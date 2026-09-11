@@ -17,10 +17,18 @@ interface StatusPageSubscribeProps {
   onClose?: () => void;
 }
 
+const MAX_EMAIL_LEN = 254;
 function getApiErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== 'object' || !('error' in payload)) return null;
   const message = (payload as { error?: unknown }).error;
   return typeof message === 'string' && message.trim() ? message : null;
+}
+
+function isValidEmail(raw: string): boolean {
+  const v = raw.trim();
+  if (!v || v.length > MAX_EMAIL_LEN) return false;
+  // Mirrors API's z.string().trim().email().max(254) intent without pulling zod into the client bundle
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
 function MailIcon() {
@@ -64,7 +72,8 @@ export default function StatusPageSubscribe({
     e.preventDefault();
     setError(null);
 
-    if (!email || !email.includes('@')) {
+    const trimmed = email.trim();
+    if (!isValidEmail(trimmed)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -75,7 +84,7 @@ export default function StatusPageSubscribe({
 
     const payload: Record<string, unknown> = {
       statusPageId,
-      email: email.trim(),
+      email: trimmed,
     };
     if (hasPicker && mode === 'selected') {
       payload.preferences = { selectedServiceIds: [...selectedIds] };
@@ -121,9 +130,13 @@ export default function StatusPageSubscribe({
         </span>
         <strong>Check your email</strong>
         <span>We sent a verification link. It expires in 24 hours. Every update includes 1-click unsubscribe.</span>
-        {variant === 'modal' && onClose && (
+        {variant === 'modal' && onClose ? (
           <button type="button" className="status-subscribe__success-close" onClick={onClose}>
             Done
+          </button>
+        ) : (
+          <button type="button" className="status-subscribe__success-close" onClick={() => setSuccess(false)}>
+            Dismiss
           </button>
         )}
       </div>
@@ -131,10 +144,14 @@ export default function StatusPageSubscribe({
   }
 
   const isCard = variant === 'card';
+  const emailErrorId = `status-subscribe-error-${statusPageId}-${variant}`;
+  const hintId = `status-subscribe-hint-${statusPageId}-${variant}`;
+  const describedBy = error ? `${hintId} ${emailErrorId}` : hintId;
 
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       className={isCard ? 'status-subscribe' : 'status-subscribe status-subscribe--modal'}
       aria-labelledby={isCard ? undefined : 'subscribe-modal-heading'}
     >
@@ -223,12 +240,18 @@ export default function StatusPageSubscribe({
             id={`status-subscribe-email-${statusPageId}-${variant}`}
             type="email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={e => {
+              setEmail(e.target.value);
+              if (error) setError(null);
+            }}
             placeholder="you@company.com"
             className="status-subscribe__input"
             autoComplete="email"
+            inputMode="email"
             required
-            aria-describedby={`status-subscribe-hint-${statusPageId}-${variant}`}
+            aria-invalid={error ? 'true' : undefined}
+            aria-describedby={describedBy}
+            maxLength={MAX_EMAIL_LEN}
           />
         </span>
         <button type="submit" className="status-subscribe__button" disabled={isPending}>
@@ -236,7 +259,7 @@ export default function StatusPageSubscribe({
         </button>
       </div>
 
-      <p id={`status-subscribe-hint-${statusPageId}-${variant}`} className="status-subscribe__hint">
+      <p id={hintId} className="status-subscribe__hint">
         No spam. Verification required. 1-click unsubscribe in every email.
         {!isCard && rssHref ? (
           <>
@@ -250,7 +273,7 @@ export default function StatusPageSubscribe({
       </p>
 
       {error && (
-        <div className="status-subscribe__error" role="alert">
+        <div id={emailErrorId} className="status-subscribe__error" role="alert">
           {error}
         </div>
       )}
