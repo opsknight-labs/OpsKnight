@@ -947,7 +947,7 @@ ${R} .status-v3-hero__stats .status-stat__hint { font-size: .72rem; color: var(-
 
 ${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item,
 ${R} .status-v3-incident, ${R} .status-v3-announcement, ${R} .status-v3-changelog__item {
-  box-shadow: none; transform: none; border-radius: 1rem;
+  box-shadow: none; transform: none; border-radius: 4px;
   border: 1px solid var(--status-panel-border);
   border-inline-start-width: 1px;
   background: color-mix(in srgb, var(--status-panel-bg) 96%, transparent);
@@ -1087,24 +1087,23 @@ ${R} .status-v3-regions__grid {
   }
 }
 
-/* Modern, simple yet elegant region card */
+/* Modern, crisp rectangular region card (minimal curve) */
 ${R} .status-v3-region-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.5rem;
-  padding: 1.15rem 1.35rem;
-  border-radius: 0.75rem;
+  gap: 0.45rem;
+  padding: 1.05rem 1.25rem;
+  border-radius: 2px;
   border: 1px solid var(--status-panel-border, #e2e8f0);
   background: var(--status-panel-bg, #ffffff);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   min-inline-size: 0;
 }
 ${R} .status-v3-region-card:hover {
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--status-panel-border, #e2e8f0));
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--status-panel-border, #e2e8f0));
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
 }
 ${R} .status-v3-region-card__head {
   display: flex;
