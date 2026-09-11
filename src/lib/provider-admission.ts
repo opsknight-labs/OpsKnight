@@ -219,14 +219,40 @@ export async function recordProviderSuccess(key: string): Promise<void> {
   });
 }
 
+function automaticBreakerDelayMs(consecutiveFails: number, statusCode?: number): number | undefined {
+  const transient = statusCode === undefined || statusCode === 429 || statusCode >= 500;
+  if (!transient || consecutiveFails < 2) return undefined;
+  if (consecutiveFails === 2) return 10_000;
+  if (consecutiveFails === 3) return 30_000;
+  if (consecutiveFails === 4) return 60_000;
+  if (consecutiveFails === 5) return 120_000;
+  return 300_000;
+}
+
 export async function recordProviderFailure(
   key: string,
   options: { statusCode?: number; retryAfterMs?: number } = {}
 ): Promise<void> {
   const now = new Date();
-  const blockedUntil = options.retryAfterMs
-    ? new Date(now.getTime() + Math.min(Math.max(options.retryAfterMs, 1_000), 24 * 60 * 60_000))
+  const current = await prisma.providerAdmission.findUnique({
+    where: { key },
+    select: { consecutiveFails: true, blockedUntil: true },
+  });
+  const consecutiveFails = (current?.consecutiveFails ?? 0) + 1;
+  const requestedDelay = options.retryAfterMs ?? automaticBreakerDelayMs(consecutiveFails, options.statusCode);
+  const boundedDelay = requestedDelay
+    ? Math.min(Math.max(requestedDelay, 1_000), 24 * 60 * 60_000)
     : undefined;
+  const generatedBlockedUntil = boundedDelay ? new Date(now.getTime() + boundedDelay) : null;
+  const existingBlockedUntil =
+    current?.blockedUntil && current.blockedUntil > now ? current.blockedUntil : null;
+  const blockedUntil =
+    generatedBlockedUntil && existingBlockedUntil
+      ? generatedBlockedUntil > existingBlockedUntil
+        ? generatedBlockedUntil
+        : existingBlockedUntil
+      : generatedBlockedUntil ?? existingBlockedUntil ?? undefined;
+
   await prisma.providerAdmission.upsert({
     where: { key },
     create: {
