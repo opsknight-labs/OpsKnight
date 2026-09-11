@@ -24,28 +24,31 @@ function readCapabilityToken(): string | null {
  * Reads an auth capability from a URL fragment (preferred) or legacy query
  * parameter exactly once, then scrubs it from browser history.
  *
- * React development Strict Mode intentionally replays effects. The ref retains
- * the first capability across that replay, and state publication is deferred to
- * a microtask so the effect itself only synchronizes with browser history.
+ * React development Strict Mode intentionally replays effects. Separate refs
+ * track whether capture already happened and retain the captured value across
+ * that replay without comparing the capability itself. State publication is
+ * deferred to a microtask so the effect synchronizes only with browser history.
  */
 export function useCapabilityToken(): CapabilityTokenState {
-  const capturedToken = useRef<string | null | undefined>(undefined);
+  const captured = useRef(false);
+  const capturedToken = useRef<string | null>(null);
   const [state, setState] = useState<Omit<CapabilityTokenState, 'clearToken'>>({
     token: null,
     ready: false,
   });
 
   useEffect(() => {
-    let token = capturedToken.current;
-    if (token === undefined) {
-      token = readCapabilityToken();
+    if (!captured.current) {
+      const token = readCapabilityToken();
       capturedToken.current = token;
+      captured.current = true;
 
       if (token) {
         window.history.replaceState(window.history.state, '', window.location.pathname);
       }
     }
 
+    const token = capturedToken.current;
     let cancelled = false;
     queueMicrotask(() => {
       if (!cancelled) setState({ token, ready: true });
