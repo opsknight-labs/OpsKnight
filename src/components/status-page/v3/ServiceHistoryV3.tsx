@@ -56,14 +56,23 @@ function StatusBreakdownBar({ timeline }: { timeline: PublicHistorySlice[] }) {
  * availability and SLA grade — all read from the projector's per-day timeline, so there is no
  * client-side status computation. Dismisses on outside click or Escape.
  */
+function meterTier(grade: string | undefined): string {
+  if (grade === 'EXCELLENT') return 'excellent';
+  if (grade === 'GOOD') return 'good';
+  if (grade === 'BELOW_TARGET') return 'poor';
+  return 'unknown';
+}
+
 export default function ServiceHistoryV3({
   service,
   timeZone,
   showGrade = true,
+  showUptimeInline = true,
 }: {
   service: PublicStatusService;
   timeZone: string;
   showGrade?: boolean;
+  showUptimeInline?: boolean;
 }) {
   const days = useMemo(
     () => (service.history ? buildPublicHistoryDays(service.history, timeZone) : []),
@@ -108,69 +117,79 @@ export default function ServiceHistoryV3({
     };
   }, [selected, navigateDay]);
 
-  if (days.length === 0) return null;
+  const hasUptime = Boolean(service.uptime?.days30 || service.uptime?.days90);
+  const hasDays = days.length > 0;
+  if (!hasDays && !(showUptimeInline && hasUptime)) return null;
 
+  const uptime30 = describeUptimeWindow(service.uptime?.days30);
   const uptime90 = describeUptimeWindow(service.uptime?.days90);
   const grade = service.sla?.grade ?? service.uptime?.days90?.grade;
   const day = selected != null ? days[selected] : null;
   const dayTotal = day?.timeline?.at(-1)?.endMinute ?? 1440;
+  const w30 = service.uptime?.days30;
+  const w90 = service.uptime?.days90;
 
   return (
     <div className="status-v3-uptime" ref={ref}>
-      <div className="status-v3-uptime__head">
-        <span className="status-v3-uptime__value">
-          {uptime90.value}
-          <span className="status-v3-uptime__unit"> · 90-day uptime</span>
-        </span>
-        {showGrade && grade && (
-          <StatusBadge status={grade} label={GRADE_LABEL[grade]} size="xs" showDot />
-        )}
-      </div>
+      {hasDays ? (
+        <div className="status-v3-uptime__head">
+          <span className="status-v3-uptime__value">
+            {uptime90.value}
+            <span className="status-v3-uptime__unit"> · 90-day uptime</span>
+          </span>
+          {showGrade && grade && (
+            <StatusBadge status={grade} label={GRADE_LABEL[grade]} size="xs" showDot />
+          )}
+        </div>
+      ) : null}
 
-      <svg
-        className="status-v3-history"
-        viewBox={`0 0 ${days.length} 10`}
-        preserveAspectRatio="none"
-        role="group"
-        aria-label={`Daily status history for ${service.name}`}
-      >
-        {days.map((entry, index) => {
-          const token = statusPresentation(entry.status).token;
-          return (
-            <rect
-              key={entry.date}
-              className={`status-v3-history__day status-${token}`}
-              x={index + 0.08}
-              y={0}
-              width={0.84}
-              height={10}
-              rx={0.22}
-              fill="currentColor"
-              tabIndex={0}
-              role="button"
-              aria-pressed={selected === index}
-              aria-label={`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? `, ${entry.availabilityPercent}%` : ''}`}
-              onClick={() => setSelected(selected === index ? null : index)}
-              onKeyDown={event => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  setSelected(selected === index ? null : index);
-                }
-              }}
-            >
-              <title>
-                {`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? ` · ${entry.availabilityPercent}%` : ''}`}
-              </title>
-            </rect>
-          );
-        })}
-      </svg>
+      {hasDays && (
+        <>
+          <svg
+            className="status-v3-history"
+            viewBox={`0 0 ${days.length} 10`}
+            preserveAspectRatio="none"
+            role="group"
+            aria-label={`Daily status history for ${service.name}`}
+          >
+            {days.map((entry, index) => {
+              const token = statusPresentation(entry.status).token;
+              return (
+                <rect
+                  key={entry.date}
+                  className={`status-v3-history__day status-${token}`}
+                  x={index + 0.08}
+                  y={0}
+                  width={0.84}
+                  height={10}
+                  rx={0.22}
+                  fill="currentColor"
+                  tabIndex={0}
+                  role="button"
+                  aria-pressed={selected === index}
+                  aria-label={`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? `, ${entry.availabilityPercent}%` : ''}`}
+                  onClick={() => setSelected(selected === index ? null : index)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelected(selected === index ? null : index);
+                    }
+                  }}
+                >
+                  <title>
+                    {`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? ` · ${entry.availabilityPercent}%` : ''}`}
+                  </title>
+                </rect>
+              );
+            })}
+          </svg>
 
-      <div className="status-v3-history__axis" aria-hidden="true">
-        <span>90 days ago</span>
-        <span>{uptime90.coverage ?? '90 days'}</span>
-        <span>Today</span>
-      </div>
+          <div className="status-v3-history__axis" aria-hidden="true">
+            <span>90 days ago</span>
+            <span>Today</span>
+          </div>
+        </>
+      )}
 
       {day && (
         <div
@@ -323,6 +342,44 @@ export default function ServiceHistoryV3({
           </div>
         </div>
       )}
+
+      {showUptimeInline && hasUptime ? (
+        <div className="status-v3-uptime-metrics-inline" role="group" aria-label={`Uptime for ${service.name}`}>
+          {[
+            { label: '30 days', described: uptime30, win: w30 },
+            { label: '90 days', described: uptime90, win: w90 },
+          ].map(({ label, described, win }) => {
+            const tier = meterTier(win?.grade);
+            const partial = described.partial;
+            const incidents = win?.incidentCount;
+            return (
+              <div key={label} className="status-v3-uptime-cell">
+                <div className="status-v3-uptime-cell__head">
+                  <span className="status-v3-uptime-cell__label">{label}</span>
+                  <span className="status-v3-uptime-cell__value">{described.value}</span>
+                </div>
+                <div
+                  className="status-v3-uptime-cell__meter"
+                  data-tier={tier}
+                  role="img"
+                  aria-label={`${service.name} ${label} availability ${described.value}`}
+                >
+                  <span style={{ inlineSize: `${described.meterPercent}%` }} />
+                </div>
+                <span className="status-v3-uptime-cell__meta">
+                  <span className="status-v3-uptime-cell__meta-main">
+                    {typeof incidents === 'number'
+                      ? `${incidents} ${incidents === 1 ? 'incident' : 'incidents'}`
+                      : described.coverage ?? ''}
+                    {described.coverage && typeof incidents === 'number' ? ` · ${described.coverage}` : ''}
+                  </span>
+                  {partial && <span className="status-v3-uptime-cell__partial"> · Partial history</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

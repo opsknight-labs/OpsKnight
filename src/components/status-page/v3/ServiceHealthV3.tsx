@@ -60,7 +60,15 @@ function slaGradeLabel(grade: string | undefined): string | undefined {
   }
 }
 
-function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZone: string }) {
+function ServiceRow({
+  service,
+  timeZone,
+  showUptime,
+}: {
+  service: PublicStatusService;
+  timeZone: string;
+  showUptime: boolean;
+}) {
   const token = statusPresentation(service.status).token;
   const slaTier = service.sla?.tier ?? service.slaTier;
   const slaGrade = service.sla?.grade ?? service.uptime?.days90?.grade;
@@ -130,8 +138,13 @@ function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZ
 
       {service.description && <p className="status-v3-service__desc">{service.description}</p>}
 
-      {(service.history || service.uptime) && (
-        <ServiceHistoryV3 service={service} timeZone={timeZone} showGrade={false} />
+      {(service.history || (showUptime && service.uptime)) && (
+        <ServiceHistoryV3
+          service={service}
+          timeZone={timeZone}
+          showGrade={false}
+          showUptimeInline={showUptime}
+        />
       )}
     </div>
   );
@@ -140,14 +153,16 @@ function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZ
 function ServiceList({
   services,
   timeZone,
+  showUptime,
 }: {
   services: PublicStatusService[];
   timeZone: string;
+  showUptime: boolean;
 }) {
   return (
     <div className="status-v3-services__list" role="list">
       {services.map(service => (
-        <ServiceRow key={service.id} service={service} timeZone={timeZone} />
+        <ServiceRow key={service.id} service={service} timeZone={timeZone} showUptime={showUptime} />
       ))}
     </div>
   );
@@ -158,10 +173,12 @@ export default function ServiceHealthV3({
   services,
   timeZone,
   groupByRegion = true,
+  showUptime = true,
 }: {
   services: PublicStatusService[];
   timeZone: string;
   groupByRegion?: boolean;
+  showUptime?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -433,12 +450,12 @@ export default function ServiceHealthV3({
                   )}
                 </div>
               </div>
-              <ServiceList services={group.services} timeZone={timeZone} />
+              <ServiceList services={group.services} timeZone={timeZone} showUptime={showUptime} />
             </div>
           );
         })
       ) : (
-        <ServiceList services={filtered} timeZone={timeZone} />
+        <ServiceList services={filtered} timeZone={timeZone} showUptime={showUptime} />
       )}
     </section>
   );

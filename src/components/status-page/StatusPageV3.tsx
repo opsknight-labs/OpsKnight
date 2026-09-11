@@ -6,7 +6,6 @@ import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contrac
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
 import StatusPageHeader from './StatusPageHeader';
 import StatusPageFooter from './StatusPageFooter';
-import StatusPageUptimeMetrics from './StatusPageUptimeMetrics';
 import StatusPageSubscribe from './StatusPageSubscribe';
 import { presentOverallHeadline } from '@/lib/status-pages/status-presentation';
 import StatusHeroV3 from './v3/StatusHeroV3';
@@ -156,10 +155,10 @@ export default function StatusPageV3({
             services={snapshot.services}
             timeZone={timeZone}
             groupByRegion={page.showServicesByRegion === true}
+            showUptime={showUptime}
           />
         )}
         {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
-        {showUptime && <StatusPageUptimeMetrics services={snapshot.services} />}
         {showIncidents && (
           <IncidentsV3
             incidents={snapshot.incidents}

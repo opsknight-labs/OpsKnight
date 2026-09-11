@@ -885,12 +885,12 @@ ${R} .status-v3-showmore { margin-block-start: 1rem; padding: .5rem 1.05rem; bor
 ${R} .status-v3-showmore:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border)); background: color-mix(in srgb, var(--primary) 8%, var(--status-panel-muted-bg)); }
 
 /* Uptime / 90-day history card + day inspector */
-${R} .status-v3-uptime { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: .5rem; margin-block-start: .35rem; min-inline-size: 0; }
+${R} .status-v3-uptime { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: .35rem; margin-block-start: .25rem; min-inline-size: 0; }
 ${R} .status-v3-uptime, ${R} .status-v3-inspector, ${R} .status-v3-hours, ${R} .status-v3 > section { min-inline-size: 0; max-inline-size: 100%; }
-${R} .status-v3-uptime__head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
-${R} .status-v3-uptime__value { font-weight: 750; color: var(--status-text-strong); font-variant-numeric: tabular-nums; font-size: .95rem; }
-${R} .status-v3-uptime__unit { font-weight: 500; color: var(--status-text-muted); font-size: .8125rem; }
-${R} .status-v3-history__axis { display: flex; justify-content: space-between; gap: .5rem; font-size: .7rem; color: var(--status-text-subtle); }
+${R} .status-v3-uptime__head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+${R} .status-v3-uptime__value { font-weight: 750; color: var(--status-text-strong); font-variant-numeric: tabular-nums; font-size: .82rem; }
+${R} .status-v3-uptime__unit { font-weight: 500; color: var(--status-text-muted); font-size: .74rem; }
+${R} .status-v3-history__axis { display: flex; justify-content: space-between; gap: .5rem; font-size: .66rem; color: var(--status-text-subtle); }
 ${R} .status-v3-history__axis > span:nth-child(2) { opacity: .7; }
 ${R} .status-v3-inspector {
   margin-block-start: .4rem;
@@ -1030,6 +1030,40 @@ ${R} .status-v3-inspector__timeline-wrap {
 ${R} .status-v3-hours { position: relative; block-size: 2.5rem; border-radius: .6rem; overflow: hidden; background: var(--status-operational); border: 1px solid var(--status-panel-border); }
 ${R} .status-v3-hours__slice { position: absolute; inset-block: 0; background: currentColor; }
 ${R} .status-v3-hours__axis { display: flex; justify-content: space-between; font-size: .66rem; color: var(--status-text-subtle); font-variant-numeric: tabular-nums; }
+
+/* Inline 30/90-day uptime inside each service card — compact, V3 4px, settings-controlled */
+${R} .status-v3-uptime-metrics-inline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4rem .9rem;
+  margin-block-start: .15rem;
+  padding-block-start: .45rem;
+  border-block-start: 1px solid color-mix(in srgb, var(--status-panel-border) 70%, transparent);
+}
+${R} .status-v3-uptime-cell { display: grid; gap: .22rem; min-inline-size: 0; }
+${R} .status-v3-uptime-cell__head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: .4rem;
+  font-size: .62rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--status-text-subtle); line-height: 1;
+}
+${R} .status-v3-uptime-cell__value {
+  font-size: .78rem; font-weight: 750; letter-spacing: -.015em; text-transform: none;
+  color: var(--status-text-strong); font-variant-numeric: tabular-nums; line-height: 1;
+}
+${R} .status-v3-uptime-cell__meter {
+  block-size: 3px; border-radius: 999px; overflow: hidden;
+  background: var(--status-panel-muted-bg); border: 0;
+}
+${R} .status-v3-uptime-cell__meter > span { display: block; block-size: 100%; border-radius: inherit; transition: inline-size .5s ease; }
+${R} .status-v3-uptime-cell__meter[data-tier='excellent'] > span { background: var(--status-operational); }
+${R} .status-v3-uptime-cell__meter[data-tier='good'] > span { background: var(--status-degraded); }
+${R} .status-v3-uptime-cell__meter[data-tier='poor'] > span { background: var(--status-major-outage); }
+${R} .status-v3-uptime-cell__meter[data-tier='unknown'] > span { background: var(--status-unknown); }
+${R} .status-v3-uptime-cell__meta { font-size: .66rem; color: var(--status-text-muted); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+${R} .status-v3-uptime-cell__partial { color: var(--status-text-subtle); }
+@media (max-width: 40rem) {
+  ${R} .status-v3-uptime-metrics-inline { grid-template-columns: minmax(0, 1fr); gap: .35rem; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   ${R} .status-v3 > *, ${R} .status-v3-hero[data-status="operational"] .status-v3-hero__live, ${R} .status-v3-inspector, ${R} .status-v3-inspector__breakdown-seg { animation: none !important; }
