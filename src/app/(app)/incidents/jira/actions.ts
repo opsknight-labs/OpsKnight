@@ -1,5 +1,6 @@
 'use server';
 
+import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { assertAdminOrResponder } from '@/lib/rbac';
 import {
@@ -7,7 +8,12 @@ import {
   linkExistingJiraIssue,
   syncExternalIssueLink,
 } from '@/lib/jira-sync';
-import { classifyJiraError } from '@/lib/jira-capabilities';
+import {
+  classifyJiraError,
+  getJiraCapabilities,
+  type JiraCapability,
+} from '@/lib/jira-capabilities';
+import { withJiraWorkspaceProviderFence } from '@/lib/jira-concurrency';
 import { revalidatePath } from 'next/cache';
 
 export type JiraActionResult = {
@@ -17,7 +23,61 @@ export type JiraActionResult = {
   url?: string;
 };
 
-export async function createJiraIssueFromIncident(incidentId: string): Promise<JiraActionResult> {
+const EntityIdSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[A-Za-z0-9_-]+$/, 'Invalid identifier.');
+
+const IncidentJiraSchema = z.object({ incidentId: EntityIdSchema }).strict();
+const LinkIncidentJiraSchema = z
+  .object({
+    incidentId: EntityIdSchema,
+    jiraKey: z.string().trim().min(1).max(255),
+  })
+  .strict();
+const OwnedIncidentJiraSchema = z
+  .object({
+    incidentId: EntityIdSchema,
+    linkId: EntityIdSchema,
+  })
+  .strict();
+
+function validationFailure(): JiraActionResult {
+  return { success: false, error: 'Invalid Jira action request.' };
+}
+
+function capabilityFailure(
+  capability: JiraCapability,
+  operation: 'create' | 'link' | 'sync' | 'unlink'
+): JiraActionResult {
+  if (capability.workspaceState === 'NOT_CONFIGURED') {
+    return { success: false, error: 'Jira is not configured in workspace settings.' };
+  }
+  if (capability.workspaceState !== 'ENABLED') {
+    return { success: false, error: 'Jira is disabled or not fully configured in workspace settings.' };
+  }
+  if (operation === 'create' && !capability.serviceMapped) {
+    return {
+      success: false,
+      error:
+        'Configure a Jira project for this service in Service Settings before creating Jira issues.',
+    };
+  }
+  if (operation === 'sync' && !capability.syncEnabled) {
+    return { success: false, error: 'Jira metadata sync is disabled for this service.' };
+  }
+  return { success: false, error: `Jira ${operation} is not allowed for this incident.` };
+}
+
+export async function createJiraIssueFromIncident(
+  incidentIdInput: string
+): Promise<JiraActionResult> {
+  const parsed = IncidentJiraSchema.safeParse({ incidentId: incidentIdInput });
+  if (!parsed.success) return validationFailure();
+  const { incidentId } = parsed.data;
+
   try {
     await assertAdminOrResponder();
 
@@ -34,27 +94,15 @@ export async function createJiraIssueFromIncident(incidentId: string): Promise<J
 
     if (!incident) return { success: false, error: 'Incident not found.' };
 
-    const mapping = incident.service?.jiraServiceMapping;
-    const jiraConfig = await prisma.jiraConfig.findUnique({
-      where: { id: 'default' },
-      select: { enabled: true },
+    const capability = await getJiraCapabilities({
+      serviceId: incident.serviceId,
+      canManage: true,
     });
+    if (!capability.canCreate) return capabilityFailure(capability, 'create');
 
-    if (!jiraConfig?.enabled) {
-      return {
-        success: false,
-        error: 'Jira is not configured or is disabled in workspace settings.',
-      };
-    }
-
+    const mapping = incident.service?.jiraServiceMapping;
     const projectKey = mapping?.projectKey;
-    if (!projectKey) {
-      return {
-        success: false,
-        error:
-          'Configure a Jira project for this service in Service Settings before creating Jira issues.',
-      };
-    }
+    if (!projectKey) return capabilityFailure(capability, 'create');
 
     const issueType = mapping?.incidentIssueType ?? 'Bug';
     const labels = mapping?.defaultLabels ?? ['opsknight'];
@@ -96,27 +144,42 @@ export async function createJiraIssueFromIncident(incidentId: string): Promise<J
 }
 
 export async function linkJiraIssueToIncident(
-  incidentId: string,
-  jiraKey: string
+  incidentIdInput: string,
+  jiraKeyInput: string
 ): Promise<JiraActionResult> {
+  const parsed = LinkIncidentJiraSchema.safeParse({
+    incidentId: incidentIdInput,
+    jiraKey: jiraKeyInput,
+  });
+  if (!parsed.success) return validationFailure();
+  const { incidentId, jiraKey } = parsed.data;
+
   try {
     await assertAdminOrResponder();
 
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },
-      select: { id: true },
+      select: { id: true, serviceId: true },
     });
     if (!incident) return { success: false, error: 'Incident not found.' };
 
-    try {
-      const { issue } = await linkExistingJiraIssue({ incidentId, jiraKey });
+    const capability = await getJiraCapabilities({
+      serviceId: incident.serviceId,
+      canManage: true,
+    });
+    if (!capability.canLink) return capabilityFailure(capability, 'link');
 
-      await prisma.incidentEvent.create({
-        data: {
-          incidentId,
-          type: 'COMMENT',
-          message: `Jira issue ${issue.key} linked`,
-        },
+    try {
+      const { issue } = await withJiraWorkspaceProviderFence(async () => {
+        const linked = await linkExistingJiraIssue({ incidentId, jiraKey });
+        await prisma.incidentEvent.create({
+          data: {
+            incidentId,
+            type: 'COMMENT',
+            message: `Jira issue ${linked.issue.key} linked`,
+          },
+        });
+        return linked;
       });
 
       revalidatePath(`/incidents/${incidentId}`);
@@ -134,9 +197,16 @@ export async function linkJiraIssueToIncident(
 }
 
 export async function unlinkJiraIssueFromIncident(
-  linkId: string,
-  incidentId: string
+  linkIdInput: string,
+  incidentIdInput: string
 ): Promise<JiraActionResult> {
+  const parsed = OwnedIncidentJiraSchema.safeParse({
+    incidentId: incidentIdInput,
+    linkId: linkIdInput,
+  });
+  if (!parsed.success) return validationFailure();
+  const { incidentId, linkId } = parsed.data;
+
   try {
     await assertAdminOrResponder();
 
@@ -148,13 +218,31 @@ export async function unlinkJiraIssueFromIncident(
 
     const link = await prisma.externalIssueLink.findFirst({
       where: ownershipWhere,
-      select: { id: true, externalKey: true, incidentId: true },
+      select: {
+        id: true,
+        externalKey: true,
+        incidentId: true,
+        incident: { select: { serviceId: true } },
+      },
     });
     if (!link) return { success: false, error: 'Jira link not found for this incident.' };
 
-    const deleted = await prisma.externalIssueLink.deleteMany({ where: ownershipWhere });
-    if (deleted.count !== 1) {
-      return { success: false, error: 'Jira link changed before it could be unlinked. Retry.' };
+    const capability = await getJiraCapabilities({
+      serviceId: link.incident?.serviceId ?? null,
+      canManage: true,
+    });
+    if (!capability.canUnlink) return capabilityFailure(capability, 'unlink');
+
+    try {
+      const deleted = await withJiraWorkspaceProviderFence(() =>
+        prisma.externalIssueLink.deleteMany({ where: ownershipWhere })
+      );
+      if (deleted.count !== 1) {
+        return { success: false, error: 'Jira link changed before it could be unlinked. Retry.' };
+      }
+    } catch (error) {
+      const classified = classifyJiraError(error);
+      return { success: false, error: classified.userMessage };
     }
 
     await prisma.incidentEvent.create({
@@ -176,9 +264,16 @@ export async function unlinkJiraIssueFromIncident(
 }
 
 export async function syncIncidentJiraIssue(
-  linkId: string,
-  incidentId: string
+  linkIdInput: string,
+  incidentIdInput: string
 ): Promise<JiraActionResult> {
+  const parsed = OwnedIncidentJiraSchema.safeParse({
+    incidentId: incidentIdInput,
+    linkId: linkIdInput,
+  });
+  if (!parsed.success) return validationFailure();
+  const { incidentId, linkId } = parsed.data;
+
   try {
     await assertAdminOrResponder();
 
@@ -188,12 +283,21 @@ export async function syncIncidentJiraIssue(
         provider: 'JIRA',
         incidentId,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        incident: { select: { serviceId: true } },
+      },
     });
     if (!link) return { success: false, error: 'Jira link not found for this incident.' };
 
+    const capability = await getJiraCapabilities({
+      serviceId: link.incident?.serviceId ?? null,
+      canManage: true,
+    });
+    if (!capability.canSync) return capabilityFailure(capability, 'sync');
+
     try {
-      const result = await syncExternalIssueLink(link.id);
+      const result = await withJiraWorkspaceProviderFence(() => syncExternalIssueLink(link.id));
       if (!result) {
         return { success: false, error: 'Jira sync failed. Check integration health in Settings.' };
       }

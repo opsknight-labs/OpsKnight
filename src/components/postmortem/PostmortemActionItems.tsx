@@ -21,7 +21,10 @@ import { cn } from '@/lib/utils';
 import { Calendar, Pencil, Trash2, Plus } from 'lucide-react';
 import type { ActionItem } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
+import type { JiraIssueReference } from '@/lib/jira-references';
 import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
+import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
+import { ACTION_ITEM_STATUS_CONFIG, ACTION_ITEM_PRIORITY_CONFIG } from './shared';
 
 interface PostmortemActionItemsProps {
   actionItems: ActionItem[];
@@ -35,9 +38,9 @@ interface PostmortemActionItemsProps {
     gender?: string | null;
   }>;
   jiraCapability: JiraCapability;
+  /** Read-only Jira issues owned by the parent incident. */
+  incidentJiraIssues?: JiraIssueReference[];
 }
-
-import { ACTION_ITEM_STATUS_CONFIG, ACTION_ITEM_PRIORITY_CONFIG } from './shared';
 
 export default function PostmortemActionItems({
   actionItems,
@@ -45,6 +48,7 @@ export default function PostmortemActionItems({
   canManage = true,
   users = [],
   jiraCapability,
+  incidentJiraIssues = [],
 }: PostmortemActionItemsProps) {
   const { userTimeZone } = useTimezone();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -98,28 +102,31 @@ export default function PostmortemActionItems({
   const completionRate = actionItems.length > 0 ? (completedCount / actionItems.length) * 100 : 0;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" id="action-items">
       {/* Add New Item Form */}
       <Card className="bg-gradient-to-br from-white to-slate-50">
         <CardHeader className="pb-3">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-3 flex-wrap">
             <CardTitle className="text-lg">Action Items</CardTitle>
-            {actionItems.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {completedCount}/{actionItems.length} completed
-                </span>
-                <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      'h-full transition-all duration-300',
-                      completionRate === 100 ? 'bg-green-500' : 'bg-blue-500'
-                    )}
-                    style={{ width: `${completionRate}%` }}
-                  />
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              <IncidentJiraContext issues={incidentJiraIssues} compact />
+              {actionItems.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {completedCount}/{actionItems.length} completed
+                  </span>
+                  <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full transition-all duration-300',
+                        completionRate === 100 ? 'bg-green-500' : 'bg-blue-500'
+                      )}
+                      style={{ width: `${completionRate}%` }}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -237,6 +244,9 @@ export default function PostmortemActionItems({
               ACTION_ITEM_PRIORITY_CONFIG[
                 item.priority as keyof typeof ACTION_ITEM_PRIORITY_CONFIG
               ] || ACTION_ITEM_PRIORITY_CONFIG.MEDIUM;
+            const inheritedIssues = incidentJiraIssues.filter(
+              issue => issue.key !== item.externalIssue?.key
+            );
 
             return (
               <Card
@@ -245,8 +255,8 @@ export default function PostmortemActionItems({
               >
                 <CardContent className="p-4">
                   <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <Badge variant={statusConfig.variant} size="xs">
                           {statusConfig.label}
                         </Badge>
@@ -266,17 +276,25 @@ export default function PostmortemActionItems({
                         )}
                       </div>
                       <h4 className="text-base font-semibold mb-1">{item.title}</h4>
-                      {isPersisted && (
-                        <div className="my-1">
-                          <ActionItemJiraBadge
-                            actionItemId={item.id}
-                            externalIssue={item.externalIssue}
-                            canManage={canManage}
-                            compact
-                            jiraCapability={jiraCapability}
-                          />
-                        </div>
-                      )}
+
+                      <div className="my-1.5 flex flex-col gap-1.5">
+                        <IncidentJiraContext issues={inheritedIssues} compact />
+                        {isPersisted && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Action Item Jira
+                            </span>
+                            <ActionItemJiraBadge
+                              actionItemId={item.id}
+                              externalIssue={item.externalIssue}
+                              canManage={canManage}
+                              compact
+                              jiraCapability={jiraCapability}
+                            />
+                          </div>
+                        )}
+                      </div>
+
                       {item.description && (
                         <p className="text-sm text-muted-foreground mb-1">{item.description}</p>
                       )}

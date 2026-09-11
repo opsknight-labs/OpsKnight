@@ -21,12 +21,13 @@ function safeRevalidateIncident(incidentId: string): void {
   }
 }
 
-function safeRevalidateActionItems(postmortemId?: string | null): void {
+function safeRevalidateActionItems(incidentIds: Iterable<string> = []): void {
   try {
     revalidatePath('/action-items');
     revalidatePath('/postmortems');
-    if (postmortemId) {
-      revalidatePath(`/postmortems/${postmortemId}`);
+    for (const incidentId of new Set(incidentIds)) {
+      revalidatePath(`/postmortems/${incidentId}`);
+      revalidatePath(`/incidents/${incidentId}`);
     }
   } catch {
     // Non-request context
@@ -93,7 +94,6 @@ export async function linkExistingJiraIssue(params: LinkExistingParams) {
     );
   }
 
-  // Check for duplicate link
   const existing = await prisma.externalIssueLink.findUnique({
     where: {
       provider_externalKey: {
@@ -156,12 +156,6 @@ export async function linkExistingJiraIssue(params: LinkExistingParams) {
   return { link, issue };
 }
 
-/**
- * Re-fetch status and assignee from Jira for a single ExternalIssueLink.
- */
-/**
- * Extract status and status category from Jira webhook payload (checking both fields and changelog).
- */
 export function extractJiraWebhookStatus(payload: JiraWebhookPayload): {
   statusName?: string;
   statusCategoryKey?: string;
@@ -190,7 +184,6 @@ export function extractJiraWebhookStatus(payload: JiraWebhookPayload): {
     }
   }
 
-  // If not found in fields, check changelog
   if (!statusName && payload.changelog?.items && Array.isArray(payload.changelog.items)) {
     const statusItem = payload.changelog.items.find(
       i => i.field?.toLowerCase() === 'status' || i.fieldId?.toLowerCase() === 'status'
@@ -211,9 +204,6 @@ export function extractJiraWebhookStatus(payload: JiraWebhookPayload): {
   };
 }
 
-/**
- * Extract assignee from Jira webhook payload (checking both fields and changelog).
- */
 export function extractJiraWebhookAssignee(payload: JiraWebhookPayload): {
   assignee: string | null;
   isAssigneePresent: boolean;
@@ -235,7 +225,6 @@ export function extractJiraWebhookAssignee(payload: JiraWebhookPayload): {
     }
   }
 
-  // If not found in fields, check changelog
   if (!isAssigneePresent && payload.changelog?.items && Array.isArray(payload.changelog.items)) {
     const assigneeItem = payload.changelog.items.find(
       i => i.field?.toLowerCase() === 'assignee' || i.fieldId?.toLowerCase() === 'assignee'
@@ -275,9 +264,8 @@ export async function syncLinkedEntitiesForJiraIssue({
   actionItemIds,
   incidentLinks,
 }: LinkedEntitySyncParams): Promise<void> {
-  // 1. Process action items
   if (actionItemIds.length > 0) {
-    await prisma.$transaction(async tx => {
+    const affectedIncidentIds = await prisma.$transaction(async tx => {
       await tx.actionItem.updateMany({
         where: {
           id: { in: actionItemIds },
@@ -290,7 +278,13 @@ export async function syncLinkedEntitiesForJiraIssue({
 
       const records = await tx.actionItem.findMany({
         where: { id: { in: actionItemIds } },
-        select: { id: true, postmortemId: true, status: true, completedAt: true },
+        select: {
+          id: true,
+          postmortemId: true,
+          incidentId: true,
+          status: true,
+          completedAt: true,
+        },
       });
 
       for (const postmortemId of new Set(records.map(r => r.postmortemId))) {
@@ -315,13 +309,17 @@ export async function syncLinkedEntitiesForJiraIssue({
           where: { id: postmortemId },
           data: { actionItems: synced as Prisma.InputJsonValue },
         });
-        safeRevalidateActionItems(postmortemId);
       }
+
+      return Array.from(new Set(records.map(record => record.incidentId)));
     });
-    safeRevalidateActionItems();
+
+    // Revalidate only after the DB transaction has committed, and use the
+    // canonical route key: postmortems are addressed by incidentId, not the
+    // internal Postmortem row id.
+    safeRevalidateActionItems(affectedIncidentIds);
   }
 
-  // 2. Process incident links
   if (incidentLinks.length > 0) {
     const actorId = await getDefaultActorId();
     for (const link of incidentLinks) {
@@ -336,7 +334,6 @@ export async function syncLinkedEntitiesForJiraIssue({
           ? `Jira issue ${link.externalKey} marked as Done (${externalStatus})`
           : `Jira issue ${link.externalKey} status updated to "${externalStatus}"`;
 
-        // Create IncidentEvent in timeline
         await prisma.incidentEvent.create({
           data: {
             incidentId: link.incidentId,
@@ -345,13 +342,11 @@ export async function syncLinkedEntitiesForJiraIssue({
           },
         });
 
-        // Touch incident updatedAt to trigger PostgreSQL RealtimeChange trigger
         await prisma.incident.update({
           where: { id: link.incidentId },
           data: { updatedAt: new Date() },
         });
 
-        // Audit log
         await logAudit({
           action: 'jira.issue.synced',
           entityType: 'INCIDENT',
@@ -365,7 +360,6 @@ export async function syncLinkedEntitiesForJiraIssue({
           },
         });
 
-        // Revalidate Next.js cache
         safeRevalidateIncident(link.incidentId);
       }
     }
@@ -410,7 +404,6 @@ export async function syncExternalIssueLink(linkId: string) {
 
   if (!link) throw new Error('External issue link not found.');
 
-  // Enforce syncEnabled: check if the service has sync enabled
   const mapping =
     link.incident?.service?.jiraServiceMapping ??
     link.actionItem?.incident?.service?.jiraServiceMapping;
@@ -461,8 +454,6 @@ export async function syncExternalIssueLink(linkId: string) {
       where: { id: linkId },
       data: { syncState: 'FAILED' },
     });
-    // Intentionally NOT re-throwing: callers that loop over multiple links
-    // should not have a single failure abort the entire batch.
     return null;
   }
 }
@@ -533,7 +524,6 @@ export async function processJiraWebhookEvent(
     return { updated: 0 };
   }
 
-  // Find all links that reference this Jira issue (supporting normalized/uppercase keys)
   const normalizedKey = issueKey ? extractJiraKey(issueKey) : undefined;
   const keyCandidates = Array.from(
     new Set(
@@ -557,8 +547,6 @@ export async function processJiraWebhookEvent(
     return { updated: 0 };
   }
 
-  // Enforce syncEnabled: filter out links whose service has sync disabled.
-  // We need to check the service's JiraServiceMapping.syncEnabled for each link.
   const linkIds = links.map(l => l.id);
   const linksWithSyncEnabled = await prisma.externalIssueLink.findMany({
     where: { id: { in: linkIds } },
@@ -592,14 +580,12 @@ export async function processJiraWebhookEvent(
     },
   });
 
-  // A link is syncable if its service's syncEnabled is true (or no mapping exists, default true)
   const syncableLinkIds = new Set(
     linksWithSyncEnabled
       .filter(link => {
         const mapping =
           link.incident?.service?.jiraServiceMapping ??
           link.actionItem?.incident?.service?.jiraServiceMapping;
-        // Default to true if no mapping exists
         return mapping?.syncEnabled !== false;
       })
       .map(link => link.id)
@@ -611,14 +597,10 @@ export async function processJiraWebhookEvent(
     return { updated: 0 };
   }
 
-  // Extract status and assignee from payload fields or changelog
   const { statusName, statusCategoryKey, statusCategoryName, isStatusPresent } =
     extractJiraWebhookStatus(payload);
   const { assignee, isAssigneePresent } = extractJiraWebhookAssignee(payload);
 
-  // Discard out-of-order stale webhooks if event timestamp is older than lastSyncedAt.
-  // Note: 5 minutes (300,000ms) skew tolerance prevents dropping legitimate webhooks.
-  // If the status is different from link's current status, we always process it.
   const eventTime = payload.timestamp
     ? new Date(
         typeof payload.timestamp === 'number' ? payload.timestamp : String(payload.timestamp)
@@ -645,9 +627,6 @@ export async function processJiraWebhookEvent(
     return { updated: 0 };
   }
 
-  // Only update fields that are actually present in the webhook payload.
-  // Jira webhooks often omit unchanged fields — blindly setting them to null
-  // would erase valid data stored from a previous sync.
   const data: Record<string, unknown> = {
     syncState: 'SYNCED',
     lastSyncedAt: eventTime && !isNaN(eventTime.getTime()) ? eventTime : new Date(),
@@ -687,6 +666,21 @@ export async function processJiraWebhookEvent(
       actionItemIds,
       incidentLinks,
     });
+  }
+
+  // Assignee-only webhooks must invalidate the same surfaces as status changes.
+  // Resolve action-item parent incident ids because postmortem routes are keyed
+  // by incident id and inherited incident/action-item Jira badges live there.
+  const directIncidentIds = validLinks.map(link => link.incidentId).filter(Boolean) as string[];
+  for (const incidentId of new Set(directIncidentIds)) safeRevalidateIncident(incidentId);
+
+  const actionItemIds = validLinks.map(link => link.actionItemId).filter(Boolean) as string[];
+  if (actionItemIds.length > 0) {
+    const actionItemParents = await prisma.actionItem.findMany({
+      where: { id: { in: actionItemIds } },
+      select: { incidentId: true },
+    });
+    safeRevalidateActionItems(actionItemParents.map(item => item.incidentId));
   }
 
   return { updated: validLinks.length };

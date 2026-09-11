@@ -9,6 +9,7 @@ export type HistoryIncident = {
   serviceId: string;
   createdAt: Date;
   resolvedAt: Date | null;
+  updatedAt: Date;
   urgency: string;
   status: string;
 };
@@ -30,7 +31,11 @@ export async function loadHistoryIncidentsByService(
         visibility: 'PUBLIC',
         status: { notIn: ['SUPPRESSED', 'SNOOZED'] },
         createdAt: { lt: now },
-        OR: [{ resolvedAt: { gte: earliestRequiredStart } }, { resolvedAt: null }],
+        OR: [
+          { resolvedAt: { gte: earliestRequiredStart } },
+          { resolvedAt: null, status: { not: 'RESOLVED' } },
+          { resolvedAt: null, status: 'RESOLVED', updatedAt: { gte: earliestRequiredStart } },
+        ],
       },
       orderBy: { id: 'asc' },
       take: HISTORY_INCIDENT_PAGE_SIZE,
@@ -40,6 +45,7 @@ export async function loadHistoryIncidentsByService(
         serviceId: true,
         createdAt: true,
         resolvedAt: true,
+        updatedAt: true,
         urgency: true,
         status: true,
       },
@@ -54,4 +60,37 @@ export async function loadHistoryIncidentsByService(
     cursor = page.at(-1)?.id;
     if (!cursor) throw new Error('Status history pagination did not advance');
   }
+}
+
+const CURRENT_INCIDENT_SELECT = {
+  id: true,
+  serviceId: true,
+  createdAt: true,
+  resolvedAt: true,
+  updatedAt: true,
+  urgency: true,
+  status: true,
+} as const;
+
+/** Active public incidents only — enough for current health without scanning history. */
+export async function loadCurrentIncidentsByService(
+  serviceIds: string[],
+  db: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<Map<string, HistoryIncident[]>> {
+  const byService = new Map<string, HistoryIncident[]>();
+  if (serviceIds.length === 0) return byService;
+  const rows = await db.incident.findMany({
+    where: {
+      serviceId: { in: serviceIds },
+      visibility: 'PUBLIC',
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+    },
+    select: CURRENT_INCIDENT_SELECT,
+  });
+  for (const incident of rows) {
+    const serviceIncidents = byService.get(incident.serviceId) ?? [];
+    serviceIncidents.push(incident);
+    byService.set(incident.serviceId, serviceIncidents);
+  }
+  return byService;
 }

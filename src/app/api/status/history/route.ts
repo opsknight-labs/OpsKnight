@@ -112,7 +112,9 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
               service: { select: { name: true, region: true } },
             },
           })
-        ).map(incident => serializePublicStatusIncident(incident, statusPage))
+        ).map(incident =>
+          serializePublicStatusIncident(incident, statusPage, { pageId: statusPage.id })
+        )
       : [];
     const services = visibility.showServices
       ? statusPage.services

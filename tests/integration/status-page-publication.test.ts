@@ -17,6 +17,16 @@ import * as servingStore from '@/lib/status-pages/serving-store';
 import { reconcileStatusPageRouteOperations } from '@/lib/status-pages/route-operations';
 
 vi.mock('@/lib/sla-server', () => ({ calculateMultiServiceUptime: vi.fn().mockResolvedValue({}) }));
+vi.mock('@/lib/status-pages/history-query', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/status-pages/history-query')>();
+  return {
+    ...actual,
+    loadHistoryIncidentsByService: vi.fn(
+      (...args: Parameters<typeof actual.loadHistoryIncidentsByService>) =>
+        actual.loadHistoryIncidentsByService(...args)
+    ),
+  };
+});
 vi.mock('@/lib/audit', () => ({ emitAuditEvent: vi.fn().mockResolvedValue(undefined) }));
 
 const actor = { id: 'user-1', email: 'admin@example.com', name: 'Admin' };
@@ -194,8 +204,10 @@ describe('status page publication lifecycle', () => {
 
   it('reports a failed publication and keeps serving the previous projection', async () => {
     const { page } = await livePage();
-    const { calculateMultiServiceUptime } = await import('@/lib/sla-server');
-    vi.mocked(calculateMultiServiceUptime).mockRejectedValueOnce(new Error('uptime backend down'));
+    const { loadHistoryIncidentsByService } = await import('@/lib/status-pages/history-query');
+    vi.mocked(loadHistoryIncidentsByService).mockRejectedValueOnce(
+      new Error('uptime backend down')
+    );
 
     const result = await applyStatusPageConfigurationChange({
       pageId: page.id,
@@ -216,8 +228,10 @@ describe('status page publication lifecycle', () => {
 
   it('keeps a failed privacy tightening dark', async () => {
     const { page } = await livePage();
-    const { calculateMultiServiceUptime } = await import('@/lib/sla-server');
-    vi.mocked(calculateMultiServiceUptime).mockRejectedValueOnce(new Error('uptime backend down'));
+    const { loadHistoryIncidentsByService } = await import('@/lib/status-pages/history-query');
+    vi.mocked(loadHistoryIncidentsByService).mockRejectedValueOnce(
+      new Error('uptime backend down')
+    );
 
     const result = await applyStatusPageConfigurationChange({
       pageId: page.id,
@@ -344,8 +358,10 @@ describe('status page publication lifecycle', () => {
   it('withholds the previous body when a disclosure was narrowed, though it is still stored', async () => {
     // Fail-closed is decided by the marker, not by whether a body exists: it does exist here.
     const { page } = await livePage();
-    const { calculateMultiServiceUptime } = await import('@/lib/sla-server');
-    vi.mocked(calculateMultiServiceUptime).mockRejectedValueOnce(new Error('uptime backend down'));
+    const { loadHistoryIncidentsByService } = await import('@/lib/status-pages/history-query');
+    vi.mocked(loadHistoryIncidentsByService).mockRejectedValueOnce(
+      new Error('uptime backend down')
+    );
 
     await applyStatusPageConfigurationChange({
       pageId: page.id,

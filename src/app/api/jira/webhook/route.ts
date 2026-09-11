@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
+import { isAppError } from '@/lib/errors';
 import { processJiraWebhookEvent, type JiraWebhookPayload } from '@/lib/jira-sync';
+import { withJiraWorkspaceProviderFence } from '@/lib/jira-concurrency';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger, withRequestContext } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
@@ -65,13 +67,11 @@ export function extractWebhookProvidedSecret(request: NextRequest): string | nul
   );
 }
 
-export async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
-  const config = await prisma.jiraConfig.findUnique({
-    where: { id: 'default' },
-    select: { webhookSecretEncrypted: true },
-  });
-
-  if (!config?.webhookSecretEncrypted) {
+async function verifyEncryptedWebhookSecret(
+  request: NextRequest,
+  webhookSecretEncrypted: string | null | undefined
+): Promise<boolean> {
+  if (!webhookSecretEncrypted) {
     // No secret configured — only accept in development mode.
     // In production, unsigned webhooks are a security risk.
     if (process.env.NODE_ENV === 'development') {
@@ -88,9 +88,8 @@ export async function verifyWebhookSecret(request: NextRequest): Promise<boolean
     return false;
   }
 
-  const secret = await decrypt(config.webhookSecretEncrypted);
+  const secret = await decrypt(webhookSecretEncrypted);
   const provided = extractWebhookProvidedSecret(request);
-
   if (!provided) return false;
 
   try {
@@ -99,6 +98,14 @@ export async function verifyWebhookSecret(request: NextRequest): Promise<boolean
   } catch {
     return false;
   }
+}
+
+export async function verifyWebhookSecret(request: NextRequest): Promise<boolean> {
+  const config = await prisma.jiraConfig.findUnique({
+    where: { id: 'default' },
+    select: { webhookSecretEncrypted: true },
+  });
+  return verifyEncryptedWebhookSecret(request, config?.webhookSecretEncrypted);
 }
 
 const HANDLED_EVENTS = new Set([
@@ -120,6 +127,14 @@ function isHandledJiraEvent(event?: string, eventType?: string): boolean {
   return false;
 }
 
+function isWorkspaceUnavailable(error: unknown): boolean {
+  return (
+    isAppError(error) &&
+    error.code === 'INTEGRATION_DISABLED' &&
+    error.details?.provider === 'jira'
+  );
+}
+
 async function postJiraWebhook(request: NextRequest) {
   try {
     const clientIp = getClientIp(request.headers);
@@ -137,23 +152,26 @@ async function postJiraWebhook(request: NextRequest) {
       );
     }
 
-    const isValid = await verifyWebhookSecret(request);
-    if (!isValid) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Enforce integration enabled state: reject webhooks when Jira is disabled.
-    // This prevents stale webhooks from modifying data after an admin disables the integration.
+    // Check lifecycle state before authenticating or parsing the body. After an
+    // admin disables/removes Jira, Atlassian may continue delivering the old
+    // webhook until it is removed there. Acknowledge those requests as no-ops
+    // so they cannot mutate OpsKnight and do not create retry storms.
     const jiraConfig = await prisma.jiraConfig.findUnique({
       where: { id: 'default' },
-      select: { enabled: true },
+      select: { enabled: true, webhookSecretEncrypted: true },
     });
     if (!jiraConfig?.enabled) {
-      logger.info('Jira webhook rejected: integration is disabled', {
+      const reason = jiraConfig ? 'integration_disabled' : 'integration_not_configured';
+      logger.info('Jira webhook acknowledged without processing', {
         component: 'jira-webhook',
+        reason,
       });
-      // Return 200 to avoid Jira retry storms, but don't process
-      return NextResponse.json({ ok: true, updated: 0, reason: 'integration_disabled' });
+      return NextResponse.json({ ok: true, updated: 0, reason });
+    }
+
+    const isValid = await verifyEncryptedWebhookSecret(request, jiraConfig.webhookSecretEncrypted);
+    if (!isValid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     let body: unknown;
@@ -174,9 +192,28 @@ async function postJiraWebhook(request: NextRequest) {
       return new NextResponse(null, { status: 204 });
     }
 
-    const result = await processJiraWebhookEvent(payload as unknown as JiraWebhookPayload);
-
-    return NextResponse.json({ ok: true, ...result });
+    try {
+      // Hold the shared workspace fence for the entire webhook mutation chain,
+      // including linked action-item/timeline side effects. Removal cannot
+      // complete halfway through processing, and a disable/removal that wins
+      // first causes this delivery to become an acknowledged no-op.
+      const result = await withJiraWorkspaceProviderFence(() =>
+        processJiraWebhookEvent(payload as unknown as JiraWebhookPayload)
+      );
+      return NextResponse.json({ ok: true, ...result });
+    } catch (error) {
+      if (isWorkspaceUnavailable(error)) {
+        logger.info('Jira webhook lost workspace lifecycle race; acknowledged without processing', {
+          component: 'jira-webhook',
+        });
+        return NextResponse.json({
+          ok: true,
+          updated: 0,
+          reason: 'integration_disabled_or_removed',
+        });
+      }
+      throw error;
+    }
   } catch (error) {
     logger.error('Jira webhook processing error', {
       component: 'jira-webhook',

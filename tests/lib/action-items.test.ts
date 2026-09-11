@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatActionItemDueDate,
   getStoredActionItemId,
+  normalizeActionItems,
   normalizeLegacyActionItems,
   parseActionItemDueDate,
   resolveStoredActionItems,
@@ -39,6 +40,7 @@ describe('action item compatibility helpers', () => {
         dueDate: '2026-05-24',
         status: 'IN_PROGRESS',
         priority: 'HIGH',
+        completedAt: undefined,
       },
       {
         id: 'pm-1-1',
@@ -48,8 +50,83 @@ describe('action item compatibility helpers', () => {
         dueDate: undefined,
         status: 'OPEN',
         priority: 'MEDIUM',
+        completedAt: undefined,
       },
     ]);
+  });
+
+  it('preserves Jira linkage when an already-normalized action item crosses another UI boundary', () => {
+    const [item] = normalizeActionItems([
+      {
+        id: 'ai-1',
+        title: 'Rotate signing key',
+        description: 'Complete the rotation',
+        owner: 'user-1',
+        dueDate: '2026-09-18',
+        status: 'IN_PROGRESS',
+        priority: 'HIGH',
+        externalIssue: {
+          linkId: 'link-1',
+          provider: 'JIRA',
+          key: 'OPS-123',
+          url: 'https://acme.atlassian.net/browse/OPS-123',
+          status: 'In Progress',
+          assignee: 'Ada',
+          syncState: 'SYNCED',
+        },
+      },
+    ]);
+
+    expect(item).toMatchObject({
+      id: 'ai-1',
+      owner: 'user-1',
+      externalIssue: {
+        linkId: 'link-1',
+        provider: 'JIRA',
+        key: 'OPS-123',
+        url: 'https://acme.atlassian.net/browse/OPS-123',
+        status: 'In Progress',
+        assignee: 'Ada',
+        syncState: 'SYNCED',
+      },
+    });
+  });
+
+  it('normalizes Prisma-style action item rows without losing owner or Jira linkage', () => {
+    const [item] = normalizeActionItems([
+      {
+        id: 'ai-2',
+        title: 'Add timeout',
+        description: null,
+        ownerId: 'user-2',
+        dueDate: new Date('2026-09-20T00:00:00.000Z'),
+        status: 'OPEN',
+        priority: 'MEDIUM',
+        externalIssueLinks: [
+          {
+            id: 'link-2',
+            provider: 'JIRA',
+            externalKey: 'OPS-456',
+            externalUrl: 'https://acme.atlassian.net/browse/OPS-456',
+            externalStatus: 'To Do',
+            externalAssignee: 'Grace',
+            syncState: 'SYNCED',
+          },
+        ],
+      },
+    ]);
+
+    expect(item).toMatchObject({
+      id: 'ai-2',
+      owner: 'user-2',
+      dueDate: '2026-09-20',
+      externalIssue: {
+        linkId: 'link-2',
+        key: 'OPS-456',
+        status: 'To Do',
+        assignee: 'Grace',
+      },
+    });
   });
 
   it('prefers normalized records over legacy JSON to prevent duplicate reads', () => {

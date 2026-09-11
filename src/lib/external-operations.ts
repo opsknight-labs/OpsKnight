@@ -9,6 +9,12 @@ import {
   hasJiraCommentMarker,
 } from '@/lib/jira';
 import {
+  acquireJiraActionItemLinkFence,
+  acquireJiraWorkspaceProviderFence,
+  JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
+  JIRA_PROVIDER_FENCE_TIMEOUT_MS,
+} from '@/lib/jira-concurrency';
+import {
   assertProviderAdmitted,
   recordProviderFailure,
   recordProviderSuccess,
@@ -35,6 +41,13 @@ type JiraCommentOperationInput = {
 };
 
 type TransactionClient = Prisma.TransactionClient;
+
+class TerminalJiraOperationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TerminalJiraOperationError';
+  }
+}
 
 function jiraCreateKey(input: JiraCreateOperationInput): string {
   const owner = input.incidentId
@@ -159,6 +172,15 @@ function parseJiraCreatePayload(value: Prisma.JsonValue | null): JiraCreateOpera
   return value as unknown as JiraCreateOperationInput;
 }
 
+function operationFailureMessage(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(0, 1000);
+}
+
+const providerFenceTransactionOptions = {
+  maxWait: JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
+  timeout: JIRA_PROVIDER_FENCE_TIMEOUT_MS,
+};
+
 export async function processExternalOperation(id: string): Promise<JiraIssueSummary | null> {
   const claim = await claimOperation(id);
   if (!claim) {
@@ -183,32 +205,67 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
       throw new Error('Jira comment payload is invalid');
     const providerKey = `jira:issue:${input.externalKey}`;
     const marker = `opsknight-comment-${operation.id}`;
+
     try {
+      // Admission is checked before opening the provider fence transaction so
+      // an already-open circuit does not consume a DB connection while waiting.
       await assertProviderAdmitted(providerKey);
-      if (!(await hasJiraCommentMarker(input.externalKey, marker))) {
-        await addJiraComment(input.externalKey, `${input.comment}\n\n[${marker}]`);
-      }
-      const completed = await prisma.externalOperation.updateMany({
-        where: { id, status: 'PROCESSING', leaseToken },
-        data: {
-          status: 'COMPLETED',
-          resultPayload: { delivered: true },
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
-      });
-      if (completed.count !== 1) throw new Error('External operation lease was lost');
-      await recordProviderSuccess(providerKey);
+
+      const outcome = await prisma.$transaction(async tx => {
+        // Shared workspace fence prevents enable/disable/remove from overtaking
+        // a provider mutation. It also re-checks the workspace after waiting.
+        await acquireJiraWorkspaceProviderFence(tx);
+
+        try {
+          if (!(await hasJiraCommentMarker(input.externalKey as string, marker))) {
+            await addJiraComment(input.externalKey as string, `${input.comment}\n\n[${marker}]`);
+          }
+        } catch (error) {
+          await recordProviderFailure(providerKey);
+          await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: operation.attempts >= 8 ? 'FAILED' : 'AMBIGUOUS',
+              nextAttemptAt: new Date(Date.now() + 30_000),
+              lastError: operationFailureMessage(error),
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          return { ok: false as const, error };
+        }
+
+        const completed = await tx.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'COMPLETED',
+            resultPayload: { delivered: true },
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        if (completed.count !== 1) throw new Error('External operation lease was lost');
+
+        // Keep provider-admission state inside the shared workspace fence. If
+        // removal is waiting, it will delete this state after the worker exits
+        // rather than allowing the worker to recreate it after cleanup.
+        await recordProviderSuccess(providerKey);
+        return { ok: true as const };
+      }, providerFenceTransactionOptions);
+
+      if (!outcome.ok) throw outcome.error;
       return null;
     } catch (error) {
-      await recordProviderFailure(providerKey);
+      // Errors that occur before provider I/O (workspace disabled/removed,
+      // lock failure, lease loss) are local control-plane failures and must not
+      // poison the Jira circuit-breaker state. Best-effort lease release is
+      // safe even if removal already deleted the operation.
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
           status: operation.attempts >= 8 ? 'FAILED' : 'AMBIGUOUS',
           nextAttemptAt: new Date(Date.now() + 30_000),
-          lastError:
-            error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+          lastError: operationFailureMessage(error),
           leaseToken: null,
           leaseExpiresAt: null,
         },
@@ -220,16 +277,43 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
   const input = parseJiraCreatePayload(operation.requestPayload);
   const marker = `opsknight-operation-${operation.id}`;
   try {
-    // Reconcile first on every retry. If Jira accepted an earlier request but
-    // the response or DB commit was lost, this adopts that issue.
-    const issue =
-      (await findJiraIssueByCorrelationLabel(marker)) ||
-      (await createJiraIssue({
-        ...input,
-        labels: Array.from(new Set([...(input.labels || []), marker])),
-      }));
+    const outcome = await prisma.$transaction(async tx => {
+      await acquireJiraWorkspaceProviderFence(tx);
 
-    await prisma.$transaction(async tx => {
+      if (input.actionItemId) {
+        // Serialize Create Jira with Link Existing for this exact action item.
+        // This fence is held through provider reconciliation/creation and the
+        // local link commit, eliminating the create-vs-link orphan race.
+        await acquireJiraActionItemLinkFence(tx, input.actionItemId);
+
+        const existingLink = await tx.externalIssueLink.findFirst({
+          where: { provider: 'JIRA', actionItemId: input.actionItemId },
+          select: { externalKey: true },
+        });
+        if (existingLink) {
+          const failed = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'FAILED',
+              lastError: `Action item is already linked to Jira issue ${existingLink.externalKey}.`,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          if (failed.count !== 1) throw new Error('External operation lease was lost');
+          return { kind: 'already-linked' as const, externalKey: existingLink.externalKey };
+        }
+      }
+
+      // Reconcile first on every retry. If Jira accepted an earlier request but
+      // the response or DB commit was lost, this adopts that issue.
+      const issue =
+        (await findJiraIssueByCorrelationLabel(marker)) ||
+        (await createJiraIssue({
+          ...input,
+          labels: Array.from(new Set([...(input.labels || []), marker])),
+        }));
+
       await tx.externalIssueLink.upsert({
         where: { provider_externalId: { provider: 'JIRA', externalId: issue.id } },
         create: {
@@ -267,16 +351,26 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
         },
       });
       if (completed.count !== 1) throw new Error('External operation lease was lost');
-    });
-    return issue;
+
+      return { kind: 'completed' as const, issue };
+    }, providerFenceTransactionOptions);
+
+    if (outcome.kind === 'already-linked') {
+      throw new TerminalJiraOperationError(
+        `This action item is already linked to Jira issue ${outcome.externalKey}. Refresh the page to see the current link.`
+      );
+    }
+
+    return outcome.issue;
   } catch (error) {
+    if (error instanceof TerminalJiraOperationError) throw error;
+
     await prisma.externalOperation.updateMany({
       where: { id, status: 'PROCESSING', leaseToken },
       data: {
         status: 'AMBIGUOUS',
         nextAttemptAt: new Date(Date.now() + 30_000),
-        lastError:
-          error instanceof Error ? error.message.slice(0, 1000) : String(error).slice(0, 1000),
+        lastError: operationFailureMessage(error),
         leaseToken: null,
         leaseExpiresAt: null,
       },

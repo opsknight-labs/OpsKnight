@@ -20,7 +20,9 @@ import { cn } from '@/lib/utils';
 import { Pencil, Globe, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { normalizeLegacyActionItems } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
+import type { JiraIssueReference } from '@/lib/jira-references';
 import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
+import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import { togglePostmortemPublicStatus } from '@/app/(app)/postmortems/actions';
 import {
   POSTMORTEM_STATUS_CONFIG,
@@ -34,11 +36,11 @@ interface PostmortemDetailViewProps {
     id: string;
     title: string;
     summary?: string | null;
-    timeline?: unknown; // JSON from database
-    impact?: unknown; // JSON from database
+    timeline?: unknown;
+    impact?: unknown;
     rootCause?: string | null;
     resolution?: string | null;
-    actionItems?: unknown; // JSON from database
+    actionItems?: unknown;
     lessons?: string | null;
     status?: string;
     isPublic?: boolean;
@@ -67,8 +69,9 @@ interface PostmortemDetailViewProps {
   canEdit?: boolean;
   incidentId: string;
   isPublicView?: boolean;
-  /** Mandatory capability contract for persisted action-item Jira surfaces. */
   jiraCapability: JiraCapability;
+  /** Incident-owned Jira issues inherited read-only by this postmortem and its action items. */
+  incidentJiraIssues?: JiraIssueReference[];
 }
 
 export default function PostmortemDetailView({
@@ -78,6 +81,7 @@ export default function PostmortemDetailView({
   incidentId,
   isPublicView: initialPublicView = false,
   jiraCapability,
+  incidentJiraIssues = [],
 }: PostmortemDetailViewProps) {
   const { userTimeZone } = useTimezone();
 
@@ -86,6 +90,7 @@ export default function PostmortemDetailView({
   const [previewAsPublic, setPreviewAsPublic] = useState(false);
 
   const effectivePublicView = initialPublicView || previewAsPublic;
+  const inheritedJiraIssues = effectivePublicView ? [] : incidentJiraIssues;
 
   const handleTogglePublic = async () => {
     setIsUpdatingPublic(true);
@@ -95,16 +100,15 @@ export default function PostmortemDetailView({
     try {
       const res = await togglePostmortemPublicStatus(postmortem.id, nextState);
       if (!res.success) {
-        setIsPublic(!nextState); // rollback
+        setIsPublic(!nextState);
       }
     } catch {
-      setIsPublic(!nextState); // rollback
+      setIsPublic(!nextState);
     } finally {
       setIsUpdatingPublic(false);
     }
   };
 
-  // Parse data
   const parseTimeline = (timeline: unknown): TimelineEvent[] => {
     if (!timeline || !Array.isArray(timeline)) return [];
     return timeline.map((e: any) => ({
@@ -148,12 +152,10 @@ export default function PostmortemDetailView({
     POSTMORTEM_STATUS_CONFIG[postmortem.status as keyof typeof POSTMORTEM_STATUS_CONFIG] ||
     POSTMORTEM_STATUS_CONFIG.DRAFT;
 
-  // Infer contributing factors from incident text only when genuine keywords or tags match
   const getInferredFactors = (): FactorType[] => {
     const factors: FactorType[] = [];
     const text = `${postmortem.rootCause || ''} ${postmortem.summary || ''}`.toLowerCase();
 
-    // Match explicit [Contributing Factors: ...] header if present
     const match = postmortem.rootCause?.match(/\[Contributing Factors:\s*([^\]]+)\]/i);
     if (match && match[1]) {
       const factorNames = match[1].split(',').map(s => s.trim().toUpperCase());
@@ -221,7 +223,6 @@ export default function PostmortemDetailView({
     return factors;
   };
 
-  // Helper to extract clean root cause narrative without embedded 5-whys or factor headers
   const getCleanRootCauseNarrative = (): string => {
     if (!postmortem.rootCause) return '';
     return (
@@ -232,7 +233,6 @@ export default function PostmortemDetailView({
     );
   };
 
-  // Parse structured 5-whys steps from root cause narrative if present
   const parseFiveWhys = (): FiveWhysStep[] => {
     if (!postmortem.rootCause) return [];
 
@@ -255,10 +255,9 @@ export default function PostmortemDetailView({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Customer Preview Mode Banner */}
       {previewAsPublic && (
         <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between text-xs text-amber-900">
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
             <Eye className="h-4 w-4 text-amber-600" />
             <span className="font-semibold">
               Customer Preview Mode Active: Viewing redacted version shown on the Public Status
@@ -276,7 +275,6 @@ export default function PostmortemDetailView({
         </div>
       )}
 
-      {/* Hero Header */}
       <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md overflow-hidden relative border-slate-200">
         <div className="absolute top-0 right-0 w-72 h-72 bg-[radial-gradient(circle,rgba(211,47,47,0.05)_0%,transparent_70%)] rounded-full translate-x-[30%] -translate-y-[30%] pointer-events-none" />
 
@@ -313,9 +311,9 @@ export default function PostmortemDetailView({
                   {postmortem.incident.title}
                 </Link>
               </p>
+              <IncidentJiraContext issues={inheritedJiraIssues} className="mt-2" />
             </div>
 
-            {/* Action Buttons */}
             {canEdit && !initialPublicView && (
               <div className="flex items-center gap-2 flex-wrap">
                 <Button
@@ -399,7 +397,6 @@ export default function PostmortemDetailView({
         </CardContent>
       </Card>
 
-      {/* Executive Summary */}
       {postmortem.summary && (
         <Card className="bg-white shadow-sm border-slate-200">
           <CardHeader className="pb-3">
@@ -416,7 +413,6 @@ export default function PostmortemDetailView({
         </Card>
       )}
 
-      {/* Timeline */}
       {timelineEvents.length > 0 && (
         <PostmortemTimeline
           events={timelineEvents}
@@ -427,10 +423,8 @@ export default function PostmortemDetailView({
         />
       )}
 
-      {/* Impact Metrics */}
       {Object.keys(impactMetrics).length > 0 && <PostmortemImpactMetrics metrics={impactMetrics} />}
 
-      {/* Root Cause Analysis & 5-Whys Diagram */}
       <Card className="bg-white shadow-sm border-slate-200">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2 font-bold text-foreground">
@@ -439,7 +433,6 @@ export default function PostmortemDetailView({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Contributing Factor Badges */}
           <div className="space-y-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Identified Contributing Factors
@@ -447,12 +440,10 @@ export default function PostmortemDetailView({
             <ContributingFactorsSelector selectedFactors={getInferredFactors()} />
           </div>
 
-          {/* 5-Whys Diagram */}
           <div className="pt-4 border-t border-slate-100">
             <FiveWhysBuilder initialSteps={parseFiveWhys()} isEditable={false} />
           </div>
 
-          {/* Root Cause Technical Narrative */}
           {getCleanRootCauseNarrative() && (
             <div className="pt-4 border-t border-slate-100 space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -464,7 +455,6 @@ export default function PostmortemDetailView({
             </div>
           )}
 
-          {/* Resolution Description */}
           {postmortem.resolution && (
             <div className="pt-4 border-t border-slate-100 space-y-2">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -478,7 +468,6 @@ export default function PostmortemDetailView({
         </CardContent>
       </Card>
 
-      {/* Preventative Action Items */}
       {actionItems.length > 0 && (
         <Card className="bg-white shadow-sm border-slate-200">
           <CardHeader className="pb-3">
@@ -512,6 +501,9 @@ export default function PostmortemDetailView({
                 ACTION_ITEM_PRIORITY_CONFIG[
                   item.priority as keyof typeof ACTION_ITEM_PRIORITY_CONFIG
                 ] || ACTION_ITEM_PRIORITY_CONFIG.MEDIUM;
+              const inheritedIssues = inheritedJiraIssues.filter(
+                issue => issue.key !== item.externalIssue?.key
+              );
 
               return (
                 <div
@@ -551,14 +543,20 @@ export default function PostmortemDetailView({
                       </div>
                       <h4 className="text-sm font-semibold text-foreground mb-1">{item.title}</h4>
                       {!effectivePublicView && (
-                        <div className="mb-2">
-                          <ActionItemJiraBadge
-                            actionItemId={item.id}
-                            externalIssue={item.externalIssue}
-                            canManage={canEdit}
-                            compact
-                            jiraCapability={jiraCapability}
-                          />
+                        <div className="mb-2 flex flex-col gap-1.5">
+                          <IncidentJiraContext issues={inheritedIssues} compact />
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">
+                              Action Item Jira
+                            </span>
+                            <ActionItemJiraBadge
+                              actionItemId={item.id}
+                              externalIssue={item.externalIssue}
+                              canManage={canEdit}
+                              compact
+                              jiraCapability={jiraCapability}
+                            />
+                          </div>
                         </div>
                       )}
                       {item.description && (
@@ -588,7 +586,6 @@ export default function PostmortemDetailView({
         </Card>
       )}
 
-      {/* Lessons Learned */}
       {postmortem.lessons && (
         <Card className="bg-white shadow-sm border-slate-200">
           <CardHeader className="pb-3">

@@ -1,18 +1,34 @@
 'use client';
 
-import { useActionState, useMemo, useState } from 'react';
+import { useActionState, useMemo, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
-import { saveJiraConfig } from '@/app/(app)/settings/integrations/jira/actions';
+import { useRouter } from 'next/navigation';
+import {
+  removeJiraWorkspace,
+  saveJiraConfig,
+} from '@/app/(app)/settings/integrations/jira/actions';
 import type { SettingsActionState } from '@/lib/settings-result';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/shadcn/alert-dialog';
 import { JiraLogo } from '@/components/common/BrandLogos';
 import { errorFromResponse } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import {
+  AlertTriangle,
   Check,
   CheckCircle2,
   Copy,
@@ -23,11 +39,12 @@ import {
   Loader2,
   Mail,
   PlugZap,
+  Power,
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Trash2,
   XCircle,
-  AlertTriangle,
 } from 'lucide-react';
 
 type JiraConfigView = {
@@ -76,6 +93,7 @@ export default function JiraIntegrationPage({
   isAdmin: boolean;
   appUrl?: string;
 }) {
+  const router = useRouter();
   const [state, formAction] = useActionState<SettingsActionState, FormData>(saveJiraConfig, {
     error: null,
     success: false,
@@ -94,6 +112,10 @@ export default function JiraIntegrationPage({
   const [testLatency, setTestLatency] = useState<number | null>(null);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [copied, setCopied] = useState<'cloud' | 'base' | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeConfirmation, setRemoveConfirmation] = useState('');
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [isRemoving, startRemoveTransition] = useTransition();
 
   const browserOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const effectiveAppUrl =
@@ -109,7 +131,7 @@ export default function JiraIntegrationPage({
   const isDirty = useMemo(() => {
     if (!config) {
       return Boolean(
-        baseUrl.trim() || userEmail.trim() || apiToken.trim() || webhookSecret.trim() || !enabled
+        baseUrl.trim() || userEmail.trim() || apiToken.trim() || webhookSecret.trim() || enabled
       );
     }
     return (
@@ -164,6 +186,26 @@ export default function JiraIntegrationPage({
     }
   };
 
+  const handleRemoveWorkspace = () => {
+    if (!config || removeConfirmation !== 'REMOVE JIRA') return;
+    setRemoveError(null);
+    startRemoveTransition(async () => {
+      const formData = new FormData();
+      formData.set('confirmation', removeConfirmation);
+      formData.set('updatedAt', new Date(config.updatedAt).toISOString());
+      const result = await removeJiraWorkspace(formData);
+      if (!result.success) {
+        setRemoveError(result.error || 'Failed to remove Jira workspace.');
+        return;
+      }
+
+      setRemoveOpen(false);
+      setRemoveConfirmation('');
+      setRemoveError(null);
+      router.refresh();
+    });
+  };
+
   return (
     <form action={formAction} className="space-y-6">
       {state?.code === 'SETTINGS_CHANGED' && (
@@ -208,6 +250,124 @@ export default function JiraIntegrationPage({
           </div>
         </div>
       )}
+
+      <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-lg border bg-muted/30 p-2">
+              <Power className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold">Jira Workspace</h3>
+                <Badge variant={config ? (enabled ? 'default' : 'outline') : 'secondary'}>
+                  {config ? (enabled ? 'Enabled' : 'Disabled') : 'Not Configured'}
+                </Badge>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground max-w-2xl">
+                Disable Jira to stop operational Jira workflows while preserving credentials,
+                service mappings, and historical links. Save Changes to apply the new state.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/20 px-3 py-2">
+            <Label htmlFor="jira-enabled-switch" className="text-sm font-medium">
+              {enabled ? 'Enabled' : 'Disabled'}
+            </Label>
+            <Switch
+              id="jira-enabled-switch"
+              aria-label="Enable Jira integration"
+              checked={enabled}
+              onCheckedChange={setEnabled}
+              disabled={!isAdmin}
+            />
+          </div>
+          <input type="hidden" name="enabled" value={enabled ? 'on' : 'off'} />
+        </div>
+
+        {config && (
+          <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium">Remove workspace connection</p>
+              <p className="text-xs text-muted-foreground">
+                Permanently remove Jira configuration and active Jira state from OpsKnight.
+              </p>
+            </div>
+            <AlertDialog
+              open={removeOpen}
+              onOpenChange={open => {
+                setRemoveOpen(open);
+                if (!open) {
+                  setRemoveConfirmation('');
+                  setRemoveError(null);
+                }
+              }}
+            >
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={!isAdmin}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remove Jira Workspace
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Remove Jira Workspace?</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-3 text-sm">
+                      <p>
+                        This permanently removes Jira credentials, service mappings, OpsKnight Jira
+                        links, queued Jira operations, and Jira provider circuit state.
+                      </p>
+                      <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-amber-900 dark:text-amber-100">
+                        Jira issues in Atlassian are <strong>not deleted</strong>. Incident timeline
+                        entries and audit records are retained as operational history.
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="remove-jira-confirmation">
+                          Type <strong>REMOVE JIRA</strong> to confirm
+                        </Label>
+                        <Input
+                          id="remove-jira-confirmation"
+                          value={removeConfirmation}
+                          onChange={event => setRemoveConfirmation(event.target.value)}
+                          autoComplete="off"
+                          disabled={isRemoving}
+                        />
+                      </div>
+                      {removeError && <p className="text-destructive">{removeError}</p>}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={event => {
+                      event.preventDefault();
+                      handleRemoveWorkspace();
+                    }}
+                    disabled={isRemoving || removeConfirmation !== 'REMOVE JIRA'}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {isRemoving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="mr-2 h-4 w-4" />
+                    )}
+                    Permanently Remove Jira
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
         <div className="flex items-center justify-between gap-3 border-b pb-4">
@@ -284,22 +444,6 @@ export default function JiraIntegrationPage({
               </button>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-lg border bg-muted/20 p-4 flex items-center justify-between gap-4">
-          <div>
-            <Label htmlFor="jira-enabled-switch">Enable Jira Integration Workflows</Label>
-            <p className="text-xs text-muted-foreground">
-              Allow incident and postmortem Jira workflows.
-            </p>
-          </div>
-          <Switch
-            id="jira-enabled-switch"
-            checked={enabled}
-            onCheckedChange={setEnabled}
-            disabled={!isAdmin}
-          />
-          <input type="hidden" name="enabled" value={enabled ? 'on' : 'off'} />
         </div>
       </section>
 

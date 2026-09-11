@@ -29,7 +29,9 @@ import {
 } from '@/components/postmortem/shared';
 import { normalizeLegacyActionItems, type ActionItem } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
+import type { JiraIssueReference } from '@/lib/jira-references';
 import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
+import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
 
 export type IncidentPostmortemTabContentProps = {
@@ -80,11 +82,13 @@ export type IncidentPostmortemTabContentProps = {
         externalUrl: string;
         externalStatus: string | null;
         externalAssignee: string | null;
+        syncState?: string | null;
       }>;
     }>;
   } | null;
-  /** Mandatory capability contract for persisted action-item Jira surfaces. */
   jiraCapability: JiraCapability;
+  /** Incident-owned Jira issues inherited read-only by the postmortem/action items. */
+  incidentJiraIssues: JiraIssueReference[];
 };
 
 export default function IncidentPostmortemTabContent({
@@ -96,11 +100,11 @@ export default function IncidentPostmortemTabContent({
   users = [],
   postmortem,
   jiraCapability,
+  incidentJiraIssues,
 }: IncidentPostmortemTabContentProps) {
   const { userTimeZone } = useTimezone();
   const isResolved = incidentStatus === 'RESOLVED';
 
-  // 1. Postmortem Exists State
   if (postmortem) {
     const rawActionItems =
       postmortem.actionItemRecords && postmortem.actionItemRecords.length > 0
@@ -122,7 +126,6 @@ export default function IncidentPostmortemTabContent({
 
     return (
       <div className="space-y-5">
-        {/* Postmortem Hero Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200/80 bg-slate-50/50 dark:bg-slate-800/30 dark:border-slate-800">
           <div className="space-y-1.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -172,6 +175,8 @@ export default function IncidentPostmortemTabContent({
               {postmortem.title}
             </h3>
 
+            <IncidentJiraContext issues={incidentJiraIssues} compact />
+
             {postmortem.createdBy && (
               <div className="flex items-center gap-2 pt-0.5">
                 <UserAvatar
@@ -188,7 +193,6 @@ export default function IncidentPostmortemTabContent({
             )}
           </div>
 
-          {/* Action CTAs */}
           <div className="flex items-center gap-2 shrink-0">
             {canManage && (
               <Link href={`/postmortems/${incidentId}?edit=true`}>
@@ -214,7 +218,6 @@ export default function IncidentPostmortemTabContent({
           </div>
         </div>
 
-        {/* Executive Summary & Root Cause */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 rounded-xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 space-y-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
@@ -236,7 +239,6 @@ export default function IncidentPostmortemTabContent({
           </div>
         </div>
 
-        {/* Action Items Preview */}
         <div className="rounded-xl border border-slate-200/80 bg-white dark:bg-slate-900 dark:border-slate-800 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -272,6 +274,9 @@ export default function IncidentPostmortemTabContent({
                   ACTION_ITEM_PRIORITY_CONFIG[
                     item.priority as keyof typeof ACTION_ITEM_PRIORITY_CONFIG
                   ] || ACTION_ITEM_PRIORITY_CONFIG.MEDIUM;
+                const inheritedIssues = incidentJiraIssues.filter(
+                  issue => issue.key !== item.externalIssue?.key
+                );
 
                 return (
                   <div
@@ -305,7 +310,12 @@ export default function IncidentPostmortemTabContent({
                         {priorityCfg.label}
                       </span>
 
-                      {item.externalIssue && (
+                      <IncidentJiraContext issues={inheritedIssues} compact />
+
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="font-semibold text-[9px] uppercase tracking-wide text-muted-foreground">
+                          Action Item Jira
+                        </span>
                         <ActionItemJiraBadge
                           actionItemId={item.id}
                           externalIssue={item.externalIssue}
@@ -313,7 +323,7 @@ export default function IncidentPostmortemTabContent({
                           compact
                           jiraCapability={jiraCapability}
                         />
-                      )}
+                      </div>
 
                       {item.dueDate && (
                         <DueDateBadge
@@ -349,7 +359,6 @@ export default function IncidentPostmortemTabContent({
     );
   }
 
-  // 2. Incident Resolved, Postmortem Not Yet Started
   if (isResolved) {
     return (
       <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 dark:bg-slate-800/20 dark:border-slate-800 p-6 sm:p-8 text-center space-y-4">
@@ -365,9 +374,9 @@ export default function IncidentPostmortemTabContent({
             Document what happened, determine root causes, and track follow-up action items to
             prevent future occurrences.
           </p>
+          <IncidentJiraContext issues={incidentJiraIssues} compact className="justify-center pt-1" />
         </div>
 
-        {/* Readiness stats */}
         <div className="inline-flex items-center justify-center gap-3 p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
           <span className="flex items-center gap-1.5 font-medium text-indigo-600 dark:text-indigo-400">
             <FileText className="h-3.5 w-3.5" />
@@ -397,7 +406,6 @@ export default function IncidentPostmortemTabContent({
     );
   }
 
-  // 3. Incident Active (TRIGGERED or ACKNOWLEDGED)
   return (
     <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 dark:bg-slate-800/20 dark:border-slate-800 p-6 sm:p-8 text-center space-y-4">
       <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center mx-auto shadow-xs border border-slate-200/60 dark:border-slate-700">

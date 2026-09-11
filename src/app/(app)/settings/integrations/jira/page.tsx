@@ -131,6 +131,7 @@ export default async function GlobalJiraIntegrationPage() {
       />
 
       <JiraIntegrationPage
+        key={config?.updatedAt.toISOString() ?? 'jira-unconfigured'}
         config={config}
         isAdmin={permissions.isAdmin}
         appUrl={await getAppUrl()}

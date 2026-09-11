@@ -100,7 +100,9 @@ export function buildPreviewSnapshot(input: {
   const allow = (flag: string) => Reflect.get(input.privacy ?? {}, flag) !== false;
 
   const visible = new Map(
-    input.mappings.filter(mapping => mapping.showOnPage).map(mapping => [mapping.serviceId, mapping])
+    input.mappings
+      .filter(mapping => mapping.showOnPage)
+      .map(mapping => [mapping.serviceId, mapping])
   );
   const activeByService = new Map<string, { count: number; statuses: PublicServiceStatus[] }>();
   for (const incident of input.incidents) {
@@ -133,8 +135,10 @@ export function buildPreviewSnapshot(input: {
               : {}),
             status: impact ? getWorstPublicStatus(impact.statuses) : 'OPERATIONAL',
             activeIncidentCount: impact?.count ?? 0,
-            ...(input.showMetrics !== false && input.showUptimeHistory !== false &&
-            allow('showServiceMetrics') && typeof uptime === 'number'
+            ...(input.showMetrics !== false &&
+            input.showUptimeHistory !== false &&
+            allow('showServiceMetrics') &&
+            typeof uptime === 'number'
               ? {
                   uptime: {
                     days30: {
@@ -191,6 +195,54 @@ export function buildPreviewSnapshot(input: {
       }))
     : [];
 
+  // Same announcement-derived maintenance/changelog split the real projector uses, so the preview
+  // renders the same V3 sections a visitor will see after saving.
+  const maintenanceEntries = input.announcements
+    .filter(item => (item.type ?? 'INFO') === 'MAINTENANCE')
+    .map(item => {
+      const startAt = iso(item.startDate) ?? now.toISOString();
+      const endAtIso = iso(item.endDate);
+      const endMs = endAtIso ? Date.parse(endAtIso) : NaN;
+      const state =
+        Number.isFinite(endMs) && endMs <= now.getTime()
+          ? ('COMPLETED' as const)
+          : Date.parse(startAt) <= now.getTime()
+            ? ('IN_PROGRESS' as const)
+            : ('SCHEDULED' as const);
+      return {
+        id: item.id,
+        title: item.title,
+        ...(item.message ? { description: item.message } : {}),
+        state,
+        startAt,
+        endAt: endAtIso ?? null,
+      };
+    });
+
+  const changelogEntries =
+    input.showChangelog !== false
+      ? input.announcements
+          .filter(item => (item.type ?? 'INFO') === 'UPDATE')
+          .map(item => ({
+            id: item.id,
+            title: item.title,
+            message: item.message,
+            publishedAt: iso(item.startDate) ?? now.toISOString(),
+          }))
+      : undefined;
+
+  const overallBase = deriveOverallPublicHealth(services);
+  const impactedServiceCount = services.filter(
+    service => service.status !== 'OPERATIONAL' && service.status !== 'UNKNOWN'
+  ).length;
+  const activeIncidentTotal = services.reduce(
+    (sum, service) => sum + (service.activeIncidentCount ?? 0),
+    0
+  );
+  const inProgressMaintenance = maintenanceEntries.filter(
+    item => item.state === 'IN_PROGRESS'
+  ).length;
+
   return {
     schemaVersion: 3,
     pageId: input.pageId,
@@ -199,6 +251,37 @@ export function buildPreviewSnapshot(input: {
     page: {
       id: input.pageId,
       name: 'preview',
+      capabilities: {
+        services: true,
+        serviceHistory: true,
+        uptime: true,
+        regions: true,
+        incidents: true,
+        incidentUpdates: true,
+        postmortems: true,
+        maintenance: true,
+        announcements: true,
+        changelog: true,
+        subscriptions: true,
+        rss: true,
+        jsonApi: true,
+        uptimeCsv: true,
+        uptimePdf: true,
+      },
+      resources: {
+        jsonApi: true,
+        rss: true,
+        uptimeCsv: false,
+        uptimePdf: false,
+        postmortems: false,
+        subscriptions: input.showSubscribe !== false,
+      },
+      subscription: {
+        enabled: input.showSubscribe !== false,
+        channels: ['EMAIL'],
+        verificationRequired: true,
+        serviceSelectionSupported: false,
+      },
       showSubscribe: true,
       showServicesByRegion: false,
       showRegionHeatmap: false,
@@ -208,8 +291,12 @@ export function buildPreviewSnapshot(input: {
         services: input.showServices,
         incidents: input.showIncidents,
         metrics: input.showMetrics !== false,
-        uptime: input.showMetrics !== false && input.showUptimeHistory !== false && allow('showServiceMetrics'),
-        regions: input.showServices && input.showServiceRegions !== false && allow('showServiceRegions'),
+        uptime:
+          input.showMetrics !== false &&
+          input.showUptimeHistory !== false &&
+          allow('showServiceMetrics'),
+        regions:
+          input.showServices && input.showServiceRegions !== false && allow('showServiceRegions'),
         changelog: input.showChangelog !== false,
         subscribe: input.showSubscribe !== false,
       },
@@ -222,20 +309,37 @@ export function buildPreviewSnapshot(input: {
       statusApiRateLimitMax: 120,
       statusApiRateLimitWindowSec: 60,
     },
-    status: getWorstPublicStatus(services.map(service => service.status)),
-    overall: deriveOverallPublicHealth(services),
+    status: overallBase.status,
+    statusIncludingUnknown: services.length
+      ? getWorstPublicStatus(services.map(service => service.status))
+      : overallBase.status,
+    overall: {
+      ...overallBase,
+      totalServiceCount: services.length,
+      impactedServiceCount,
+      activeIncidentCount: activeIncidentTotal,
+      maintenanceCount: inProgressMaintenance,
+    },
     thresholds: input.thresholds,
     services,
     regions: aggregatePublicRegions(services),
     incidents,
-    announcements: input.announcements.map(item => ({
-      id: item.id,
-      title: item.title,
-      message: item.message,
-      type: item.type ?? 'INFO',
-      startDate: iso(item.startDate) ?? now.toISOString(),
-      endDate: iso(item.endDate) ?? null,
-    })),
+    ...(maintenanceEntries.length ? { maintenance: maintenanceEntries } : {}),
+    announcements: input.announcements
+      .filter(item => (item.type ?? 'INFO') !== 'MAINTENANCE' && (item.type ?? 'INFO') !== 'UPDATE')
+      .map(item => ({
+        id: item.id,
+        title: item.title,
+        message: item.message,
+        type: item.type ?? 'INFO',
+        startDate: iso(item.startDate) ?? now.toISOString(),
+        endDate: iso(item.endDate) ?? null,
+      })),
+    ...(changelogEntries ? { changelog: changelogEntries } : {}),
+    freshness: {
+      generatedAt: now.toISOString(),
+      revision: 'preview',
+    },
     historyDays: 90,
   };
 }

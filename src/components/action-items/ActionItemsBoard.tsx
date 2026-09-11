@@ -23,8 +23,10 @@ import { useTimezone } from '@/contexts/TimezoneContext';
 import { cn } from '@/lib/utils';
 import type { ActionItem } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
+import type { JiraIssueReference } from '@/lib/jira-references';
 import { ActionItemStatus } from '@prisma/client';
 import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
+import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
 import SearchFilterBar from '@/components/ui/SearchFilterBar';
 import EmptyState from '@/components/ui/EmptyState';
@@ -48,6 +50,7 @@ export interface BoardActionItem extends ActionItem {
   incidentTitle: string;
   serviceId: string;
   serviceName: string;
+  incidentJiraIssues: JiraIssueReference[];
   createdAt: Date;
   completedAt?: Date | string | null;
 }
@@ -156,6 +159,9 @@ function ActionItemCard({
   const router = useRouter();
   const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG.OPEN;
   const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
+  const inheritedIssues = item.incidentJiraIssues.filter(
+    issue => issue.key !== item.externalIssue?.key
+  );
 
   return (
     <div
@@ -249,14 +255,20 @@ function ActionItemCard({
         </p>
       )}
 
-      <div className="mb-2.5">
-        <ActionItemJiraBadge
-          actionItemId={item.id}
-          externalIssue={item.externalIssue}
-          canManage={canManage}
-          compact
-          jiraCapability={jiraCapability}
-        />
+      <div className="mb-2.5 flex flex-col gap-1.5">
+        <IncidentJiraContext issues={inheritedIssues} compact />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">
+            Action Item Jira
+          </span>
+          <ActionItemJiraBadge
+            actionItemId={item.id}
+            externalIssue={item.externalIssue}
+            canManage={canManage}
+            compact
+            jiraCapability={jiraCapability}
+          />
+        </div>
       </div>
 
       <div className="pt-2 border-t border-slate-100 flex flex-col gap-1 text-[11px] text-muted-foreground">
@@ -608,6 +620,9 @@ export default function ActionItemsBoard({
               const priorityConfig = PRIORITY_CONFIG[item.priority] || PRIORITY_CONFIG.MEDIUM;
               const isUpdating = updatingId === item.id;
               const jiraCapability = requireJiraCapability(jiraCapabilities, item.serviceId);
+              const inheritedIssues = item.incidentJiraIssues.filter(
+                issue => issue.key !== item.externalIssue?.key
+              );
 
               return (
                 <Card
@@ -648,13 +663,21 @@ export default function ActionItemsBoard({
                         />
                       </div>
                       <h3 className="text-base font-semibold mb-1 text-foreground">{item.title}</h3>
-                      <ActionItemJiraBadge
-                        actionItemId={item.id}
-                        externalIssue={item.externalIssue}
-                        canManage={canManage}
-                        compact
-                        jiraCapability={jiraCapability}
-                      />
+                      <div className="flex flex-col gap-1.5">
+                        <IncidentJiraContext issues={inheritedIssues} compact />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">
+                            Action Item Jira
+                          </span>
+                          <ActionItemJiraBadge
+                            actionItemId={item.id}
+                            externalIssue={item.externalIssue}
+                            canManage={canManage}
+                            compact
+                            jiraCapability={jiraCapability}
+                          />
+                        </div>
+                      </div>
                       {item.description && (
                         <p className="text-sm text-muted-foreground mt-1 mb-2">{item.description}</p>
                       )}

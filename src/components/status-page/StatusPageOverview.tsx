@@ -56,9 +56,7 @@ export default function StatusPageOverview({
           <dd className="status-stat__value">{services.length}</dd>
           <dd className="status-stat__hint">
             {affected === 0 ? 'None affected' : `${affected} affected`}
-            {overall.unknownServiceCount > 0
-              ? ` · ${overall.unknownServiceCount} unverified`
-              : ''}
+            {overall.unknownServiceCount > 0 ? ` · ${overall.unknownServiceCount} unverified` : ''}
           </dd>
         </div>
         <div className="status-stat">

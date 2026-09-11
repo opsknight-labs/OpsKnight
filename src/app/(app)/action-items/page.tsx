@@ -10,6 +10,10 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { resolveStoredActionItems, type ActionItem } from '@/lib/action-items';
 import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
+import {
+  serializeJiraIssueReference,
+  type JiraIssueReference,
+} from '@/lib/jira-references';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +63,19 @@ export default async function ActionItemsPage({
               name: true,
             },
           },
+          externalIssueLinks: {
+            where: { provider: 'JIRA' },
+            orderBy: { createdAt: 'desc' as const },
+            select: {
+              id: true,
+              provider: true,
+              externalKey: true,
+              externalUrl: true,
+              externalStatus: true,
+              externalAssignee: true,
+              syncState: true,
+            },
+          },
         },
       },
       createdBy: {
@@ -94,6 +111,7 @@ export default async function ActionItemsPage({
       incidentTitle: string;
       serviceId: string;
       serviceName: string;
+      incidentJiraIssues: JiraIssueReference[];
       createdAt: Date;
     }
   > = [];
@@ -104,6 +122,9 @@ export default async function ActionItemsPage({
       legacy: postmortem.actionItems,
       legacyIdPrefix: `postmortem-${postmortem.id}`,
     });
+    const incidentJiraIssues = postmortem.incident.externalIssueLinks.map(
+      serializeJiraIssueReference
+    );
 
     actionItems.forEach(item => {
       allActionItems.push({
@@ -114,6 +135,7 @@ export default async function ActionItemsPage({
         incidentTitle: postmortem.incident.title,
         serviceId: postmortem.incident.service.id,
         serviceName: postmortem.incident.service.name,
+        incidentJiraIssues,
         createdAt: postmortem.createdAt,
       });
     });

@@ -18,7 +18,7 @@ This is not full two-way workflow mirroring: Jira transitions do not change an O
 | Link existing issue            | Jira → OpsKnight reference | Fetches and stores key, URL, status, and assignee.                           |
 | Create issue for action item   | OpsKnight → Jira           | Creates the service-mapped action-item issue type.                           |
 | Incident note/lifecycle update | OpsKnight → Jira           | Adds a best-effort formatted Jira comment to linked issues.                  |
-| Jira issue update webhook      | Jira → OpsKnight           | Refreshes stored Jira status and assignee metadata.                          |
+| Jira issue update webhook      | Jira → OpsKnight           | Refreshes stored Jira metadata and mirrors action-item completion state.     |
 | Jira issue delete webhook      | Jira → OpsKnight           | Event is accepted; it does not delete the OpsKnight incident or action item. |
 
 GitHub Issues, Linear, and Asana do not have equivalent native issue-sync workflows in v1.4.
@@ -40,8 +40,8 @@ Use a dedicated least-privilege Jira service account where possible. Changes to 
 2. Open **Settings → Integrations → Jira** in OpsKnight.
 3. Enter the Jira Site URL, Jira User Email, and API Token.
 4. Generate a long random Webhook Secret and enter it.
-5. Select **Enable Jira workflows** and save.
-6. Select **Test Connection** and confirm the connected Jira identity.
+5. Select **Test Connection** and confirm the connected Jira identity.
+6. Turn on **Jira Workspace → Enabled** and save the configuration.
 
 OpsKnight normalizes a bare `example.atlassian.net` site value to HTTPS. Use the exact Cloud site, not a project or board URL. On later edits, leaving the masked token/secret unchanged preserves the stored encrypted values.
 
@@ -67,7 +67,9 @@ Authorization: Bearer YOUR_SECRET
 
 In production, OpsKnight rejects Jira webhooks if no webhook secret is configured. The comparison is constant-time. Limit the Jira webhook with JQL to projects used by OpsKnight when practical.
 
-The inbound webhook updates only the linked issue's stored external status and assignee when those fields are present. It does not change incident status, assignment, urgency, or action-item status.
+The inbound webhook updates only fields actually present in the Jira event, so an omitted assignee or status field does not erase previously synchronized metadata. Jira status changes do not transition the OpsKnight incident lifecycle.
+
+For linked **action items**, OpsKnight intentionally mirrors only completion state: a Jira status categorized as Done marks a non-completed action item `COMPLETED`; if that Jira issue later leaves Done, an action item that OpsKnight previously sees as completed is reopened to `OPEN`. Jira non-Done states do not overwrite an action item that is already `IN_PROGRESS` or `BLOCKED`.
 
 ## Map each service
 
@@ -107,28 +109,41 @@ Lifecycle updates are posted as `[OpsKnight Update]: ...` comments. Comment sync
 
 ## Action-item workflow
 
-From **Action Items**, create a Jira issue using the action item's incident service mapping, or link an existing Jira issue. OpsKnight stores the same external key, URL, status, assignee, sync state, and last-sync time.
+From **Action Items** or the action-item section of its postmortem, create a Jira issue using the action item's incident service mapping, or link an existing Jira issue. The same persisted action item and Jira link are shown consistently across the global Action Items board, postmortem detail/edit views, and the incident postmortem tab.
+
+OpsKnight stores the external key, URL, status, assignee, sync state, and last-sync time. An action item with an existing Jira link must be refreshed rather than given a second active Jira link; stale Create/Link requests are rejected server-side.
 
 An action item without an incident/service mapping cannot create a correctly routed Jira issue. Fix the association or mapping first.
 
-## Disable or rotate credentials
+## Disable, remove, or rotate credentials
 
-- Disabling the workspace integration stops Jira workflows but preserves configuration, mappings, and existing links.
+**Disable Jira** when you want a reversible pause. Disabling the workspace integration stops operational Jira workflows and inbound synchronization while preserving credentials, service mappings, and existing Jira links. Historical links remain available as read-only references where supported.
+
+Use **Remove Jira Workspace** when the Jira connection should be removed from OpsKnight entirely. Removal requires Admin access plus the explicit `REMOVE JIRA` confirmation. It removes encrypted Jira credentials and webhook secret, service mappings, OpsKnight Jira links, queued Jira external operations/jobs, Jira provider-admission state, and stale cached Jira projections in legacy postmortem action-item JSON.
+
+Workspace removal does **not** delete Jira issues in Atlassian. OpsKnight also retains incident timeline entries and audit records as immutable operational history.
+
+For credential rotation:
+
 - Rotating the API token requires saving the new token and running **Test Connection**.
 - Rotating the webhook secret requires updating Jira and OpsKnight together; otherwise inbound requests return 401.
-- Removing an OpsKnight link does not delete the Jira issue.
+- Removing an individual OpsKnight link does not delete the Jira issue.
 
 ## Verification checklist
 
 - [ ] Test Connection returns the intended least-privilege Jira account.
+- [ ] Enable/Disable hides and restores operational Jira controls as expected.
 - [ ] Each production service maps to an existing project, component, and issue type.
 - [ ] A manual incident issue is created with the expected labels and link.
 - [ ] An existing issue can be linked and duplicate linking is rejected.
 - [ ] An incident note appears as a Jira comment.
 - [ ] A Jira status or assignee update refreshes the stored metadata.
+- [ ] A linked action item shows the same Jira key on Action Items and postmortem surfaces.
+- [ ] Jira Done marks a linked action item complete and reopening Jira reopens a previously completed item.
 - [ ] A test action item creates or links the intended issue type.
 - [ ] Auto-create is tested for one selected and one excluded urgency.
 - [ ] Invalid webhook secrets return 401 without changing metadata.
+- [ ] Remove Jira Workspace clears OpsKnight Jira state without deleting the provider ticket.
 
 ## Troubleshooting
 
@@ -136,11 +151,11 @@ An action item without an incident/service mapping cannot create a correctly rou
 | -------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Test Connection returns 401                  | Jira email/token pair, revoked token, and site URL.                                   |
 | Create returns 400/404                       | Project key, issue type, component, labels, and service-account permissions.          |
-| “already linked”                             | The same external Jira issue already belongs to an OpsKnight incident or action item. |
+| “already linked”                             | The Jira issue or action item already has an active OpsKnight Jira association.       |
 | Webhook returns 401                          | Stored webhook secret and the Jira header/Bearer value must match exactly.            |
 | Webhook returns 204                          | The event name is not one of the two handled names.                                   |
-| Webhook says `updated: 0`                    | No stored link matches the Jira issue ID or key.                                      |
-| Jira changed but incident did not transition | Expected limitation: inbound Jira changes update external metadata only.              |
+| Webhook says `updated: 0`                    | No stored link matches the Jira issue ID or key, or Jira sync is disabled.             |
+| Jira changed but incident did not transition | Expected limitation: inbound Jira changes do not change incident lifecycle state.     |
 | OpsKnight note missing in Jira               | Comment permission, API token, linked issue, Jira availability, and application logs. |
 
 ## Security notes
