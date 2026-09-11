@@ -18,6 +18,7 @@ export type OidcRuntimeMetadata = {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   jwksUri: string;
+  tokenEndpointAuthMethodsSupported?: string[];
 };
 
 type OidcDiscoveryMetadata = {
@@ -26,6 +27,11 @@ type OidcDiscoveryMetadata = {
   token_endpoint?: unknown;
   jwks_uri?: unknown;
   id_token_signing_alg_values_supported?: unknown;
+  token_endpoint_auth_methods_supported?: unknown;
+};
+
+export type ValidateOidcConnectionOptions = {
+  tokenEndpointAuthMethod?: string;
 };
 
 type JsonWebKeySet = {
@@ -35,7 +41,7 @@ type JsonWebKeySet = {
 const MAX_JWKS_BYTES = 1_048_576;
 const RUNTIME_METADATA_TTL_MS = 300_000;
 let runtimeMetadataCache:
-  | { issuer: string; result: OidcValidationResult; expiresAt: number }
+  | { key: string; result: OidcValidationResult; expiresAt: number }
   | undefined;
 
 function hasUsableSigningKey(value: unknown): boolean {
@@ -87,7 +93,10 @@ function normalizeIssuerForComparison(issuer: string): string {
   return `${scheme}//${host}${parsed.pathname.replace(/\/+$/, '')}`;
 }
 
-export async function validateOidcConnection(issuer: string): Promise<OidcValidationResult> {
+export async function validateOidcConnection(
+  issuer: string,
+  options?: ValidateOidcConnectionOptions
+): Promise<OidcValidationResult> {
   try {
     const trimmedIssuer = issuer?.trim();
     if (!trimmedIssuer) {
@@ -273,6 +282,27 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
       }
     }
 
+    const tokenEndpointAuthMethodsSupported = Array.isArray(
+      config.token_endpoint_auth_methods_supported
+    )
+      ? config.token_endpoint_auth_methods_supported
+          .filter((item): item is string => typeof item === 'string')
+          .map(item => item.trim())
+      : undefined;
+
+    if (
+      options?.tokenEndpointAuthMethod &&
+      tokenEndpointAuthMethodsSupported &&
+      tokenEndpointAuthMethodsSupported.length > 0
+    ) {
+      if (!tokenEndpointAuthMethodsSupported.includes(options.tokenEndpointAuthMethod)) {
+        return {
+          isValid: false,
+          error: `Identity Provider does not support the selected token endpoint authentication method (${options.tokenEndpointAuthMethod}). Supported methods: ${tokenEndpointAuthMethodsSupported.join(', ')}.`,
+        };
+      }
+    }
+
     const jwksUri = config.jwks_uri as string;
     const jwksResponse = await safeOutboundFetch(jwksUri, {
       method: 'GET',
@@ -307,6 +337,9 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
         authorizationEndpoint: config.authorization_endpoint as string,
         tokenEndpoint: config.token_endpoint as string,
         jwksUri,
+        ...(tokenEndpointAuthMethodsSupported
+          ? { tokenEndpointAuthMethodsSupported }
+          : {}),
       },
     };
   } catch (error) {
@@ -334,19 +367,24 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
  * use the protected DNS lookup supplied to openid-client.
  */
 export async function getValidatedOidcRuntimeMetadata(
-  issuer: string
+  issuer: string,
+  options?: ValidateOidcConnectionOptions
 ): Promise<OidcValidationResult> {
   const normalizedIssuer = issuer.trim();
+  const cacheKey = options?.tokenEndpointAuthMethod
+    ? `${normalizedIssuer}::${options.tokenEndpointAuthMethod}`
+    : normalizedIssuer;
+
   if (
-    runtimeMetadataCache?.issuer === normalizedIssuer &&
+    runtimeMetadataCache?.key === cacheKey &&
     runtimeMetadataCache.expiresAt > Date.now()
   ) {
     return runtimeMetadataCache.result;
   }
-  const result = await validateOidcConnection(normalizedIssuer);
+  const result = await validateOidcConnection(normalizedIssuer, options);
   if (result.isValid && result.metadata) {
     runtimeMetadataCache = {
-      issuer: normalizedIssuer,
+      key: cacheKey,
       result,
       expiresAt: Date.now() + RUNTIME_METADATA_TTL_MS,
     };

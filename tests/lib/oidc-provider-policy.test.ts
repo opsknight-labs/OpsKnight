@@ -51,4 +51,32 @@ describe('OIDC provider security policy registry', () => {
       reason: 'OIDC_ORGANIZATION_REJECTED',
     });
   });
+
+  it('enforces Allowed Domains as an additional filter on Microsoft Entra policy', () => {
+    const policy = getOidcProviderPolicy('https://login.microsoftonline.com/tenant/v2.0');
+    expect(policy.family).toBe('azure');
+
+    // Without allowedDomains configured, any verified tenant user is permitted
+    expect(policy.validateOrganizationBoundary({ email: 'user@anywhere.com' }, [])).toEqual({
+      ok: true,
+    });
+
+    // With allowedDomains configured, acts as an additional email domain filter
+    expect(
+      policy.validateOrganizationBoundary(
+        { email: 'user@acme.com' },
+        ['acme.com', 'subsidiary.acme.com']
+      )
+    ).toEqual({ ok: true });
+
+    expect(
+      policy.validateOrganizationBoundary(
+        { email: 'user@external.com' },
+        ['acme.com', 'subsidiary.acme.com']
+      )
+    ).toEqual({
+      ok: false,
+      reason: 'OIDC_ORGANIZATION_REJECTED',
+    });
+  });
 });

@@ -167,8 +167,8 @@ describe('resolveOidcIdentityForSignIn', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('does not use an Entra email suffix as tenant membership proof', async () => {
-    const result = await resolveOidcIdentityForSignIn({
+  it('enforces configured Allowed Domains as an additional filter after Entra tenant verification', async () => {
+    const rejected = await resolveOidcIdentityForSignIn({
       ...baseInput,
       issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
       email: 'alice@outside.example',
@@ -176,8 +176,28 @@ describe('resolveOidcIdentityForSignIn', () => {
       requireEmailVerifiedClaim: false,
       claims: { tid: 'tenant-id' },
     });
+    expect(rejected).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
 
-    expect(result.ok).toBe(true);
+    const acceptedMatching = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
+      email: 'alice@example.com',
+      emailVerifiedClaim: undefined,
+      requireEmailVerifiedClaim: false,
+      claims: { tid: 'tenant-id' },
+    });
+    expect(acceptedMatching.ok).toBe(true);
+
+    const acceptedNoRestriction = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
+      email: 'alice@outside.example',
+      allowedDomains: [],
+      emailVerifiedClaim: undefined,
+      requireEmailVerifiedClaim: false,
+      claims: { tid: 'tenant-id' },
+    });
+    expect(acceptedNoRestriction.ok).toBe(true);
   });
 
   it('rejects an established identity whose linked OpsKnight user is disabled', async () => {

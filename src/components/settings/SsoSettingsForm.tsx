@@ -33,6 +33,7 @@ import {
   validateOidcConnectionAction,
 } from '@/app/(app)/settings/security/actions';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
+import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import type { SettingsActionState } from '@/lib/settings-result';
 
 type ProfileMapping = {
@@ -53,6 +54,7 @@ type OidcConfig = {
   providerType?: string | null;
   providerLabel?: string | null;
   organizationId?: string | null;
+  tokenEndpointAuthMethod?: string | null;
   profileMapping?: ProfileMapping | null;
   updatedAt?: string;
 };
@@ -161,6 +163,10 @@ export default function SsoSettingsForm({
   const initialEnabled = initialConfig?.enabled ?? false;
   const initialProviderLabel = initialConfig?.providerLabel ?? '';
   const initialOrganizationId = initialConfig?.organizationId ?? '';
+  const initialTokenEndpointAuthMethod =
+    initialConfig?.tokenEndpointAuthMethod === 'client_secret_post'
+      ? 'client_secret_post'
+      : 'client_secret_basic';
   const initialCustomScopes = initialConfig?.customScopes ?? '';
   const initialAutoProvision = initialConfig?.autoProvision ?? true;
   const initialProviderType = normalizeOidcProviderType(initialConfig?.providerType, initialIssuer);
@@ -176,6 +182,9 @@ export default function SsoSettingsForm({
   const [showSecret, setShowSecret] = useState(false);
   const [providerLabelValue, setProviderLabelValue] = useState(initialProviderLabel);
   const [organizationIdValue, setOrganizationIdValue] = useState(initialOrganizationId);
+  const [tokenEndpointAuthMethodValue, setTokenEndpointAuthMethodValue] = useState(
+    initialTokenEndpointAuthMethod
+  );
   const [customScopesValue, setCustomScopesValue] = useState(initialCustomScopes);
   const [autoProvision, setAutoProvision] = useState(initialAutoProvision);
   const [selectedPreset, setSelectedPreset] = useState(initialProviderType);
@@ -206,7 +215,9 @@ export default function SsoSettingsForm({
     setTestMessage('Testing connection...');
 
     try {
-      const result = await validateOidcConnectionAction(issuerUrl);
+      const result = await validateOidcConnectionAction(issuerUrl, {
+        tokenEndpointAuthMethod: tokenEndpointAuthMethodValue,
+      });
       if (result.isValid) {
         setTestStatus('success');
         // The test validates OIDC discovery only — it does not exercise the
@@ -229,7 +240,7 @@ export default function SsoSettingsForm({
   const clientSecretRequired = !initialConfig?.hasClientSecret;
   const issuerChanged =
     Boolean(initialIssuer) &&
-    issuerUrl.trim().replace(/\/$/, '') !== initialIssuer.trim().replace(/\/$/, '');
+    normalizeOidcIssuer(issuerUrl) !== normalizeOidcIssuer(initialIssuer);
   const selectedPresetNote =
     PROVIDER_PRESETS.find(preset => preset.id === selectedPreset)?.note ??
     'Enter the issuer URL from your provider.';
@@ -247,6 +258,7 @@ export default function SsoSettingsForm({
     domains.trim() !== initialDomains.trim() ||
     providerLabelValue.trim() !== initialProviderLabel.trim() ||
     organizationIdValue.trim() !== initialOrganizationId.trim() ||
+    tokenEndpointAuthMethodValue !== initialTokenEndpointAuthMethod ||
     customScopesValue.trim() !== initialCustomScopes.trim() ||
     autoProvision !== initialAutoProvision ||
     isRoleMappingDirty ||
@@ -330,6 +342,7 @@ export default function SsoSettingsForm({
         setEnabled(initialEnabled);
         setProviderLabelValue(initialProviderLabel);
         setOrganizationIdValue(initialOrganizationId);
+        setTokenEndpointAuthMethodValue(initialTokenEndpointAuthMethod);
         setCustomScopesValue(initialCustomScopes);
         setAutoProvision(initialAutoProvision);
         setSelectedPreset(initialProviderType);
@@ -655,6 +668,75 @@ export default function SsoSettingsForm({
               </p>
             )}
           </div>
+        </div>
+
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-semibold">
+              Token Endpoint Authentication
+            </Label>
+            <span className="text-[11px] text-muted-foreground">
+              client_secret_basic / client_secret_post
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label
+              htmlFor="auth-method-basic"
+              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                tokenEndpointAuthMethodValue === 'client_secret_basic'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border hover:bg-muted/30'
+              }`}
+            >
+              <input
+                type="radio"
+                id="auth-method-basic"
+                name="tokenEndpointAuthMethod"
+                value="client_secret_basic"
+                checked={tokenEndpointAuthMethodValue === 'client_secret_basic'}
+                onChange={() => setTokenEndpointAuthMethodValue('client_secret_basic')}
+                className="mt-0.5 accent-primary h-4 w-4"
+              />
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-foreground block">
+                  Client Secret Basic
+                </span>
+                <span className="text-[11px] text-muted-foreground block leading-relaxed">
+                  HTTP Basic Authorization header (default standard)
+                </span>
+              </div>
+            </label>
+
+            <label
+              htmlFor="auth-method-post"
+              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                tokenEndpointAuthMethodValue === 'client_secret_post'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border hover:bg-muted/30'
+              }`}
+            >
+              <input
+                type="radio"
+                id="auth-method-post"
+                name="tokenEndpointAuthMethod"
+                value="client_secret_post"
+                checked={tokenEndpointAuthMethodValue === 'client_secret_post'}
+                onChange={() => setTokenEndpointAuthMethodValue('client_secret_post')}
+                className="mt-0.5 accent-primary h-4 w-4"
+              />
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-foreground block">
+                  Client Secret Post
+                </span>
+                <span className="text-[11px] text-muted-foreground block leading-relaxed">
+                  Credentials sent in POST body (Auth0/Okta POST client)
+                </span>
+              </div>
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Must match your application&apos;s authentication configuration in your Identity Provider.
+          </p>
         </div>
 
         <div className="space-y-2">

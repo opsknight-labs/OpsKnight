@@ -85,9 +85,9 @@ const entraPolicy: OidcProviderPolicy = {
     const authority = getMicrosoftEntraTenantAuthority(issuer);
     return authority !== null && !isMicrosoftEntraGenericAuthority(authority);
   },
-  // Entra membership is bounded by the tenant-specific issuer. An email suffix
-  // is not tenant proof and must never be used as one.
-  validateOrganizationBoundary: () => ({ ok: true }),
+  // Entra tenant membership is enforced by tenant-specific issuer validation.
+  // When configured, Allowed Domains acts as an additional email domain filter.
+  validateOrganizationBoundary: emailBoundary,
   allowsMissingEmailVerified: () => true,
 };
 

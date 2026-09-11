@@ -102,6 +102,13 @@ export async function saveOidcConfig(
     const customScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
     const providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
     const organizationId = (formData.get('organizationId') as string | null)?.trim() ?? null;
+    const rawTokenEndpointAuthMethod = (
+      formData.get('tokenEndpointAuthMethod') as string | null
+    )?.trim();
+    const tokenEndpointAuthMethod =
+      rawTokenEndpointAuthMethod === 'client_secret_post'
+        ? 'client_secret_post'
+        : 'client_secret_basic';
     const requestedProviderType = (formData.get('providerType') as string | null)?.trim();
 
     let roleMapping: RoleMappingRule[];
@@ -151,7 +158,7 @@ export async function saveOidcConfig(
 
     if (enabled) {
       const { validateOidcConnection } = await import('@/lib/oidc-validation');
-      const validation = await validateOidcConnection(issuer);
+      const validation = await validateOidcConnection(issuer, { tokenEndpointAuthMethod });
       if (!validation.isValid) {
         return {
           success: false,
@@ -216,6 +223,7 @@ export async function saveOidcConfig(
             providerType,
             providerLabel,
             organizationId,
+            tokenEndpointAuthMethod,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
@@ -256,6 +264,7 @@ export async function saveOidcConfig(
             providerType,
             providerLabel,
             organizationId,
+            tokenEndpointAuthMethod,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
@@ -282,6 +291,7 @@ export async function saveOidcConfig(
                 providerType: existing.providerType,
                 providerLabel: existing.providerLabel,
                 organizationId: existing.organizationId,
+                tokenEndpointAuthMethod: existing.tokenEndpointAuthMethod,
                 hasClientSecret: Boolean(existing.clientSecret),
               }
             : null,
@@ -295,6 +305,7 @@ export async function saveOidcConfig(
             providerType,
             providerLabel,
             organizationId,
+            tokenEndpointAuthMethod,
             roleMappingCount: roleMapping.length,
             hasClientSecret: Boolean(encryptedSecret),
           },
@@ -350,11 +361,14 @@ export async function saveOidcConfig(
   }
 }
 
-export async function validateOidcConnectionAction(issuer: string) {
+export async function validateOidcConnectionAction(
+  issuer: string,
+  options?: { tokenEndpointAuthMethod?: string }
+) {
   await assertAdmin();
   if (!issuer) return { isValid: false, error: 'Issuer URL is missing' };
   const { validateOidcConnection } = await import('@/lib/oidc-validation');
-  return validateOidcConnection(issuer);
+  return validateOidcConnection(issuer, options);
 }
 
 export async function revokeAllSessions(): Promise<{ success?: boolean; error?: string }> {

@@ -25,6 +25,7 @@ import {
 } from '@/lib/local-auth-policy';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
+import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 
 /**
  * Security-sensitive user state is intentionally refreshed on every server-side
@@ -88,7 +89,7 @@ function safeTtlMs(value: number, fallback: number) {
 const AUTH_TTL_MS = safeTtlMs(AUTH_OPTIONS_CACHE_TTL_MS, 5000);
 
 function normalizeIssuer(issuer: string) {
-  return issuer.replace(/\/$/, '');
+  return normalizeOidcIssuer(issuer);
 }
 
 function coerceBooleanClaim(value: unknown): boolean | undefined {
@@ -145,7 +146,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
   authOptionsInFlight = (async () => {
     const oidcConfig = await getOidcConfig();
     const oidcValidation = oidcConfig
-      ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer)
+      ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer, {
+          tokenEndpointAuthMethod: oidcConfig.tokenEndpointAuthMethod,
+        })
       : null;
     const activeOidcConfig =
       oidcConfig && oidcValidation?.isValid && oidcValidation.metadata ? oidcConfig : null;
@@ -259,6 +262,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 issuer: activeOidcConfig.issuer,
                 customScopes: activeOidcConfig.customScopes ?? null,
                 metadata: oidcValidation.metadata,
+                tokenEndpointAuthMethod: activeOidcConfig.tokenEndpointAuthMethod,
+                providerType: activeOidcConfig.providerType,
+                organizationId: activeOidcConfig.organizationId,
               }),
             ]
           : []),
