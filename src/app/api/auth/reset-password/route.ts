@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 import { z } from 'zod';
 import { completePasswordReset } from '@/lib/password-reset';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
@@ -26,6 +27,12 @@ function json(body: Record<string, unknown>, status: number) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!getLocalAuthPolicy().localLoginEnabled) {
+    return NextResponse.json(
+      { error: 'Local password authentication is disabled.' },
+      { status: 403 }
+    );
+  }
   try {
     const parsed = schema.safeParse(await readJsonBodyWithLimit(req, 8192));
     if (!parsed.success) return json({ error: 'Invalid reset request.' }, 400);

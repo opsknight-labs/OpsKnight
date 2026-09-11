@@ -1,5 +1,16 @@
 export type OidcProviderType = 'google' | 'okta' | 'azure' | 'auth0' | 'custom';
 
+const MICROSOFT_ENTRA_HOSTS = new Set([
+  'login.microsoftonline.com',
+  'login.microsoftonline.us',
+  'login.partner.microsoftonline.cn',
+  'login.microsoft.com',
+  'sts.windows.net',
+  'microsoftonline.com',
+]);
+
+const MICROSOFT_ENTRA_GENERIC_AUTHORITIES = new Set(['common', 'organizations', 'consumers']);
+
 function isKnownProviderType(value: string | null | undefined): value is OidcProviderType {
   return (
     value === 'google' ||
@@ -10,6 +21,25 @@ function isKnownProviderType(value: string | null | undefined): value is OidcPro
   );
 }
 
+export function isMicrosoftEntraHost(hostname: string): boolean {
+  return MICROSOFT_ENTRA_HOSTS.has(hostname.toLowerCase());
+}
+
+/**
+ * Return the Entra authority/tenant segment from a recognized Microsoft issuer.
+ * For https://login.microsoftonline.com/<tenant>/v2.0 this is <tenant>, not
+ * the trailing protocol-version segment.
+ */
+export function getMicrosoftEntraTenantAuthority(url: URL): string | null {
+  if (!isMicrosoftEntraHost(url.hostname)) return null;
+  const [authority] = url.pathname.split('/').filter(Boolean);
+  return authority?.toLowerCase() ?? null;
+}
+
+export function isMicrosoftEntraGenericAuthority(authority: string | null): boolean {
+  return authority !== null && MICROSOFT_ENTRA_GENERIC_AUTHORITIES.has(authority.toLowerCase());
+}
+
 /**
  * Detect the built-in provider family from an OIDC issuer hostname.
  *
@@ -17,9 +47,7 @@ function isKnownProviderType(value: string | null | undefined): value is OidcPro
  * authentication policy as well as UI branding, so lookalike hostnames must
  * never inherit provider-specific authentication behavior.
  */
-export function detectOidcProviderType(
-  issuerUrl: string | null | undefined
-): OidcProviderType {
+export function detectOidcProviderType(issuerUrl: string | null | undefined): OidcProviderType {
   if (!issuerUrl) return 'custom';
 
   let hostname: string;
@@ -43,15 +71,7 @@ export function detectOidcProviderType(
     return 'okta';
   }
 
-  const microsoftHosts = [
-    'login.microsoftonline.com',
-    'login.microsoftonline.us',
-    'login.partner.microsoftonline.cn',
-    'login.microsoft.com',
-    'sts.windows.net',
-    'microsoftonline.com',
-  ];
-  if (microsoftHosts.some(host => hostname === host || hostname.endsWith(`.${host}`))) {
+  if (isMicrosoftEntraHost(hostname)) {
     return 'azure';
   }
 
@@ -63,10 +83,10 @@ export function detectOidcProviderType(
 }
 
 /**
- * The issuer is authoritative whenever it is available. A persisted provider
- * type is only a legacy fallback for rows that do not have an issuer. This is
- * important because provider type affects authentication policy and must not
- * be able to weaken that policy when it disagrees with the issuer hostname.
+ * A canonical provider issuer is always authoritative. Custom hostnames cannot
+ * identify an Auth0 or Okta tenant by themselves, so preserve those two stored
+ * families where they only tighten the generic policy. Never let a stored
+ * Entra or Google label grant special trust to an arbitrary hostname.
  *
  * The return is typed as string because persisted UI presets are extensible;
  * all values produced here are still constrained to OidcProviderType.
@@ -75,7 +95,16 @@ export function normalizeOidcProviderType(
   storedProviderType: string | null | undefined,
   issuerUrl: string | null | undefined
 ): string {
-  if (issuerUrl) return detectOidcProviderType(issuerUrl);
+  if (issuerUrl) {
+    const detected = detectOidcProviderType(issuerUrl);
+    if (
+      detected === 'custom' &&
+      (storedProviderType === 'auth0' || storedProviderType === 'okta')
+    ) {
+      return storedProviderType;
+    }
+    return detected;
+  }
   return isKnownProviderType(storedProviderType) ? storedProviderType : 'custom';
 }
 
@@ -105,7 +134,6 @@ export function hasOidcEmailLinkAssurance(
   emailVerifiedClaim: boolean | undefined
 ): boolean {
   return (
-    emailVerifiedClaim === true ||
-    (providerType === 'azure' && emailVerifiedClaim === undefined)
+    emailVerifiedClaim === true || (providerType === 'azure' && emailVerifiedClaim === undefined)
   );
 }

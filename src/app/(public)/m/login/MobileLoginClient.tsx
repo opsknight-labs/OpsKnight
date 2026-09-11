@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect, @next/next/no-img-element -- existing login UI behavior */
 
 import { useState, useEffect } from 'react';
 import { signIn } from 'next-auth/react';
@@ -21,12 +22,14 @@ import {
 import { cn } from '@/lib/utils';
 import { calculatePasswordStrength } from '@/lib/password-strength';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
+import { sanitizeCallbackUrl } from '@/lib/callback-url';
 
 type Props = {
   callbackUrl: string;
   ssoEnabled: boolean;
   ssoProviderType?: string | null;
   ssoProviderLabel?: string | null;
+  localAuthEnabled: boolean;
   errorCode?: string | null;
   ssoError?: string | null;
   passwordSet?: boolean;
@@ -54,6 +57,7 @@ export default function MobileLoginClient({
   ssoEnabled,
   ssoProviderType,
   ssoProviderLabel,
+  localAuthEnabled,
 }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -111,31 +115,13 @@ export default function MobileLoginClient({
     setIsValid(Boolean(email) && Boolean(password));
   }, [email, password]);
 
-  let safeCallbackUrl = callbackUrl;
-  // Ensure we redirect to mobile dashboard /m unless specific deep link
-  if (
-    !safeCallbackUrl ||
-    safeCallbackUrl === '/' ||
-    safeCallbackUrl.includes('/login') ||
-    safeCallbackUrl.includes('/auth') || // Catches /auth/signout
-    !safeCallbackUrl.startsWith('/m')
-  ) {
-    safeCallbackUrl = '/m';
-  }
+  const safeCallbackUrl = sanitizeCallbackUrl(callbackUrl, '/m');
 
   const handleSSO = async () => {
     setIsSSOLoading(true);
     setError('');
     try {
-      let finalCallbackUrl = callbackUrl;
-      if (
-        !finalCallbackUrl ||
-        finalCallbackUrl === '/' ||
-        finalCallbackUrl.includes('/login') ||
-        finalCallbackUrl.includes('/auth/signout')
-      ) {
-        finalCallbackUrl = '/m';
-      }
+      const finalCallbackUrl = sanitizeCallbackUrl(callbackUrl, '/m');
       await purgeBrowserAuthCaches();
       await signIn('oidc', { callbackUrl: finalCallbackUrl });
     } catch {
@@ -168,13 +154,7 @@ export default function MobileLoginClient({
       } else if (result?.ok) {
         setIsSubmitting(false);
         setIsSuccess(true);
-        const target =
-          safeCallbackUrl &&
-          safeCallbackUrl.startsWith('/') &&
-          !safeCallbackUrl.startsWith('/login') &&
-          !safeCallbackUrl.includes('/auth/signout')
-            ? safeCallbackUrl
-            : '/m';
+        const target = sanitizeCallbackUrl(safeCallbackUrl, '/m');
 
         // Purge any stale Service Worker dynamic/RSC caches immediately
         void purgeBrowserAuthCaches();
@@ -303,187 +283,196 @@ export default function MobileLoginClient({
           )}
 
           {/* Login Form */}
-          <form onSubmit={handleCredentials} className="space-y-5">
-            {/* Email Field */}
-            <div className="group space-y-2">
-              <label
-                className={`text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${
-                  emailTouched && email && !isEmailValid
-                    ? 'text-red-500'
-                    : 'text-slate-500 group-focus-within:text-slate-900'
-                }`}
-              >
-                Identification
-              </label>
-              <div className="relative group/input">
-                <div className="relative flex items-center pr-3 group-focus-within:border-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm transition-colors duration-300">
-                  <div className="flex items-center justify-center pl-4 pr-3 py-3.5 border-r border-slate-100">
-                    <Mail className="h-5 w-5 text-slate-400 transition-colors group-focus-within/input:text-slate-600" />
-                  </div>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={e => {
-                      setEmail(e.target.value);
-                      if (error) setError('');
-                    }}
-                    onBlur={() => setEmailTouched(true)}
-                    className="auth-input w-full bg-transparent px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors"
-                    placeholder="you@opsknight.com"
-                    disabled={isSubmitting || isSuccess}
-                  />
-                  {emailTouched && email && !isEmailValid && (
-                    <div className="absolute right-3 text-red-500 animate-in fade-in zoom-in duration-200">
-                      <AlertCircle className="w-5 h-5" />
-                    </div>
-                  )}
-                </div>
-              </div>
-              {emailTouched && email && !isEmailValid && (
-                <p className="text-[10px] text-red-500 font-medium pl-1 animate-in slide-in-from-top-1">
-                  Please enter a valid email address
-                </p>
-              )}
-            </div>
-
-            {/* Password Field */}
-            <div className="group space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors duration-300 group-focus-within:text-slate-900">
-                  Access Key
-                </label>
-                <Link
-                  href="/m/forgot-password"
-                  className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors focus:outline-none focus:underline"
+          {localAuthEnabled && (
+            <form onSubmit={handleCredentials} className="space-y-5">
+              {/* Email Field */}
+              <div className="group space-y-2">
+                <label
+                  className={`text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${
+                    emailTouched && email && !isEmailValid
+                      ? 'text-red-500'
+                      : 'text-slate-500 group-focus-within:text-slate-900'
+                  }`}
                 >
-                  Forgot password?
-                </Link>
-              </div>
-
-              <div className="relative group/input">
-                <div className="relative flex items-center pr-3 group-focus-within:border-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm transition-all duration-300">
-                  <div className="flex items-center justify-center pl-4 pr-3 py-3.5 border-r border-slate-100">
-                    <Lock className="h-5 w-5 text-slate-400 transition-colors group-focus-within/input:text-slate-600" />
-                  </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={e => {
-                      setPassword(e.target.value);
-                      if (error) setError('');
-                    }}
-                    onKeyDown={e => {
-                      if (e.getModifierState('CapsLock')) {
-                        setCapsLockOn(true);
-                      } else {
-                        setCapsLockOn(false);
-                      }
-                    }}
-                    className="auth-input w-full bg-transparent px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors"
-                    placeholder="••••••••"
-                    disabled={isSubmitting || isSuccess}
-                  />
-                  <div className="flex items-center border-l border-slate-100 pl-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="text-slate-400 hover:text-slate-600 transition-colors focus:outline-none p-1 rounded-md"
-                      aria-label="Toggle password visibility"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
+                  Identification
+                </label>
+                <div className="relative group/input">
+                  <div className="relative flex items-center pr-3 group-focus-within:border-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm transition-colors duration-300">
+                    <div className="flex items-center justify-center pl-4 pr-3 py-3.5 border-r border-slate-100">
+                      <Mail className="h-5 w-5 text-slate-400 transition-colors group-focus-within/input:text-slate-600" />
+                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={e => {
+                        setEmail(e.target.value);
+                        if (error) setError('');
+                      }}
+                      onBlur={() => setEmailTouched(true)}
+                      className="auth-input w-full bg-transparent px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors"
+                      placeholder="you@opsknight.com"
+                      disabled={isSubmitting || isSuccess}
+                    />
+                    {emailTouched && email && !isEmailValid && (
+                      <div className="absolute right-3 text-red-500 animate-in fade-in zoom-in duration-200">
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-
-              {/* Password Strength Indicator */}
-              {password && !isSuccess && (
-                <div className="space-y-1 pt-1 duration-200 animate-in fade-in slide-in-from-top-1">
-                  <div className="flex gap-1 h-1 w-full overflow-hidden rounded-full bg-slate-200">
-                    {[1, 2, 3, 4, 5].map(level => (
-                      <div
-                        key={level}
-                        className={cn(
-                          'h-full flex-1 transition-all duration-500',
-                          level <= (passwordStrength.score + 1) * 1.25
-                            ? passwordStrength.color
-                            : 'bg-transparent'
-                        )}
-                      />
-                    ))}
-                  </div>
-                  <p
-                    className={cn('text-[10px] font-medium text-right', passwordStrength.textColor)}
-                  >
-                    Strength: {passwordStrength.label}
+                {emailTouched && email && !isEmailValid && (
+                  <p className="text-[10px] text-red-500 font-medium pl-1 animate-in slide-in-from-top-1">
+                    Please enter a valid email address
                   </p>
-                </div>
-              )}
+                )}
+              </div>
 
-              {capsLockOn && (
-                <div className="flex items-center gap-2 text-amber-600 text-xs animate-pulse font-medium pl-1">
-                  <AlertCircle className="h-3 w-3" />
-                  <span>Caps Lock is ON</span>
+              {/* Password Field */}
+              <div className="group space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors duration-300 group-focus-within:text-slate-900">
+                    Access Key
+                  </label>
+                  <Link
+                    href="/m/forgot-password"
+                    className="text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors focus:outline-none focus:underline"
+                  >
+                    Forgot password?
+                  </Link>
                 </div>
-              )}
-            </div>
 
-            {/* Remember Me */}
-            <div
-              className="flex items-center group cursor-pointer"
-              onClick={() => !isSubmitting && !isSuccess && setRememberMe(!rememberMe)}
-            >
+                <div className="relative group/input">
+                  <div className="relative flex items-center pr-3 group-focus-within:border-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm transition-all duration-300">
+                    <div className="flex items-center justify-center pl-4 pr-3 py-3.5 border-r border-slate-100">
+                      <Lock className="h-5 w-5 text-slate-400 transition-colors group-focus-within/input:text-slate-600" />
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={e => {
+                        setPassword(e.target.value);
+                        if (error) setError('');
+                      }}
+                      onKeyDown={e => {
+                        if (e.getModifierState('CapsLock')) {
+                          setCapsLockOn(true);
+                        } else {
+                          setCapsLockOn(false);
+                        }
+                      }}
+                      className="auth-input w-full bg-transparent px-4 py-3 text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors"
+                      placeholder="••••••••"
+                      disabled={isSubmitting || isSuccess}
+                    />
+                    <div className="flex items-center border-l border-slate-100 pl-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-slate-400 hover:text-slate-600 transition-colors focus:outline-none p-1 rounded-md"
+                        aria-label="Toggle password visibility"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password Strength Indicator */}
+                {password && !isSuccess && (
+                  <div className="space-y-1 pt-1 duration-200 animate-in fade-in slide-in-from-top-1">
+                    <div className="flex gap-1 h-1 w-full overflow-hidden rounded-full bg-slate-200">
+                      {[1, 2, 3, 4, 5].map(level => (
+                        <div
+                          key={level}
+                          className={cn(
+                            'h-full flex-1 transition-all duration-500',
+                            level <= (passwordStrength.score + 1) * 1.25
+                              ? passwordStrength.color
+                              : 'bg-transparent'
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <p
+                      className={cn(
+                        'text-[10px] font-medium text-right',
+                        passwordStrength.textColor
+                      )}
+                    >
+                      Strength: {passwordStrength.label}
+                    </p>
+                  </div>
+                )}
+
+                {capsLockOn && (
+                  <div className="flex items-center gap-2 text-amber-600 text-xs animate-pulse font-medium pl-1">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>Caps Lock is ON</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Remember Me */}
               <div
+                className="flex items-center group cursor-pointer"
+                onClick={() => !isSubmitting && !isSuccess && setRememberMe(!rememberMe)}
+              >
+                <div
+                  className={cn(
+                    'h-5 w-5 rounded-md border flex items-center justify-center transition-all duration-200',
+                    rememberMe
+                      ? 'bg-slate-800 border-slate-800 shadow-sm'
+                      : 'bg-white border-slate-300 group-hover:border-slate-400 shadow-sm'
+                  )}
+                >
+                  {rememberMe && <Check className="h-3.5 w-3.5 text-white stroke-[3]" />}
+                </div>
+                <input
+                  id="remember-me"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={e => setRememberMe(e.target.checked)}
+                  disabled={isSubmitting || isSuccess}
+                  className="sr-only"
+                />
+                <label className="ml-3 text-sm text-slate-600 group-hover:text-slate-900 transition-colors cursor-pointer select-none">
+                  Remember me
+                </label>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isSubmitting || isSSOLoading || !isValid || isSuccess}
                 className={cn(
-                  'h-5 w-5 rounded-md border flex items-center justify-center transition-all duration-200',
-                  rememberMe
-                    ? 'bg-slate-800 border-slate-800 shadow-sm'
-                    : 'bg-white border-slate-300 group-hover:border-slate-400 shadow-sm'
+                  'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200',
+                  isSuccess
+                    ? 'bg-slate-900 text-white shadow-lg'
+                    : 'bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed'
                 )}
               >
-                {rememberMe && <Check className="h-3.5 w-3.5 text-white stroke-[3]" />}
-              </div>
-              <input
-                id="remember-me"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-                disabled={isSubmitting || isSuccess}
-                className="sr-only"
-              />
-              <label className="ml-3 text-sm text-slate-600 group-hover:text-slate-900 transition-colors cursor-pointer select-none">
-                Remember me
-              </label>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting || isSSOLoading || !isValid || isSuccess}
-              className={cn(
-                'w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200',
-                isSuccess
-                  ? 'bg-slate-900 text-white shadow-lg'
-                  : 'bg-slate-900 text-white hover:bg-slate-800 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed'
-              )}
-            >
-              {isSuccess ? (
-                <>
-                  <CheckCircle2 className="h-5 w-5" />
-                  <span>Success</span>
-                </>
-              ) : isSubmitting ? (
-                <>
-                  <Spinner size="sm" variant="white" />
-                  <span>Signing in...</span>
-                </>
-              ) : (
-                <span>Sign in</span>
-              )}
-            </button>
-          </form>
+                {isSuccess ? (
+                  <>
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span>Success</span>
+                  </>
+                ) : isSubmitting ? (
+                  <>
+                    <Spinner size="sm" variant="white" />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <span>Sign in</span>
+                )}
+              </button>
+            </form>
+          )}
 
           {/* Footer */}
           <p className="mt-8 text-center text-xs text-slate-400">Secured by OpsKnight</p>

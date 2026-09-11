@@ -5,13 +5,20 @@ import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
+import {
+  getOidcLinkingApprovalExpiry,
+  getOidcLinkingApprovalState,
+  type OidcLinkingApprovalState,
+} from '@/lib/oidc-linking-approval';
 
-export type OidcLinkingState = 'not-approved' | 'approved' | 'linked';
+export type OidcLinkingState = OidcLinkingApprovalState | 'linked';
 
 export type OidcLinkingApprovalResult = {
   success?: boolean;
   alreadyLinked?: boolean;
   alreadyApproved?: boolean;
+  renewed?: boolean;
   state?: OidcLinkingState;
   error?: string;
 };
@@ -23,19 +30,19 @@ async function getManagedUser(userId: string) {
   });
 }
 
-async function readOidcLinkingState(userId: string, _email: string): Promise<OidcLinkingState> {
+async function readOidcLinkingState(userId: string, now = new Date()): Promise<OidcLinkingState> {
   const existingIdentity = await prisma.oidcIdentity.findFirst({
     where: { userId },
     select: { id: true },
   });
   if (existingIdentity) return 'linked';
 
-  const provisioningEvidence = await prisma.oidcLinkingApproval.findUnique({
+  const approval = await prisma.oidcLinkingApproval.findUnique({
     where: { userId },
-    select: { id: true, revokedAt: true },
+    select: { id: true, revokedAt: true, consumedAt: true, expiresAt: true },
   });
 
-  return provisioningEvidence && !provisioningEvidence.revokedAt ? 'approved' : 'not-approved';
+  return getOidcLinkingApprovalState(approval, now);
 }
 
 export async function getOidcLinkingState(userId: string): Promise<OidcLinkingApprovalResult> {
@@ -48,13 +55,15 @@ export async function getOidcLinkingState(userId: string): Promise<OidcLinkingAp
   const user = await getManagedUser(userId);
   if (!user) return { error: 'User not found.' };
 
-  const state = await readOidcLinkingState(user.id, user.email);
+  const state = await readOidcLinkingState(user.id);
   return { success: true, state, alreadyLinked: state === 'linked' };
 }
 
 /**
- * Explicitly authorizes first-time OIDC linking for an existing ACTIVE user
+ * Explicitly authorizes first-time OIDC linking for an ACTIVE or INVITED user
  * without changing the account status or issuing a usable invitation link.
+ * Expired or revoked approvals are renewed in-place so generation advances and
+ * stale callbacks cannot reuse the prior authorization.
  */
 export async function allowOidcLinking(userId: string): Promise<OidcLinkingApprovalResult> {
   let admin: { id: string; email: string };
@@ -66,12 +75,12 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
 
   const user = await getManagedUser(userId);
   if (!user) return { error: 'User not found.' };
-  if (user.status !== 'ACTIVE') {
-    return { error: 'OIDC linking approval can only be managed for active users.' };
+  if (user.status !== 'ACTIVE' && user.status !== 'INVITED') {
+    return { error: 'OIDC linking approval can only be managed for active or invited users.' };
   }
 
   const identifier = user.email.toLowerCase();
-  const state = await readOidcLinkingState(user.id, identifier);
+  const state = await readOidcLinkingState(user.id);
   if (state === 'linked') {
     return { success: true, alreadyLinked: true, state };
   }
@@ -79,42 +88,78 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
     return { success: true, alreadyApproved: true, state };
   }
 
+  const now = new Date();
+  const expiresAt = getOidcLinkingApprovalExpiry(now);
+  const renewed = state === 'expired' || state === 'revoked' || state === 'consumed';
+  const provider = await prisma.oidcConfig.findFirst({
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, issuer: true, clientId: true, configVersion: true, enabled: true },
+  });
+  if (!provider?.enabled) return { error: 'An active OIDC configuration is required.' };
+  const issuerFingerprint = oidcTrustFingerprint(provider.issuer, provider.clientId);
+
   await prisma.oidcLinkingApproval.upsert({
     where: { userId: user.id },
-    create: { userId: user.id, approvedById: admin.id },
+    create: {
+      userId: user.id,
+      approvedById: admin.id,
+      approvedAt: now,
+      expiresAt,
+      providerConfigId: provider.id,
+      issuerFingerprint,
+      expectedEmail: identifier,
+      configVersion: provider.configVersion,
+    },
     update: {
       approvedById: admin.id,
-      approvedAt: new Date(),
+      approvedAt: now,
       revokedAt: null,
+      consumedAt: null,
+      providerConfigId: provider.id,
+      issuerFingerprint,
+      expectedEmail: identifier,
+      configVersion: provider.configVersion,
+      expiresAt,
       generation: { increment: 1 },
     },
   });
 
   await logAudit({
-    action: 'user.oidc_linking.approved',
+    action: renewed ? 'user.oidc_linking.renewed' : 'user.oidc_linking.approved',
     entityType: 'USER',
     entityId: user.id,
     actorId: admin.id,
-    details: { email: identifier },
+    details: {
+      email: identifier,
+      outcome: 'approved',
+      previousState: state,
+      expiresAt: expiresAt.toISOString(),
+    },
   });
 
-  logger.info('[Auth] Admin approved first-time OIDC linking', {
-    component: 'users-actions',
-    userId: user.id,
-    email: identifier,
-    adminId: admin.id,
-  });
+  logger.info(
+    renewed
+      ? '[Auth] Admin renewed first-time OIDC linking approval'
+      : '[Auth] Admin approved first-time OIDC linking',
+    {
+      component: 'users-actions',
+      userId: user.id,
+      adminId: admin.id,
+      previousState: state,
+      expiresAt: expiresAt.toISOString(),
+    }
+  );
 
   revalidatePath('/users');
   revalidatePath('/audit');
-  return { success: true, state: 'approved' };
+  return { success: true, state: 'approved', renewed };
 }
 
 /**
- * Revokes first-time OIDC linking eligibility for an ACTIVE user that has not
- * linked an OIDC identity yet. Existing credentials and account status are not
- * changed. A linked identity must be managed separately; this action never
- * silently unlinks an established identity.
+ * Revokes first-time OIDC linking eligibility for an ACTIVE or INVITED user
+ * that has not linked an OIDC identity yet. Existing credentials and account
+ * status are not changed. A linked identity must be managed separately; this
+ * action never silently unlinks an established identity.
  */
 export async function revokeOidcLinking(userId: string): Promise<OidcLinkingApprovalResult> {
   let admin: { id: string; email: string };
@@ -126,12 +171,12 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
 
   const user = await getManagedUser(userId);
   if (!user) return { error: 'User not found.' };
-  if (user.status !== 'ACTIVE') {
-    return { error: 'OIDC linking approval can only be managed for active users.' };
+  if (user.status !== 'ACTIVE' && user.status !== 'INVITED') {
+    return { error: 'OIDC linking approval can only be managed for active or invited users.' };
   }
 
   const identifier = user.email.toLowerCase();
-  const state = await readOidcLinkingState(user.id, identifier);
+  const state = await readOidcLinkingState(user.id);
   if (state === 'linked') {
     return {
       error:
@@ -141,12 +186,12 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
     };
   }
 
-  // ACTIVE users no longer need invite credentials. Removing their INVITE
-  // records removes the administrator-provisioning evidence used by #336, so
-  // a future first-time OIDC link is denied again without affecting password
-  // authentication, role, or account status.
+  if (state === 'revoked' || state === 'consumed' || state === 'not-approved') {
+    return { success: true, state };
+  }
+
   await prisma.oidcLinkingApproval.updateMany({
-    where: { userId: user.id, revokedAt: null },
+    where: { userId: user.id, revokedAt: null, consumedAt: null },
     data: { revokedAt: new Date() },
   });
 
@@ -155,17 +200,17 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
     entityType: 'USER',
     entityId: user.id,
     actorId: admin.id,
-    details: { email: identifier },
+    details: { email: identifier, outcome: 'revoked', previousState: state },
   });
 
   logger.info('[Auth] Admin revoked first-time OIDC linking approval', {
     component: 'users-actions',
     userId: user.id,
-    email: identifier,
     adminId: admin.id,
+    previousState: state,
   });
 
   revalidatePath('/users');
   revalidatePath('/audit');
-  return { success: true, state: 'not-approved' };
+  return { success: true, state: 'revoked' };
 }

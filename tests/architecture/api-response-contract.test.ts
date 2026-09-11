@@ -23,6 +23,9 @@ const DIRECT_RESPONSE_ALLOWLIST = new Set([
   'src/app/api/schedules/[id]/oncall/route.ts',
   'src/app/api/schedules/[id]/route.ts',
   'src/app/api/schedules/route.ts',
+  // SCIM 2.0 mandates its own schemas and error envelope.
+  'src/app/api/scim/v2/Users/[id]/route.ts',
+  'src/app/api/scim/v2/Users/route.ts',
   'src/app/api/sla-definitions/[id]/route.ts',
   'src/app/api/sla-definitions/route.ts',
   'src/app/api/sla/stream/route.ts',

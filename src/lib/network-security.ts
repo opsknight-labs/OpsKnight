@@ -1,20 +1,29 @@
 import { logger } from '@/lib/logger';
 import dns from 'dns';
 import { Agent } from 'undici';
+import type { LookupFunction } from 'node:net';
+
+/**
+ * Resolve an outbound hostname while rejecting the entire answer set if any
+ * address is private/reserved. Exported so the OIDC runtime can enforce the
+ * same rule on its actual discovery, token and JWKS sockets.
+ */
+export const safeOutboundLookup: LookupFunction = (hostname, options, callback) => {
+  dns.lookup(hostname, { ...options, all: true, verbatim: true }, (error, addresses) => {
+    if (error) return callback(error, '', 4);
+    const results = Array.isArray(addresses) ? addresses : [addresses];
+    if (results.length === 0 || results.some(result => isPrivateIp(result.address))) {
+      return callback(new Error('URL resolves to a restricted network address'), '', 4);
+    }
+    if (options.all) return callback(null, results);
+    const selected = results[0];
+    return callback(null, selected.address, selected.family);
+  });
+};
 
 const safeOutboundDispatcher = new Agent({
   connect: {
-    lookup(hostname, options, callback) {
-      dns.lookup(hostname, { ...options, all: true, verbatim: true }, (error, addresses) => {
-        if (error) return callback(error, '', 4);
-        const results = Array.isArray(addresses) ? addresses : [addresses];
-        if (results.length === 0 || results.some(result => isPrivateIp(result.address))) {
-          return callback(new Error('URL resolves to a restricted network address'), '', 4);
-        }
-        const selected = results[0];
-        callback(null, selected.address, selected.family);
-      });
-    },
+    lookup: safeOutboundLookup,
   },
 });
 
@@ -83,10 +92,7 @@ export function isPrivateIp(ip: string): boolean {
     // Unspecified address.
     if (lowerIp === '::') return true;
     // Documentation and multicast ranges.
-    if (
-      (firstHextet === 0x2001 && ipv6Parts[1] === 0x0db8) ||
-      (firstHextet & 0xff00) === 0xff00
-    ) {
+    if ((firstHextet === 0x2001 && ipv6Parts[1] === 0x0db8) || (firstHextet & 0xff00) === 0xff00) {
       return true;
     }
     return false;

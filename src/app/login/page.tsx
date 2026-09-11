@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { redirect } from 'next/navigation';
+import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
@@ -83,7 +84,6 @@ export default async function LoginPage({
     }
     redirect(callbackUrl);
   }
-
   const errorCode =
     typeof awaitedSearchParams?.error === 'string' ? awaitedSearchParams.error : null;
   const passwordSet = awaitedSearchParams?.password === '1';
@@ -97,6 +97,7 @@ export default async function LoginPage({
       ssoEnabled={ssoEnabled}
       ssoProviderType={ssoConfig?.providerType}
       ssoProviderLabel={ssoConfig?.providerLabel}
+      localAuthEnabled={getLocalAuthPolicy().localLoginEnabled}
     />
   );
 }

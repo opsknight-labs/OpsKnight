@@ -90,6 +90,12 @@ describe('SsoSettingsForm', () => {
     fireEvent.click(presetButton);
     const issuerInput = screen.getByPlaceholderText('https://login.company.com');
     expect(issuerInput).toHaveValue('https://{yourOktaDomain}/oauth2/default');
+    expect(
+      screen.getByText(/Changing the issuer replaces the identity trust boundary/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /authorize this issuer migration/i })
+    ).toBeInTheDocument();
   });
 
   it('shows warning if encryption key is missing', () => {

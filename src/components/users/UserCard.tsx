@@ -342,7 +342,7 @@ export function UserCard({
             </DropdownMenuItem>
           )}
 
-          {user.status === 'ACTIVE' && (
+          {(user.status === 'ACTIVE' || user.status === 'INVITED') && (
             <OidcLinkingApprovalButton userId={user.id} userName={user.name} />
           )}
 

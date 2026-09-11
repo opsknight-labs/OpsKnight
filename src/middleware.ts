@@ -198,7 +198,10 @@ const publishedRouteCache = new Map<string, CachedPublishedRoute>();
 const publishedRouteInflight = new Map<string, Promise<PublishedStatusRoute | null>>();
 
 function cachePublishedRoute(routeKey: string, entry: CachedPublishedRoute): void {
-  if (!publishedRouteCache.has(routeKey) && publishedRouteCache.size >= STATUS_ROUTE_CACHE_MAX_ENTRIES) {
+  if (
+    !publishedRouteCache.has(routeKey) &&
+    publishedRouteCache.size >= STATUS_ROUTE_CACHE_MAX_ENTRIES
+  ) {
     const oldestKey = publishedRouteCache.keys().next().value;
     if (oldestKey) publishedRouteCache.delete(oldestKey);
   }
@@ -216,7 +219,9 @@ function isSafeStatusSlug(value: string): boolean {
 export function parsePublishedStatusRoute(value: unknown): PublishedStatusRoute | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  if (Object.keys(record).some(key => !['pageId', 'slug', 'requireAuth', 'revision'].includes(key))) {
+  if (
+    Object.keys(record).some(key => !['pageId', 'slug', 'requireAuth', 'revision'].includes(key))
+  ) {
     return null;
   }
   const slug = record.slug === null ? null : record.slug;
@@ -265,7 +270,9 @@ export async function fetchPublishedStatusDomain(
     try {
       const origin = new URL(base);
       if (origin.protocol !== 'https:' || origin.username || origin.password) return null;
-      const storeBase = origin.pathname.endsWith('/') ? origin : new URL(`${origin.pathname}/`, origin);
+      const storeBase = origin.pathname.endsWith('/')
+        ? origin
+        : new URL(`${origin.pathname}/`, origin);
       const response = await fetch(
         new URL(`status-pages/routes/${encodeURIComponent(routeKey)}`, storeBase),
         {
@@ -275,7 +282,8 @@ export async function fetchPublishedStatusDomain(
         }
       );
       if (!response.ok && response.status !== 404) throw new Error('Status route lookup failed');
-      const value = response.status === 404 ? null : parsePublishedStatusRoute(await response.json());
+      const value =
+        response.status === 404 ? null : parsePublishedStatusRoute(await response.json());
       if (response.status !== 404 && !value) throw new Error('Invalid status route payload');
       const cachedAt = Date.now();
       cachePublishedRoute(routeKey, {
@@ -381,9 +389,8 @@ export default async function middleware(req: NextRequest) {
       .at(-1);
     const hostname = normalizeHostname(forwardedHost || req.headers.get('host'));
     const publishedPage = hostname ? await fetchPublishedStatusDomain(hostname) : null;
-    const statusConfig = publishedPage || usesExternalStatusServingStore()
-      ? null
-      : await fetchStatusDomainConfig();
+    const statusConfig =
+      publishedPage || usesExternalStatusServingStore() ? null : await fetchStatusDomainConfig();
     if (statusConfig?.enabled) {
       const matchedPage = statusConfig.pages?.find(page => {
         const subdomainHost =
@@ -398,7 +405,9 @@ export default async function middleware(req: NextRequest) {
         const pageRoot = matchedPage.slug ? `/status/${matchedPage.slug}` : '/status';
         url.pathname = pathname === '/' || pathname === '' ? pageRoot : `${pageRoot}${pathname}`;
         const rewriteResponse = NextResponse.rewrite(url);
-        Object.entries(securityHeaders).forEach(([key, value]) => rewriteResponse.headers.set(key, value));
+        Object.entries(securityHeaders).forEach(([key, value]) =>
+          rewriteResponse.headers.set(key, value)
+        );
         rewriteResponse.headers.set('x-request-id', requestId);
         rewriteResponse.headers.set(
           'Cache-Control',
@@ -413,7 +422,9 @@ export default async function middleware(req: NextRequest) {
       const pageRoot = publishedPage.slug ? `/status/${publishedPage.slug}` : '/status';
       url.pathname = pathname === '/' || pathname === '' ? pageRoot : `${pageRoot}${pathname}`;
       const rewriteResponse = NextResponse.rewrite(url);
-      Object.entries(securityHeaders).forEach(([key, value]) => rewriteResponse.headers.set(key, value));
+      Object.entries(securityHeaders).forEach(([key, value]) =>
+        rewriteResponse.headers.set(key, value)
+      );
       rewriteResponse.headers.set('x-request-id', requestId);
       rewriteResponse.headers.set(
         'Cache-Control',
@@ -429,7 +440,9 @@ export default async function middleware(req: NextRequest) {
     const resetUrl = req.nextUrl.clone();
     resetUrl.pathname = '/reset-password';
     const redirectResponse = NextResponse.redirect(resetUrl);
-    Object.entries(securityHeaders).forEach(([key, value]) => redirectResponse.headers.set(key, value));
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      redirectResponse.headers.set(key, value)
+    );
     applySensitiveAuthHeaders(redirectResponse, '/reset-password');
     return redirectResponse;
   }
@@ -450,7 +463,9 @@ export default async function middleware(req: NextRequest) {
     !pathname.startsWith('/status') &&
     !pathname.startsWith('/_next') &&
     !pathname.startsWith('/favicon') &&
-    !/\.(jpg|jpeg|png|webp|avif|gif|svg|ico|css|js|woff|woff2|ttf|eot|webmanifest)$/i.test(pathname);
+    !/\.(jpg|jpeg|png|webp|avif|gif|svg|ico|css|js|woff|woff2|ttf|eot|webmanifest)$/i.test(
+      pathname
+    );
 
   if (shouldRedirectToMobile) {
     const mobileUrl = req.nextUrl.clone();
@@ -459,7 +474,9 @@ export default async function middleware(req: NextRequest) {
     else if (pathname === '/forgot-password') mobileUrl.pathname = '/m/forgot-password';
     else mobileUrl.pathname = `/m${pathname}`;
     const redirectResponse = NextResponse.redirect(mobileUrl);
-    Object.entries(securityHeaders).forEach(([key, value]) => redirectResponse.headers.set(key, value));
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      redirectResponse.headers.set(key, value)
+    );
     return redirectResponse;
   }
 
@@ -475,7 +492,9 @@ export default async function middleware(req: NextRequest) {
     const mobileUrl = req.nextUrl.clone();
     mobileUrl.pathname = pathname === '/' ? '/m' : `/m${pathname}`;
     const redirectResponse = NextResponse.redirect(mobileUrl);
-    Object.entries(securityHeaders).forEach(([key, value]) => redirectResponse.headers.set(key, value));
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      redirectResponse.headers.set(key, value)
+    );
     return redirectResponse;
   }
 
@@ -489,11 +508,14 @@ export default async function middleware(req: NextRequest) {
         'Access-Control-Allow-Credentials': 'true',
         Vary: 'Origin',
       };
-      if (req.method === 'OPTIONS') return new NextResponse(null, { status: 204, headers: corsHeaders });
+      if (req.method === 'OPTIONS')
+        return new NextResponse(null, { status: 204, headers: corsHeaders });
       const apiResponse = NextResponse.next({ request: { headers: forwardedHeaders } });
       apiResponse.headers.set('x-request-id', requestId);
       Object.entries(corsHeaders).forEach(([key, value]) => apiResponse.headers.set(key, value));
-      Object.entries(securityHeaders).forEach(([key, value]) => apiResponse.headers.set(key, value));
+      Object.entries(securityHeaders).forEach(([key, value]) =>
+        apiResponse.headers.set(key, value)
+      );
       applySensitiveAuthHeaders(apiResponse, pathname);
       return apiResponse;
     }
@@ -541,7 +563,9 @@ export default async function middleware(req: NextRequest) {
         defaultDest
       );
       const redirectResponse = NextResponse.redirect(new URL(redirectUrl, req.url));
-      Object.entries(securityHeaders).forEach(([key, value]) => redirectResponse.headers.set(key, value));
+      Object.entries(securityHeaders).forEach(([key, value]) =>
+        redirectResponse.headers.set(key, value)
+      );
       return redirectResponse;
     }
     return response;
@@ -555,7 +579,9 @@ export default async function middleware(req: NextRequest) {
   const redirectResponse = NextResponse.redirect(url);
   redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
   redirectResponse.headers.set('Pragma', 'no-cache');
-  Object.entries(securityHeaders).forEach(([key, value]) => redirectResponse.headers.set(key, value));
+  Object.entries(securityHeaders).forEach(([key, value]) =>
+    redirectResponse.headers.set(key, value)
+  );
   return redirectResponse;
 }
 
