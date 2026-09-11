@@ -1603,7 +1603,7 @@ async function main() {
     },
   });
 
-  const statusPage = await seedPublicStatusSurface({
+  const _statusPage = await seedPublicStatusSurface({
     adminId: admin.id,
     teams,
     policies,

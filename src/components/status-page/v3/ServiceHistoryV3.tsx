@@ -1,18 +1,30 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PublicStatusService, PublicHistorySlice } from '@/lib/status-pages/public-contract';
+import type { PublicStatusService, PublicHistorySlice, PublicServiceStatus } from '@/lib/status-pages/public-contract';
 import { buildPublicHistoryDays } from '@/lib/status-pages/history-presentation';
-import { statusPresentation } from '@/lib/status-pages/status-presentation';
+import { normalizePublicStatus, statusPresentation } from '@/lib/status-pages/status-presentation';
 import { describeUptimeWindow } from '@/lib/status-pages/presentation';
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
 
-const GRADE_LABEL: Record<string, string> = {
-  EXCELLENT: 'Excellent',
-  GOOD: 'Good',
-  BELOW_TARGET: 'Below SLA',
-};
+function gradeLabel(grade: string | undefined): string | undefined {
+  switch (grade) {
+    case 'EXCELLENT':
+      return 'Excellent';
+    case 'GOOD':
+      return 'Good';
+    case 'BELOW_TARGET':
+      return 'Below SLA';
+    default:
+      return undefined;
+  }
+}
+
+function presentationForStatus(status: string): { token: string; label: string } {
+  const normalized: PublicServiceStatus = normalizePublicStatus(status);
+  return statusPresentation(normalized);
+}
 
 const HOUR_TICKS = ['00:00', '06:00', '12:00', '18:00', '24:00'];
 
@@ -43,14 +55,17 @@ const StatusBreakdownBar = memo(function StatusBreakdownBar({
       {[...buckets.entries()]
         .filter(([, mins]) => mins > 0)
         .sort(([, a], [, b]) => b - a)
-        .map(([status, mins]) => (
-          <span
-            key={status}
-            className={`status-v3-inspector__breakdown-seg status-${statusPresentation(status as any).token}`}
-            style={{ inlineSize: `${(mins / total) * 100}%` }}
-            title={`${statusPresentation(status as any).label}: ${Math.round((mins / total) * 1440)} min`}
-          />
-        ))}
+        .map(([status, mins]) => {
+          const presentation = presentationForStatus(status);
+          return (
+            <span
+              key={status}
+              className={`status-v3-inspector__breakdown-seg status-${presentation.token}`}
+              style={{ inlineSize: `${(mins / total) * 100}%` }}
+              title={`${presentation.label}: ${Math.round((mins / total) * 1440)} min`}
+            />
+          );
+        })}
     </div>
   );
 });
@@ -128,7 +143,7 @@ function ServiceHistoryV3Inner({
   const uptime30 = describeUptimeWindow(service.uptime?.days30);
   const uptime90 = describeUptimeWindow(service.uptime?.days90);
   const grade = service.sla?.grade ?? service.uptime?.days90?.grade;
-  const day = selected != null ? days[selected] : null;
+  const day = selected != null ? (days.at(selected) ?? null) : null;
   const dayTotal = day?.timeline?.at(-1)?.endMinute ?? 1440;
   const w30 = service.uptime?.days30;
   const w90 = service.uptime?.days90;
@@ -142,7 +157,7 @@ function ServiceHistoryV3Inner({
             <span className="status-v3-uptime__unit"> · 90-day uptime</span>
           </span>
           {showGrade && grade && (
-            <StatusBadge status={grade} label={GRADE_LABEL[grade]} size="xs" showDot />
+            <StatusBadge status={grade} label={gradeLabel(grade) ?? grade} size="xs" showDot />
           )}
         </div>
       ) : null}
@@ -313,7 +328,7 @@ function ServiceHistoryV3Inner({
             {grade && (
               <span className="status-v3-chip">
                 <span className="status-v3-inspector__chip-label">SLA</span>
-                {GRADE_LABEL[grade]}
+                {gradeLabel(grade) ?? grade}
               </span>
             )}
           </div>

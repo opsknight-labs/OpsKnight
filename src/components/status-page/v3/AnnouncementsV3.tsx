@@ -5,12 +5,20 @@ import type { PublicAnnouncement, PublicChangelogEntry } from '@/lib/status-page
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
 
-const TYPE_LABEL: Record<string, string> = {
-  INFO: 'Info',
-  WARNING: 'Warning',
-  INCIDENT: 'Notice',
-  MAINTENANCE: 'Maintenance',
-};
+function announcementTypeLabel(typeUpper: string, fallback: string): string {
+  switch (typeUpper) {
+    case 'INFO':
+      return 'Info';
+    case 'WARNING':
+      return 'Warning';
+    case 'INCIDENT':
+      return 'Notice';
+    case 'MAINTENANCE':
+      return 'Maintenance';
+    default:
+      return fallback;
+  }
+}
 
 const DESC_CLAMP_AT = 140;
 const AFFECTS_INLINE_LIMIT = 3;
@@ -199,7 +207,7 @@ function ChangelogAffects({ services }: { services?: { id?: string; name: string
 
 function AnnouncementCard({ item, timeZone }: { item: PublicAnnouncement; timeZone: string }) {
   const typeUpper = (item.type || 'INFO').toUpperCase();
-  const badgeLabel = TYPE_LABEL[typeUpper] || item.type;
+  const badgeLabel = announcementTypeLabel(typeUpper, item.type);
   const absolute = formatDateTime(item.startDate, timeZone, { format: 'short', hour12: true });
   const relative = formatDateTime(item.startDate, timeZone, { format: 'relative' });
 

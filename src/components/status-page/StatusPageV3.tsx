@@ -45,13 +45,32 @@ export default function StatusPageV3({
   const [subscribeOpen, setSubscribeOpen] = useState(false);
 
   useEffect(() => {
-    setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const id = window.setTimeout(() => setTimeZone(tz), 0);
+    return () => window.clearTimeout(id);
   }, []);
 
   const visible = (key: keyof NonNullable<typeof vis>, capability?: boolean) => {
     if (capability === false) return false;
-    if (vis) return vis[key] === true;
-    return true;
+    if (!vis) return true;
+    switch (key) {
+      case 'services':
+        return vis.services === true;
+      case 'incidents':
+        return vis.incidents === true;
+      case 'metrics':
+        return vis.metrics === true;
+      case 'uptime':
+        return vis.uptime === true;
+      case 'regions':
+        return vis.regions === true;
+      case 'changelog':
+        return vis.changelog === true;
+      case 'subscribe':
+        return vis.subscribe === true;
+      default:
+        return true;
+    }
   };
 
   const showHeader = (presentation?.showHeader ?? branding.showHeader) !== false;
