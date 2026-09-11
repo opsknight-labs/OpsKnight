@@ -299,6 +299,8 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(token.sub).toBe('u1');
     expect(token.email).toBe('real@example.com');
     expect(token.role).toBe('ADMIN');
+    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 43_100);
+    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 43_200);
   });
 
   it('jwt callback fails closed instead of falling back to email when identity is missing', async () => {
@@ -494,6 +496,42 @@ describe('Auth JWT + OIDC callback contract', () => {
 
     expect(token.sub).toBe('u-clean');
     expect(token.error).toBeUndefined();
+    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 604_700);
+    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 604_800);
+  });
+
+  it('keeps the one-year Remember Me lifetime for credential sessions', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u-remember',
+      email: 'remember@example.com',
+      name: 'Remember User',
+      role: 'USER',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const token = await jwt({
+      token: {},
+      user: {
+        id: 'u-remember',
+        email: 'remember@example.com',
+        name: 'Remember User',
+        role: 'USER',
+        tokenVersion: 0,
+        rememberMe: true,
+      } as never,
+      account: { provider: 'credentials', type: 'credentials', providerAccountId: 'u-remember' },
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'signIn',
+      session: undefined,
+    });
+
+    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 31_535_900);
+    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 31_536_000);
   });
 
   it('revokeUserSessions increments tokenVersion', async () => {

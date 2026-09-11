@@ -190,6 +190,40 @@ export default function LoginClient({
           </div>
         )}
 
+        {/* SSO is independent from local credentials. In SSO-only mode this
+            remains the primary (and only) authentication mechanism. */}
+        {ssoEnabled && (
+          <div className={localAuthEnabled ? 'mb-4' : ''}>
+            <SsoButton
+              providerType={ssoProviderType as 'google' | 'okta' | 'azure' | 'auth0' | 'custom'}
+              providerLabel={ssoProviderLabel}
+              onClick={handleSSO}
+              loading={isSSOLoading}
+              disabled={isSubmitting || isSuccess}
+            />
+            {localAuthEnabled && (
+              <div className="relative my-4 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200 dark:border-slate-800" />
+                </div>
+                <span className="relative px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 bg-background">
+                  or
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!ssoEnabled && !localAuthEnabled && (
+          <div
+            role="alert"
+            className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+          >
+            No authentication method is available. Contact your administrator to configure SSO or
+            enable local login.
+          </div>
+        )}
+
         {localAuthEnabled && (
           <form onSubmit={handleCredentials} className="space-y-4">
             {/* Work Email */}
@@ -364,47 +398,21 @@ export default function LoginClient({
                 </>
               )}
             </button>
-
-            {/* SSO Section */}
-            {ssoEnabled && (
-              <>
-                <div className="relative my-4 flex items-center justify-center">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200 dark:border-slate-800" />
-                  </div>
-                  <span className="relative px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 bg-background">
-                    or
-                  </span>
-                </div>
-
-                <div>
-                  <SsoButton
-                    providerType={
-                      ssoProviderType as 'google' | 'okta' | 'azure' | 'auth0' | 'custom'
-                    }
-                    providerLabel={ssoProviderLabel}
-                    onClick={handleSSO}
-                    loading={isSSOLoading}
-                    disabled={isSubmitting || isSuccess}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Setup Guide Link */}
-            <div className="text-center text-xs text-slate-500 dark:text-slate-400 font-medium pt-3.5">
-              Setting up OpsKnight?{' '}
-              <a
-                href="https://opsknight.com/docs"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold inline-flex items-center gap-0.5 hover:underline transition-colors ml-0.5"
-              >
-                Installation guide →
-              </a>
-            </div>
           </form>
         )}
+
+        {/* Setup Guide Link */}
+        <div className="text-center text-xs text-slate-500 dark:text-slate-400 font-medium pt-3.5">
+          Setting up OpsKnight?{' '}
+          <a
+            href="https://opsknight.com/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold inline-flex items-center gap-0.5 hover:underline transition-colors ml-0.5"
+          >
+            Installation guide →
+          </a>
+        </div>
       </AuthCard>
     </AuthLayout>
   );

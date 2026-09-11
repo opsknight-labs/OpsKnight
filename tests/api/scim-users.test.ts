@@ -20,7 +20,11 @@ vi.mock('@/lib/users/admin-invariants', () => ({
 import prisma from '@/lib/prisma';
 import { updateUserSecurityState } from '@/lib/users/admin-invariants';
 import { GET as listUsers } from '@/app/api/scim/v2/Users/route';
-import { DELETE as deleteUser, PUT as replaceUser } from '@/app/api/scim/v2/Users/[id]/route';
+import {
+  DELETE as deleteUser,
+  GET as getUser,
+  PUT as replaceUser,
+} from '@/app/api/scim/v2/Users/[id]/route';
 
 const token = 'scim-test-token-that-is-longer-than-thirty-two-characters';
 const originalToken = process.env.SCIM_BEARER_TOKEN;
@@ -126,7 +130,18 @@ describe('SCIM Users HTTP lifecycle', () => {
     expect(updateUserSecurityState).toHaveBeenCalledWith(
       'user-1',
       { status: 'DISABLED' },
-      { roleSource: 'SCIM', tokenVersion: { increment: 1 } }
+      {
+        scimExternalId: null,
+        roleSource: 'SCIM',
+        tokenVersion: { increment: 1 },
+      }
     );
+
+    vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
+    const getAfterDelete = await getUser(
+      request('https://ops.example.com/api/scim/v2/Users/user-1'),
+      context
+    );
+    expect(getAfterDelete.status).toBe(404);
   });
 });

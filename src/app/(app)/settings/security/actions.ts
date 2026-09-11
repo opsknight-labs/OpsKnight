@@ -18,6 +18,7 @@ import {
   isOidcIssuerMigration,
   normalizeOidcIssuer,
 } from '@/lib/oidc/issuer-migration';
+import { normalizeOidcProviderType } from '@/lib/oidc-provider';
 
 function normalizeDomains(value: string) {
   if (!value) return [];
@@ -65,39 +66,6 @@ function parseRoleMapping(input: string): RoleMappingRule[] {
     }
     return { claim, value, role: role as RoleMappingRule['role'] };
   });
-}
-
-function detectProviderType(issuerUrl: string): string {
-  let hostname = '';
-  try {
-    hostname = new URL(issuerUrl).hostname.toLowerCase();
-  } catch {
-    hostname = issuerUrl.toLowerCase();
-  }
-
-  if (
-    hostname === 'accounts.google.com' ||
-    hostname === 'googleapis.com' ||
-    hostname.endsWith('.google.com') ||
-    hostname.endsWith('.googleapis.com')
-  )
-    return 'google';
-  if (
-    hostname === 'okta.com' ||
-    hostname.endsWith('.okta.com') ||
-    hostname.endsWith('.okta-emea.com') ||
-    hostname.includes('.okta.')
-  )
-    return 'okta';
-  const azureHosts = [
-    'login.microsoftonline.com',
-    'login.microsoft.com',
-    'sts.windows.net',
-    'microsoftonline.com',
-  ];
-  if (azureHosts.some(host => hostname === host || hostname.endsWith(`.${host}`))) return 'azure';
-  if (hostname === 'auth0.com' || hostname.endsWith('.auth0.com')) return 'auth0';
-  return 'custom';
 }
 
 export async function saveOidcConfig(
@@ -230,12 +198,7 @@ export async function saveOidcConfig(
       };
     }
 
-    const detectedProviderType = detectProviderType(issuer);
-    const providerType =
-      detectedProviderType === 'custom' &&
-      (requestedProviderType === 'auth0' || requestedProviderType === 'okta')
-        ? requestedProviderType
-        : detectedProviderType;
+    const providerType = normalizeOidcProviderType(requestedProviderType, issuer);
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';
       if (existing) {

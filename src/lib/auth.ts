@@ -153,8 +153,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     // and server-side revocation boundaries. Credentials retain remember-me
     // behavior, while OIDC never extends the original IdP authentication time.
     const enterpriseSession = getEnterpriseSessionPolicy();
-    const sessionMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
-    const rememberMeMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
+    const oidcSessionMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
+    // Preserve the established credential policy from main. Auth.js needs the
+    // outer JWT/cookie ceiling to accommodate Remember Me; the jwt callback
+    // applies the shorter per-authentication-method expiration below.
+    const credentialSessionMaxAgeSeconds = 60 * 60 * 24 * 7;
+    const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 365;
     const sessionUpdateAgeSeconds = enterpriseSession.updateAgeSeconds;
     const sessionIdleTimeoutMs = enterpriseSession.idleTimeoutSeconds * 1000;
     const oidcReauthenticateAfterMs = enterpriseSession.reauthenticateAfterSeconds * 1000;
@@ -507,7 +511,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             const remember = (token as AugmentedJWT).rememberMe === true;
-            const ttlSeconds = remember ? rememberMeMaxAgeSeconds : sessionMaxAgeSeconds;
+            const ttlSeconds =
+              account.provider === 'oidc'
+                ? oidcSessionMaxAgeSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds;
             token.exp = Math.floor(Date.now() / 1000) + ttlSeconds;
           } else if (user) {
             delete (token as AugmentedJWT).error;

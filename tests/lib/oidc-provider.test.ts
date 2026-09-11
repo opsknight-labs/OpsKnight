@@ -41,6 +41,12 @@ describe('OIDC provider compatibility policy', () => {
     expect(normalizeOidcProviderType('auth0', 'https://login.example.com')).toBe('auth0');
     expect(normalizeOidcProviderType('okta', 'https://login.example.com')).toBe('okta');
     expect(normalizeOidcProviderType('auth0', 'https://accounts.google.com')).toBe('google');
+    expect(
+      normalizeOidcProviderType('custom', 'https://login.microsoftonline.us/tenant-id/v2.0')
+    ).toBe('azure');
+    expect(
+      normalizeOidcProviderType('custom', 'https://login.partner.microsoftonline.cn/tenant-id/v2.0')
+    ).toBe('azure');
     expect(normalizeOidcProviderType('unexpected', 'https://accounts.google.com')).toBe('google');
   });
 

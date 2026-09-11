@@ -143,7 +143,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
     await updateUserSecurityState(
       id,
       { status: 'DISABLED' },
-      { roleSource: 'SCIM', tokenVersion: { increment: 1 } }
+      {
+        // DELETE removes the resource from the external SCIM namespace while
+        // retaining the disabled OpsKnight account for audit/history.
+        scimExternalId: null,
+        roleSource: 'SCIM',
+        tokenVersion: { increment: 1 },
+      }
     );
     await logAudit({
       action: 'scim.user.deprovisioned',
