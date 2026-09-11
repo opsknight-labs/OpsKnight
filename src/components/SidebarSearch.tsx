@@ -63,7 +63,14 @@ type NavigationPage = {
 
 const RECENT_SEARCHES_KEY = 'OpsKnight-recent-searches-v2';
 const MAX_RECENT_SEARCHES = 5;
-const TYPE_ORDER = ['incident', 'service', 'team', 'user'] as const;
+const TYPE_ORDER = [
+  'incident',
+  'service',
+  'team',
+  'user',
+  'policy',
+  'postmortem',
+] as const;
 
 const NAVIGATION_PAGES: NavigationPage[] = [
   {
@@ -216,6 +223,8 @@ const getTypeIcon = (type: string) => {
 };
 
 const getTypeLabel = (type: string) => {
+  if (type === 'policy') return 'Escalation Policies';
+  if (type === 'postmortem') return 'Postmortems';
   return type.charAt(0).toUpperCase() + type.slice(1) + 's';
 };
 
@@ -389,7 +398,15 @@ export default function SidebarSearch() {
     return groups;
   }, [results]);
 
-  const hasAnyResults = matchingNavigation.length > 0 || results.length > 0;
+  const totalRenderedResultsCount = useMemo(() => {
+    let count = 0;
+    TYPE_ORDER.forEach(type => {
+      count += groupedResults.get(type)?.length ?? 0;
+    });
+    return count;
+  }, [groupedResults]);
+
+  const hasAnyResults = matchingNavigation.length > 0 || totalRenderedResultsCount > 0;
 
   return (
     <Command shouldFilter={false} className="overflow-visible bg-transparent border-0 shadow-none">

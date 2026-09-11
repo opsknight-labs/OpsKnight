@@ -43,4 +43,40 @@ describe('SidebarSearch component', () => {
       expect(screen.getByText('Incidents')).toBeDefined();
     });
   });
+
+  it('renders API search results for policies and postmortems without empty state', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        results: [
+          {
+            type: 'policy',
+            id: 'pol-1',
+            title: 'Critical Infra Escalation',
+            subtitle: 'Escalation Policy',
+            href: '/policies/pol-1',
+          },
+          {
+            type: 'postmortem',
+            id: 'pm-1',
+            title: 'Postmortem for Database Outage',
+            subtitle: 'Published',
+            href: '/postmortems/inc-1',
+          },
+        ],
+      }),
+    } as any);
+
+    render(<SidebarSearch />);
+    const input = screen.getByPlaceholderText('Search...');
+    fireEvent.change(input, { target: { value: 'database outage' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('Critical Infra Escalation')).toBeDefined();
+      expect(screen.getByText('Postmortem for Database Outage')).toBeDefined();
+    });
+
+    global.fetch = originalFetch;
+  });
 });

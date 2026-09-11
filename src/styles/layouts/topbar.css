@@ -3328,8 +3328,8 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
   /* Search bar */
   .topbar-search,
   .topbar-search-input {
-    background-color: #ffffff !important;
-    color: var(--text-primary) !important;
+    background-color: transparent !important;
+    color: #f4f4f5 !important;
     filter: none !important;
   }
 }
