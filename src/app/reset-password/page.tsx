@@ -1,8 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Lock, ShieldCheck, X } from 'lucide-react';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import AuthBrand from '@/components/auth/AuthBrand';
@@ -10,14 +9,17 @@ import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/Passw
 import Spinner from '@/components/ui/Spinner';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
 
-function readFragmentToken(): string | null {
+function readCapabilityToken(): string | null {
   if (typeof window === 'undefined') return null;
-  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
-  return new URLSearchParams(hash).get('token');
+  const hash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const fragmentToken = new URLSearchParams(hash).get('token');
+  if (fragmentToken) return fragmentToken;
+  return new URLSearchParams(window.location.search).get('token');
 }
 
 function ResetPasswordForm() {
-  const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [tokenReady, setTokenReady] = useState(false);
   const [password, setPassword] = useState('');
@@ -30,11 +32,14 @@ function ResetPasswordForm() {
   const passwordsMatch = Object.is(password, confirmPassword);
 
   useEffect(() => {
-    const rawToken = readFragmentToken() || searchParams.get('token');
+    // Capture the capability exactly once before scrubbing it. Next patches
+    // history.replaceState to synchronize router state; keying this effect to
+    // useSearchParams would re-run after the scrub and erase the in-memory token.
+    const rawToken = readCapabilityToken();
     setToken(rawToken);
     setTokenReady(true);
     if (rawToken) window.history.replaceState({}, '', window.location.pathname);
-  }, [searchParams]);
+  }, []);
 
   if (!tokenReady) return <div className="flex justify-center p-8"><Spinner /></div>;
   if (!token) {
@@ -125,7 +130,7 @@ export default function ResetPasswordPage() {
     <AuthLayout>
       <AuthCard>
         <div className="mb-8 text-center"><AuthBrand className="mb-6" /><h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">Reset password</h1><p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Secure your account with a new passphrase.</p></div>
-        <Suspense fallback={<div className="flex justify-center p-8"><Spinner /></div>}><ResetPasswordForm /></Suspense>
+        <ResetPasswordForm />
       </AuthCard>
     </AuthLayout>
   );
