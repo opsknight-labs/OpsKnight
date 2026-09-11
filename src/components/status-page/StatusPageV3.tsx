@@ -147,6 +147,7 @@ export default function StatusPageV3({
         {showMaintenance && (
           <MaintenanceV3 maintenance={snapshot.maintenance} timeZone={timeZone} />
         )}
+        {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
         {showServices && (
           <ServiceHealthV3
             services={snapshot.services}
@@ -154,7 +155,6 @@ export default function StatusPageV3({
             groupByRegion={page.showServicesByRegion === true}
           />
         )}
-        {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
         {showUptime && <StatusPageUptimeMetrics services={snapshot.services} />}
         {showIncidents && (
           <IncidentsV3

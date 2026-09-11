@@ -49,10 +49,10 @@ ${R} {
   --status-text-muted: var(--sp-muted, #6b7280);
   --status-text-subtle: var(--sp-muted-2, var(--sp-muted, #94a3b8));
   --status-text-inverse: var(--sp-inverse, #ffffff);
-  --status-panel-bg: var(--sp-panel-bg, color-mix(in srgb, #ffffff 94%, var(--status-primary, #2563eb) 6%));
-  --status-panel-border: var(--sp-panel-border, color-mix(in srgb, #e5e7eb 82%, var(--status-primary, #2563eb) 18%));
-  --status-panel-muted-bg: var(--sp-panel-muted-bg, color-mix(in srgb, #f8fafc 85%, var(--status-primary, #2563eb) 15%));
-  --status-panel-muted-border: var(--sp-panel-muted-border, color-mix(in srgb, #e2e8f0 80%, var(--status-primary, #2563eb) 20%));
+  --status-panel-bg: var(--sp-panel-bg, #ffffff);
+  --status-panel-border: var(--sp-panel-border, #e2e8f0);
+  --status-panel-muted-bg: var(--sp-panel-muted-bg, #f8fafc);
+  --status-panel-muted-border: var(--sp-panel-muted-border, #e2e8f0);
   color: var(--status-text);
   font-family: var(--status-font-family, inherit);
   display: block;
@@ -772,11 +772,11 @@ ${R} .status-v3-filter select {
 }
 ${R} .status-v3-filter select:focus-visible { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
 ${R} details.status-v3-incident { display: block; padding: 0; overflow: hidden; }
-${R} .status-v3-incident__summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: clamp(.8rem, 2.5vw, 1.05rem) clamp(1rem, 3vw, 1.3rem); cursor: pointer; list-style: none; }
+${R} .status-v3-incident__summary { display: flex; align-items: center; justify-content: space-between; gap: .75rem 1rem; padding: clamp(.8rem, 2.5vw, 1.05rem) clamp(1rem, 3vw, 1.3rem); cursor: pointer; list-style: none; flex-wrap: wrap; }
 ${R} .status-v3-incident__summary::-webkit-details-marker { display: none; }
 ${R} .status-v3-incident__summary:hover { background: color-mix(in srgb, var(--v3-accent, var(--primary)) 6%, transparent); }
-${R} .status-v3-incident__summary-main { display: inline-flex; align-items: center; gap: .55rem; min-inline-size: 0; flex-wrap: wrap; }
-${R} .status-v3-incident__summary-meta { display: inline-flex; align-items: center; gap: .65rem; color: var(--status-text-muted); font-size: .8125rem; flex: none; }
+${R} .status-v3-incident__summary-main { display: inline-flex; align-items: center; gap: .55rem; min-inline-size: 0; flex: 1 1 14rem; flex-wrap: wrap; }
+${R} .status-v3-incident__summary-meta { display: inline-flex; align-items: center; gap: .65rem; color: var(--status-text-muted); font-size: .8125rem; margin-inline-start: auto; flex-shrink: 0; }
 ${R} .status-v3-incident__chevron { inline-size: .5rem; block-size: .5rem; border-inline-end: 2px solid currentColor; border-block-end: 2px solid currentColor; transform: rotate(45deg); transition: transform .18s ease; opacity: .55; }
 ${R} details.status-v3-incident[open] .status-v3-incident__chevron { transform: rotate(-135deg); }
 ${R} .status-v3-incident__body { display: grid; gap: .6rem; padding: 0 clamp(1rem, 3vw, 1.3rem) clamp(1rem, 3vw, 1.3rem); border-block-start: 1px solid var(--status-panel-border); padding-block-start: .85rem; }
@@ -1024,6 +1024,123 @@ ${R} .status-v3-service__details summary::-webkit-details-marker { display: none
 ${R} .status-v3-service__details .status-v3-service__meta { margin-block-start: .4rem; }
 ${R} .status-v3-filters .status-v3-chip__count {
   font-variant-numeric: tabular-nums; color: var(--status-text-subtle); font-weight: 650;
+}
+
+/* ---- Regions Section (V3) ---- */
+${R} .status-v3-regions {
+  display: grid;
+  gap: 0.85rem;
+  margin-block-end: 0.25rem;
+}
+${R} .status-v3-regions__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+${R} .status-v3-regions__head h2 {
+  margin: 0;
+  font-family: 'Space Grotesk', Inter, sans-serif;
+  letter-spacing: -0.02em;
+}
+${R} .status-v3-regions__tally {
+  margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--status-text-subtle);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+${R} .status-v3-regions__tally strong {
+  font-size: 1.05rem;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+  color: var(--status-text-strong);
+  font-family: 'Space Grotesk', Inter, sans-serif;
+}
+${R} .status-v3-regions__tally-impacted {
+  color: #ef4444 !important;
+}
+
+${R} .status-v3-regions__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 38rem) {
+  ${R} .status-v3-regions__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+}
+@media (min-width: 60rem) {
+  ${R} .status-v3-regions__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+/* Modern, simple yet elegant region card */
+${R} .status-v3-region-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 1.05rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--status-panel-border, #e2e8f0);
+  background: var(--status-panel-bg, #ffffff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  min-inline-size: 0;
+}
+${R} .status-v3-region-card:hover {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--status-panel-border, #e2e8f0));
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.07);
+  transform: translateY(-1px);
+}
+${R} .status-v3-region-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-inline-size: 0;
+}
+${R} .status-v3-region-card__name {
+  font-weight: 650;
+  font-size: 0.95rem;
+  letter-spacing: -0.015em;
+  color: var(--status-text-strong);
+  min-inline-size: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+}
+${R} .status-v3-region-card__head .status-badge,
+${R} .status-v3-region-card__head [data-badge="true"] {
+  flex-shrink: 0;
+}
+${R} .status-v3-region-card__sub {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+${R} .status-v3-region-card__desc {
+  font-size: 0.8125rem;
+  color: var(--status-text-muted);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 ${R} .status-site-footer {
