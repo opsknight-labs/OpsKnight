@@ -23,7 +23,7 @@ export default async function NotificationOperationsPage() {
     redirect('/settings');
   }
   const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
-  const [leases, campaigns, control, subscriptionStates, feedbackTypes, runtime, effectiveCapacities] = await Promise.all([
+  const [leases, campaigns, control, subscriptionStates, feedbackTypes, runtime, storedProviderCapacities] = await Promise.all([
     prisma.providerWorkerLease.count({ where: { expiresAt: { gt: new Date() } } }),
     prisma.notificationFanout.findMany({
       orderBy: { createdAt: 'desc' },
@@ -46,8 +46,18 @@ export default async function NotificationOperationsPage() {
       GROUP BY "eventType"
     `),
     prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } }),
-    Promise.all(channels.map(channel => getEffectiveCapacity({ channel: channel as never, provider: 'default' }))),
+    prisma.notificationProviderCapacity.findMany({ orderBy: [{ channel: 'asc' }, { provider: 'asc' }] }),
   ]);
+  // Show actual configured provider/channel pairs rather than six synthetic `default` providers.
+  // WEBHOOK:default and SLACK:default act as logical capacity profiles governing per-origin/per-channel buckets.
+  let effectiveCapacities: Awaited<ReturnType<typeof getEffectiveCapacity>>[];
+  if (storedProviderCapacities.length > 0) {
+    effectiveCapacities = await Promise.all(
+      storedProviderCapacities.map(row => getEffectiveCapacity({ channel: row.channel as never, provider: row.provider }))
+    );
+  } else {
+    effectiveCapacities = await Promise.all(channels.map(channel => getEffectiveCapacity({ channel: channel as never, provider: 'default' })));
+  }
   const watermarks = await getEffectiveWatermarks();
   const controlValue =
     control?.value && typeof control.value === 'object' && !Array.isArray(control.value)

@@ -91,23 +91,28 @@ export async function PATCH(request: NextRequest) {
     const { bulkPaused } = parsed.data;
     const before = await prisma.systemConfig.findUnique({ where: { key: 'notification_capacity_control' } });
     const beforeValue = before?.value as Record<string, unknown> | null;
-    await prisma.systemConfig.upsert({
-      where: { key: 'notification_capacity_control' },
-      create: {
-        key: 'notification_capacity_control',
-        value: { bulkPaused },
-        updatedBy: permissions.id,
-      },
-      update: { value: { bulkPaused } as Prisma.InputJsonValue, updatedBy: permissions.id },
-    });
-    await logAudit({
-      action: 'notification_capacity.updated',
-      entityType: 'SYSTEM_CONFIG',
-      entityId: 'notification_capacity_control',
-      actorId: permissions.id,
-      oldValue: (beforeValue ?? null) as Prisma.InputJsonValue | null,
-      newValue: { bulkPaused } as Prisma.InputJsonValue,
-      details: { kind: 'bulkPaused', bulkPaused } as Prisma.InputJsonValue,
+    await prisma.$transaction(async tx => {
+      await tx.systemConfig.upsert({
+        where: { key: 'notification_capacity_control' },
+        create: {
+          key: 'notification_capacity_control',
+          value: { bulkPaused },
+          updatedBy: permissions.id,
+        },
+        update: { value: { bulkPaused } as Prisma.InputJsonValue, updatedBy: permissions.id },
+      });
+      await logAudit(
+        {
+          action: 'notification_capacity.updated',
+          entityType: 'SYSTEM_CONFIG',
+          entityId: 'notification_capacity_control',
+          actorId: permissions.id,
+          oldValue: (beforeValue ?? null) as Prisma.InputJsonValue | null,
+          newValue: { bulkPaused } as Prisma.InputJsonValue,
+          details: { kind: 'bulkPaused', bulkPaused } as Prisma.InputJsonValue,
+        },
+        tx as never
+      );
     });
     invalidateNotificationCapacityControl();
     return jsonOk({ bulkPaused });
@@ -163,42 +168,68 @@ export async function PATCH(request: NextRequest) {
       revision: nextRevision,
     };
 
+    const auditNewValue = {
+      provider,
+      channel,
+      mode: data.mode,
+      ratePerSecond: writeData.ratePerSecond,
+      maxInFlight: writeData.maxInFlight,
+      bulkSharePercent: data.bulkSharePercent,
+      adaptiveBackpressure: data.adaptiveBackpressure,
+      revision: nextRevision,
+    } as Prisma.InputJsonValue;
+    const auditDetails = { kind: 'providerCapacity', provider, channel } as Prisma.InputJsonValue;
     let updated: { revision: number; updatedAt: Date };
-    if (existing) {
-      const result = await prisma.notificationProviderCapacity.updateMany({
-        where: { provider, channel, revision: existing.revision },
-        data: writeData,
+    try {
+      updated = await prisma.$transaction(async tx => {
+        let inner: { revision: number; updatedAt: Date };
+        if (existing) {
+          const result = await tx.notificationProviderCapacity.updateMany({
+            where: { provider, channel, revision: existing.revision },
+            data: writeData,
+          });
+          if (result.count !== 1) throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
+          inner = await tx.notificationProviderCapacity.findUniqueOrThrow({
+            where: { provider_channel: { provider, channel } },
+            select: { revision: true, updatedAt: true },
+          });
+        } else {
+          try {
+            inner = await tx.notificationProviderCapacity.create({
+              data: { provider, channel, ...writeData },
+              select: { revision: true, updatedAt: true },
+            });
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+              throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
+            }
+            throw e;
+          }
+        }
+        await logAudit(
+          {
+            action: 'notification_provider_capacity.updated',
+            entityType: 'SYSTEM_CONFIG',
+            entityId: `${provider}:${channel}`,
+            actorId: permissions.id,
+            oldValue,
+            newValue: auditNewValue,
+            details: auditDetails,
+          },
+          tx as never
+        );
+        return inner;
       });
-      if (result.count !== 1) return jsonError('Settings changed elsewhere. Reload before saving.', 409);
-      updated = await prisma.notificationProviderCapacity.findUniqueOrThrow({
-        where: { provider_channel: { provider, channel } },
-        select: { revision: true, updatedAt: true },
-      });
-    } else {
-      updated = await prisma.notificationProviderCapacity.create({
-        data: { provider, channel, ...writeData },
-        select: { revision: true, updatedAt: true },
-      });
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
+      if (code === 'CAS_CONFLICT' || (e instanceof Error && e.message === 'CAS_CONFLICT')) {
+        return jsonError('Settings changed elsewhere. Reload before saving.', 409);
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return jsonError('Settings changed elsewhere. Reload before saving.', 409);
+      }
+      throw e;
     }
-
-    await logAudit({
-      action: 'notification_provider_capacity.updated',
-      entityType: 'SYSTEM_CONFIG',
-      entityId: `${provider}:${channel}`,
-      actorId: permissions.id,
-      oldValue,
-      newValue: {
-        provider,
-        channel,
-        mode: data.mode,
-        ratePerSecond: writeData.ratePerSecond,
-        maxInFlight: writeData.maxInFlight,
-        bulkSharePercent: data.bulkSharePercent,
-        adaptiveBackpressure: data.adaptiveBackpressure,
-        revision: nextRevision,
-      } as Prisma.InputJsonValue,
-      details: { kind: 'providerCapacity', provider, channel } as Prisma.InputJsonValue,
-    });
 
     invalidateCapacityCache(`${channel}:${provider}`);
     return jsonOk({
@@ -241,43 +272,81 @@ export async function PATCH(request: NextRequest) {
       : null;
 
     const nextRevision = existing ? existing.revision + 1 : 1;
-    const updated = await prisma.notificationRuntimeSettings.upsert({
-      where: { id: 'default' },
-      create: {
-        id: 'default',
-        bulkQueueLowWatermark: data.bulkQueueLowWatermark,
-        bulkQueueHighWatermark: data.bulkQueueHighWatermark,
-        defaultBulkSharePercent: data.defaultBulkSharePercent,
-        adaptiveBackpressure: data.adaptiveBackpressure,
-        revision: nextRevision,
-        updatedBy: permissions.id,
-      },
-      update: {
-        bulkQueueLowWatermark: data.bulkQueueLowWatermark,
-        bulkQueueHighWatermark: data.bulkQueueHighWatermark,
-        defaultBulkSharePercent: data.defaultBulkSharePercent,
-        adaptiveBackpressure: data.adaptiveBackpressure,
-        revision: nextRevision,
-        updatedBy: permissions.id,
-      },
-      select: { revision: true, updatedAt: true },
-    });
-
-    await logAudit({
-      action: 'notification_runtime_settings.updated',
-      entityType: 'SYSTEM_CONFIG',
-      entityId: 'notification_runtime_settings',
-      actorId: permissions.id,
-      oldValue,
-      newValue: {
-        bulkQueueLowWatermark: data.bulkQueueLowWatermark,
-        bulkQueueHighWatermark: data.bulkQueueHighWatermark,
-        defaultBulkSharePercent: data.defaultBulkSharePercent,
-        adaptiveBackpressure: data.adaptiveBackpressure,
-        revision: nextRevision,
-      } as Prisma.InputJsonValue,
-      details: { kind: 'runtimeSettings' } as Prisma.InputJsonValue,
-    });
+    let updated2!: { revision: number; updatedAt: Date };
+    const runtimeAuditNewValue = {
+      bulkQueueLowWatermark: data.bulkQueueLowWatermark,
+      bulkQueueHighWatermark: data.bulkQueueHighWatermark,
+      defaultBulkSharePercent: data.defaultBulkSharePercent,
+      adaptiveBackpressure: data.adaptiveBackpressure,
+      revision: nextRevision,
+    } as Prisma.InputJsonValue;
+    try {
+      await prisma.$transaction(async tx => {
+        let createdOrUpdated: { revision: number; updatedAt: Date };
+        if (!existing) {
+          try {
+            createdOrUpdated = await tx.notificationRuntimeSettings.create({
+              data: {
+                id: 'default',
+                bulkQueueLowWatermark: data.bulkQueueLowWatermark,
+                bulkQueueHighWatermark: data.bulkQueueHighWatermark,
+                defaultBulkSharePercent: data.defaultBulkSharePercent,
+                adaptiveBackpressure: data.adaptiveBackpressure,
+                revision: nextRevision,
+                updatedBy: permissions.id,
+              },
+              select: { revision: true, updatedAt: true },
+            });
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+              throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
+            }
+            throw e;
+          }
+        } else {
+          // CAS: conditional update keyed on expected revision so two concurrent
+          // admins reading rev 5 cannot both silently advance to rev 6.
+          const result = await tx.notificationRuntimeSettings.updateMany({
+            where: { id: 'default', revision: existing.revision },
+            data: {
+              bulkQueueLowWatermark: data.bulkQueueLowWatermark,
+              bulkQueueHighWatermark: data.bulkQueueHighWatermark,
+              defaultBulkSharePercent: data.defaultBulkSharePercent,
+              adaptiveBackpressure: data.adaptiveBackpressure,
+              revision: nextRevision,
+              updatedBy: permissions.id,
+            },
+          });
+          if (result.count !== 1) throw Object.assign(new Error('CAS_CONFLICT'), { code: 'CAS_CONFLICT' });
+          createdOrUpdated = await tx.notificationRuntimeSettings.findUniqueOrThrow({
+            where: { id: 'default' },
+            select: { revision: true, updatedAt: true },
+          });
+        }
+        await logAudit(
+          {
+            action: 'notification_runtime_settings.updated',
+            entityType: 'SYSTEM_CONFIG',
+            entityId: 'notification_runtime_settings',
+            actorId: permissions.id,
+            oldValue,
+            newValue: runtimeAuditNewValue,
+            details: { kind: 'runtimeSettings' } as Prisma.InputJsonValue,
+          },
+          tx as never
+        );
+        updated2 = createdOrUpdated;
+      });
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
+      if (code === 'CAS_CONFLICT' || (e instanceof Error && e.message === 'CAS_CONFLICT')) {
+        return jsonError('Settings changed elsewhere. Reload before saving.', 409);
+      }
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return jsonError('Settings changed elsewhere. Reload before saving.', 409);
+      }
+      throw e;
+    }
 
     invalidateRuntimeCache();
     // Default bulk share affects every computed capacity; invalidate process cache.
@@ -287,8 +356,8 @@ export async function PATCH(request: NextRequest) {
       bulkQueueHighWatermark: data.bulkQueueHighWatermark,
       defaultBulkSharePercent: data.defaultBulkSharePercent,
       adaptiveBackpressure: data.adaptiveBackpressure,
-      revision: updated.revision,
-      updatedAt: updated.updatedAt.toISOString(),
+      revision: updated2.revision,
+      updatedAt: updated2.updatedAt.toISOString(),
     });
   }
 

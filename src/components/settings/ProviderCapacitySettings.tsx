@@ -379,7 +379,7 @@ export default function ProviderCapacitySettings({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button size="sm" onClick={() => void onSave()} disabled={saving || !isDirty} className="h-8 text-xs font-semibold">
+        <Button type="button" size="sm" onClick={() => void onSave()} disabled={saving || !isDirty} className="h-8 text-xs font-semibold">
           {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
           {saving ? 'Saving…' : 'Save capacity'}
         </Button>
@@ -406,8 +406,8 @@ export default function ProviderCapacitySettings({
             </div>
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" size="sm" onClick={() => { setConfirmOpen(false); setPendingPayload(null); }} className="h-8 text-xs" disabled={saving}>Cancel</Button>
-            <Button size="sm" onClick={() => void executeSave(pendingPayload)} className="h-8 text-xs" disabled={saving}>
+            <Button type="button" variant="outline" size="sm" onClick={() => { setConfirmOpen(false); setPendingPayload(null); }} className="h-8 text-xs" disabled={saving}>Cancel</Button>
+            <Button type="button" size="sm" onClick={() => void executeSave(pendingPayload)} className="h-8 text-xs" disabled={saving}>
               {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
               Confirm
             </Button>

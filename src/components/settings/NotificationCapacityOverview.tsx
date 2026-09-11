@@ -68,6 +68,7 @@ export default function NotificationCapacityOverview({
   const [high, setHigh] = useState<string>(runtime ? String(runtime.bulkQueueHighWatermark) : watermarks ? String(watermarks.high) : '25000');
   const [defaultShare, setDefaultShare] = useState<number>(runtime?.defaultBulkSharePercent ?? 80);
   const [adaptive, setAdaptive] = useState<boolean>(runtime?.adaptiveBackpressure ?? true);
+  const [currentRevision, setCurrentRevision] = useState<number | null>(runtime?.revision ?? watermarks?.revision ?? null);
   const [runtimeSaving, setRuntimeSaving] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeSuccess, setRuntimeSuccess] = useState(false);
@@ -136,11 +137,16 @@ export default function NotificationCapacityOverview({
           bulkQueueHighWatermark: parsedHigh,
           defaultBulkSharePercent: defaultShare,
           adaptiveBackpressure: adaptive,
-          ...(runtime ? { revision: runtime.revision } : {}),
+          ...(currentRevision != null ? { revision: currentRevision } : {}),
         }),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(body.error || 'Runtime update failed');
+      const body = (await res.json().catch(() => ({}))) as { error?: string; data?: { revision?: number; updatedAt?: string } } & {
+        revision?: number;
+        updatedAt?: string;
+      };
+      if (!res.ok) throw new Error((body as { error?: string }).error || 'Runtime update failed');
+      const updated = (body as { data?: { revision?: number } }).data ?? body;
+      if (updated && typeof updated.revision === 'number') setCurrentRevision(updated.revision);
       setRuntimeSuccess(true);
       window.setTimeout(() => setRuntimeSuccess(false), 2500);
     } catch (e) {
@@ -225,7 +231,7 @@ export default function NotificationCapacityOverview({
               <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">Source</div>
               <div className="mt-1 flex gap-1.5 flex-wrap">
                 {watermarks ? sourceBadge(watermarks.source) : null}
-                {runtime ? <Badge variant="outline" className="text-[10px]">rev {runtime.revision}</Badge> : null}
+                <Badge variant="outline" className="text-[10px]">rev {currentRevision ?? runtime?.revision ?? watermarks?.revision ?? '—'}</Badge>
               </div>
               <div className="text-[11px] text-muted-foreground mt-1">{runtime ? 'DB-managed' : watermarks?.source === 'ENV' ? 'Legacy env — save to own' : 'Defaults'}</div>
             </div>

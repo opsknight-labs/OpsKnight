@@ -10,7 +10,7 @@ import {
   defaultInFlight,
   defaultRate,
 } from './defaults';
-import { HARD_LIMITS } from './hard-limits';
+import { clampInt, HARD_LIMITS } from './hard-limits';
 import type { CapacitySource, EffectiveCapacityConfig } from './types';
 
 function normalizedProvider(provider: string): string {
@@ -63,10 +63,15 @@ function recoverAdaptiveRate(key: string, hardRate: number, configured: number, 
 }
 
 async function resolveRuntimeSettingsCached(nowMs: number) {
-  const cached = runtimeCache.get('runtime', nowMs);
-  if (cached) return cached as Awaited<ReturnType<typeof prisma.notificationRuntimeSettings.findUnique>>;
+  // runtimeCache distinguishes undefined (miss/expired) from null (cached absence)
+  const cached = runtimeCache.get('runtime', nowMs) as
+    | Awaited<ReturnType<typeof prisma.notificationRuntimeSettings.findUnique>>
+    | null
+    | undefined;
+  if (cached !== undefined) return cached;
   const record = await prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } });
-  runtimeCache.set('runtime', record, nowMs, CACHE_TTLS.runtimeTtlMs);
+  // Cache null (no row yet) as negative cache so fanout doesn't hammer Postgres before first admin save.
+  runtimeCache.set('runtime', record as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
   return record;
 }
 
@@ -74,27 +79,34 @@ function resolveEnvCapacity(
   channel: NotificationChannel,
   provider: string,
   env: NodeJS.ProcessEnv
-): { configuredRate?: number; configuredInFlight?: number; bulkShare?: number; adaptive?: boolean; ceiling?: number; hasAny: boolean } {
+): { configuredRate?: number; configuredInFlight?: number; bulkShare?: number; adaptive?: boolean; ceiling: number; quotaBlockSize: number; hasAny: boolean } {
   const providerEnvKey = provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_').slice(0, 80);
   const scoped = (suffix: string) =>
     envValue(env, `NOTIFICATION_${channel}_${providerEnvKey}_${suffix}`) ?? envValue(env, `NOTIFICATION_${channel}_${suffix}`);
   const rateRaw = scoped('RATE_PER_SECOND');
   const inFlightRaw = scoped('MAX_IN_FLIGHT');
-  const hasAny = Boolean(rateRaw || inFlightRaw || env.NOTIFICATION_BULK_SHARE || env.NOTIFICATION_ADAPTIVE_BACKPRESSURE || env.NOTIFICATION_DEPLOYMENT_RATE_CEILING || env.NOTIFICATION_QUOTA_BLOCK_SIZE);
+  const bulkShareRaw = env.NOTIFICATION_BULK_SHARE;
+  const adaptiveRaw = env.NOTIFICATION_ADAPTIVE_BACKPRESSURE;
+  // Only capacity-relevant env vars drive the ENV branch. Deployment ceiling and
+  // quota-block size are independent infrastructure clamps and must not hijack
+  // DB-owned bulkShare/adaptive values (e.g. DB 50% + emergency ceiling=1000
+  // must keep the DB's 50%, not fall through to the env-default 80%).
+  const hasRate = Boolean(rateRaw && Number.isSafeInteger(Number(rateRaw)) && Number(rateRaw) >= HARD_LIMITS.ratePerSecond.min && Number(rateRaw) <= HARD_LIMITS.ratePerSecond.max);
+  const hasInFlight = Boolean(inFlightRaw && Number.isSafeInteger(Number(inFlightRaw)) && Number(inFlightRaw) >= HARD_LIMITS.maxInFlight.min && Number(inFlightRaw) <= HARD_LIMITS.maxInFlight.max);
+  const hasBulkShare = typeof bulkShareRaw === 'string' && bulkShareRaw.trim() !== '' && Number.isFinite(Number(bulkShareRaw)) && Number(bulkShareRaw) >= 0.05 && Number(bulkShareRaw) <= 1;
+  const hasAdaptive = typeof adaptiveRaw === 'string' && adaptiveRaw.trim() !== '';
+  const hasAny = Boolean(hasRate || hasInFlight || hasBulkShare || hasAdaptive);
   let configuredRate: number | undefined;
-  if (rateRaw && Number.isSafeInteger(Number(rateRaw)) && Number(rateRaw) >= HARD_LIMITS.ratePerSecond.min && Number(rateRaw) <= HARD_LIMITS.ratePerSecond.max) {
-    configuredRate = Number(rateRaw);
-  }
+  if (hasRate) configuredRate = Number(rateRaw);
   let configuredInFlight: number | undefined;
-  if (inFlightRaw && Number.isSafeInteger(Number(inFlightRaw)) && Number(inFlightRaw) >= HARD_LIMITS.maxInFlight.min && Number(inFlightRaw) <= HARD_LIMITS.maxInFlight.max) {
-    configuredInFlight = Number(inFlightRaw);
-  }
+  if (hasInFlight) configuredInFlight = Number(inFlightRaw);
   return {
     configuredRate,
     configuredInFlight,
-    bulkShare: shareFromEnv(env.NOTIFICATION_BULK_SHARE),
-    adaptive: env.NOTIFICATION_ADAPTIVE_BACKPRESSURE !== 'false',
+    bulkShare: hasBulkShare ? shareFromEnv(bulkShareRaw) : undefined,
+    adaptive: hasAdaptive ? adaptiveRaw !== 'false' : undefined,
     ceiling: integerSetting(env.NOTIFICATION_DEPLOYMENT_RATE_CEILING, HARD_LIMITS.ratePerSecond.max, 1, HARD_LIMITS.ratePerSecond.max),
+    quotaBlockSize: boundedQuotaBlockSize(env),
     hasAny,
   };
 }
@@ -115,8 +127,8 @@ export async function getEffectiveCapacity(input: {
   const env = input.env ?? process.env;
   const nowMs = input.nowMs ?? Date.now();
   const cacheKey = `${channel}:${provider}`;
-  const cached = capacityCache.get(cacheKey, nowMs) as EffectiveCapacityConfig | null;
-  if (cached) {
+  const cached = capacityCache.get(cacheKey, nowMs) as EffectiveCapacityConfig | undefined;
+  if (cached !== undefined) {
     // Cheap refresh for adaptive recovery without re-querying Postgres every call.
     if (cached.adaptiveBackpressure) {
       const key = capacityKey(channel, provider);
@@ -127,10 +139,16 @@ export async function getEffectiveCapacity(input: {
     return cached;
   }
 
-  const [runtime, stored] = await Promise.all([
-    resolveRuntimeSettingsCached(nowMs),
-    prisma.notificationProviderCapacity.findUnique({ where: { provider_channel: { provider, channel } } }),
-  ]);
+  const runtimePromise = resolveRuntimeSettingsCached(nowMs);
+  let stored = await prisma.notificationProviderCapacity.findUnique({ where: { provider_channel: { provider, channel } } });
+  // WEBHOOK/SLACK admission uses dynamic bucket keys (e.g. WEBHOOK:<origin>) but is
+  // governed by a single logical profile WEBHOOK:default (similarly SLACK:default).
+  // Without a fallback an admin saving WEBHOOK:default would see no effect on
+  // actual webhook deliveries because each origin would resolve to DEFAULT.
+  if (!stored && (channel === 'WEBHOOK' || channel === 'SLACK') && provider !== 'default') {
+    stored = await prisma.notificationProviderCapacity.findUnique({ where: { provider_channel: { provider: 'default', channel } } });
+  }
+  const runtime = await runtimePromise;
 
   const runtimeBulkShare = runtime ? runtime.defaultBulkSharePercent / 100 : DEFAULT_BULK_SHARE;
   const envCapacity = resolveEnvCapacity(channel, provider, env);
@@ -213,9 +231,12 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
   const nowMs = input?.nowMs ?? Date.now();
   const runtime = (await resolveRuntimeSettingsCached(nowMs)) as Awaited<ReturnType<typeof prisma.notificationRuntimeSettings.findUnique>> | null;
   if (runtime) {
+    // Defense in depth: a bad manual DB edit or stale migration must not widen into an invalid fanout.
+    const lowClamped = clampInt(runtime.bulkQueueLowWatermark, HARD_LIMITS.queueLowWatermark.min, HARD_LIMITS.queueLowWatermark.max);
+    const highClamped = clampInt(runtime.bulkQueueHighWatermark, HARD_LIMITS.queueHighWatermark.min, HARD_LIMITS.queueHighWatermark.max);
     return {
-      low: runtime.bulkQueueLowWatermark,
-      high: Math.max(runtime.bulkQueueLowWatermark, runtime.bulkQueueHighWatermark),
+      low: lowClamped,
+      high: Math.max(lowClamped, highClamped),
       source: 'DATABASE',
       revision: runtime.revision,
     };
@@ -242,9 +263,9 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
 
 export function recordCapacityPressure(channel: NotificationChannel, provider: string, nowMs = Date.now()): number {
   const effectiveKey = `${channel}:${normalizedProvider(provider || 'default')}`;
-  const cached = capacityCache.get(effectiveKey, nowMs) as EffectiveCapacityConfig | null;
+  const cached = capacityCache.get(effectiveKey, nowMs) as EffectiveCapacityConfig | undefined;
   let configured: number;
-  if (cached) configured = cached.configuredRatePerSecond;
+  if (cached !== undefined) configured = cached.configuredRatePerSecond;
   else {
     const envCap = resolveEnvCapacity(channel, normalizedProvider(provider || 'default'), process.env);
     configured = envCap.configuredRate ?? defaultRate(channel);
@@ -260,9 +281,9 @@ export function recordCapacityPressure(channel: NotificationChannel, provider: s
 
 export function recordHealthyCapacity(channel: NotificationChannel, provider: string, nowMs = Date.now()): number {
   const effectiveKey = `${channel}:${normalizedProvider(provider || 'default')}`;
-  const cached = capacityCache.get(effectiveKey, nowMs) as EffectiveCapacityConfig | null;
+  const cached = capacityCache.get(effectiveKey, nowMs) as EffectiveCapacityConfig | undefined;
   let configured: number;
-  if (cached) configured = cached.configuredRatePerSecond;
+  if (cached !== undefined) configured = cached.configuredRatePerSecond;
   else {
     const envCap = resolveEnvCapacity(channel, normalizedProvider(provider || 'default'), process.env);
     configured = envCap.configuredRate ?? defaultRate(channel);

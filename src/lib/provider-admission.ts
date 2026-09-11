@@ -181,6 +181,10 @@ export async function acquireProviderConcurrency(
     local = { reserved, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
     localConcurrency.set(poolKey, local);
   }
+  // If admin lowered maxInFlight, an existing local reservation must not keep
+  // admitting against the old, larger reserved value for up to PROVIDER_LEASE_MS.
+  // DB rows expire conservatively; the local check shrinks immediately.
+  local.reserved = Math.min(local.reserved, laneCeiling);
   if (local.active >= local.reserved) {
     return {
       allowed: false,
