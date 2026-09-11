@@ -1860,25 +1860,21 @@ ${R} .status-v3-announcements-inline__tally-pill--changelog .status-v3-announcem
   background-color: #94a3b8;
 }
 ${R} .status-v3-announcements-inline__list {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  display: grid;
   gap: 0.5rem;
 }
 ${R} .status-v3-changelog-inline {
   margin-block-start: 0.75rem;
 }
 ${R} .status-v3-changelog-inline__list {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  display: grid;
   gap: 0.5rem;
 }
 ${R} .status-v3-changelog-pill {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
-  flex: 1 1 calc(50% - 0.5rem);
-  min-inline-size: min(100%, 22rem);
+  flex: none;
+  inline-size: 100%;
   gap: 0.3rem;
   padding: 0.55rem 0.75rem;
   border-radius: 4px;
@@ -1953,10 +1949,10 @@ ${R} .status-v3-changelog-pill__affected-label {
 }
 
 ${R} .status-v3-announcement-pill {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
-  flex: 1 1 calc(50% - 0.5rem);
-  min-inline-size: min(100%, 22rem);
+  flex: none;
+  inline-size: 100%;
   gap: 0.3rem;
   padding: 0.55rem 0.75rem;
   border-radius: 4px;
