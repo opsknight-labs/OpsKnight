@@ -8,7 +8,15 @@ import { withJiraWorkspaceProviderFence } from '@/lib/jira-concurrency';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger, withRequestContext } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
-import { readIntegrationBody } from '@/lib/integrations/request-security';
+import {
+  claimInboundDelivery,
+  completeInboundDelivery,
+  failInboundDelivery,
+  readIntegrationBody,
+  type InboundDeliveryClaim,
+} from '@/lib/integrations/request-security';
+
+const JIRA_INBOUND_INTEGRATION_ID = 'jira:default';
 
 const JiraWebhookSchema = z
   .object({
@@ -48,6 +56,34 @@ const JiraWebhookSchema = z
     user: z.record(z.unknown()).optional(),
   })
   .passthrough();
+
+type ParsedJiraWebhook = z.infer<typeof JiraWebhookSchema>;
+
+/**
+ * Jira Cloud does not expose one universal delivery header for every webhook.
+ * Prefer the provider changelog/comment identity and fall back to the webhook
+ * timestamp scoped to the issue and event. Returning null deliberately opts
+ * out of durable dedupe rather than treating a body hash as a provider nonce.
+ */
+export function getJiraWebhookDeliveryId(payload: ParsedJiraWebhook): string | null {
+  const issueIdentity = payload.issue?.id?.trim() || payload.issue?.key?.trim();
+  if (!issueIdentity) return null;
+
+  const event = (payload.webhookEvent || payload.issue_event_type_name || 'issue_event')
+    .trim()
+    .toLowerCase();
+  const changelogId = payload.changelog?.id?.trim();
+  if (changelogId) return `${event}:${issueIdentity}:changelog:${changelogId}`;
+
+  const commentId = payload.comment?.id?.trim();
+  if (commentId) return `${event}:${issueIdentity}:comment:${commentId}`;
+
+  if (payload.timestamp !== undefined && payload.timestamp !== null) {
+    return `${event}:${issueIdentity}:timestamp:${String(payload.timestamp)}`;
+  }
+
+  return null;
+}
 
 /**
  * Extracts webhook secret from incoming request.
@@ -135,6 +171,19 @@ function isWorkspaceUnavailable(error: unknown): boolean {
   );
 }
 
+async function completeClaim(
+  claim: InboundDeliveryClaim | null
+): Promise<void> {
+  if (claim?.disposition === 'CLAIMED') await completeInboundDelivery(claim);
+}
+
+async function failClaim(
+  claim: InboundDeliveryClaim | null,
+  error: unknown
+): Promise<void> {
+  if (claim?.disposition === 'CLAIMED') await failInboundDelivery(claim, error);
+}
+
 async function postJiraWebhook(request: NextRequest) {
   try {
     const clientIp = getClientIp(request.headers);
@@ -192,6 +241,24 @@ async function postJiraWebhook(request: NextRequest) {
       return new NextResponse(null, { status: 204 });
     }
 
+    const claim = await claimInboundDelivery(
+      JIRA_INBOUND_INTEGRATION_ID,
+      'JIRA',
+      getJiraWebhookDeliveryId(payload)
+    );
+    if (claim?.disposition === 'COMPLETED') {
+      return NextResponse.json({ ok: true, updated: 0, reason: 'duplicate_delivery' });
+    }
+    if (claim?.disposition === 'BUSY') {
+      // Another replica currently owns the delivery lease. Acknowledge receipt
+      // without performing duplicate side effects; the active worker will mark
+      // completion or release the failed lease for a later provider retry.
+      return NextResponse.json(
+        { ok: true, updated: 0, reason: 'delivery_in_progress' },
+        { status: 202 }
+      );
+    }
+
     try {
       // Hold the shared workspace fence for the entire webhook mutation chain,
       // including linked action-item/timeline side effects. Removal cannot
@@ -200,18 +267,21 @@ async function postJiraWebhook(request: NextRequest) {
       const result = await withJiraWorkspaceProviderFence(() =>
         processJiraWebhookEvent(payload as unknown as JiraWebhookPayload)
       );
+      await completeClaim(claim);
       return NextResponse.json({ ok: true, ...result });
     } catch (error) {
       if (isWorkspaceUnavailable(error)) {
         logger.info('Jira webhook lost workspace lifecycle race; acknowledged without processing', {
           component: 'jira-webhook',
         });
+        await completeClaim(claim);
         return NextResponse.json({
           ok: true,
           updated: 0,
           reason: 'integration_disabled_or_removed',
         });
       }
+      await failClaim(claim, error);
       throw error;
     }
   } catch (error) {
