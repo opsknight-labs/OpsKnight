@@ -7,6 +7,7 @@ import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-
 import StatusPageHeader from './StatusPageHeader';
 import StatusPageFooter from './StatusPageFooter';
 import StatusPageSubscribe from './StatusPageSubscribe';
+import StatusPageSubscribeModal from './StatusPageSubscribeModal';
 import { presentOverallHeadline } from '@/lib/status-pages/status-presentation';
 import StatusHeroV3 from './v3/StatusHeroV3';
 import ServiceHealthV3 from './v3/ServiceHealthV3';
@@ -41,6 +42,7 @@ export default function StatusPageV3({
   const resources = page.resources;
   const vis = page.visibility;
   const [timeZone, setTimeZone] = useState('UTC');
+  const [subscribeOpen, setSubscribeOpen] = useState(false);
 
   useEffect(() => {
     setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
@@ -102,6 +104,9 @@ export default function StatusPageV3({
   const apiPath =
     page.slug && !page.isDefault ? `/api/status/${encodeURIComponent(page.slug)}` : '/api/status';
 
+  const serviceOptions = snapshot.services.map(s => ({ id: s.id, name: s.name }));
+  const rssHref = showRss ? `${apiPath}/rss` : null;
+
   return (
     <div className={STATUS_PAGE_SURFACE_CLASS}>
       {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
@@ -114,8 +119,9 @@ export default function StatusPageV3({
             contactUrl: page.contactUrl,
           }}
           branding={branding}
-          rssHref={showRss ? `${apiPath}/rss` : null}
+          rssHref={rssHref}
           apiHref={showApi ? apiPath : null}
+          onSubscribeClick={showSubscribe && subscribeEnabled ? () => setSubscribeOpen(true) : null}
           timeZone={timeZone}
           generatedAt={snapshot.freshness?.generatedAt ?? snapshot.generatedAt}
           refreshIntervalSeconds={refreshIntervalSeconds}
@@ -180,11 +186,21 @@ export default function StatusPageV3({
             <span className="status-section__count">Get notified when service status changes</span>
           </div>
           {subscribeEnabled ? (
-            <StatusPageSubscribe statusPageId={page.id} />
+            <StatusPageSubscribe statusPageId={page.id} services={serviceOptions} rssHref={rssHref} />
           ) : (
             <p className="status-muted">Subscriptions are accepted on the published status page.</p>
           )}
         </section>
+      )}
+
+      {showSubscribe && subscribeEnabled && (
+        <StatusPageSubscribeModal
+          open={subscribeOpen}
+          statusPageId={page.id}
+          services={serviceOptions}
+          rssHref={rssHref}
+          onClose={() => setSubscribeOpen(false)}
+        />
       )}
 
       {showFooter && (

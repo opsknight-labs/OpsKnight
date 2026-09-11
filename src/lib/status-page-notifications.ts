@@ -160,7 +160,7 @@ export async function notifyStatusPageSubscribers(
           orderBy: { id: 'asc' },
           take: PAGE_SIZE,
           ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-          select: { id: true, email: true, token: true },
+          select: { id: true, email: true, token: true, preferences: true },
         });
         if (subscriptions.length === 0) {
           await recordFanoutPage(fanout.id, {
@@ -171,8 +171,28 @@ export async function notifyStatusPageSubscribers(
           });
           break;
         }
+        // Industry-standard service picker: filter by preferences.selectedServiceIds when present
+        const eligible = subscriptions.filter(sub => {
+          const prefs = sub.preferences as { selectedServiceIds?: string[] } | null | undefined;
+          const ids = prefs?.selectedServiceIds;
+          if (!Array.isArray(ids) || ids.length === 0) return true;
+          return ids.includes(incident.serviceId);
+        });
+        if (eligible.length === 0) {
+          cursor = subscriptions.at(-1)?.id;
+          if (cursor) {
+            await recordFanoutPage(fanout.id, {
+              cursor,
+              materialized: 0,
+              failed: 0,
+              complete: subscriptions.length < PAGE_SIZE,
+            });
+          }
+          if (subscriptions.length < PAGE_SIZE || !cursor) break;
+          continue;
+        }
         const unsubscribeTokens = await issueUnsubscribeTokensBatch(
-          subscriptions.map(subscription => subscription.id)
+          eligible.map(subscription => subscription.id)
         );
         let pageSent = 0;
         let pageFailed = 0;
@@ -180,7 +200,7 @@ export async function notifyStatusPageSubscribers(
 
         try {
           const result = await createCentralNotificationIntentsBatch(
-            subscriptions.map(sub => ({
+            eligible.map(sub => ({
               category: 'STATUS_PAGE',
               channel: 'EMAIL',
               recipientType: 'SUBSCRIBER',
@@ -215,7 +235,7 @@ export async function notifyStatusPageSubscribers(
           );
           pageSent = result.created;
         } catch (error) {
-          pageFailed = subscriptions.length;
+          pageFailed = eligible.length;
           pageError = error;
           logger.error('status_page.incident_fanout_page_failed', {
             statusPageId: page.id,

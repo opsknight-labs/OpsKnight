@@ -11,6 +11,7 @@ import { getClientIp } from '@/lib/client-ip';
 import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
+import { Prisma } from '@prisma/client';
 import { hashSubscriptionToken } from './subscription-tokens';
 import { subscriptionRequestAction } from './subscription-policy';
 import {
@@ -45,12 +46,17 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       .object({
         statusPageId: z.string().min(1).max(200),
         email: z.string().trim().email().max(254),
+        preferences: z
+          .object({
+            selectedServiceIds: z.array(z.string().min(1).max(200)).max(100).optional(),
+          })
+          .optional(),
       })
       .strict()
       .safeParse(body);
     if (!parsed.success)
       return jsonError('A valid status page and email address are required.', 400);
-    const { statusPageId, email } = parsed.data;
+    const { statusPageId, email, preferences: rawPreferences } = parsed.data;
 
     if (!statusPageId || !email || !email.includes('@')) {
       return jsonError(
@@ -97,6 +103,22 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       return jsonError('Authentication required', 401);
     }
 
+    // Industry-standard service picker: optional preferences.selectedServiceIds, validated against page's services
+    const preferencesProvided = rawPreferences !== undefined;
+    let normalizedPreferences: { selectedServiceIds?: string[] } | null = null;
+    if (rawPreferences?.selectedServiceIds && rawPreferences.selectedServiceIds.length > 0) {
+      const allowed = await prisma.statusPageService.findMany({
+        where: { statusPageId, showOnPage: true },
+        select: { serviceId: true },
+      });
+      const allowedSet = new Set(allowed.map(r => r.serviceId));
+      const filtered = rawPreferences.selectedServiceIds.filter(id => allowedSet.has(id));
+      // Empty after filtering = subscriber opted into nothing valid — store as "all" (no filter)
+      if (filtered.length > 0) {
+        normalizedPreferences = { selectedServiceIds: [...new Set(filtered)] };
+      }
+    }
+
     const token = randomBytes(32).toString('hex');
     const verificationToken = randomBytes(32).toString('hex');
 
@@ -112,6 +134,13 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       // after an unsubscribe, so unsubscribedAt alone must never reactivate a
       // complained, bounced, or suppressed address.
       if (action === 'ACCEPT') {
+        // ACTIVE subscribers may update their service selection even though verification is skipped
+        if (existing.state === 'ACTIVE' && preferencesProvided) {
+          await prisma.statusPageSubscription.update({
+            where: { id: existing.id },
+            data: { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue },
+          });
+        }
         return subscriptionAccepted();
       }
 
@@ -125,6 +154,9 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             token: hashSubscriptionToken(token),
             verificationToken: hashSubscriptionToken(verificationToken),
             verified: false,
+            ...(preferencesProvided
+              ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
+              : {}),
           },
         });
 
@@ -137,6 +169,9 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           data: {
             token: hashSubscriptionToken(token),
             verificationToken: hashSubscriptionToken(verificationToken),
+            ...(preferencesProvided
+              ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
+              : {}),
           },
         });
         if (refreshed.count === 0) return subscriptionAccepted();
@@ -150,6 +185,9 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           verificationToken: hashSubscriptionToken(verificationToken),
           verified: false,
           state: 'PENDING',
+          ...(preferencesProvided
+            ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
+            : {}),
         },
       });
     }

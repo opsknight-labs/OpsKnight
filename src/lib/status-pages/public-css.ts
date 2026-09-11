@@ -520,6 +520,32 @@ ${R} .status-subscribe__input:focus-visible, ${R} .status-subscribe__button:focu
 ${R} .status-subscribe__error { grid-column: 1 / -1; padding: .65rem .75rem; border: 1px solid #fca5a5; border-radius: .6rem; background: #fee2e2; color: #991b1b; font-size: .875rem; }
 ${R} .status-subscribe__success { display: grid; gap: .35rem; padding: 1.25rem; border: 1px solid #86efac; border-radius: .8rem; background: #dcfce7; text-align: center; color: #15803d; }
 ${R} .status-subscribe__success strong { color: #166534; font-size: 1.05rem; }
+${R} .status-subscribe__success-close { justify-self: center; margin-block-start: .35rem; padding: .4rem .9rem; border: 1px solid var(--status-panel-border); border-radius: 999px; background: var(--status-panel-bg); color: var(--status-text); font-weight: 650; font-size: .78rem; cursor: pointer; }
+${R} .status-subscribe__success-close:hover { border-color: var(--primary); color: var(--primary); }
+${R} .status-subscribe--modal { grid-template-columns: minmax(0, 1fr); gap: .85rem; }
+${R} .status-subscribe--modal .status-subscribe__copy strong { font-size: 1.05rem; }
+${R} .status-subscribe__rss-link { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+${R} .status-subscribe__rss-link:hover { color: var(--primary-hover); }
+${R} .status-subscribe__hint { grid-column: 1 / -1; margin: 0; font-size: .72rem; color: var(--status-text-muted); line-height: 1.45; }
+${R} .status-subscribe__prefs { display: grid; gap: .55rem; grid-column: 1 / -1; margin: 0; padding: .7rem .75rem; border: 1px solid var(--status-panel-border); border-radius: 4px; background: color-mix(in srgb, var(--status-panel-muted-bg) 62%, transparent); }
+${R} .status-subscribe__radio { display: inline-flex; align-items: center; gap: .45rem; font-size: .82rem; font-weight: 600; color: var(--status-text); cursor: pointer; }
+${R} .status-subscribe__radio input[type="radio"] { accent-color: var(--primary); inline-size: 1rem; block-size: 1rem; }
+${R} .status-subscribe__radio-hint { font-weight: 500; color: var(--status-text-muted); font-size: .72rem; border: 1px solid var(--status-panel-border); border-radius: 999px; padding: .05rem .4rem; background: var(--status-panel-bg); }
+${R} .status-subscribe__picker { display: grid; gap: .5rem; padding-block-start: .15rem; border-block-start: 1px solid var(--status-panel-border); margin-block-start: .15rem; }
+${R} .status-subscribe__picker-actions { display: flex; align-items: center; gap: .45rem; flex-wrap: wrap; }
+${R} .status-subscribe__picker-btn { padding: .22rem .55rem; border: 1px solid var(--status-panel-border); border-radius: 4px; background: var(--status-panel-bg); color: var(--status-text-muted); font-size: .72rem; font-weight: 600; cursor: pointer; }
+${R} .status-subscribe__picker-btn:hover { border-color: color-mix(in srgb, var(--primary) 35%, var(--status-panel-border)); color: var(--status-text-strong); }
+${R} .status-subscribe__picker-count { font-size: .72rem; color: var(--status-text-subtle); font-variant-numeric: tabular-nums; margin-inline-start: auto; }
+${R} .status-subscribe__picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: .35rem .75rem; max-block-size: 10rem; overflow: auto; padding: .35rem; border: 1px solid var(--status-panel-border); border-radius: 4px; background: var(--status-panel-bg); }
+${R} .status-subscribe__check { display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; color: var(--status-text); cursor: pointer; line-height: 1.25; }
+${R} .status-subscribe__check input[type="checkbox"] { accent-color: var(--primary); inline-size: .9rem; block-size: .9rem; flex: none; }
+${R} .status-subscribe-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: clamp(.75rem, 3vw, 1.5rem); background: rgba(15,23,42,.42); backdrop-filter: blur(8px) saturate(1.15); -webkit-backdrop-filter: blur(8px) saturate(1.15); animation: status-v3-in .2s ease both; }
+${R} .status-subscribe-modal { inline-size: min(100%, 30rem); max-block-size: min(90dvh, 36rem); overflow: auto; display: grid; gap: 1rem; padding: clamp(1rem, 3vw, 1.35rem); border: 1px solid var(--status-panel-border); border-radius: 1rem; background: var(--status-panel-bg); box-shadow: 0 20px 50px rgba(15,23,42,.18), 0 1px 3px rgba(15,23,42,.08); }
+${R} .status-subscribe-modal__head { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+${R} .status-subscribe-modal__title { margin: 0; font-family: 'Space Grotesk', Inter, sans-serif; font-size: 1.05rem; font-weight: 700; letter-spacing: -.015em; color: var(--status-text-strong); }
+${R} .status-subscribe-modal__close { flex: none; inline-size: 2rem; block-size: 2rem; display: grid; place-items: center; border: 1px solid var(--status-panel-border); border-radius: 999px; background: var(--status-panel-muted-bg); color: var(--status-text-muted); font-size: 1.15rem; line-height: 1; cursor: pointer; }
+${R} .status-subscribe-modal__close:hover { color: var(--status-text-strong); border-color: var(--primary); background: var(--status-panel-bg); }
+${R} .status-subscribe-modal__close:focus-visible, ${R} .status-subscribe__button:focus-visible, ${R} .status-subscribe__picker-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent); outline-offset: 2px; }
 
 ${R} .status-footer {
   margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--status-panel-border);

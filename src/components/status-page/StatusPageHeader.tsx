@@ -12,6 +12,7 @@ interface StatusPageHeaderProps {
   branding?: (PublicStatusBranding & { logo?: string }) | null;
   rssHref?: string | null;
   apiHref?: string | null;
+  onSubscribeClick?: (() => void) | null;
   /** Visitor browser IANA zone. All visible timestamps on the page use this same value. */
   timeZone: string;
   generatedAt?: string;
@@ -118,6 +119,15 @@ function MailIcon() {
   );
 }
 
+function SubscribeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M4 9a2.5 2.5 0 0 1 2.5-2.5H17A2.5 2.5 0 0 1 19.5 9V16A2.5 2.5 0 0 1 17 18.5H6.5A2.5 2.5 0 0 1 4 16V9Z" />
+      <path d="m5 7.5 7 5 7-5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /**
  * Slim public top bar. Clock, countdown, and timestamps all use the visitor's browser zone.
  */
@@ -126,6 +136,7 @@ export default function StatusPageHeader({
   branding = {},
   rssHref,
   apiHref,
+  onSubscribeClick,
   timeZone,
   generatedAt,
   refreshIntervalSeconds = null,
@@ -201,6 +212,12 @@ export default function StatusPageHeader({
                 {formatCountdown(remainingSeconds)}
               </span>
             </span>
+          )}
+          {onSubscribeClick && (
+            <button type="button" className="status-topbar__chip status-topbar__chip--accent" onClick={onSubscribeClick} aria-haspopup="dialog">
+              <SubscribeIcon />
+              Subscribe
+            </button>
           )}
           {rssHref && (
             <a className="status-topbar__chip" href={rssHref}>

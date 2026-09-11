@@ -501,7 +501,7 @@ export async function buildStatusPageSnapshot(
         enabled: page.showSubscribe,
         channels: ['EMAIL'],
         verificationRequired: true,
-        serviceSelectionSupported: false,
+        serviceSelectionSupported: true,
       },
       showSubscribe: page.showSubscribe,
       showServicesByRegion: page.showServicesByRegion,
