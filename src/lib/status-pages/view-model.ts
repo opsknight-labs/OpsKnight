@@ -58,8 +58,16 @@ export function createStatusPageViewModel(
         incident.service && typeof incident.service === 'object' && !Array.isArray(incident.service)
           ? (incident.service as { name?: unknown; regions?: unknown })
           : {};
+      const hasLinkablePostmortem = Boolean(
+        incident.postmortem?.available === true && typeof incident.postmortem.id === 'string'
+      );
       return {
-        id: typeof incident.id === 'string' ? incident.id : `public-${index}`,
+        id:
+          typeof incident.id === 'string'
+            ? incident.id
+            : typeof incident.publicEventId === 'string'
+              ? incident.publicEventId
+              : `public-${index}`,
         title: typeof incident.title === 'string' ? incident.title : 'Status update',
         description: typeof incident.description === 'string' ? incident.description : null,
         status: typeof incident.status === 'string' ? incident.status : 'OPEN',
@@ -74,7 +82,10 @@ export function createStatusPageViewModel(
           region: Array.isArray(service.regions) ? service.regions.join(', ') : null,
         },
         events: snapshotIncidentEvents(incident.updates),
-        postIncidentReview: incident.postIncidentReview === true,
+        // The legacy renderer turns this marker into a clickable link using `id`. Only preserve
+        // it when the V3 projection also provided a real public postmortem id; otherwise a
+        // privacy-hidden incident id would become a fabricated /postmortems/public-N URL.
+        postIncidentReview: incident.postIncidentReview === true && hasLinkablePostmortem,
       };
     }),
     announcements: snapshot.announcements.map(item => ({
@@ -82,12 +93,22 @@ export function createStatusPageViewModel(
       startDate: new Date(item.startDate),
       endDate: item.endDate ? new Date(item.endDate) : null,
     })),
-    uptime: Object.fromEntries(snapshot.services.flatMap(service =>
-      service.uptime?.days90.percentage == null ? [] : [[service.id, service.uptime.days90.percentage]]
-    )),
-    uptime30: Object.fromEntries(snapshot.services.flatMap(service =>
-      service.uptime?.days30.percentage == null ? [] : [[service.id, service.uptime.days30.percentage]]
-    )),
-    statusHistory: Object.fromEntries(snapshot.services.map(service => [service.id, service.history ?? []])),
+    uptime: Object.fromEntries(
+      snapshot.services.flatMap(service =>
+        service.uptime?.days90.percentage == null
+          ? []
+          : [[service.id, service.uptime.days90.percentage]]
+      )
+    ),
+    uptime30: Object.fromEntries(
+      snapshot.services.flatMap(service =>
+        service.uptime?.days30.percentage == null
+          ? []
+          : [[service.id, service.uptime.days30.percentage]]
+      )
+    ),
+    statusHistory: Object.fromEntries(
+      snapshot.services.map(service => [service.id, service.history ?? []])
+    ),
   };
 }
