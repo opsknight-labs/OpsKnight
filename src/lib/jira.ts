@@ -83,6 +83,23 @@ function toADF(text: string) {
   };
 }
 
+export function parseJiraRetryAfterMs(
+  value: string | null | undefined,
+  nowMs = Date.now()
+): number | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(Math.max(Math.ceil(seconds * 1000), 1000), 24 * 60 * 60_000);
+  }
+
+  const retryAt = Date.parse(raw);
+  if (!Number.isFinite(retryAt)) return undefined;
+  return Math.min(Math.max(retryAt - nowMs, 1000), 24 * 60 * 60_000);
+}
+
 async function jiraRequest<T>(
   config: JiraConfigForRequest,
   path: string,
@@ -137,6 +154,7 @@ async function jiraRequest<T>(
       provider: 'jira',
       operation: `${init.method || 'GET'} ${path}`,
       status: response.status,
+      retryAfterMs: parseJiraRetryAfterMs(response.headers.get('retry-after')),
       cause: body
         ? new Error(`Jira request failed (${response.status}) with a provider response body.`)
         : new Error(`Jira request failed (${response.status}).`),
