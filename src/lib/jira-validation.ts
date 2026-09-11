@@ -1,3 +1,35 @@
+import { isIP } from 'node:net';
+
+function isForbiddenJiraHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host === 'metadata.google.internal' ||
+    host === 'metadata.azure.internal'
+  ) {
+    return true;
+  }
+
+  const family = isIP(host);
+  if (family === 4) {
+    const octets = host.split('.').map(Number);
+    const [a, b] = octets;
+    return (
+      a === 0 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+
+  if (family === 6) {
+    return host === '::1' || host.startsWith('fe80:') || host === '::';
+  }
+
+  return false;
+}
+
 export function normalizeJiraBaseUrl(value: string): string {
   let trimmed = value.trim().replace(/\/+$/, '');
 
@@ -17,6 +49,15 @@ export function normalizeJiraBaseUrl(value: string): string {
 
   if (url.protocol !== 'https:') {
     throw new Error('Jira URL must use HTTPS.');
+  }
+  if (url.username || url.password) {
+    throw new Error('Jira URL must not contain embedded credentials.');
+  }
+  if (url.search || url.hash) {
+    throw new Error('Jira URL must not contain query parameters or fragments.');
+  }
+  if (isForbiddenJiraHost(url.hostname)) {
+    throw new Error('Jira URL points to a forbidden local or metadata address.');
   }
 
   return url.toString().replace(/\/+$/, '');
