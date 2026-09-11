@@ -106,13 +106,24 @@ export async function renderVerifySubscriptionPage(token: string, expectedSlug?:
       status = 'invalid';
     } else if (isVerificationExpired(sub as unknown as { verificationTokenExpiresAt: Date | null })) {
       status = 'invalid';
-    } else if (sub.verified) {
-      status = 'already_verified';
-      subscription = sub;
     } else {
-      // GET only displays confirmation; email scanners cannot verify a subscription.
-      status = 'success';
-      subscription = sub;
+      const prefs = sub.preferences as Record<string, unknown> | null;
+      const hasPendingPreferenceChange =
+        sub.state === 'ACTIVE' &&
+        (prefs as Record<string, unknown> | null)?._pendingPreferences !== undefined;
+      if (hasPendingPreferenceChange) {
+        // ACTIVE subscriber with a pending preference change must be able to
+        // reach the confirmation form even though verified is still true.
+        status = 'success';
+        subscription = sub;
+      } else if (sub.verified) {
+        status = 'already_verified';
+        subscription = sub;
+      } else {
+        // GET only displays confirmation; email scanners cannot verify a subscription.
+        status = 'success';
+        subscription = sub;
+      }
     }
   } catch (error) {
     logger.error('Verify error', { component: 'status-verify-page', error });

@@ -286,12 +286,16 @@ export async function createTestStatusPageSubscription(
   email: string,
   overrides: Partial<Prisma.StatusPageSubscriptionUncheckedCreateInput> = {}
 ) {
+  const verified = overrides.verified ?? true;
+  const state = (overrides as { state?: string }).state;
+  const inferredState = state === undefined ? (verified ? 'ACTIVE' : 'PENDING') : undefined;
   return await prisma.statusPageSubscription.create({
     data: {
       statusPageId,
       email,
       token: Math.random().toString(36).substring(2),
-      verified: true,
+      verified,
+      ...(inferredState ? { state: inferredState as never } : {}),
       ...overrides,
     },
   });
