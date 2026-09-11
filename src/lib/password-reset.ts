@@ -98,7 +98,11 @@ export async function issuePasswordResetToken(params: {
             },
           });
         },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+        // The per-user advisory lock is the serialization primitive here.
+        // READ COMMITTED lets a waiter observe the preceding lock holder's
+        // committed token before revoking it; SERIALIZABLE can capture a stale
+        // snapshot while waiting and turn a safe burst into P2034 retry storms.
+        { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted }
       );
 
       return { token, tokenHash, expiresAt };
