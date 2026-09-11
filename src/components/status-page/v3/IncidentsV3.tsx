@@ -35,8 +35,8 @@ function IncidentImpactIcon({ impact }: { impact?: string }) {
     return (
       <svg
         className="status-v3-incident-pill__icon"
-        width="13"
-        height="13"
+        width="14"
+        height="14"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -55,8 +55,8 @@ function IncidentImpactIcon({ impact }: { impact?: string }) {
     return (
       <svg
         className="status-v3-incident-pill__icon"
-        width="13"
-        height="13"
+        width="14"
+        height="14"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -75,8 +75,8 @@ function IncidentImpactIcon({ impact }: { impact?: string }) {
     return (
       <svg
         className="status-v3-incident-pill__icon"
-        width="13"
-        height="13"
+        width="14"
+        height="14"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -92,8 +92,8 @@ function IncidentImpactIcon({ impact }: { impact?: string }) {
   return (
     <svg
       className="status-v3-incident-pill__icon"
-      width="13"
-      height="13"
+      width="14"
+      height="14"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -137,12 +137,12 @@ const IncidentCard = memo(function IncidentCard({
   incident,
   timeZone,
   postmortemHref,
-  defaultOpen,
+  defaultOpen = false,
 }: {
   incident: PublicIncident;
   timeZone: string;
   postmortemHref?: (postmortemId: string) => string;
-  defaultOpen: boolean;
+  defaultOpen?: boolean;
 }) {
   const isActive = incident.status === 'OPEN' || incident.status === 'ACKNOWLEDGED';
   const impactToken = incident.publicImpact
@@ -271,19 +271,73 @@ const IncidentCard = memo(function IncidentCard({
           </ol>
         )}
 
-        {incident.postmortem &&
-          (postmortemHref && (incident.postmortem.id || incident.id) ? (
-            <a
-              className="status-v3-incident-pill__pir"
-              href={postmortemHref(incident.postmortem.id || incident.id || '')}
-            >
-              {incident.postmortem.title ?? 'View post-incident review'} →
-            </a>
-          ) : (
-            <span className="status-v3-incident-pill__pir status-v3-incident-pill__pir--muted">
-              {incident.postmortem.title ?? 'Post-incident review available'}
-            </span>
-          ))}
+        {incident.postmortem && (
+          <div className="status-v3-incident-pill__pir-row">
+            {postmortemHref && (incident.postmortem.id || incident.id) ? (
+              <a
+                className="status-v3-incident-pill__pir"
+                href={postmortemHref(incident.postmortem.id || incident.id || '')}
+              >
+                <svg
+                  className="status-v3-incident-pill__pir-icon"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                <span className="status-v3-incident-pill__pir-label">
+                  {incident.postmortem.title ?? 'View post-incident review'}
+                </span>
+                <svg
+                  className="status-v3-incident-pill__pir-arrow"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </a>
+            ) : (
+              <span className="status-v3-incident-pill__pir status-v3-incident-pill__pir--muted">
+                <svg
+                  className="status-v3-incident-pill__pir-icon"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                <span className="status-v3-incident-pill__pir-label">
+                  {incident.postmortem.title ?? 'Post-incident review available'}
+                </span>
+              </span>
+            )}
+          </div>
+        )}
 
         {(hasService || hasRegions) && (
           <div className="status-v3-incident-pill__affects">
@@ -428,26 +482,15 @@ export default function IncidentsV3({
         </div>
       ) : (
         <div className="status-v3-incidents-inline__list" role="list">
-          {/* Active first — always expanded */}
+          {/* Collapsed by default — scannable feed; active + past both start closed */}
           {shownActive.map((incident, index) => (
             <div key={incident.id ?? incident.publicEventId ?? `active-${index}`} role="listitem">
-              <IncidentCard
-                incident={incident}
-                timeZone={timeZone}
-                postmortemHref={postmortemHref}
-                defaultOpen={true}
-              />
+              <IncidentCard incident={incident} timeZone={timeZone} postmortemHref={postmortemHref} />
             </div>
           ))}
-          {/* Past — only first past open when no active, rest collapsed */}
           {shownPast.map((incident, index) => (
             <div key={incident.id ?? incident.publicEventId ?? `past-${index}`} role="listitem">
-              <IncidentCard
-                incident={incident}
-                timeZone={timeZone}
-                postmortemHref={postmortemHref}
-                defaultOpen={shownActive.length === 0 && index === 0 && service === 'all'}
-              />
+              <IncidentCard incident={incident} timeZone={timeZone} postmortemHref={postmortemHref} />
             </div>
           ))}
         </div>
