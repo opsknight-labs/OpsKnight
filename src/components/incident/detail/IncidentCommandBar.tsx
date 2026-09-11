@@ -177,6 +177,7 @@ export default function IncidentCommandBar({
   const isWarRoomArchived = Boolean(warRoom?.warRoomArchivedAt);
   const hasActiveWarRoom = Boolean(warRoom?.slackChannelId) && !isWarRoomArchived;
   const warRoomEnabled = warRoom?.enabled ?? false;
+  const hasVisibleWarRoom = hasActiveWarRoom || (warRoomEnabled && canManage);
 
   const jiraLinks = jira?.links || [];
   const primaryJira = jiraLinks[0];
@@ -188,7 +189,7 @@ export default function IncidentCommandBar({
     jiraCapability.canCreate ||
     jiraCapability.canLink;
   const hasAnyIntegrations =
-    hasActiveWarRoom || Boolean(primaryJira) || jiraCapability.showOperationalJira;
+    hasVisibleWarRoom || Boolean(primaryJira) || jiraCapability.showOperationalJira;
 
   const handleCreateWarRoom = () => {
     setWarRoomError(null);
