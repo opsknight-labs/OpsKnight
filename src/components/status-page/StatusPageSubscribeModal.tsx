@@ -55,16 +55,18 @@ export default function StatusPageSubscribeModal({
             ×
           </button>
         </div>
-        <StatusPageSubscribe
-          statusPageId={statusPageId}
-          services={services}
-          variant="modal"
-          rssHref={rssHref}
-          onSuccess={() => {
-            // Keep modal open to show success; user can dismiss via Done/Escape/overlay
-          }}
-          onClose={onClose}
-        />
+        <div className="status-subscribe-modal__body">
+          <StatusPageSubscribe
+            statusPageId={statusPageId}
+            services={services}
+            variant="modal"
+            rssHref={rssHref}
+            onSuccess={() => {
+              // Keep modal open to show success; user can dismiss via Done/Escape/overlay
+            }}
+            onClose={onClose}
+          />
+        </div>
       </div>
     </div>
   );
