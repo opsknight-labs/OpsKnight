@@ -3,6 +3,7 @@ import type { NotificationTrafficClass } from '@prisma/client';
 import prisma from './prisma';
 import { encrypt } from './encryption';
 import { addOperationalMetric } from './metrics/operational/registry';
+import { getEffectiveWatermarks as resolverWatermarks } from './notification-capacity/resolver';
 
 const DEFAULT_LOW_WATERMARK = 5_000;
 const DEFAULT_HIGH_WATERMARK = 25_000;
@@ -12,14 +13,19 @@ function boundedSetting(value: string | undefined, fallback: number) {
   return Number.isSafeInteger(parsed) && parsed >= 100 && parsed <= 1_000_000 ? parsed : fallback;
 }
 
+/** Legacy env-only watermarks. Prefer `getEffectiveFanoutWatermarks()` (DB > env > default). */
 export function fanoutWatermarks(env: NodeJS.ProcessEnv = process.env) {
   const low = boundedSetting(env.NOTIFICATION_BULK_QUEUE_LOW_WATERMARK, DEFAULT_LOW_WATERMARK);
   const high = boundedSetting(env.NOTIFICATION_BULK_QUEUE_HIGH_WATERMARK, DEFAULT_HIGH_WATERMARK);
   return { low, high: Math.max(low, high) };
 }
 
+export async function getEffectiveFanoutWatermarks() {
+  return resolverWatermarks();
+}
+
 export async function bulkQueueHasCapacity(): Promise<boolean> {
-  const { high } = fanoutWatermarks();
+  const { high } = await resolverWatermarks();
   const depth = await prisma.notification.count({
     where: {
       trafficClass: { in: ['PUBLIC_INCIDENT', 'BULK'] },

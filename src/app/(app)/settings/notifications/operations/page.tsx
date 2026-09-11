@@ -7,9 +7,9 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import NotificationCapacityOverview from '@/components/settings/NotificationCapacityOverview';
-import { getProviderCapacity } from '@/lib/provider-capacity';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { getEffectiveCapacity, getEffectiveWatermarks } from '@/lib/notification-capacity/resolver';
 
 export default async function NotificationOperationsPage() {
   let user: Awaited<ReturnType<typeof getCurrentUser>>;
@@ -23,7 +23,7 @@ export default async function NotificationOperationsPage() {
     redirect('/settings');
   }
   const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
-  const [leases, campaigns, control, subscriptionStates, feedbackTypes] = await Promise.all([
+  const [leases, campaigns, control, subscriptionStates, feedbackTypes, runtime, effectiveCapacities] = await Promise.all([
     prisma.providerWorkerLease.count({ where: { expiresAt: { gt: new Date() } } }),
     prisma.notificationFanout.findMany({
       orderBy: { createdAt: 'desc' },
@@ -45,7 +45,10 @@ export default async function NotificationOperationsPage() {
       WHERE "occurredAt" >= CURRENT_TIMESTAMP - INTERVAL '24 hours'
       GROUP BY "eventType"
     `),
+    prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } }),
+    Promise.all(channels.map(channel => getEffectiveCapacity({ channel: channel as never, provider: 'default' }))),
   ]);
+  const watermarks = await getEffectiveWatermarks();
   const controlValue =
     control?.value && typeof control.value === 'object' && !Array.isArray(control.value)
       ? (control.value as Record<string, unknown>)
@@ -115,11 +118,36 @@ export default async function NotificationOperationsPage() {
       />
 
       <NotificationCapacityOverview
-        capacities={channels.map(channel => ({ channel, ...getProviderCapacity(channel) }))}
+        capacities={effectiveCapacities.map(c => ({
+          channel: c.channel,
+          configuredRatePerSecond: c.configuredRatePerSecond,
+          effectiveRatePerSecond: c.effectiveRatePerSecond,
+          bulkRatePerSecond: c.bulkRatePerSecond,
+          maxInFlight: c.maxInFlight,
+          bulkMaxInFlight: c.bulkMaxInFlight,
+          adaptiveBackpressure: c.adaptiveBackpressure,
+          bulkShare: c.bulkShare,
+          mode: c.mode,
+          source: c.source,
+          revision: c.revision,
+        }))}
         workerCount={leases}
         campaigns={campaigns}
         initialPaused={controlValue.bulkPaused === true}
         canManage={user.role === 'ADMIN'}
+        watermarks={watermarks}
+        runtime={
+          runtime
+            ? {
+                bulkQueueLowWatermark: runtime.bulkQueueLowWatermark,
+                bulkQueueHighWatermark: runtime.bulkQueueHighWatermark,
+                defaultBulkSharePercent: runtime.defaultBulkSharePercent,
+                adaptiveBackpressure: runtime.adaptiveBackpressure,
+                revision: runtime.revision,
+                updatedAt: runtime.updatedAt.toISOString(),
+              }
+            : null
+        }
       />
       <section aria-labelledby="deliverability-heading" className="grid gap-3 md:grid-cols-3">
         <h2 id="deliverability-heading" className="sr-only">Subscriber deliverability</h2>

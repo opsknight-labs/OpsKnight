@@ -1388,6 +1388,41 @@ model ApiKey {
   @@index([expiresAt])
 }
 
+enum NotificationCapacityMode {
+  AUTO
+  CUSTOM
+}
+
+model NotificationProviderCapacity {
+  id                   String                   @id @default(cuid())
+  provider             String
+  channel              NotificationChannel
+  mode                 NotificationCapacityMode @default(AUTO)
+  ratePerSecond        Int?
+  maxInFlight          Int?
+  bulkSharePercent     Int                      @default(80)
+  adaptiveBackpressure Boolean                  @default(true)
+  updatedBy            String?
+  revision             Int                      @default(1)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@unique([provider, channel])
+  @@index([provider, channel])
+  @@index([updatedAt])
+}
+
+model NotificationRuntimeSettings {
+  id                      String   @id @default("default")
+  bulkQueueLowWatermark   Int      @default(5000)
+  bulkQueueHighWatermark  Int      @default(25000)
+  defaultBulkSharePercent Int      @default(80)
+  adaptiveBackpressure    Boolean  @default(true)
+  revision                Int      @default(1)
+  updatedBy               String?
+  updatedAt               DateTime @updatedAt
+}
+
 // System-level notification provider configuration
 model NotificationProvider {
   id        String   @id @default(cuid())

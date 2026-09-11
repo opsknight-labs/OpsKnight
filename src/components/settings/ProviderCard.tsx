@@ -39,6 +39,7 @@ import {
 import type { ProviderRecord, ProviderConfigSchema, SaveStatus } from '@/types/notification-types';
 import { notify as toast } from '@/lib/toast';
 import { getProviderBrandLogo } from '@/components/settings/ProviderBrandLogos';
+import ProviderCapacitySettings from '@/components/settings/ProviderCapacitySettings';
 
 interface ProviderCardProps {
   providerConfig: ProviderConfigSchema;
@@ -554,6 +555,10 @@ export default function ProviderCard({
                   </div>
                 );
               })}
+            </div>
+
+            <div className="border-t border-border/60 pt-4">
+              <ProviderCapacitySettings providerKey={providerConfig.key} compact />
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/60 pt-4">

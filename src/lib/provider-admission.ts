@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
-import { Prisma, type NotificationTrafficClass } from '@prisma/client';
+import { Prisma, type NotificationChannel, type NotificationTrafficClass } from '@prisma/client';
 import prisma from './prisma';
-import { getProviderCapacity, recordCapacityPressure, usesBulkCapacity } from './provider-capacity';
+import { getEffectiveCapacity, recordCapacityPressure } from './notification-capacity/resolver';
+import { usesBulkCapacity } from './provider-capacity';
 
 export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK';
 
@@ -32,6 +33,10 @@ function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
 /**
  * Distributed provider admission control. Quota blocks amortize database work while
  * a persisted cooldown remains authoritative across replicas after provider 429s.
+ *
+ * Capacity is resolved via the notification capacity control plane:
+ *   Database (NotificationProviderCapacity) > legacy env > safe default
+ * with a 5s process-local cache so 1M deliveries do not become 1M SELECTs.
  */
 export async function acquireProviderAdmission(
   scope: ProviderAdmissionScope,
@@ -46,7 +51,10 @@ export async function acquireProviderAdmission(
   if (cooldown?.expiresAt && cooldown.expiresAt > now) {
     return { allowed: false, retryAt: cooldown.expiresAt, reason: 'RATE_LIMITED' };
   }
-  const capacity = getProviderCapacity(scope, providerKey);
+  const capacity = await getEffectiveCapacity({
+    channel: scope as unknown as NotificationChannel,
+    provider: providerKey,
+  });
   const bulk = usesBulkCapacity(trafficClass);
   const cacheKey = `${bucketKey(scope, providerKey)}:${bulk ? 'bulk' : 'global'}`;
   const cached = localQuota.get(cacheKey);
@@ -100,7 +108,10 @@ export async function deferProviderAdmission(
   providerKey: string,
   retryAt: Date
 ): Promise<void> {
-  const config = getProviderCapacity(scope, providerKey);
+  const config = await getEffectiveCapacity({
+    channel: scope as unknown as NotificationChannel,
+    provider: providerKey,
+  });
   const key = bucketKey(scope, providerKey);
   await prisma.$executeRaw(Prisma.sql`
     INSERT INTO "RateLimit" ("key", "count", "expiresAt")
@@ -112,7 +123,7 @@ export async function deferProviderAdmission(
   for (const localKey of localQuota.keys()) {
     if (localKey.startsWith(`${key}:`)) localQuota.delete(localKey);
   }
-  recordCapacityPressure(scope, providerKey);
+  recordCapacityPressure(scope as unknown as NotificationChannel, providerKey);
 }
 
 /**
@@ -126,7 +137,10 @@ export async function acquireProviderConcurrency(
   now: Date = new Date(),
   trafficClass?: NotificationTrafficClass
 ): Promise<ProviderConcurrencyResult> {
-  const config = getProviderCapacity(scope, providerKey);
+  const config = await getEffectiveCapacity({
+    channel: scope as unknown as NotificationChannel,
+    provider: providerKey,
+  });
   const bulk = usesBulkCapacity(trafficClass);
   const lane = bulk ? 'bulk' : 'reserved';
   const physicalPoolKey = `${scope}:${providerKey}`;
