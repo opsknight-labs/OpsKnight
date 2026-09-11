@@ -54,7 +54,9 @@ export default async function SetupPage() {
     <AuthLayout showAnimation={false}>
       <AuthCard>
         <div className="mb-7 text-center">
-          <h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">System initialization</h1>
+          <h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">
+            System initialization
+          </h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
             Create the first administrator using an explicitly issued one-time operator capability.
           </p>
@@ -75,11 +77,15 @@ export default async function SetupPage() {
             <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
             <div className="min-w-0 text-xs leading-relaxed text-blue-800 dark:text-blue-200">
               <p className="font-semibold">Issue a one-time setup capability</p>
-              <p className="mt-1">Run this command from an interactive terminal on the OpsKnight host/container, then refresh this page:</p>
+              <p className="mt-1">
+                Run this production-native command from an interactive terminal inside the OpsKnight container, then refresh this page:
+              </p>
               <code className="mt-2 block overflow-x-auto rounded-lg bg-blue-950/5 px-2.5 py-2 font-mono text-[11px] dark:bg-black/20">
-                npx ts-node --project tsconfig.script.json scripts/create-bootstrap-code.ts
+                node scripts/create-bootstrap-code.mjs
               </code>
-              <p className="mt-2">The plaintext capability is printed only to that terminal and is not written to application logs.</p>
+              <p className="mt-2">
+                It uses only production dependencies already shipped in the image. The plaintext capability is printed only to that terminal and is not written to application logs.
+              </p>
             </div>
           </div>
         )}
