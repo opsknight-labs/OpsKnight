@@ -1122,14 +1122,6 @@ ${R} .status-v3-region-card__name {
   white-space: nowrap;
   font-family: 'Space Grotesk', Inter, sans-serif;
 }
-${R} .status-v3-region-card__location {
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--status-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 ${R} .status-v3-region-card__status {
   display: flex;
   align-items: center;
