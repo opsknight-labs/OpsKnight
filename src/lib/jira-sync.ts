@@ -7,6 +7,7 @@ import {
   processExternalOperation,
 } from '@/lib/external-operations';
 import { isValidJiraKey, extractJiraKey, isJiraStatusDone } from '@/lib/jira-validation';
+import { acquireJiraExternalIssueLinkFence } from '@/lib/jira-concurrency';
 import { logAudit, getDefaultActorId } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { revalidatePath } from 'next/cache';
@@ -53,6 +54,13 @@ export type LinkExistingParams = {
   jiraKey: string;
 };
 
+function assertExactlyOneJiraOwner(params: Pick<LinkExistingParams, 'incidentId' | 'actionItemId'>) {
+  const ownerCount = Number(Boolean(params.incidentId)) + Number(Boolean(params.actionItemId));
+  if (ownerCount !== 1) {
+    throw new Error('A Jira issue link must belong to exactly one OpsKnight entity.');
+  }
+}
+
 /**
  * Create a new Jira issue and persist an ExternalIssueLink row.
  * Used by both incident and action-item linking flows.
@@ -83,10 +91,14 @@ export async function createJiraIssueAndLink(params: CreateAndLinkParams) {
 }
 
 /**
- * Link an existing Jira issue by key. Fetches current status/assignee from
- * Jira and persists the link. Prevents duplicate links.
+ * Link an existing Jira issue by key. Provider I/O happens before the short
+ * ownership transaction; the canonical Jira key is then locked cluster-wide,
+ * rechecked, and inserted create-only so a competing owner can never be merged
+ * into the same ExternalIssueLink row.
  */
 export async function linkExistingJiraIssue(params: LinkExistingParams) {
+  assertExactlyOneJiraOwner(params);
+  const provider = params.provider ?? 'JIRA';
   const key = extractJiraKey(params.jiraKey);
   if (!isValidJiraKey(key)) {
     throw new Error(
@@ -94,50 +106,40 @@ export async function linkExistingJiraIssue(params: LinkExistingParams) {
     );
   }
 
-  const existing = await prisma.externalIssueLink.findUnique({
-    where: {
-      provider_externalKey: {
-        provider: params.provider ?? 'JIRA',
-        externalKey: key,
-      },
-    },
-  });
-
-  if (existing) {
-    throw new Error(`Jira issue ${key} is already linked.`);
+  const issue = await getJiraIssue(key);
+  const canonicalKey = extractJiraKey(issue.key);
+  if (!isValidJiraKey(canonicalKey)) {
+    throw new Error('Jira returned an invalid canonical issue key.');
   }
 
-  const issue = await getJiraIssue(key);
+  const link = await prisma.$transaction(async tx => {
+    await acquireJiraExternalIssueLinkFence(tx, provider, canonicalKey);
 
-  const link = await prisma.externalIssueLink.upsert({
-    where: {
-      provider_externalKey: {
-        provider: params.provider ?? 'JIRA',
-        externalKey: key,
+    const existing = await tx.externalIssueLink.findFirst({
+      where: {
+        provider,
+        OR: [{ externalKey: canonicalKey }, { externalId: issue.id }],
       },
-    },
-    create: {
-      provider: params.provider ?? 'JIRA',
-      incidentId: params.incidentId ?? null,
-      actionItemId: params.actionItemId ?? null,
-      externalId: issue.id,
-      externalKey: issue.key,
-      externalUrl: issue.url,
-      externalStatus: issue.status ?? null,
-      externalAssignee: issue.assignee ?? null,
-      syncState: 'SYNCED',
-      lastSyncedAt: new Date(),
-    },
-    update: {
-      incidentId: params.incidentId ?? undefined,
-      actionItemId: params.actionItemId ?? undefined,
-      externalId: issue.id,
-      externalUrl: issue.url,
-      externalStatus: issue.status ?? null,
-      externalAssignee: issue.assignee ?? null,
-      syncState: 'SYNCED',
-      lastSyncedAt: new Date(),
-    },
+      select: { externalKey: true },
+    });
+    if (existing) {
+      throw new Error(`Jira issue ${existing.externalKey} is already linked.`);
+    }
+
+    return tx.externalIssueLink.create({
+      data: {
+        provider,
+        incidentId: params.incidentId ?? null,
+        actionItemId: params.actionItemId ?? null,
+        externalId: issue.id,
+        externalKey: canonicalKey,
+        externalUrl: issue.url,
+        externalStatus: issue.status ?? null,
+        externalAssignee: issue.assignee ?? null,
+        syncState: 'SYNCED',
+        lastSyncedAt: new Date(),
+      },
+    });
   });
 
   await logAudit({
@@ -257,15 +259,30 @@ export type LinkedEntitySyncParams = {
 /**
  * Synchronize action items and incident metadata/timeline when Jira issue status changes.
  */
-export async function syncLinkedEntitiesForJiraIssue({
-  externalKey: _externalKey,
-  externalStatus,
-  isDone,
-  actionItemIds,
-  incidentLinks,
-}: LinkedEntitySyncParams): Promise<void> {
+export async function syncLinkedEntitiesForJiraIssue(
+  {
+    externalKey: _externalKey,
+    externalStatus,
+    isDone,
+    actionItemIds,
+    incidentLinks,
+  }: LinkedEntitySyncParams,
+  outerTx?: Prisma.TransactionClient
+): Promise<void> {
+  const runTransaction = async <T>(
+    callback: (tx: Prisma.TransactionClient) => Promise<T>
+  ): Promise<T> => {
+    if (outerTx) {
+      return callback(outerTx);
+    }
+    if (typeof prisma.$transaction === 'function') {
+      return prisma.$transaction(callback);
+    }
+    return callback(prisma as unknown as Prisma.TransactionClient);
+  };
+
   if (actionItemIds.length > 0) {
-    const affectedIncidentIds = await prisma.$transaction(async tx => {
+    const affectedIncidentIds = await runTransaction(async tx => {
       await tx.actionItem.updateMany({
         where: {
           id: { in: actionItemIds },
@@ -314,14 +331,12 @@ export async function syncLinkedEntitiesForJiraIssue({
       return Array.from(new Set(records.map(record => record.incidentId)));
     });
 
-    // Revalidate only after the DB transaction has committed, and use the
-    // canonical route key: postmortems are addressed by incidentId, not the
-    // internal Postmortem row id.
     safeRevalidateActionItems(affectedIncidentIds);
   }
 
   if (incidentLinks.length > 0) {
     const actorId = await getDefaultActorId();
+    const client = outerTx ?? prisma;
     for (const link of incidentLinks) {
       if (!link.incidentId) continue;
 
@@ -334,7 +349,7 @@ export async function syncLinkedEntitiesForJiraIssue({
           ? `Jira issue ${link.externalKey} marked as Done (${externalStatus})`
           : `Jira issue ${link.externalKey} status updated to "${externalStatus}"`;
 
-        await prisma.incidentEvent.create({
+        await client.incidentEvent.create({
           data: {
             incidentId: link.incidentId,
             type: 'STATUS_CHANGE',
@@ -342,7 +357,7 @@ export async function syncLinkedEntitiesForJiraIssue({
           },
         });
 
-        await prisma.incident.update({
+        await client.incident.update({
           where: { id: link.incidentId },
           data: { updatedAt: new Date() },
         });
@@ -360,7 +375,14 @@ export async function syncLinkedEntitiesForJiraIssue({
           },
         });
 
-        safeRevalidateIncident(link.incidentId);
+        if (!outerTx) {
+          safeRevalidateIncident(link.incidentId);
+        }
+      }
+    }
+    if (outerTx) {
+      for (const link of incidentLinks) {
+        if (link.incidentId) safeRevalidateIncident(link.incidentId);
       }
     }
   }
@@ -507,12 +529,50 @@ export type JiraWebhookPayload = {
   [key: string]: unknown;
 };
 
+function webhookEventName(payload: JiraWebhookPayload): string {
+  return (payload.webhookEvent || payload.issue_event_type_name || '').trim().toLowerCase();
+}
+
+function isDeleteWebhook(payload: JiraWebhookPayload): boolean {
+  const event = webhookEventName(payload);
+  return event === 'jira:issue_deleted' || event === 'issue_deleted';
+}
+
+export function extractJiraWebhookEventTime(payload: JiraWebhookPayload): Date | null {
+  // Jira issue.fields.updated is the provider's issue-version clock and is a
+  // stronger ordering signal than transport delivery time. Fall back to the
+  // webhook timestamp only when the issue timestamp is absent/invalid.
+  const candidates = [payload.issue?.fields?.updated, payload.timestamp];
+  for (const candidate of candidates) {
+    if (candidate === undefined || candidate === null || candidate === '') continue;
+    const value =
+      typeof candidate === 'number'
+        ? new Date(candidate)
+        : new Date(String(candidate));
+    if (!Number.isNaN(value.getTime())) return value;
+  }
+  return null;
+}
+
+async function revalidateJiraLinks(links: Array<{ incidentId: string | null; actionItemId: string | null }>) {
+  const directIncidentIds = links.map(link => link.incidentId).filter(Boolean) as string[];
+  for (const incidentId of new Set(directIncidentIds)) safeRevalidateIncident(incidentId);
+
+  const actionItemIds = links.map(link => link.actionItemId).filter(Boolean) as string[];
+  if (actionItemIds.length > 0) {
+    const actionItemParents = await prisma.actionItem.findMany({
+      where: { id: { in: actionItemIds } },
+      select: { incidentId: true },
+    });
+    safeRevalidateActionItems(actionItemParents.map(item => item.incidentId));
+  }
+}
+
 /**
- * Process an inbound Jira webhook event. Finds matching ExternalIssueLink
- * rows by external issue id or key and updates their status/assignee,
- * syncing incidents and action items.
- *
- * Idempotent: replay-safe, duplicate events produce the same result.
+ * Process one serialized inbound Jira webhook. Transport-level delivery
+ * deduplication and the per-issue advisory fence are owned by the API route;
+ * this function additionally enforces a monotonic provider clock so a delayed
+ * event can never roll Jira metadata (or action-item lifecycle) backward.
  */
 export async function processJiraWebhookEvent(
   payload: JiraWebhookPayload
@@ -597,92 +657,110 @@ export async function processJiraWebhookEvent(
     return { updated: 0 };
   }
 
-  const { statusName, statusCategoryKey, statusCategoryName, isStatusPresent } =
-    extractJiraWebhookStatus(payload);
-  const { assignee, isAssigneePresent } = extractJiraWebhookAssignee(payload);
-
-  const eventTime = payload.timestamp
-    ? new Date(
-        typeof payload.timestamp === 'number' ? payload.timestamp : String(payload.timestamp)
-      )
-    : payload.issue?.fields?.updated
-      ? new Date(payload.issue.fields.updated)
-      : null;
-
-  const validLinks =
-    eventTime && !isNaN(eventTime.getTime())
-      ? syncableLinks.filter(l => {
-          if (!l.lastSyncedAt) return true;
-          if (
-            statusName &&
-            statusName.trim().toLowerCase() !== (l.externalStatus || '').trim().toLowerCase()
-          ) {
-            return true;
-          }
-          return l.lastSyncedAt.getTime() <= eventTime.getTime() + 300_000;
-        })
-      : syncableLinks;
+  const eventTime = extractJiraWebhookEventTime(payload);
+  const validLinks = eventTime
+    ? syncableLinks.filter(link => !link.lastSyncedAt || link.lastSyncedAt < eventTime)
+    : syncableLinks;
 
   if (validLinks.length === 0) {
     return { updated: 0 };
   }
 
-  const data: Record<string, unknown> = {
-    syncState: 'SYNCED',
-    lastSyncedAt: eventTime && !isNaN(eventTime.getTime()) ? eventTime : new Date(),
+  const acceptedAt = eventTime ?? new Date();
+
+  const runWebhookTransaction = async (tx: Prisma.TransactionClient) => {
+    if (isDeleteWebhook(payload)) {
+      // Preserve the Jira key/URL as historical evidence but never advertise a
+      // deleted remote issue as healthy/synchronized. FAILED is the existing
+      // schema's fail-closed state until a dedicated REMOTE_DELETED enum can be
+      // introduced in a separately deployable schema change.
+      await tx.externalIssueLink.updateMany({
+        where: { id: { in: validLinks.map(link => link.id) } },
+        data: {
+          syncState: 'FAILED',
+          externalStatus: 'Deleted in Jira',
+          externalAssignee: null,
+          lastSyncedAt: acceptedAt,
+        },
+      });
+
+      const actorId = await getDefaultActorId();
+      for (const link of validLinks) {
+        if (!link.incidentId) continue;
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: link.incidentId,
+            type: 'STATUS_CHANGE',
+            message: `Jira issue ${link.externalKey} was deleted in Jira`,
+          },
+        });
+        await logAudit({
+          action: 'jira.issue.remote_deleted',
+          entityType: 'INCIDENT',
+          entityId: link.incidentId,
+          actorId,
+          details: { externalKey: link.externalKey },
+        });
+      }
+      return;
+    }
+
+    const { statusName, statusCategoryKey, statusCategoryName, isStatusPresent } =
+      extractJiraWebhookStatus(payload);
+    const { assignee, isAssigneePresent } = extractJiraWebhookAssignee(payload);
+
+    const data: Record<string, unknown> = {
+      syncState: 'SYNCED',
+      lastSyncedAt: acceptedAt,
+    };
+
+    if (isStatusPresent) {
+      data.externalStatus = statusName ?? null;
+    }
+
+    if (isAssigneePresent) {
+      data.externalAssignee = assignee;
+    }
+
+    await tx.externalIssueLink.updateMany({
+      where: {
+        id: { in: validLinks.map(l => l.id) },
+      },
+      data,
+    });
+
+    if (isStatusPresent && statusName) {
+      const isDone = isJiraStatusDone(statusName, statusCategoryKey, statusCategoryName);
+      const actionItemIds = validLinks.map(l => l.actionItemId).filter(Boolean) as string[];
+      const incidentLinks = validLinks
+        .filter(l => Boolean(l.incidentId))
+        .map(l => ({
+          id: l.id,
+          incidentId: l.incidentId!,
+          externalKey: l.externalKey,
+          externalStatus: l.externalStatus,
+        }));
+
+      await syncLinkedEntitiesForJiraIssue(
+        {
+          externalKey: issueKey || validLinks[0].externalKey,
+          externalStatus: statusName,
+          isDone,
+          actionItemIds,
+          incidentLinks,
+        },
+        tx
+      );
+    }
   };
 
-  if (isStatusPresent) {
-    data.externalStatus = statusName ?? null;
+  if (typeof prisma.$transaction === 'function') {
+    await prisma.$transaction(runWebhookTransaction);
+  } else {
+    await runWebhookTransaction(prisma as unknown as Prisma.TransactionClient);
   }
 
-  if (isAssigneePresent) {
-    data.externalAssignee = assignee;
-  }
-
-  await prisma.externalIssueLink.updateMany({
-    where: {
-      id: { in: validLinks.map(l => l.id) },
-    },
-    data,
-  });
-
-  if (isStatusPresent && statusName) {
-    const isDone = isJiraStatusDone(statusName, statusCategoryKey, statusCategoryName);
-    const actionItemIds = validLinks.map(l => l.actionItemId).filter(Boolean) as string[];
-    const incidentLinks = validLinks
-      .filter(l => Boolean(l.incidentId))
-      .map(l => ({
-        id: l.id,
-        incidentId: l.incidentId!,
-        externalKey: l.externalKey,
-        externalStatus: l.externalStatus,
-      }));
-
-    await syncLinkedEntitiesForJiraIssue({
-      externalKey: issueKey || validLinks[0].externalKey,
-      externalStatus: statusName,
-      isDone,
-      actionItemIds,
-      incidentLinks,
-    });
-  }
-
-  // Assignee-only webhooks must invalidate the same surfaces as status changes.
-  // Resolve action-item parent incident ids because postmortem routes are keyed
-  // by incident id and inherited incident/action-item Jira badges live there.
-  const directIncidentIds = validLinks.map(link => link.incidentId).filter(Boolean) as string[];
-  for (const incidentId of new Set(directIncidentIds)) safeRevalidateIncident(incidentId);
-
-  const actionItemIds = validLinks.map(link => link.actionItemId).filter(Boolean) as string[];
-  if (actionItemIds.length > 0) {
-    const actionItemParents = await prisma.actionItem.findMany({
-      where: { id: { in: actionItemIds } },
-      select: { incidentId: true },
-    });
-    safeRevalidateActionItems(actionItemParents.map(item => item.incidentId));
-  }
-
+  await revalidateJiraLinks(validLinks);
   return { updated: validLinks.length };
 }
 

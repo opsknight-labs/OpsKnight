@@ -16,6 +16,13 @@ import {
  */
 export const JIRA_PROVIDER_FENCE_TIMEOUT_MS = 40_000;
 export const JIRA_PROVIDER_FENCE_MAX_WAIT_MS = 5_000;
+const JIRA_ISSUE_MUTATION_FENCE_TIMEOUT_MS = 15_000;
+
+function deterministicJiraLockKey(namespace: bigint, value: string): bigint {
+  const digest = crypto.createHash('sha256').update(value).digest();
+  const lower48 = digest.readBigUInt64BE(0) & BigInt('0x0000ffffffffffff');
+  return namespace | lower48;
+}
 
 /**
  * Reserve a positive bigint namespace for per-action-item Jira link locks.
@@ -24,9 +31,18 @@ export const JIRA_PROVIDER_FENCE_MAX_WAIT_MS = 5_000;
  * negligible and keeping dynamic keys away from the small static LOCK_KEYS.
  */
 export function jiraActionItemLinkLockKey(actionItemId: string): bigint {
-  const digest = crypto.createHash('sha256').update(actionItemId).digest();
-  const lower48 = digest.readBigUInt64BE(0) & BigInt('0x0000ffffffffffff');
-  return BigInt('0x4a49000000000000') | lower48;
+  return deterministicJiraLockKey(BigInt('0x4a49000000000000'), actionItemId);
+}
+
+/**
+ * Serialize ownership changes and inbound mutations for one provider issue
+ * identity across every OpsKnight entity and replica.
+ */
+export function jiraExternalIssueLinkLockKey(provider: string, externalKey: string): bigint {
+  return deterministicJiraLockKey(
+    BigInt('0x4a4b000000000000'),
+    `${provider.trim().toUpperCase()}\0${externalKey.trim().toUpperCase()}`
+  );
 }
 
 export async function acquireJiraWorkspaceProviderFence(
@@ -59,6 +75,36 @@ export async function acquireJiraActionItemLinkFence(
   actionItemId: string
 ): Promise<void> {
   await acquireAdvisoryLock(tx, jiraActionItemLinkLockKey(actionItemId));
+}
+
+export async function acquireJiraExternalIssueLinkFence(
+  tx: Prisma.TransactionClient,
+  provider: string,
+  externalKey: string
+): Promise<void> {
+  await acquireAdvisoryLock(tx, jiraExternalIssueLinkLockKey(provider, externalKey));
+}
+
+/**
+ * Hold a short transaction-scoped lock while a local Jira mutation chain runs.
+ * Webhook processing performs no provider HTTP calls, so this serializes the
+ * stale-check + DB side effects without holding a connection on Atlassian I/O.
+ */
+export async function withJiraIssueMutationFence<T>(
+  provider: string,
+  externalKeyOrId: string,
+  work: () => Promise<T>
+): Promise<T> {
+  return prisma.$transaction(
+    async tx => {
+      await acquireJiraExternalIssueLinkFence(tx, provider, externalKeyOrId);
+      return work();
+    },
+    {
+      maxWait: JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
+      timeout: JIRA_ISSUE_MUTATION_FENCE_TIMEOUT_MS,
+    }
+  );
 }
 
 /**

@@ -8,6 +8,7 @@ export type ProviderFailureInput = {
   operation: string;
   providerCode?: string | null;
   status?: number | null;
+  retryAfterMs?: number | null;
   cause?: unknown;
 };
 
@@ -62,11 +63,16 @@ function providerAction(providerCode: string | undefined, label: string): string
 export function integrationProviderError(input: ProviderFailureInput): AppError {
   const providerCode = input.providerCode?.toLowerCase();
   const label = providerLabel(input.provider);
+  const retryAfterMs =
+    typeof input.retryAfterMs === 'number' && Number.isFinite(input.retryAfterMs)
+      ? Math.max(0, Math.trunc(input.retryAfterMs))
+      : undefined;
   const details = {
     provider: input.provider,
     operation: input.operation,
     providerCode: input.providerCode ?? undefined,
     providerStatus: input.status ?? undefined,
+    providerRetryAfterMs: retryAfterMs,
   };
 
   if (
@@ -122,6 +128,7 @@ export function notificationProviderUnavailable(input: ProviderFailureInput): Ap
       operation: input.operation,
       providerCode: input.providerCode ?? undefined,
       providerStatus: input.status ?? undefined,
+      providerRetryAfterMs: input.retryAfterMs ?? undefined,
     },
     cause: input.cause,
   });

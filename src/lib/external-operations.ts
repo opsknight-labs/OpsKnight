@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+import { isAppError } from '@/lib/errors';
 import {
   createJiraIssue,
   findJiraIssueByCorrelationLabel,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/jira';
 import {
   acquireJiraActionItemLinkFence,
+  acquireJiraExternalIssueLinkFence,
   acquireJiraWorkspaceProviderFence,
   JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
   JIRA_PROVIDER_FENCE_TIMEOUT_MS,
@@ -21,6 +23,8 @@ import {
 } from '@/lib/provider-admission';
 
 const LEASE_MS = 5 * 60_000;
+const MAX_JIRA_OPERATION_ATTEMPTS = 8;
+const JIRA_PROVIDER_KEY = 'jira:workspace';
 
 export type JiraCreateOperationInput = {
   incidentId?: string;
@@ -42,6 +46,11 @@ type JiraCommentOperationInput = {
 
 type TransactionClient = Prisma.TransactionClient;
 
+type ProviderFailureOptions = {
+  statusCode?: number;
+  retryAfterMs?: number;
+};
+
 class TerminalJiraOperationError extends Error {
   constructor(message: string) {
     super(message);
@@ -56,6 +65,35 @@ function jiraCreateKey(input: JiraCreateOperationInput): string {
       ? `action-item:${input.actionItemId}`
       : `request:${crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex')}`;
   return `jira:create:${owner}`;
+}
+
+function assertExactlyOneCreateOwner(input: JiraCreateOperationInput): void {
+  const ownerCount = Number(Boolean(input.incidentId)) + Number(Boolean(input.actionItemId));
+  if (ownerCount !== 1) {
+    throw new Error('A Jira create operation must belong to exactly one OpsKnight entity.');
+  }
+}
+
+function jiraProviderFailureOptions(error: unknown): ProviderFailureOptions | null {
+  if (!isAppError(error) || error.details?.provider !== 'jira') return null;
+  const status = error.details.providerStatus;
+  const retryAfter = error.details.providerRetryAfterMs;
+  return {
+    ...(typeof status === 'number' && Number.isFinite(status)
+      ? { statusCode: Math.trunc(status) }
+      : {}),
+    ...(typeof retryAfter === 'number' && Number.isFinite(retryAfter)
+      ? { retryAfterMs: Math.max(1_000, Math.trunc(retryAfter)) }
+      : {}),
+  };
+}
+
+function operationRetryDelayMs(error: unknown): number {
+  return jiraProviderFailureOptions(error)?.retryAfterMs ?? 30_000;
+}
+
+function operationFailureStatus(attempts: number): 'FAILED' | 'AMBIGUOUS' {
+  return attempts >= MAX_JIRA_OPERATION_ATTEMPTS ? 'FAILED' : 'AMBIGUOUS';
 }
 
 export async function enqueueJiraCommentOperations(
@@ -92,7 +130,7 @@ export async function enqueueJiraCommentOperationsInTransaction(
         type: 'EXTERNAL_OPERATION',
         status: 'PENDING',
         scheduledAt: new Date(),
-        maxAttempts: 8,
+        maxAttempts: MAX_JIRA_OPERATION_ATTEMPTS,
         payload: { operationId: operation.id },
       },
     });
@@ -102,6 +140,7 @@ export async function enqueueJiraCommentOperationsInTransaction(
 }
 
 export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput): Promise<string> {
+  assertExactlyOneCreateOwner(input);
   const idempotencyKey = jiraCreateKey(input);
   return prisma.$transaction(async tx => {
     const existing = await tx.externalOperation.findUnique({
@@ -124,7 +163,7 @@ export async function enqueueJiraCreateOperation(input: JiraCreateOperationInput
         type: 'EXTERNAL_OPERATION',
         status: 'PENDING',
         scheduledAt: new Date(),
-        maxAttempts: 8,
+        maxAttempts: MAX_JIRA_OPERATION_ATTEMPTS,
         payload: { operationId: operation.id },
       },
     });
@@ -169,7 +208,9 @@ function parseJiraCreatePayload(value: Prisma.JsonValue | null): JiraCreateOpera
   ) {
     throw new Error('Jira operation payload is invalid');
   }
-  return value as unknown as JiraCreateOperationInput;
+  const parsed = value as unknown as JiraCreateOperationInput;
+  assertExactlyOneCreateOwner(parsed);
+  return parsed;
 }
 
 function operationFailureMessage(error: unknown): string {
@@ -180,6 +221,24 @@ const providerFenceTransactionOptions = {
   maxWait: JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
   timeout: JIRA_PROVIDER_FENCE_TIMEOUT_MS,
 };
+
+async function releaseFailedOperation(
+  id: string,
+  leaseToken: string,
+  attempts: number,
+  error: unknown
+): Promise<void> {
+  await prisma.externalOperation.updateMany({
+    where: { id, status: 'PROCESSING', leaseToken },
+    data: {
+      status: operationFailureStatus(attempts),
+      nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(error)),
+      lastError: operationFailureMessage(error),
+      leaseToken: null,
+      leaseExpiresAt: null,
+    },
+  });
+}
 
 export async function processExternalOperation(id: string): Promise<JiraIssueSummary | null> {
   const claim = await claimOperation(id);
@@ -203,17 +262,14 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
     const input = value as Record<string, Prisma.JsonValue>;
     if (typeof input.externalKey !== 'string' || typeof input.comment !== 'string')
       throw new Error('Jira comment payload is invalid');
-    const providerKey = `jira:issue:${input.externalKey}`;
     const marker = `opsknight-comment-${operation.id}`;
 
     try {
-      // Admission is checked before opening the provider fence transaction so
-      // an already-open circuit does not consume a DB connection while waiting.
-      await assertProviderAdmitted(providerKey);
+      // Admission is workspace-scoped because Atlassian auth/rate/outage state
+      // is shared by all issues in the configured Jira workspace.
+      await assertProviderAdmitted(JIRA_PROVIDER_KEY);
 
       const outcome = await prisma.$transaction(async tx => {
-        // Shared workspace fence prevents enable/disable/remove from overtaking
-        // a provider mutation. It also re-checks the workspace after waiting.
         await acquireJiraWorkspaceProviderFence(tx);
 
         try {
@@ -221,12 +277,13 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
             await addJiraComment(input.externalKey as string, `${input.comment}\n\n[${marker}]`);
           }
         } catch (error) {
-          await recordProviderFailure(providerKey);
+          const failure = jiraProviderFailureOptions(error);
+          if (failure) await recordProviderFailure(JIRA_PROVIDER_KEY, failure);
           await tx.externalOperation.updateMany({
             where: { id, status: 'PROCESSING', leaseToken },
             data: {
-              status: operation.attempts >= 8 ? 'FAILED' : 'AMBIGUOUS',
-              nextAttemptAt: new Date(Date.now() + 30_000),
+              status: operationFailureStatus(operation.attempts),
+              nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(error)),
               lastError: operationFailureMessage(error),
               leaseToken: null,
               leaseExpiresAt: null,
@@ -246,30 +303,17 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
         });
         if (completed.count !== 1) throw new Error('External operation lease was lost');
 
-        // Keep provider-admission state inside the shared workspace fence. If
-        // removal is waiting, it will delete this state after the worker exits
-        // rather than allowing the worker to recreate it after cleanup.
-        await recordProviderSuccess(providerKey);
+        await recordProviderSuccess(JIRA_PROVIDER_KEY);
         return { ok: true as const };
       }, providerFenceTransactionOptions);
 
       if (!outcome.ok) throw outcome.error;
       return null;
     } catch (error) {
-      // Errors that occur before provider I/O (workspace disabled/removed,
-      // lock failure, lease loss) are local control-plane failures and must not
-      // poison the Jira circuit-breaker state. Best-effort lease release is
-      // safe even if removal already deleted the operation.
-      await prisma.externalOperation.updateMany({
-        where: { id, status: 'PROCESSING', leaseToken },
-        data: {
-          status: operation.attempts >= 8 ? 'FAILED' : 'AMBIGUOUS',
-          nextAttemptAt: new Date(Date.now() + 30_000),
-          lastError: operationFailureMessage(error),
-          leaseToken: null,
-          leaseExpiresAt: null,
-        },
-      });
+      // Pre-I/O control-plane errors must not poison provider health. Release
+      // the operation lease so the durable queue can retry after admission or
+      // lifecycle state recovers.
+      await releaseFailedOperation(id, leaseToken, operation.attempts, error);
       throw error;
     }
   }
@@ -277,13 +321,13 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
   const input = parseJiraCreatePayload(operation.requestPayload);
   const marker = `opsknight-operation-${operation.id}`;
   try {
+    await assertProviderAdmitted(JIRA_PROVIDER_KEY);
+
     const outcome = await prisma.$transaction(async tx => {
       await acquireJiraWorkspaceProviderFence(tx);
 
       if (input.actionItemId) {
         // Serialize Create Jira with Link Existing for this exact action item.
-        // This fence is held through provider reconciliation/creation and the
-        // local link commit, eliminating the create-vs-link orphan race.
         await acquireJiraActionItemLinkFence(tx, input.actionItemId);
 
         const existingLink = await tx.externalIssueLink.findFirst({
@@ -305,40 +349,80 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
         }
       }
 
-      // Reconcile first on every retry. If Jira accepted an earlier request but
-      // the response or DB commit was lost, this adopts that issue.
-      const issue =
-        (await findJiraIssueByCorrelationLabel(marker)) ||
-        (await createJiraIssue({
-          ...input,
-          labels: Array.from(new Set([...(input.labels || []), marker])),
-        }));
+      let issue: JiraIssueSummary;
+      try {
+        // Reconcile first on every retry. If Jira accepted an earlier request
+        // but the response or DB commit was lost, adopt that issue instead of
+        // creating a duplicate.
+        issue =
+          (await findJiraIssueByCorrelationLabel(marker)) ||
+          (await createJiraIssue({
+            ...input,
+            labels: Array.from(new Set([...(input.labels || []), marker])),
+          }));
+      } catch (error) {
+        const failure = jiraProviderFailureOptions(error);
+        if (failure) await recordProviderFailure(JIRA_PROVIDER_KEY, failure);
+        throw error;
+      }
 
-      await tx.externalIssueLink.upsert({
-        where: { provider_externalId: { provider: 'JIRA', externalId: issue.id } },
-        create: {
+      await acquireJiraExternalIssueLinkFence(tx, 'JIRA', issue.key);
+      const existingIssueLink = await tx.externalIssueLink.findFirst({
+        where: {
           provider: 'JIRA',
-          incidentId: input.incidentId ?? null,
-          actionItemId: input.actionItemId ?? null,
-          externalId: issue.id,
-          externalKey: issue.key,
-          externalUrl: issue.url,
-          externalStatus: issue.status ?? null,
-          externalAssignee: issue.assignee ?? null,
-          syncState: 'SYNCED',
-          lastSyncedAt: new Date(),
+          OR: [{ externalId: issue.id }, { externalKey: issue.key }],
         },
-        update: {
-          incidentId: input.incidentId ?? undefined,
-          actionItemId: input.actionItemId ?? undefined,
-          externalKey: issue.key,
-          externalUrl: issue.url,
-          externalStatus: issue.status ?? null,
-          externalAssignee: issue.assignee ?? null,
-          syncState: 'SYNCED',
-          lastSyncedAt: new Date(),
-        },
+        select: { id: true, incidentId: true, actionItemId: true, externalKey: true },
       });
+
+      const sameOwner =
+        existingIssueLink &&
+        existingIssueLink.incidentId === (input.incidentId ?? null) &&
+        existingIssueLink.actionItemId === (input.actionItemId ?? null);
+
+      if (existingIssueLink && !sameOwner) {
+        const failed = await tx.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'FAILED',
+            lastError: `Jira issue ${existingIssueLink.externalKey} is already owned by another OpsKnight entity.`,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        if (failed.count !== 1) throw new Error('External operation lease was lost');
+        return { kind: 'ownership-conflict' as const, externalKey: existingIssueLink.externalKey };
+      }
+
+      if (existingIssueLink) {
+        await tx.externalIssueLink.update({
+          where: { id: existingIssueLink.id },
+          data: {
+            externalKey: issue.key,
+            externalUrl: issue.url,
+            externalStatus: issue.status ?? null,
+            externalAssignee: issue.assignee ?? null,
+            syncState: 'SYNCED',
+            lastSyncedAt: new Date(),
+          },
+        });
+      } else {
+        await tx.externalIssueLink.create({
+          data: {
+            provider: 'JIRA',
+            incidentId: input.incidentId ?? null,
+            actionItemId: input.actionItemId ?? null,
+            externalId: issue.id,
+            externalKey: issue.key,
+            externalUrl: issue.url,
+            externalStatus: issue.status ?? null,
+            externalAssignee: issue.assignee ?? null,
+            syncState: 'SYNCED',
+            lastSyncedAt: new Date(),
+          },
+        });
+      }
+
       const completed = await tx.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
@@ -352,6 +436,7 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
       });
       if (completed.count !== 1) throw new Error('External operation lease was lost');
 
+      await recordProviderSuccess(JIRA_PROVIDER_KEY);
       return { kind: 'completed' as const, issue };
     }, providerFenceTransactionOptions);
 
@@ -360,21 +445,17 @@ export async function processExternalOperation(id: string): Promise<JiraIssueSum
         `This action item is already linked to Jira issue ${outcome.externalKey}. Refresh the page to see the current link.`
       );
     }
+    if (outcome.kind === 'ownership-conflict') {
+      throw new TerminalJiraOperationError(
+        `Jira issue ${outcome.externalKey} is already linked to another OpsKnight entity.`
+      );
+    }
 
     return outcome.issue;
   } catch (error) {
     if (error instanceof TerminalJiraOperationError) throw error;
 
-    await prisma.externalOperation.updateMany({
-      where: { id, status: 'PROCESSING', leaseToken },
-      data: {
-        status: 'AMBIGUOUS',
-        nextAttemptAt: new Date(Date.now() + 30_000),
-        lastError: operationFailureMessage(error),
-        leaseToken: null,
-        leaseExpiresAt: null,
-      },
-    });
+    await releaseFailedOperation(id, leaseToken, operation.attempts, error);
     throw error;
   }
 }
