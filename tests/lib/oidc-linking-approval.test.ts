@@ -21,6 +21,7 @@ vi.mock('@/lib/prisma', () => ({
     user: { findUnique: vi.fn() },
     oidcIdentity: { findFirst: vi.fn() },
     oidcLinkingApproval: { findUnique: vi.fn(), upsert: vi.fn(), updateMany: vi.fn() },
+    oidcConfig: { findFirst: vi.fn() },
   },
 }));
 
@@ -45,6 +46,13 @@ describe('OIDC linking approval management', () => {
     vi.mocked(prisma.oidcLinkingApproval.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.oidcLinkingApproval.upsert).mockResolvedValue({ id: 'approval-1' } as never);
     vi.mocked(prisma.oidcLinkingApproval.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+      id: 'default',
+      issuer: 'https://idp.example.com',
+      clientId: 'client-id',
+      configVersion: 1,
+      enabled: true,
+    } as never);
   });
 
   it('reports not-approved when no identity or approval exists', async () => {
@@ -207,7 +215,7 @@ describe('OIDC linking approval management', () => {
 
     expect(result).toEqual({ success: true, state: 'revoked' });
     expect(prisma.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', revokedAt: null },
+      where: { userId: 'user-1', revokedAt: null, consumedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
     expect(prisma.user.update).toBeUndefined();

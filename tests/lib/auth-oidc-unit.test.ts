@@ -50,6 +50,7 @@ const targetUser = {
   email: 'real@example.com',
   name: 'Real User',
   role: 'USER',
+  roleSource: 'OIDC',
   status: 'ACTIVE',
   department: null,
   jobTitle: null,
@@ -88,6 +89,7 @@ describe('Auth JWT + OIDC callback contract', () => {
 
     vi.mocked(getOidcConfig).mockResolvedValue({
       enabled: true,
+      configVersion: 1,
       issuer: 'https://login.example.com/',
       clientId: 'client-id',
       clientSecret: 'secret',
@@ -206,6 +208,7 @@ describe('Auth JWT + OIDC callback contract', () => {
   it('de-provisions an elevated role when no role mapping matches', async () => {
     vi.mocked(getOidcConfig).mockResolvedValue({
       enabled: true,
+      configVersion: 1,
       issuer: 'https://login.example.com/',
       clientId: 'client-id',
       clientSecret: 'secret',

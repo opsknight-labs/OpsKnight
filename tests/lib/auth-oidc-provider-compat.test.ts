@@ -105,12 +105,12 @@ describe('OIDC provider-specific email verification compatibility', () => {
 
     expect(result).toBe(true);
     expect(prisma.oidcIdentity.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         issuer: baseConfig.issuer,
         subject: 'entra-sub',
         email: 'user@example.com',
         userId: 'u1',
-      },
+      }),
     });
   });
 
@@ -145,9 +145,10 @@ describe('OIDC provider-specific email verification compatibility', () => {
         id: 'approval-1',
         generation: 1,
         revokedAt: null,
+        consumedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
       },
-      data: { revokedAt: expect.any(Date) },
+      data: { consumedAt: expect.any(Date) },
     });
     expect(prisma.oidcIdentity.create).toHaveBeenCalled();
   });
@@ -172,7 +173,13 @@ describe('OIDC provider-specific email verification compatibility', () => {
     expect(result).toBe(false);
     expect(prisma.oidcLinkingApproval.findUnique).toHaveBeenCalledWith({
       where: { userId: 'u1' },
-      select: { id: true, generation: true, revokedAt: true, expiresAt: true },
+      select: expect.objectContaining({
+        id: true,
+        generation: true,
+        revokedAt: true,
+        consumedAt: true,
+        expiresAt: true,
+      }),
     });
     expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
@@ -207,17 +214,18 @@ describe('OIDC provider-specific email verification compatibility', () => {
         id: 'approval-1',
         generation: 1,
         revokedAt: null,
+        consumedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
       },
-      data: { revokedAt: expect.any(Date) },
+      data: { consumedAt: expect.any(Date) },
     });
     expect(prisma.oidcIdentity.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         issuer: baseConfig.issuer,
         subject: 'entra-sub',
         email: 'user@example.com',
         userId: 'u1',
-      },
+      }),
     });
   });
 

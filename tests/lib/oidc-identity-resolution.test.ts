@@ -37,6 +37,7 @@ const linkedUser = {
   email: 'alice@example.com',
   status: 'ACTIVE',
   role: 'USER',
+  roleSource: 'OIDC',
   name: 'Alice',
   department: null,
   jobTitle: null,
@@ -187,17 +188,18 @@ describe('resolveOidcIdentityForSignIn', () => {
         id: 'approval-1',
         generation: 4,
         revokedAt: null,
+        consumedAt: null,
         OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
-      data: { revokedAt: now },
+      data: { consumedAt: now },
     });
     expect(tx.oidcIdentity.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         issuer: baseInput.issuer,
         subject: baseInput.subject,
         email: baseInput.email,
         userId: 'user-1',
-      },
+      }),
     });
   });
 
@@ -228,6 +230,31 @@ describe('resolveOidcIdentityForSignIn', () => {
     tx.oidcLinkingApproval.updateMany.mockResolvedValue({ count: 0 });
 
     const result = await resolveOidcIdentityForSignIn(baseInput);
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_LINK_NOT_APPROVED' });
+    expect(tx.oidcIdentity.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an approval issued for a different provider trust configuration', async () => {
+    tx.user.findUnique.mockResolvedValue(linkedUser);
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-1',
+      generation: 1,
+      revokedAt: null,
+      consumedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      providerConfigId: 'different-provider',
+      issuerFingerprint: null,
+      expectedEmail: 'alice@example.com',
+      configVersion: 1,
+    });
+
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      providerConfigId: 'default',
+      clientId: 'client-id',
+      configVersion: 1,
+    });
 
     expect(result).toEqual({ ok: false, reason: 'OIDC_LINK_NOT_APPROVED' });
     expect(tx.oidcIdentity.create).not.toHaveBeenCalled();

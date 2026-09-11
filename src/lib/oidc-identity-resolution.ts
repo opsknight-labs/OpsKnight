@@ -3,12 +3,14 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { hasOidcEmailLinkAssurance } from '@/lib/oidc-provider';
 import { isOidcLinkingApprovalUsable } from '@/lib/oidc-linking-approval';
 import { getOidcProviderPolicy, type OidcClaims } from '@/lib/oidc/provider-policy';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 
 export type OidcTargetUser = {
   id: string;
   email: string;
   status: string;
   role: string;
+  roleSource: string;
   name: string | null;
   department: string | null;
   jobTitle: string | null;
@@ -49,6 +51,9 @@ type ResolveOidcIdentityInput = {
   autoProvision: boolean;
   allowedDomains: string[];
   claims?: OidcClaims;
+  providerConfigId?: string;
+  clientId?: string;
+  configVersion?: number;
 };
 
 const targetUserSelect = {
@@ -56,6 +61,7 @@ const targetUserSelect = {
   email: true,
   status: true,
   role: true,
+  roleSource: true,
   name: true,
   department: true,
   jobTitle: true,
@@ -163,9 +169,31 @@ export async function resolveOidcIdentityForSignIn(
 
         const approval = await tx.oidcLinkingApproval.findUnique({
           where: { userId: emailUser.id },
-          select: { id: true, generation: true, revokedAt: true, expiresAt: true },
+          select: {
+            id: true,
+            generation: true,
+            revokedAt: true,
+            consumedAt: true,
+            expiresAt: true,
+            providerConfigId: true,
+            issuerFingerprint: true,
+            expectedEmail: true,
+            configVersion: true,
+          },
         });
         if (!approval) throw new Error('OIDC_LINK_NOT_APPROVED');
+        const fingerprint = input.clientId
+          ? oidcTrustFingerprint(input.issuer, input.clientId)
+          : null;
+        if (
+          (approval.providerConfigId &&
+            approval.providerConfigId !== (input.providerConfigId ?? 'default')) ||
+          (approval.issuerFingerprint && approval.issuerFingerprint !== fingerprint) ||
+          (approval.expectedEmail && approval.expectedEmail.toLowerCase() !== email) ||
+          (approval.configVersion != null && approval.configVersion !== input.configVersion)
+        ) {
+          throw new Error('OIDC_LINK_NOT_APPROVED');
+        }
         if (!isOidcLinkingApprovalUsable(approval, now)) {
           if (!approval.revokedAt && approval.expiresAt && approval.expiresAt <= now) {
             throw new Error('OIDC_LINK_APPROVAL_EXPIRED');
@@ -181,9 +209,10 @@ export async function resolveOidcIdentityForSignIn(
             id: approval.id,
             generation: approval.generation,
             revokedAt: null,
+            consumedAt: null,
             OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
           },
-          data: { revokedAt: now },
+          data: { consumedAt: now },
         });
         if (consumed.count !== 1) throw new Error('OIDC_LINK_NOT_APPROVED');
 
@@ -192,6 +221,11 @@ export async function resolveOidcIdentityForSignIn(
             issuer: input.issuer,
             subject: input.subject,
             email,
+            emailAtLink: email,
+            providerConfigId: input.providerConfigId ?? 'default',
+            providerObjectId: typeof input.claims?.oid === 'string' ? input.claims.oid : null,
+            tenantId: typeof input.claims?.tid === 'string' ? input.claims.tid : null,
+            lastLoginAt: now,
             userId: emailUser.id,
           },
         });
@@ -216,6 +250,7 @@ export async function resolveOidcIdentityForSignIn(
           email,
           name: input.displayName || email.split('@')[0],
           role: 'USER',
+          roleSource: 'OIDC',
           status: 'ACTIVE',
         },
         select: targetUserSelect,
@@ -226,6 +261,11 @@ export async function resolveOidcIdentityForSignIn(
           issuer: input.issuer,
           subject: input.subject,
           email,
+          emailAtLink: email,
+          providerConfigId: input.providerConfigId ?? 'default',
+          providerObjectId: typeof input.claims?.oid === 'string' ? input.claims.oid : null,
+          tenantId: typeof input.claims?.tid === 'string' ? input.claims.tid : null,
+          lastLoginAt: now,
           userId: createdUser.id,
         },
       });

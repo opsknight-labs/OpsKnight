@@ -2,6 +2,7 @@ export const OIDC_LINKING_APPROVAL_TTL_HOURS = 168;
 
 export type OidcLinkingApprovalRecord = {
   revokedAt: Date | null;
+  consumedAt?: Date | null;
   expiresAt: Date | null;
 };
 
@@ -9,7 +10,8 @@ export type OidcLinkingApprovalState =
   | 'not-approved'
   | 'approved'
   | 'expired'
-  | 'revoked';
+  | 'revoked'
+  | 'consumed';
 
 /**
  * Single source of truth for whether a first-time OIDC linking approval is
@@ -20,6 +22,7 @@ export function getOidcLinkingApprovalState(
   now = new Date()
 ): OidcLinkingApprovalState {
   if (!approval) return 'not-approved';
+  if (approval.consumedAt) return 'consumed';
   if (approval.revokedAt) return 'revoked';
   if (approval.expiresAt && approval.expiresAt.getTime() <= now.getTime()) return 'expired';
   return 'approved';

@@ -645,6 +645,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               autoProvision: activeConfig.autoProvision,
               allowedDomains: activeConfig.allowedDomains,
               claims,
+              providerConfigId: 'default',
+              clientId: activeConfig.clientId,
+              configVersion: activeConfig.configVersion,
             });
           } catch (error) {
             logger.error('[Auth] OIDC identity transaction failed', {

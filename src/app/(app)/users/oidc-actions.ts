@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 import {
   getOidcLinkingApprovalExpiry,
   getOidcLinkingApprovalState,
@@ -38,7 +39,7 @@ async function readOidcLinkingState(userId: string, now = new Date()): Promise<O
 
   const approval = await prisma.oidcLinkingApproval.findUnique({
     where: { userId },
-    select: { id: true, revokedAt: true, expiresAt: true },
+    select: { id: true, revokedAt: true, consumedAt: true, expiresAt: true },
   });
 
   return getOidcLinkingApprovalState(approval, now);
@@ -89,7 +90,13 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
 
   const now = new Date();
   const expiresAt = getOidcLinkingApprovalExpiry(now);
-  const renewed = state === 'expired' || state === 'revoked';
+  const renewed = state === 'expired' || state === 'revoked' || state === 'consumed';
+  const provider = await prisma.oidcConfig.findFirst({
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, issuer: true, clientId: true, configVersion: true, enabled: true },
+  });
+  if (!provider?.enabled) return { error: 'An active OIDC configuration is required.' };
+  const issuerFingerprint = oidcTrustFingerprint(provider.issuer, provider.clientId);
 
   await prisma.oidcLinkingApproval.upsert({
     where: { userId: user.id },
@@ -98,11 +105,20 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
       approvedById: admin.id,
       approvedAt: now,
       expiresAt,
+      providerConfigId: provider.id,
+      issuerFingerprint,
+      expectedEmail: identifier,
+      configVersion: provider.configVersion,
     },
     update: {
       approvedById: admin.id,
       approvedAt: now,
       revokedAt: null,
+      consumedAt: null,
+      providerConfigId: provider.id,
+      issuerFingerprint,
+      expectedEmail: identifier,
+      configVersion: provider.configVersion,
       expiresAt,
       generation: { increment: 1 },
     },
@@ -170,12 +186,12 @@ export async function revokeOidcLinking(userId: string): Promise<OidcLinkingAppr
     };
   }
 
-  if (state === 'revoked' || state === 'not-approved') {
+  if (state === 'revoked' || state === 'consumed' || state === 'not-approved') {
     return { success: true, state };
   }
 
   await prisma.oidcLinkingApproval.updateMany({
-    where: { userId: user.id, revokedAt: null },
+    where: { userId: user.id, revokedAt: null, consumedAt: null },
     data: { revokedAt: new Date() },
   });
 

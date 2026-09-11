@@ -34,6 +34,7 @@ type OidcConfigRecord = {
   providerType?: string | null;
   providerLabel?: string | null;
   profileMapping?: unknown;
+  configVersion: number;
 };
 
 export type OidcConfig = {
@@ -52,6 +53,7 @@ export type OidcConfig = {
   providerType?: string | null;
   providerLabel?: string | null;
   profileMapping?: Record<string, string> | null;
+  configVersion: number;
 };
 
 export type OidcPublicConfig = {
@@ -152,6 +154,7 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
       hasProfileMapping: !!config.profileMapping,
       providerType: config.providerType,
       providerLabel: config.providerLabel,
+      configVersion: config.configVersion,
       allowedDomainCount: config.allowedDomains?.length ?? 0,
     });
 
@@ -167,6 +170,7 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
       profileMapping: config.profileMapping,
       providerType: config.providerType,
       providerLabel: config.providerLabel,
+      configVersion: config.configVersion,
     };
   } catch (error) {
     // Database connection error or other Prisma errors
@@ -276,6 +280,7 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
         providerType: normalizeOidcProviderType(config.providerType, config.issuer),
         providerLabel: config.providerLabel,
         profileMapping: parseProfileMapping(config.profileMapping),
+        configVersion: config.configVersion,
       };
 
       logger.info('[OIDC] Successfully loaded OIDC config', {

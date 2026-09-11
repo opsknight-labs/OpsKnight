@@ -235,6 +235,7 @@ export async function saveOidcConfig(
                 ? (profileMapping as Prisma.InputJsonObject)
                 : Prisma.JsonNull,
             updatedBy: actor.id,
+            configVersion: { increment: 1 },
           },
         });
         if (updated.count !== 1) throw new SettingsChangedMutationError();
