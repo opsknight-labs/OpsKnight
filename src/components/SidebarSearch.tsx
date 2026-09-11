@@ -24,6 +24,11 @@ import {
   Loader2,
   CornerDownLeft,
   X,
+  LayoutDashboard,
+  Server,
+  PieChart,
+  BarChart,
+  ListTodo,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { DirectUserAvatar } from '@/components/UserAvatar';
@@ -47,9 +52,117 @@ type RecentSearch = {
   resultCount?: number;
 };
 
+type NavigationPage = {
+  id: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  icon: typeof Zap;
+  keywords: string[];
+};
+
 const RECENT_SEARCHES_KEY = 'OpsKnight-recent-searches-v2';
 const MAX_RECENT_SEARCHES = 5;
 const TYPE_ORDER = ['incident', 'service', 'team', 'user'] as const;
+
+const NAVIGATION_PAGES: NavigationPage[] = [
+  {
+    id: 'nav-dashboard',
+    title: 'Dashboard',
+    subtitle: 'System overview & metrics',
+    href: '/',
+    icon: LayoutDashboard,
+    keywords: ['dashboard', 'overview', 'home', 'main', 'summary'],
+  },
+  {
+    id: 'nav-incidents',
+    title: 'Incidents',
+    subtitle: 'Active & resolved incidents',
+    href: '/incidents',
+    icon: Zap,
+    keywords: ['incidents', 'incident', 'alerts', 'outages', 'issues', 'tickets'],
+  },
+  {
+    id: 'nav-services',
+    title: 'Services',
+    subtitle: 'Service registry & status',
+    href: '/services',
+    icon: Server,
+    keywords: ['services', 'service', 'components', 'microservices', 'infrastructure', 'endpoints'],
+  },
+  {
+    id: 'nav-schedules',
+    title: 'Schedules',
+    subtitle: 'On-call shifts & rotations',
+    href: '/schedules',
+    icon: Calendar,
+    keywords: ['schedules', 'schedule', 'oncall', 'shifts', 'rotations', 'calendar', 'handoff'],
+  },
+  {
+    id: 'nav-policies',
+    title: 'Escalation Policies',
+    subtitle: 'Alert routing & escalation tiers',
+    href: '/policies',
+    icon: Shield,
+    keywords: ['policies', 'policy', 'escalation', 'routing', 'rules', 'tiers'],
+  },
+  {
+    id: 'nav-teams',
+    title: 'Teams',
+    subtitle: 'Team directory & rosters',
+    href: '/teams',
+    icon: Users,
+    keywords: ['teams', 'team', 'groups', 'squads', 'members'],
+  },
+  {
+    id: 'nav-users',
+    title: 'Users',
+    subtitle: 'User directory & access roles',
+    href: '/users',
+    icon: Users,
+    keywords: ['users', 'user', 'people', 'responders', 'accounts', 'members', 'directory'],
+  },
+  {
+    id: 'nav-analytics',
+    title: 'Analytics',
+    subtitle: 'MTTA, MTTR & SLA compliance trends',
+    href: '/analytics',
+    icon: PieChart,
+    keywords: ['analytics', 'metrics', 'mtta', 'mttr', 'sla', 'trends', 'insights', 'uptime'],
+  },
+  {
+    id: 'nav-reports',
+    title: 'Reports & Dashboards',
+    subtitle: 'Executive reports & reliability widgets',
+    href: '/reports',
+    icon: BarChart,
+    keywords: ['reports', 'report', 'dashboards', 'dashboard', 'executive', 'reliability'],
+  },
+  {
+    id: 'nav-postmortems',
+    title: 'Postmortems',
+    subtitle: 'Root cause analysis & lessons learned',
+    href: '/postmortems',
+    icon: FileText,
+    keywords: ['postmortems', 'postmortem', 'rca', 'retrospectives', 'lessons', 'incident reports'],
+  },
+  {
+    id: 'nav-action-items',
+    title: 'Action Items',
+    subtitle: 'Post-incident corrective actions',
+    href: '/action-items',
+    icon: ListTodo,
+    keywords: ['action items', 'action item', 'tasks', 'remediation', 'todos', 'followups'],
+  },
+  {
+    id: 'nav-settings',
+    title: 'Settings',
+    subtitle: 'Integrations, API keys & preferences',
+    href: '/settings',
+    icon: Wrench,
+    keywords: ['settings', 'setting', 'configuration', 'integrations', 'api keys', 'slack', 'profile'],
+  },
+];
 
 const QUICK_ACTIONS = [
   {
@@ -65,7 +178,7 @@ const QUICK_ACTIONS = [
     id: 'qa-services',
     label: 'View all services',
     query: 'service',
-    icon: Wrench,
+    icon: Server,
     category: 'Navigation',
     description: 'Manage services',
     href: '/services',
@@ -86,7 +199,7 @@ const getTypeIcon = (type: string) => {
     case 'incident':
       return <Zap className="h-4 w-4 text-red-500" />;
     case 'service':
-      return <Wrench className="h-4 w-4 text-blue-500" />;
+      return <Server className="h-4 w-4 text-blue-500" />;
     case 'team':
       return <Users className="h-4 w-4 text-orange-500" />;
     case 'user':
@@ -136,9 +249,6 @@ export default function SidebarSearch() {
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [shortcutKey, setShortcutKey] = useState('Ctrl');
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Check if Popover is installed, otherwise fallback to basic div logic?
-  // Assuming Popover is available as I'm using it.
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const router = useRouter();
@@ -245,15 +355,25 @@ export default function SidebarSearch() {
           saveRecentSearch(query, results.length);
         }
         setOpen(false);
-        setQuery(''); // Optional: Keep query or clear? Clearing usually better for nav.
+        setQuery('');
         inputRef.current?.blur();
       } else if (item?.query) {
         setQuery(item.query);
-        // Ensure it triggers search
       }
     },
     [router, openCreateIncident, query, results.length, saveRecentSearch]
   );
+
+  const matchingNavigation = useMemo(() => {
+    if (query.trim().length < 2) return [];
+    const q = query.trim().toLowerCase();
+    return NAVIGATION_PAGES.filter(
+      page =>
+        page.title.toLowerCase().includes(q) ||
+        page.subtitle.toLowerCase().includes(q) ||
+        page.keywords.some(k => k.toLowerCase().includes(q))
+    );
+  }, [query]);
 
   const groupedResults = useMemo(() => {
     const groups = new Map<string, SearchResult[]>();
@@ -268,6 +388,8 @@ export default function SidebarSearch() {
     });
     return groups;
   }, [results]);
+
+  const hasAnyResults = matchingNavigation.length > 0 || results.length > 0;
 
   return (
     <Command shouldFilter={false} className="overflow-visible bg-transparent border-0 shadow-none">
@@ -294,7 +416,14 @@ export default function SidebarSearch() {
                     setOpen(true);
                   }
                 }}
-                className="flex h-full w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="search-input topbar-search-input flex h-full w-full bg-transparent text-sm text-zinc-100 outline-none border-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: '#f4f4f5',
+                  border: 'none',
+                  outline: 'none',
+                  boxShadow: 'none',
+                }}
               />
               {query.length > 0 && (
                 <button
@@ -324,7 +453,7 @@ export default function SidebarSearch() {
           </div>
         </PopoverTrigger>
         <PopoverContent
-          className="p-0 w-[var(--radix-popover-trigger-width)] overflow-hidden bg-popover dark:bg-[#121216] border border-border dark:border-zinc-800 shadow-2xl rounded-xl"
+          className="p-0 w-[var(--radix-popover-trigger-width)] min-w-[340px] overflow-hidden bg-popover dark:bg-[#121216] border border-border dark:border-zinc-800 shadow-2xl rounded-xl"
           align="center"
           sideOffset={8}
           onOpenAutoFocus={(e: Event) => e.preventDefault()} // Don't steal focus from input
@@ -334,15 +463,13 @@ export default function SidebarSearch() {
           }}
         >
           <CommandList className="max-h-[500px] py-1">
-            {/* Hidden empty state to prevent command from collapsing when empty if we handle it manually? 
-                            Shadcn Command usually shows Empty if no items filter match. 
-                            Since we use shouldFilter=false, we control items.
-                        */}
-            <CommandEmpty>
-              <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
-                <p className="text-sm">No results found for &quot;{query}&quot;</p>
-              </div>
-            </CommandEmpty>
+            {query.length >= 2 && !hasAnyResults && !isLoading && (
+              <CommandEmpty>
+                <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
+                  <p className="text-sm">No results found for &quot;{query}&quot;</p>
+                </div>
+              </CommandEmpty>
+            )}
 
             {query.length === 0 && (
               <>
@@ -353,7 +480,7 @@ export default function SidebarSearch() {
                         key={`${recent.query}-${recent.timestamp}`}
                         value={`recent-${recent.query}`}
                         onSelect={() => handleSelect('', { query: recent.query })}
-                        className="aria-selected:bg-accent aria-selected:text-accent-foreground"
+                        className="aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
                       >
                         <History className="mr-3 h-4 w-4 opacity-70" />
                         <div className="flex flex-col">
@@ -369,7 +496,7 @@ export default function SidebarSearch() {
                       key={action.id}
                       value={action.label}
                       onSelect={() => handleSelect(action.label, action)}
-                      className="aria-selected:bg-accent aria-selected:text-accent-foreground"
+                      className="aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
                     >
                       <div className="flex items-center justify-center h-7 w-7 rounded-sm bg-muted mr-3">
                         <action.icon className="h-3.5 w-3.5 opacity-70" />
@@ -388,6 +515,32 @@ export default function SidebarSearch() {
 
             {query.length > 0 && (
               <>
+                {matchingNavigation.length > 0 && (
+                  <CommandGroup heading="Navigation">
+                    {matchingNavigation.map(page => {
+                      const Icon = page.icon;
+                      return (
+                        <CommandItem
+                          key={page.id}
+                          value={`nav-${page.title}`}
+                          onSelect={() => handleSelect(page.title, { href: page.href })}
+                          className="aria-selected:bg-accent aria-selected:text-accent-foreground cursor-pointer"
+                        >
+                          <div className="flex items-center justify-center h-7 w-7 rounded-sm bg-muted/70 mr-3 shrink-0">
+                            <Icon className="h-3.5 w-3.5 opacity-70" />
+                          </div>
+                          <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                            <span className="font-medium text-sm">{page.title}</span>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                              {page.subtitle}
+                            </span>
+                          </div>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                )}
+
                 {TYPE_ORDER.map(type => {
                   const items = groupedResults.get(type);
                   if (!items?.length) return null;
@@ -398,7 +551,7 @@ export default function SidebarSearch() {
                           key={result.id}
                           value={`${result.type}-${result.id}-${result.title}`}
                           onSelect={() => handleSelect('', result)}
-                          className="aria-selected:bg-accent aria-selected:text-accent-foreground group"
+                          className="aria-selected:bg-accent aria-selected:text-accent-foreground group cursor-pointer"
                         >
                           {result.type === 'user' ? (
                             <div className="mr-3 shrink-0">
