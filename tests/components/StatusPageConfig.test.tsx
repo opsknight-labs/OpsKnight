@@ -13,10 +13,12 @@ vi.mock('@/lib/toast', () => ({
   },
 }));
 
+const mockRefresh = vi.fn();
+
 // Mock useRouter
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
-    refresh: vi.fn(),
+    refresh: mockRefresh,
     push: vi.fn(),
   }),
 }));
@@ -171,5 +173,24 @@ describe('StatusPageConfig Component', () => {
     const request = fetchMock.mock.calls.find(([, options]) => options?.method === 'PATCH');
     expect(request).toBeDefined();
     expect(JSON.parse(request![1].body).requireAuth).toBe(true);
+  });
+
+  it('resets modified form draft and calls router.refresh when Cancel is clicked', () => {
+    render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
+
+    const nameInput = screen.getByLabelText(/Page Name/i) as HTMLInputElement;
+    expect(nameInput.value).toBe('Test Page');
+
+    // User edits draft
+    fireEvent.change(nameInput, { target: { value: 'Modified Draft Name' } });
+    expect(nameInput.value).toBe('Modified Draft Name');
+
+    // Click Cancel
+    const cancelBtn = screen.getByText('Cancel');
+    fireEvent.click(cancelBtn);
+
+    // Draft is deterministically reset to original value and router.refresh() is called
+    expect(nameInput.value).toBe('Test Page');
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 });

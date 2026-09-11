@@ -23,15 +23,22 @@ export default function ServiceSettingsFlashToast({ serviceId }: { serviceId: st
   useEffect(() => {
     const saved = searchParams.get('saved');
 
-    if (saved === '1' && firedRef.current !== 'saved') {
-      firedRef.current = 'saved';
-      notify.success('Service settings saved', { id: `service:${serviceId}:save` });
-      const next = new URLSearchParams(searchParams.toString());
-      next.delete('saved');
-      const qs = next.toString();
-      // Next.js router.replace (not raw history.replaceState) so RSC cache stays coherent.
-      router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
+    if (saved !== '1') {
+      firedRef.current = null;
+      return;
     }
+
+    if (firedRef.current === 'saved') {
+      return;
+    }
+
+    firedRef.current = 'saved';
+    notify.success('Service settings saved', { id: `service:${serviceId}:save` });
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('saved');
+    const qs = next.toString();
+    // Next.js router.replace (not raw history.replaceState) so RSC cache stays coherent.
+    router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
     // ?error=duplicate-service intentionally does NOT toast — the service page
     // renders a persistent InlineNotice with the same text and recovery guidance;
     // a transient duplicate toast would be noise.

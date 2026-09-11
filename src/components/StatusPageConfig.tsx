@@ -735,7 +735,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   // Parse branding JSON
   const branding = isStatusPageBranding(statusPage.branding) ? statusPage.branding : {};
 
-  const [formData, setFormData] = useState({
+  const getInitialFormData = () => ({
     name: statusPage.name,
     slug: statusPage.slug || '',
     isDefault: statusPage.isDefault ?? false,
@@ -786,6 +786,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     statusApiRateLimitWindowSec: statusPage.statusApiRateLimitWindowSec ?? 60,
   });
 
+  const [formData, setFormData] = useState(getInitialFormData);
+
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
     message: '',
@@ -825,13 +827,10 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     { id: 'advanced', label: 'Advanced', icon: '⚡' },
   ];
 
-  const [selectedServices, setSelectedServices] = useState<Set<string>>(
-    new Set(statusPage.services.map(s => s.serviceId))
-  );
+  const getInitialSelectedServices = () =>
+    new Set(statusPage.services.map(s => s.serviceId));
 
-  const [serviceConfigs, setServiceConfigs] = useState<
-    Record<string, { displayName: string; order: number; showOnPage: boolean }>
-  >(
+  const getInitialServiceConfigs = () =>
     statusPage.services.reduce(
       (acc, sp) => {
         acc[sp.serviceId] = {
@@ -842,8 +841,13 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
         return acc;
       },
       {} as Record<string, { displayName: string; order: number; showOnPage: boolean }>
-    )
-  );
+    );
+
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(getInitialSelectedServices);
+
+  const [serviceConfigs, setServiceConfigs] = useState<
+    Record<string, { displayName: string; order: number; showOnPage: boolean }>
+  >(getInitialServiceConfigs);
 
   const serviceLookup = new Map(allServices.map(service => [service.id, service] as const));
 
@@ -880,7 +884,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   };
 
   // Privacy settings - with defaults if not in statusPage
-  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>({
+  const getInitialPrivacySettings = (): PrivacySettings => ({
     privacyMode: (statusPage.privacyMode as PrivacySettings['privacyMode']) || 'PUBLIC',
     showIncidentDetails: statusPage.showIncidentDetails !== false,
     showIncidentTitles: statusPage.showIncidentTitles !== false,
@@ -905,6 +909,20 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     requireAuth: statusPage.requireAuth || false,
     authProvider: statusPage.authProvider || null,
   });
+
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(getInitialPrivacySettings);
+
+  const handleDiscardChanges = () => {
+    setFormData(getInitialFormData());
+    setPrivacySettings(getInitialPrivacySettings());
+    setSelectedServices(getInitialSelectedServices());
+    setServiceConfigs(getInitialServiceConfigs());
+    setTemplateAppliedNotice(null);
+    setSelectedTemplateId(null);
+    setTemplateError(null);
+    setError(null);
+    router.refresh();
+  };
 
   const selectedServiceIds = Array.from(selectedServices);
   const announcementServiceOptions = allServices.filter(service =>
@@ -3696,7 +3714,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             <InlineNotice
                               tone="neutral"
                               title="Unsaved changes"
-                              onDismiss={() => setTemplateAppliedNotice(null)}
                               className="mb-3"
                             >
                               {templateAppliedNotice}
@@ -4573,7 +4590,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => router.refresh()}
+                  onClick={handleDiscardChanges}
                   disabled={isPending}
                 >
                   Cancel
