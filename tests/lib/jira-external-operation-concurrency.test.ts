@@ -4,7 +4,8 @@ const mocks = vi.hoisted(() => {
   const tx = {
     externalIssueLink: {
       findFirst: vi.fn(),
-      upsert: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
     },
     externalOperation: {
       updateMany: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => {
     hasJiraCommentMarker: vi.fn(),
     acquireJiraWorkspaceProviderFence: vi.fn(),
     acquireJiraActionItemLinkFence: vi.fn(),
+    acquireJiraExternalIssueLinkFence: vi.fn(),
     assertProviderAdmitted: vi.fn(),
     recordProviderFailure: vi.fn(),
     recordProviderSuccess: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock('@/lib/jira-concurrency', () => ({
   JIRA_PROVIDER_FENCE_TIMEOUT_MS: 40_000,
   acquireJiraWorkspaceProviderFence: mocks.acquireJiraWorkspaceProviderFence,
   acquireJiraActionItemLinkFence: mocks.acquireJiraActionItemLinkFence,
+  acquireJiraExternalIssueLinkFence: mocks.acquireJiraExternalIssueLinkFence,
 }));
 
 vi.mock('@/lib/provider-admission', () => ({
@@ -61,13 +64,13 @@ vi.mock('@/lib/provider-admission', () => ({
 
 import { processExternalOperation } from '@/lib/external-operations';
 
-function actionItemCreateOperation() {
+function actionItemCreateOperation(attempts = 1) {
   return {
     id: 'op-1',
     provider: 'JIRA',
     operation: 'CREATE_ISSUE',
     status: 'PROCESSING',
-    attempts: 1,
+    attempts,
     requestPayload: {
       actionItemId: 'action-1',
       projectKey: 'OPS',
@@ -84,8 +87,13 @@ describe('durable Jira provider concurrency contract', () => {
     mocks.externalOperationFindUnique.mockResolvedValue(actionItemCreateOperation());
     mocks.acquireJiraWorkspaceProviderFence.mockResolvedValue(undefined);
     mocks.acquireJiraActionItemLinkFence.mockResolvedValue(undefined);
+    mocks.acquireJiraExternalIssueLinkFence.mockResolvedValue(undefined);
+    mocks.assertProviderAdmitted.mockResolvedValue(undefined);
+    mocks.recordProviderFailure.mockResolvedValue(undefined);
+    mocks.recordProviderSuccess.mockResolvedValue(undefined);
     mocks.tx.externalOperation.updateMany.mockResolvedValue({ count: 1 });
-    mocks.tx.externalIssueLink.upsert.mockResolvedValue({ id: 'link-1' });
+    mocks.tx.externalIssueLink.create.mockResolvedValue({ id: 'link-1' });
+    mocks.tx.externalIssueLink.update.mockResolvedValue({ id: 'link-1' });
     mocks.transaction.mockImplementation(async callback => callback(mocks.tx));
   });
 
@@ -96,11 +104,12 @@ describe('durable Jira provider concurrency contract', () => {
       'already linked to Jira issue OPS-WINNER'
     );
 
+    expect(mocks.assertProviderAdmitted).toHaveBeenCalledWith('jira:workspace');
     expect(mocks.acquireJiraWorkspaceProviderFence).toHaveBeenCalledWith(mocks.tx);
     expect(mocks.acquireJiraActionItemLinkFence).toHaveBeenCalledWith(mocks.tx, 'action-1');
     expect(mocks.findJiraIssueByCorrelationLabel).not.toHaveBeenCalled();
     expect(mocks.createJiraIssue).not.toHaveBeenCalled();
-    expect(mocks.tx.externalIssueLink.upsert).not.toHaveBeenCalled();
+    expect(mocks.tx.externalIssueLink.create).not.toHaveBeenCalled();
     expect(mocks.tx.externalOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ id: 'op-1', status: 'PROCESSING' }),
@@ -109,8 +118,9 @@ describe('durable Jira provider concurrency contract', () => {
     );
   });
 
-  it('takes both fences before Jira reconciliation/create and commits one durable link', async () => {
+  it('locks the provider issue identity and creates one immutable owner link', async () => {
     const callOrder: string[] = [];
+    let ownershipChecks = 0;
     mocks.acquireJiraWorkspaceProviderFence.mockImplementation(async () => {
       callOrder.push('workspace-fence');
     });
@@ -118,7 +128,8 @@ describe('durable Jira provider concurrency contract', () => {
       callOrder.push('action-item-fence');
     });
     mocks.tx.externalIssueLink.findFirst.mockImplementation(async () => {
-      callOrder.push('ownership-check');
+      ownershipChecks += 1;
+      callOrder.push(ownershipChecks === 1 ? 'owner-check' : 'external-key-recheck');
       return null;
     });
     mocks.findJiraIssueByCorrelationLabel.mockImplementation(async () => {
@@ -134,7 +145,10 @@ describe('durable Jira provider concurrency contract', () => {
         status: 'To Do',
       };
     });
-    mocks.tx.externalIssueLink.upsert.mockImplementation(async () => {
+    mocks.acquireJiraExternalIssueLinkFence.mockImplementation(async () => {
+      callOrder.push('external-key-fence');
+    });
+    mocks.tx.externalIssueLink.create.mockImplementation(async () => {
       callOrder.push('persist-link');
       return { id: 'link-1' };
     });
@@ -145,18 +159,68 @@ describe('durable Jira provider concurrency contract', () => {
     expect(callOrder).toEqual([
       'workspace-fence',
       'action-item-fence',
-      'ownership-check',
+      'owner-check',
       'reconcile-provider',
       'create-provider',
+      'external-key-fence',
+      'external-key-recheck',
       'persist-link',
     ]);
-    expect(mocks.tx.externalIssueLink.upsert).toHaveBeenCalledWith(
+    expect(mocks.acquireJiraExternalIssueLinkFence).toHaveBeenCalledWith(
+      mocks.tx,
+      'JIRA',
+      'OPS-101'
+    );
+    expect(mocks.tx.externalIssueLink.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        provider: 'JIRA',
+        actionItemId: 'action-1',
+        incidentId: null,
+        externalKey: 'OPS-101',
+      }),
+    });
+    expect(mocks.tx.externalIssueLink.update).not.toHaveBeenCalled();
+    expect(mocks.recordProviderSuccess).toHaveBeenCalledWith('jira:workspace');
+  });
+
+  it('fails instead of transferring a Jira issue already owned by another entity', async () => {
+    mocks.tx.externalIssueLink.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'link-other',
+        incidentId: 'inc-other',
+        actionItemId: null,
+        externalKey: 'OPS-101',
+      });
+    mocks.findJiraIssueByCorrelationLabel.mockResolvedValue({
+      id: 'jira-1',
+      key: 'OPS-101',
+      url: 'https://acme.atlassian.net/browse/OPS-101',
+      status: 'To Do',
+    });
+
+    await expect(processExternalOperation('op-1')).rejects.toThrow(
+      'already linked to another OpsKnight entity'
+    );
+
+    expect(mocks.tx.externalIssueLink.create).not.toHaveBeenCalled();
+    expect(mocks.tx.externalIssueLink.update).not.toHaveBeenCalled();
+    expect(mocks.tx.externalOperation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'FAILED' }) })
+    );
+  });
+
+  it('marks the final create attempt FAILED rather than permanently AMBIGUOUS', async () => {
+    mocks.externalOperationFindUnique.mockResolvedValue(actionItemCreateOperation(8));
+    mocks.tx.externalIssueLink.findFirst.mockResolvedValue(null);
+    mocks.findJiraIssueByCorrelationLabel.mockRejectedValue(new Error('provider unavailable'));
+
+    await expect(processExternalOperation('op-1')).rejects.toThrow('provider unavailable');
+
+    expect(mocks.externalOperationUpdateMany).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        create: expect.objectContaining({
-          provider: 'JIRA',
-          actionItemId: 'action-1',
-          externalKey: 'OPS-101',
-        }),
+        where: expect.objectContaining({ id: 'op-1', status: 'PROCESSING' }),
+        data: expect.objectContaining({ status: 'FAILED' }),
       })
     );
   });
