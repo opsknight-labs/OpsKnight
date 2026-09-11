@@ -128,8 +128,8 @@ function MailIcon() {
 function ArrowUpRightIcon() {
   return (
     <svg
-      width="12"
-      height="12"
+      width="11"
+      height="11"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -160,7 +160,7 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
   return (
     <footer className="status-site-footer">
       <div className="status-site-footer__inner">
-        {/* Top Tier: Enterprise Status Telemetry & Resource Links */}
+        {/* Top Tier: Enterprise Observability Status & Resources */}
         <div className="status-site-footer__main">
           <div className="status-site-footer__info">
             <div className="status-site-footer__status-indicator">
@@ -213,14 +213,14 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
           )}
         </div>
 
-        {/* Middle Tier: Center-Aligned Prominent Branding with Larger Logo & Marketing CTA */}
+        {/* Center Tier: Clean Compact Branding without Pill Enclosure */}
         <div className="status-site-footer__brand-center">
           <a
-            className="status-site-footer__brand-badge"
+            className="status-site-footer__brand-lockup"
             href="https://opsknight.com/?ref=status_footer"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Powered by OpsKnight — Next-Gen Incident Management"
+            aria-label="Powered by OpsKnight Incident Management & Status Pages"
           >
             <span className="status-site-footer__brand-lead">Powered by</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -241,9 +241,11 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
             />
             <span className="status-site-footer__brand-name">OpsKnight</span>
           </a>
-          <p className="status-site-footer__brand-desc">
-            Next-generation incident management, automated on-call scheduling, and high-reliability
-            status pages.{' '}
+          <div className="status-site-footer__brand-subline">
+            <span>Incident Response &amp; Real-Time Status</span>
+            <span className="status-site-footer__dot-sep" aria-hidden="true">
+              &bull;
+            </span>
             <a
               href="https://opsknight.com/?ref=status_footer_cta"
               target="_blank"
@@ -253,10 +255,10 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
               <span>Create your status page</span>
               <ArrowUpRightIcon />
             </a>
-          </p>
+          </div>
         </div>
 
-        {/* Bottom Tier: Enterprise Metadata & Copyright */}
+        {/* Bottom Tier: Enterprise Metadata & Synchronized Telemetry */}
         <div className="status-site-footer__bottom">
           <div className="status-site-footer__copyright">
             <span>&copy; {currentYear} System Status Portal</span>

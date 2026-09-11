@@ -2705,34 +2705,34 @@ ${R} .status-site-footer__brand-center {
   padding-block: 1.5rem;
   border-block: 1px solid color-mix(in srgb, var(--status-panel-border) 80%, transparent);
 }
-${R} .status-site-footer__brand-badge {
+${R} .status-site-footer__brand-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.45rem;
+  padding-block: 1.35rem;
+  border-block: 1px solid color-mix(in srgb, var(--status-panel-border) 80%, transparent);
+}
+${R} .status-site-footer__brand-lockup {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.45rem 1.15rem;
-  border: 1px solid color-mix(in srgb, var(--status-panel-border) 85%, transparent);
-  border-radius: 999px;
-  background: var(--status-panel-bg);
-  color: var(--status-text-muted);
-  text-decoration: none;
-  font-size: 0.84rem;
-  font-weight: 500;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-}
-${R} .status-site-footer__brand-badge:hover {
+  gap: 0.55rem;
   color: var(--status-text-strong);
-  border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border));
-  background: color-mix(in srgb, var(--primary) 6%, var(--status-panel-bg));
+  text-decoration: none;
+  font-size: 0.92rem;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+${R} .status-site-footer__brand-lockup:hover {
+  opacity: 0.9;
   transform: translateY(-1px);
-  box-shadow: 0 4px 16px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 ${R} .status-site-footer__brand-lead {
   color: var(--status-text-subtle);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 ${R} .status-site-footer__brand-logo {
   display: inline-block;
@@ -2745,25 +2745,27 @@ ${R} .status-site-footer__brand-logo {
 ${R} .status-site-footer__brand-name {
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
   font-weight: 800;
-  font-size: 0.98rem;
+  font-size: 1.05rem;
   color: var(--status-text-strong);
   letter-spacing: -0.02em;
 }
-${R} .status-site-footer__brand-badge:hover .status-site-footer__brand-name {
+${R} .status-site-footer__brand-lockup:hover .status-site-footer__brand-name {
   color: var(--primary);
 }
-${R} .status-site-footer__brand-desc {
-  margin: 0;
+${R} .status-site-footer__brand-subline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
   color: var(--status-text-muted);
   font-size: 0.8125rem;
-  line-height: 1.55;
-  max-inline-size: 38rem;
+  line-height: 1.45;
 }
 ${R} .status-site-footer__brand-cta {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  margin-inline-start: 0.35rem;
+  gap: 0.2rem;
   color: var(--primary);
   font-weight: 650;
   text-decoration: underline;
@@ -2772,7 +2774,7 @@ ${R} .status-site-footer__brand-cta {
   transition: opacity 0.15s ease;
 }
 ${R} .status-site-footer__brand-cta:hover {
-  opacity: 0.85;
+  opacity: 0.8;
 }
 ${R} .status-site-footer__bottom {
   display: flex;
