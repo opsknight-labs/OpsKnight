@@ -282,7 +282,8 @@ export default function SsoSettingsForm({
 
   useEffect(() => {
     if (state?.success) notify.success('SSO configuration saved', { id: 'settings:sso:save' });
-    if (state?.error && state.code !== 'SETTINGS_CHANGED') notify.error(state.error);
+    // Non-conflict errors already render as persistent inline Alerts (including
+    // stale-write recovery); avoid duplicating the same text as a transient toast.
   }, [state]);
 
   const validateFields = () => {

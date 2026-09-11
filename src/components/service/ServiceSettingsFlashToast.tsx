@@ -5,11 +5,13 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { notify } from '@/lib/toast';
 
 /**
- * Flash → Toast bridge for server-action redirects that use `?saved=1` / `?error=...`.
+ * Flash → Toast bridge for server-action redirects that use `?saved=1`.
  * - Success is centralized via the global Sonner toast (4s) with a stable id so rapid
  *   back-navigation or double-render does not stack duplicates.
- * - Validation-style errors (duplicate-service) toast once but keep the persistent
- *   inline notice rendered server-side — the toast is transient, the page banner is the source of truth.
+ * - `?saved=1` is stripped via Next.js `router.replace(..., { scroll: false })` so
+ *   reload/replay does not re-toast. Validation errors like `?error=duplicate-service`
+ *   are intentionally NOT toasted — the persistent InlineNotice on the page already
+ *   shows the recovery context; a transient duplicate toast would be noise.
  * - After surfacing, `saved` is stripped from the URL via replace so reload/replay does not re-toast.
  */
 export default function ServiceSettingsFlashToast({ serviceId }: { serviceId: string }) {
@@ -20,7 +22,6 @@ export default function ServiceSettingsFlashToast({ serviceId }: { serviceId: st
 
   useEffect(() => {
     const saved = searchParams.get('saved');
-    const err = searchParams.get('error');
 
     if (saved === '1' && firedRef.current !== 'saved') {
       firedRef.current = 'saved';
@@ -28,17 +29,12 @@ export default function ServiceSettingsFlashToast({ serviceId }: { serviceId: st
       const next = new URLSearchParams(searchParams.toString());
       next.delete('saved');
       const qs = next.toString();
+      // Next.js router.replace (not raw history.replaceState) so RSC cache stays coherent.
       router.replace(`${pathname}${qs ? `?${qs}` : ''}`, { scroll: false });
-      return;
     }
-
-    if (err === 'duplicate-service' && firedRef.current !== 'duplicate-service') {
-      firedRef.current = 'duplicate-service';
-      notify.error('A service with this name already exists. Please choose a unique name.', {
-        id: `service:${serviceId}:duplicate`,
-      });
-      // keep ?error in URL so the persistent inline alert stays visible; toast is additive
-    }
+    // ?error=duplicate-service intentionally does NOT toast — the service page
+    // renders a persistent InlineNotice with the same text and recovery guidance;
+    // a transient duplicate toast would be noise.
   }, [searchParams, router, pathname, serviceId]);
 
   return null;

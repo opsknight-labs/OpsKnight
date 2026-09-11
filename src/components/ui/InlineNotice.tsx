@@ -52,12 +52,16 @@ export function InlineNotice({
   onDismiss,
   className,
   children,
+  role: roleProp,
+  'aria-live': ariaLiveProp,
   ...props
 }: InlineNoticeProps) {
   const isError = tone === 'error';
   const resolvedUrgency: InlineNoticeUrgency = urgency ?? (isError ? 'assertive' : 'polite');
-  const role = resolvedUrgency === 'assertive' ? 'alert' : 'status';
-  const ariaLive = resolvedUrgency === 'assertive' ? 'assertive' : 'polite';
+  // Caller overrides are explicit; default derives from tone/urgency so tests and a11y
+  // have a stable contract: error+assertive => alert/assertive, others => status/polite.
+  const role = roleProp ?? (resolvedUrgency === 'assertive' ? 'alert' : 'status');
+  const ariaLive = ariaLiveProp ?? (resolvedUrgency === 'assertive' ? 'assertive' : 'polite');
   // tone is a closed union InlineNoticeTone — indexing these maps is not user-controlled.
   // eslint-disable-next-line security/detect-object-injection
   const toneClass = toneStyles[tone];
@@ -66,6 +70,7 @@ export function InlineNotice({
 
   return (
     <div
+      {...props}
       role={role}
       aria-live={ariaLive}
       className={cn(
@@ -73,7 +78,6 @@ export function InlineNotice({
         toneClass,
         className
       )}
-      {...props}
     >
       {icon !== null && (icon ?? toneIcon)}
       <div className="min-w-0 flex-1 space-y-0.5">

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { statusPageSectionPatch } from '@/lib/status-pages/settings-sections';
 import { Card, Button, FormField, Switch, Checkbox } from '@/components/ui';
 import StatusPageLivePreview from '@/components/status-page/StatusPageLivePreview';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import { notify } from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
@@ -720,6 +721,9 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [templateLoadingId, setTemplateLoadingId] = useState<string | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  // Persistent dirty-state notice after a template is applied locally but not yet saved.
+  // Unlike a transient toast, this survives until Save succeeds or the draft is discarded.
+  const [templateAppliedNotice, setTemplateAppliedNotice] = useState<string | null>(null);
   const [templateFilter, setTemplateFilter] = useState<'all' | TemplateCategory>('all');
   const [templateCssMap, setTemplateCssMap] = useState<Record<string, string>>({});
   const templateFetchRef = useRef<Set<string>>(new Set());
@@ -1104,6 +1108,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
           // — publication failure/pending is surfaced by the distinct persistent banner below.
           notify.success(msg, { id: `status-page:${statusPage.id}:${activeSection}:save` });
         }
+        // A successful save commits any locally-applied template draft.
+        setTemplateAppliedNotice(null);
         router.refresh();
       } catch (err: unknown) {
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
@@ -1479,15 +1485,11 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
       const css = await response.text();
       setFormData(prev => ({ ...prev, customCss: css }));
       setSelectedTemplateId(template.id);
-      // Template is applied locally — do not claim "saved". Use a distinct amber notice so the
-      // user knows they must press Save. successMessage is reserved for actual persistence.
+      // Template is applied locally — do not claim "saved". Render a persistent
+      // InlineNotice (not a transient toast) so the dirty state survives a
+      // 6s toast expiry — consistent with Retention's unsaved-changes pattern.
       setTemplateError(null);
-      // Reuse the nearby error area but as an info notice: keep it InlineNotice below.
-      // Here we stash the notice text in templateError's sibling pattern; render handles it.
-      // To avoid overloading templateError semantics, emit an info toast with a stable id.
-      notify.info(`Template applied: ${template.name}. Unsaved changes — press Save.`, {
-        id: `status-page:${statusPage.id}:template:${template.id}`,
-      });
+      setTemplateAppliedNotice(`Template applied: ${template.name}. Unsaved changes — press Save to publish.`);
     } catch {
       setTemplateError('Failed to load template. Please try again.');
     } finally {
@@ -3682,19 +3684,19 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             </div>
                           </div>
                           {templateError && (
-                            <div
-                              style={{
-                                padding: 'var(--spacing-2) var(--spacing-3)',
-                                borderRadius: 'var(--radius-md)',
-                                background: '#fee2e2',
-                                border: '1px solid #fecaca',
-                                color: '#991b1b',
-                                fontSize: 'var(--font-size-sm)',
-                                marginBottom: 'var(--spacing-3)',
-                              }}
-                            >
+                            <InlineNotice tone="error" className="mb-3">
                               {templateError}
-                            </div>
+                            </InlineNotice>
+                          )}
+                          {templateAppliedNotice && (
+                            <InlineNotice
+                              tone="neutral"
+                              title="Unsaved changes"
+                              onDismiss={() => setTemplateAppliedNotice(null)}
+                              className="mb-3"
+                            >
+                              {templateAppliedNotice}
+                            </InlineNotice>
                           )}
                           <div
                             style={{
@@ -4543,24 +4545,9 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                 )}
 
                 {error && (
-                  <div
-                    style={{
-                      marginBottom: 'var(--spacing-4)',
-                      padding: 'var(--spacing-3)',
-                      borderRadius: 'var(--radius-md)',
-                      background: '#fee2e2',
-                      border: '1px solid #fecaca',
-                      color: '#991b1b',
-                    }}
-                    role="alert"
-                  >
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}
-                    >
-                      <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                      <span>{error}</span>
-                    </div>
-                  </div>
+                  <InlineNotice tone="error" className="mb-4">
+                    {error}
+                  </InlineNotice>
                 )}
               </div>
             </div>

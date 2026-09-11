@@ -9,21 +9,22 @@ import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvide
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
 
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
-  // Enterprise contract: Light / Dark / System on all surfaces. next-themes
-  // persists the resolved choice in localStorage; desktop no longer forces light.
+  // Save-feedback PR keeps the existing product theme behavior: mobile routes
+  // may follow the system theme, desktop remains forced light. Toast/InlineNotice
+  // tokens are dark-capable (see globals.css .dark / --toast-*), but enabling
+  // global desktop dark mode is a separate product change that requires a full
+  // authenticated-surface audit. Do not broaden scope here.
   const pathname = usePathname();
   const isMobileRoute = pathname?.startsWith('/m');
-
-  // Keep the prop shape stable to avoid remount churn on navigation.
   const themeProps = isMobileRoute
     ? { defaultTheme: 'system' as const, enableSystem: true }
-    : { defaultTheme: 'system' as const, enableSystem: true };
+    : { forcedTheme: 'light' as const, defaultTheme: 'light' as const, enableSystem: false };
 
   return (
     <ThemeProvider
       attribute="class"
       disableTransitionOnChange
-      enableColorScheme={true}
+      enableColorScheme={false}
       {...themeProps}
     >
       {children}

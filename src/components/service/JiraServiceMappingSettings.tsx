@@ -64,9 +64,9 @@ export default function JiraServiceMappingSettings({
   useEffect(() => {
     if (state?.success) {
       notify.success('Jira mapping saved', { id: `service:${serviceId}:jira-mapping:save` });
-    } else if (state?.error) {
-      notify.error(state.error);
     }
+    // Errors render as a persistent inline Alert below (field-level recovery context).
+    // Do not also toast the same text — one semantic notification per event.
   }, [state, serviceId]);
 
   // Product contract: unavailable integrations do not leak operational/configuration
