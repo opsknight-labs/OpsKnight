@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
 
 describe('enterprise identity documentation', () => {
   it('keeps the v1.5 OIDC and SCIM guides versioned with the implementation', () => {

@@ -16,6 +16,7 @@ import {
   createOverride,
   deleteLayer,
   deleteOverride,
+  deleteSchedule,
   moveLayerUser,
   moveLayerPrecedence,
   removeLayerUser,
@@ -40,6 +41,7 @@ import ScheduleHealthCheck from '@/components/ScheduleHealthCheck';
 import ScheduleLinkedPolicies, {
   type LinkedPolicy,
 } from '@/components/schedules/ScheduleLinkedPolicies';
+import DeleteScheduleCard from '@/components/schedules/DeleteScheduleCard';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -679,22 +681,40 @@ export default async function ScheduleDetailPage({
     </>
   );
 
-  const settings = capabilities.canManageScheduleSettings ? (
-    <ScheduleEditForm
-      scheduleId={schedule.id}
-      currentName={schedule.name}
-      currentTimeZone={schedule.timeZone}
-      updateSchedule={updateSchedule}
-      canManageSchedules={capabilities.canManageScheduleSettings}
-    />
-  ) : (
-    <Alert>
-      <Info className="h-4 w-4" />
-      <AlertTitle>Schedule settings are read-only</AlertTitle>
-      <AlertDescription>
-        This schedule uses {schedule.timeZone}. Admins and responders can change schedule settings.
-      </AlertDescription>
-    </Alert>
+  const settings = (
+    <div className="space-y-6">
+      {capabilities.canManageScheduleSettings ? (
+        <ScheduleEditForm
+          scheduleId={schedule.id}
+          currentName={schedule.name}
+          currentTimeZone={schedule.timeZone}
+          updateSchedule={updateSchedule}
+          canManageSchedules={capabilities.canManageScheduleSettings}
+        />
+      ) : (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertTitle>Schedule settings are read-only</AlertTitle>
+          <AlertDescription>
+            This schedule uses {schedule.timeZone}. Admins and responders can change schedule settings.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {capabilities.canDeleteSchedule && (
+        <DeleteScheduleCard
+          scheduleId={schedule.id}
+          scheduleName={schedule.name}
+          stats={{
+            layerCount: schedule.layers.length,
+            participantCount: viewModel.participantCount,
+            overrideCount: currentAndFutureOverrides.length + historyCount,
+          }}
+          linkedRules={linkedRules}
+          deleteScheduleAction={deleteSchedule}
+        />
+      )}
+    </div>
   );
 
   return (
