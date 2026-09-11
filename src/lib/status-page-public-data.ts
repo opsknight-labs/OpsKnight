@@ -1,10 +1,13 @@
 import type {
   PublicIncident,
   PublicIncidentStatus,
-  PublicIncidentUpdateType,
+  PublicIncidentUpdate,
   PublicIncidentUrgency,
 } from '@/lib/status-pages/public-contract';
-import { publicStatusIncidentEventId } from '@/lib/status-pages/public-event-id';
+import {
+  publicStatusIncidentEventId,
+  publicStatusIncidentUpdateEventId,
+} from '@/lib/status-pages/public-event-id';
 import { publicStatusForIncidentUrgency } from '@/lib/status-pages/status-presentation';
 
 export type StatusPagePublicSettings = {
@@ -79,6 +82,40 @@ type PublicIncidentInput = {
 function serializeDate(value: string | Date | null | undefined): string | undefined {
   if (value == null) return undefined;
   return value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * IncidentEvent is an internal audit stream. Never forward its free-text message to the public
+ * status page: assignment, escalation, Jira, notification, and responder identity details can be
+ * embedded in those messages. Only lifecycle facts with customer-safe fixed copy are projected.
+ */
+function serializePublicIncidentUpdate(
+  incidentId: string,
+  event: NonNullable<PublicIncidentInput['events']>[number],
+  pageId: string | undefined,
+  showTimestamp: boolean
+): PublicIncidentUpdate | null {
+  let update: Pick<PublicIncidentUpdate, 'type' | 'message'> | null = null;
+  switch (event.type) {
+    case 'ACKNOWLEDGED':
+      update = { type: 'ACKNOWLEDGED', message: 'We are investigating the issue.' };
+      break;
+    case 'AUTO_RESOLVED':
+    case 'MANUAL_RESOLVED':
+      update = { type: 'RESOLVED', message: 'This incident has been resolved.' };
+      break;
+    case 'REOPENED':
+      update = { type: 'UPDATE', message: 'Incident reopened.' };
+      break;
+    default:
+      return null;
+  }
+
+  return {
+    id: publicStatusIncidentUpdateEventId(pageId ?? 'unscoped', incidentId, event.id),
+    ...update,
+    ...(showTimestamp ? { createdAt: serializeDate(event.createdAt) } : {}),
+  };
 }
 
 function incidentDetailCutoffMs(settings: StatusPagePublicSettings, nowMs: number): number | null {
@@ -170,13 +207,16 @@ export function serializePublicStatusIncident(
     };
   }
   if (!redactedByAge && visibility.showIncidentId && visibility.showIncidentDescription && incident.events?.length) {
-    // G01: cap + truncate updates so a long private thread cannot leak via detail window.
-    result.updates = incident.events.slice(0, 8).map(event => ({
-      id: event.id,
-      type: publicUpdateType(event.type),
-      message: truncateForRedacted(event.message, 400),
-      ...(visibility.showIncidentTimestamp ? { createdAt: serializeDate(event.createdAt) } : {}),
-    }));
+    const updates = incident.events.slice(0, 8).flatMap(event => {
+      const update = serializePublicIncidentUpdate(
+        incident.id,
+        event,
+        context?.pageId,
+        visibility.showIncidentTimestamp
+      );
+      return update ? [update] : [];
+    });
+    if (updates.length > 0) result.updates = updates;
   }
   if (
     visibility.showPostIncidentReview &&
@@ -202,20 +242,7 @@ export function serializePublicStatusIncident(
   return result;
 }
 
-function publicUpdateType(type: string | null | undefined): PublicIncidentUpdateType {
-  if (
-    type === 'INVESTIGATING' ||
-    type === 'IDENTIFIED' ||
-    type === 'MONITORING' ||
-    type === 'ACKNOWLEDGED' ||
-    type === 'RESOLVED' ||
-    type === 'UPDATE'
-  ) {
-    return type;
-  }
-  if (type === 'AUTO_RESOLVED' || type === 'MANUAL_RESOLVED') return 'RESOLVED';
-  return 'UPDATE';
-}
+
 
 /**
  * Keep the long-standing `/api/status` incident shape while applying the
