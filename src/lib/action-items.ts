@@ -1,15 +1,13 @@
+import {
+  normalizeJiraIssueReference,
+  serializeJiraIssueReference,
+  type JiraIssueReference,
+} from '@/lib/jira-references';
+
 export type ActionItemStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED';
 export type ActionItemPriority = 'HIGH' | 'MEDIUM' | 'LOW';
 
-export type ActionItemExternalIssue = {
-  linkId: string;
-  provider: string;
-  key: string;
-  url: string;
-  status?: string;
-  assignee?: string;
-  syncState?: string;
-};
+export type ActionItemExternalIssue = JiraIssueReference;
 
 export type ActionItem = {
   id: string;
@@ -76,6 +74,20 @@ function sanitizeIdentifierPart(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 160);
 }
 
+function normalizeExternalIssueFromEntry(
+  entry: Record<string, unknown>
+): ActionItemExternalIssue | undefined {
+  const direct = normalizeJiraIssueReference(entry.externalIssue);
+  if (direct) return direct;
+
+  if (!Array.isArray(entry.externalIssueLinks)) return undefined;
+  for (const link of entry.externalIssueLinks) {
+    const normalized = normalizeJiraIssueReference(link);
+    if (normalized) return normalized;
+  }
+  return undefined;
+}
+
 export function getStoredActionItemId(params: {
   postmortemId: string;
   legacyId?: string;
@@ -114,7 +126,16 @@ export function parseActionItemDueDate(value: string | null | undefined): Date |
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
-export function normalizeLegacyActionItems(
+/**
+ * Normalize action-item data at UI boundaries.
+ *
+ * During the action-item migration, callers can receive one of three shapes:
+ * legacy postmortem JSON, the stable ActionItem UI shape, or normalized Prisma
+ * ActionItem rows with externalIssueLinks. Preserve Jira linkage metadata when
+ * it is already present so the same persisted action item renders consistently
+ * on the global board, postmortem detail/edit views, and incident postmortem tab.
+ */
+export function normalizeActionItems(
   value: unknown,
   options: { legacyIdPrefix?: string } = {}
 ): ActionItem[] {
@@ -124,12 +145,13 @@ export function normalizeLegacyActionItems(
 
   return value.map((item, index) => {
     const entry = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+    const externalIssue = normalizeExternalIssueFromEntry(entry);
 
     return {
       id: toStringOrUndefined(entry.id) ?? `${legacyIdPrefix}-${index}`,
       title: toStringOrUndefined(entry.title) ?? '',
       description: toStringOrUndefined(entry.description) ?? '',
-      owner: toStringOrUndefined(entry.owner),
+      owner: toStringOrUndefined(entry.owner) ?? toStringOrUndefined(entry.ownerId),
       dueDate: formatActionItemDueDate(
         entry.dueDate instanceof Date || typeof entry.dueDate === 'string'
           ? entry.dueDate
@@ -137,12 +159,21 @@ export function normalizeLegacyActionItems(
       ),
       status: toActionItemStatus(entry.status),
       priority: toActionItemPriority(entry.priority),
+      ...(externalIssue ? { externalIssue } : {}),
       completedAt:
         entry.completedAt instanceof Date || typeof entry.completedAt === 'string'
           ? entry.completedAt
           : undefined,
     };
   });
+}
+
+/** @deprecated Prefer normalizeActionItems for UI boundaries. */
+export function normalizeLegacyActionItems(
+  value: unknown,
+  options: { legacyIdPrefix?: string } = {}
+): ActionItem[] {
+  return normalizeActionItems(value, options);
 }
 
 export function serializeActionItemRecord(record: ActionItemRecordLike): ActionItem {
@@ -157,17 +188,7 @@ export function serializeActionItemRecord(record: ActionItemRecordLike): ActionI
     status: record.status,
     priority: record.priority,
     completedAt: record.completedAt ?? undefined,
-    externalIssue: externalIssue
-      ? {
-          linkId: externalIssue.id,
-          provider: externalIssue.provider,
-          key: externalIssue.externalKey,
-          url: externalIssue.externalUrl,
-          status: externalIssue.externalStatus ?? undefined,
-          assignee: externalIssue.externalAssignee ?? undefined,
-          syncState: externalIssue.syncState ?? undefined,
-        }
-      : undefined,
+    externalIssue: externalIssue ? serializeJiraIssueReference(externalIssue) : undefined,
   };
 }
 
@@ -185,7 +206,7 @@ export function resolveStoredActionItems(params: {
     return records.map(serializeActionItemRecord);
   }
 
-  return normalizeLegacyActionItems(params.legacy, {
+  return normalizeActionItems(params.legacy, {
     legacyIdPrefix: params.legacyIdPrefix,
   });
 }

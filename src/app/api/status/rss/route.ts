@@ -7,6 +7,7 @@ import { authorizeStatusApiRequest } from '@/lib/status-api-auth';
 import { createHash } from 'node:crypto';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
+import { projectPublicStatusEvents } from '@/lib/status-pages/event-projection';
 import {
   PRIVATE_STATUS_CACHE_CONTROL,
   PUBLIC_STATUS_CACHE_CONTROL,
@@ -76,17 +77,13 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
     if (projected.snapshot) {
       const snapshot = projected.snapshot;
       const pageUrl = getStatusPagePublicUrl(statusPage, getBaseUrl());
-      const items = snapshot.incidents
-        .map(incident => {
-          const title = typeof incident.title === 'string' ? incident.title : 'Status update';
-          const status = typeof incident.status === 'string' ? incident.status : 'OPEN';
-          const createdAt = typeof incident.createdAt === 'string' ? incident.createdAt : null;
-          const id =
-            typeof incident.id === 'string'
-              ? incident.id
-              : createHash('sha256').update(JSON.stringify(incident)).digest('hex');
-          const guid = opaqueRssIncidentGuid(pageUrl, statusPage.id, id);
-          return `<item><title>${escapeXml(title)} - ${escapeXml(status)}</title><link>${guid}</link><guid isPermaLink="false">${guid}</guid>${createdAt ? `<pubDate>${new Date(createdAt).toUTCString()}</pubDate>` : ''}<description>${escapeXml(typeof incident.description === 'string' ? incident.description : title)}</description></item>`;
+      const events = projectPublicStatusEvents(snapshot);
+      const items = events
+        .map(event => {
+          const title = event.status ? `${event.title} - ${event.status}` : event.title;
+          const createdAt = event.publishedAt;
+          const guid = opaqueRssIncidentGuid(pageUrl, statusPage.id, event.id);
+          return `<item><title>${escapeXml(title)}</title><link>${guid}</link><guid isPermaLink="false">${guid}</guid>${createdAt ? `<pubDate>${new Date(createdAt).toUTCString()}</pubDate>` : ''}<description>${escapeXml(event.body ?? event.title)}</description></item>`;
         })
         .join('');
       return new NextResponse(

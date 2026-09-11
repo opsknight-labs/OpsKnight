@@ -56,6 +56,8 @@ type CreateJiraIssueInput = {
   component?: string | null;
 };
 
+const JIRA_REQUEST_TIMEOUT_MS = 8_000;
+
 function authHeader(config: JiraConfigForRequest) {
   const token = Buffer.from(`${config.userEmail}:${config.apiToken}`).toString('base64');
   return `Basic ${token}`;
@@ -87,11 +89,27 @@ async function jiraRequest<T>(
   init: RequestInit = {}
 ): Promise<T> {
   let response: Response;
+  const controller = new AbortController();
+  let timedOut = false;
+  const upstreamSignal = init.signal;
+  const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, JIRA_REQUEST_TIMEOUT_MS);
+
+  if (upstreamSignal?.aborted) {
+    abortFromUpstream();
+  } else {
+    upstreamSignal?.addEventListener('abort', abortFromUpstream, { once: true });
+  }
+
   try {
     response = await fetch(`${config.baseUrl}${path}`, {
       ...init,
       // Never forward Jira credentials to an HTTP redirect target.
       redirect: 'error',
+      signal: controller.signal,
       headers: {
         Authorization: authHeader(config),
         Accept: 'application/json',
@@ -100,11 +118,17 @@ async function jiraRequest<T>(
       },
     });
   } catch (error) {
+    const cause = timedOut
+      ? new Error(`Jira request timed out after ${JIRA_REQUEST_TIMEOUT_MS}ms.`)
+      : error;
     throw integrationProviderError({
       provider: 'jira',
       operation: `${init.method || 'GET'} ${path}`,
-      cause: error,
+      cause,
     });
+  } finally {
+    clearTimeout(timeout);
+    upstreamSignal?.removeEventListener('abort', abortFromUpstream);
   }
 
   if (!response.ok) {
@@ -262,7 +286,7 @@ export async function findJiraIssueByCorrelationLabel(
 
 export async function addJiraComment(issueKeyOrId: string, commentText: string): Promise<void> {
   const config = await getDecryptedJiraConfig();
-  if (!config) return;
+  if (!config) throw jiraNotConfigured();
 
   const payload = {
     body: toADF(commentText),

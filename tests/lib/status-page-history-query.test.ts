@@ -20,6 +20,7 @@ function incident(id: string, serviceId = 'service-a') {
     serviceId,
     createdAt: start,
     resolvedAt: end,
+    updatedAt: end,
     urgency: 'LOW',
     status: 'RESOLVED',
   };
@@ -29,13 +30,12 @@ describe('status-page authoritative history query', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('exhausts bounded keyset pages before marking history complete', async () => {
-    const firstPage = Array.from(
-      { length: HISTORY_INCIDENT_PAGE_SIZE },
-      (_, index) => incident(`incident-${String(index).padStart(4, '0')}`)
+    const firstPage = Array.from({ length: HISTORY_INCIDENT_PAGE_SIZE }, (_, index) =>
+      incident(`incident-${String(index).padStart(4, '0')}`)
     );
-    mocks.findMany.mockResolvedValueOnce(firstPage).mockResolvedValueOnce([
-      incident('incident-final', 'service-b'),
-    ]);
+    mocks.findMany
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([incident('incident-final', 'service-b')]);
 
     const result = await loadHistoryIncidentsByService(['service-a', 'service-b'], start, end);
 
@@ -45,6 +45,13 @@ describe('status-page authoritative history query', () => {
     expect(mocks.findMany.mock.calls[0]?.[0]).toMatchObject({
       orderBy: { id: 'asc' },
       take: HISTORY_INCIDENT_PAGE_SIZE,
+      select: expect.objectContaining({ updatedAt: true, resolvedAt: true }),
+      where: expect.objectContaining({
+        OR: expect.arrayContaining([
+          { resolvedAt: null, status: { not: 'RESOLVED' } },
+          { resolvedAt: null, status: 'RESOLVED', updatedAt: { gte: start } },
+        ]),
+      }),
     });
     expect(mocks.findMany.mock.calls[1]?.[0]).toMatchObject({
       cursor: { id: firstPage.at(-1)?.id },
@@ -55,10 +62,11 @@ describe('status-page authoritative history query', () => {
 
   it('rejects the whole read when a later page fails', async () => {
     mocks.findMany
-      .mockResolvedValueOnce(Array.from(
-        { length: HISTORY_INCIDENT_PAGE_SIZE },
-        (_, index) => incident(`incident-${index}`)
-      ))
+      .mockResolvedValueOnce(
+        Array.from({ length: HISTORY_INCIDENT_PAGE_SIZE }, (_, index) =>
+          incident(`incident-${index}`)
+        )
+      )
       .mockRejectedValueOnce(new Error('database unavailable'));
 
     await expect(loadHistoryIncidentsByService(['service-a'], start, end)).rejects.toThrow(

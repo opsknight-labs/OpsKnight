@@ -38,6 +38,17 @@ export const LOCK_KEYS = {
 
   /** Serializes manual or scheduled data retention cleanups across cluster nodes. */
   DATA_CLEANUP: BigInt(9141004),
+
+  /**
+   * Jira workspace lifecycle fence.
+   *
+   * Provider work takes this lock in shared mode. Enabling, disabling, or
+   * removing the workspace takes it in exclusive mode. This prevents a
+   * workspace lifecycle mutation from overtaking an already-admitted Jira
+   * provider operation, while work that starts afterwards must observe the
+   * new workspace state before it can contact Jira.
+   */
+  JIRA_WORKSPACE: BigInt(9141005),
 } as const;
 
 /**
@@ -85,6 +96,35 @@ export async function acquireAdvisoryLock(
     // that transaction; swallowing it only moves the failure to a later,
     // unrelated query and hides the real cause.
     logger.error('[DbLocks] pg_advisory_xact_lock failed; rolling back transaction', {
+      key: key.toString(),
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
+}
+
+/**
+ * Acquire the shared form of a transaction-scoped advisory lock.
+ *
+ * Multiple readers/workers may hold the lock concurrently, while an exclusive
+ * lifecycle mutation using `acquireAdvisoryLock` on the same key waits for all
+ * shared holders to finish. As with the exclusive helper, lock acquisition
+ * fails closed on database errors.
+ */
+export async function acquireSharedAdvisoryLock(
+  tx: Prisma.TransactionClient,
+  key: bigint
+): Promise<void> {
+  try {
+    const rows = await tx.$queryRaw<Array<{ acquired: boolean }>>`
+      SELECT TRUE AS "acquired"
+      FROM (SELECT pg_advisory_xact_lock_shared(${key}::bigint)) AS lock_result
+    `;
+    if (rows[0]?.acquired !== true) {
+      throw new Error(`PostgreSQL shared advisory lock ${key.toString()} was not acquired`);
+    }
+  } catch (err) {
+    logger.error('[DbLocks] pg_advisory_xact_lock_shared failed; rolling back transaction', {
       key: key.toString(),
       error: err instanceof Error ? err.message : String(err),
     });

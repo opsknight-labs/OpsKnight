@@ -149,6 +149,9 @@ const nextConfig: NextConfig = {
   images: {
     localPatterns: [
       {
+        pathname: '/logo.png',
+      },
+      {
         pathname: '/api/avatar',
         search: '?**',
       },

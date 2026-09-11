@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { IncidentStatus } from '@prisma/client';
+import type { JiraCapability } from '@/lib/jira-capabilities';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -35,22 +36,6 @@ import {
 } from '@/app/(app)/incidents/jira/actions';
 import { isJiraStatusDone } from '@/lib/jira-validation';
 import { errorFromResponse } from '@/lib/client-error';
-
-function jiraStatusBadgeStyle(status: string | null): string {
-  if (!status)
-    return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
-  if (isJiraStatusDone(status)) {
-    return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
-  }
-  const lower = status.toLowerCase();
-  if (lower === 'in progress' || lower === 'in review' || lower === 'investigating') {
-    return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
-  }
-  if (lower === 'to do' || lower === 'open' || lower === 'backlog') {
-    return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
-  }
-  return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
-}
 import { toUserFacingError } from '@/lib/user-facing-error';
 import {
   Check,
@@ -71,6 +56,22 @@ import {
   Trash2,
   RefreshCw,
 } from 'lucide-react';
+
+function jiraStatusBadgeStyle(status: string | null): string {
+  if (!status)
+    return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+  if (isJiraStatusDone(status)) {
+    return 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+  }
+  const lower = status.toLowerCase();
+  if (lower === 'in progress' || lower === 'in review' || lower === 'investigating') {
+    return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+  }
+  if (lower === 'to do' || lower === 'open' || lower === 'backlog') {
+    return 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+  }
+  return 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700';
+}
 
 export type JiraLinkItem = {
   id: string;
@@ -96,7 +97,6 @@ type IncidentCommandBarProps = {
   resolvingIncident: ResolvingIncidentData;
   postmortemHref: string;
   postmortemExists: boolean;
-  // Collaboration
   warRoom?: {
     slackChannelId: string | null;
     slackChannelName: string | null;
@@ -111,6 +111,8 @@ type IncidentCommandBarProps = {
     serviceSettingsHref: string;
   } | null;
   tags?: Array<{ id: string; name: string; color?: string | null }>;
+  /** Mandatory source of truth for all operational Jira UI. */
+  jiraCapability: JiraCapability;
 };
 
 function formatResumeIn(snoozedUntil: Date | null): string | null {
@@ -146,38 +148,48 @@ export default function IncidentCommandBar({
   warRoom,
   jira,
   tags = [],
+  jiraCapability,
 }: IncidentCommandBarProps) {
   const router = useRouter();
   const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [showMobileMore, setShowMobileMore] = useState(false);
-
-  // Slack War-Room state
   const [isWarRoomPending, startWarRoomTransition] = useTransition();
   const [warRoomError, setWarRoomError] = useState<string | null>(null);
-
-  // Jira state
   const [showJiraDialog, setShowJiraDialog] = useState(false);
   const [jiraLinkKey, setJiraLinkKey] = useState('');
   const [isJiraPending, startJiraTransition] = useTransition();
   const [jiraError, setJiraError] = useState<string | null>(null);
+  const [syncingLinkId, setSyncingLinkId] = useState<string | null>(null);
+  const [unlinkingLinkId, setUnlinkingLinkId] = useState<string | null>(null);
 
   const isResolved = currentStatus === 'RESOLVED';
   const isSnoozed = currentStatus === 'SNOOZED';
   const isSuppressed = currentStatus === 'SUPPRESSED';
   const isAcknowledged = currentStatus === 'ACKNOWLEDGED';
   const resumeText = isSnoozed ? formatResumeIn(snoozedUntil) : null;
-
   const canAct = canManage || canAcknowledge;
   const showAcknowledge =
     !isAcknowledged && canAcknowledge && ((!isSuppressed && !isSnoozed) || isSnoozed);
   const showUnsnooze = canManage && isSnoozed;
   const showResolve = canManage && !isResolved;
 
-  // War-Room logic
   const isWarRoomArchived = Boolean(warRoom?.warRoomArchivedAt);
   const hasActiveWarRoom = Boolean(warRoom?.slackChannelId) && !isWarRoomArchived;
   const warRoomEnabled = warRoom?.enabled ?? false;
+  const hasVisibleWarRoom = hasActiveWarRoom || (warRoomEnabled && canManage);
+
+  const jiraLinks = jira?.links || [];
+  const primaryJira = jiraLinks[0];
+  const serviceMapped = jiraCapability.serviceMapped;
+  const hasOperationalJira = jiraCapability.showOperationalJira;
+  const canManageLinkedJira =
+    jiraCapability.canSync ||
+    jiraCapability.canUnlink ||
+    jiraCapability.canCreate ||
+    jiraCapability.canLink;
+  const hasAnyIntegrations =
+    hasVisibleWarRoom || Boolean(primaryJira) || jiraCapability.showOperationalJira;
 
   const handleCreateWarRoom = () => {
     setWarRoomError(null);
@@ -188,12 +200,10 @@ export default function IncidentCommandBar({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ incidentId, action: 'create' }),
         });
-        if (!response.ok) {
-          throw await errorFromResponse(response, 'Failed to create war-room');
-        }
+        if (!response.ok) throw await errorFromResponse(response, 'Failed to create war-room');
         router.refresh();
-      } catch (err: unknown) {
-        setWarRoomError(displayError(err, 'Failed to create war-room'));
+      } catch (error: unknown) {
+        setWarRoomError(displayError(error, 'Failed to create war-room'));
       }
     });
   };
@@ -207,30 +217,21 @@ export default function IncidentCommandBar({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ incidentId, action: 'archive' }),
         });
-        if (!response.ok) {
-          throw await errorFromResponse(response, 'Failed to archive war-room');
-        }
+        if (!response.ok) throw await errorFromResponse(response, 'Failed to archive war-room');
         router.refresh();
-      } catch (err: unknown) {
-        setWarRoomError(displayError(err, 'Failed to archive war-room'));
+      } catch (error: unknown) {
+        setWarRoomError(displayError(error, 'Failed to archive war-room'));
       }
     });
   };
 
-  // Jira logic
-  const jiraLinks = jira?.links || [];
-  const primaryJira = jiraLinks[0];
-  const jiraEnabled = jira?.enabled ?? false;
-
-  const hasAnyIntegrations = hasActiveWarRoom || Boolean(primaryJira) || canManage;
-
   const handleCreateJira = () => {
+    if (!jiraCapability.canCreate) return;
     setJiraError(null);
     startJiraTransition(async () => {
-      const res = await createJiraIssueFromIncident(incidentId);
-      if (!res.success && res.error) {
-        setJiraError(res.error);
-      } else {
+      const result = await createJiraIssueFromIncident(incidentId);
+      if (!result.success && result.error) setJiraError(result.error);
+      else {
         setShowJiraDialog(false);
         router.refresh();
       }
@@ -238,13 +239,12 @@ export default function IncidentCommandBar({
   };
 
   const handleLinkJira = () => {
-    if (!jiraLinkKey.trim()) return;
+    if (!jiraCapability.canLink || !jiraLinkKey.trim()) return;
     setJiraError(null);
     startJiraTransition(async () => {
-      const res = await linkJiraIssueToIncident(incidentId, jiraLinkKey.trim());
-      if (!res.success && res.error) {
-        setJiraError(res.error);
-      } else {
+      const result = await linkJiraIssueToIncident(incidentId, jiraLinkKey.trim());
+      if (!result.success && result.error) setJiraError(result.error);
+      else {
         setJiraLinkKey('');
         setShowJiraDialog(false);
         router.refresh();
@@ -252,20 +252,15 @@ export default function IncidentCommandBar({
     });
   };
 
-  const [syncingLinkId, setSyncingLinkId] = useState<string | null>(null);
-  const [unlinkingLinkId, setUnlinkingLinkId] = useState<string | null>(null);
-
   const handleUnlinkJira = (linkId: string) => {
+    if (!jiraCapability.canUnlink) return;
     setJiraError(null);
     setUnlinkingLinkId(linkId);
     startJiraTransition(async () => {
       try {
-        const res = await unlinkJiraIssueFromIncident(linkId, incidentId);
-        if (!res.success && res.error) {
-          setJiraError(res.error);
-        } else {
-          router.refresh();
-        }
+        const result = await unlinkJiraIssueFromIncident(linkId, incidentId);
+        if (!result.success && result.error) setJiraError(result.error);
+        else router.refresh();
       } finally {
         setUnlinkingLinkId(null);
       }
@@ -273,16 +268,14 @@ export default function IncidentCommandBar({
   };
 
   const handleSyncJira = (linkId: string) => {
+    if (!jiraCapability.canSync) return;
     setJiraError(null);
     setSyncingLinkId(linkId);
     startJiraTransition(async () => {
       try {
-        const res = await syncIncidentJiraIssue(linkId, incidentId);
-        if (!res.success && res.error) {
-          setJiraError(res.error);
-        } else {
-          router.refresh();
-        }
+        const result = await syncIncidentJiraIssue(linkId, incidentId);
+        if (!result.success && result.error) setJiraError(result.error);
+        else router.refresh();
       } finally {
         setSyncingLinkId(null);
       }
@@ -396,12 +389,10 @@ export default function IncidentCommandBar({
 
   return (
     <>
-      {/* Screen-reader announcement */}
       <div role="status" aria-live="polite" className="sr-only">
         {statusAnnouncement}
       </div>
 
-      {/* Desktop / tablet Command Bar card with standard sizes */}
       <div
         className={cn(
           'hidden sm:flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all dark:bg-slate-900 dark:border-slate-800',
@@ -409,14 +400,13 @@ export default function IncidentCommandBar({
         )}
         data-command-bar
       >
-        {/* Left Side: Collaboration & Tags */}
         <div className="flex items-center gap-3 flex-wrap min-w-0">
           {hasAnyIntegrations && (
             <>
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
                 Integrations:
               </span>
-              {/* Slack War-Room */}
+
               {hasActiveWarRoom ? (
                 <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-sm font-medium shadow-xs">
                   <SlackLogo className="h-4 w-4 shrink-0" />
@@ -482,22 +472,8 @@ export default function IncidentCommandBar({
                     <span>{isWarRoomArchived ? 'Re-open War-Room' : 'Create War-Room'}</span>
                   </Button>
                 )
-              ) : (
-                canManage && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push('/settings/integrations/slack')}
-                    className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
-                  >
-                    <SlackLogo className="h-4 w-4 shrink-0" />
-                    <span>Connect Slack</span>
-                  </Button>
-                )
-              )}
+              ) : null}
 
-              {/* Jira Integration */}
               {primaryJira ? (
                 <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-50 text-blue-900 border border-blue-200 text-sm font-medium shadow-xs">
                   <JiraLogo className="h-4 w-4 shrink-0" />
@@ -531,7 +507,7 @@ export default function IncidentCommandBar({
                       +{jiraLinks.length - 1}
                     </button>
                   )}
-                  {canManage && (
+                  {jiraCapability.canSync && (
                     <button
                       type="button"
                       onClick={() => handleSyncJira(primaryJira.id)}
@@ -548,7 +524,7 @@ export default function IncidentCommandBar({
                       <span>Sync</span>
                     </button>
                   )}
-                  {canManage && (
+                  {canManageLinkedJira && (
                     <button
                       type="button"
                       onClick={() => setShowJiraDialog(true)}
@@ -559,33 +535,18 @@ export default function IncidentCommandBar({
                     </button>
                   )}
                 </div>
-              ) : jiraEnabled ? (
-                canManage && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowJiraDialog(true)}
-                    className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
-                  >
-                    <JiraLogo className="h-4 w-4 shrink-0" />
-                    <span>Link Jira Issue</span>
-                  </Button>
-                )
-              ) : (
-                canManage && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push('/settings/integrations/jira')}
-                    className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
-                  >
-                    <JiraLogo className="h-4 w-4 shrink-0" />
-                    <span>Connect Jira</span>
-                  </Button>
-                )
-              )}
+              ) : jiraCapability.canLink ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowJiraDialog(true)}
+                  className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
+                >
+                  <JiraLogo className="h-4 w-4 shrink-0" />
+                  <span>Link Jira Issue</span>
+                </Button>
+              ) : null}
 
               {warRoomError && (
                 <span className="text-xs text-rose-600 inline-flex items-center gap-1 font-medium">
@@ -593,17 +554,13 @@ export default function IncidentCommandBar({
                   {warRoomError}
                 </span>
               )}
-
-              {/* Vertical divider between Integrations and Tags */}
               <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0 hidden md:block" />
             </>
           )}
 
-          {/* Tags Section */}
           <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
         </div>
 
-        {/* Right Side: Standard Lifecycle Action Buttons */}
         {canAct && (
           <div className="flex items-center gap-2.5 shrink-0">
             {isResolved ? (
@@ -665,7 +622,6 @@ export default function IncidentCommandBar({
         )}
       </div>
 
-      {/* Mobile sticky bottom action bar */}
       {canAct && (
         <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 flex items-center gap-2 pb-[calc(0.625rem+env(safe-area-inset-bottom))]">
           {isResolved ? (
@@ -723,7 +679,6 @@ export default function IncidentCommandBar({
         </div>
       )}
 
-      {/* Mobile More Actions Sheet */}
       <Sheet open={showMobileMore} onOpenChange={setShowMobileMore}>
         <SheetContent side="bottom" className="sm:hidden">
           <SheetHeader>
@@ -763,35 +718,37 @@ export default function IncidentCommandBar({
                   <span>Connect Slack</span>
                 </Button>
               ))}
-            {canManage &&
-              !primaryJira &&
-              (jiraEnabled ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11 justify-start gap-2.5 text-sm font-medium"
-                  onClick={() => {
-                    setShowMobileMore(false);
-                    setShowJiraDialog(true);
-                  }}
-                >
-                  <JiraLogo className="h-4 w-4" />
-                  <span>Link Jira Issue</span>
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11 justify-start gap-2.5 text-sm font-medium"
-                  onClick={() => {
-                    setShowMobileMore(false);
-                    router.push('/settings/integrations/jira');
-                  }}
-                >
-                  <JiraLogo className="h-4 w-4" />
-                  <span>Connect Jira</span>
-                </Button>
-              ))}
+
+            {!primaryJira && jiraCapability.canLink && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 justify-start gap-2.5 text-sm font-medium"
+                onClick={() => {
+                  setShowMobileMore(false);
+                  setShowJiraDialog(true);
+                }}
+              >
+                <JiraLogo className="h-4 w-4" />
+                <span>Link Jira Issue</span>
+              </Button>
+            )}
+
+            {primaryJira && canManageLinkedJira && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 justify-start gap-2.5 text-sm font-medium"
+                onClick={() => {
+                  setShowMobileMore(false);
+                  setShowJiraDialog(true);
+                }}
+              >
+                <JiraLogo className="h-4 w-4" />
+                <span>Manage Jira Issues</span>
+              </Button>
+            )}
+
             {showUnsnooze && (
               <form action={onUnsnooze}>
                 <Button
@@ -824,128 +781,133 @@ export default function IncidentCommandBar({
         </SheetContent>
       </Sheet>
 
-      {/* Jira Link / Create Modal */}
-      <Dialog open={showJiraDialog} onOpenChange={setShowJiraDialog}>
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <JiraLogo className="h-5 w-5" />
-              <span>{jiraLinks.length > 0 ? 'Jira Integration' : 'Link Jira Issue'}</span>
-            </DialogTitle>
-            <DialogDescription>
-              {jiraLinks.length > 0
-                ? 'Manage linked Jira issues or connect additional tickets to this incident.'
-                : 'Create a new issue from this incident or link an existing Jira issue key.'}
-            </DialogDescription>
-          </DialogHeader>
+      {(primaryJira || hasOperationalJira) && (
+        <Dialog open={showJiraDialog} onOpenChange={setShowJiraDialog}>
+          <DialogContent className="sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <JiraLogo className="h-5 w-5" />
+                <span>{jiraLinks.length > 0 ? 'Jira Integration' : 'Link Jira Issue'}</span>
+              </DialogTitle>
+              <DialogDescription>
+                {jiraLinks.length > 0
+                  ? hasOperationalJira
+                    ? 'Manage linked Jira issues or connect additional tickets to this incident.'
+                    : 'View Jira issues previously linked to this incident.'
+                  : 'Create a new issue from this incident or link an existing Jira issue key.'}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            {jiraError && (
-              <div className="p-2.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5 font-medium">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{jiraError}</span>
-              </div>
-            )}
-
-            {/* Existing Linked Issues */}
-            {jiraLinks.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  Linked Issues ({jiraLinks.length})
+            <div className="space-y-4 py-2">
+              {jiraError && (
+                <div className="p-2.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5 font-medium">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{jiraError}</span>
                 </div>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {jiraLinks.map(link => (
-                    <div
-                      key={link.id}
-                      className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 bg-slate-50/70 dark:bg-slate-800/40 dark:border-slate-800 text-xs"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <a
-                          href={link.externalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-semibold text-blue-600 hover:underline inline-flex items-center gap-1"
-                        >
-                          <span>{link.externalKey}</span>
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                        {link.externalStatus && (
-                          <span
-                            className={cn(
-                              'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border',
-                              jiraStatusBadgeStyle(link.externalStatus)
-                            )}
+              )}
+
+              {jiraLinks.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Linked Issues ({jiraLinks.length})
+                  </div>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {jiraLinks.map(link => (
+                      <div
+                        key={link.id}
+                        className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 bg-slate-50/70 dark:bg-slate-800/40 dark:border-slate-800 text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <a
+                            href={link.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold text-blue-600 hover:underline inline-flex items-center gap-1"
                           >
-                            {link.externalStatus}
-                          </span>
-                        )}
-                        {link.externalAssignee && (
-                          <span className="text-slate-500 text-[11px] truncate max-w-[120px]">
-                            {link.externalAssignee}
-                          </span>
+                            <span>{link.externalKey}</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                          {link.externalStatus && (
+                            <span
+                              className={cn(
+                                'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase border',
+                                jiraStatusBadgeStyle(link.externalStatus)
+                              )}
+                            >
+                              {link.externalStatus}
+                            </span>
+                          )}
+                          {link.externalAssignee && (
+                            <span className="text-slate-500 text-[11px] truncate max-w-[120px]">
+                              {link.externalAssignee}
+                            </span>
+                          )}
+                        </div>
+                        {(jiraCapability.canSync || jiraCapability.canUnlink) && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {jiraCapability.canSync && (
+                              <button
+                                type="button"
+                                onClick={() => handleSyncJira(link.id)}
+                                disabled={isJiraPending || syncingLinkId === link.id}
+                                title="Sync Jira Issue"
+                                className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                              >
+                                <RefreshCw
+                                  className={cn(
+                                    'h-3.5 w-3.5',
+                                    syncingLinkId === link.id && 'animate-spin text-blue-600'
+                                  )}
+                                />
+                              </button>
+                            )}
+                            {jiraCapability.canUnlink && (
+                              <button
+                                type="button"
+                                onClick={() => handleUnlinkJira(link.id)}
+                                disabled={isJiraPending || unlinkingLinkId === link.id}
+                                title="Unlink Jira Issue"
+                                className="p-1 rounded text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                {unlinkingLinkId === link.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
+                                ) : (
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
-                      {canManage && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleSyncJira(link.id)}
-                            disabled={isJiraPending || syncingLinkId === link.id}
-                            title="Sync Jira Issue"
-                            className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                          >
-                            <RefreshCw
-                              className={cn(
-                                'h-3.5 w-3.5',
-                                syncingLinkId === link.id && 'animate-spin text-blue-600'
-                              )}
-                            />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleUnlinkJira(link.id)}
-                            disabled={isJiraPending || unlinkingLinkId === link.id}
-                            title="Unlink Jira Issue"
-                            className="p-1 rounded text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                          >
-                            {unlinkingLinkId === link.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin text-rose-600" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Option 1: Create New Issue */}
-            <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-800/20 space-y-2">
-              <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                Create new issue in project
-              </div>
-              <p className="text-xs text-slate-500">
-                Automatically creates a Jira issue with this incident&apos;s title and description.
-              </p>
-              {jira?.serviceMapped ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleCreateJira}
-                  disabled={isJiraPending}
-                  className="w-full h-9 gap-2 text-xs font-semibold"
-                >
-                  {isJiraPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Plus className="h-3.5 w-3.5" />
-                  )}
-                  <span>Create Jira Issue</span>
-                </Button>
-              ) : (
+              {jiraCapability.canCreate ? (
+                <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-800/20 space-y-2">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Create new issue in project
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Automatically creates a Jira issue with this incident&apos;s title and description.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleCreateJira}
+                    disabled={isJiraPending}
+                    className="w-full h-9 gap-2 text-xs font-semibold"
+                  >
+                    {isJiraPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}
+                    <span>Create Jira Issue</span>
+                  </Button>
+                </div>
+              ) : hasOperationalJira && !serviceMapped ? (
                 <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/50">
                   <span>Service needs a Jira project mapping. </span>
                   <Link
@@ -955,51 +917,55 @@ export default function IncidentCommandBar({
                     Configure Service Mapping
                   </Link>
                 </div>
+              ) : null}
+
+              {jiraCapability.canLink && (
+                <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-800/20 space-y-2">
+                  <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Or link an existing issue key
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={jiraLinkKey}
+                      onChange={event => setJiraLinkKey(event.target.value)}
+                      placeholder="e.g. PROJ-123"
+                      className="h-9 text-xs font-mono"
+                      disabled={isJiraPending}
+                      onKeyDown={event => event.key === 'Enter' && handleLinkJira()}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleLinkJira}
+                      disabled={isJiraPending || !jiraLinkKey.trim()}
+                      className="h-9 text-xs font-semibold shrink-0 px-3"
+                    >
+                      {isJiraPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        'Link'
+                      )}
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
 
-            {/* Option 2: Link Existing Key */}
-            <div className="p-3 rounded-lg border bg-slate-50/50 dark:bg-slate-800/20 space-y-2">
-              <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                Or link an existing issue key
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  value={jiraLinkKey}
-                  onChange={e => setJiraLinkKey(e.target.value)}
-                  placeholder="e.g. PROJ-123"
-                  className="h-9 text-xs font-mono"
-                  disabled={isJiraPending}
-                  onKeyDown={e => e.key === 'Enter' && handleLinkJira()}
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleLinkJira}
-                  disabled={isJiraPending || !jiraLinkKey.trim()}
-                  className="h-9 text-xs font-semibold shrink-0 px-3"
-                >
-                  {isJiraPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link'}
-                </Button>
-              </div>
-            </div>
-          </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowJiraDialog(false)}
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowJiraDialog(false)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Snooze duration dialog */}
       {showSnoozeDialog && (
         <SnoozeDurationDialog
           incidentId={incidentId}
@@ -1008,7 +974,6 @@ export default function IncidentCommandBar({
         />
       )}
 
-      {/* Resolve Incident modal with mandatory note */}
       <ResolveIncidentModal
         incident={resolvingIncident}
         open={showResolveModal}

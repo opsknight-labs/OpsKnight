@@ -7,10 +7,7 @@ import type {
   PublicStatusService,
 } from '@/lib/status-pages/public-contract';
 import { buildPublicHistoryDays } from '@/lib/status-pages/history-presentation';
-import {
-  getWorstPublicStatus,
-  statusPresentation,
-} from '@/lib/status-pages/status-presentation';
+import { getWorstPublicStatus, statusPresentation } from '@/lib/status-pages/status-presentation';
 import {
   describeUptimeWindow,
   groupServicesByRegion,
@@ -242,12 +239,8 @@ const ServiceCard = memo(function ServiceCard({
         <div>
           <h3 className="status-service__name">{service.name}</h3>
           <div className="status-service__meta">
-            {service.team && (
-              <span className="status-tag">Owned by {service.team.name}</span>
-            )}
-            {service.slaTier && (
-              <span className="status-tag">Service tier: {service.slaTier}</span>
-            )}
+            {service.team && <span className="status-tag">Owned by {service.team.name}</span>}
+            {service.slaTier && <span className="status-tag">Service tier: {service.slaTier}</span>}
             {service.regions?.length ? (
               <span className="status-tag">{service.regions.join(' · ')}</span>
             ) : null}
@@ -258,9 +251,7 @@ const ServiceCard = memo(function ServiceCard({
         </span>
       </div>
 
-      {service.description && (
-        <p className="status-service__description">{service.description}</p>
-      )}
+      {service.description && <p className="status-service__description">{service.description}</p>}
 
       <div className="status-service__facts">
         {service.uptime && (
@@ -410,7 +401,10 @@ function DayInspector({ day, tooltipId }: { day: PublicStatusHistoryDay; tooltip
           </div>
           <div className="status-legend">
             {HISTORY_LEGEND.map(entry => (
-              <span key={entry.status} className={`status-${statusPresentation(entry.status).token}`}>
+              <span
+                key={entry.status}
+                className={`status-${statusPresentation(entry.status).token}`}
+              >
                 <i aria-hidden="true" />
                 {entry.label}
               </span>

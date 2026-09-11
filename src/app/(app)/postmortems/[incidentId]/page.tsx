@@ -13,6 +13,8 @@ import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { getJiraCapabilities } from '@/lib/jira-capabilities';
+import { serializeJiraIssueReference } from '@/lib/jira-references';
 
 export default async function PostmortemPage({
   params,
@@ -36,10 +38,42 @@ export default async function PostmortemPage({
     getCurrentAuthorizationActor(),
   ]);
   const canEdit = permissions.isResponderOrAbove;
-  // All users can view published postmortems, but only responders+ can edit
   const canView = postmortem ? postmortem.status === 'PUBLISHED' || canEdit : canEdit;
 
-  // Get users for action items assignment
+  // Resolve the incident once through the authorization boundary. Jira links
+  // owned by the incident are inherited as read-only context by the postmortem
+  // and its action items; they are not duplicated into ActionItem link rows.
+  const incidentContext = await prisma.incident.findFirst({
+    where: { AND: [incidentReadWhere(actor), { id: incidentId }] },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      serviceId: true,
+      externalIssueLinks: {
+        where: { provider: 'JIRA' },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          provider: true,
+          externalKey: true,
+          externalUrl: true,
+          externalStatus: true,
+          externalAssignee: true,
+          syncState: true,
+        },
+      },
+    },
+  });
+
+  if (!incidentContext) notFound();
+
+  const incidentJiraIssues = incidentContext.externalIssueLinks.map(serializeJiraIssueReference);
+  const jiraCapability = await getJiraCapabilities({
+    serviceId: incidentContext.serviceId,
+    canManage: canEdit,
+  });
+
   const users = await prisma.user.findMany({
     where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
     select: { id: true, name: true, email: true },
@@ -47,18 +81,7 @@ export default async function PostmortemPage({
   });
 
   if (!postmortem) {
-    // Check if incident exists and is resolved
-    const prisma = (await import('@/lib/prisma')).default;
-    const incident = await prisma.incident.findFirst({
-      where: { AND: [incidentReadWhere(actor), { id: incidentId }] },
-      select: { id: true, title: true, status: true },
-    });
-
-    if (!incident) {
-      notFound();
-    }
-
-    if (incident.status !== 'RESOLVED') {
+    if (incidentContext.status !== 'RESOLVED') {
       return (
         <div className="p-6">
           <Card className="text-center">
@@ -76,7 +99,6 @@ export default async function PostmortemPage({
       );
     }
 
-    // Show create form for new postmortem
     return (
       <div className="p-6">
         <div className="mb-6">
@@ -88,11 +110,16 @@ export default async function PostmortemPage({
             Back to Postmortems
           </Link>
           <h1 className="text-2xl font-bold mt-2">Create Postmortem</h1>
-          <p className="text-muted-foreground">For incident: {incident.title}</p>
+          <p className="text-muted-foreground">For incident: {incidentContext.title}</p>
         </div>
 
         {canEdit ? (
-          <PostmortemForm incidentId={incidentId} users={users} />
+          <PostmortemForm
+            incidentId={incidentId}
+            users={users}
+            jiraCapability={jiraCapability}
+            incidentJiraIssues={incidentJiraIssues}
+          />
         ) : (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -105,7 +132,6 @@ export default async function PostmortemPage({
     );
   }
 
-  // Show existing postmortem
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -130,13 +156,21 @@ export default async function PostmortemPage({
 
       {canView ? (
         editMode && canEdit ? (
-          <PostmortemForm incidentId={incidentId} initialData={postmortem} users={users} />
+          <PostmortemForm
+            incidentId={incidentId}
+            initialData={postmortem}
+            users={users}
+            jiraCapability={jiraCapability}
+            incidentJiraIssues={incidentJiraIssues}
+          />
         ) : (
           <PostmortemDetailView
             postmortem={postmortem}
             users={users}
             canEdit={canEdit}
             incidentId={incidentId}
+            jiraCapability={jiraCapability}
+            incidentJiraIssues={incidentJiraIssues}
           />
         )
       ) : (

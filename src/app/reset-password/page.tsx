@@ -1,89 +1,60 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Spinner from '@/components/ui/Spinner';
-import { Eye, EyeOff, Lock, AlertTriangle, CheckCircle2, ShieldCheck, X } from 'lucide-react';
+import { useState } from 'react';
+import Link from 'next/link';
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Lock, ShieldCheck, X } from 'lucide-react';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
-import { cn } from '@/lib/utils';
-import { calculatePasswordStrength } from '@/lib/password-strength';
+import AuthBrand from '@/components/auth/AuthBrand';
+import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
+import { useCapabilityToken } from '@/components/auth/useCapabilityToken';
+import Spinner from '@/components/ui/Spinner';
+import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
 
 function ResetPasswordForm() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const token = searchParams.get('token');
-
+  const { token, ready: tokenReady, clearToken } = useCapabilityToken();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const passwordsMatch = Object.is(password, confirmPassword);
 
-  // Password strength using centralized utility
-  const passwordStrength = calculatePasswordStrength(password);
-  const isStrong = passwordStrength.meetsMinimum && passwordStrength.score >= 4;
-
-  if (!token) {
+  if (!tokenReady) return <div className="flex justify-center p-8"><Spinner /></div>;
+  if (!token && !success) {
     return (
-      <div className="p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-200 text-sm flex items-start gap-3">
-        <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500 mt-0.5" />
-        <div className="flex-1">
-          <p className="font-semibold text-rose-400 mb-1">Invalid Token</p>
-          <p className="text-white/70">
-            Invalid or missing reset token. Please request a new link.
-          </p>
-        </div>
+      <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm dark:border-red-500/20 dark:bg-red-500/10">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+        <div><p className="font-medium text-red-700 dark:text-red-300">Invalid reset link</p><p className="mt-1 text-xs text-red-600 dark:text-red-300/80">Request a new password reset link and try again.</p></div>
       </div>
     );
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (!isStrong) {
-      setError('Please create a stronger password');
-      return;
-    }
-
+    if (!token) return setError('Invalid or expired reset link.');
+    if (!passwordsMatch) return setError('Passwords do not match.');
+    if (!isPasswordStrong(password)) return setError('Password does not meet the security requirements.');
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({ token, password }),
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || 'Failed to reset password');
-      } else {
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) setError(data.error || 'Unable to reset password.');
+      else {
+        clearToken();
+        setPassword('');
+        setConfirmPassword('');
         setSuccess(true);
-
-        // Clear all NextAuth session cookies to prevent token version mismatch
-        // This ensures no stale session interferes with fresh login
-        document.cookie = 'next-auth.session-token=; Max-Age=0; path=/; SameSite=Lax';
-        document.cookie =
-          '__Secure-next-auth.session-token=; Max-Age=0; path=/; Secure; SameSite=Lax';
-        document.cookie = 'next-auth.csrf-token=; Max-Age=0; path=/; SameSite=Lax';
-        document.cookie = '__Host-next-auth.csrf-token=; Max-Age=0; path=/; Secure; SameSite=Lax';
-
-        // Redirect after success
-        setTimeout(() => {
-          router.push('/login?password=1');
-        }, 2000);
       }
-    } catch (_err) {
-      setError('An unexpected error occurred');
+    } catch {
+      setError('Unable to reset password. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -91,21 +62,13 @@ function ResetPasswordForm() {
 
   if (success) {
     return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="p-6 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col items-center text-center gap-4">
-          <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
-          <div>
-            <h3 className="text-lg font-bold text-emerald-400">Password Reset!</h3>
-            <p className="mt-2 text-sm text-emerald-200/80">
-              Your password has been successfully updated. Secure session initialized.
-            </p>
-          </div>
+      <div className="space-y-4" role="status" aria-live="polite">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
+          <ShieldCheck className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+          <h3 className="mt-3 font-['Space_Grotesk',sans-serif] font-semibold text-emerald-800 dark:text-emerald-300">Password updated</h3>
+          <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">All previously issued sessions have been revoked.</p>
         </div>
-        <div className="text-center text-xs text-white/40 animate-pulse">
-          Redirecting to login...
-        </div>
+        <Link href="/login?passwordReset=1" className="flex w-full items-center justify-center rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2">Continue to sign in</Link>
       </div>
     );
   }
@@ -113,155 +76,31 @@ function ResetPasswordForm() {
   return (
     <>
       {error && (
-        <div className="mb-6 p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-200 text-sm flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-          <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500 mt-0.5" />
-          <div className="flex-1">
-            <p className="font-semibold text-rose-400 mb-1">Reset Failed</p>
-            <p className="text-white/70">{error}</p>
-          </div>
-          <button
-            onClick={() => setError('')}
-            className="text-white/40 hover:text-white transition"
-            aria-label="Dismiss error"
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <div role="alert" aria-live="assertive" className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-500/20 dark:bg-red-500/10">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" /><p className="flex-1 text-red-700 dark:text-red-300">{error}</p><button type="button" onClick={() => setError('')} aria-label="Dismiss error" className="rounded text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"><X className="h-4 w-4" /></button>
         </div>
       )}
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-5">
-          {/* New Password */}
-          <div className="group space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-white/60 transition-colors duration-300 group-focus-within:text-white/80">
-              New Password
-            </label>
-            <div className="relative group/input">
-              <div className="absolute inset-0 bg-white/5 rounded-xl transition duration-300 group-hover/input:bg-white/10" />
-              <div className="absolute inset-[1px] bg-[#0a0a0a] rounded-[11px]" />
-
-              <div className="relative flex items-center pr-3 group-focus-within:border-white/30 group-focus-within:bg-white/5 rounded-xl border border-white/10 transition-all duration-300">
-                <div className="flex items-center justify-center pl-4 pr-3 py-3.5 border-r border-white/10">
-                  <Lock className="h-5 w-5 text-white/40 transition-colors group-focus-within/input:text-white/70" />
-                </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={e => {
-                    setPassword(e.target.value);
-                    if (error) setError('');
-                  }}
-                  className="w-full bg-transparent px-4 py-3 text-white placeholder:text-white/20 focus:outline-none transition-colors"
-                  placeholder="New strong password"
-                  autoComplete="new-password"
-                  disabled={isSubmitting}
-                />
-                <div className="flex items-center border-l border-white/10 pl-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-white/30 hover:text-white/80 transition-colors focus:outline-none p-1 rounded-md"
-                    aria-label="Toggle password visibility"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Strength Indicator */}
-            {password && (
-              <div className="space-y-1 pt-1 duration-200 animate-in fade-in slide-in-from-top-1">
-                <div className="flex gap-1 h-1 w-full overflow-hidden rounded-full bg-white/5">
-                  {[1, 2, 3, 4, 5].map(level => (
-                    <div
-                      key={level}
-                      className={cn(
-                        'h-full flex-1 transition-all duration-500',
-                        level <= (passwordStrength.score + 1) * 1.25
-                          ? passwordStrength.color
-                          : 'bg-transparent'
-                      )}
-                    />
-                  ))}
-                </div>
-                <p className={cn('text-[10px] font-medium text-right', passwordStrength.textColor)}>
-                  Strength: {passwordStrength.label}
-                </p>
-              </div>
-            )}
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="space-y-1.5">
+          <label htmlFor="password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">New password</label>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
+            <Lock className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+            <input id="password" type={showPassword ? 'text' : 'password'} required value={password} maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS} onChange={e => { setPassword(e.target.value); setError(''); }} autoComplete="new-password" disabled={isSubmitting} className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white" autoFocus />
+            <button type="button" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'} className="mr-3 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:hover:text-slate-300 dark:focus-visible:ring-white">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
           </div>
-
-          {/* Confirm Password */}
-          <div className="group space-y-2">
-            <label className="text-xs font-bold uppercase tracking-wider text-white/60 transition-colors duration-300 group-focus-within:text-white/80">
-              Confirm Password
-            </label>
-            <div className="relative group/input">
-              <div className="absolute inset-0 bg-white/5 rounded-xl transition duration-300 group-hover/input:bg-white/10" />
-              <div className="absolute inset-[1px] bg-[#0a0a0a] rounded-[11px]" />
-
-              <div className="relative flex items-center pr-3 group-focus-within:border-white/30 group-focus-within:bg-white/5 rounded-xl border border-white/10 transition-all duration-300">
-                <div className="flex items-center justify-center pl-4 pr-3 py-3.5 border-r border-white/10">
-                  <Lock className="h-5 w-5 text-white/40 transition-colors group-focus-within/input:text-white/70" />
-                </div>
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  required
-                  value={confirmPassword}
-                  onChange={e => {
-                    setConfirmPassword(e.target.value);
-                    if (error) setError('');
-                  }}
-                  className="w-full bg-transparent px-4 py-3 text-white placeholder:text-white/20 focus:outline-none transition-colors"
-                  placeholder="Confirm new password"
-                  autoComplete="new-password"
-                  disabled={isSubmitting}
-                />
-                <div className="flex items-center border-l border-white/10 pl-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="text-white/30 hover:text-white/80 transition-colors focus:outline-none p-1 rounded-md"
-                    aria-label="Toggle password visibility"
-                  >
-                    {showConfirmPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-            {confirmPassword && password !== confirmPassword && (
-              <p className="text-[10px] text-rose-400 font-medium pl-1 animate-in slide-in-from-top-1 flex items-center gap-1">
-                <X className="h-3 w-3" /> Passwords do not match
-              </p>
-            )}
-          </div>
+          <PasswordStrengthMeter password={password} />
+          <p className="text-[11px] text-slate-400">Additional account-specific password checks are enforced securely on submit.</p>
         </div>
-
-        <button
-          type="submit"
-          disabled={isSubmitting || !isStrong || password !== confirmPassword}
-          className="relative w-full overflow-hidden rounded-lg py-3.5 text-sm font-bold shadow-lg transition-all duration-300 bg-white text-black hover:bg-white/95 hover:scale-[1.02] hover:shadow-[0_0_25px_rgba(255,255,255,0.3)] focus:outline-none focus:ring-2 focus:ring-cyan-400/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
-        >
-          <span className="relative z-10 flex items-center justify-center gap-2 uppercase tracking-wide">
-            {isSubmitting ? (
-              <>
-                <Spinner size="sm" variant="black" />
-                <span>Updating...</span>
-              </>
-            ) : (
-              <>
-                <span>Set New Password</span>
-                <ShieldCheck className="h-4 w-4" />
-              </>
-            )}
-          </span>
-        </button>
+        <div className="space-y-1.5">
+          <label htmlFor="confirm-password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">Confirm password</label>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
+            <Lock className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+            <input id="confirm-password" type={showConfirmPassword ? 'text' : 'password'} required value={confirmPassword} maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS} onChange={e => { setConfirmPassword(e.target.value); setError(''); }} autoComplete="new-password" disabled={isSubmitting} className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white" />
+            <button type="button" onClick={() => setShowConfirmPassword(value => !value)} aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'} className="mr-3 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:hover:text-slate-300 dark:focus-visible:ring-white">{showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button>
+          </div>
+          {confirmPassword && <p className={`flex items-center gap-1 text-xs ${passwordsMatch ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>{passwordsMatch ? <CheckCircle2 className="h-3 w-3" /> : <X className="h-3 w-3" />}{passwordsMatch ? 'Passwords match' : 'Passwords do not match'}</p>}
+        </div>
+        <button type="submit" disabled={isSubmitting || !isPasswordStrong(password) || !passwordsMatch} className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2">{isSubmitting ? <><Spinner size="sm" variant="current" /> Updating…</> : <><ShieldCheck className="h-4 w-4" /> Set new password</>}</button>
       </form>
     </>
   );
@@ -271,28 +110,8 @@ export default function ResetPasswordPage() {
   return (
     <AuthLayout>
       <AuthCard>
-        {/* Card Header */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-extrabold tracking-tight text-white tracking-tight flex items-center gap-3">
-            <span className="flex items-center gap-3">
-              <span className="w-1.5 h-6 bg-white/20 rounded-full" />
-              Reset Password
-            </span>
-          </h2>
-          <p className="mt-2 text-sm text-white/50 pl-0.5">
-            Secure your account with a strong password.
-          </p>
-        </div>
-
-        <Suspense
-          fallback={
-            <div className="flex justify-center p-8">
-              <Spinner variant="white" />
-            </div>
-          }
-        >
-          <ResetPasswordForm />
-        </Suspense>
+        <div className="mb-8 text-center"><AuthBrand className="mb-6" /><h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">Reset password</h1><p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Secure your account with a new passphrase.</p></div>
+        <ResetPasswordForm />
       </AuthCard>
     </AuthLayout>
   );

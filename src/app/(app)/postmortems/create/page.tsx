@@ -10,6 +10,8 @@ import { Card, CardContent } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { getJiraCapabilities } from '@/lib/jira-capabilities';
+import { serializeJiraIssueReference } from '@/lib/jira-references';
 
 export default async function CreatePostmortemPage() {
   const session = await getServerSession(await getAuthOptions());
@@ -34,8 +36,7 @@ export default async function CreatePostmortemPage() {
     );
   }
 
-  // Get all resolved incidents without postmortems
-  const resolvedIncidents = await prisma.incident.findMany({
+  const resolvedIncidentRows = await prisma.incident.findMany({
     where: {
       AND: [incidentReadWhere(actor), { status: 'RESOLVED', postmortem: null }],
     },
@@ -45,16 +46,44 @@ export default async function CreatePostmortemPage() {
           name: true,
         },
       },
+      externalIssueLinks: {
+        where: { provider: 'JIRA' },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          provider: true,
+          externalKey: true,
+          externalUrl: true,
+          externalStatus: true,
+          externalAssignee: true,
+          syncState: true,
+        },
+      },
     },
     orderBy: { resolvedAt: 'desc' },
     take: 100,
   });
 
-  // Get users for action items assignment
+  const resolvedIncidents = resolvedIncidentRows.map(incident => ({
+    id: incident.id,
+    title: incident.title,
+    resolvedAt: incident.resolvedAt,
+    service: incident.service,
+    jiraIssues: incident.externalIssueLinks.map(serializeJiraIssueReference),
+  }));
+
   const users = await prisma.user.findMany({
     where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
     select: { id: true, name: true, email: true },
     orderBy: { name: 'asc' },
+  });
+
+  // No incident has been selected/persisted yet, so action-item Jira mutations
+  // deliberately stay non-operational. Incident Jira references are still
+  // inherited read-only as soon as the user selects an incident above.
+  const jiraCapability = await getJiraCapabilities({
+    serviceId: null,
+    canManage: canCreate,
   });
 
   return (
@@ -87,7 +116,12 @@ export default async function CreatePostmortemPage() {
           </CardContent>
         </Card>
       ) : (
-        <PostmortemForm incidentId="" users={users} resolvedIncidents={resolvedIncidents} />
+        <PostmortemForm
+          incidentId=""
+          users={users}
+          resolvedIncidents={resolvedIncidents}
+          jiraCapability={jiraCapability}
+        />
       )}
     </div>
   );

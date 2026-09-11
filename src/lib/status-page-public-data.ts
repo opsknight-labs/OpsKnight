@@ -4,6 +4,8 @@ import type {
   PublicIncidentUpdateType,
   PublicIncidentUrgency,
 } from '@/lib/status-pages/public-contract';
+import { publicStatusIncidentEventId } from '@/lib/status-pages/public-event-id';
+import { publicStatusForIncidentUrgency } from '@/lib/status-pages/status-presentation';
 
 export type StatusPagePublicSettings = {
   showServices: boolean;
@@ -57,7 +59,13 @@ type PublicIncidentInput = {
   resolvedAt: string | Date | null;
   acknowledgedAt?: string | Date | null;
   service?: { id?: string; name?: string; region?: string | null } | null;
-  postmortem?: { status?: string; isPublic?: boolean | null } | null;
+  postmortem?: {
+    status?: string;
+    isPublic?: boolean | null;
+    publishedAt?: string | Date | null;
+    title?: string | null;
+    summary?: string | null;
+  } | null;
   events?: Array<{
     id: string;
     type?: string | null;
@@ -74,10 +82,14 @@ function serializeDate(value: string | Date | null | undefined): string | undefi
 /** Shape every public endpoint from the same status-page visibility controls. */
 export function serializePublicStatusIncident(
   incident: PublicIncidentInput,
-  settings: StatusPagePublicSettings
+  settings: StatusPagePublicSettings,
+  context?: { pageId: string }
 ): PublicIncident {
   const visibility = publicStatusVisibility(settings);
   const result: PublicIncident = { status: incident.status as PublicIncidentStatus };
+  if (context?.pageId) {
+    result.publicEventId = publicStatusIncidentEventId(context.pageId, incident.id);
+  }
 
   if (visibility.showIncidentId) result.id = incident.id;
   if (visibility.showIncidentTitle) result.title = incident.title;
@@ -86,6 +98,8 @@ export function serializePublicStatusIncident(
   }
   if (visibility.showIncidentUrgency && incident.urgency) {
     result.urgency = incident.urgency as PublicIncidentUrgency;
+    const impact = publicStatusForIncidentUrgency(incident.urgency);
+    if (impact !== 'OPERATIONAL' && impact !== 'MAINTENANCE') result.publicImpact = impact;
   }
   if (visibility.showIncidentTimestamp) {
     result.createdAt = serializeDate(incident.createdAt);
@@ -99,15 +113,16 @@ export function serializePublicStatusIncident(
       ...(incident.service.id ? { id: incident.service.id } : {}),
       ...(incident.service.name ? { name: incident.service.name } : {}),
       ...(visibility.showServiceRegion && incident.service.region
-        ? { regions: incident.service.region.split(',').map(value => value.trim()).filter(Boolean) }
+        ? {
+            regions: incident.service.region
+              .split(',')
+              .map(value => value.trim())
+              .filter(Boolean),
+          }
         : {}),
     };
   }
-  if (
-    visibility.showIncidentId &&
-    visibility.showIncidentDescription &&
-    incident.events?.length
-  ) {
+  if (visibility.showIncidentId && visibility.showIncidentDescription && incident.events?.length) {
     result.updates = incident.events.map(event => ({
       id: event.id,
       type: publicUpdateType(event.type),
@@ -122,16 +137,33 @@ export function serializePublicStatusIncident(
     incident.postmortem.isPublic !== false
   ) {
     result.postIncidentReview = true;
+    if (visibility.showIncidentId && incident.id) {
+      const publishedAt = serializeDate(incident.postmortem.publishedAt);
+      result.postmortem = {
+        available: true,
+        id: incident.id,
+        ...(publishedAt ? { publishedAt } : {}),
+        ...(incident.postmortem.title ? { title: incident.postmortem.title } : {}),
+        ...(incident.postmortem.summary ? { summary: incident.postmortem.summary } : {}),
+      };
+    }
   }
 
   return result;
 }
 
 function publicUpdateType(type: string | null | undefined): PublicIncidentUpdateType {
-  if (type === 'ACKNOWLEDGED') return 'ACKNOWLEDGED';
-  if (type === 'RESOLVED' || type === 'AUTO_RESOLVED' || type === 'MANUAL_RESOLVED') {
-    return 'RESOLVED';
+  if (
+    type === 'INVESTIGATING' ||
+    type === 'IDENTIFIED' ||
+    type === 'MONITORING' ||
+    type === 'ACKNOWLEDGED' ||
+    type === 'RESOLVED' ||
+    type === 'UPDATE'
+  ) {
+    return type;
   }
+  if (type === 'AUTO_RESOLVED' || type === 'MANUAL_RESOLVED') return 'RESOLVED';
   return 'UPDATE';
 }
 
@@ -141,9 +173,13 @@ function publicUpdateType(type: string | null | undefined): PublicIncidentUpdate
  */
 export function serializePublicStatusApiIncident(
   incident: PublicIncidentInput,
-  settings: StatusPagePublicSettings
+  settings: StatusPagePublicSettings,
+  context?: { pageId: string }
 ): Record<string, unknown> {
-  const result = { ...serializePublicStatusIncident(incident, settings) } as Record<string, unknown>;
+  const result = { ...serializePublicStatusIncident(incident, settings, context) } as Record<
+    string,
+    unknown
+  >;
   const service = result.service;
   if (!service || typeof service !== 'object' || Array.isArray(service)) return result;
 

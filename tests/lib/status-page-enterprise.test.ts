@@ -137,9 +137,9 @@ describe('enterprise status-page contracts', () => {
         legacyThemeKey: 'preserved',
       }).success
     ).toBe(true);
-    expect(StatusPageBrandingSchema.safeParse({ primaryColor: 'expression(alert(1))' }).success).toBe(
-      false
-    );
+    expect(
+      StatusPageBrandingSchema.safeParse({ primaryColor: 'expression(alert(1))' }).success
+    ).toBe(false);
     expect(StatusPageBrandingSchema.safeParse({ logoUrl: 'javascript:alert(1)' }).success).toBe(
       false
     );
@@ -163,6 +163,23 @@ describe('enterprise status-page contracts', () => {
     expect(projectServiceStatus('service-a', 'CRITICAL', maintenance)).toBe('CRITICAL');
     expect(projectOverallStatus(true, true, maintenance)).toBe('outage');
     expect(projectOverallStatus(false, false, maintenance)).toBe('maintenance');
+  });
+
+  it('treats maintenance with no affected services as page-wide', () => {
+    const maintenance = activeMaintenanceServiceIds(
+      [
+        {
+          type: 'MAINTENANCE',
+          isActive: true,
+          startDate: '2026-09-06T10:00:00Z',
+          endDate: '2026-09-06T12:00:00Z',
+          affectedServiceIds: [],
+        },
+      ],
+      new Date('2026-09-06T11:00:00Z'),
+      ['service-a', 'service-b']
+    );
+    expect(maintenance).toEqual(new Set(['service-a', 'service-b']));
   });
 
   it('ignores maintenance that references services hidden or removed from the page', () => {

@@ -59,6 +59,12 @@ export default function JiraServiceMappingSettings({
     error: null,
     success: false,
   });
+
+  // Product contract: unavailable integrations do not leak operational/configuration
+  // surfaces into normal service settings. The workspace integration page is the
+  // single place to connect or re-enable Jira.
+  if (!jiraEnabled) return null;
+
   const selectedAutoCreateUrgencies =
     mapping && mapping.autoCreateIncidentUrgencies.length > 0
       ? mapping.autoCreateIncidentUrgencies
@@ -79,22 +85,12 @@ export default function JiraServiceMappingSettings({
               Route this service&apos;s incidents and follow-up work to the right Jira project.
             </CardDescription>
           </div>
-          <Badge variant={jiraEnabled ? 'default' : 'secondary'}>
-            {jiraEnabled ? 'Workspace connected' : 'Workspace not connected'}
-          </Badge>
+          <Badge variant="default">Workspace connected</Badge>
         </div>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="serviceId" value={serviceId} />
-          {!jiraEnabled && (
-            <Alert className="border-amber-200 bg-amber-50 text-amber-900">
-              <AlertDescription>
-                You can save this service mapping now. Auto-created Jira issues will start after the
-                workspace Jira integration is connected and enabled.
-              </AlertDescription>
-            </Alert>
-          )}
           {state?.error && (
             <Alert variant="destructive">
               <XCircle className="h-4 w-4" />

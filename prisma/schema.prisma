@@ -1610,18 +1610,23 @@ model StatusPageRouteOperation {
 
 // Derived, sanitized publication data. A revision fences concurrent rebuilds.
 model StatusPageSnapshot {
-  statusPageId      String     @id
-  revision          BigInt     @default(0)
-  publishedRevision BigInt     @default(-1)
+  statusPageId        String     @id
+  revision            BigInt     @default(0)
+  publishedRevision   BigInt     @default(-1)
   // Why the current payload may or may not be served. FAIL_CLOSED is the safe default so an
   // unclassified invalidation never republishes a retracted disclosure.
-  servingState      String     @default("FAIL_CLOSED")
-  generatedAt       DateTime?
-  payload           Json?
-  lastError         String?
-  statusPage        StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  servingState        String     @default("FAIL_CLOSED")
+  generatedAt         DateTime?
+  payload             Json?
+  lastError           String?
+  // A short control-plane lease prevents duplicate builds without holding a transaction open
+  // while the bounded read phase calculates a large public projection.
+  buildLeaseToken     String?
+  buildLeaseExpiresAt DateTime?
+  statusPage          StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
 
   @@index([generatedAt])
+  @@index([buildLeaseExpiresAt])
 }
 
 // Logos are kept out of the frequently read configuration JSON.

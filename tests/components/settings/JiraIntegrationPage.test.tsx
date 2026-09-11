@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import JiraIntegrationPage from '@/components/settings/JiraIntegrationPage';
 
 vi.mock('next/navigation', () => ({
@@ -27,8 +27,12 @@ describe('JiraIntegrationPage Component', () => {
     vi.clearAllMocks();
   });
 
-  it('renders all three modern cards and fields properly', () => {
+  it('renders workspace lifecycle plus the three configuration cards', () => {
     render(<JiraIntegrationPage config={mockConfig} isAdmin={true} />);
+
+    expect(screen.getByText('Jira Workspace')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Enable Jira integration/i })).toBeChecked();
+    expect(screen.getByRole('button', { name: /Remove Jira Workspace/i })).toBeInTheDocument();
 
     // Card 1: Workspace Credentials
     expect(screen.getByText('Workspace Credentials')).toBeInTheDocument();
@@ -56,5 +60,28 @@ describe('JiraIntegrationPage Component', () => {
 
     expect(screen.getByDisplayValue('https://acme.atlassian.net')).toBeInTheDocument();
     expect(screen.getByDisplayValue('ops@acme.com')).toBeInTheDocument();
+  });
+
+  it('requires an explicit destructive confirmation before workspace removal', () => {
+    render(<JiraIntegrationPage config={mockConfig} isAdmin={true} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove Jira Workspace/i }));
+
+    const confirmInput = screen.getByLabelText(/Type REMOVE JIRA to confirm/i);
+    const removeButton = screen.getByRole('button', { name: /Permanently Remove Jira/i });
+    expect(removeButton).toBeDisabled();
+
+    fireEvent.change(confirmInput, { target: { value: 'REMOVE JIRA' } });
+    expect(removeButton).toBeEnabled();
+    expect(screen.getByText(/Jira issues in Atlassian are/i)).toBeInTheDocument();
+  });
+
+  it('starts an unconfigured workspace cleanly disabled with no false dirty state', () => {
+    render(<JiraIntegrationPage config={null} isAdmin={true} />);
+
+    expect(screen.getByText('Not Configured')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Enable Jira integration/i })).not.toBeChecked();
+    expect(screen.queryByRole('button', { name: /Remove Jira Workspace/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Save Changes/i })).toBeDisabled();
   });
 });

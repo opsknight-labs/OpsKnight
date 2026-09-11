@@ -9,6 +9,11 @@ import ActionItemsBoard from '@/components/action-items/ActionItemsBoard';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { CheckSquare, Circle, Clock, CheckCircle2, AlertOctagon } from 'lucide-react';
 import { resolveStoredActionItems, type ActionItem } from '@/lib/action-items';
+import { getJiraCapabilitiesByServiceIds } from '@/lib/jira-capabilities';
+import {
+  serializeJiraIssueReference,
+  type JiraIssueReference,
+} from '@/lib/jira-references';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,9 +28,7 @@ export default async function ActionItemsPage({
   }>;
 }) {
   const session = await getServerSession(await getAuthOptions());
-  if (!session) {
-    redirect('/login');
-  }
+  if (!session) redirect('/login');
 
   const params = await searchParams;
   const status = params.status as 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED' | undefined;
@@ -37,23 +40,14 @@ export default async function ActionItemsPage({
     getCurrentAuthorizationActor(),
   ]);
 
-  // Get all postmortems with action items
   const postmortems = await prisma.postmortem.findMany({
     where: {
       AND: [
         postmortemReadWhere(actor),
         {
           OR: [
-            {
-              actionItems: {
-                not: Prisma.JsonNull,
-              },
-            },
-            {
-              actionItemRecords: {
-                some: {},
-              },
-            },
+            { actionItems: { not: Prisma.JsonNull } },
+            { actionItemRecords: { some: {} } },
           ],
         },
       ],
@@ -65,17 +59,27 @@ export default async function ActionItemsPage({
           title: true,
           service: {
             select: {
+              id: true,
               name: true,
+            },
+          },
+          externalIssueLinks: {
+            where: { provider: 'JIRA' },
+            orderBy: { createdAt: 'desc' as const },
+            select: {
+              id: true,
+              provider: true,
+              externalKey: true,
+              externalUrl: true,
+              externalStatus: true,
+              externalAssignee: true,
+              syncState: true,
             },
           },
         },
       },
       createdBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
+        select: { id: true, name: true, email: true },
       },
       actionItemRecords: {
         include: {
@@ -99,14 +103,15 @@ export default async function ActionItemsPage({
     orderBy: { createdAt: 'desc' },
   });
 
-  // Extract and flatten all action items with postmortem context
   const allActionItems: Array<
     ActionItem & {
       postmortemId: string;
       postmortemTitle: string;
       incidentId: string;
       incidentTitle: string;
+      serviceId: string;
       serviceName: string;
+      incidentJiraIssues: JiraIssueReference[];
       createdAt: Date;
     }
   > = [];
@@ -117,6 +122,9 @@ export default async function ActionItemsPage({
       legacy: postmortem.actionItems,
       legacyIdPrefix: `postmortem-${postmortem.id}`,
     });
+    const incidentJiraIssues = postmortem.incident.externalIssueLinks.map(
+      serializeJiraIssueReference
+    );
 
     actionItems.forEach(item => {
       allActionItems.push({
@@ -125,13 +133,14 @@ export default async function ActionItemsPage({
         postmortemTitle: postmortem.title,
         incidentId: postmortem.incidentId,
         incidentTitle: postmortem.incident.title,
+        serviceId: postmortem.incident.service.id,
         serviceName: postmortem.incident.service.name,
+        incidentJiraIssues,
         createdAt: postmortem.createdAt,
       });
     });
   });
 
-  // Single-pass filtering and stats calculation for better performance
   const now = new Date();
   const stats = {
     total: 0,
@@ -146,29 +155,21 @@ export default async function ActionItemsPage({
   const filteredItems: typeof allActionItems = [];
 
   for (const item of allActionItems) {
-    // Calculate stats (always, regardless of filter)
     stats.total++;
     if (item.status === 'OPEN') stats.open++;
     else if (item.status === 'IN_PROGRESS') stats.inProgress++;
     else if (item.status === 'COMPLETED') stats.completed++;
     else if (item.status === 'BLOCKED') stats.blocked++;
 
-    if (item.dueDate && item.status !== 'COMPLETED' && new Date(item.dueDate) < now) {
-      stats.overdue++;
-    }
-    if (item.priority === 'HIGH' && item.status !== 'COMPLETED') {
-      stats.highPriority++;
-    }
+    if (item.dueDate && item.status !== 'COMPLETED' && new Date(item.dueDate) < now) stats.overdue++;
+    if (item.priority === 'HIGH' && item.status !== 'COMPLETED') stats.highPriority++;
 
-    // Apply filters
     if (status && item.status !== status) continue;
     if (owner && item.owner !== owner) continue;
     if (priority && item.priority !== priority) continue;
-
     filteredItems.push(item);
   }
 
-  // Get all users for owner filter
   const users = await prisma.user.findMany({
     where: { AND: [{ status: 'ACTIVE' }, dashboardUserReadWhere(actor)] },
     select: { id: true, name: true, email: true },
@@ -176,10 +177,13 @@ export default async function ActionItemsPage({
   });
 
   const canManage = permissions.isResponderOrAbove;
+  const jiraCapabilitiesByServiceId = await getJiraCapabilitiesByServiceIds(
+    filteredItems.map(item => item.serviceId),
+    canManage
+  );
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 md:py-8">
-      {/* Centralized Hero Header */}
       <DetailHeroBanner
         tag="Postmortem Follow-Up"
         title="Action Items"
@@ -238,17 +242,13 @@ export default async function ActionItemsPage({
         ]}
       />
 
-      {/* Board/List View */}
       <ActionItemsBoard
         actionItems={filteredItems}
         users={users}
         canManage={canManage}
         view={view}
-        filters={{
-          status,
-          owner,
-          priority,
-        }}
+        filters={{ status, owner, priority }}
+        jiraCapabilitiesByServiceId={jiraCapabilitiesByServiceId}
       />
     </div>
   );

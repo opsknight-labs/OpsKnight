@@ -361,6 +361,23 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 2,
   },
   {
+    name: 'opsknight_status_page_snapshot_build_duration_seconds',
+    help: 'Bounded status snapshot candidate build time by publication phase',
+    kind: 'histogram',
+    labels: ['phase'],
+    scope: 'counter',
+    estimatedMaxSeries: 6,
+    buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60],
+  },
+  {
+    name: 'opsknight_status_page_snapshot_bytes',
+    help: 'Serialized bytes in the most recently built public status snapshot',
+    kind: 'gauge',
+    labels: [],
+    scope: 'instance',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_notification_queue_depth',
     help: 'Ready notification queue depth by traffic class, provider and channel',
     kind: 'gauge',

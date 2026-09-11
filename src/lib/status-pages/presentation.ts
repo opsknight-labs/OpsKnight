@@ -2,6 +2,7 @@ import type {
   PublicRegionStatus,
   PublicServiceStatus,
   PublicStatusService,
+  PublicUptimeGrade,
   PublicUptimeWindow,
 } from './public-contract';
 import { STATUS_PRESENTATION, statusPresentation } from './status-presentation';
@@ -36,9 +37,7 @@ export type StatusServiceGroup<T> = {
  * `Global` and `Multi-region` sort last because they are catch-alls; a reader scanning for a
  * specific region should not have to look past them.
  */
-export function groupServicesByRegion<
-  T extends Pick<PublicStatusService, 'regions' | 'status'>,
->(
+export function groupServicesByRegion<T extends Pick<PublicStatusService, 'regions' | 'status'>>(
   services: readonly T[],
   worst: (statuses: readonly PublicServiceStatus[]) => PublicServiceStatus
 ): StatusServiceGroup<T>[] {
@@ -92,6 +91,20 @@ export const UPTIME_TIER_LABEL: Record<UptimeTier, string> = {
   poor: 'Below SLA',
   unknown: 'No SLA data',
 };
+
+/**
+ * Canonical, backend-owned uptime grade for the public contract. Returns undefined when there is
+ * no measurement to grade, so the UI never has to decide what "Excellent" means.
+ */
+export function publicUptimeGrade(
+  percentage: number | null | undefined,
+  thresholds: { excellent: number; good: number }
+): PublicUptimeGrade | undefined {
+  if (percentage === null || percentage === undefined) return undefined;
+  if (percentage >= thresholds.excellent) return 'EXCELLENT';
+  if (percentage >= thresholds.good) return 'GOOD';
+  return 'BELOW_TARGET';
+}
 
 /**
  * How to present one uptime window.

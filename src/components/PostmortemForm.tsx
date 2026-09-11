@@ -9,6 +9,8 @@ import {
   generatePostmortemDraft,
 } from '@/app/(app)/postmortems/actions';
 import { normalizeLegacyActionItems, type ActionItem } from '@/lib/action-items';
+import type { JiraCapability } from '@/lib/jira-capabilities';
+import type { JiraIssueReference } from '@/lib/jira-references';
 import { notify as toast } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -41,6 +43,7 @@ import ContributingFactorsSelector, {
   type FactorType,
   ALL_FACTORS,
 } from './postmortem/ContributingFactorsSelector';
+import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
 import { AlertCircle, AlertTriangle, Loader2, Wand2, Sparkles } from 'lucide-react';
@@ -84,7 +87,12 @@ type PostmortemFormProps = {
     service: {
       name: string;
     };
+    jiraIssues?: JiraIssueReference[];
   }>;
+  /** Mandatory capability contract passed to all persisted action-item Jira surfaces. */
+  jiraCapability: JiraCapability;
+  /** Jira issues owned by the incident and inherited read-only by this postmortem. */
+  incidentJiraIssues?: JiraIssueReference[];
 };
 
 // Helper to extract clean root cause narrative without embedded 5-whys or factor blocks
@@ -187,6 +195,8 @@ export default function PostmortemForm({
   initialData,
   users = [],
   resolvedIncidents = [],
+  jiraCapability,
+  incidentJiraIssues = [],
 }: PostmortemFormProps) {
   const router = useRouter();
   const { userTimeZone } = useTimezone();
@@ -360,6 +370,9 @@ export default function PostmortemForm({
   };
 
   const selectedIncident = resolvedIncidents.find(inc => inc.id === selectedIncidentId);
+  const effectiveIncidentJiraIssues = incidentId
+    ? incidentJiraIssues
+    : (selectedIncident?.jiraIssues ?? []);
 
   return (
     <Form {...form}>
@@ -398,15 +411,24 @@ export default function PostmortemForm({
                     <strong>Selected:</strong> {selectedIncident.title}
                   </div>
                   <div className="text-xs text-muted-foreground mt-1">
-                    Service: {selectedIncident.service.name} • Resolved:{' '}
-                    {selectedIncident.resolvedAt
-                      ? formatDateTime(selectedIncident.resolvedAt, userTimeZone, {
-                          format: 'date',
-                        })
-                      : 'N/A'}
+                    Service: {selectedIncident.service.name}
                   </div>
+                  <IncidentJiraContext issues={effectiveIncidentJiraIssues} className="mt-2" />
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {incidentId && effectiveIncidentJiraIssues.length > 0 && (
+          <Card className="border-blue-200/80 bg-blue-50/40 shadow-sm">
+            <CardContent className="p-4 flex flex-col gap-1.5">
+              <div className="text-xs font-semibold text-foreground">Inherited incident context</div>
+              <p className="text-xs text-muted-foreground">
+                These Jira issues belong to the incident and are shown read-only throughout this
+                postmortem. Action items can still have their own Jira tracking issues.
+              </p>
+              <IncidentJiraContext issues={effectiveIncidentJiraIssues} className="mt-1" />
             </CardContent>
           </Card>
         )}
@@ -614,7 +636,13 @@ export default function PostmortemForm({
         </Card>
 
         {/* Action Items */}
-        <PostmortemActionItems actionItems={actionItems} onChange={setActionItems} users={users} />
+        <PostmortemActionItems
+          actionItems={actionItems}
+          onChange={setActionItems}
+          users={users}
+          jiraCapability={jiraCapability}
+          incidentJiraIssues={effectiveIncidentJiraIssues}
+        />
 
         {/* Lessons Learned */}
         <Card className="bg-gradient-to-br from-white to-slate-50 shadow-md">

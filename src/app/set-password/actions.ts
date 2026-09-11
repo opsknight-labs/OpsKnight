@@ -1,108 +1,190 @@
 'use server';
 
-import prisma from '@/lib/prisma';
+import { createHash, timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { redirect } from 'next/navigation';
-import { logAudit } from '@/lib/audit';
+import { z } from 'zod';
 import { headers } from 'next/headers';
-import { checkRateLimit, simulateWork } from '@/lib/password-reset';
-import { validatePasswordStrength } from '@/lib/passwords';
-import { createHash } from 'crypto';
+import { redirect } from 'next/navigation';
+import prisma from '@/lib/prisma';
+import { logAudit } from '@/lib/audit';
 import { getClientIp } from '@/lib/client-ip';
+import { checkRateLimit, simulateWork } from '@/lib/password-reset';
+import {
+  PASSWORD_TRANSPORT_MAX_CODE_UNITS,
+  validatePasswordStrength,
+} from '@/lib/passwords';
+import { authPrivacyDigest } from '@/lib/auth-abuse';
+import { isAppError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
-export async function setPassword(formData: FormData) {
+export type SetPasswordState = {
+  error?: string | null;
+};
+
+const schema = z
+  .object({
+    token: z.string().min(32).max(512),
+    password: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
+    confirmPassword: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
+  })
+  .strict();
+
+function secretTextEqual(left: string, right: string): boolean {
+  const leftBytes = Buffer.from(left, 'utf8');
+  const rightBytes = Buffer.from(right, 'utf8');
+  if (leftBytes.length !== rightBytes.length) return false;
+  return timingSafeEqual(leftBytes, rightBytes);
+}
+
+async function auditInviteFailure(params: {
+  reason: string;
+  ip: string;
+  userId?: string | null;
+}) {
+  const ipHash = await authPrivacyDigest('audit:invite:ip', params.ip);
+  try {
+    await logAudit({
+      action: 'INVITE_FAILED',
+      entityType: 'USER',
+      entityId: params.userId || 'unknown',
+      actorId: null,
+      source: 'AUTH',
+      details: { reason: params.reason, ipHash },
+    });
+  } catch (error) {
+    logger.warn('auth.invite.audit_failed', {
+      component: 'set-password',
+      reason: params.reason,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function setPassword(
+  _previousState: SetPasswordState,
+  formData: FormData
+): Promise<SetPasswordState> {
   const startTime = Date.now();
-  const token = formData.get('token') as string;
-  const password = formData.get('password') as string;
-  const confirmPassword = formData.get('confirmPassword') as string;
+  const parsed = schema.safeParse({
+    token: formData.get('token'),
+    password: formData.get('password'),
+    confirmPassword: formData.get('confirmPassword'),
+  });
 
-  // 1. Rate Limiting
+  if (!parsed.success) {
+    await simulateWork(startTime);
+    return { error: 'Invalid or expired invitation. Request a new invite and try again.' };
+  }
+
+  const { token, password, confirmPassword } = parsed.data;
+  const tokenHash = createHash('sha256').update(token).digest('hex');
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
+
   try {
-    await checkRateLimit('unknown', ip, 'INVITE_FAILED');
+    await checkRateLimit(tokenHash, ip, 'INVITE_ACTIVATION');
   } catch (error) {
-    redirect('/set-password?error=rate_limited');
+    if (isAppError(error) && error.code === 'RATE_LIMIT_EXCEEDED') {
+      await auditInviteFailure({ reason: 'RATE_LIMITED', ip });
+      await simulateWork(startTime);
+      return { error: 'Too many activation attempts. Please try again later.' };
+    }
+    logger.error('auth.invite.rate_limit_failed', {
+      component: 'set-password',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await simulateWork(startTime);
+    return { error: 'Unable to activate the account right now. Please try again.' };
   }
 
-  if (!token) {
-    redirect('/set-password?error=missing');
-  }
-
-  const passwordError = validatePasswordStrength(password || '');
-  if (passwordError) {
-    const code = passwordError.includes('include') ? 'complexity' : 'weak';
-    redirect(`/set-password?token=${encodeURIComponent(token)}&error=${code}`);
-  }
-
-  if (password !== confirmPassword) {
-    redirect(`/set-password?token=${encodeURIComponent(token)}&error=mismatch`);
-  }
-
-  const tokenHash = createHash('sha256').update(token).digest('hex');
   const record = await prisma.userToken.findFirst({
     where: {
       tokenHash,
       type: 'INVITE',
       usedAt: null,
       revokedAt: null,
+      expiresAt: { gt: new Date() },
     },
+    select: { id: true, userId: true, identifier: true, generation: true },
   });
 
-  if (!record || record.expiresAt < new Date()) {
-    // Log failure for rate limiting
-    await logAudit({
-      action: 'INVITE_FAILED',
-      entityType: 'USER',
-      entityId: 'unknown',
-      actorId: null,
-      details: { ip, reason: 'INVALID_TOKEN' },
-    });
+  if (!record) {
+    await auditInviteFailure({ reason: 'INVALID_OR_EXPIRED_TOKEN', ip });
     await simulateWork(startTime);
-    redirect('/set-password?error=expired');
+    return { error: 'Invalid or expired invitation. Request a new invite and try again.' };
   }
 
   const user = await prisma.user.findFirst({
     where: record.userId ? { id: record.userId } : { email: record.identifier },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      status: true,
+      invitationGeneration: true,
+    },
   });
 
-  if (!user) {
-    await logAudit({
-      action: 'INVITE_FAILED',
-      entityType: 'USER',
-      entityId: 'unknown',
-      actorId: null,
-      details: { ip, reason: 'USER_NOT_FOUND' },
+  if (!user || user.status !== 'INVITED') {
+    await auditInviteFailure({
+      reason: !user ? 'USER_NOT_FOUND' : user.status === 'DISABLED' ? 'USER_DISABLED' : 'ALREADY_ACTIVE',
+      ip,
+      userId: user?.id,
     });
     await simulateWork(startTime);
-    redirect('/set-password?error=invalid');
+    return {
+      error:
+        user?.status === 'ACTIVE'
+          ? 'This invitation has already been completed. Sign in instead.'
+          : 'Invalid or expired invitation. Request a new invite and try again.',
+    };
   }
 
-  // Invitations are valid only for accounts still awaiting onboarding. Disabled and active
-  // accounts require an explicit administrator action or password recovery respectively.
-  if (user.status !== 'INVITED') {
-    await logAudit({
-      action: 'INVITE_FAILED',
-      entityType: 'USER',
-      entityId: user.id,
-      actorId: null,
-      details: { ip, reason: user.status === 'DISABLED' ? 'USER_DISABLED' : 'ALREADY_ACTIVE' },
-    });
+  if (
+    record.userId &&
+    typeof record.generation === 'number' &&
+    record.generation !== user.invitationGeneration
+  ) {
+    await auditInviteFailure({ reason: 'STALE_GENERATION', ip, userId: user.id });
     await simulateWork(startTime);
-    redirect(
-      user.status === 'DISABLED' ? '/set-password?error=disabled' : '/login?error=already_active'
-    );
+    return { error: 'Invalid or expired invitation. Request a new invite and try again.' };
   }
+
+  if (!secretTextEqual(password, confirmPassword)) {
+    return { error: 'Passwords do not match.' };
+  }
+
+  const passwordError = validatePasswordStrength(password, {
+    email: user.email,
+    displayName: user.name,
+  });
+  if (passwordError) return { error: passwordError };
 
   const passwordHash = await bcrypt.hash(password, 12);
+  const now = new Date();
 
   try {
     await prisma.$transaction(async tx => {
+      const claimed = await tx.userToken.updateMany({
+        where: {
+          id: record.id,
+          tokenHash,
+          type: 'INVITE',
+          usedAt: null,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: { usedAt: now },
+      });
+      if (claimed.count !== 1) throw new Error('INVITE_TOKEN_ALREADY_USED');
+
       const activated = await tx.user.updateMany({
         where: {
           id: user.id,
           status: 'INVITED',
-          ...(record.userId ? { invitationGeneration: record.generation } : {}),
+          ...(record.userId && typeof record.generation === 'number'
+            ? { invitationGeneration: record.generation }
+            : {}),
         },
         data: {
           passwordHash,
@@ -114,31 +196,14 @@ export async function setPassword(formData: FormData) {
       });
       if (activated.count !== 1) throw new Error('INVITE_USER_STATE_CHANGED');
 
-      // Atomically claim THIS token. Concurrent submissions cannot both win.
-      const claimed = await tx.userToken.updateMany({
-        where: {
-          tokenHash,
-          type: 'INVITE',
-          usedAt: null,
-          revokedAt: null,
-          expiresAt: { gt: new Date() },
-        },
-        data: { usedAt: new Date() },
-      });
-      if (claimed.count !== 1) throw new Error('INVITE_TOKEN_ALREADY_USED');
-
-      // Security: Invalidate ALL other INVITE tokens for this user to prevent reuse of old links
       await tx.userToken.updateMany({
         where: {
           OR: [{ userId: user.id }, { identifier: user.email }],
           type: 'INVITE',
-          NOT: { tokenHash }, // Don't delete the one we just marked used (for audit history), or just delete them all? Keeping history is better.
-          // Actually, we just marked it used.
-          // Let's delete *other* unused invite tokens.
           usedAt: null,
           revokedAt: null,
         },
-        data: { revokedAt: new Date() },
+        data: { revokedAt: now },
       });
     });
   } catch (error) {
@@ -148,21 +213,24 @@ export async function setPassword(formData: FormData) {
         error.message === 'INVITE_USER_STATE_CHANGED')
     ) {
       await simulateWork(startTime);
-      redirect('/set-password?error=expired');
+      return { error: 'Invalid or expired invitation. Request a new invite and try again.' };
     }
-    throw error;
+    logger.error('auth.invite.activation_failed', {
+      component: 'set-password',
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { error: 'Unable to activate the account right now. Please try again.' };
   }
 
   await logAudit({
-    action: 'user.active', // Changed action to standard user activation event
+    action: 'user.active',
     entityType: 'USER',
     entityId: user.id,
-    actorId: user.id, // User acting on themselves
-    details: { method: 'invite', ip },
+    actorId: user.id,
+    source: 'AUTH',
+    details: { method: 'invite' },
   });
 
-  // Force sign-out effectively by redirecting to signout or letting the frontend handle it.
-  // Since this is a server action, we can't easily clear the cookie domain-wide without auth hooks.
-  // However, redirecting to the sign-out route with a callback to login is a safe way to ensure fresh session.
-  redirect('/api/auth/signout?callbackUrl=/login?password=1');
+  redirect('/login?password=1');
 }

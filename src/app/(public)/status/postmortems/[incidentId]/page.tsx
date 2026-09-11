@@ -6,6 +6,15 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { resolveStatusPage } from '@/lib/status-page-resolver';
 import { canPublishIncidentToStatusPage } from '@/lib/status-page-publication';
+import { deriveJiraCapability } from '@/lib/jira-capabilities';
+
+const PUBLIC_READ_ONLY_JIRA_CAPABILITY = deriveJiraCapability({
+  workspaceState: 'NOT_CONFIGURED',
+  canManage: false,
+  serviceMapped: false,
+  syncEnabled: false,
+  rawEnabled: false,
+});
 
 export default async function PublicPostmortemPage({
   params,
@@ -93,6 +102,7 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
         canEdit={false}
         incidentId={incidentId}
         isPublicView={true}
+        jiraCapability={PUBLIC_READ_ONLY_JIRA_CAPABILITY}
       />
     </main>
   );

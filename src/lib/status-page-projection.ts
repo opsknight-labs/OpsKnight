@@ -1,3 +1,5 @@
+import { maintenanceScopeFromAffectedIds } from '@/lib/status-pages/availability-engine';
+
 export type MaintenanceAnnouncement = {
   type?: string;
   isActive?: boolean;
@@ -16,18 +18,22 @@ export function statusProjectionClock(nowMs: number = Date.now()): Date {
 
 export function activeMaintenanceServiceIds(
   announcements: MaintenanceAnnouncement[],
-  now: Date
+  now: Date,
+  allServiceIds: Iterable<string> = []
 ): Set<string> {
+  const published = [...allServiceIds];
   const result = new Set<string>();
   for (const announcement of announcements) {
     if (announcement.type !== 'MAINTENANCE' || announcement.isActive === false) continue;
     const start = announcement.startDate ? new Date(announcement.startDate) : null;
     const end = announcement.endDate ? new Date(announcement.endDate) : null;
     if ((start && start > now) || (end && end <= now)) continue;
-    if (!Array.isArray(announcement.affectedServiceIds)) continue;
-    for (const serviceId of announcement.affectedServiceIds) {
-      if (typeof serviceId === 'string') result.add(serviceId);
+    const scope = maintenanceScopeFromAffectedIds(announcement.affectedServiceIds);
+    if (scope.type === 'ALL_SERVICES') {
+      for (const serviceId of published) result.add(serviceId);
+      continue;
     }
+    for (const serviceId of scope.serviceIds) result.add(serviceId);
   }
   return result;
 }
@@ -37,10 +43,11 @@ export function visibleMaintenanceServiceIds(
   visibleServiceIds: Iterable<string>,
   now: Date
 ): Set<string> {
-  const visible = new Set(visibleServiceIds);
+  const visible = [...visibleServiceIds];
+  const visibleSet = new Set(visible);
   return new Set(
-    [...activeMaintenanceServiceIds(announcements, now)].filter(serviceId =>
-      visible.has(serviceId)
+    [...activeMaintenanceServiceIds(announcements, now, visible)].filter(serviceId =>
+      visibleSet.has(serviceId)
     )
   );
 }

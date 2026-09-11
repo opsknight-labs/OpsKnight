@@ -51,8 +51,28 @@ export default function StatusPageExperience({
       ? (page.branding as Record<string, unknown>)
       : {};
 
-  const notices = view.announcements.filter(item => item.type !== 'UPDATE');
-  const changelog = view.announcements.filter(item => item.type === 'UPDATE');
+  const notices = [
+    ...view.announcements.filter(item => item.type !== 'UPDATE' && item.type !== 'MAINTENANCE'),
+    ...(snapshot.maintenance ?? []).map(item => ({
+      id: item.id,
+      title: item.title,
+      message: item.description ?? '',
+      type: 'MAINTENANCE',
+      startDate: new Date(item.startAt),
+      endDate: item.endAt ? new Date(item.endAt) : null,
+    })),
+  ];
+  const changelog =
+    snapshot.changelog && snapshot.changelog.length > 0
+      ? snapshot.changelog.map(entry => ({
+          id: entry.id,
+          title: entry.title,
+          message: entry.message,
+          type: 'UPDATE',
+          startDate: new Date(entry.publishedAt),
+          endDate: null,
+        }))
+      : view.announcements.filter(item => item.type === 'UPDATE');
   // Published with the snapshot, so the badge on this page grades uptime the same way the API
   // and any export do. Defaults match the column defaults for payloads written before they were.
   const thresholds = {
@@ -160,17 +180,37 @@ export default function StatusPageExperience({
     [snapshot.services]
   );
   const legacyCoverage30 = useMemo(
-    () => Object.fromEntries(snapshot.services.flatMap(service => {
-      const window = service.uptime?.days30;
-      return window && !window.complete ? [[service.id, `${Math.floor(window.measuredDays)} days of available data · Partial history`]] : [];
-    })),
+    () =>
+      Object.fromEntries(
+        snapshot.services.flatMap(service => {
+          const window = service.uptime?.days30;
+          return window && !window.complete
+            ? [
+                [
+                  service.id,
+                  `${Math.floor(window.measuredDays)} days of available data · Partial history`,
+                ],
+              ]
+            : [];
+        })
+      ),
     [snapshot.services]
   );
   const legacyCoverage90 = useMemo(
-    () => Object.fromEntries(snapshot.services.flatMap(service => {
-      const window = service.uptime?.days90;
-      return window && !window.complete ? [[service.id, `${Math.floor(window.measuredDays)} days of available data · Partial history`]] : [];
-    })),
+    () =>
+      Object.fromEntries(
+        snapshot.services.flatMap(service => {
+          const window = service.uptime?.days90;
+          return window && !window.complete
+            ? [
+                [
+                  service.id,
+                  `${Math.floor(window.measuredDays)} days of available data · Partial history`,
+                ],
+              ]
+            : [];
+        })
+      ),
     [snapshot.services]
   );
   const legacyHistoryIncidents = useMemo(
@@ -181,34 +221,51 @@ export default function StatusPageExperience({
           createdAt: segment.startAt,
           resolvedAt: segment.endAt,
           status: 'RESOLVED',
-          urgency: segment.status === 'MAJOR_OUTAGE' ? 'HIGH' : segment.status === 'MAINTENANCE' ? 'MAINTENANCE' : 'MEDIUM',
+          urgency:
+            segment.status === 'MAJOR_OUTAGE'
+              ? 'HIGH'
+              : segment.status === 'MAINTENANCE'
+                ? 'MAINTENANCE'
+                : 'MEDIUM',
         }))
       ),
     [snapshot.services]
   );
   const legacyStatusHistory = useMemo(
-    () => Object.fromEntries(snapshot.services.flatMap(service => {
-      const history = service.history;
-      if (!history) return [];
-      const start = new Date(history.rangeStart);
-      const end = new Date(history.rangeEnd);
-      const days: Array<{ date: string; status: 'operational' | 'degraded' | 'outage' | 'maintenance' | 'unknown' }> = [];
-      for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
-        const dayStart = new Date(cursor);
-        const dayEnd = new Date(cursor);
-        dayEnd.setDate(dayEnd.getDate() + 1);
-        const statuses = history.segments
-          .filter(segment => new Date(segment.startAt) < dayEnd && new Date(segment.endAt) > dayStart)
-          .map(segment => segment.status);
-        const status = statuses.includes('MAJOR_OUTAGE') ? 'outage'
-          : statuses.includes('PARTIAL_OUTAGE') || statuses.includes('DEGRADED') ? 'degraded'
-          : statuses.includes('MAINTENANCE') ? 'maintenance'
-          : statuses.includes('UNKNOWN') ? 'unknown'
-          : 'operational';
-        days.push({ date: dayStart.toLocaleDateString('en-CA'), status });
-      }
-      return [[service.id, days]];
-    })),
+    () =>
+      Object.fromEntries(
+        snapshot.services.flatMap(service => {
+          const history = service.history;
+          if (!history) return [];
+          const start = new Date(history.rangeStart);
+          const end = new Date(history.rangeEnd);
+          const days: Array<{
+            date: string;
+            status: 'operational' | 'degraded' | 'outage' | 'maintenance' | 'unknown';
+          }> = [];
+          for (const cursor = new Date(start); cursor < end; cursor.setDate(cursor.getDate() + 1)) {
+            const dayStart = new Date(cursor);
+            const dayEnd = new Date(cursor);
+            dayEnd.setDate(dayEnd.getDate() + 1);
+            const statuses = history.segments
+              .filter(
+                segment => new Date(segment.startAt) < dayEnd && new Date(segment.endAt) > dayStart
+              )
+              .map(segment => segment.status);
+            const status = statuses.includes('MAJOR_OUTAGE')
+              ? 'outage'
+              : statuses.includes('PARTIAL_OUTAGE') || statuses.includes('DEGRADED')
+                ? 'degraded'
+                : statuses.includes('MAINTENANCE')
+                  ? 'maintenance'
+                  : statuses.includes('UNKNOWN')
+                    ? 'unknown'
+                    : 'operational';
+            days.push({ date: dayStart.toLocaleDateString('en-CA'), status });
+          }
+          return [[service.id, days]];
+        })
+      ),
     [snapshot.services]
   );
 
@@ -235,7 +292,14 @@ export default function StatusPageExperience({
         </p>
       )}
       {snapshot.overall.note && (
-        <p role="note" style={{ margin: '1rem 0', color: 'var(--status-text-muted, #64748b)', fontSize: '0.875rem' }}>
+        <p
+          role="note"
+          style={{
+            margin: '1rem 0',
+            color: 'var(--status-text-muted, #64748b)',
+            fontSize: '0.875rem',
+          }}
+        >
           {snapshot.overall.note}
         </p>
       )}
@@ -425,19 +489,46 @@ export default function StatusPageExperience({
       {branding.showFooter !== false && (
         <footer className="status-footer">
           <p className="status-footer__brand">
-            {page.footerText || <><span>Powered by </span><a className="status-footer-link" href="https://opsknight.com/">OpsKnight</a></>}
-          </p>
-          <nav aria-label="Status resources" className="status-footer__links">
-            {branding.showApiLink !== false && <a className="status-footer-link" href={apiPath}>JSON API</a>}
-            {branding.showRssLink !== false && <a className="status-footer-link" href={`${apiPath}/rss`}>RSS</a>}
-            {page.enableUptimeExports === true && hasUptime && (
+            {page.footerText || (
               <>
-                <a className="status-footer-link" href={`${apiPath}/uptime-export?format=csv`}>Uptime CSV</a>
-                <a className="status-footer-link" href={`${apiPath}/uptime-export?format=pdf`}>Uptime PDF</a>
+                <span>Powered by </span>
+                <a className="status-footer-link" href="https://opsknight.com/">
+                  OpsKnight
+                </a>
               </>
             )}
-            {page.contactEmail && <a className="status-footer-link" href={`mailto:${page.contactEmail}`}>Contact</a>}
-            {page.contactUrl && <a className="status-footer-link" href={page.contactUrl}>Support</a>}
+          </p>
+          <nav aria-label="Status resources" className="status-footer__links">
+            {branding.showApiLink !== false && (
+              <a className="status-footer-link" href={apiPath}>
+                JSON API
+              </a>
+            )}
+            {branding.showRssLink !== false && (
+              <a className="status-footer-link" href={`${apiPath}/rss`}>
+                RSS
+              </a>
+            )}
+            {page.enableUptimeExports === true && hasUptime && (
+              <>
+                <a className="status-footer-link" href={`${apiPath}/uptime-export?format=csv`}>
+                  Uptime CSV
+                </a>
+                <a className="status-footer-link" href={`${apiPath}/uptime-export?format=pdf`}>
+                  Uptime PDF
+                </a>
+              </>
+            )}
+            {page.contactEmail && (
+              <a className="status-footer-link" href={`mailto:${page.contactEmail}`}>
+                Contact
+              </a>
+            )}
+            {page.contactUrl && (
+              <a className="status-footer-link" href={page.contactUrl}>
+                Support
+              </a>
+            )}
           </nav>
         </footer>
       )}

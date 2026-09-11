@@ -1,8 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { initiatePasswordReset } from '@/lib/password-reset';
 import { logger } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
 import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
+import { readJsonBodyWithLimit } from '@/lib/request-body';
+
+const GENERIC_MESSAGE =
+  'If an account exists with this email, you will receive password reset instructions.';
+const schema = z
+  .object({
+    email: z.string().trim().email().max(254),
+  })
+  .strict();
+
+function response() {
+  return NextResponse.json(
+    { message: GENERIC_MESSAGE },
+    {
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'Referrer-Policy': 'no-referrer',
+      },
+    }
+  );
+}
 
 export async function POST(req: NextRequest) {
   if (!getLocalAuthPolicy().localLoginEnabled) {
@@ -12,27 +35,15 @@ export async function POST(req: NextRequest) {
     );
   }
   try {
-    const body = await req.json();
-    const { email } = body;
-
-    if (!email || typeof email !== 'string') {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 });
-    }
-
-    // Get IP for rate limiting
-    const ip = getClientIp(req.headers);
-
-    const result = await initiatePasswordReset(email, ip);
-
-    return NextResponse.json({ message: result.message }, { status: 200 });
+    const parsed = schema.safeParse(await readJsonBodyWithLimit(req, 4096));
+    if (!parsed.success) return response();
+    await initiatePasswordReset(parsed.data.email, getClientIp(req.headers));
+    return response();
   } catch (error) {
-    logger.error('API Error /auth/forgot-password', { error });
-    return NextResponse.json(
-      {
-        message:
-          'If an account exists with this email, you will receive password reset instructions.',
-      },
-      { status: 200 }
-    ); // Always return 200 Security hygiene
+    logger.error('auth.password_reset.request_route_failed', {
+      component: 'forgot-password-route',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return response();
   }
 }
