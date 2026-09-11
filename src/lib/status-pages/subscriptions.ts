@@ -106,16 +106,41 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
     // Industry-standard service picker: optional preferences.selectedServiceIds, validated against page's services
     const preferencesProvided = rawPreferences !== undefined;
     let normalizedPreferences: { selectedServiceIds?: string[] } | null = null;
-    if (rawPreferences?.selectedServiceIds && rawPreferences.selectedServiceIds.length > 0) {
-      const allowed = await prisma.statusPageService.findMany({
-        where: { statusPageId, showOnPage: true },
-        select: { serviceId: true },
-      });
-      const allowedSet = new Set(allowed.map(r => r.serviceId));
-      const filtered = rawPreferences.selectedServiceIds.filter(id => allowedSet.has(id));
-      // Empty after filtering = subscriber opted into nothing valid — store as "all" (no filter)
-      if (filtered.length > 0) {
+    if (preferencesProvided) {
+      if (rawPreferences?.selectedServiceIds !== undefined) {
+        // Explicit Selected mode — empty or all-invalid must not widen to "all".
+        if (rawPreferences.selectedServiceIds.length === 0) {
+          return jsonError(
+            new AppError({
+              code: 'VALIDATION_FAILED',
+              userMessage: 'Select at least one service to follow, or leave service selection empty for all updates.',
+              fields: [
+                { field: 'preferences.selectedServiceIds', code: 'empty', message: 'Empty selection is not valid when service selection is provided.' },
+              ],
+            })
+          );
+        }
+        const allowed = await prisma.statusPageService.findMany({
+          where: { statusPageId, showOnPage: true },
+          select: { serviceId: true },
+        });
+        const allowedSet = new Set(allowed.map(r => r.serviceId));
+        const filtered = rawPreferences.selectedServiceIds.filter(id => allowedSet.has(id));
+        if (filtered.length === 0) {
+          return jsonError(
+            new AppError({
+              code: 'VALIDATION_FAILED',
+              userMessage: 'None of the selected services are available on this status page.',
+              fields: [
+                { field: 'preferences.selectedServiceIds', code: 'invalid', message: 'No valid service selected.' },
+              ],
+            })
+          );
+        }
         normalizedPreferences = { selectedServiceIds: [...new Set(filtered)] };
+      } else {
+        // preferences: {} with no selectedServiceIds — treat as "all" (null) but still considered provided
+        normalizedPreferences = null;
       }
     }
 
@@ -134,13 +159,9 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       // after an unsubscribe, so unsubscribedAt alone must never reactivate a
       // complained, bounced, or suppressed address.
       if (action === 'ACCEPT') {
-        // ACTIVE subscribers may update their service selection even though verification is skipped
-        if (existing.state === 'ACTIVE' && preferencesProvided) {
-          await prisma.statusPageSubscription.update({
-            where: { id: existing.id },
-            data: { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue },
-          });
-        }
+        // ACTIVE subscribers must not have preferences mutated from an unauthenticated subscribe.
+        // Preference changes require the signed manage token or a re-verification flow so an
+        // attacker who knows victim@example.com cannot silently narrow that user's alert scope.
         return subscriptionAccepted();
       }
 

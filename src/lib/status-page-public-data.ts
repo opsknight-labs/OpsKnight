@@ -119,21 +119,35 @@ function serializePublicIncidentUpdate(
 }
 
 function incidentDetailCutoffMs(settings: StatusPagePublicSettings, nowMs: number): number | null {
-  if (settings.showIncidentHistoryDetails === false) return nowMs;
   const raw = settings.incidentHistoryDetailDays;
-  if (raw == null) return null;
+  if (raw == null) {
+    // showIncidentHistoryDetails=false without a window is not a policy — it would redact every
+    // non-null incident as historical, including active ones. Only redact when a window is set.
+    return null;
+  }
   const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));
   if (!Number.isFinite(days)) return null;
   return nowMs - days * 86_400_000;
 }
 
 function shouldRedactByCutoff(
-  createdAt: string | Date | null | undefined,
-  cutoffMs: number | null
+  incident: Pick<PublicIncidentInput, 'status' | 'createdAt'>,
+  cutoffMs: number | null,
+  settings: StatusPagePublicSettings
 ): boolean {
   if (cutoffMs == null) return false;
-  if (!createdAt) return false;
-  const ms = createdAt instanceof Date ? createdAt.getTime() : Date.parse(String(createdAt));
+  // "Incident History Details" must never redact active incidents — those are current
+  // communications, not historical. Only RESOLVED incidents older than the detail window are redacted.
+  // When showIncidentHistoryDetails=false, the window above is still required; if no window is
+  // configured we never redact here, which matches the fail-closed intent enforced via
+  // statusPagePublicationLimits without silently hiding live incident detail.
+  if (incident.status === 'OPEN' || incident.status === 'ACKNOWLEDGED') return false;
+  if (settings.showIncidentHistoryDetails === false && incident.status !== 'RESOLVED') return false;
+  if (!incident.createdAt) return false;
+  const ms =
+    incident.createdAt instanceof Date
+      ? incident.createdAt.getTime()
+      : Date.parse(String(incident.createdAt));
   return Number.isFinite(ms) && (ms as number) < cutoffMs;
 }
 
@@ -166,7 +180,7 @@ export function serializePublicStatusIncident(
         : new Date(context.now as string | number);
     cutoffMs = incidentDetailCutoffMs(settings, now.getTime());
   }
-  const redactedByAge = shouldRedactByCutoff(incident.createdAt, cutoffMs);
+  const redactedByAge = shouldRedactByCutoff(incident, cutoffMs, settings);
   const visibility = publicStatusVisibility(settings);
   const result: PublicIncident = { status: incident.status as PublicIncidentStatus };
   if (context?.pageId) {

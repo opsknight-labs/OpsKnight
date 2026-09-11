@@ -174,7 +174,16 @@ export async function buildStatusPageSnapshot(
           where: {
             serviceId: { in: ids },
             visibility: 'PUBLIC',
-            createdAt: { gte: window.start, lte: now },
+            OR: [
+              { createdAt: { gte: window.start, lte: now } },
+              {
+                createdAt: { lt: window.start },
+                OR: [
+                  { resolvedAt: { gte: window.start } },
+                  { resolvedAt: null, status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+                ],
+              },
+            ],
           },
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: limits.maxIncidents,
