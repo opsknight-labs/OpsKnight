@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppError } from '@/lib/errors';
 import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 
 const mocks = vi.hoisted(() => ({

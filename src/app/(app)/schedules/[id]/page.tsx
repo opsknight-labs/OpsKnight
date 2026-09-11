@@ -48,7 +48,6 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import {
-  ArrowLeft,
   Calendar,
   CheckCircle2,
   Clock3,
