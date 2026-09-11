@@ -24,52 +24,78 @@ export default function RegionHealthV3({ regions }: { regions: PublicRegionStatu
   if (!regions || regions.length === 0) return null;
 
   return (
-    <section className="status-v3-regions" aria-labelledby="status-v3-regions-heading">
-      <header className="status-v3-regions__head">
-        <h2 id="status-v3-regions-heading">Regions</h2>
-        <p
-          className="status-v3-regions__tally"
+    <section className="status-v3-regions-inline" aria-labelledby="status-v3-regions-heading">
+      <div className="status-v3-regions-inline__head">
+        <div className="status-v3-regions-inline__title-wrap">
+          <h2 id="status-v3-regions-heading" className="status-v3-regions-inline__title">
+            Regions
+          </h2>
+          <span className="status-v3-regions-inline__subtitle">Geographic availability</span>
+        </div>
+        <div
+          className="status-v3-regions-inline__tally"
           aria-label={`${regions.length - impactedCount} of ${totalCount} regions fully operational`}
         >
           {impactedCount === 0 ? (
-            <>
-              <strong>{totalCount}</strong>
-              <span> of {totalCount} operational</span>
-            </>
+            <span className="status-v3-regions-inline__tally-pill status-v3-regions-inline__tally-pill--healthy">
+              <span className="status-v3-regions-inline__dot" aria-hidden="true" />
+              All operational
+            </span>
           ) : (
-            <>
-              <strong className="status-v3-regions__tally-impacted">{impactedCount}</strong>
-              <span> of {totalCount} impacted</span>
-            </>
+            <span className="status-v3-regions-inline__tally-pill status-v3-regions-inline__tally-pill--impacted">
+              <span className="status-v3-regions-inline__dot" aria-hidden="true" />
+              {impactedCount} of {totalCount} impacted
+            </span>
           )}
-        </p>
-      </header>
+        </div>
+      </div>
 
-      <div className="status-v3-regions__panel">
-        <ul className="status-v3-regions__list">
-          {regions.map(region => {
-            const isHealthy = region.status === 'OPERATIONAL';
-            const label = statusPresentation(region.status).label;
+      <div className="status-v3-regions-inline__list" role="list">
+        {regions.map(region => {
+          const isHealthy = region.status === 'OPERATIONAL';
+          const label = statusPresentation(region.status).label;
+          const desc = describeRegion(region);
 
-            return (
-              <li key={region.name} className="status-v3-region-row">
-                <div className="status-v3-region-row__info">
-                  <span className="status-v3-region-row__name">{region.name}</span>
-                  <span className="status-v3-region-row__desc">{describeRegion(region)}</span>
-                </div>
-                <div className="status-v3-region-row__status">
-                  <StatusBadge
-                    status={region.status}
-                    label={label}
-                    size="sm"
-                    showDot
-                    pulse={!isHealthy}
-                  />
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+          return (
+            <div
+              key={region.name}
+              className={`status-v3-region-pill${!isHealthy ? ' status-v3-region-pill--impacted' : ''}`}
+              data-status={region.status}
+              role="listitem"
+              title={`${region.name}: ${desc}`}
+            >
+              <div className="status-v3-region-pill__lead">
+                <svg
+                  className="status-v3-region-pill__icon"
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                  <path d="M2 12h20" />
+                </svg>
+                <span className="status-v3-region-pill__name">{region.name}</span>
+                <span className="status-v3-region-pill__divider" aria-hidden="true" />
+              </div>
+              <div className="status-v3-region-pill__status">
+                <StatusBadge
+                  status={region.status}
+                  label={label}
+                  size="xs"
+                  showDot
+                  pulse={!isHealthy}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
