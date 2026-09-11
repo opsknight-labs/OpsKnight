@@ -745,11 +745,24 @@ ${R} svg.status-v3-history .status-maintenance, ${R} .status-v3-hours__slice.sta
 ${R} svg.status-v3-history .status-partial-outage, ${R} .status-v3-hours__slice.status-partial-outage { color: var(--status-partial-outage); }
 ${R} svg.status-v3-history .status-major-outage, ${R} .status-v3-hours__slice.status-major-outage { color: var(--status-major-outage); }
 ${R} svg.status-v3-history .status-unknown, ${R} .status-v3-hours__slice.status-unknown { color: var(--status-unknown); }
-${R} .status-v3-history__day { cursor: pointer; transition: opacity .12s ease; }
-${R} svg.status-v3-history:hover .status-v3-history__day { opacity: .45; }
-${R} .status-v3-history__day:hover { opacity: 1; }
-${R} .status-v3-history__day[aria-pressed="true"] { opacity: 1; stroke: var(--status-text-strong); stroke-width: .12; }
-${R} .status-v3-history__day:focus-visible { outline: none; stroke: var(--primary); stroke-width: .18; }
+${R} .status-v3-history__day {
+  cursor: pointer;
+  transition: opacity .15s ease, transform .15s ease, stroke-width .15s ease, filter .15s ease;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+}
+${R} svg.status-v3-history:hover .status-v3-history__day { opacity: .6; }
+${R} svg.status-v3-history .status-v3-history__day:hover,
+${R} svg.status-v3-history .status-v3-history__day[aria-pressed="true"] {
+  opacity: 1;
+  transform: scaleY(1.25);
+  stroke: var(--status-text-strong);
+  stroke-width: .14;
+}
+${R} svg.status-v3-history .status-v3-history__day:hover:not([aria-pressed="true"]) {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 65%, transparent));
+}
+${R} .status-v3-history__day:focus-visible { outline: none; stroke: var(--primary); stroke-width: .2; }
 
 /* Incident timeline */
 ${R} .status-v3-incident__updates { list-style: none; margin: .35rem 0 0; padding: 0 0 0 1rem; display: grid; gap: .5rem; border-inline-start: 2px solid var(--status-panel-border); }
