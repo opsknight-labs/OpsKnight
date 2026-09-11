@@ -44,7 +44,7 @@ export default function RegionHealthV3({ regions }: { regions: PublicRegionStatu
           ) : (
             <span className="status-v3-regions-inline__tally-pill status-v3-regions-inline__tally-pill--impacted">
               <span className="status-v3-regions-inline__dot" aria-hidden="true" />
-              {impactedCount} of {totalCount} impacted
+              {impactedCount} of {totalCount} affected
             </span>
           )}
         </div>
@@ -92,6 +92,7 @@ export default function RegionHealthV3({ regions }: { regions: PublicRegionStatu
                   showDot
                   pulse={!isHealthy}
                 />
+                <span className="sr-only">{desc}</span>
               </div>
             </div>
           );
