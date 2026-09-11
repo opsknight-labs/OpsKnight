@@ -372,9 +372,16 @@ export default function StatusPageSubscribe({
               <button
                 type="button"
                 className="status-subscribe__picker-btn"
-                onClick={() => setSelectedIds(new Set(allIds))}
+                onClick={() => {
+                  if (allIds.length > 100) {
+                    setSelectedIds(new Set(allIds.slice(0, 100)));
+                  } else {
+                    setSelectedIds(new Set(allIds));
+                  }
+                }}
+                title={allIds.length > 100 ? 'Limited to 100 services per subscription' : undefined}
               >
-                Select all
+                Select all{allIds.length > 100 ? ' (100 max)' : ''}
               </button>
               <button
                 type="button"

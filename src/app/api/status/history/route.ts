@@ -45,6 +45,8 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
     if (!statusPage) {
       return jsonError('Status page not found or disabled', 404);
     }
+    // Include only services that are actually published; filter early for efficiency at large scale.
+    const publishedServices = statusPage.services.filter(sp => sp.showOnPage);
 
     // Publication contract must be derived after the page is loaded — computing it before
     // would reference an undefined settings object and would let callers request history beyond
@@ -86,7 +88,7 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
 
     const visibility = publicStatusVisibility(statusPage);
 
-    const serviceIds = statusPage.services.filter(sp => sp.showOnPage).map(sp => sp.serviceId);
+    const serviceIds = publishedServices.map(sp => sp.serviceId);
 
     if (serviceId && !serviceIds.includes(serviceId)) {
       return jsonError('Service is not available on this status page', 404);
@@ -116,13 +118,18 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
     const incidentWhere = {
       serviceId: { in: effectiveServiceIds },
       visibility: 'PUBLIC' as const,
+      status: { notIn: ['SUPPRESSED', 'SNOOZED'] as IncidentStatus[] },
       OR: [
         // Created inside the window
         { createdAt: { gte: window.start, lte: window.end } },
-        // Started before window, still overlapping (resolved inside or still open)
+        // Started before window, still overlapping
         {
           createdAt: { lt: window.start },
-          OR: [{ resolvedAt: { gte: window.start } }, { resolvedAt: null, status: { in: openStatuses } }],
+          OR: [
+            { resolvedAt: { gte: window.start } },
+            { resolvedAt: null, status: { in: openStatuses } },
+            { resolvedAt: null, status: 'RESOLVED' as IncidentStatus, updatedAt: { gte: window.start } },
+          ],
         },
       ],
     };
@@ -155,7 +162,7 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
       )
     );
     const services = visibility.showServices
-      ? statusPage.services
+      ? publishedServices
           .filter(item => effectiveServiceIds.includes(item.serviceId))
           .map(item => ({ id: item.service.id, name: item.service.name }))
       : [];

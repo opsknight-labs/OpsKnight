@@ -1,5 +1,5 @@
 import 'server-only';
-import { Prisma } from '@prisma/client';
+import { IncidentEventType, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { statusPagePublicationLimits } from './publication-policy';
@@ -168,53 +168,92 @@ export async function buildStatusPageSnapshot(
   const currentIncidentsByService = ids.length
     ? await loadCurrentIncidentsByService(ids, db)
     : emptyHistory;
-  const incidents =
-    ids.length && visibility.showIncidents
-      ? await db.incident.findMany({
-          where: {
-            serviceId: { in: ids },
-            visibility: 'PUBLIC',
+  const PUBLIC_EVENT_TYPES: IncidentEventType[] = [
+    IncidentEventType.ACKNOWLEDGED,
+    IncidentEventType.AUTO_RESOLVED,
+    IncidentEventType.MANUAL_RESOLVED,
+    IncidentEventType.REOPENED,
+  ];
+  const INCIDENT_SELECT: Prisma.IncidentSelect = {
+    id: true,
+    title: true,
+    description: true,
+    status: true,
+    urgency: true,
+    createdAt: true,
+    acknowledgedAt: true,
+    resolvedAt: true,
+    updatedAt: true,
+    service: { select: { id: true, name: true, region: true } },
+    events: {
+      where: { type: { in: PUBLIC_EVENT_TYPES } },
+      orderBy: { createdAt: 'asc' },
+      take: 8,
+      select: { id: true, type: true, createdAt: true },
+    },
+    postmortem: {
+      select: {
+        status: true,
+        isPublic: true,
+        publishedAt: true,
+        title: true,
+        summary: true,
+      },
+    },
+  };
+
+  // Active incidents must never be evicted by the historical display limit.
+  // We fetch ALL active PUBLIC incidents plus recent/overlapping resolved incidents
+  // up to the display budget, then dedupe and sort active-first.
+  let incidents: Array<(typeof INCIDENT_SELECT extends infer S ? any : never)> = [];
+  if (ids.length && visibility.showIncidents) {
+    const activeIncidents = await db.incident.findMany({
+      where: {
+        serviceId: { in: ids },
+        visibility: 'PUBLIC',
+        status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: INCIDENT_SELECT,
+    });
+    const historicalIncidents = await db.incident.findMany({
+      where: {
+        serviceId: { in: ids },
+        visibility: 'PUBLIC',
+        OR: [
+          { createdAt: { gte: window.start, lte: now } },
+          {
+            createdAt: { lt: window.start },
             OR: [
-              { createdAt: { gte: window.start, lte: now } },
-              {
-                createdAt: { lt: window.start },
-                OR: [
-                  { resolvedAt: { gte: window.start } },
-                  { resolvedAt: null, status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
-                ],
-              },
+              { resolvedAt: { gte: window.start } },
+              { resolvedAt: null, status: { in: ['OPEN', 'ACKNOWLEDGED'] } },
+              { resolvedAt: null, status: 'RESOLVED', updatedAt: { gte: window.start } },
             ],
           },
-          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-          take: limits.maxIncidents,
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            status: true,
-            urgency: true,
-            createdAt: true,
-            acknowledgedAt: true,
-            resolvedAt: true,
-            service: { select: { id: true, name: true, region: true } },
-            events: {
-              orderBy: { createdAt: 'asc' },
-              // Serialized payload caps at 8 × 400 chars; fetching more only bloats the row + snapshot bytes.
-              take: 8,
-              select: { id: true, type: true, message: true, createdAt: true },
-            },
-            postmortem: {
-              select: {
-                status: true,
-                isPublic: true,
-                publishedAt: true,
-                title: true,
-                summary: true,
-              },
-            },
-          },
-        })
-      : [];
+        ],
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limits.maxIncidents,
+      select: INCIDENT_SELECT,
+    });
+    const seen = new Set(activeIncidents.map(i => i.id));
+    const dedupedHistorical = historicalIncidents.filter(i => !seen.has(i.id));
+    const activeFirst = (a: any, b: any) => {
+      const aActive = a.status === 'OPEN' || a.status === 'ACKNOWLEDGED' ? 0 : 1;
+      const bActive = b.status === 'OPEN' || b.status === 'ACKNOWLEDGED' ? 0 : 1;
+      if (aActive !== bActive) return aActive - bActive;
+      const t = b.createdAt.getTime() - a.createdAt.getTime();
+      if (t !== 0) return t;
+      return b.id.localeCompare(a.id);
+    };
+    incidents = [...activeIncidents, ...dedupedHistorical].sort(activeFirst);
+    // Trim historical overflow while preserving all active incidents
+    if (incidents.length > activeIncidents.length + limits.maxIncidents) {
+      const active = incidents.filter(i => i.status === 'OPEN' || i.status === 'ACKNOWLEDGED');
+      const resolved = incidents.filter(i => !(i.status === 'OPEN' || i.status === 'ACKNOWLEDGED'));
+      incidents = [...active, ...resolved.slice(0, limits.maxIncidents)];
+    }
+  }
   const historyIncidentsByService =
     ids.length && needsHistory
       ? await loadHistoryIncidentsByService(ids, earliestRequiredStart, now, db)
@@ -453,7 +492,10 @@ export async function buildStatusPageSnapshot(
   });
 
   const lastIncidentUpdateAt = incidents.reduce<Date | null>((latest, incident) => {
-    const times = [incident.createdAt, ...(incident.events?.map(event => event.createdAt) ?? [])];
+    const times = [
+      incident.createdAt,
+      ...(incident.events?.map((event: { createdAt: Date }) => event.createdAt) ?? []),
+    ];
     for (const time of times) {
       if (time && (!latest || time > latest)) latest = time;
     }

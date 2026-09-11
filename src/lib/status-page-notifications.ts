@@ -162,6 +162,7 @@ export async function notifyStatusPageSubscribers(
           await prisma.statusPageSubscription.findMany({
             where: {
               statusPageId: page.id,
+              state: 'ACTIVE',
               verified: true,
               unsubscribedAt: null,
               OR: [
@@ -620,12 +621,31 @@ export async function notifyStatusPageSubscribersAnnouncement(
     let failed = 0;
     let cursor: string | undefined = fanout.cursor ?? undefined;
 
+    // Respect selected-service preferences for scoped announcements.
+    // A null/empty affectedServiceIds means global -> all ACTIVE subscribers.
+    const rawAffected = announcement.affectedServiceIds;
+    const affectedIds: string[] = Array.isArray(rawAffected)
+      ? rawAffected.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      : [];
+    const hasScopedServices = affectedIds.length > 0;
+
     while (true) {
       if (!(await bulkQueueHasCapacity())) {
         throw new Error('Bulk notification queue reached its high watermark');
       }
       const subscriptions = await prisma.statusPageSubscription.findMany({
-        where: { statusPageId, verified: true, unsubscribedAt: null },
+        where: hasScopedServices
+          ? {
+              statusPageId,
+              state: 'ACTIVE',
+              verified: true,
+              unsubscribedAt: null,
+              OR: [
+                { selectedServices: { none: {} } },
+                { selectedServices: { some: { serviceId: { in: affectedIds } } } },
+              ],
+            }
+          : { statusPageId, state: 'ACTIVE', verified: true, unsubscribedAt: null },
         orderBy: { id: 'asc' },
         take: PAGE_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

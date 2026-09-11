@@ -119,12 +119,11 @@ function serializePublicIncidentUpdate(
 }
 
 function incidentDetailCutoffMs(settings: StatusPagePublicSettings, nowMs: number): number | null {
+  // Show Incident History Details is the master toggle: when ON, historical details are never
+  // redacted by age. When OFF, the numeric window controls how far back full detail is shown.
+  if (settings.showIncidentHistoryDetails !== false) return null;
   const raw = settings.incidentHistoryDetailDays;
-  if (raw == null) {
-    // showIncidentHistoryDetails=false without a window is not a policy — it would redact every
-    // non-null incident as historical, including active ones. Only redact when a window is set.
-    return null;
-  }
+  if (raw == null) return null;
   const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));
   if (!Number.isFinite(days)) return null;
   return nowMs - days * 86_400_000;

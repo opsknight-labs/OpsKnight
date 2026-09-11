@@ -176,6 +176,8 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
 
     const token = randomBytes(32).toString('hex');
     const verificationToken = randomBytes(32).toString('hex');
+    const VERIFICATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — must match email template
+    const verificationExpiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
 
     const existing = await prisma.statusPageSubscription.findUnique({
       where: {
@@ -183,19 +185,63 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       },
     });
 
+    let isActivePendingChange = false;
     if (existing) {
       const action = subscriptionRequestAction(existing.state, existing.subscribedAt, Date.now());
       // Deliverability state is authoritative. Provider suppressions can arrive
       // after an unsubscribe, so unsubscribedAt alone must never reactivate a
       // complained, bounced, or suppressed address.
       if (action === 'ACCEPT') {
-        // ACTIVE subscribers must not have preferences mutated from an unauthenticated subscribe.
-        // Preference changes require the signed manage token or a re-verification flow so an
-        // attacker who knows victim@example.com cannot silently narrow that user's alert scope.
-        return subscriptionAccepted();
+        // ACTIVE: do not mutate preferences from unauthenticated request.
+        // If preferences were supplied, send a re-verification email that keeps
+        // the current preferences live until the subscriber confirms.
+        if (existing.state === 'ACTIVE' && preferencesProvided) {
+          // Persist pending preferences alongside the verification token so
+          // the verify handler can atomically install them on confirmation.
+          // Keep state=ACTIVE and current preferences untouched until verified.
+          const pendingVerif = hashSubscriptionToken(verificationToken);
+          const existingPrefs = (existing.preferences as Record<string, unknown> | null) ?? null;
+          const pendingValue =
+            normalizedPreferences !== null ? normalizedPreferences : null;
+          const alreadyPending =
+            existingPrefs !== null &&
+            (existingPrefs as Record<string, unknown>)._pendingPreferences !== undefined;
+          // Avoid redundant writes when pending already matches
+          const pendingJson = JSON.stringify(pendingValue);
+          const currentPendingJson = alreadyPending
+            ? JSON.stringify((existingPrefs as Record<string, unknown>)._pendingPreferences)
+            : '__none__';
+          if (pendingJson !== currentPendingJson) {
+            await prisma.statusPageSubscription.update({
+              where: { id: existing.id },
+              data: {
+                verificationToken: pendingVerif,
+                verificationTokenExpiresAt: verificationExpiresAt,
+                preferences: {
+                  ...(existingPrefs ?? {}),
+                  _pendingPreferences: pendingValue,
+                  _pendingServiceIds: normalizedServiceIds,
+                } as unknown as Prisma.InputJsonValue,
+              },
+            });
+          } else {
+            await prisma.statusPageSubscription.update({
+              where: { id: existing.id },
+              data: {
+                verificationToken: pendingVerif,
+                verificationTokenExpiresAt: verificationExpiresAt,
+              },
+            });
+          }
+          // Do NOT sync join table — stays as-is until verification confirms.
+          isActivePendingChange = true;
+        } else {
+          // No preference change for ACTIVE, or suppressed/bounced/complained — generic, no email
+          return subscriptionAccepted();
+        }
       }
 
-      if (action === 'REACTIVATE') {
+      if (!isActivePendingChange && action === 'REACTIVATE') {
         const reactivated = await prisma.statusPageSubscription.updateMany({
           where: { id: existing.id, state: 'UNSUBSCRIBED' },
           data: {
@@ -204,6 +250,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             suppressionReason: null,
             token: hashSubscriptionToken(token),
             verificationToken: hashSubscriptionToken(verificationToken),
+            verificationTokenExpiresAt: verificationExpiresAt,
             verified: false,
             ...(preferencesProvided
               ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
@@ -215,12 +262,13 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         // initial read. Preserve that state and avoid queueing verification.
         if (reactivated.count === 0) return subscriptionAccepted();
         if (preferencesProvided) await syncSubscriptionServices(existing.id);
-      } else {
+      } else if (!isActivePendingChange) {
         const refreshed = await prisma.statusPageSubscription.updateMany({
           where: { id: existing.id, state: 'PENDING' },
           data: {
             token: hashSubscriptionToken(token),
             verificationToken: hashSubscriptionToken(verificationToken),
+            verificationTokenExpiresAt: verificationExpiresAt,
             ...(preferencesProvided
               ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
               : {}),
@@ -236,6 +284,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           email: normalizedEmail,
           token: hashSubscriptionToken(token),
           verificationToken: hashSubscriptionToken(verificationToken),
+          verificationTokenExpiresAt: verificationExpiresAt,
           verified: false,
           state: 'PENDING',
           ...(preferencesProvided

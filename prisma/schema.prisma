@@ -1694,8 +1694,9 @@ model StatusPageSubscription {
   complainedAt      DateTime?
   lastDeliveredAt   DateTime?
   lastFailedAt      DateTime?
-  verificationToken String?
-  preferences       Json? // Notification preferences (all incidents, major only, etc.)
+  verificationToken          String?
+  verificationTokenExpiresAt DateTime?
+  preferences                Json? // Notification preferences (all incidents, major only, etc.)
 
   statusPage      StatusPage                     @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
   deliveryTokens  StatusPageSubscriptionToken[]

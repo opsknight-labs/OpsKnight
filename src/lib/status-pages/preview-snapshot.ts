@@ -118,7 +118,6 @@ export function buildPreviewSnapshot(input: {
         .filter(service => visible.has(service.id))
         .map(service => {
           const impact = activeByService.get(service.id);
-          const uptime = input.uptime90[service.id];
           return {
             id: service.id,
             name: visible.get(service.id)?.displayName || service.name,
@@ -135,33 +134,13 @@ export function buildPreviewSnapshot(input: {
               : {}),
             status: impact ? getWorstPublicStatus(impact.statuses) : 'OPERATIONAL',
             activeIncidentCount: impact?.count ?? 0,
-            ...(input.showMetrics !== false &&
-            input.showUptimeHistory !== false &&
-            allow('showServiceMetrics') &&
-            typeof uptime === 'number'
-              ? {
-                  uptime: {
-                    days30: {
-                      percentage: uptime,
-                      incidentCount: 0,
-                      measuredDays: 30,
-                      complete: true,
-                    },
-                    days90: {
-                      percentage: uptime,
-                      incidentCount: 0,
-                      measuredDays: 90,
-                      complete: true,
-                    },
-                  },
-                }
-              : {}),
           };
         })
     : [];
 
   const nowMs = now.getTime();
   const previewDetailCutoffMs = (() => {
+    if (Reflect.get(input.privacy ?? {}, 'showIncidentHistoryDetails') !== false) return null;
     const raw = Reflect.get(input.privacy ?? {}, 'incidentHistoryDetailDays') as unknown;
     if (raw == null) return null;
     const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));

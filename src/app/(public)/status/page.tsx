@@ -24,6 +24,17 @@ export async function getPublicStatusMetadata(slug?: string): Promise<Metadata> 
   if (!statusPage) {
     return { title: 'Status Page', description: 'Service status and incident information' };
   }
+  // Private pages must not leak identity (title, OG, RSS) before authentication.
+  if (statusPage.requireAuth) {
+    const session = await getServerSession(await getAuthOptions());
+    if (!session) {
+      return {
+        title: 'Private Status Page',
+        description: 'Service status — authentication required.',
+        robots: { index: false, follow: false },
+      };
+    }
+  }
 
   const branding =
     statusPage.branding &&

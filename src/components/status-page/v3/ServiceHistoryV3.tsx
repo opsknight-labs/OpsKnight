@@ -168,7 +168,7 @@ function ServiceHistoryV3Inner({
             className="status-v3-history"
             viewBox={`0 0 ${days.length} 10`}
             preserveAspectRatio="none"
-            role="group"
+            role="listbox"
             tabIndex={0}
             aria-label={`Daily status history for ${service.name} — press Enter to open details, arrow keys to navigate days`}
             aria-activedescendant={selected != null ? `history-day-${service.id}-${selected}` : undefined}
@@ -204,6 +204,8 @@ function ServiceHistoryV3Inner({
                   key={entry.date}
                   id={`history-day-${service.id}-${index}`}
                   className={`status-v3-history__day status-${token}${isSelected ? ' status-v3-history__day--selected' : ''}`}
+                  role="option"
+                  aria-selected={isSelected}
                   x={index + 0.08}
                   y={0}
                   width={0.84}
