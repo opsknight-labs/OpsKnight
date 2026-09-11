@@ -21,15 +21,17 @@ import {
   useSecureCookies,
 } from '@/lib/auth-cookies';
 
+/**
+ * Security-sensitive user state (status, role and tokenVersion) is intentionally
+ * refreshed on every server-side session evaluation. Credential resets and
+ * administrative revocations must not inherit a stale one-minute cache window.
+ */
 function getJwtUserRefreshTtlMs() {
-  const raw = process.env.JWT_USER_REFRESH_TTL_MS ?? '60000';
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 60000;
+  return 0;
 }
 
 import type { JWT } from 'next-auth/jwt';
 
-// Augmented types to avoid 'any' usage
 type AugmentedJWT = JWT & {
   tokenVersion?: number;
   userFetchedAt?: number;
@@ -105,8 +107,6 @@ export async function hashPassword(password: string) {
 
 export async function getAuthOptions(): Promise<NextAuthOptions> {
   const now = Date.now();
-  // Module-level cache to avoid repeatedly constructing options (and reloading OIDC config)
-  // across multiple server component renders / API calls within a short window.
   if (authOptionsCache && authOptionsCache.expiresAt > now) {
     return authOptionsCache.value;
   }
@@ -117,22 +117,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
   authOptionsInFlight = (async () => {
     const oidcConfig = await getOidcConfig();
-    // Session design (modelled on PagerDuty / Linear / Slack):
-    //   - No time-based "you've been idle, log back in" on any client.
-    //   - Mobile clients ALWAYS get the long ceiling so push-notification
-    //     listeners don't silently fall off because a timer expired
-    //     without the user noticing. Mobile UA forces rememberMe=true
-    //     in the authorize() call below.
-    //   - Web without "Remember Me" still gets 7 days (matches most ops
-    //     tools' default), but with sliding refresh — any activity in
-    //     that window resets the timer.
-    //   - Web with "Remember Me" gets the long ceiling.
-    //   - The only way to log a user out is server-side revocation:
-    //     `tokenVersion` is bumped (user disabled, password reset,
-    //     deletion) and the next JWT callback rejects the stale token.
-    const sessionMaxAgeSeconds = 60 * 60 * 24 * 7; // 7 days (web, no Remember Me)
-    const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 365; // 1 year (web + RM, all mobile)
-    const sessionUpdateAgeSeconds = 60 * 60; // sliding refresh at most hourly
+    const sessionMaxAgeSeconds = 60 * 60 * 24 * 7;
+    const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 365;
+    const sessionUpdateAgeSeconds = 60 * 60;
 
     if (oidcConfig) {
       logger.info('[Auth] OIDC provider will be enabled', {
@@ -147,21 +134,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     }
 
     return {
-      // No adapter - using pure JWT sessions (industry standard for OIDC)
-      // Session cap is `rememberMeMaxAgeSeconds` (30 days) so a
-      // remember-me JWT can outlive 7 days. Non-remember-me sessions
-      // are still pinned to 7 days via the JWT's own `exp` set in the
-      // jwt callback below — NextAuth respects whichever is shorter.
       session: {
         strategy: 'jwt',
         maxAge: rememberMeMaxAgeSeconds,
         updateAge: sessionUpdateAgeSeconds,
       },
       jwt: { maxAge: rememberMeMaxAgeSeconds },
-      // Explicit cookie config (see src/lib/auth-cookies.ts).
-      // We derive `secure` and the `__Secure-` / `__Host-` prefixes from
-      // NEXTAUTH_URL rather than relying on NextAuth's request-based protocol
-      // detection, which is unreliable behind Cloudflare Tunnel.
       useSecureCookies,
       cookies: {
         sessionToken: {
@@ -221,8 +199,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           },
         },
       },
-      // Host headers affect OAuth callback construction. Trust them only when an
-      // operator explicitly opts in for a correctly configured reverse proxy.
       trustHost: process.env.AUTH_TRUST_HOST?.toLowerCase() === 'true',
       providers: [
         ...(oidcConfig
@@ -243,7 +219,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             rememberMe: { label: 'Remember Me', type: 'text' },
           },
           async authorize(credentials, req) {
-            // Import security modules
             const { checkLoginAttempt, recordFailedAttempt, resetLoginAttempts, isValidEmail } =
               await import('@/lib/login-security');
             const { logLoginSuccess, logLoginFailed, logLoginBlocked } =
@@ -252,16 +227,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             const email = credentials?.email?.toLowerCase().trim() || '';
             const password = credentials?.password || '';
             const userAgentHeader = (req?.headers?.['user-agent'] as string) || '';
-            // Mobile clients (PWA on iOS/Android, native wrappers, etc.)
-            // are forced into Remember Me. We never want push-notification
-            // listeners to silently fall off because a 7-day timer expired
-            // — see the session-design comment in getAuthOptions().
             const isMobileClient =
               /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(
                 userAgentHeader
               );
             const rememberMe = credentials?.rememberMe === 'true' || isMobileClient;
-            // Get IP from request headers (best effort)
             const { getClientIp } = await import('@/lib/client-ip');
             const ip = getClientIp(req?.headers);
             const userAgent = userAgentHeader || 'Unknown';
@@ -272,7 +242,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               ip,
             });
 
-            // Server-side email validation
             if (!email || !isValidEmail(email)) {
               await logLoginFailed(email || 'unknown', ip, userAgent, 'INVALID_EMAIL_FORMAT');
               return null;
@@ -283,8 +252,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return null;
             }
 
-            // Shared across application instances; the progressive local
-            // lockout below remains useful for its user-facing lockout timing.
             const { checkRateLimit } = await import('@/lib/rate-limit');
             const distributedAttempt = await checkRateLimit(
               `auth:credentials:${email}:${ip}`,
@@ -310,7 +277,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return null;
             }
 
-            // Check rate limiting / lockout
             const attemptCheck = checkLoginAttempt(email, ip);
             if (!attemptCheck.allowed) {
               await logLoginBlocked(
@@ -339,7 +305,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return null;
             }
 
-            // Check if user is disabled
             if (user.status === 'DISABLED') {
               await logLoginFailed(email, ip, userAgent, 'USER_DISABLED');
               return null;
@@ -370,16 +335,13 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return null;
             }
 
-            // Success - reset attempts and log
             resetLoginAttempts(email, ip);
             await logLoginSuccess(email, user.id, ip, userAgent, 'credentials');
 
-            // Log remember me usage (Note: extending session maxAge dynamically requires JWT callback changes)
             if (rememberMe) {
               logger.debug('[Auth] User requested "Remember Me"', { email });
             }
 
-            // Update status to ACTIVE if it's INVITED (first login)
             if (user.status !== 'ACTIVE') {
               await prisma.user.update({
                 where: { email: user.email },
@@ -397,9 +359,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               tokenVersion: user.tokenVersion,
             });
 
-            // Stash the rememberMe flag onto the user object so the
-            // jwt callback can pick it up and cap the JWT exp at the
-            // appropriate value (7d default, 30d when set).
             return {
               id: user.id,
               name: user.name,
@@ -417,7 +376,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       },
       callbacks: {
         async jwt({ token, user, account, trigger, session: _session }) {
-          // Debug: Log incoming token state
           logger.warn('[Auth-Debug] JWT callback started', {
             component: 'auth:jwt',
             hasSub: !!token.sub,
@@ -425,7 +383,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             trigger: trigger || 'none',
           });
 
-          // Initial sign in
           if (user && account) {
             delete (token as AugmentedJWT).error;
             logger.warn('[Auth-Debug] Initial Sign In', {
@@ -433,16 +390,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               userId: user.id,
               provider: account.provider,
             });
-            // ... (keep existing initial sign-in logic)
-            // For OIDC, we must look up the user in the DB to get the internal CUID and current role
-            // The 'user' object from OIDC is just the profile, so 'user.id' is the OIDC 'sub' (not our DB ID)
             if (account.provider === 'oidc' && user.email) {
               try {
                 const activeConfig = await getOidcConfig();
                 const issuer = activeConfig?.issuer ? normalizeIssuer(activeConfig.issuer) : null;
                 const subject = account.providerAccountId || user.id || null;
 
-                // Prefer stable identity link (issuer + subject) over email-only lookup.
                 const identity =
                   issuer && subject
                     ? await prisma.oidcIdentity.findUnique({
@@ -457,14 +410,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     });
 
                 if (dbUser) {
-                  token.sub = dbUser.id; // Use internal CUID
+                  token.sub = dbUser.id;
                   token.role = dbUser.role;
                   token.name = dbUser.name;
                   token.email = dbUser.email;
-                  // Include tokenVersion so we can revoke sessions later
                   (token as AugmentedJWT).tokenVersion = dbUser.tokenVersion ?? 0;
                 } else {
-                  // This should technically not happen if signIn passed, but just in case
                   logger.error('[Auth] JWT callback - OIDC user not found in DB', {
                     component: 'auth:jwt',
                     email: user.email,
@@ -477,7 +428,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 });
               }
             } else {
-              // For Credentials, 'user' comes from authorize() and is already the DB user object
               delete (token as AugmentedJWT).error;
               token.role = (user as AugmentedUser).role;
               token.sub = user.id;
@@ -487,20 +437,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               (token as AugmentedJWT).rememberMe = (user as AugmentedUser).rememberMe === true;
             }
 
-            // Pick the JWT exp cap based on rememberMe. The session
-            // cookie itself uses the 30-day NextAuth maxAge so the
-            // browser will hold either token; the JWT's own `exp`
-            // claim is what makes verification fail at 7 days for
-            // non-remember-me sessions.
             const remember = (token as AugmentedJWT).rememberMe === true;
             const ttlSeconds = remember ? rememberMeMaxAgeSeconds : sessionMaxAgeSeconds;
             token.exp = Math.floor(Date.now() / 1000) + ttlSeconds;
-          }
-          // The user provided in the jwt callback is the one returned by the `authorize` function
-          // or the OIDC provider. We need to ensure `token.sub` is set to our internal user ID
-          // and `token.role` is set correctly.
-          // This block handles the initial population of the token from the `user` object.
-          else if (user) {
+          } else if (user) {
             delete (token as AugmentedJWT).error;
             logger.warn('[Auth-Debug] Initial Sign In (Fallback)', {
               component: 'auth:jwt',
@@ -513,25 +453,19 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             (token as AugmentedJWT).tokenVersion = (user as AugmentedUser).tokenVersion ?? 0;
           }
 
-          // Handle client-side update() calls
-          // If trigger is "update", we can accept partial updates from the client if needed,
-          // OR simply force a refresh (which is safer/better).
-          // We'll treat trigger="update" as a signal to bypass cache.
           if (trigger === 'update') {
-            // ...
+            // Explicit updates also take the same authoritative DB path below.
           }
-          // Fetch latest user data from database on each request to ensure name is up-to-date
-          // This ensures name changes reflect immediately without requiring re-login
+
           if (token.sub && typeof token.sub === 'string') {
-            // Session revocation: if the user increments tokenVersion, older JWTs are invalid.
-            // Session revocation: if the user increments tokenVersion, older JWTs are invalid.
             const currentTokenVersion = (token as AugmentedJWT).tokenVersion;
             const lastFetchedAt = (token as AugmentedJWT).userFetchedAt;
             const ttlMs = getJwtUserRefreshTtlMs();
 
-            // Skip DB fetch if cached AND NOT forced by update trigger
             if (trigger !== 'update' && lastFetchedAt && Date.now() - lastFetchedAt < ttlMs) {
-              // Cached
+              // ttlMs is intentionally zero: retained only to keep this branch
+              // structurally explicit if a future cache is redesigned around
+              // distributed revocation invalidation.
             } else {
               try {
                 const dbUser = await prisma.user.findUnique({
@@ -557,7 +491,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     tokenVer: currentTokenVersion,
                   });
 
-                  // If disabled, force logout.
                   if (dbUser.status === 'DISABLED') {
                     return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
                   }
@@ -606,7 +539,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           });
 
           if ((token as AugmentedJWT)?.error || !token.sub) {
-            // Force unauthenticated session shape.
             (session as unknown as { user: unknown }).user = undefined;
             logger.warn('[Auth-Debug] Session CLEARED due to error/missing sub', {
               component: 'auth:session',
@@ -619,12 +551,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             (session.user as AugmentedUser).id = token.sub;
             (session.user as AugmentedUser).tokenVersion =
               (token as AugmentedJWT).tokenVersion ?? 0;
-            // Always use the latest name from token (which is fetched from DB)
             session.user.name = (token.name as string) || session.user.name;
             session.user.email = (token.email as string) || session.user.email;
             session.user.avatarUrl = token.avatarUrl;
             session.user.gender = token.gender;
-            // Map to standard image field as well for compatibility
             session.user.image = token.avatarUrl || getDefaultAvatar(token.gender, token.sub);
           }
 
@@ -644,7 +574,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             where: { email },
           });
 
-          // Final check - prevent disabled users from signing in
           if (existing?.status === 'DISABLED') {
             logger.warn('[Auth] Sign-in rejected: user disabled', {
               component: 'auth:signIn',
@@ -671,10 +600,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
-            // Reject an explicit negative verification claim for every provider.
-            // Microsoft Entra ID commonly omits the standard `email_verified`
-            // claim, so strict mode is provider-aware rather than rejecting a
-            // valid Entra token solely because the claim is absent.
             const emailVerifiedClaim = coerceBooleanClaim((profile as any)?.email_verified); // eslint-disable-line @typescript-eslint/no-explicit-any
             if (emailVerifiedClaim === false) {
               logger.warn('[Auth] OIDC sign-in rejected: email not verified by IdP', {
@@ -732,7 +657,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               });
             }
 
-            // Create new user if auto-provision is enabled
             if (!existing) {
               if (!activeConfig.autoProvision) {
                 logger.warn('[Auth] OIDC sign-in rejected: auto-provision disabled', {
@@ -742,13 +666,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 return false;
               }
 
-              // Create new user from OIDC profile
               try {
                 const newUser = await prisma.user.create({
                   data: {
                     email,
                     name: user.name || email.split('@')[0],
-                    role: 'USER', // Default role, can be overridden by role mapping below
+                    role: 'USER',
                     status: 'ACTIVE',
                   },
                 });
@@ -759,7 +682,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   email,
                 });
 
-                // Update user object with new ID for JWT callback
                 user.id = newUser.id;
               } catch (error) {
                 logger.error('[Auth] Failed to create OIDC user', {
@@ -770,7 +692,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               }
             }
 
-            // Get user for updates (either existing or newly created)
             const targetUser = existing || (await prisma.user.findUnique({ where: { email } }));
 
             if (!targetUser) {
@@ -781,9 +702,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
-            // Administrative disable is authoritative. OIDC must never create a
-            // new identity link or reactivate a disabled account, even when a
-            // historical invite record exists for that email address.
             if (targetUser.status === 'DISABLED') {
               logger.warn('[Auth] OIDC sign-in rejected: user is disabled', {
                 component: 'auth:signIn',
@@ -793,7 +711,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return false;
             }
 
-            // Create/validate stable issuer+subject identity link to avoid unsafe email-only linking.
             const issuer = normalizeIssuer(activeConfig.issuer);
             const subject =
               account?.providerAccountId ||
@@ -835,10 +752,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                     return linked;
                   }
 
-                  // Existing accounts must meet the provider-specific email
-                  // assurance policy. Entra may omit `email_verified`, but a
-                  // missing claim is not sufficient by itself to claim an
-                  // invited account: that path requires a one-time admin approval.
                   if (
                     existing &&
                     !hasOidcEmailLinkAssurance(activeConfig.providerType, emailVerifiedClaim)
@@ -906,12 +819,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             const updateData: any = {};
-
-            // Ensure user object has correct ID for JWT
             user.id = targetUser.id;
 
-            // First successful SSO completes an outstanding invitation. A
-            // DISABLED account was rejected above and is never reactivated.
             if (targetUser.status === 'INVITED') {
               updateData.status = 'ACTIVE';
               updateData.invitedAt = null;
@@ -923,7 +832,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               });
             }
 
-            // Role Evaluation
             if (
               activeConfig.roleMapping &&
               Array.isArray(activeConfig.roleMapping) &&
@@ -976,7 +884,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                       matchedValue: rule.value,
                     });
                   }
-                  break; // Stop at first match
+                  break;
                 }
               }
 
@@ -988,7 +896,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               }
             }
 
-            // JIT Profile Sync - sync attributes from OIDC profile
             if (
               activeConfig.profileMapping &&
               typeof activeConfig.profileMapping === 'object' &&
@@ -1002,7 +909,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               const mapping = activeConfig.profileMapping as Record<string, string>;
               const oidcProfile = profile as Record<string, unknown>;
 
-              // Sync department
               if (mapping.department && oidcProfile[mapping.department]) {
                 const dept = String(oidcProfile[mapping.department]);
                 if (dept && dept !== targetUser.department) {
@@ -1016,7 +922,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 }
               }
 
-              // Sync job title
               if (mapping.jobTitle && oidcProfile[mapping.jobTitle]) {
                 const title = String(oidcProfile[mapping.jobTitle]);
                 if (title && title !== targetUser.jobTitle) {
@@ -1030,7 +935,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 }
               }
 
-              // Sync avatar URL
               if (mapping.avatarUrl && oidcProfile[mapping.avatarUrl]) {
                 const avatar = String(oidcProfile[mapping.avatarUrl]);
                 let safeAvatar: string | null = null;
@@ -1042,8 +946,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 } catch {
                   safeAvatar = null;
                 }
-                // Only sync if value changed AND the current value is NOT a locally uploaded file
-                // This prevents OIDC from overwriting a user's custom uploaded photo.
                 const isLocalUpload =
                   targetUser.avatarUrl?.startsWith('/api/users/') ||
                   targetUser.avatarUrl?.startsWith('/uploads/');
@@ -1057,7 +959,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   });
                 }
               }
-              // Update lastOidcSync timestamp if any profile data was synced
               if (updateData.department || updateData.jobTitle || updateData.avatarUrl) {
                 updateData.lastOidcSync = new Date();
                 logger.info('[Auth] OIDC profile sync completed', {
@@ -1130,17 +1031,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 }
 
 export async function revokeUserSessions(userId: string) {
-  // Increment tokenVersion to invalidate all JWT sessions for this user.
   await prisma.user.update({
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
   });
 }
 
-/**
- * Internal helper to reset the auth options cache.
- * Intended for use in tests only.
- */
 export function resetAuthOptionsCache() {
   authOptionsCache = undefined;
   authOptionsInFlight = undefined;

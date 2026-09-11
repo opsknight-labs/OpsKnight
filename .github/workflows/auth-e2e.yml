@@ -1,0 +1,71 @@
+name: Auth Browser E2E
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auth-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public
+      HUSKY: '0'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Prepare browser-test database
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
+          npm run prisma:indexes:status-platform
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authentication browser contracts
+        run: npx playwright test --project=chromium
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

@@ -24,6 +24,16 @@ type EmailInviteResult = {
   providerName?: string | null;
 };
 
+function buildInviteUrl(token: string): string {
+  const baseUrl = getBaseUrl().replace(/\/$/, '');
+  return `${baseUrl}/set-password#token=${encodeURIComponent(token)}`;
+}
+
+function inviteEventKey(inviteUrl: string): string {
+  // Never persist the plaintext invite capability as a dedup/event key.
+  return createHash('sha256').update(inviteUrl).digest('hex');
+}
+
 async function sendInviteEmailIfConfigured(data: {
   userId: string;
   email: string;
@@ -65,7 +75,7 @@ async function sendInviteEmailIfConfigured(data: {
       templateKey: 'user-invitation',
       sourceType: 'USER_INVITATION',
       sourceId: data.userId,
-      eventKey: data.inviteUrl,
+      eventKey: inviteEventKey(data.inviteUrl),
       displayMessage: 'Workspace invitation',
       priority: 2,
       payload: {
@@ -251,10 +261,7 @@ async function createInviteToken(userId: string, email: string) {
     });
   });
 
-  const baseUrl = getBaseUrl();
-  const inviteUrl = `${baseUrl}/set-password?token=${encodeURIComponent(token)}`;
-
-  return inviteUrl;
+  return buildInviteUrl(token);
 }
 
 export async function addUser(
@@ -343,8 +350,7 @@ export async function addUser(
         },
       });
 
-      const baseUrl = getBaseUrl();
-      inviteUrl = `${baseUrl}/set-password?token=${encodeURIComponent(token)}`;
+      inviteUrl = buildInviteUrl(token);
 
       return newUser;
     });

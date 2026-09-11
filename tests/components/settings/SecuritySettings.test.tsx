@@ -4,19 +4,21 @@ import PasswordStrength from '@/components/settings/PasswordStrength';
 import SecurityForm from '@/components/settings/SecurityForm';
 import ActiveSessionsSection from '@/components/settings/ActiveSessionsSection';
 import SecurityRecentActivity from '@/components/settings/SecurityRecentActivity';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MAX_UTF8_BYTES,
+  PASSWORD_MIN_LENGTH,
+} from '@/lib/passwords';
 
-// Mock react-dom useFormStatus
 vi.mock('react-dom', () => ({
   useFormStatus: () => ({ pending: false }),
 }));
 
-// Mock next-auth/react
 vi.mock('next-auth/react', () => ({
   signOut: vi.fn(),
   useSession: () => ({ data: null }),
 }));
 
-// Mock server actions
 vi.mock('@/app/(app)/settings/actions', () => ({
   updatePassword: vi.fn().mockResolvedValue({ success: true }),
 }));
@@ -31,15 +33,18 @@ describe('Security Components', () => {
   });
 
   describe('PasswordStrength', () => {
-    it('renders password strength meter and requirements checklist', () => {
+    it('renders the centralized passphrase requirements without composition rules', () => {
       render(<PasswordStrength password="Password123!" />);
 
       expect(screen.getByText('Password Strength')).toBeInTheDocument();
-      expect(screen.getByText('At least 8 characters')).toBeInTheDocument();
-      expect(screen.getByText('Contains lowercase letter (a-z)')).toBeInTheDocument();
-      expect(screen.getByText('Contains uppercase letter (A-Z)')).toBeInTheDocument();
-      expect(screen.getByText('Contains number (0-9)')).toBeInTheDocument();
-      expect(screen.getByText('Contains special character (!@#$...)')).toBeInTheDocument();
+      expect(screen.getByText(`At least ${PASSWORD_MIN_LENGTH} characters`)).toBeInTheDocument();
+      expect(screen.getByText(`No more than ${PASSWORD_MAX_LENGTH} characters`)).toBeInTheDocument();
+      expect(
+        screen.getByText(`Within ${PASSWORD_MAX_UTF8_BYTES} UTF-8 bytes (bcrypt safety limit)`)
+      ).toBeInTheDocument();
+      expect(screen.getByText('Not common, default, or account-identifying')).toBeInTheDocument();
+      expect(screen.queryByText(/uppercase letter/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/special character/i)).not.toBeInTheDocument();
     });
 
     it('returns null when password is empty', () => {

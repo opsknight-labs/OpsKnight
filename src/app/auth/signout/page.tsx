@@ -1,79 +1,26 @@
 import { Suspense } from 'react';
 import SignOutClient from './signout-client';
 
+/** Minimal skeleton that matches the new right-panel card layout while the
+ *  client bundle hydrates. No old glass-panel / login-shell dead code. */
+function SignOutSkeleton() {
+  return (
+    <div className="relative min-h-[100dvh] w-full bg-background flex items-center justify-center px-6">
+      <div className="w-full max-w-[360px] sm:max-w-[400px] animate-pulse space-y-6 py-8">
+        <div className="h-7 w-32 rounded-lg bg-slate-200 dark:bg-slate-800" />
+        <div className="h-4 w-64 rounded bg-slate-100 dark:bg-slate-800/60" />
+        <div className="space-y-3 pt-2">
+          <div className="h-11 w-full rounded-xl bg-slate-200 dark:bg-slate-800" />
+          <div className="h-11 w-full rounded-xl bg-slate-100 dark:bg-slate-800/60" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SignOutPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="login-shell" role="main">
-          <div className="login-bg-animation">
-            <div className="login-bg-orb login-bg-orb-1"></div>
-            <div className="login-bg-orb login-bg-orb-2"></div>
-            <div className="login-bg-orb login-bg-orb-3"></div>
-          </div>
-
-          <div
-            className="login-card glass-panel"
-            style={{
-              maxWidth: '480px',
-              margin: 'auto',
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 'auto',
-              gridTemplateColumns: 'none',
-              background: 'rgba(255, 255, 255, 0.7)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.4)',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            }}
-          >
-            <section
-              className="login-form"
-              style={{
-                width: '100%',
-                padding: '3rem 2rem',
-                background: 'transparent',
-                boxShadow: 'none',
-                textAlign: 'center',
-              }}
-            >
-              <div
-                className="login-form-logo"
-                style={{ margin: '0 auto 1.5rem', width: '56px', height: '56px' }}
-              >
-                <img
-                  src="/logo.svg"
-                  alt="OpsKnight"
-                  className="login-form-logo-img"
-                  style={{ width: '32px', height: '32px' }}
-                />
-              </div>
-
-              <h1
-                style={{
-                  fontSize: '1.75rem',
-                  fontWeight: 800,
-                  color: 'var(--text-primary)',
-                  marginBottom: '0.75rem',
-                }}
-              >
-                Sign Out
-              </h1>
-
-              <p
-                style={{
-                  color: 'var(--text-secondary)',
-                  marginBottom: '2rem',
-                  fontSize: '1rem',
-                }}
-              >
-                Loading…
-              </p>
-            </section>
-          </div>
-        </main>
-      }
-    >
+    <Suspense fallback={<SignOutSkeleton />}>
       <SignOutClient />
     </Suspense>
   );
