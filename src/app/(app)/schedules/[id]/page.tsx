@@ -47,16 +47,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/aler
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
-import {
-  ArrowLeft,
-  Calendar,
-  CheckCircle2,
-  Clock3,
-  Info,
-  Layers3,
-  ShieldAlert,
-  Users,
-} from 'lucide-react';
+import { Calendar, CheckCircle2, Clock3, Info, Layers3, ShieldAlert, Users } from 'lucide-react';
 
 export const revalidate = 0;
 
@@ -696,7 +687,8 @@ export default async function ScheduleDetailPage({
           <Info className="h-4 w-4" />
           <AlertTitle>Schedule settings are read-only</AlertTitle>
           <AlertDescription>
-            This schedule uses {schedule.timeZone}. Admins and responders can change schedule settings.
+            This schedule uses {schedule.timeZone}. Admins and responders can change schedule
+            settings.
           </AlertDescription>
         </Alert>
       )}

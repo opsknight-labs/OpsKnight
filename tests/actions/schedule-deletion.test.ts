@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppError } from '@/lib/errors';
 import { AuthorizationError, CAPABILITIES } from '@/lib/authorization';
 
 const mocks = vi.hoisted(() => ({
@@ -92,10 +91,7 @@ describe('Schedule Deletion Lifecycle & RBAC', () => {
 
     it('rejects RESPONDER access with AUTHORIZATION_DENIED', async () => {
       mocks.assertAdmin.mockRejectedValue(
-        new AuthorizationError(
-          'Unauthorized. Admin access required.',
-          CAPABILITIES.ADMIN_MANAGE
-        )
+        new AuthorizationError('Unauthorized. Admin access required.', CAPABILITIES.ADMIN_MANAGE)
       );
 
       const result = await deleteSchedule(scheduleId);
@@ -110,10 +106,7 @@ describe('Schedule Deletion Lifecycle & RBAC', () => {
 
     it('rejects standard USER access with AUTHORIZATION_DENIED', async () => {
       mocks.assertAdmin.mockRejectedValue(
-        new AuthorizationError(
-          'Unauthorized. Admin access required.',
-          CAPABILITIES.ADMIN_MANAGE
-        )
+        new AuthorizationError('Unauthorized. Admin access required.', CAPABILITIES.ADMIN_MANAGE)
       );
 
       const result = await deleteSchedule(scheduleId);
