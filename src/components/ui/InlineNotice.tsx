@@ -15,25 +15,35 @@ interface InlineNoticeProps extends React.HTMLAttributes<HTMLDivElement> {
   onDismiss?: () => void;
 }
 
-const toneStyles: Record<InlineNoticeTone, string> = {
-  success:
-    'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200',
-  error:
-    'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200',
-  warning:
-    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200',
-  info: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/40 dark:text-sky-200',
-  neutral:
-    'border-amber-200 bg-amber-50/70 text-amber-900 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-100',
-};
+function getToneStyles(tone: InlineNoticeTone): string {
+  switch (tone) {
+    case 'success':
+      return 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200';
+    case 'error':
+      return 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/40 dark:text-rose-200';
+    case 'warning':
+      return 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-200';
+    case 'info':
+      return 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/40 dark:bg-sky-950/40 dark:text-sky-200';
+    case 'neutral':
+      return 'border-amber-200 bg-amber-50/70 text-amber-900 dark:border-amber-900/30 dark:bg-amber-950/20 dark:text-amber-100';
+  }
+}
 
-const defaultIcons: Record<InlineNoticeTone, React.ReactNode> = {
-  success: <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />,
-  error: <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />,
-  warning: <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />,
-  info: <Info className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />,
-  neutral: <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />,
-};
+function getDefaultIcon(tone: InlineNoticeTone): React.ReactNode {
+  switch (tone) {
+    case 'success':
+      return <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />;
+    case 'error':
+      return <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />;
+    case 'warning':
+      return <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />;
+    case 'info':
+      return <Info className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />;
+    case 'neutral':
+      return <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />;
+  }
+}
 
 /**
  * InlineNotice — semantic, theme-safe alternative to hand-built emerald/rose Alerts.
@@ -62,11 +72,8 @@ export function InlineNotice({
   // have a stable contract: error+assertive => alert/assertive, others => status/polite.
   const role = roleProp ?? (resolvedUrgency === 'assertive' ? 'alert' : 'status');
   const ariaLive = ariaLiveProp ?? (resolvedUrgency === 'assertive' ? 'assertive' : 'polite');
-  // tone is a closed union InlineNoticeTone — indexing these maps is not user-controlled.
-  // eslint-disable-next-line security/detect-object-injection
-  const toneClass = toneStyles[tone];
-  // eslint-disable-next-line security/detect-object-injection
-  const toneIcon = defaultIcons[tone];
+  const toneClass = getToneStyles(tone);
+  const toneIcon = getDefaultIcon(tone);
 
   return (
     <div
