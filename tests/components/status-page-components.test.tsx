@@ -172,9 +172,9 @@ describe('StatusPageSubscribeModal', () => {
 describe('StatusPageFooter', () => {
   it('renders default footer text, live pulse indicator, and powered by badge', () => {
     render(<StatusPageFooter links={{ resources: [], support: [] }} />);
-    expect(screen.getByText(/real-time incident & telemetry updates/i)).toBeDefined();
+    expect(screen.getByText(/continuous service observability/i)).toBeDefined();
     expect(
-      screen.getByText(/status, incident communication, and real-time availability tracking/i)
+      screen.getByText(/enterprise-grade uptime monitoring, automated incident dispatch/i)
     ).toBeDefined();
     expect(screen.getByRole('link', { name: /powered by opsknight/i })).toBeDefined();
     expect(screen.getByText(/create your status page/i)).toBeDefined();

@@ -128,8 +128,8 @@ function MailIcon() {
 function ArrowUpRightIcon() {
   return (
     <svg
-      width="11"
-      height="11"
+      width="12"
+      height="12"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -160,14 +160,16 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
   return (
     <footer className="status-site-footer">
       <div className="status-site-footer__inner">
+        {/* Top Tier: Enterprise Status Telemetry & Resource Links */}
         <div className="status-site-footer__main">
           <div className="status-site-footer__info">
             <div className="status-site-footer__status-indicator">
               <span className="status-site-footer__pulse-dot" aria-hidden="true" />
-              <span>Real-Time Incident &amp; Telemetry Updates</span>
+              <span>Continuous Service Observability</span>
             </div>
             <p className="status-site-footer__text">
-              {footerText || 'Status, incident communication, and real-time availability tracking.'}
+              {footerText ||
+                'Enterprise-grade uptime monitoring, automated incident dispatch, and real-time SLA telemetry.'}
             </p>
           </div>
 
@@ -176,7 +178,7 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
               {hasResources && (
                 <nav
                   className="status-site-footer__pill-group"
-                  aria-label="Status feeds and exports"
+                  aria-label="Developer Feeds and APIs"
                 >
                   <span className="status-site-footer__group-label">Feeds &amp; API</span>
                   <div className="status-site-footer__pill-row">
@@ -193,7 +195,7 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
               )}
 
               {hasSupport && (
-                <nav className="status-site-footer__pill-group" aria-label="Support and contact">
+                <nav className="status-site-footer__pill-group" aria-label="Support and Escalation">
                   <span className="status-site-footer__group-label">Support</span>
                   <div className="status-site-footer__pill-row">
                     {links.support.map(link => (
@@ -211,30 +213,23 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
           )}
         </div>
 
-        <div className="status-site-footer__bottom">
-          <div className="status-site-footer__copyright">
-            <span>&copy; {currentYear} All systems operational</span>
-            <span className="status-site-footer__dot-sep" aria-hidden="true">
-              &bull;
-            </span>
-            <span>Incident history updated continuously</span>
-          </div>
-
+        {/* Middle Tier: Center-Aligned Prominent Branding with Larger Logo & Marketing CTA */}
+        <div className="status-site-footer__brand-center">
           <a
-            className="status-site-footer__powered"
-            href="https://opsknight.com/?ref=status_page"
+            className="status-site-footer__brand-badge"
+            href="https://opsknight.com/?ref=status_footer"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Powered by OpsKnight — Incident Response and Status Pages"
+            aria-label="Powered by OpsKnight — Next-Gen Incident Management"
           >
-            <span className="status-site-footer__powered-lead">Powered by</span>
+            <span className="status-site-footer__brand-lead">Powered by</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.svg"
               alt=""
-              width={18}
-              height={18}
-              className="status-site-footer__powered-logo"
+              width={26}
+              height={26}
+              className="status-site-footer__brand-logo"
               loading="lazy"
               decoding="async"
               onError={e => {
@@ -244,12 +239,36 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
                 }
               }}
             />
-            <span className="status-site-footer__powered-brand">OpsKnight</span>
-            <span className="status-site-footer__powered-cta">
-              Create your status page
-              <ArrowUpRightIcon />
-            </span>
+            <span className="status-site-footer__brand-name">OpsKnight</span>
           </a>
+          <p className="status-site-footer__brand-desc">
+            Next-generation incident management, automated on-call scheduling, and high-reliability
+            status pages.{' '}
+            <a
+              href="https://opsknight.com/?ref=status_footer_cta"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="status-site-footer__brand-cta"
+            >
+              <span>Create your status page</span>
+              <ArrowUpRightIcon />
+            </a>
+          </p>
+        </div>
+
+        {/* Bottom Tier: Enterprise Metadata & Copyright */}
+        <div className="status-site-footer__bottom">
+          <div className="status-site-footer__copyright">
+            <span>&copy; {currentYear} System Status Portal</span>
+            <span className="status-site-footer__dot-sep" aria-hidden="true">
+              &bull;
+            </span>
+            <span>Multi-region telemetry active</span>
+            <span className="status-site-footer__dot-sep" aria-hidden="true">
+              &bull;
+            </span>
+            <span>Incident history synchronized in real time</span>
+          </div>
         </div>
       </div>
     </footer>
