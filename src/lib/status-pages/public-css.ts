@@ -619,8 +619,96 @@ ${R} .status-v3-search input:focus-visible { outline: none; border-color: var(--
 ${R} .status-v3-filters { display: flex; flex-wrap: wrap; gap: .4rem; }
 ${R} .status-v3-filters .status-v3-chip { cursor: pointer; background: var(--status-panel-bg); gap: .35rem; }
 ${R} .status-v3-filters .status-v3-chip[aria-pressed="true"] { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border)); background: color-mix(in srgb, var(--primary) 10%, var(--status-panel-bg)); }
-${R} .status-v3-group { display: grid; gap: .75rem; margin-block-end: 1.25rem; }
-${R} .status-v3-group__title { font-size: .8125rem; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; color: var(--status-text-subtle); margin: 0; }
+${R} .status-v3-group {
+  display: grid;
+  gap: 0.6rem;
+  margin-block-end: 1.5rem;
+}
+
+${R} .status-v3-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-block-end: 0.5rem;
+  border-block-end: 1px solid var(--status-panel-border);
+}
+
+${R} .status-v3-group__title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+${R} .status-v3-group__title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--status-text-strong);
+  overflow-wrap: anywhere;
+}
+
+${R} .status-v3-group__icon {
+  color: var(--status-text-subtle);
+  flex-shrink: 0;
+}
+
+${R} .status-v3-group__subtitle {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--status-text-muted);
+}
+
+${R} .status-v3-group__tally {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+${R} .status-v3-group__tally-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+${R} .status-v3-group__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+
+${R} .status-v3-group__tally-pill--healthy {
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid rgba(4, 120, 87, 0.18);
+}
+${R} .status-v3-group__tally-pill--healthy .status-v3-group__dot {
+  background-color: #10b981;
+}
+
+${R} .status-v3-group__tally-pill--impacted {
+  color: #ef4444;
+  background: #fef2f2;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+${R} .status-v3-group__tally-pill--impacted .status-v3-group__dot {
+  background-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
 
 ${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item, ${R} .status-v3-incident, ${R} .status-v3-announcement, ${R} .status-v3-changelog__item {
   border: 1px solid var(--status-panel-border); border-inline-start: 3px solid var(--v3-accent, var(--status-panel-border));

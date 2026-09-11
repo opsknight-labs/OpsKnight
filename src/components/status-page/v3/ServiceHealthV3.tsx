@@ -33,15 +33,6 @@ const IMPACT_ORDER: Record<PublicServiceStatus, number> = {
   OPERATIONAL: 0,
 };
 
-const STATUS_FILTER_ORDER: PublicServiceStatus[] = [
-  'MAJOR_OUTAGE',
-  'PARTIAL_OUTAGE',
-  'DEGRADED',
-  'MAINTENANCE',
-  'UNKNOWN',
-  'OPERATIONAL',
-];
-
 function sortByImpact(left: PublicStatusService, right: PublicStatusService) {
   const delta = IMPACT_ORDER[right.status] - IMPACT_ORDER[left.status];
   return delta !== 0 ? delta : left.name.localeCompare(right.name);
@@ -56,11 +47,18 @@ function serviceMatches(service: PublicStatusService, filter: FilterKey) {
   return service.status === filter;
 }
 
-const SLA_GRADE_LABEL: Record<string, string> = {
-  EXCELLENT: 'Excellent',
-  GOOD: 'Good',
-  BELOW_TARGET: 'Below target',
-};
+function slaGradeLabel(grade: string | undefined): string | undefined {
+  switch (grade) {
+    case 'EXCELLENT':
+      return 'Excellent';
+    case 'GOOD':
+      return 'Good';
+    case 'BELOW_TARGET':
+      return 'Below target';
+    default:
+      return grade;
+  }
+}
 
 function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZone: string }) {
   const token = statusPresentation(service.status).token;
@@ -115,7 +113,7 @@ function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZ
           {slaGrade && (
             <StatusBadge
               status={slaGrade}
-              label={SLA_GRADE_LABEL[slaGrade] ?? slaGrade}
+              label={slaGradeLabel(slaGrade)}
               size="xs"
               showDot
             />
@@ -179,12 +177,6 @@ export default function ServiceHealthV3({
     return services.filter(service => serviceSearchKey(service).includes(needle));
   }, [services, query]);
 
-  const presentStatuses = useMemo(() => {
-    const seen = new Set(searched.map(service => service.status));
-    return STATUS_FILTER_ORDER.filter(status => seen.has(status));
-  }, [searched]);
-
-  const issueCount = searched.filter(service => service.status !== 'OPERATIONAL').length;
   const canGroup = services.some(service => (service.regions?.length ?? 0) > 0);
 
   const filtered = useMemo(() => {
@@ -397,12 +389,54 @@ export default function ServiceHealthV3({
           )}
         </div>
       ) : groups ? (
-        groups.map(group => (
-          <div key={group.region} className="status-v3-group">
-            <h3 className="status-v3-group__title">{group.region}</h3>
-            <ServiceList services={group.services} timeZone={timeZone} />
-          </div>
-        ))
+        groups.map(group => {
+          const impacted = group.services.filter(service => service.status !== 'OPERATIONAL').length;
+          const healthy = impacted === 0;
+          return (
+            <div key={group.region} className="status-v3-group">
+              <div className="status-v3-group__head">
+                <div className="status-v3-group__title-wrap">
+                  <h3 className="status-v3-group__title">
+                    <svg
+                      className="status-v3-group__icon"
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                      <path d="M2 12h20" />
+                    </svg>
+                    {group.region}
+                  </h3>
+                  <span className="status-v3-group__subtitle">
+                    {group.services.length} service{group.services.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="status-v3-group__tally" aria-label={`${healthy ? 'All' : impacted} of ${group.services.length} services ${healthy ? 'operational' : 'affected'}`}>
+                  {healthy ? (
+                    <span className="status-v3-group__tally-pill status-v3-group__tally-pill--healthy">
+                      <span className="status-v3-group__dot" aria-hidden="true" />
+                      All operational
+                    </span>
+                  ) : (
+                    <span className="status-v3-group__tally-pill status-v3-group__tally-pill--impacted">
+                      <span className="status-v3-group__dot" aria-hidden="true" />
+                      {impacted} affected
+                    </span>
+                  )}
+                </div>
+              </div>
+              <ServiceList services={group.services} timeZone={timeZone} />
+            </div>
+          );
+        })
       ) : (
         <ServiceList services={filtered} timeZone={timeZone} />
       )}
