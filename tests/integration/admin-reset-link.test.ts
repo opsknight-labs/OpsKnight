@@ -6,10 +6,6 @@ const mockPrisma = vi.hoisted(() => ({
   user: {
     findUnique: vi.fn(),
   },
-  userToken: {
-    deleteMany: vi.fn(),
-    create: vi.fn(),
-  },
   auditLog: {
     create: vi.fn(),
   },
@@ -23,6 +19,7 @@ const mockPrisma = vi.hoisted(() => ({
 }));
 const mockAssertAdmin = vi.hoisted(() => vi.fn());
 const mockCheckRateLimit = vi.hoisted(() => vi.fn());
+const mockIssuePasswordResetToken = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/rbac', () => ({
   assertAdmin: mockAssertAdmin,
@@ -34,6 +31,7 @@ vi.mock('@/lib/prisma', () => ({
 
 vi.mock('@/lib/password-reset', () => ({
   checkRateLimit: mockCheckRateLimit,
+  issuePasswordResetToken: mockIssuePasswordResetToken,
 }));
 
 vi.mock('@/lib/app-url', () => ({
@@ -54,6 +52,11 @@ describe('API: Admin Generate Reset Link', () => {
       status: 'ACTIVE',
     });
     mockCheckRateLimit.mockResolvedValue(undefined);
+    mockIssuePasswordResetToken.mockResolvedValue({
+      token: 'admin-reset-token-12345678901234567890123456789012',
+      tokenHash: 'a'.repeat(64),
+      expiresAt: new Date('2026-09-11T05:00:00.000Z'),
+    });
     mockPrisma.$transaction.mockImplementation(async callback => callback(mockPrisma));
   });
 
@@ -78,15 +81,11 @@ describe('API: Admin Generate Reset Link', () => {
       where: { id: 'target-id' },
       select: { id: true, email: true },
     });
-    expect(mockPrisma.userToken.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          userId: 'target-id',
-          identifier: 'target-id',
-          type: 'PASSWORD_RESET',
-        }),
-      })
-    );
+    expect(mockIssuePasswordResetToken).toHaveBeenCalledWith({
+      userId: 'target-id',
+      email: 'target@example.com',
+      metadata: { generatedBy: 'admin-id' },
+    });
     expect(mockPrisma.auditLog.create).toHaveBeenCalled();
   });
 
