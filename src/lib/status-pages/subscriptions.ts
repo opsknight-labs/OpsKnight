@@ -106,6 +106,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
     // Industry-standard service picker: optional preferences.selectedServiceIds, validated against page's services
     const preferencesProvided = rawPreferences !== undefined;
     let normalizedPreferences: { selectedServiceIds?: string[] } | null = null;
+    let normalizedServiceIds: string[] | null = null;
     if (preferencesProvided) {
       if (rawPreferences?.selectedServiceIds !== undefined) {
         // Explicit Selected mode — empty or all-invalid must not widen to "all".
@@ -113,9 +114,14 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           return jsonError(
             new AppError({
               code: 'VALIDATION_FAILED',
-              userMessage: 'Select at least one service to follow, or leave service selection empty for all updates.',
+              userMessage:
+                'Select at least one service to follow, or leave service selection empty for all updates.',
               fields: [
-                { field: 'preferences.selectedServiceIds', code: 'empty', message: 'Empty selection is not valid when service selection is provided.' },
+                {
+                  field: 'preferences.selectedServiceIds',
+                  code: 'empty',
+                  message: 'Empty selection is not valid when service selection is provided.',
+                },
               ],
             })
           );
@@ -132,15 +138,39 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
               code: 'VALIDATION_FAILED',
               userMessage: 'None of the selected services are available on this status page.',
               fields: [
-                { field: 'preferences.selectedServiceIds', code: 'invalid', message: 'No valid service selected.' },
+                {
+                  field: 'preferences.selectedServiceIds',
+                  code: 'invalid',
+                  message: 'No valid service selected.',
+                },
               ],
             })
           );
         }
-        normalizedPreferences = { selectedServiceIds: [...new Set(filtered)] };
+        const unique = [...new Set(filtered)];
+        normalizedPreferences = { selectedServiceIds: unique };
+        normalizedServiceIds = unique;
       } else {
         // preferences: {} with no selectedServiceIds — treat as "all" (null) but still considered provided
         normalizedPreferences = null;
+        normalizedServiceIds = null;
+      }
+    }
+
+    async function syncSubscriptionServices(subscriptionId: string) {
+      if (!preferencesProvided) return;
+      if (normalizedServiceIds === null) {
+        await prisma.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
+      } else {
+        await prisma.$transaction(async tx => {
+          await tx.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
+          if (normalizedServiceIds!.length > 0) {
+            await tx.statusPageSubscriptionService.createMany({
+              data: normalizedServiceIds!.map(serviceId => ({ subscriptionId, serviceId })),
+              skipDuplicates: true,
+            });
+          }
+        });
       }
     }
 
@@ -184,6 +214,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         // A provider callback may have applied a stronger suppression after the
         // initial read. Preserve that state and avoid queueing verification.
         if (reactivated.count === 0) return subscriptionAccepted();
+        if (preferencesProvided) await syncSubscriptionServices(existing.id);
       } else {
         const refreshed = await prisma.statusPageSubscription.updateMany({
           where: { id: existing.id, state: 'PENDING' },
@@ -196,9 +227,10 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           },
         });
         if (refreshed.count === 0) return subscriptionAccepted();
+        if (preferencesProvided) await syncSubscriptionServices(existing.id);
       }
     } else {
-      await prisma.statusPageSubscription.create({
+      const created = await prisma.statusPageSubscription.create({
         data: {
           statusPageId,
           email: normalizedEmail,
@@ -210,13 +242,17 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
             : {}),
         },
+        select: { id: true },
       });
+      if (preferencesProvided) await syncSubscriptionServices(created.id);
     }
 
-    const subscription = await prisma.statusPageSubscription.findUniqueOrThrow({
-      where: { statusPageId_email: { statusPageId, email: normalizedEmail } },
-      select: { id: true },
-    });
+    const subscription = existing
+      ? { id: existing.id }
+      : await prisma.statusPageSubscription.findUniqueOrThrow({
+          where: { statusPageId_email: { statusPageId, email: normalizedEmail } },
+          select: { id: true },
+        });
 
     try {
       const { getStatusPageEmailConfig } = await import('@/lib/notification-providers');

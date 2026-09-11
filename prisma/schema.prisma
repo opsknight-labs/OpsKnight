@@ -458,13 +458,14 @@ model Service {
   incidents Incident[]
   policy    EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id])
 
-  integrations        Integration[]
-  alerts              Alert[]
-  incidentTemplates   IncidentTemplate[]
-  statusPageServices  StatusPageService[]
-  webhookIntegrations WebhookIntegration[]
-  slackIntegration    SlackIntegration?    @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
-  jiraServiceMapping  JiraServiceMapping?
+  integrations          Integration[]
+  alerts                Alert[]
+  incidentTemplates     IncidentTemplate[]
+  statusPageServices    StatusPageService[]
+  webhookIntegrations   WebhookIntegration[]
+  slackIntegration      SlackIntegration?               @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
+  jiraServiceMapping    JiraServiceMapping?
+  subscriptionServices StatusPageSubscriptionService[]
 
   @@index([teamId])
   @@index([escalationPolicyId])
@@ -1696,12 +1697,26 @@ model StatusPageSubscription {
   verificationToken String?
   preferences       Json? // Notification preferences (all incidents, major only, etc.)
 
-  statusPage     StatusPage                    @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
-  deliveryTokens StatusPageSubscriptionToken[]
+  statusPage      StatusPage                     @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  deliveryTokens  StatusPageSubscriptionToken[]
+  selectedServices StatusPageSubscriptionService[]
 
   @@unique([statusPageId, email])
   @@index([statusPageId, verified])
   @@index([token])
+}
+
+model StatusPageSubscriptionService {
+  subscriptionId String
+  serviceId      String
+  createdAt      DateTime @default(now())
+
+  subscription StatusPageSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  service      Service              @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@id([subscriptionId, serviceId])
+  @@index([serviceId])
+  @@index([subscriptionId])
 }
 
 model StatusPageSubscriptionToken {

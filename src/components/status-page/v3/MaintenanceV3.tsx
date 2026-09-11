@@ -1,7 +1,20 @@
-import { memo, useMemo } from 'react';
 import type { PublicMaintenance } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
+
+function countsFor(maintenance: PublicMaintenance[] | undefined) {
+  if (!maintenance || maintenance.length === 0)
+    return { inProgress: 0, scheduled: 0, completed: 0 };
+  let inProgress = 0;
+  let scheduled = 0;
+  let completed = 0;
+  for (const item of maintenance) {
+    if (item.state === 'IN_PROGRESS') inProgress++;
+    else if (item.state === 'SCHEDULED') scheduled++;
+    else if (item.state === 'COMPLETED') completed++;
+  }
+  return { inProgress, scheduled, completed };
+}
 
 const STATE_LABEL: Record<PublicMaintenance['state'], string> = {
   SCHEDULED: 'Scheduled',
@@ -13,29 +26,20 @@ const STATE_LABEL: Record<PublicMaintenance['state'], string> = {
  * Compact, card-less maintenance strip matching the Region card architecture.
  * Eliminates bulky vertical boxes while keeping title, time window, badge, and expandable details.
  */
-function MaintenanceV3Inner({
+function MaintenanceV3({
   maintenance,
   timeZone,
 }: {
   maintenance: PublicMaintenance[] | undefined;
   timeZone: string;
 }) {
-  const counts = useMemo(() => {
-    if (!maintenance || maintenance.length === 0) return { inProgress: 0, scheduled: 0, completed: 0 };
-    let inProgress = 0;
-    let scheduled = 0;
-    let completed = 0;
-    for (const item of maintenance) {
-      if (item.state === 'IN_PROGRESS') inProgress++;
-      else if (item.state === 'SCHEDULED') scheduled++;
-      else if (item.state === 'COMPLETED') completed++;
-    }
-    return { inProgress, scheduled, completed };
-  }, [maintenance]);
-
+  const counts = countsFor(maintenance);
   if (!maintenance || maintenance.length === 0) return null;
-
-  const { inProgress: inProgressCount, scheduled: scheduledCount, completed: completedCount } = counts;
+  const {
+    inProgress: inProgressCount,
+    scheduled: scheduledCount,
+    completed: completedCount,
+  } = counts;
 
   return (
     <section
@@ -168,5 +172,4 @@ function MaintenanceV3Inner({
   );
 }
 
-const MaintenanceV3 = memo(MaintenanceV3Inner);
 export default MaintenanceV3;

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StatusPageSubscribe from '@/components/status-page/StatusPageSubscribe';
+import StatusPageSubscribeModal from '@/components/status-page/StatusPageSubscribeModal';
 
 // Mock fetch for subscribe tests
 const mockFetch = vi.fn();
@@ -14,6 +15,7 @@ describe('StatusPageSubscribe', () => {
   it('renders the subscription form with email input and submit button', () => {
     render(<StatusPageSubscribe statusPageId="sp-123" />);
     expect(screen.getByRole('textbox')).toBeDefined();
+    expect(screen.getByRole('button', { name: /subscribe/i })).toBeDefined();
   });
 
   it('shows validation error for invalid email', async () => {
@@ -56,6 +58,49 @@ describe('StatusPageSubscribe', () => {
     });
   });
 
+  it('supports selecting specific services and submitting preferences', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    const services = [
+      { id: 'srv-1', name: 'API Gateway' },
+      { id: 'srv-2', name: 'Database' },
+    ];
+    render(<StatusPageSubscribe statusPageId="sp-456" services={services} />);
+
+    // Toggle to Selected services
+    const selectedServicesBtn = screen.getByRole('button', { name: /selected services/i });
+    fireEvent.click(selectedServicesBtn);
+
+    // Try submitting without selecting any service
+    const emailInput = screen.getByRole('textbox');
+    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
+    const form = emailInput.closest('form')!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(screen.getByText(/select at least one service/i)).toBeDefined();
+    });
+
+    // Select API Gateway service
+    const serviceCheckbox = screen.getByRole('checkbox', { name: /api gateway/i });
+    fireEvent.click(serviceCheckbox);
+
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/status-page/subscribe',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            statusPageId: 'sp-456',
+            email: 'test@example.com',
+            preferences: { selectedServiceIds: ['srv-1'] },
+          }),
+        })
+      );
+    });
+  });
+
   it('shows error message when API returns an error', async () => {
     mockFetch.mockResolvedValue({
       ok: false,
@@ -69,5 +114,56 @@ describe('StatusPageSubscribe', () => {
     await waitFor(() => {
       expect(screen.getByText(/already subscribed/i)).toBeDefined();
     });
+  });
+
+  it('shows success message and allows dismiss', async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+    render(<StatusPageSubscribe statusPageId="sp-123" />);
+    const emailInput = screen.getByRole('textbox');
+    fireEvent.change(emailInput, { target: { value: 'new@example.com' } });
+    fireEvent.submit(emailInput.closest('form')!);
+
+    await waitFor(() => {
+      expect(screen.getByText(/check your inbox|check your email/i)).toBeDefined();
+    });
+
+    const dismissBtn = screen.getByRole('button', { name: /dismiss/i });
+    fireEvent.click(dismissBtn);
+
+    expect(screen.queryByText(/check your inbox|check your email/i)).toBeNull();
+    expect(screen.getByRole('textbox')).toBeDefined();
+  });
+});
+
+describe('StatusPageSubscribeModal', () => {
+  it('does not render when open is false', () => {
+    const { container } = render(
+      <StatusPageSubscribeModal
+        open={false}
+        statusPageId="sp-123"
+        services={[]}
+        onClose={vi.fn()}
+      />
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('renders modal dialog when open is true and calls onClose when close button clicked', () => {
+    const onClose = vi.fn();
+    render(
+      <StatusPageSubscribeModal
+        open={true}
+        statusPageId="sp-123"
+        services={[{ id: 's1', name: 'Web App' }]}
+        onClose={onClose}
+      />
+    );
+
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByRole('heading', { name: /subscribe to updates/i })).toBeDefined();
+
+    const closeBtn = screen.getByRole('button', { name: /close/i });
+    fireEvent.click(closeBtn);
+    expect(onClose).toHaveBeenCalled();
   });
 });

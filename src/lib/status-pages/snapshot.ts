@@ -446,9 +446,11 @@ export async function buildStatusPageSnapshot(
     (sum, service) => sum + (service.activeIncidentCount ?? 0),
     0
   );
-  const inProgressMaintenance = maintenanceEntries.filter(
-    item => item.state === 'IN_PROGRESS'
-  ).length;
+  // overall.maintenanceCount must not under-report when >200 simultaneous
+  // maintenances exist: display feeds are truncated (STATUS_PAGE_DISPLAY_FEED_LIMIT).
+  const inProgressMaintenance = await db.statusPageAnnouncement.count({
+    where: maintenanceInProgressDisplayWhere(pageId, now),
+  });
 
   const lastIncidentUpdateAt = incidents.reduce<Date | null>((latest, incident) => {
     const times = [incident.createdAt, ...(incident.events?.map(event => event.createdAt) ?? [])];
