@@ -1085,10 +1085,10 @@ table:not(.login-card table) td {
 }
 
 /* Compact form inputs - exclude login */
-input[type="text"]:not(.login-input):not(.auth-input),
-input[type="email"]:not(.login-input):not(.auth-input),
-input[type="password"]:not(.login-input):not(.auth-input),
-input[type="number"]:not(.login-input):not(.auth-input),
+input[type="text"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
+input[type="email"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
+input[type="password"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
+input[type="number"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
 select:not(.login-card select),
 textarea:not(.login-card textarea) {
   padding: 0.5rem 0.625rem;
@@ -1183,10 +1183,10 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
   }
 
   /* Compact form inputs - exclude login */
-  input[type="text"]:not(.login-input):not(.auth-input),
-  input[type="email"]:not(.login-input):not(.auth-input),
-  input[type="password"]:not(.login-input):not(.auth-input),
-  input[type="number"]:not(.login-input):not(.auth-input),
+  input[type="text"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
+  input[type="email"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
+  input[type="password"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
+  input[type="number"]:not(.login-input):not(.auth-input):not(.search-input):not(.topbar-search-input):not([cmdk-input]),
   select:not(.login-card select),
   textarea:not(.login-card textarea) {
     padding: 0.5rem 0.625rem !important;
@@ -3328,8 +3328,8 @@ section:not(.login-brand):not(.login-form):not(.login-card section),
   /* Search bar */
   .topbar-search,
   .topbar-search-input {
-    background-color: #ffffff !important;
-    color: var(--text-primary) !important;
+    background-color: transparent !important;
+    color: #f4f4f5 !important;
     filter: none !important;
   }
 }
