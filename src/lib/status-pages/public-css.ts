@@ -718,9 +718,7 @@ ${R} .status-v3-hero {
     var(--status-panel-bg);
   box-shadow: 0 16px 38px -30px color-mix(in srgb, var(--v3-accent, var(--primary)) 45%, transparent);
 }
-${R} .status-v3-hero::before { block-size: 5px; background: linear-gradient(90deg, var(--v3-accent, var(--primary)), color-mix(in srgb, var(--v3-accent, var(--primary)) 30%, var(--primary))); }
-${R} .status-v3-hero__banner h1 { text-wrap: balance; }
-${R} .status-v3-hero__mark .status-v3-dot--lg { box-shadow: 0 0 0 6px color-mix(in srgb, currentColor 16%, transparent), 0 0 22px color-mix(in srgb, currentColor 55%, transparent); }
+${R} .status-v3-hero h1 { text-wrap: balance; }
 ${R} .status-v3-hero .status-badge { box-shadow: 0 8px 20px -10px currentColor; }
 
 /* Stat cards: bold tabular numerals over a soft gradient */
@@ -749,7 +747,7 @@ ${R} .status-v3-incident__updates { border-inline-start-color: color-mix(in srgb
 ${R} .status-v3-update::before { background: var(--v3-accent, var(--primary)); box-shadow: 0 0 0 3px var(--status-panel-bg), 0 0 10px color-mix(in srgb, var(--v3-accent, var(--primary)) 60%, transparent); }
 
 /* A calm pulse on a fully-operational hero */
-${R} .status-v3-hero[data-status="operational"] .status-v3-dot--lg { animation: status-pulse 2.6s ease-in-out infinite; }
+${R} .status-v3-hero[data-status="operational"] .status-v3-hero__live { animation: status-pulse 2.6s ease-in-out infinite; }
 
 /* Staggered entrance for each section */
 @keyframes status-v3-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -933,7 +931,7 @@ ${R} .status-v3-hours__slice { position: absolute; inset-block: 0; background: c
 ${R} .status-v3-hours__axis { display: flex; justify-content: space-between; font-size: .66rem; color: var(--status-text-subtle); font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: reduce) {
-  ${R} .status-v3 > *, ${R} .status-v3-hero[data-status="operational"] .status-v3-dot--lg, ${R} .status-v3-inspector, ${R} .status-v3-inspector__breakdown-seg { animation: none !important; }
+  ${R} .status-v3 > *, ${R} .status-v3-hero[data-status="operational"] .status-v3-hero__live, ${R} .status-v3-inspector, ${R} .status-v3-inspector__breakdown-seg { animation: none !important; }
   ${R} .status-v3-history__day { transition: none !important; }
 }
 
@@ -1014,62 +1012,75 @@ ${R} .status-v3 > section > h2 {
 ${R} .status-v3 > section > h2::before { display: none; }
 
 ${R} .status-v3-hero {
-  display: grid; gap: .85rem 1.75rem; align-items: center;
-  padding: .85rem 0 .95rem; overflow: visible; grid-template-columns: minmax(0, 1fr);
-  border: 0; border-radius: 0; background: transparent; box-shadow: none;
-  border-block-end: 2px solid var(--v3-accent, var(--primary));
+  display: grid; gap: 1rem 2rem; align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 1.05rem 1.15rem;
+  border: 1px solid var(--status-panel-border);
+  border-inline-start: 3px solid var(--v3-accent, var(--primary));
+  border-radius: 10px;
+  background:
+    radial-gradient(140% 180% at 100% 0%, color-mix(in srgb, var(--v3-accent, var(--primary)) 7%, transparent), transparent 62%),
+    var(--status-panel-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
 }
 ${R} .status-v3-hero::before { display: none; }
-${R} .status-v3-hero__banner {
-  display: flex; align-items: flex-start; gap: .75rem; min-inline-size: 0;
+${R} .status-v3-hero__main {
+  display: grid; gap: .3rem; min-inline-size: 0;
+}
+${R} .status-v3-hero__status-row {
+  display: inline-flex; align-items: center; gap: .5rem;
+  margin-block-end: .15rem;
 }
 ${R} .status-v3-hero__live {
-  flex: none; margin-block-start: .55rem;
-  inline-size: .55rem; block-size: .55rem; border-radius: 999px;
+  flex: none;
+  inline-size: .5rem; block-size: .5rem; border-radius: 999px;
   background: var(--v3-accent, var(--primary));
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--v3-accent, var(--primary)) 16%, transparent);
 }
 ${R} .status-v3-hero__copy { display: grid; gap: .2rem; min-inline-size: 0; }
-${R} .status-v3-hero__banner h1 {
+${R} .status-v3-hero h1 {
   margin: 0; text-wrap: balance;
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
-  font-size: clamp(1.2rem, 2.1vw, 1.45rem); font-weight: 680; letter-spacing: -.03em; line-height: 1.2;
+  font-size: clamp(1.2rem, 2.1vw, 1.5rem); font-weight: 700; letter-spacing: -.03em; line-height: 1.2;
   color: var(--status-text-strong);
 }
 ${R} .status-v3-hero__note, ${R} .status-v3-hero__confidence {
-  margin: 0; max-inline-size: 40rem; color: var(--status-text-muted); font-size: .84rem; line-height: 1.45;
+  margin: 0; max-inline-size: 40rem; color: var(--status-text-muted); font-size: .84rem; line-height: 1.5;
 }
-${R} .status-v3-hero__updated { color: var(--status-text-subtle); }
+${R} .status-v3-hero__updated { color: var(--status-text-subtle); font-size: .8rem; }
 ${R} .status-v3-hero__confidence { font-size: .78rem; color: var(--status-text-subtle); }
 ${R} .status-v3-hero__stats {
-  display: flex; flex-wrap: wrap; align-items: start; gap: 0; margin: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0; margin: 0;
+  border-block-start: 1px solid var(--status-panel-border);
+  padding-block-start: .75rem;
 }
 ${R} .status-v3-hero__stats .status-stat {
-  display: grid; gap: .08rem; min-inline-size: 5.75rem;
-  padding: 0 1.1rem; border: 0; border-radius: 0; background: transparent; box-shadow: none;
-  border-inline-start: 1px solid var(--status-panel-border);
+  display: grid; gap: .08rem; min-inline-size: 6rem;
+  padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none;
 }
-${R} .status-v3-hero__stats .status-stat:first-child { border-inline-start: 0; padding-inline-start: 0; }
+${R} .status-v3-hero__stats .status-stat + .status-stat {
+  padding-inline-start: 1.1rem; border-inline-start: 1px solid var(--status-panel-border);
+}
 ${R} .status-v3-hero__stats .status-stat__label {
   font-size: .62rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
   color: var(--status-text-subtle);
 }
 ${R} .status-v3-hero__stats .status-stat__value {
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
-  font-size: 1.2rem; font-weight: 680; letter-spacing: -.03em;
+  font-size: 1.35rem; font-weight: 700; letter-spacing: -.03em;
   font-variant-numeric: tabular-nums; color: var(--status-text-strong); line-height: 1.15;
 }
 ${R} .status-v3-hero__stats .status-stat__hint { font-size: .72rem; color: var(--status-text-muted); }
 @media (min-width: 52rem) {
-  ${R} .status-v3-hero { grid-template-columns: minmax(0, 1fr) auto; padding-block: .9rem 1rem; }
+  ${R} .status-v3-hero { grid-template-columns: minmax(0, 1fr) auto; }
+  ${R} .status-v3-hero__stats { border-block-start: 0; padding-block-start: 0; }
 }
 @media (min-width: 90rem) {
-  ${R} .status-v3-hero { grid-template-columns: minmax(0, 1fr) auto; }
   ${R} .status-v3-hero__stats { display: flex; grid-template-columns: none; }
 }
 @media (max-width: 40rem) {
   ${R} .status-v3-hero__stats { width: 100%; }
-  ${R} .status-v3-hero__stats .status-stat { flex: 1 1 0; min-inline-size: 0; padding-inline: .75rem; }
+  ${R} .status-v3-hero__stats .status-stat { flex: 1 1 0; min-inline-size: 0; }
 }
 
 ${R} .status-v3-service, ${R} .status-v3-region, ${R} .status-v3-maintenance__item,

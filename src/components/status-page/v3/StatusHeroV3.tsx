@@ -1,8 +1,10 @@
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { OVERALL_DETAIL, statusPresentation } from '@/lib/status-pages/status-presentation';
+import StatusBadge from '@/components/incident/StatusBadge';
 
 /**
- * Compact overall-status strip. Figures come from the V3 `overall` block only.
+ * Compact overall-status panel. Figures come from the V3 `overall` block only.
+ * The status badge, headline and note are derived server-side; this only arranges them.
  */
 export default function StatusHeroV3({
   overall,
@@ -12,13 +14,17 @@ export default function StatusHeroV3({
   updatedLabel?: string | null;
 }) {
   const token = statusPresentation(overall.status).token;
+  const presentation = statusPresentation(overall.status);
+  const impacted = overall.impactedServiceCount;
   const stats: Array<{ label: string; value: number | undefined; hint?: string }> = [
     {
       label: 'Services',
       value: overall.totalServiceCount,
       hint:
-        overall.impactedServiceCount != null
-          ? `${overall.impactedServiceCount} affected`
+        impacted != null
+          ? impacted === 0
+            ? 'all operational'
+            : `${impacted} affected`
           : undefined,
     },
     { label: 'Active incidents', value: overall.activeIncidentCount },
@@ -32,8 +38,17 @@ export default function StatusHeroV3({
       data-status={token}
       aria-labelledby="status-v3-hero-heading"
     >
-      <div className="status-v3-hero__banner">
-        <span className="status-v3-hero__live" aria-hidden="true" />
+      <div className="status-v3-hero__main">
+        <div className="status-v3-hero__status-row">
+          <span className="status-v3-hero__live" aria-hidden="true" />
+          <StatusBadge
+            status={overall.status}
+            label={presentation.label}
+            size="sm"
+            showDot
+            pulse={overall.status !== 'OPERATIONAL'}
+          />
+        </div>
         <div className="status-v3-hero__copy">
           <h1 id="status-v3-hero-heading" aria-live="polite">
             {overall.headline}
