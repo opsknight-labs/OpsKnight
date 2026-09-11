@@ -1,6 +1,7 @@
 import type { PublicRegionStatus } from '@/lib/status-pages/public-contract';
 import { describeRegion } from '@/lib/status-pages/presentation';
-import StatusBadgeV3 from './StatusBadgeV3';
+import { statusPresentation } from '@/lib/status-pages/status-presentation';
+import StatusBadge from '@/components/incident/StatusBadge';
 
 /** Region health from V3 aggregation — the frontend never computes a region's worst status. */
 export default function RegionHealthV3({ regions }: { regions: PublicRegionStatus[] }) {
@@ -13,7 +14,12 @@ export default function RegionHealthV3({ regions }: { regions: PublicRegionStatu
           <li key={region.name} className="status-v3-region">
             <div className="status-v3-region__head">
               <span className="status-v3-region__name">{region.name}</span>
-              <StatusBadgeV3 status={region.status} size="sm" />
+              <StatusBadge
+                status={region.status}
+                label={statusPresentation(region.status).label}
+                size="sm"
+                showDot
+              />
             </div>
             <span className="status-muted">{describeRegion(region)}</span>
           </li>

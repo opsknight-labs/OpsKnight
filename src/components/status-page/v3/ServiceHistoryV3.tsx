@@ -5,6 +5,7 @@ import type { PublicStatusService } from '@/lib/status-pages/public-contract';
 import { buildPublicHistoryDays } from '@/lib/status-pages/history-presentation';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import { describeUptimeWindow } from '@/lib/status-pages/presentation';
+import StatusBadge from '@/components/incident/StatusBadge';
 
 const GRADE_LABEL: Record<string, string> = {
   EXCELLENT: 'Excellent',
@@ -121,16 +122,13 @@ export default function ServiceHistoryV3({
         >
           <div className="status-v3-inspector__head">
             <span className="status-v3-inspector__lead">
-              <span
-                className={`status-v3-dot status-${statusPresentation(day.status).token}`}
-                aria-hidden="true"
-              />
               <strong className="status-v3-inspector__date">{day.date}</strong>
-              <span
-                className={`status-badge status-${statusPresentation(day.status).token} status-v3-badge--sm`}
-              >
-                {statusPresentation(day.status).label}
-              </span>
+              <StatusBadge
+                status={day.status}
+                label={statusPresentation(day.status).label}
+                size="sm"
+                showDot
+              />
             </span>
             <button
               type="button"

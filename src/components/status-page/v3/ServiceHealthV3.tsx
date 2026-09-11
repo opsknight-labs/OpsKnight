@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { PublicServiceStatus, PublicStatusService } from '@/lib/status-pages/public-contract';
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
-import StatusBadgeV3 from './StatusBadgeV3';
+import StatusBadge from '@/components/incident/StatusBadge';
 import ServiceHistoryV3 from './ServiceHistoryV3';
 
 type FilterKey = 'all' | 'issues' | PublicServiceStatus;
@@ -54,7 +54,13 @@ function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZ
           <span className="status-v3-service__name">{service.name}</span>
           {service.description && <p className="status-v3-service__desc">{service.description}</p>}
         </div>
-        <StatusBadgeV3 status={service.status} size="sm" />
+        <StatusBadge
+          status={service.status}
+          label={statusPresentation(service.status).label}
+          size="sm"
+          showDot
+          pulse={affected}
+        />
       </div>
       {hasDetails && (
         <details className="status-v3-service__details">
@@ -152,7 +158,9 @@ export default function ServiceHealthV3({
             services: [...members].sort(sortByImpact),
           }))
           .sort((left, right) => {
-            const leftRank = Math.max(...left.services.map(service => IMPACT_ORDER[service.status]));
+            const leftRank = Math.max(
+              ...left.services.map(service => IMPACT_ORDER[service.status])
+            );
             const rightRank = Math.max(
               ...right.services.map(service => IMPACT_ORDER[service.status])
             );
@@ -186,10 +194,7 @@ export default function ServiceHealthV3({
         <div className="status-v3-services__instruments">
           <label className="status-v3-filter">
             <span className="sr-only">Filter by status</span>
-            <select
-              value={filter}
-              onChange={event => setFilter(event.target.value as FilterKey)}
-            >
+            <select value={filter} onChange={event => setFilter(event.target.value as FilterKey)}>
               <option value="all">All</option>
               {issueCount > 0 ? <option value="issues">Issues ({issueCount})</option> : null}
               {presentStatuses.map(status => (

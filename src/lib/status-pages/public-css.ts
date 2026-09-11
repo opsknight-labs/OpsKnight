@@ -72,17 +72,104 @@ ${R} .sr-only {
 }
 
 /* ---- status tokens ---- */
-${R} .status-badge {
-  display: inline-flex; align-items: center; gap: .35rem; border: 1px solid currentColor;
-  border-radius: 999px; padding: .25rem .6rem; font-weight: 700; font-size: .8125rem;
-  white-space: nowrap;
-}
 ${R} .status-operational { color: var(--status-operational); background: var(--status-operational-bg); }
 ${R} .status-degraded { color: var(--status-degraded); background: var(--status-degraded-bg); }
 ${R} .status-maintenance { color: var(--status-maintenance); background: var(--status-maintenance-bg); }
 ${R} .status-partial-outage { color: var(--status-partial-outage); background: var(--status-partial-outage-bg); }
 ${R} .status-major-outage { color: var(--status-major-outage); background: var(--status-major-outage-bg); }
 ${R} .status-unknown { color: var(--status-unknown); background: var(--status-unknown-bg); }
+
+/* ---- status tokens & central badge engine ---- */
+${R} .status-badge,
+${R} [data-badge="true"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 0.375rem;
+  padding: 0.2rem 0.55rem;
+  font-weight: 700;
+  font-size: 0.6875rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+  color: #ffffff !important;
+  border: 1px solid transparent !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: all 0.15s ease;
+}
+${R} .status-badge.status-v3-badge--xs,
+${R} [data-badge="true"][data-size="xs"] {
+  font-size: 0.625rem;
+  padding: 0.125rem 0.45rem;
+  border-radius: 0.3125rem;
+}
+${R} .status-badge.status-v3-badge--sm,
+${R} [data-badge="true"][data-size="sm"] {
+  font-size: 0.6875rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 0.375rem;
+}
+${R} .status-badge.status-v3-badge--md,
+${R} [data-badge="true"][data-size="md"] {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 0.375rem;
+}
+${R} .status-badge .status-badge__dot,
+${R} [data-badge="true"] .status-badge__dot {
+  width: 0.425rem;
+  height: 0.425rem;
+  border-radius: 9999px;
+  background-color: #ffffff !important;
+  flex-shrink: 0;
+  display: inline-block;
+  opacity: 0.95;
+}
+${R} .status-badge.status-operational,
+${R} .status-badge.status-resolved,
+${R} [data-badge="true"][data-variant="success"],
+${R} [data-badge="true"][data-status="operational"],
+${R} [data-badge="true"][data-status="resolved"] {
+  background: linear-gradient(to right, #10b981, #16a34a) !important;
+  color: #ffffff !important;
+}
+${R} .status-badge.status-degraded,
+${R} .status-badge.status-partial-outage,
+${R} .status-badge.status-acknowledged,
+${R} [data-badge="true"][data-variant="warning"],
+${R} [data-badge="true"][data-status="degraded"],
+${R} [data-badge="true"][data-status="partial-outage"],
+${R} [data-badge="true"][data-status="acknowledged"] {
+  background: linear-gradient(to right, #f59e0b, #ea580c) !important;
+  color: #ffffff !important;
+}
+${R} .status-badge.status-maintenance,
+${R} .status-badge.status-scheduled,
+${R} [data-badge="true"][data-variant="info"],
+${R} [data-badge="true"][data-status="maintenance"],
+${R} [data-badge="true"][data-status="scheduled"] {
+  background: linear-gradient(to right, #3b82f6, #4f46e5) !important;
+  color: #ffffff !important;
+}
+${R} .status-badge.status-major-outage,
+${R} .status-badge.status-critical,
+${R} .status-badge.status-high,
+${R} .status-badge.status-open,
+${R} [data-badge="true"][data-variant="danger"],
+${R} [data-badge="true"][data-status="major-outage"],
+${R} [data-badge="true"][data-status="critical"],
+${R} [data-badge="true"][data-status="high"],
+${R} [data-badge="true"][data-status="open"] {
+  background: linear-gradient(to right, #ef4444, #e11d48) !important;
+  color: #ffffff !important;
+}
+${R} .status-badge.status-unknown,
+${R} [data-badge="true"][data-variant="neutral"],
+${R} [data-badge="true"][data-status="unknown"] {
+  background: #334155 !important;
+  color: #ffffff !important;
+}
 
 /* ---- shared surfaces ---- */
 ${R} .status-panel {

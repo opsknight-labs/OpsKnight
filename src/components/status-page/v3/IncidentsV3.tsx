@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import type { PublicIncident } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
-import StatusBadgeV3 from './StatusBadgeV3';
+import StatusBadge from '@/components/incident/StatusBadge';
 
 const INITIAL_VISIBLE = 8;
 
@@ -46,7 +46,14 @@ function IncidentCard({
         </span>
       </summary>
       <div className="status-v3-incident__body">
-        {incident.publicImpact && <StatusBadgeV3 status={incident.publicImpact} size="sm" />}
+        {incident.publicImpact && (
+          <StatusBadge
+            status={incident.publicImpact}
+            label={statusPresentation(incident.publicImpact).label}
+            size="sm"
+            showDot
+          />
+        )}
         {incident.urgency ? <span className="status-v3-chip">{incident.urgency}</span> : null}
         {incident.createdAt && (
           <span className="status-muted" suppressHydrationWarning>
