@@ -221,33 +221,6 @@ export default function ServiceHealthV3({
               ? `${services.length} total`
               : `${filtered.length} of ${services.length}`}
           </span>
-          {canGroup && (
-            <button
-              type="button"
-              className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
-              aria-label="Group by region"
-              aria-pressed={groupRegions}
-              onClick={() => setGroupRegions(open => !open)}
-            >
-              <svg
-                className="status-v3-services__group-icon"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-                <path d="M2 12h20" />
-              </svg>
-              <span>{groupRegions ? 'Grouped by region' : 'Group by region'}</span>
-            </button>
-          )}
         </div>
 
         <div className="status-v3-services__right-group">
@@ -275,6 +248,34 @@ export default function ServiceHealthV3({
               onChange={event => setQuery(event.target.value)}
             />
           </div>
+
+          {canGroup && (
+            <button
+              type="button"
+              className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
+              aria-label="Group by region"
+              aria-pressed={groupRegions}
+              onClick={() => setGroupRegions(open => !open)}
+            >
+              <svg
+                className="status-v3-services__group-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                <path d="M2 12h20" />
+              </svg>
+              <span>{groupRegions ? 'Grouped by region' : 'Group by region'}</span>
+            </button>
+          )}
 
           <label htmlFor="status-v3-filter-select" className="sr-only">
             Filter by status
