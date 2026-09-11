@@ -30,7 +30,7 @@ import {
 import { normalizeLegacyActionItems, type ActionItem } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
-import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
+import ActionItemJiraContext from '@/components/action-items/ActionItemJiraContext';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import DueDateBadge from '@/components/action-items/DueDateBadge';
 
@@ -312,18 +312,14 @@ export default function IncidentPostmortemTabContent({
 
                       <IncidentJiraContext issues={inheritedIssues} compact />
 
-                      <div className="flex flex-wrap items-center gap-1">
-                        <span className="font-semibold text-[9px] uppercase tracking-wide text-muted-foreground">
-                          Action Item Jira
-                        </span>
-                        <ActionItemJiraBadge
-                          actionItemId={item.id}
-                          externalIssue={item.externalIssue}
-                          canManage={canManage}
-                          compact
-                          jiraCapability={jiraCapability}
-                        />
-                      </div>
+                      <ActionItemJiraContext
+                        actionItemId={item.id}
+                        externalIssue={item.externalIssue}
+                        canManage={canManage}
+                        compact
+                        jiraCapability={jiraCapability}
+                        labelClassName="text-[9px]"
+                      />
 
                       {item.dueDate && (
                         <DueDateBadge

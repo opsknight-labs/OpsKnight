@@ -21,7 +21,7 @@ import { Pencil, Globe, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { normalizeLegacyActionItems } from '@/lib/action-items';
 import type { JiraCapability } from '@/lib/jira-capabilities';
 import type { JiraIssueReference } from '@/lib/jira-references';
-import ActionItemJiraBadge from '@/components/action-items/ActionItemJiraBadge';
+import ActionItemJiraContext from '@/components/action-items/ActionItemJiraContext';
 import IncidentJiraContext from '@/components/jira/IncidentJiraContext';
 import { togglePostmortemPublicStatus } from '@/app/(app)/postmortems/actions';
 import {
@@ -545,18 +545,13 @@ export default function PostmortemDetailView({
                       {!effectivePublicView && (
                         <div className="mb-2 flex flex-col gap-1.5">
                           <IncidentJiraContext issues={inheritedIssues} compact />
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-semibold text-[10px] uppercase tracking-wide text-muted-foreground">
-                              Action Item Jira
-                            </span>
-                            <ActionItemJiraBadge
-                              actionItemId={item.id}
-                              externalIssue={item.externalIssue}
-                              canManage={canEdit}
-                              compact
-                              jiraCapability={jiraCapability}
-                            />
-                          </div>
+                          <ActionItemJiraContext
+                            actionItemId={item.id}
+                            externalIssue={item.externalIssue}
+                            canManage={canEdit}
+                            compact
+                            jiraCapability={jiraCapability}
+                          />
                         </div>
                       )}
                       {item.description && (
