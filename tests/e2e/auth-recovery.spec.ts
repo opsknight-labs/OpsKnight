@@ -6,9 +6,23 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 const databaseUrl = process.env.DATABASE_URL!;
+const BOOTSTRAP_CONFIG_KEY = 'auth.bootstrap.authorization';
 
 function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
+}
+
+async function resetBootstrapFixture() {
+  // Playwright retries must start from the same fresh-install contract. If a
+  // prior attempt times out while the first Server Action is compiling, its
+  // out-of-band capability may remain active even though no admin committed.
+  // This database is dedicated to the serial browser suite, so clear only the
+  // auth/bootstrap fixture before re-issuing the capability.
+  await prisma.auditLog.deleteMany();
+  await prisma.userToken.deleteMany();
+  await prisma.systemConfig.deleteMany({ where: { key: BOOTSTRAP_CONFIG_KEY } });
+  await prisma.rateLimit.deleteMany();
+  await prisma.user.deleteMany();
 }
 
 async function createResetCapability(email: string, password: string, token: string) {
@@ -73,6 +87,8 @@ test.describe.serial('authentication browser contracts', () => {
   test('fresh install bootstrap is issued out-of-band and consumed by first-admin creation', async ({
     page,
   }) => {
+    await resetBootstrapFixture();
+
     const output = execFileSync('node', ['scripts/create-bootstrap-code.mjs'], {
       env: { ...process.env, DATABASE_URL: databaseUrl },
       encoding: 'utf8',
@@ -92,13 +108,13 @@ test.describe.serial('authentication browser contracts', () => {
     await page.getByLabel('Confirm password').fill('Cobalt-orbit-library-492!');
     await page.getByRole('button', { name: 'Create administrator' }).click();
 
-    await expect(page.getByText('Administrator created')).toBeVisible();
+    await expect(page.getByText('Administrator created')).toBeVisible({ timeout: 20_000 });
     const admin = await prisma.user.findUnique({ where: { email: 'e2e-admin@example.com' } });
     expect(admin?.status).toBe('ACTIVE');
     expect(admin?.role).toBe('ADMIN');
 
     const bootstrapRow = await prisma.systemConfig.findUnique({
-      where: { key: 'auth.bootstrap.authorization' },
+      where: { key: BOOTSTRAP_CONFIG_KEY },
     });
     expect((bootstrapRow?.value as { usedAt?: string | null } | null)?.usedAt).toBeTruthy();
   });
