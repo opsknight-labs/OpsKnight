@@ -313,6 +313,7 @@ model User {
   invitationGeneration         Int        @default(0)
   role                         Role       @default(USER)
   roleSource                   RoleSource @default(MANUAL)
+  scimExternalId               String?    @unique
   status                       UserStatus @default(INVITED)
   passwordHash                 String?
   timeZone                     String     @default("UTC")
