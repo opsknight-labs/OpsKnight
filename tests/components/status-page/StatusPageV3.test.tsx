@@ -102,6 +102,19 @@ describe('StatusPageV3', () => {
     expect(screen.queryByText('Checkout API')).not.toBeInTheDocument();
   });
 
+  it('lists affected services before operational ones', () => {
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf([
+          service({ id: 'svc-ok', name: 'Alpha API' }),
+          service({ id: 'svc-down', name: 'Zeta Gateway', status: 'MAJOR_OUTAGE' }),
+        ])}
+      />
+    );
+    const names = screen.getAllByText(/Alpha API|Zeta Gateway/).map(node => node.textContent);
+    expect(names.indexOf('Zeta Gateway')).toBeLessThan(names.indexOf('Alpha API'));
+  });
+
   it('filters services by status', () => {
     render(
       <StatusPageV3
@@ -111,9 +124,30 @@ describe('StatusPageV3', () => {
         ])}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /performance issues/i }));
+    fireEvent.change(screen.getByRole('combobox', { name: /filter by status/i }), {
+      target: { value: 'issues' },
+    });
     expect(screen.getByText('Payments')).toBeInTheDocument();
     expect(screen.queryByText('Checkout API')).not.toBeInTheDocument();
+  });
+
+  it('lets a reader group and ungroup services by region', () => {
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf(
+          [
+            service({ regions: ['eu-west-1'] }),
+            service({ id: 'svc-2', name: 'Payments', regions: ['us-east-1'] }),
+          ],
+          { page: { ...snapshotOf([]).page, showServicesByRegion: true } }
+        )}
+      />
+    );
+    expect(screen.getByRole('heading', { name: 'eu-west-1' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Group by region' }));
+    expect(screen.queryByRole('heading', { name: 'eu-west-1' })).not.toBeInTheDocument();
+    expect(screen.getByText('Checkout API')).toBeInTheDocument();
+    expect(screen.getByText('Payments')).toBeInTheDocument();
   });
 
   it('lists a multi-region service once when grouping', () => {
