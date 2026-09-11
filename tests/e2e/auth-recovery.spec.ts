@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { afterAll } from 'vitest';
 import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
