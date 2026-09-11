@@ -8,6 +8,9 @@ import StatusBadge from '@/components/incident/StatusBadge';
 
 const INITIAL_VISIBLE = 8;
 const DESC_CLAMP_AT = 180;
+// Industry standard (Atlassian Statuspage, GitHub, Cloudflare): inline feed is
+// Active + Recent ~14d. Full 90d is History — paginated / on-demand.
+const RECENT_DISPLAY_DAYS = 14;
 
 function formatDuration(start?: string, end?: string): string | null {
   if (!start) return null;
@@ -376,6 +379,7 @@ export default function IncidentsV3({
 }) {
   const [service, setService] = useState('all');
   const [visible, setVisible] = useState(INITIAL_VISIBLE);
+  const [showHistory, setShowHistory] = useState(false);
 
   const services = useMemo(() => {
     const byId = new Map<string, string>();
@@ -390,18 +394,33 @@ export default function IncidentsV3({
     [incidents, service]
   );
 
-  const { active, past } = useMemo(() => {
-    const a: PublicIncident[] = [];
-    const p: PublicIncident[] = [];
-    for (const item of filtered) {
-      if (item.status === 'OPEN' || item.status === 'ACKNOWLEDGED') a.push(item);
-      else p.push(item);
-    }
-    return { active: a, past: p };
-  }, [filtered]);
+  // Industry: main feed = Active + Recent 14d. Older (14d→90d) lives behind "Incident history".
+  // Fixed at mount — feed is ≤ 50 items; re-parsing bounds on every render is wasteful.
+  const [nowMs] = useState(() => Date.now());
+  const recentCutoffMs = nowMs - RECENT_DISPLAY_DAYS * 86_400_000;
 
-  // Keep active incidents always above the fold; paginate the full filtered list.
-  const shown = filtered.slice(0, visible);
+  const { active, recentPast, olderPast } = useMemo(() => {
+    const a: PublicIncident[] = [];
+    const r: PublicIncident[] = [];
+    const o: PublicIncident[] = [];
+    for (const item of filtered) {
+      const isActive = item.status === 'OPEN' || item.status === 'ACKNOWLEDGED';
+      if (isActive) a.push(item);
+      else {
+        const t = item.createdAt ? Date.parse(item.createdAt) : NaN;
+        if (Number.isNaN(t) || t >= recentCutoffMs) r.push(item);
+        else o.push(item);
+      }
+    }
+    return { active: a, recentPast: r, olderPast: o };
+  }, [filtered, recentCutoffMs]);
+
+  // Industry: main feed = active + recent; older is behind "Incident history".
+  const feedBase = useMemo(() => [...active, ...recentPast], [active, recentPast]);
+  const feed = showHistory ? filtered : feedBase;
+  const hiddenOlderCount = olderPast.length;
+
+  const shown = feed.slice(0, visible);
   const shownActive = shown.filter(i => i.status === 'OPEN' || i.status === 'ACKNOWLEDGED');
   const shownPast = shown.filter(i => i.status !== 'OPEN' && i.status !== 'ACKNOWLEDGED');
 
@@ -421,7 +440,13 @@ export default function IncidentsV3({
     );
   }
 
-  const windowLabel = historyDays ? `Past ${historyDays}d` : 'Recent';
+  const windowLabel = showHistory
+    ? historyDays
+      ? `Past ${historyDays}d`
+      : 'All time'
+    : `Past ${RECENT_DISPLAY_DAYS}d`;
+  const tallyTotal = feed.length;
+  const subtitlePastCount = showHistory ? filtered.filter(i => i.status !== 'OPEN' && i.status !== 'ACKNOWLEDGED').length : recentPast.length;
 
   return (
     <section className="status-v3-incidents-inline" id="incidents" aria-labelledby="status-v3-incidents-heading">
@@ -431,24 +456,25 @@ export default function IncidentsV3({
             Incidents
           </h2>
           <span className="status-v3-incidents-inline__subtitle">
-            {windowLabel} · {active.length} active · {past.length} resolved
+            {windowLabel} · {active.length} active · {subtitlePastCount} resolved
+            {hiddenOlderCount > 0 && !showHistory ? ` · +${hiddenOlderCount} in history` : ''}
           </span>
         </div>
-        <div className="status-v3-incidents-inline__tally" aria-label={`${filtered.length} incidents`}>
+        <div className="status-v3-incidents-inline__tally" aria-label={`${tallyTotal} incidents in view`}>
           {active.length > 0 ? (
             <span className="status-v3-incidents-inline__tally-pill status-v3-incidents-inline__tally-pill--active">
               <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
               {active.length} active
             </span>
-          ) : past.length > 0 ? (
+          ) : subtitlePastCount > 0 ? (
             <span className="status-v3-incidents-inline__tally-pill status-v3-incidents-inline__tally-pill--resolved">
               <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
-              {past.length} resolved
+              {subtitlePastCount} resolved
             </span>
           ) : (
             <span className="status-v3-incidents-inline__tally-pill">
               <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
-              {filtered.length} total
+              {tallyTotal} total
             </span>
           )}
           {services.length > 1 && (
@@ -496,13 +522,51 @@ export default function IncidentsV3({
         </div>
       )}
 
-      {filtered.length > visible && (
+      {feed.length > visible && (
         <button
           type="button"
           className="status-v3-showmore"
           onClick={() => setVisible(count => count + INITIAL_VISIBLE)}
         >
-          Show {Math.min(INITIAL_VISIBLE, filtered.length - visible)} more · {filtered.length - visible} remaining
+          Show {Math.min(INITIAL_VISIBLE, feed.length - visible)} more · {feed.length - visible} remaining
+        </button>
+      )}
+
+      {hiddenOlderCount > 0 && !showHistory && (
+        <button
+          type="button"
+          className="status-v3-incidents-inline__history-toggle"
+          onClick={() => {
+            setShowHistory(true);
+            setVisible(count => Math.max(count, feedBase.length + Math.min(INITIAL_VISIBLE, hiddenOlderCount)));
+          }}
+          aria-expanded={showHistory}
+        >
+          <span>View incident history</span>
+          <span className="status-v3-incidents-inline__history-count">
+            {hiddenOlderCount} older {hiddenOlderCount === 1 ? 'incident' : 'incidents'}
+            {historyDays ? ` · past ${historyDays}d` : ''}
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+      )}
+      {showHistory && hiddenOlderCount > 0 && (
+        <button
+          type="button"
+          className="status-v3-incidents-inline__history-toggle status-v3-incidents-inline__history-toggle--active"
+          onClick={() => {
+            setShowHistory(false);
+            setVisible(INITIAL_VISIBLE);
+          }}
+          aria-expanded={showHistory}
+        >
+          <span>Show recent only</span>
+          <span className="status-v3-incidents-inline__history-count">Back to past {RECENT_DISPLAY_DAYS}d</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: 'rotate(180deg)' }}>
+            <path d="m9 18 6-6-6-6" />
+          </svg>
         </button>
       )}
     </section>
