@@ -74,7 +74,9 @@ describe('user management security contract', () => {
       .map(line => line.trim().split(/\s+/))
       .filter(parts => parts.length >= 2)
       .filter(parts => !scalarTypes.has(parts[1].replace(/[?\[\]]/g, '')))
-      .filter(parts => !['Role', 'UserStatus'].includes(parts[1].replace(/[?\[\]]/g, '')))
+      .filter(
+        parts => !['Role', 'RoleSource', 'UserStatus'].includes(parts[1].replace(/[?\[\]]/g, ''))
+      )
       .map(parts => parts[0]);
 
     for (const relation of relationLines) {

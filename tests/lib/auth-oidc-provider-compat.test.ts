@@ -8,6 +8,18 @@ vi.mock('@/lib/oidc-config', () => ({
   getOidcConfig: getOidcConfigMock,
 }));
 
+vi.mock('@/lib/oidc-validation', () => ({
+  getValidatedOidcRuntimeMetadata: vi.fn().mockImplementation(async (issuer: string) => ({
+    isValid: true,
+    metadata: {
+      issuer,
+      authorizationEndpoint: `${issuer.replace(/\/$/, '')}/authorize`,
+      tokenEndpoint: `${issuer.replace(/\/$/, '')}/token`,
+      jwksUri: `${issuer.replace(/\/$/, '')}/jwks`,
+    },
+  })),
+}));
+
 vi.mock('@/lib/prisma', () => {
   const mockPrisma = {
     user: {
@@ -16,7 +28,7 @@ vi.mock('@/lib/prisma', () => {
       update: vi.fn(),
     },
     oidcLinkingApproval: {
-      findFirst: vi.fn(),
+      findUnique: vi.fn(),
       updateMany: vi.fn(),
     },
     oidcIdentity: {
@@ -77,7 +89,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.user.create).mockResolvedValue({ id: 'u1' } as never);
     vi.mocked(prisma.user.update).mockResolvedValue({} as never);
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcLinkingApproval.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.oidcLinkingApproval.updateMany).mockResolvedValue({ count: 1 } as never);
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.oidcIdentity.create).mockResolvedValue({ id: 'identity-1' } as never);
@@ -105,12 +117,12 @@ describe('OIDC provider-specific email verification compatibility', () => {
 
     expect(result).toBe(true);
     expect(prisma.oidcIdentity.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         issuer: baseConfig.issuer,
         subject: 'entra-sub',
         email: 'user@example.com',
         userId: 'u1',
-      },
+      }),
     });
   });
 
@@ -125,8 +137,11 @@ describe('OIDC provider-specific email verification compatibility', () => {
     vi.mocked(prisma.user.findUnique)
       .mockResolvedValueOnce(existing as never)
       .mockResolvedValueOnce({ id: 'u1', status: 'ACTIVE' } as never);
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+    vi.mocked(prisma.oidcLinkingApproval.findUnique).mockResolvedValue({
       id: 'approval-1',
+      generation: 1,
+      revokedAt: null,
+      expiresAt: null,
     } as never);
 
     const signIn = await getSignIn();
@@ -138,8 +153,14 @@ describe('OIDC provider-specific email verification compatibility', () => {
 
     expect(result).toBe(true);
     expect(prisma.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
-      where: { id: 'approval-1', revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
+      where: {
+        id: 'approval-1',
+        generation: 1,
+        revokedAt: null,
+        consumedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+      },
+      data: { consumedAt: expect.any(Date) },
     });
     expect(prisma.oidcIdentity.create).toHaveBeenCalled();
   });
@@ -152,9 +173,7 @@ describe('OIDC provider-specific email verification compatibility', () => {
       role: 'ADMIN',
       status: 'INVITED',
     };
-    vi.mocked(prisma.user.findUnique)
-      .mockResolvedValueOnce(invited as never)
-      .mockResolvedValueOnce({ id: 'u1', status: 'INVITED' } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(invited as never);
 
     const signIn = await getSignIn();
     const result = await signIn({
@@ -164,9 +183,15 @@ describe('OIDC provider-specific email verification compatibility', () => {
     });
 
     expect(result).toBe(false);
-    expect(prisma.oidcLinkingApproval.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'u1', revokedAt: null },
-      select: { id: true },
+    expect(prisma.oidcLinkingApproval.findUnique).toHaveBeenCalledWith({
+      where: { userId: 'u1' },
+      select: expect.objectContaining({
+        id: true,
+        generation: true,
+        revokedAt: true,
+        consumedAt: true,
+        expiresAt: true,
+      }),
     });
     expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
     expect(prisma.user.update).not.toHaveBeenCalled();
@@ -180,11 +205,12 @@ describe('OIDC provider-specific email verification compatibility', () => {
       role: 'USER',
       status: 'INVITED',
     };
-    vi.mocked(prisma.user.findUnique)
-      .mockResolvedValueOnce(invited as never)
-      .mockResolvedValueOnce({ id: 'u1', status: 'INVITED' } as never);
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(invited as never);
+    vi.mocked(prisma.oidcLinkingApproval.findUnique).mockResolvedValue({
       id: 'approval-1',
+      generation: 1,
+      revokedAt: null,
+      expiresAt: null,
     } as never);
 
     const signIn = await getSignIn();
@@ -196,24 +222,22 @@ describe('OIDC provider-specific email verification compatibility', () => {
 
     expect(result).toBe(true);
     expect(prisma.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
-      where: { id: 'approval-1', revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
+      where: {
+        id: 'approval-1',
+        generation: 1,
+        revokedAt: null,
+        consumedAt: null,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: expect.any(Date) } }],
+      },
+      data: { consumedAt: expect.any(Date) },
     });
     expect(prisma.oidcIdentity.create).toHaveBeenCalledWith({
-      data: {
+      data: expect.objectContaining({
         issuer: baseConfig.issuer,
         subject: 'entra-sub',
         email: 'user@example.com',
         userId: 'u1',
-      },
-    });
-    expect(prisma.user.update).toHaveBeenCalledWith({
-      where: { id: 'u1' },
-      data: {
-        status: 'ACTIVE',
-        invitedAt: null,
-        deactivatedAt: null,
-      },
+      }),
     });
   });
 

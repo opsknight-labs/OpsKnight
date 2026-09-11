@@ -20,6 +20,12 @@ enum UserStatus {
   DISABLED
 }
 
+enum RoleSource {
+  MANUAL
+  OIDC
+  SCIM
+}
+
 enum TeamRole {
   OWNER
   ADMIN
@@ -306,6 +312,8 @@ model User {
   tokenVersion                 Int        @default(0)
   invitationGeneration         Int        @default(0)
   role                         Role       @default(USER)
+  roleSource                   RoleSource @default(MANUAL)
+  scimExternalId               String?    @unique
   status                       UserStatus @default(INVITED)
   passwordHash                 String?
   timeZone                     String     @default("UTC")
@@ -378,19 +386,25 @@ model UserAvatar {
 // Stable link between an IdP identity (issuer+sub) and an internal user.
 // Avoids unsafe "email-only" linking for OIDC sign-in.
 model OidcIdentity {
-  id        String   @id @default(cuid())
-  issuer    String
-  subject   String
-  email     String?
-  userId    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String    @id @default(cuid())
+  issuer           String
+  subject          String
+  email            String?
+  providerConfigId String?   @default("default")
+  providerObjectId String?
+  tenantId         String?
+  emailAtLink      String?
+  lastLoginAt      DateTime?
+  userId           String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([issuer, subject])
   @@index([userId])
   @@index([issuer])
+  @@index([providerConfigId])
 }
 
 model Team {
@@ -598,12 +612,14 @@ model OidcConfig {
   clientId       String
   clientSecret   String
   enabled        Boolean  @default(true)
+  configVersion  Int      @default(1)
   autoProvision  Boolean  @default(true)
   allowedDomains String[] @default([])
   roleMapping    Json?    @default("[]") // Schema: [{ claim: string, value: string, role: Role }]
   customScopes   String? // e.g. "groups profile email"
   providerType   String? // e.g. 'google', 'okta', 'azure', 'auth0', 'custom'
   providerLabel  String? // Custom display name, e.g. "Acme Corp SSO"
+  organizationId String? // Auth0 org_id or equivalent signed organization boundary
   profileMapping Json?    @default("{}") // { department: "dept", jobTitle: "title", avatarUrl: "picture" }
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -1356,14 +1372,20 @@ model UserToken {
 }
 
 model OidcLinkingApproval {
-  id           String    @id @default(cuid())
-  userId       String    @unique
-  approvedById String?
-  approvedAt   DateTime  @default(now())
-  revokedAt    DateTime?
-  generation   Int       @default(1)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  approvedById      String?
+  approvedAt        DateTime  @default(now())
+  expiresAt         DateTime?
+  consumedAt        DateTime?
+  revokedAt         DateTime?
+  providerConfigId  String?   @default("default")
+  issuerFingerprint String?
+  expectedEmail     String?
+  configVersion     Int?
+  generation        Int       @default(1)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

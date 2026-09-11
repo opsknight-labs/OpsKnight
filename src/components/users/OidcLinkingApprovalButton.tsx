@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Link2, Loader2, Unlink2 } from 'lucide-react';
+import { CheckCircle2, Clock3, Link2, Loader2, RotateCcw, Unlink2 } from 'lucide-react';
 import { notify as toast } from '@/lib/toast';
 import { DropdownMenuItem } from '@/components/ui/shadcn/dropdown-menu';
 import {
@@ -52,6 +52,8 @@ export default function OidcLinkingApprovalButton({
   }, [userId]);
 
   const confirmAllow = async () => {
+    const wasExpired = state === 'expired';
+    const wasRevoked = state === 'revoked';
     setPending(true);
     try {
       const result = await allowOidcLinking(userId);
@@ -65,9 +67,13 @@ export default function OidcLinkingApprovalButton({
         return;
       }
       setState('approved');
-      toast.success(`OIDC linking allowed for ${userName}'s next verified sign-in.`);
+      toast.success(
+        wasExpired || wasRevoked || result.renewed
+          ? `OIDC linking approval renewed for ${userName}.`
+          : `OIDC linking allowed for ${userName}'s next verified sign-in.`
+      );
     } catch {
-      toast.error('Failed to allow OIDC linking.');
+      toast.error(wasExpired ? 'Failed to renew OIDC linking approval.' : 'Failed to allow OIDC linking.');
     } finally {
       setPending(false);
       setDialog(null);
@@ -83,7 +89,7 @@ export default function OidcLinkingApprovalButton({
         toast.error(result.error);
         return;
       }
-      setState('not-approved');
+      setState(result.state ?? 'revoked');
       toast.success(`OIDC linking approval revoked for ${userName}.`);
     } catch {
       toast.error('Failed to revoke OIDC linking approval.');
@@ -92,6 +98,8 @@ export default function OidcLinkingApprovalButton({
       setDialog(null);
     }
   };
+
+  const isRenewal = state === 'expired' || state === 'revoked';
 
   return (
     <>
@@ -114,7 +122,29 @@ export default function OidcLinkingApprovalButton({
           className="text-orange-600 focus:text-orange-700"
         >
           <Unlink2 className="mr-2 h-4 w-4" />
-          <span>Revoke OIDC linking approval</span>
+          <span>Approved — Revoke OIDC linking</span>
+        </DropdownMenuItem>
+      ) : state === 'expired' ? (
+        <DropdownMenuItem
+          onSelect={event => {
+            event.preventDefault();
+            setDialog('allow');
+          }}
+          className="text-amber-700 focus:text-amber-800"
+        >
+          <Clock3 className="mr-2 h-4 w-4" />
+          <span>Expired — Renew approval</span>
+        </DropdownMenuItem>
+      ) : state === 'revoked' ? (
+        <DropdownMenuItem
+          onSelect={event => {
+            event.preventDefault();
+            setDialog('allow');
+          }}
+          className="text-blue-600 focus:text-blue-700"
+        >
+          <RotateCcw className="mr-2 h-4 w-4" />
+          <span>Revoked — Reapprove OIDC linking</span>
         </DropdownMenuItem>
       ) : (
         <DropdownMenuItem
@@ -125,17 +155,20 @@ export default function OidcLinkingApprovalButton({
           className="text-blue-600 focus:text-blue-700"
         >
           <Link2 className="mr-2 h-4 w-4" />
-          <span>Allow OIDC linking</span>
+          <span>Not approved — Allow OIDC linking</span>
         </DropdownMenuItem>
       )}
 
       <AlertDialog open={dialog === 'allow'} onOpenChange={open => !open && setDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Allow OIDC linking?</AlertDialogTitle>
+            <AlertDialogTitle>{isRenewal ? 'Renew OIDC linking approval?' : 'Allow OIDC linking?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              This allows <strong>{userName}</strong> to connect their existing OpsKnight account
-              to a verified identity from the configured OIDC provider on their next sign-in.
+              {isRenewal ? 'This issues a fresh, time-limited administrator approval for ' : 'This allows '}
+              <strong>{userName}</strong>
+              {isRenewal
+                ? ' and invalidates the previous approval generation.'
+                : ' to connect their existing OpsKnight account to a verified identity from the configured OIDC provider on their next sign-in.'}{' '}
               Their role, account status, and password are not changed.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -143,7 +176,7 @@ export default function OidcLinkingApprovalButton({
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmAllow} disabled={pending}>
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Allow linking
+              {isRenewal ? 'Renew approval' : 'Allow linking'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,281 +1,271 @@
 ---
 order: 1
 title: OIDC SSO Setup
-description: Configure OIDC Single Sign-On for common identity providers
+description: Configure and operate enterprise OIDC SSO with provider-specific security controls
 ---
 
 # OIDC Single Sign-On (SSO) Setup
 
-Configure OIDC SSO in OpsKnight for common identity providers.
-
----
+OpsKnight v1.5 supports one workspace OIDC provider at a time. The OIDC implementation uses the provider issuer plus the OIDC subject (`iss` + `sub`) as the stable external identity. Email, UPN, username, and display name are profile attributes and are never used as the permanent identity key.
 
 ## Prerequisites
 
-- OpsKnight admin access
-- An IdP OIDC app registration created
-- A stable base URL for OpsKnight (used for redirect/callback)
-- `ENCRYPTION_KEY` configured (required to store client secrets)
-
----
+- OpsKnight Admin access
+- A confidential OIDC web application at the identity provider
+- A stable public HTTPS OpsKnight URL
+- `NEXTAUTH_URL` set to that public origin
+- `ENCRYPTION_KEYS` or `ENCRYPTION_KEY` configured in production so the client secret can be stored securely
 
 ## Callback URL
 
-Configure this callback URL in your identity provider:
+Register this exact redirect URI with the identity provider:
 
-```
+```text
 https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc
 ```
 
-Replace `YOUR_OPSKNIGHT_URL` with your OpsKnight instance URL.
+The value shown in **Settings → System → Single Sign-On (OIDC)** should match the public authentication origin configured for OpsKnight.
 
----
+## Configure SSO
 
-## Configuration Fields
+1. Open **Settings → System → Single Sign-On (OIDC)**.
+2. Choose the provider family.
+3. Enter the HTTPS issuer URL, client ID, and client secret.
+4. Optionally configure custom scopes, automatic provisioning, organization/domain restrictions, role mapping, profile mapping, and the provider label.
+5. Select **Test connection**. This validates OIDC discovery, issuer consistency, provider endpoints, JWKS availability, and supported signing configuration. It does not perform a real user login.
+6. Save the configuration.
+7. Test sign-in with a non-Admin account before relying on SSO for administrators.
 
-| Field               | Required | Description                           |
-| ------------------- | :------: | ------------------------------------- |
-| **Issuer URL**      |   Yes    | The OIDC issuer URL for your provider |
-| **Client ID**       |   Yes    | From your IdP app                     |
-| **Client Secret**   |   Yes    | From your IdP app (stored encrypted)  |
-| **Custom Scopes**   |    No    | Additional scopes beyond default      |
-| **Auto-provision**  |    No    | Create users on first login           |
-| **Allowed Domains** |    No    | Email domain allowlist                |
-| **Role Mapping**    |    No    | Map IdP claims to roles               |
-| **Profile Mapping** |    No    | Map IdP claims to user fields         |
-| **Provider Label**  |    No    | Custom text for SSO button            |
+Default scopes are:
 
-**Default Scopes**: `openid email profile`
+```text
+openid email profile
+```
 
----
+## Security model
 
-## OpsKnight Setup Steps
+OpsKnight applies the following rules regardless of provider:
 
-1. Go to **Settings** → **System Settings** → **Single Sign-On (OIDC)**
-2. Enable SSO
-3. Enter Issuer URL, Client ID, Client Secret
-4. Configure optional settings:
-   - Custom scopes
-   - Allowed domains
-   - Auto-provision
-   - Role mapping
-   - Profile mapping
-5. Save
-6. Test with the SSO button on the login page
+- HTTPS-only issuer and discovery endpoints.
+- Exact discovery issuer matching.
+- Authorization, token, and JWKS endpoints are validated before use.
+- Discovery and JWKS access are protected against redirects, private-network access, and DNS-rebinding style endpoint changes.
+- ID tokens must use the allowed asymmetric signing algorithm policy.
+- Existing identities are resolved by normalized issuer plus `sub` before email is considered.
+- An explicit `email_verified: false` claim is rejected.
+- Email is required when OpsKnight must create or first-link a user, but an already-linked identity can continue to authenticate without an email claim.
+- Callback URLs are restricted to the local OpsKnight origin.
 
----
+## Provider-specific behavior
 
-## Supported Providers
+### Microsoft Entra ID
 
-OpsKnight auto-detects provider type from the issuer URL:
+Use a tenant-specific workforce issuer:
 
-| Provider      | Detection                             |
-| ------------- | ------------------------------------- |
-| **Google**    | `accounts.google.com` in issuer       |
-| **Microsoft** | `login.microsoftonline.com` in issuer |
-| **Okta**      | `okta` in issuer                      |
-| **Auth0**     | `auth0` in issuer                     |
-| **Custom**    | All other issuers                     |
+```text
+https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0
+```
 
----
+OpsKnight rejects broad authorities such as:
 
-## Provider Guides
+```text
+/common/v2.0
+/organizations/v2.0
+/consumers/v2.0
+```
+
+Supported Entra authority hosts include the Microsoft public cloud and supported sovereign-cloud endpoints.
+
+Microsoft Entra workforce tokens commonly do not include the standard OIDC `email_verified` claim. For a validated Entra issuer, a missing claim is accepted according to the Entra provider policy, while an explicit `email_verified: false` is still rejected.
+
+For authorization, prefer Entra App Roles when possible. If group claims are used, OpsKnight detects group-overage conditions instead of silently treating an omitted groups claim as an empty group list.
 
 ### Google Workspace
 
-1. Create an OAuth app in Google Cloud Console
-2. Configure OAuth consent screen
-3. Create OAuth client credentials (Web application)
-4. **Authorized redirect URI**: `https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc`
-5. **Issuer URL**: `https://accounts.google.com`
-6. **Scopes**: `openid email profile` (default)
+Use:
 
-**Profile mapping claims**:
+```text
+https://accounts.google.com
+```
 
-- `avatarUrl`: `picture`
-- `department`: Not provided by Google
-- `jobTitle`: Not provided by Google
+When restricting access to a Google Workspace domain, OpsKnight validates the signed `hd` claim. It does not treat the suffix of the email address as proof of Workspace membership.
 
-### Microsoft Entra ID (Azure AD)
+For example, a Workspace restriction to `example.com` requires the token to contain:
 
-1. Register an app in Azure Entra ID
-2. Add a Web platform redirect URI: `https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc`
-3. Create a client secret
-4. **Issuer URL**: `https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0`
-5. **Scopes**: `openid email profile` (default)
-6. Optional: Add email and profile claims if not present
-
-**Profile mapping claims**:
-
-- `department`: `department`
-- `jobTitle`: `jobTitle`
-- `avatarUrl`: `picture`
+```text
+hd = example.com
+```
 
 ### Okta
 
-1. Create an OIDC Web App integration
-2. **Sign-in redirect URI**: `https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc`
-3. **Issuer URL**: `https://YOUR_OKTA_DOMAIN/oauth2/default`
-4. **Scopes**: `openid email profile` (default)
+OpsKnight supports normal Okta issuers including organization and custom authorization-server forms, for example:
 
-**Profile mapping claims**:
+```text
+https://example.okta.com
+https://example.okta.com/oauth2/default
+https://example.okta.com/oauth2/YOUR_SERVER_ID
+```
 
-- `department`: `department`
-- `jobTitle`: `title`
-- `avatarUrl`: `picture`
+Okta custom domains can also be used. Saving an Okta custom-domain issuer preserves the Okta provider policy rather than degrading it to generic OIDC behavior.
+
+If roles are mapped from an Okta `groups` claim, configure the claim in Okta so it is actually included in the ID token used by OpsKnight.
 
 ### Auth0
 
-1. Create a Regular Web Application
-2. **Allowed Callback URLs**: `https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc`
-3. **Issuer URL**: `https://YOUR_AUTH0_DOMAIN`
-4. **Scopes**: `openid email profile` (default)
+Use the tenant issuer or a configured Auth0 custom domain, for example:
 
-**Profile mapping claims**:
+```text
+https://tenant.eu.auth0.com
+https://login.example.com
+```
 
-- `department`: Use custom claim, e.g., `https://example.com/department`
-- `jobTitle`: Use custom claim, e.g., `https://example.com/title`
-- `avatarUrl`: `picture`
+When an Auth0 Organization is configured, OpsKnight validates the signed `org_id` claim on every login, including logins from identities that were linked previously.
 
-### Keycloak
+For custom role/profile claims, use namespaced Auth0 claims where appropriate.
 
-1. Create a Realm and Client (OpenID Connect)
-2. Client Access Type: Confidential
-3. **Valid Redirect URIs**: `https://YOUR_OPSKNIGHT_URL/api/auth/callback/oidc`
-4. **Issuer URL**: `https://YOUR_KEYCLOAK_HOST/realms/YOUR_REALM`
-5. **Scopes**: `openid email profile` (default)
+### Generic OIDC / Keycloak
 
-**Profile mapping claims**:
+Generic OIDC is intentionally strict. The issuer must expose valid OIDC discovery metadata and satisfy the same HTTPS, issuer, endpoint, JWKS, signing, state, nonce, and PKCE protections used by the built-in provider policies.
 
-- `department`: `department`
-- `jobTitle`: `jobTitle`
-- `avatarUrl`: `picture`
+Typical Keycloak issuer:
 
----
+```text
+https://keycloak.example.com/realms/YOUR_REALM
+```
 
-## Role Mapping
+## First-time account linking
 
-Map IdP claims to OpsKnight roles automatically.
+OpsKnight never silently attaches a new OIDC subject to an existing account merely because the email matches.
 
-### Format
+For an existing account that has not yet linked OIDC, an Admin can authorize first-time linking from **Users**.
 
-JSON array of rules:
+Linking approvals are:
+
+- time limited;
+- renewable and revocable;
+- scoped to the provider configuration and issuer trust boundary;
+- tied to the expected account email;
+- consumed atomically when the first link succeeds.
+
+Approvals are available for supported **Active** and **Invited** account flows. The provider still has to pass its identity, email-assurance, organization, and domain checks.
+
+Once linked, future logins use the stored `(issuer, sub)` identity rather than email matching.
+
+## Automatic provisioning
+
+When **Auto-provision** is enabled, an eligible first OIDC login can create an OpsKnight account automatically.
+
+Creation and identity binding are committed atomically so OpsKnight does not leave a half-created user when identity linking fails or races with another login.
+
+When auto-provisioning is disabled, unknown external identities are denied.
+
+## Organization and domain restrictions
+
+Restrictions are provider-aware:
+
+- **Microsoft Entra ID** — tenant-specific issuer/trust policy.
+- **Google Workspace** — signed `hd` claim.
+- **Auth0** — optional signed `org_id` boundary.
+- **Okta / generic OIDC** — configured issuer plus any supported email/domain policy.
+
+Do not rely on an email suffix as the sole proof of organizational membership when the provider exposes a stronger signed organization claim.
+
+## Role mapping
+
+Role rules are evaluated from bounded OIDC claims and can map to:
+
+```text
+USER
+AUDITOR
+RESPONDER
+ADMIN
+```
+
+Example:
 
 ```json
 [
-  { "claim": "groups", "value": "admins", "role": "ADMIN" },
-  { "claim": "groups", "value": "oncall-team", "role": "RESPONDER" },
-  { "claim": "department", "value": "engineering", "role": "RESPONDER" }
+  { "claim": "groups", "value": "opsknight-admins", "role": "ADMIN" },
+  { "claim": "groups", "value": "on-call", "role": "RESPONDER" }
 ]
 ```
 
-### Rule Fields
+OpsKnight tracks whether a role is managed manually, by OIDC, or by SCIM. OIDC-managed access can therefore be de-provisioned when the authoritative mapped claim is removed, without confusing that state with a manually managed role.
 
-| Field   | Description                                     |
-| ------- | ----------------------------------------------- |
-| `claim` | The IdP claim name to check                     |
-| `value` | The value to match                              |
-| `role`  | OpsKnight role: `ADMIN`, `RESPONDER`, or `USER` |
+## Profile mapping
 
-### Evaluation
+The following profile fields can be synchronized from bounded claims:
 
-- Rules are evaluated in order
-- First match wins
-- Users not matching any rule get the default role (`USER`)
+- `department`
+- `jobTitle`
+- `avatarUrl`
 
----
+Wrong claim types are rejected/ignored according to the mapping policy rather than being coerced from arbitrary objects.
 
-## Profile Mapping
+## Issuer changes
 
-Sync user profile fields from IdP claims.
+Changing the issuer changes the external identity trust boundary. OpsKnight requires explicit confirmation for an issuer migration and invalidates affected sessions and outstanding first-link approvals as part of the change.
 
-### Supported Fields
+Do not change an Okta/Auth0 issuer to a custom domain without planning the identity migration first.
 
-| OpsKnight Field | Description         |
-| --------------- | ------------------- |
-| `department`    | User's department   |
-| `jobTitle`      | User's job title    |
-| `avatarUrl`     | Profile picture URL |
+## SSO-only and break-glass access
 
-### Format
+Local credential login can be disabled with:
 
-JSON object mapping OpsKnight fields to IdP claim names:
-
-```json
-{
-  "department": "department",
-  "jobTitle": "title",
-  "avatarUrl": "picture"
-}
+```text
+AUTH_LOCAL_LOGIN_ENABLED=false
 ```
 
-### Behavior
+When disabled, the SSO button remains available and local password login/recovery is not exposed as a bypass.
 
-- Profile fields update on each login
-- Empty claims don't overwrite existing values
+For emergency recovery, configure a dedicated break-glass account with:
 
----
+```text
+AUTH_BREAK_GLASS_ENABLED=true
+AUTH_BREAK_GLASS_EMAIL=admin@example.com
+```
 
-## Domain Restrictions
+Keep the break-glass credentials outside the normal SSO dependency and restrict use to documented recovery procedures.
 
-Limit which email domains can use SSO:
+## OIDC session policy
 
-1. In SSO settings, add **Allowed Domains**
-2. Enter domains (comma-separated): `example.com, subsidiary.com`
-3. Only users with matching email domains can sign in
+OIDC sessions have separate enterprise limits from local credential sessions. Defaults are:
 
-If empty, all email domains are allowed.
+```text
+Maximum OIDC session age: 12 hours
+Idle timeout:             4 hours
+OpsKnight SSO renewal:   12 hours
+Session update age:       1 hour
+```
 
----
+These values are controlled by the `AUTH_SSO_*` settings documented in [Configuration Reference](../getting-started/configuration.md).
 
-## Auto-Provisioning
+OpsKnight can require a new OpsKnight OIDC session after the configured period, but that is not the same as forcing the identity provider to prompt for credentials again; the IdP may reuse its own SSO session.
 
-**Enabled**: Users are created automatically on first SSO login.
+## Current scope
 
-**Disabled**: Only pre-existing users can sign in via SSO.
+OpsKnight v1.5 currently supports **one OIDC provider configuration per workspace**. Multi-IdP selection is not part of this release.
 
-When enabled:
-
-- New users get the role from role mapping (or default `USER`)
-- Profile fields populated from claims
-- Email domain must match allowed domains (if configured)
-
----
+For lifecycle provisioning and de-provisioning, see [SCIM Provisioning](./scim-provisioning.md).
 
 ## Troubleshooting
 
-### SSO Button Not Showing
+| Symptom | Check |
+| --- | --- |
+| SSO button missing | OIDC is enabled and its client secret can be decrypted. |
+| Discovery validation fails | HTTPS issuer, exact discovery issuer, reachable public endpoints, valid JWKS metadata. |
+| Entra login denied | Use a tenant-specific issuer; do not use `common`, `organizations`, or `consumers`. |
+| Google Workspace user denied | Verify the signed `hd` claim matches the configured Workspace domain. |
+| Auth0 user denied | Verify the configured `org_id` and the token's signed organization claim. |
+| Existing account cannot first-link | Review the Admin linking approval, expiry, provider/config scope, email, and provider assurance checks. |
+| Existing linked user changed email | Identity should still resolve by `(issuer, sub)`; investigate issuer/subject changes instead of relinking by email. |
+| Role does not update | Confirm the expected claim is present and the mapping value exactly matches. |
+| Login loops after URL change | Confirm `NEXTAUTH_URL`, reverse-proxy host/scheme forwarding, and the registered callback URI all match. |
 
-1. Verify SSO is enabled in settings
-2. Check `ENCRYPTION_KEY` environment variable is set
-3. Verify client secret can be decrypted
+## Related topics
 
-### Validation Fails
-
-1. Confirm issuer URL uses HTTPS
-2. Verify OIDC discovery document is reachable: `{issuer}/.well-known/openid-configuration`
-3. Check client ID and secret are correct
-
-### Access Denied
-
-1. Check allowed domains configuration
-2. Verify auto-provision is enabled (for new users)
-3. Ensure IdP sends the email claim
-
-### Profile Fields Not Syncing
-
-1. Confirm claim names in profile mapping match IdP claims
-2. Verify IdP includes the claims in the token
-3. Check IdP token/claims debugger
-
-### Missing Email Claim
-
-Ensure your IdP is configured to include the `email` claim in tokens. Some providers require explicit configuration.
-
----
-
-## Related Topics
-
-- [Authentication](../administration/authentication) — All authentication methods
-- [Users](../core-concepts/users) — User management
-- [Security Overview](.) — Security best practices
+- [Authentication](../administration/authentication.md)
+- [SCIM Provisioning](./scim-provisioning.md)
+- [Users](../core-concepts/users.md)
+- [Authorization and Roles](./authorization.md)
+- [Configuration Reference](../getting-started/configuration.md)
