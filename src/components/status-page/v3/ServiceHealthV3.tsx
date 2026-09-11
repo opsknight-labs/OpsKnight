@@ -63,45 +63,64 @@ function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZ
   const affected = service.status !== 'OPERATIONAL';
 
   return (
-    <li
+    <div
       className={`status-v3-service status-service-card${affected ? ' status-v3-service--affected' : ''}`}
       data-status={token}
+      role="listitem"
     >
       <div className="status-v3-service__head">
-        <div className="status-v3-service__copy">
+        <div className="status-v3-service__lead">
+          <svg
+            className="status-v3-service__icon"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+            <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+            <line x1="6" x2="6.01" y1="6" y2="6" />
+            <line x1="6" x2="6.01" y1="18" y2="18" />
+          </svg>
           <span className="status-v3-service__name">{service.name}</span>
-          {service.description && <p className="status-v3-service__desc">{service.description}</p>}
+          {hasDetails && (
+            <div className="status-v3-service__meta">
+              {slaTier ? <span className="status-v3-chip">Service tier: {slaTier}</span> : null}
+              {service.team?.name ? (
+                <span className="status-v3-chip status-v3-chip--muted">
+                  Owned by {service.team.name}
+                </span>
+              ) : null}
+              {service.regions?.map(region => (
+                <span key={region} className="status-v3-chip status-v3-chip--muted">
+                  {region}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
-        <StatusBadge
-          status={service.status}
-          label={statusPresentation(service.status).label}
-          size="sm"
-          showDot
-          pulse={affected}
-        />
+        <div className="status-v3-service__status">
+          <StatusBadge
+            status={service.status}
+            label={statusPresentation(service.status).label}
+            size="sm"
+            showDot
+            pulse={affected}
+          />
+        </div>
       </div>
-      {hasDetails && (
-        <details className="status-v3-service__details">
-          <summary>Details</summary>
-          <div className="status-v3-service__meta">
-            {slaTier ? <span className="status-v3-chip">Service tier: {slaTier}</span> : null}
-            {service.team?.name ? (
-              <span className="status-v3-chip status-v3-chip--muted">
-                Owned by {service.team.name}
-              </span>
-            ) : null}
-            {service.regions?.map(region => (
-              <span key={region} className="status-v3-chip status-v3-chip--muted">
-                {region}
-              </span>
-            ))}
-          </div>
-        </details>
-      )}
+
+      {service.description && <p className="status-v3-service__desc">{service.description}</p>}
+
       {(service.history || service.uptime) && (
         <ServiceHistoryV3 service={service} timeZone={timeZone} />
       )}
-    </li>
+    </div>
   );
 }
 
@@ -113,11 +132,11 @@ function ServiceList({
   timeZone: string;
 }) {
   return (
-    <ul className="status-v3-services__list">
+    <div className="status-v3-services__list" role="list">
       {services.map(service => (
         <ServiceRow key={service.id} service={service} timeZone={timeZone} />
       ))}
-    </ul>
+    </div>
   );
 }
 

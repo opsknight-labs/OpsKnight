@@ -1161,31 +1161,94 @@ ${R} .status-v3-legend-clock {
   flex-shrink: 0;
 }
 
-${R} .status-v3-services__list { gap: 0; }
+${R} .status-v3-services__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  width: 100%;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
 ${R} .status-v3-services .status-v3-service {
-  padding: .8rem 0 .85rem; gap: .45rem; border-radius: 0;
-  border: 0; border-block-end: 1px solid var(--status-panel-border);
-  background: transparent; box-shadow: none; transform: none;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 0.45rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 4px;
+  background: var(--status-panel-bg, #ffffff);
+  border: 1px solid var(--status-panel-border, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-inline-size: 0;
 }
+
 ${R} .status-v3-services .status-v3-service:hover {
-  transform: none; box-shadow: none; border-color: var(--status-panel-border);
+  border-color: color-mix(in srgb, var(--primary) 25%, var(--status-panel-border));
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.05);
 }
+
 ${R} .status-v3-services .status-v3-service--affected {
-  padding-inline-start: .85rem;
   border-inline-start: 3px solid var(--v3-accent, var(--primary));
 }
-${R} .status-v3-service__copy { display: grid; gap: .15rem; min-inline-size: 0; }
+
+${R} .status-v3-service__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  flex-wrap: wrap;
+}
+
+${R} .status-v3-service__lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+${R} .status-v3-service__icon {
+  color: var(--status-text-subtle);
+  flex-shrink: 0;
+}
+
+${R} .status-v3-services .status-v3-service__name {
+  font-family: 'Space Grotesk', Inter, sans-serif;
+  font-weight: 650;
+  font-size: 0.875rem;
+  color: var(--status-text-strong);
+  letter-spacing: -0.01em;
+}
+
+${R} .status-v3-service__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  flex-wrap: wrap;
+}
+
+${R} .status-v3-service__meta .status-v3-chip {
+  font-size: 0.72rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+}
+
+${R} .status-v3-service__status {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 ${R} .status-v3-services .status-v3-service__desc {
-  font-size: .8125rem; line-height: 1.4;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--status-text-muted);
 }
-${R} .status-v3-service__details { margin: 0; }
-${R} .status-v3-service__details summary {
-  cursor: pointer; color: var(--status-text-subtle); font-size: .75rem; font-weight: 600;
-  letter-spacing: .02em; list-style: none;
-}
-${R} .status-v3-service__details summary::-webkit-details-marker { display: none; }
-${R} .status-v3-service__details .status-v3-service__meta { margin-block-start: .4rem; }
+
 ${R} .status-v3-filters .status-v3-chip__count {
   font-variant-numeric: tabular-nums; color: var(--status-text-subtle); font-weight: 650;
 }
