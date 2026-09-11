@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { cache } from 'react';
 import type { Metadata } from 'next';
 import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
@@ -11,15 +12,28 @@ import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const getCachedStatusPageSnapshotByRoute = cache(getStatusPageSnapshotByRoute);
+
 export async function generateMetadata(): Promise<Metadata> {
   return getPublicStatusMetadata();
 }
 
 export async function getPublicStatusMetadata(slug?: string): Promise<Metadata> {
-  const projected = await getStatusPageSnapshotByRoute(slug || 'default');
+  const projected = await getCachedStatusPageSnapshotByRoute(slug || 'default');
   const statusPage = projected.snapshot?.page;
   if (!statusPage) {
     return { title: 'Status Page', description: 'Service status and incident information' };
+  }
+  // Private pages must not leak identity (title, OG, RSS) before authentication.
+  if (statusPage.requireAuth) {
+    const session = await getServerSession(await getAuthOptions());
+    if (!session) {
+      return {
+        title: 'Private Status Page',
+        description: 'Service status — authentication required.',
+        robots: { index: false, follow: false },
+      };
+    }
   }
 
   const branding =
@@ -55,7 +69,7 @@ export default async function PublicStatusPage() {
 }
 
 export async function renderPublicStatusPage(slug?: string) {
-  const projected = await getStatusPageSnapshotByRoute(slug || 'default');
+  const projected = await getCachedStatusPageSnapshotByRoute(slug || 'default');
   const snapshot = projected.snapshot;
   const statusPage = snapshot?.page;
 

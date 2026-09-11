@@ -57,5 +57,11 @@ describe('schedule action error adapter', () => {
       code: 'SCHEDULE_OVERRIDE_CONFLICT',
       retryable: false,
     });
+    expect(
+      scheduleActionError(new AppError({ code: 'SCHEDULE_IN_USE' }), 'fallback')
+    ).toMatchObject({
+      code: 'SCHEDULE_IN_USE',
+      retryable: false,
+    });
   });
 });

@@ -168,32 +168,52 @@ function ServiceHistoryV3Inner({
             className="status-v3-history"
             viewBox={`0 0 ${days.length} 10`}
             preserveAspectRatio="none"
-            role="group"
-            aria-label={`Daily status history for ${service.name}`}
+            role="listbox"
+            tabIndex={0}
+            aria-label={`Daily status history for ${service.name} — press Enter to open details, arrow keys to navigate days`}
+            aria-activedescendant={selected != null ? `history-day-${service.id}-${selected}` : undefined}
+            onClick={event => {
+              const target = event.target as SVGElement;
+              const rect = target.closest('rect[data-day-index]');
+              if (!rect) return;
+              const idx = Number(rect.getAttribute('data-day-index'));
+              if (Number.isFinite(idx)) setSelected(prev => (prev === idx ? null : idx));
+            }}
+            onKeyDown={event => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setSelected(prev => (prev === null ? 0 : prev));
+              } else if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                navigateDay(-1);
+                if (selected === null) setSelected(days.length - 1);
+              } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                navigateDay(1);
+                if (selected === null) setSelected(0);
+              } else if (event.key === 'Escape') {
+                setSelected(null);
+              }
+            }}
           >
             {days.map((entry, index) => {
               const token = statusPresentation(entry.status).token;
+              const isSelected = selected === index;
               return (
                 <rect
                   key={entry.date}
-                  className={`status-v3-history__day status-${token}`}
+                  id={`history-day-${service.id}-${index}`}
+                  className={`status-v3-history__day status-${token}${isSelected ? ' status-v3-history__day--selected' : ''}`}
+                  role="option"
+                  aria-selected={isSelected}
                   x={index + 0.08}
                   y={0}
                   width={0.84}
                   height={10}
                   rx={0.22}
                   fill="currentColor"
-                  tabIndex={0}
-                  role="button"
-                  aria-pressed={selected === index}
-                  aria-label={`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? `, ${entry.availabilityPercent}%` : ''}`}
-                  onClick={() => setSelected(selected === index ? null : index)}
-                  onKeyDown={event => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      setSelected(selected === index ? null : index);
-                    }
-                  }}
+                  data-day-index={index}
+                  aria-hidden="true"
                 >
                   <title>
                     {`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? ` · ${entry.availabilityPercent}%` : ''}`}

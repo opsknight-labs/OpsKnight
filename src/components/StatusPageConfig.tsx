@@ -95,6 +95,8 @@ type StatusPageConfigProps = {
     showIncidentUrgency?: boolean;
     showUptimeHistory?: boolean;
     showRecentIncidents?: boolean;
+    showIncidentHistoryDetails?: boolean;
+    incidentHistoryDetailDays?: number | null;
     maxIncidentsToShow?: number;
     incidentHistoryDays?: number;
     allowedCustomFields?: string[];
@@ -890,6 +892,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     showIncidentUrgency: statusPage.showIncidentUrgency !== false,
     showUptimeHistory: statusPage.showUptimeHistory !== false,
     showRecentIncidents: statusPage.showRecentIncidents !== false,
+    showIncidentHistoryDetails: statusPage.showIncidentHistoryDetails ?? true,
+    incidentHistoryDetailDays: statusPage.incidentHistoryDetailDays ?? 7,
     maxIncidentsToShow: statusPage.maxIncidentsToShow || 50,
     incidentHistoryDays: statusPage.incidentHistoryDays || 90,
     allowedCustomFields: statusPage.allowedCustomFields || [],
@@ -1057,6 +1061,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                 showIncidentUrgency: privacySettings.showIncidentUrgency,
                 showUptimeHistory: privacySettings.showUptimeHistory,
                 showRecentIncidents: privacySettings.showRecentIncidents,
+                showIncidentHistoryDetails: privacySettings.showIncidentHistoryDetails,
+                incidentHistoryDetailDays: privacySettings.incidentHistoryDetailDays,
                 maxIncidentsToShow: privacySettings.maxIncidentsToShow,
                 incidentHistoryDays: privacySettings.incidentHistoryDays,
                 allowedCustomFields: privacySettings.allowedCustomFields,
@@ -1540,6 +1546,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     showIncidentUrgency: privacySettings.showIncidentUrgency !== false,
     showUptimeHistory: privacySettings.showUptimeHistory !== false,
     showRecentIncidents: privacySettings.showRecentIncidents !== false,
+    showIncidentHistoryDetails: privacySettings.showIncidentHistoryDetails ?? true,
+    incidentHistoryDetailDays: privacySettings.incidentHistoryDetailDays ?? 7,
     maxIncidentsToShow: privacySettings.maxIncidentsToShow || 50,
     incidentHistoryDays: privacySettings.incidentHistoryDays || 90,
     allowedCustomFields: privacySettings.allowedCustomFields || [],

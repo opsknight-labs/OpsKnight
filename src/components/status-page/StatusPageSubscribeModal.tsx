@@ -114,11 +114,35 @@ export default function StatusPageSubscribeModal({
         aria-labelledby="subscribe-modal-heading"
       >
         <div className="status-subscribe-modal__head">
-          <h2 id="subscribe-modal-heading" className="status-subscribe-modal__title">
-            Subscribe to updates
-          </h2>
-          <button type="button" className="status-subscribe-modal__close" onClick={onClose} aria-label="Close">
-            ×
+          <div className="status-subscribe-modal__headcopy">
+            <h2 id="subscribe-modal-heading" className="status-subscribe-modal__title">
+              Subscribe to Updates
+            </h2>
+            <p className="status-subscribe-modal__subtitle">
+              Receive real-time notifications for active incidents and scheduled maintenance.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="status-subscribe-modal__close"
+            onClick={onClose}
+            aria-label="Close dialog"
+            title="Close dialog"
+          >
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
         <div className="status-subscribe-modal__body">

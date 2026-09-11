@@ -13,6 +13,12 @@ import {
   settingsChangedState,
   type SettingsActionState,
 } from '@/lib/settings-result';
+import {
+  hasIssuerMigrationConfirmation,
+  isOidcIssuerMigration,
+  normalizeOidcIssuer,
+} from '@/lib/oidc/issuer-migration';
+import { normalizeOidcProviderType } from '@/lib/oidc-provider';
 
 function normalizeDomains(value: string) {
   if (!value) return [];
@@ -62,37 +68,6 @@ function parseRoleMapping(input: string): RoleMappingRule[] {
   });
 }
 
-function detectProviderType(issuerUrl: string): string {
-  let hostname = '';
-  try {
-    hostname = new URL(issuerUrl).hostname.toLowerCase();
-  } catch {
-    hostname = issuerUrl.toLowerCase();
-  }
-
-  if (
-    hostname === 'accounts.google.com' ||
-    hostname === 'googleapis.com' ||
-    hostname.endsWith('.google.com') ||
-    hostname.endsWith('.googleapis.com')
-  ) return 'google';
-  if (
-    hostname === 'okta.com' ||
-    hostname.endsWith('.okta.com') ||
-    hostname.endsWith('.okta-emea.com') ||
-    hostname.includes('.okta.')
-  ) return 'okta';
-  const azureHosts = [
-    'login.microsoftonline.com',
-    'login.microsoft.com',
-    'sts.windows.net',
-    'microsoftonline.com',
-  ];
-  if (azureHosts.some(host => hostname === host || hostname.endsWith(`.${host}`))) return 'azure';
-  if (hostname === 'auth0.com' || hostname.endsWith('.auth0.com')) return 'auth0';
-  return 'custom';
-}
-
 export async function saveOidcConfig(
   prevState: SettingsActionState | undefined,
   formData: FormData
@@ -116,15 +91,18 @@ export async function saveOidcConfig(
     const clientSecret = (formData.get('clientSecret') as string | null)?.trim() ?? '';
     const enabledValue = formData.get('enabled');
     const autoProvisionValue = formData.get('autoProvision');
-    const enabled =
-      enabledValue === 'on' || enabledValue === 'true' || enabledValue === 'checked';
+    const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === 'checked';
     const autoProvision =
       autoProvisionValue === 'on' ||
       autoProvisionValue === 'true' ||
       autoProvisionValue === 'checked';
-    const allowedDomains = normalizeDomains((formData.get('allowedDomains') as string | null) ?? '');
+    const allowedDomains = normalizeDomains(
+      (formData.get('allowedDomains') as string | null) ?? ''
+    );
     const customScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
     const providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
+    const organizationId = (formData.get('organizationId') as string | null)?.trim() ?? null;
+    const requestedProviderType = (formData.get('providerType') as string | null)?.trim();
 
     let roleMapping: RoleMappingRule[];
     try {
@@ -185,6 +163,16 @@ export async function saveOidcConfig(
     }
 
     const existing = await prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const issuerMigration = existing ? isOidcIssuerMigration(existing.issuer, issuer) : false;
+    if (issuerMigration && !hasIssuerMigrationConfirmation(formData)) {
+      return {
+        success: false,
+        code: 'VALIDATION_ERROR',
+        error:
+          'Issuer changes cross an identity trust boundary. Confirm the migration to revoke existing OIDC sessions and pending link approvals.',
+        updatedAt: expectedUpdatedAt,
+      };
+    }
     const expectedRevision = parseSettingsRevision(expectedUpdatedAt);
     if (existing && !expectedRevision) return settingsChangedState(expectedUpdatedAt);
     if (!existing && expectedRevision) return settingsChangedState(expectedUpdatedAt);
@@ -210,7 +198,7 @@ export async function saveOidcConfig(
       };
     }
 
-    const providerType = detectProviderType(issuer);
+    const providerType = normalizeOidcProviderType(requestedProviderType, issuer);
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';
       if (existing) {
@@ -227,14 +215,32 @@ export async function saveOidcConfig(
             customScopes,
             providerType,
             providerLabel,
+            organizationId,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
                 : Prisma.JsonNull,
             updatedBy: actor.id,
+            configVersion: { increment: 1 },
           },
         });
         if (updated.count !== 1) throw new SettingsChangedMutationError();
+
+        if (issuerMigration) {
+          const previousIssuer = normalizeOidcIssuer(existing.issuer);
+          await tx.user.updateMany({
+            where: { oidcIdentities: { some: { issuer: previousIssuer } } },
+            data: { tokenVersion: { increment: 1 } },
+          });
+          await tx.oidcLinkingApproval.updateMany({
+            where: {
+              providerConfigId: existing.id,
+              consumedAt: null,
+              revokedAt: null,
+            },
+            data: { revokedAt: new Date() },
+          });
+        }
       } else {
         await tx.oidcConfig.create({
           data: {
@@ -249,6 +255,7 @@ export async function saveOidcConfig(
             customScopes,
             providerType,
             providerLabel,
+            organizationId,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
@@ -274,6 +281,7 @@ export async function saveOidcConfig(
                 customScopes: existing.customScopes,
                 providerType: existing.providerType,
                 providerLabel: existing.providerLabel,
+                organizationId: existing.organizationId,
                 hasClientSecret: Boolean(existing.clientSecret),
               }
             : null,
@@ -286,10 +294,21 @@ export async function saveOidcConfig(
             customScopes,
             providerType,
             providerLabel,
+            organizationId,
             roleMappingCount: roleMapping.length,
             hasClientSecret: Boolean(encryptedSecret),
           },
-          details: { integration: 'oidc' },
+          details: {
+            integration: 'oidc',
+            issuerMigration,
+            ...(issuerMigration
+              ? {
+                  previousIssuer: normalizeOidcIssuer(existing!.issuer),
+                  sessionsRevoked: true,
+                  pendingLinkApprovalsRevoked: true,
+                }
+              : {}),
+          },
         },
         tx
       );
@@ -303,6 +322,13 @@ export async function saveOidcConfig(
 
     const { resetAuthOptionsCache } = await import('@/lib/auth');
     resetAuthOptionsCache();
+    // Invalidate the OIDC config caches too — the freshly saved issuer,
+    // client secret and enabled state must take effect immediately rather
+    // than remaining stale for several seconds.
+    const { resetOidcConfigCache } = await import('@/lib/oidc-config');
+    resetOidcConfigCache();
+    const { resetOidcRuntimeMetadataCache } = await import('@/lib/oidc-validation');
+    resetOidcRuntimeMetadataCache();
     revalidatePath('/settings/security');
     revalidatePath('/settings/system');
     revalidatePath('/login');

@@ -118,7 +118,6 @@ export function buildPreviewSnapshot(input: {
         .filter(service => visible.has(service.id))
         .map(service => {
           const impact = activeByService.get(service.id);
-          const uptime = input.uptime90[service.id];
           return {
             id: service.id,
             name: visible.get(service.id)?.displayName || service.name,
@@ -135,34 +134,13 @@ export function buildPreviewSnapshot(input: {
               : {}),
             status: impact ? getWorstPublicStatus(impact.statuses) : 'OPERATIONAL',
             activeIncidentCount: impact?.count ?? 0,
-            ...(input.showMetrics !== false &&
-            input.showUptimeHistory !== false &&
-            allow('showServiceMetrics') &&
-            typeof uptime === 'number'
-              ? {
-                  uptime: {
-                    days30: {
-                      percentage: uptime,
-                      incidentCount: 0,
-                      measuredDays: 30,
-                      complete: true,
-                    },
-                    days90: {
-                      percentage: uptime,
-                      incidentCount: 0,
-                      measuredDays: 90,
-                      complete: true,
-                    },
-                  },
-                }
-              : {}),
           };
         })
     : [];
 
   const nowMs = now.getTime();
   const previewDetailCutoffMs = (() => {
-    if (allow('showIncidentHistoryDetails') === false) return nowMs;
+    if (Reflect.get(input.privacy ?? {}, 'showIncidentHistoryDetails') !== false) return null;
     const raw = Reflect.get(input.privacy ?? {}, 'incidentHistoryDetailDays') as unknown;
     if (raw == null) return null;
     const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));
@@ -171,15 +149,18 @@ export function buildPreviewSnapshot(input: {
   })();
   const clampTitle = (value: string, max = 120) =>
     value.length <= max ? value : `${value.slice(0, max).trimEnd()}…`;
-  const redactedByAge = (createdAt: string | Date | null | undefined) => {
+  const redactedByAge = (incident: { status: string; createdAt: string | Date | null | undefined }) => {
     if (previewDetailCutoffMs == null) return false;
-    const t = createdAt ? Date.parse(String(createdAt)) : NaN;
+    if (incident.status === 'OPEN' || incident.status === 'ACKNOWLEDGED') return false;
+    const showHistoryDetails = allow('showIncidentHistoryDetails');
+    if (showHistoryDetails === false && incident.status !== 'RESOLVED') return false;
+    const t = incident.createdAt ? Date.parse(String(incident.createdAt)) : NaN;
     if (Number.isNaN(t)) return false;
     return t < (previewDetailCutoffMs as number);
   };
   const incidents: PublicIncident[] = input.showIncidents
     ? input.incidents.map(incident => {
-        const redacted = redactedByAge(incident.createdAt);
+        const redacted = redactedByAge(incident);
         return {
           status: incident.status as PublicIncidentStatus,
           ...(allow('showIncidentDetails') ? { id: incident.id } : {}),

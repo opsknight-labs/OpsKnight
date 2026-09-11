@@ -6,6 +6,8 @@ import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { sanitizeCallbackUrl } from '@/lib/callback-url';
+import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,22 +72,20 @@ export default async function MobileLoginPage({
       }
     }
     const awaitedSearchParams = await searchParams;
-    let callbackUrl =
-      typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/m';
-
-    // Fix: Prevent redirect loop if callbackUrl is the login page itself
-    if (callbackUrl.includes('/login') || callbackUrl === '/') {
-      callbackUrl = '/m';
-    }
+    const callbackUrl = sanitizeCallbackUrl(
+      typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/m',
+      '/m'
+    );
 
     // Redirect to mobile callback or mobile dashboard
-    const redirectUrl = callbackUrl.startsWith('/m') ? callbackUrl : '/m';
-    redirect(redirectUrl);
+    redirect(callbackUrl);
   }
 
   const awaitedSearchParams = await searchParams;
-  const callbackUrl =
-    typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/m';
+  const callbackUrl = sanitizeCallbackUrl(
+    typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/m',
+    '/m'
+  );
   const errorCode =
     typeof awaitedSearchParams?.error === 'string' ? awaitedSearchParams.error : null;
   const passwordSet = awaitedSearchParams?.password === '1';
@@ -100,6 +100,7 @@ export default async function MobileLoginPage({
         ssoEnabled={ssoEnabled}
         ssoProviderType={ssoConfig?.providerType}
         ssoProviderLabel={ssoConfig?.providerLabel}
+        localAuthEnabled={getLocalAuthPolicy().localLoginEnabled}
       />
     </ThemeProvider>
   );

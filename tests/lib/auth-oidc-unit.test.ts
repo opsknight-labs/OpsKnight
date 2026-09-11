@@ -1,9 +1,109 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { NextAuthOptions } from 'next-auth';
 
-vi.mock('@/lib/oidc-config', () => {
+vi.mock('@/lib/oidc-config', () => ({
+  getOidcConfig: vi.fn().mockResolvedValue({
+    enabled: true,
+    issuer: 'https://login.example.com/',
+    clientId: 'client-id',
+    clientSecret: 'secret',
+    autoProvision: true,
+    allowedDomains: [],
+    roleMapping: undefined,
+    customScopes: null,
+    providerType: 'custom',
+    profileMapping: null,
+  }),
+}));
+
+vi.mock('@/lib/oidc-validation', () => ({
+  getValidatedOidcRuntimeMetadata: vi.fn().mockResolvedValue({
+    isValid: true,
+    metadata: {
+      issuer: 'https://login.example.com/',
+      authorizationEndpoint: 'https://login.example.com/authorize',
+      tokenEndpoint: 'https://login.example.com/token',
+      jwksUri: 'https://login.example.com/jwks',
+    },
+  }),
+}));
+
+vi.mock('@/lib/oidc-identity-resolution', () => ({
+  resolveOidcIdentityForSignIn: vi.fn(),
+}));
+
+vi.mock('@/lib/users/admin-invariants', () => ({
+  updateUserSecurityState: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  default: {
+    user: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    oidcIdentity: {
+      findUnique: vi.fn(),
+    },
+  },
+}));
+
+import prisma from '@/lib/prisma';
+import { getOidcConfig } from '@/lib/oidc-config';
+import { resolveOidcIdentityForSignIn } from '@/lib/oidc-identity-resolution';
+import { updateUserSecurityState } from '@/lib/users/admin-invariants';
+import { getAuthOptions, resetAuthOptionsCache, revokeUserSessions } from '@/lib/auth';
+
+type SignInCallback = NonNullable<NonNullable<NextAuthOptions['callbacks']>['signIn']>;
+type JwtCallback = NonNullable<NonNullable<NextAuthOptions['callbacks']>['jwt']>;
+
+const targetUser = {
+  id: 'u1',
+  email: 'real@example.com',
+  name: 'Real User',
+  role: 'USER',
+  roleSource: 'OIDC',
+  status: 'ACTIVE',
+  department: null,
+  jobTitle: null,
+  avatarUrl: null,
+};
+
+function successfulResolution(overrides: Partial<typeof targetUser> = {}) {
   return {
-    getOidcConfig: vi.fn().mockResolvedValue({
+    ok: true as const,
+    user: { ...targetUser, ...overrides },
+    identityCreated: false,
+    userCreated: false,
+    approvalConsumed: false,
+  };
+}
+
+async function getSignInCallback(): Promise<SignInCallback> {
+  const options = await getAuthOptions();
+  if (!options.callbacks?.signIn) throw new Error('signIn callback missing');
+  return options.callbacks.signIn;
+}
+
+async function getJwtCallback(): Promise<JwtCallback> {
+  const options = await getAuthOptions();
+  if (!options.callbacks?.jwt) throw new Error('jwt callback missing');
+  return options.callbacks.jwt;
+}
+
+describe('Auth JWT + OIDC callback contract', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetAuthOptionsCache();
+    process.env.AUTH_OPTIONS_CACHE_TTL_MS = '0';
+    process.env.JWT_USER_REFRESH_TTL_MS = '60000';
+    process.env.OIDC_REQUIRE_EMAIL_VERIFIED_STRICT = 'false';
+    process.env.AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS = '14400';
+    process.env.AUTH_SSO_REAUTH_AFTER_SECONDS = '43200';
+
+    vi.mocked(getOidcConfig).mockResolvedValue({
       enabled: true,
+      configVersion: 1,
       issuer: 'https://login.example.com/',
       clientId: 'client-id',
       clientSecret: 'secret',
@@ -11,334 +111,366 @@ vi.mock('@/lib/oidc-config', () => {
       allowedDomains: [],
       roleMapping: undefined,
       customScopes: null,
+      providerType: 'custom',
       profileMapping: null,
-    }),
-  };
-});
-
-vi.mock('@/lib/prisma', () => {
-  const mockPrisma = {
-    user: {
-      findUnique: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-    },
-    oidcLinkingApproval: {
-      findFirst: vi.fn(),
-      updateMany: vi.fn(),
-    },
-    oidcIdentity: {
-      findUnique: vi.fn(),
-      create: vi.fn(),
-    },
-    oidcConfig: {
-      findFirst: vi.fn(),
-      upsert: vi.fn(),
-    },
-    auditLog: {
-      findFirst: vi.fn(),
-    },
-    $transaction: vi.fn(),
-  };
-  mockPrisma.$transaction.mockImplementation(async callback => callback(mockPrisma));
-  return { default: mockPrisma };
-});
-
-import prisma from '@/lib/prisma';
-import { getAuthOptions, revokeUserSessions, resetAuthOptionsCache } from '@/lib/auth';
-
-type AuthOptions = Awaited<ReturnType<typeof getAuthOptions>>;
-
-type SignInCallback = (args: {
-  user: Record<string, unknown>;
-  account: Record<string, unknown>;
-  profile?: Record<string, unknown>;
-}) => Promise<boolean>;
-
-type JwtCallback = (args: {
-  token: Record<string, unknown>;
-  user?: Record<string, unknown>;
-  account?: Record<string, unknown>;
-  trigger?: string;
-}) => Promise<Record<string, unknown>>;
-
-function getSignInCallback(authOptions: AuthOptions): SignInCallback {
-  if (!authOptions.callbacks?.signIn) throw new Error('signIn callback is not configured');
-  return authOptions.callbacks.signIn as unknown as SignInCallback;
-}
-
-function getJwtCallback(authOptions: AuthOptions): JwtCallback {
-  if (!authOptions.callbacks?.jwt) throw new Error('jwt callback is not configured');
-  return authOptions.callbacks.jwt as unknown as JwtCallback;
-}
-
-const userFindUnique = vi.mocked(prisma.user.findUnique);
-const oidcIdentityFindUnique = vi.mocked(prisma.oidcIdentity.findUnique);
-
-describe('Auth JWT + OIDC (unit)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    resetAuthOptionsCache();
-    process.env.AUTH_OPTIONS_CACHE_TTL_MS = '0';
-    process.env.JWT_USER_REFRESH_TTL_MS = '60000';
-    process.env.OIDC_REQUIRE_EMAIL_VERIFIED_STRICT = 'false';
-
-    userFindUnique.mockResolvedValue(null);
-    vi.mocked(prisma.user.create).mockResolvedValue({ id: 'u1' } as never);
+    });
+    vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(successfulResolution());
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.user.update).mockResolvedValue({} as never);
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.oidcLinkingApproval.updateMany).mockResolvedValue({ count: 1 } as never);
-    vi.mocked(prisma.auditLog.findFirst).mockResolvedValue(null);
-    oidcIdentityFindUnique.mockResolvedValue(null);
-    vi.mocked(prisma.oidcIdentity.create).mockResolvedValue({ id: 'id1' } as never);
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
   });
 
-  it('rejects OIDC sign-in when email_verified is false', async () => {
-    const signIn = getSignInCallback(await getAuthOptions());
+  it('rejects explicit email_verified=false before identity resolution', async () => {
+    const signIn = await getSignInCallback();
 
     const result = await signIn({
       user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: { email_verified: false },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: false } as never,
+      email: undefined,
+      credentials: undefined,
     });
 
     expect(result).toBe(false);
+    expect(resolveOidcIdentityForSignIn).not.toHaveBeenCalled();
   });
 
-  it('rejects OIDC sign-in when email_verified is missing and strict mode enabled', async () => {
+  it('passes strict email verification policy into first-binding resolver', async () => {
     process.env.OIDC_REQUIRE_EMAIL_VERIFIED_STRICT = 'true';
-    const signIn = getSignInCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValue({
-      id: 'u1',
-      email: 'user@example.com',
-      name: 'User',
-      role: 'USER',
-      status: 'ACTIVE',
-    } as never);
+    resetAuthOptionsCache();
+    vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue({
+      ok: false,
+      reason: 'OIDC_EMAIL_ASSURANCE_REQUIRED',
+    });
+    const signIn = await getSignInCallback();
 
     const result = await signIn({
       user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: {},
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { sub: 'oidc-sub' },
+      email: undefined,
+      credentials: undefined,
     });
 
     expect(result).toBe(false);
-  });
-
-  it('rejects OIDC sign-in if email exists but is not linked (ATO prevention)', async () => {
-    const signIn = getSignInCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValue({
-      id: 'u1',
-      email: 'user@example.com',
-      name: 'User',
-      role: 'USER',
-      status: 'ACTIVE',
-    } as never);
-    oidcIdentityFindUnique.mockResolvedValue(null);
-
-    const result = await signIn({
-      user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: { email_verified: true, sub: 'oidc-sub' },
-    });
-
-    expect(result).toBe(false);
-    expect(prisma.oidcLinkingApproval.findFirst).toHaveBeenCalledWith({
-      where: { userId: 'u1', revokedAt: null },
-      select: { id: true },
-    });
-    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
-  });
-
-  it('links an ACTIVE admin-provisioned user on first OIDC login when email is verified', async () => {
-    const signIn = getSignInCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValue({
-      id: 'u1',
-      email: 'user@example.com',
-      name: 'User',
-      role: 'USER',
-      status: 'ACTIVE',
-    } as never);
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
-      id: 'approval-record',
-    } as never);
-    oidcIdentityFindUnique.mockResolvedValue(null);
-
-    const user = { email: 'user@example.com', name: 'User', id: 'oidc-sub' };
-    const result = await signIn({
-      user,
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: { email_verified: true, sub: 'oidc-sub' },
-    });
-
-    expect(result).toBe(true);
-    expect(prisma.oidcIdentity.create).toHaveBeenCalledWith({
-      data: {
+    expect(resolveOidcIdentityForSignIn).toHaveBeenCalledWith(
+      expect.objectContaining({
         issuer: 'https://login.example.com',
         subject: 'oidc-sub',
         email: 'user@example.com',
-        userId: 'u1',
-      },
-    });
-    expect(prisma.oidcLinkingApproval.updateMany).toHaveBeenCalledWith({
-      where: { id: 'approval-record', revokedAt: null },
-      data: { revokedAt: expect.any(Date) },
-    });
-    expect(user.id).toBe('u1');
+        emailVerifiedClaim: undefined,
+        requireEmailVerifiedClaim: true,
+      })
+    );
   });
 
-  it('does not link an existing provisioned user when email_verified is missing', async () => {
-    const signIn = getSignInCallback(await getAuthOptions());
+  it('allows an established identity when the OIDC profile omits email', async () => {
+    const signIn = await getSignInCallback();
+    const user = { email: null, name: 'User', id: 'oidc-sub' };
 
-    userFindUnique.mockResolvedValue({
-      id: 'u1',
-      email: 'user@example.com',
-      name: 'User',
-      role: 'USER',
-      status: 'ACTIVE',
-    } as never);
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
-      id: 'approval-record',
-    } as never);
-    oidcIdentityFindUnique.mockResolvedValue(null);
+    const result = await signIn({
+      user,
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { sub: 'oidc-sub' },
+      email: undefined,
+      credentials: undefined,
+    });
+
+    expect(result).toBe(true);
+    expect(resolveOidcIdentityForSignIn).toHaveBeenCalledWith(
+      expect.objectContaining({ email: null, subject: 'oidc-sub' })
+    );
+    expect(user.id).toBe('u1');
+    expect(user.email).toBe('real@example.com');
+  });
+
+  it('keeps issuer+subject ownership when the email claim changes', async () => {
+    const signIn = await getSignInCallback();
+    const user = { email: 'changed@example.com', name: 'Changed', id: 'oidc-sub' };
+
+    const result = await signIn({
+      user,
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: true, sub: 'oidc-sub' } as never,
+      email: undefined,
+      credentials: undefined,
+    });
+
+    expect(result).toBe(true);
+    expect(user.id).toBe('u1');
+    expect(user.email).toBe('real@example.com');
+  });
+
+  it('rejects when the identity resolver denies linking policy', async () => {
+    vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue({
+      ok: false,
+      reason: 'OIDC_LINK_NOT_APPROVED',
+    });
+    const signIn = await getSignInCallback();
 
     const result = await signIn({
       user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: { sub: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: true, sub: 'oidc-sub' } as never,
+      email: undefined,
+      credentials: undefined,
     });
 
     expect(result).toBe(false);
-    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
   });
 
-  it('does not link or reactivate a disabled user with historical invite evidence', async () => {
-    const signIn = getSignInCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValue({
-      id: 'u-disabled',
-      email: 'disabled@example.com',
-      name: 'Disabled',
-      role: 'USER',
-      status: 'DISABLED',
-    } as never);
-    vi.mocked(prisma.oidcLinkingApproval.findFirst).mockResolvedValue({
-      id: 'historical-approval',
-    } as never);
+  it('de-provisions an elevated role when no role mapping matches', async () => {
+    vi.mocked(getOidcConfig).mockResolvedValue({
+      enabled: true,
+      configVersion: 1,
+      issuer: 'https://login.example.com/',
+      clientId: 'client-id',
+      clientSecret: 'secret',
+      autoProvision: true,
+      allowedDomains: [],
+      roleMapping: [
+        { claim: 'groups', value: 'admins', role: 'ADMIN' },
+        { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+      ],
+      customScopes: 'groups',
+      providerType: 'custom',
+      profileMapping: null,
+    });
+    vi.mocked(resolveOidcIdentityForSignIn).mockResolvedValue(
+      successfulResolution({ id: 'u-responder', role: 'RESPONDER' })
+    );
+    resetAuthOptionsCache();
+    const signIn = await getSignInCallback();
 
     const result = await signIn({
-      user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: { email_verified: true, sub: 'oidc-sub' },
+      user: { email: 'user@example.com', name: 'User', id: 'oidc-sub' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: { email_verified: true, sub: 'oidc-sub', groups: ['everyone'] } as never,
+      email: undefined,
+      credentials: undefined,
     });
 
-    expect(result).toBe(false);
-    expect(prisma.oidcLinkingApproval.findFirst).not.toHaveBeenCalled();
-    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
-    expect(prisma.user.update).not.toHaveBeenCalled();
+    expect(result).toBe(true);
+    expect(updateUserSecurityState).toHaveBeenCalledWith(
+      'u-responder',
+      { role: 'USER' },
+      expect.objectContaining({ tokenVersion: { increment: 1 } })
+    );
   });
 
-  it('rejects a disabled user whose OIDC identity is already linked', async () => {
-    const signIn = getSignInCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValue({
-      id: 'u-disabled',
-      email: 'disabled@example.com',
-      name: 'Disabled',
-      role: 'USER',
-      status: 'DISABLED',
-    } as never);
-    oidcIdentityFindUnique.mockResolvedValue({
-      issuer: 'https://login.example.com',
-      subject: 'oidc-sub',
-      userId: 'u-disabled',
-    } as never);
-
-    const result = await signIn({
-      user: { email: 'disabled@example.com', name: 'Disabled', id: 'oidc-sub' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: { email_verified: true, sub: 'oidc-sub' },
-    });
-
-    expect(result).toBe(false);
-    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
-    expect(prisma.user.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects sign-in if OIDC identity is linked to another user', async () => {
-    const signIn = getSignInCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValue({
-      id: 'u2',
-      email: 'user2@example.com',
-      name: 'User2',
-      role: 'USER',
-      status: 'ACTIVE',
-    } as never);
-    oidcIdentityFindUnique.mockResolvedValue({
-      id: 'id1',
-      issuer: 'https://login.example.com',
-      subject: 'oidc-sub',
-      userId: 'u1',
-    } as never);
-
-    const result = await signIn({
-      user: { email: 'user2@example.com', name: 'User2', id: 'oidc-sub' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-      profile: { email_verified: true, sub: 'oidc-sub' },
-    });
-
-    expect(result).toBe(false);
-    expect(prisma.oidcIdentity.create).not.toHaveBeenCalled();
-  });
-
-  it('jwt callback prefers OIDC identity mapping over email mapping', async () => {
-    const jwt = getJwtCallback(await getAuthOptions());
-
-    oidcIdentityFindUnique.mockResolvedValue({
-      issuer: 'https://login.example.com',
-      subject: 'oidc-sub',
-      userId: 'u1',
-    } as never);
-    userFindUnique
+  it('jwt callback resolves OIDC sessions only through issuer+subject identity', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue({ userId: 'u1' } as never);
+    vi.mocked(prisma.user.findUnique)
       .mockResolvedValueOnce({
         id: 'u1',
         email: 'real@example.com',
         name: 'Real',
         role: 'ADMIN',
+        status: 'ACTIVE',
+        tokenVersion: 0,
       } as never)
       .mockResolvedValueOnce({
         name: 'Real',
         email: 'real@example.com',
         role: 'ADMIN',
+        status: 'ACTIVE',
+        tokenVersion: 0,
+        avatarUrl: null,
+        gender: null,
       } as never);
 
     const token = await jwt({
       token: {},
-      user: { id: 'oidc-sub', email: 'spoof@example.com', name: 'Spoof' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
+      user: { id: 'u1', email: null, name: 'Real' },
+      account: { provider: 'oidc', providerAccountId: 'oidc-sub', type: 'oauth' },
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'signIn',
+      session: undefined,
     });
 
+    expect(prisma.oidcIdentity.findUnique).toHaveBeenCalledWith({
+      where: {
+        issuer_subject: { issuer: 'https://login.example.com', subject: 'oidc-sub' },
+      },
+      select: { userId: true },
+    });
     expect(token.sub).toBe('u1');
     expect(token.email).toBe('real@example.com');
     expect(token.role).toBe('ADMIN');
+    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 43_100);
+    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 43_200);
+  });
+
+  it('jwt callback fails closed instead of falling back to email when identity is missing', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+
+    const token = await jwt({
+      token: {},
+      user: { id: 'u1', email: 'same@example.com', name: 'User' },
+      account: { provider: 'oidc', providerAccountId: 'unknown-sub', type: 'oauth' },
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'signIn',
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('OIDC_IDENTITY_NOT_RESOLVABLE');
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
   it('jwt callback refreshes security state even inside the historical TTL window', async () => {
-    const jwt = getJwtCallback(await getAuthOptions());
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      name: 'Updated User',
+      email: 'updated@example.com',
+      role: 'ADMIN',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+    const token = await jwt({
+      token: { sub: 'u1', role: 'USER', tokenVersion: 0, userFetchedAt: Date.now() },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
 
-    const token: Record<string, unknown> = {
-      sub: 'u1',
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    expect(token.role).toBe('ADMIN');
+    expect(token.email).toBe('updated@example.com');
+  });
+
+  it('expires an OIDC session after the configured idle timeout', async () => {
+    const now = Date.now();
+    const jwt = await getJwtCallback();
+    const token = await jwt({
+      token: {
+        sub: 'u1',
+        oidcConfigVersion: 1,
+        oidcAuthenticatedAt: now - 1_000,
+        lastActivityAt: now - 14_400_000,
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('OIDC_SESSION_IDLE_TIMEOUT');
+  });
+
+  it('requires a new OpsKnight OIDC session after the renewal window', async () => {
+    const now = Date.now();
+    const jwt = await getJwtCallback();
+    const token = await jwt({
+      token: {
+        sub: 'u1',
+        oidcConfigVersion: 1,
+        oidcAuthenticatedAt: now - 43_200_000,
+        lastActivityAt: now,
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('OIDC_SESSION_RENEWAL_REQUIRED');
+  });
+
+  it('revokes an OIDC session when its provider trust configuration changes', async () => {
+    const jwt = await getJwtCallback();
+    const token = await jwt({
+      token: {
+        sub: 'u1',
+        oidcConfigVersion: 0,
+        oidcAuthenticatedAt: Date.now(),
+        lastActivityAt: Date.now(),
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('OIDC_CONFIGURATION_CHANGED');
+  });
+
+  it('jwt callback revokes an existing session when tokenVersion mismatches', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      name: 'Real',
+      email: 'real@example.com',
+      role: 'ADMIN',
+      tokenVersion: 2,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const token = await jwt({
+      token: { sub: 'u1', role: 'USER', tokenVersion: 1 },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('SESSION_REVOKED');
+  });
+
+  it('jwt callback revokes an existing session when the user is disabled', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      name: 'Disabled',
+      email: 'disabled@example.com',
       role: 'USER',
       tokenVersion: 0,
-      userFetchedAt: Date.now(),
-    };
-    userFindUnique.mockResolvedValue({
-      name: 'New',
-      email: 'new@example.com',
+      status: 'DISABLED',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const token = await jwt({
+      token: { sub: 'u1', tokenVersion: 0 },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('USER_DISABLED');
+  });
+
+  it('fresh credential sign-in clears a previously poisoned JWT error', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: 'u-clean',
+      email: 'clean@example.com',
+      name: 'Clean User',
       role: 'ADMIN',
       tokenVersion: 0,
       status: 'ACTIVE',
@@ -346,86 +478,8 @@ describe('Auth JWT + OIDC (unit)', () => {
       gender: null,
     } as never);
 
-    const result = await jwt({ token });
-
-    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
-    expect(result.role).toBe('ADMIN');
-    expect(result.email).toBe('new@example.com');
-  });
-
-  it('jwt callback revokes session when tokenVersion mismatches', async () => {
-    const jwt = getJwtCallback(await getAuthOptions());
-
-    oidcIdentityFindUnique.mockResolvedValue({
-      issuer: 'https://login.example.com',
-      subject: 'oidc-sub',
-      userId: 'u1',
-    } as never);
-    userFindUnique
-      .mockResolvedValueOnce({
-        id: 'u1',
-        email: 'real@example.com',
-        name: 'Real',
-        role: 'ADMIN',
-        tokenVersion: 0,
-      } as never)
-      .mockResolvedValueOnce({
-        name: 'Real',
-        email: 'real@example.com',
-        role: 'ADMIN',
-        tokenVersion: 1,
-        status: 'ACTIVE',
-      } as never);
-
     const token = await jwt({
-      token: {},
-      user: { id: 'oidc-sub', email: 'real@example.com', name: 'Real' },
-      account: { provider: 'oidc', providerAccountId: 'oidc-sub' },
-    });
-
-    expect(token.sub).toBeUndefined();
-    expect(token.error).toBe('SESSION_REVOKED');
-  });
-
-  it('jwt callback revokes session when user is disabled', async () => {
-    const jwt = getJwtCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValueOnce({
-      id: 'u1',
-      name: 'Disabled',
-      email: 'disabled@example.com',
-      role: 'USER',
-      tokenVersion: 0,
-      status: 'DISABLED',
-    } as never);
-
-    const token = await jwt({
-      token: { sub: 'u1', tokenVersion: 0 },
-    });
-
-    expect(token.sub).toBeUndefined();
-    expect(token.error).toBe('USER_DISABLED');
-  });
-
-  it('jwt callback removes error property from incoming token upon fresh credential sign-in', async () => {
-    const jwt = getJwtCallback(await getAuthOptions());
-
-    userFindUnique.mockResolvedValueOnce({
-      id: 'u-clean',
-      email: 'clean@example.com',
-      name: 'Clean User',
-      role: 'ADMIN',
-      tokenVersion: 0,
-      status: 'ACTIVE',
-    } as never);
-
-    const poisonedToken: Record<string, unknown> = {
-      sub: 'old-sub',
-      error: 'SESSION_REVOKED',
-    };
-
-    const token = await jwt({
-      token: poisonedToken,
+      token: { sub: 'old-sub', error: 'SESSION_REVOKED' },
       user: {
         id: 'u-clean',
         email: 'clean@example.com',
@@ -433,11 +487,51 @@ describe('Auth JWT + OIDC (unit)', () => {
         role: 'ADMIN',
         tokenVersion: 0,
       },
-      account: { provider: 'credentials', type: 'credentials' },
+      account: { provider: 'credentials', type: 'credentials', providerAccountId: 'u-clean' },
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'signIn',
+      session: undefined,
     });
 
     expect(token.sub).toBe('u-clean');
     expect(token.error).toBeUndefined();
+    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 604_700);
+    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 604_800);
+  });
+
+  it('keeps the one-year Remember Me lifetime for credential sessions', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u-remember',
+      email: 'remember@example.com',
+      name: 'Remember User',
+      role: 'USER',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const token = await jwt({
+      token: {},
+      user: {
+        id: 'u-remember',
+        email: 'remember@example.com',
+        name: 'Remember User',
+        role: 'USER',
+        tokenVersion: 0,
+        rememberMe: true,
+      } as never,
+      account: { provider: 'credentials', type: 'credentials', providerAccountId: 'u-remember' },
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'signIn',
+      session: undefined,
+    });
+
+    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 31_535_900);
+    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 31_536_000);
   });
 
   it('revokeUserSessions increments tokenVersion', async () => {

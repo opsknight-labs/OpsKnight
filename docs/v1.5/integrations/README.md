@@ -14,7 +14,7 @@ OpsKnight integrations have three distinct directions:
 | Outbound notification | Deliver incident and escalation messages to responders or external endpoints.               | Email, SMS, push, WhatsApp, Slack, service webhooks.  |
 | Workflow              | Connect incident response to another working surface.                                       | Slack ChatOps war rooms and Jira issues/action items. |
 
-There is no native voice/PSTN notification channel in v1.4. PagerDuty support is inbound Events API v2 compatibility, not a full PagerDuty product or bidirectional synchronization.
+There is no native voice/PSTN notification channel in v1.5. PagerDuty support is inbound Events API v2 compatibility, not a full PagerDuty product or bidirectional synchronization.
 
 ## Start here
 
@@ -27,7 +27,7 @@ There is no native voice/PSTN notification channel in v1.4. PagerDuty support is
 
 ## Inbound integration catalog
 
-These entries are backed by v1.4 route handlers. The provider guide is authoritative for payload and recovery behavior.
+These entries are backed by v1.5 route handlers. The provider guide is authoritative for payload and recovery behavior.
 
 | Category              | Provider                | Webhook path                                                               | Guide                                                          |
 | --------------------- | ----------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -72,7 +72,7 @@ The application also has `/api/integrations/health` for authenticated integratio
 | Jira Cloud                                              | [Jira](issue-tracking/jira.md)                          | Workspace configuration, service mapping, incident/action-item links. |
 | Service webhooks                                        | [Custom webhooks](custom/webhooks.md)                   | Outbound lifecycle webhook configuration and signing.                 |
 
-Microsoft Teams and Google Chat do not have dedicated native notification providers in the v1.4 provider model. A compatible incoming-webhook endpoint may accept a generic outbound webhook payload, but test its format explicitly and do not describe it as a native integration.
+Microsoft Teams and Google Chat do not have dedicated native notification providers in the v1.5 provider model. A compatible incoming-webhook endpoint may accept a generic outbound webhook payload, but test its format explicitly and do not describe it as a native integration.
 
 ## Credential vocabulary
 

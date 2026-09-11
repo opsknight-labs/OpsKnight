@@ -18,6 +18,7 @@ describe('schedule UI capability contract', () => {
       canManageScheduleSettings: true,
       canCreateOverride: true,
       canDeleteOverride: true,
+      canDeleteSchedule: true,
     });
   });
 
@@ -67,6 +68,7 @@ describe('schedule UI capability contract', () => {
       canManageScheduleSettings: false,
       canCreateOverride: false,
       canDeleteOverride: false,
+      canDeleteSchedule: false,
     });
   });
 });

@@ -6,7 +6,7 @@ order: 10
 
 # Action Items
 
-Action items turn a postmortem into owned follow-up work. Each item belongs to a postmortem and its incident, and can carry an owner, due date, priority, status, description, and external ticket link (Jira / GitHub).
+Action items turn a postmortem into owned follow-up work. Each item belongs to a postmortem and its incident, and can carry an owner, due date, priority, status, description, and optional Jira issue link.
 
 ## Action-item fields
 
@@ -19,7 +19,7 @@ Action items turn a postmortem into owned follow-up work. Each item belongs to a
 | Priority      | High, Medium, or Low with color-coded badges                                         |
 | Status        | Open, In Progress, Completed, or Blocked with one-click transitions                  |
 | Source        | Postmortem for items created in the incident learning workflow                       |
-| External link | Optional linked Jira or GitHub issue with live sync state                            |
+| External link | Optional linked Jira issue with stored key, status, assignee, and sync state         |
 
 ## Add action items to a postmortem
 
@@ -49,9 +49,17 @@ Open **Action Items** from the main navigation. The page combines action items f
 
 Responders and administrators can manage action items. Update the status instantly using the card quick-action menu or change owner, due date, priority, and description from the postmortem.
 
-## Ticket integrations (Jira & GitHub)
+## Jira integration
 
-When the workspace Jira or GitHub integration is configured, an item can link to an external issue, display the issue key and status, and open the external issue with one click.
+When the workspace Jira integration is enabled, a persisted action item can create a Jira issue from its incident service mapping or link an existing Jira issue. OpsKnight displays the stored Jira key and supported metadata and can open the provider issue directly.
+
+A Jira issue can belong to only one OpsKnight incident or action item. Competing attempts to link the same Jira issue are rejected rather than merging two OpsKnight owners into one external link.
+
+Jira status synchronization mirrors only completion state for action items: a Jira status categorized as Done marks a non-completed item `COMPLETED`; if the Jira issue later leaves Done, a currently `COMPLETED` item is reopened to `OPEN`. Existing `IN_PROGRESS` and `BLOCKED` action items are not replaced by other non-Done Jira statuses.
+
+Jira metadata shown in OpsKnight is stored state refreshed by authenticated webhooks or an explicit Sync action; rendering the action item does not require a live Jira request.
+
+GitHub Issues do not have an equivalent native action-item issue-sync workflow in v1.5.
 
 ## Troubleshooting
 
@@ -62,6 +70,8 @@ When the workspace Jira or GitHub integration is configured, an item can link to
 | **Create Jira** fails                         | Configure workspace Jira, then configure the incident service's Jira project and action-item issue type. |
 | Jira reports an invalid project or issue type | Verify the project key, API-token permissions, and issue type in **Service Settings → Jira Mapping**.    |
 | A Jira issue cannot be linked                 | Confirm the key exists and is not already linked to another incident or action item.                     |
+| Jira status appears stale                     | Use Sync if permitted, confirm service sync is enabled, and verify Jira webhook delivery.                |
+| Jira link shows `Deleted in Jira`             | The provider issue was deleted; OpsKnight preserves the historical reference instead of deleting it.    |
 
 ## Related guides
 

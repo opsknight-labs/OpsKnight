@@ -27,11 +27,17 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   const layout = str(source.layout);
+  // Branding images must be short asset URLs, never inline data URLs in the snapshot.
+  // A 2.8 MB data:image in the snapshot bloats RSC + hydration props for every visitor.
+  // Uploaded logos are normalized to /api/status-assets/* via status-page asset handling;
+  // any data URL that survived normalization (e.g. preview draft) is dropped here.
+  const rawLogo = str(source.logoUrl) ?? str(source.logo);
+  const rawFavicon = str(source.faviconUrl);
+  const safeLogoUrl = rawLogo && rawLogo.startsWith('data:') ? undefined : rawLogo;
+  const safeFaviconUrl = rawFavicon && rawFavicon.startsWith('data:') ? undefined : rawFavicon;
   const branding: PublicStatusBranding = {
-    ...((str(source.logoUrl) ?? str(source.logo))
-      ? { logoUrl: str(source.logoUrl) ?? str(source.logo) }
-      : {}),
-    ...(str(source.faviconUrl) ? { faviconUrl: str(source.faviconUrl) } : {}),
+    ...(safeLogoUrl ? { logoUrl: safeLogoUrl } : {}),
+    ...(safeFaviconUrl ? { faviconUrl: safeFaviconUrl } : {}),
     ...((str(source.primaryColor) ?? str(source.primary))
       ? { primaryColor: str(source.primaryColor) ?? str(source.primary) }
       : {}),

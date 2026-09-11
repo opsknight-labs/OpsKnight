@@ -51,6 +51,7 @@ type OidcConfig = {
   customScopes?: string | null;
   providerType?: string | null;
   providerLabel?: string | null;
+  organizationId?: string | null;
   profileMapping?: ProfileMapping | null;
   updatedAt?: string;
 };
@@ -158,6 +159,7 @@ export default function SsoSettingsForm({
   const initialDomains = (initialConfig?.allowedDomains ?? []).join(', ');
   const initialEnabled = initialConfig?.enabled ?? false;
   const initialProviderLabel = initialConfig?.providerLabel ?? '';
+  const initialOrganizationId = initialConfig?.organizationId ?? '';
   const initialCustomScopes = initialConfig?.customScopes ?? '';
   const initialAutoProvision = initialConfig?.autoProvision ?? true;
   const initialProviderType = normalizeOidcProviderType(initialConfig?.providerType, initialIssuer);
@@ -172,16 +174,26 @@ export default function SsoSettingsForm({
   const [clientSecretValue, setClientSecretValue] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [providerLabelValue, setProviderLabelValue] = useState(initialProviderLabel);
+  const [organizationIdValue, setOrganizationIdValue] = useState(initialOrganizationId);
   const [customScopesValue, setCustomScopesValue] = useState(initialCustomScopes);
   const [autoProvision, setAutoProvision] = useState(initialAutoProvision);
   const [selectedPreset, setSelectedPreset] = useState(initialProviderType);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const [lastTested, setLastTested] = useState<string | null>(null);
+  const [issuerMigrationConfirmed, setIssuerMigrationConfirmed] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [roleMappingPreview, setRoleMappingPreview] =
     useState<RoleMappingRule[]>(initialRoleMapping);
   const [roleMappingResetKey, setRoleMappingResetKey] = useState(0);
+  // Profile-mapping fields are controlled so edits participate in dirty-state
+  // detection ("Profile Mapping changed" stays visible until saved).
+  const initialProfileMapping = {
+    department: initialConfig?.profileMapping?.department ?? '',
+    jobTitle: initialConfig?.profileMapping?.jobTitle ?? '',
+    avatarUrl: initialConfig?.profileMapping?.avatarUrl ?? '',
+  };
+  const [profileMappingValues, setProfileMappingValues] = useState(initialProfileMapping);
 
   const handleTestConnection = async () => {
     if (!issuerUrl) {
@@ -196,7 +208,10 @@ export default function SsoSettingsForm({
       const result = await validateOidcConnectionAction(issuerUrl);
       if (result.isValid) {
         setTestStatus('success');
-        setTestMessage('Connection successful.');
+        // The test validates OIDC discovery only — it does not exercise the
+        // client ID, client secret, redirect URI, or the authorization-code
+        // exchange.  Keep the message accurate.
+        setTestMessage('OIDC discovery validated. Save to apply.');
         setLastTested(new Date().toLocaleString());
       } else {
         setTestStatus('error');
@@ -211,11 +226,18 @@ export default function SsoSettingsForm({
   };
 
   const clientSecretRequired = !initialConfig?.hasClientSecret;
+  const issuerChanged =
+    Boolean(initialIssuer) &&
+    issuerUrl.trim().replace(/\/$/, '') !== initialIssuer.trim().replace(/\/$/, '');
   const selectedPresetNote =
     PROVIDER_PRESETS.find(preset => preset.id === selectedPreset)?.note ??
     'Enter the issuer URL from your provider.';
   const isRoleMappingDirty =
     JSON.stringify(roleMappingPreview) !== JSON.stringify(initialRoleMapping);
+  const isProfileMappingDirty =
+    profileMappingValues.department.trim() !== initialProfileMapping.department.trim() ||
+    profileMappingValues.jobTitle.trim() !== initialProfileMapping.jobTitle.trim() ||
+    profileMappingValues.avatarUrl.trim() !== initialProfileMapping.avatarUrl.trim();
   const isDirty =
     enabled !== initialEnabled ||
     issuerUrl.trim() !== initialIssuer.trim() ||
@@ -223,9 +245,11 @@ export default function SsoSettingsForm({
     clientSecretValue.trim().length > 0 ||
     domains.trim() !== initialDomains.trim() ||
     providerLabelValue.trim() !== initialProviderLabel.trim() ||
+    organizationIdValue.trim() !== initialOrganizationId.trim() ||
     customScopesValue.trim() !== initialCustomScopes.trim() ||
     autoProvision !== initialAutoProvision ||
-    isRoleMappingDirty;
+    isRoleMappingDirty ||
+    isProfileMappingDirty;
   const isIssuerValid = (value: string) => {
     if (!value.trim()) return false;
     try {
@@ -298,6 +322,7 @@ export default function SsoSettingsForm({
         setDomains(initialDomains);
         setEnabled(initialEnabled);
         setProviderLabelValue(initialProviderLabel);
+        setOrganizationIdValue(initialOrganizationId);
         setCustomScopesValue(initialCustomScopes);
         setAutoProvision(initialAutoProvision);
         setSelectedPreset(initialProviderType);
@@ -305,16 +330,20 @@ export default function SsoSettingsForm({
         setTestMessage('');
         setLastTested(null);
         setValidationErrors({});
+        setIssuerMigrationConfirmed(false);
         setRoleMappingPreview(initialRoleMapping);
         setRoleMappingResetKey(current => current + 1);
+        setProfileMappingValues(initialProfileMapping);
       }}
       className="space-y-6"
     >
+      <input type="hidden" name="providerType" value={selectedPreset} />
       {!hasEncryptionKey && (
         <Alert className="bg-amber-500/10 border-amber-500/30">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
           <AlertDescription className="text-amber-700 dark:text-amber-300">
             Encryption key is required before saving SSO secrets. Set{' '}
+            <code className="font-mono text-xs">ENCRYPTION_KEYS</code> or{' '}
             <code className="font-mono text-xs">ENCRYPTION_KEY</code> in your environment.
           </AlertDescription>
         </Alert>
@@ -454,6 +483,7 @@ export default function SsoSettingsForm({
                 value={issuerUrl}
                 onChange={event => {
                   setIssuerUrl(event.target.value);
+                  setIssuerMigrationConfirmed(false);
                   setTestStatus('idle');
                   if (validationErrors.issuer) {
                     setValidationErrors(current => ({ ...current, issuer: undefined }));
@@ -478,6 +508,28 @@ export default function SsoSettingsForm({
               <AlertTriangle className="h-3 w-3" />
               {validationErrors.issuer}
             </p>
+          )}
+
+          {issuerChanged && (
+            <Alert className="bg-destructive/5 border-destructive/30" role="alert">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="space-y-3">
+                <p>
+                  Changing the issuer replaces the identity trust boundary. Existing OIDC sessions
+                  and unused account-link approvals will be revoked.
+                </p>
+                <label className="flex items-start gap-2 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="confirmIssuerMigration"
+                    checked={issuerMigrationConfirmed}
+                    onChange={event => setIssuerMigrationConfirmed(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  I understand and authorize this issuer migration
+                </label>
+              </AlertDescription>
+            </Alert>
           )}
 
           {testStatus !== 'idle' && (
@@ -671,6 +723,25 @@ export default function SsoSettingsForm({
             Leave empty to allow any domain verified and sent by your identity provider.
           </p>
         </div>
+
+        {selectedPreset === 'auth0' && (
+          <div className="space-y-2">
+            <Label htmlFor="organization-id" className="text-sm font-semibold">
+              Required Auth0 Organization ID
+            </Label>
+            <Input
+              id="organization-id"
+              name="organizationId"
+              value={organizationIdValue}
+              onChange={event => setOrganizationIdValue(event.target.value)}
+              placeholder="org_..."
+              className="font-mono text-sm h-10"
+            />
+            <p className="text-xs text-muted-foreground">
+              When set, the signed ID-token org_id claim must match exactly.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
@@ -766,7 +837,13 @@ export default function SsoSettingsForm({
                   type="text"
                   name="profileMapping.department"
                   placeholder="e.g. department"
-                  defaultValue={initialConfig?.profileMapping?.department ?? ''}
+                  value={profileMappingValues.department}
+                  onChange={event =>
+                    setProfileMappingValues(current => ({
+                      ...current,
+                      department: event.target.value,
+                    }))
+                  }
                   className="h-8 text-xs font-mono"
                 />
               </div>
@@ -779,7 +856,13 @@ export default function SsoSettingsForm({
                   type="text"
                   name="profileMapping.jobTitle"
                   placeholder="e.g. title"
-                  defaultValue={initialConfig?.profileMapping?.jobTitle ?? ''}
+                  value={profileMappingValues.jobTitle}
+                  onChange={event =>
+                    setProfileMappingValues(current => ({
+                      ...current,
+                      jobTitle: event.target.value,
+                    }))
+                  }
                   className="h-8 text-xs font-mono"
                 />
               </div>
@@ -792,7 +875,13 @@ export default function SsoSettingsForm({
                   type="text"
                   name="profileMapping.avatarUrl"
                   placeholder="e.g. picture"
-                  defaultValue={initialConfig?.profileMapping?.avatarUrl ?? ''}
+                  value={profileMappingValues.avatarUrl}
+                  onChange={event =>
+                    setProfileMappingValues(current => ({
+                      ...current,
+                      avatarUrl: event.target.value,
+                    }))
+                  }
                   className="h-8 text-xs font-mono"
                 />
               </div>

@@ -155,13 +155,26 @@ export async function notifyStatusPageSubscribers(
         if (!(await bulkQueueHasCapacity())) {
           throw new Error('Bulk notification queue reached its high watermark');
         }
-        const subscriptions = await prisma.statusPageSubscription.findMany({
-          where: { statusPageId: page.id, verified: true, unsubscribedAt: null },
-          orderBy: { id: 'asc' },
-          take: PAGE_SIZE,
-          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-          select: { id: true, email: true, token: true, preferences: true },
-        });
+        // Indexed fanout: `StatusPageSubscriptionService(serviceId)` carries the
+        // selective scope. Scrubbed JSON remains for rolling-deploy compat but
+        // is no longer scanned in Node. `selectedServices none` = "all services".
+        const subscriptions: Array<{ id: string; email: string; token: string }> =
+          await prisma.statusPageSubscription.findMany({
+            where: {
+              statusPageId: page.id,
+              state: 'ACTIVE',
+              verified: true,
+              unsubscribedAt: null,
+              OR: [
+                { selectedServices: { none: {} } },
+                { selectedServices: { some: { serviceId: incident.serviceId } } },
+              ],
+            },
+            orderBy: { id: 'asc' },
+            take: PAGE_SIZE,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            select: { id: true, email: true, token: true },
+          });
         if (subscriptions.length === 0) {
           await recordFanoutPage(fanout.id, {
             cursor,
@@ -171,26 +184,7 @@ export async function notifyStatusPageSubscribers(
           });
           break;
         }
-        // Industry-standard service picker: filter by preferences.selectedServiceIds when present
-        const eligible = subscriptions.filter(sub => {
-          const prefs = sub.preferences as { selectedServiceIds?: string[] } | null | undefined;
-          const ids = prefs?.selectedServiceIds;
-          if (!Array.isArray(ids) || ids.length === 0) return true;
-          return ids.includes(incident.serviceId);
-        });
-        if (eligible.length === 0) {
-          cursor = subscriptions.at(-1)?.id;
-          if (cursor) {
-            await recordFanoutPage(fanout.id, {
-              cursor,
-              materialized: 0,
-              failed: 0,
-              complete: subscriptions.length < PAGE_SIZE,
-            });
-          }
-          if (subscriptions.length < PAGE_SIZE || !cursor) break;
-          continue;
-        }
+        const eligible = subscriptions;
         const unsubscribeTokens = await issueUnsubscribeTokensBatch(
           eligible.map(subscription => subscription.id)
         );
@@ -627,12 +621,31 @@ export async function notifyStatusPageSubscribersAnnouncement(
     let failed = 0;
     let cursor: string | undefined = fanout.cursor ?? undefined;
 
+    // Respect selected-service preferences for scoped announcements.
+    // A null/empty affectedServiceIds means global -> all ACTIVE subscribers.
+    const rawAffected = announcement.affectedServiceIds;
+    const affectedIds: string[] = Array.isArray(rawAffected)
+      ? rawAffected.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+      : [];
+    const hasScopedServices = affectedIds.length > 0;
+
     while (true) {
       if (!(await bulkQueueHasCapacity())) {
         throw new Error('Bulk notification queue reached its high watermark');
       }
       const subscriptions = await prisma.statusPageSubscription.findMany({
-        where: { statusPageId, verified: true, unsubscribedAt: null },
+        where: hasScopedServices
+          ? {
+              statusPageId,
+              state: 'ACTIVE',
+              verified: true,
+              unsubscribedAt: null,
+              OR: [
+                { selectedServices: { none: {} } },
+                { selectedServices: { some: { serviceId: { in: affectedIds } } } },
+              ],
+            }
+          : { statusPageId, state: 'ACTIVE', verified: true, unsubscribedAt: null },
         orderBy: { id: 'asc' },
         take: PAGE_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

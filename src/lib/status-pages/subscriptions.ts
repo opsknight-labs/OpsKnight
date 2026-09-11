@@ -106,21 +106,78 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
     // Industry-standard service picker: optional preferences.selectedServiceIds, validated against page's services
     const preferencesProvided = rawPreferences !== undefined;
     let normalizedPreferences: { selectedServiceIds?: string[] } | null = null;
-    if (rawPreferences?.selectedServiceIds && rawPreferences.selectedServiceIds.length > 0) {
-      const allowed = await prisma.statusPageService.findMany({
-        where: { statusPageId, showOnPage: true },
-        select: { serviceId: true },
-      });
-      const allowedSet = new Set(allowed.map(r => r.serviceId));
-      const filtered = rawPreferences.selectedServiceIds.filter(id => allowedSet.has(id));
-      // Empty after filtering = subscriber opted into nothing valid — store as "all" (no filter)
-      if (filtered.length > 0) {
-        normalizedPreferences = { selectedServiceIds: [...new Set(filtered)] };
+    let normalizedServiceIds: string[] | null = null;
+    if (preferencesProvided) {
+      if (rawPreferences?.selectedServiceIds !== undefined) {
+        // Explicit Selected mode — empty or all-invalid must not widen to "all".
+        if (rawPreferences.selectedServiceIds.length === 0) {
+          return jsonError(
+            new AppError({
+              code: 'VALIDATION_FAILED',
+              userMessage:
+                'Select at least one service to follow, or leave service selection empty for all updates.',
+              fields: [
+                {
+                  field: 'preferences.selectedServiceIds',
+                  code: 'empty',
+                  message: 'Empty selection is not valid when service selection is provided.',
+                },
+              ],
+            })
+          );
+        }
+        const allowed = await prisma.statusPageService.findMany({
+          where: { statusPageId, showOnPage: true },
+          select: { serviceId: true },
+        });
+        const allowedSet = new Set(allowed.map(r => r.serviceId));
+        const filtered = rawPreferences.selectedServiceIds.filter(id => allowedSet.has(id));
+        if (filtered.length === 0) {
+          return jsonError(
+            new AppError({
+              code: 'VALIDATION_FAILED',
+              userMessage: 'None of the selected services are available on this status page.',
+              fields: [
+                {
+                  field: 'preferences.selectedServiceIds',
+                  code: 'invalid',
+                  message: 'No valid service selected.',
+                },
+              ],
+            })
+          );
+        }
+        const unique = [...new Set(filtered)];
+        normalizedPreferences = { selectedServiceIds: unique };
+        normalizedServiceIds = unique;
+      } else {
+        // preferences: {} with no selectedServiceIds — treat as "all" (null) but still considered provided
+        normalizedPreferences = null;
+        normalizedServiceIds = null;
+      }
+    }
+
+    async function syncSubscriptionServices(subscriptionId: string) {
+      if (!preferencesProvided) return;
+      if (normalizedServiceIds === null) {
+        await prisma.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
+      } else {
+        await prisma.$transaction(async tx => {
+          await tx.statusPageSubscriptionService.deleteMany({ where: { subscriptionId } });
+          if (normalizedServiceIds!.length > 0) {
+            await tx.statusPageSubscriptionService.createMany({
+              data: normalizedServiceIds!.map(serviceId => ({ subscriptionId, serviceId })),
+              skipDuplicates: true,
+            });
+          }
+        });
       }
     }
 
     const token = randomBytes(32).toString('hex');
     const verificationToken = randomBytes(32).toString('hex');
+    const VERIFICATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — must match email template
+    const verificationExpiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
 
     const existing = await prisma.statusPageSubscription.findUnique({
       where: {
@@ -128,23 +185,63 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       },
     });
 
+    let isActivePendingChange = false;
     if (existing) {
       const action = subscriptionRequestAction(existing.state, existing.subscribedAt, Date.now());
       // Deliverability state is authoritative. Provider suppressions can arrive
       // after an unsubscribe, so unsubscribedAt alone must never reactivate a
       // complained, bounced, or suppressed address.
       if (action === 'ACCEPT') {
-        // ACTIVE subscribers may update their service selection even though verification is skipped
+        // ACTIVE: do not mutate preferences from unauthenticated request.
+        // If preferences were supplied, send a re-verification email that keeps
+        // the current preferences live until the subscriber confirms.
         if (existing.state === 'ACTIVE' && preferencesProvided) {
-          await prisma.statusPageSubscription.update({
-            where: { id: existing.id },
-            data: { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue },
-          });
+          // Persist pending preferences alongside the verification token so
+          // the verify handler can atomically install them on confirmation.
+          // Keep state=ACTIVE and current preferences untouched until verified.
+          const pendingVerif = hashSubscriptionToken(verificationToken);
+          const existingPrefs = (existing.preferences as Record<string, unknown> | null) ?? null;
+          const pendingValue =
+            normalizedPreferences !== null ? normalizedPreferences : null;
+          const alreadyPending =
+            existingPrefs !== null &&
+            (existingPrefs as Record<string, unknown>)._pendingPreferences !== undefined;
+          // Avoid redundant writes when pending already matches
+          const pendingJson = JSON.stringify(pendingValue);
+          const currentPendingJson = alreadyPending
+            ? JSON.stringify((existingPrefs as Record<string, unknown>)._pendingPreferences)
+            : '__none__';
+          if (pendingJson !== currentPendingJson) {
+            await prisma.statusPageSubscription.update({
+              where: { id: existing.id },
+              data: {
+                verificationToken: pendingVerif,
+                verificationTokenExpiresAt: verificationExpiresAt,
+                preferences: {
+                  ...(existingPrefs ?? {}),
+                  _pendingPreferences: pendingValue,
+                  _pendingServiceIds: normalizedServiceIds,
+                } as unknown as Prisma.InputJsonValue,
+              },
+            });
+          } else {
+            await prisma.statusPageSubscription.update({
+              where: { id: existing.id },
+              data: {
+                verificationToken: pendingVerif,
+                verificationTokenExpiresAt: verificationExpiresAt,
+              },
+            });
+          }
+          // Do NOT sync join table — stays as-is until verification confirms.
+          isActivePendingChange = true;
+        } else {
+          // No preference change for ACTIVE, or suppressed/bounced/complained — generic, no email
+          return subscriptionAccepted();
         }
-        return subscriptionAccepted();
       }
 
-      if (action === 'REACTIVATE') {
+      if (!isActivePendingChange && action === 'REACTIVATE') {
         const reactivated = await prisma.statusPageSubscription.updateMany({
           where: { id: existing.id, state: 'UNSUBSCRIBED' },
           data: {
@@ -153,6 +250,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             suppressionReason: null,
             token: hashSubscriptionToken(token),
             verificationToken: hashSubscriptionToken(verificationToken),
+            verificationTokenExpiresAt: verificationExpiresAt,
             verified: false,
             ...(preferencesProvided
               ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
@@ -163,39 +261,47 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
         // A provider callback may have applied a stronger suppression after the
         // initial read. Preserve that state and avoid queueing verification.
         if (reactivated.count === 0) return subscriptionAccepted();
-      } else {
+        if (preferencesProvided) await syncSubscriptionServices(existing.id);
+      } else if (!isActivePendingChange) {
         const refreshed = await prisma.statusPageSubscription.updateMany({
           where: { id: existing.id, state: 'PENDING' },
           data: {
             token: hashSubscriptionToken(token),
             verificationToken: hashSubscriptionToken(verificationToken),
+            verificationTokenExpiresAt: verificationExpiresAt,
             ...(preferencesProvided
               ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
               : {}),
           },
         });
         if (refreshed.count === 0) return subscriptionAccepted();
+        if (preferencesProvided) await syncSubscriptionServices(existing.id);
       }
     } else {
-      await prisma.statusPageSubscription.create({
+      const created = await prisma.statusPageSubscription.create({
         data: {
           statusPageId,
           email: normalizedEmail,
           token: hashSubscriptionToken(token),
           verificationToken: hashSubscriptionToken(verificationToken),
+          verificationTokenExpiresAt: verificationExpiresAt,
           verified: false,
           state: 'PENDING',
           ...(preferencesProvided
             ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
             : {}),
         },
+        select: { id: true },
       });
+      if (preferencesProvided) await syncSubscriptionServices(created.id);
     }
 
-    const subscription = await prisma.statusPageSubscription.findUniqueOrThrow({
-      where: { statusPageId_email: { statusPageId, email: normalizedEmail } },
-      select: { id: true },
-    });
+    const subscription = existing
+      ? { id: existing.id }
+      : await prisma.statusPageSubscription.findUniqueOrThrow({
+          where: { statusPageId_email: { statusPageId, email: normalizedEmail } },
+          select: { id: true },
+        });
 
     try {
       const { getStatusPageEmailConfig } = await import('@/lib/notification-providers');

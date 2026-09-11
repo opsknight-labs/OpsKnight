@@ -18,6 +18,22 @@ export function statusPagePublicationLimits(settings: {
 }
 
 /**
+ * Validate contactUrl at the persistence boundary: public status pages render this as a
+ * support href without additional sanitization downstream, so only safe navigable protocols
+ * are accepted here rather than relying on browser URL parsing at render time.
+ */
+export function isAllowedStatusPageContactUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'mailto:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Which publication policy a configuration change requires.
  *
  * The reason this exists: withdrawing a live status page is the right move when an administrator

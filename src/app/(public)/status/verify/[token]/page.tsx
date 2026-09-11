@@ -1,12 +1,18 @@
 import prisma from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { statusPageSlugMatches } from '@/lib/status-page-resolver';
 import { hashSubscriptionToken } from '@/lib/status-pages/subscription-tokens';
 
 export const dynamic = 'force-dynamic';
+
+function isVerificationExpired(subscription: { verificationTokenExpiresAt?: Date | null }): boolean {
+  if (!subscription.verificationTokenExpiresAt) return false;
+  return new Date(subscription.verificationTokenExpiresAt).getTime() < Date.now();
+}
 
 export async function confirmStatusSubscription(form: FormData) {
   'use server';
@@ -22,14 +28,62 @@ export async function confirmStatusSubscription(form: FormData) {
     !statusPageSlugMatches(subscription.statusPage.slug, input.slug || undefined)
   )
     redirect('/status');
-  await prisma.statusPageSubscription.updateMany({
-    where: {
-      id: subscription.id,
-      verificationToken: hashSubscriptionToken(input.token),
-      unsubscribedAt: null,
-    },
-    data: { verified: true, state: 'ACTIVE', verificationToken: null },
-  });
+  if (isVerificationExpired(subscription as unknown as { verificationTokenExpiresAt: Date | null })) {
+    await prisma.statusPageSubscription.updateMany({
+      where: { id: subscription.id, verificationToken: hashSubscriptionToken(input.token) },
+      data: { verificationToken: null, verificationTokenExpiresAt: null },
+    });
+    redirect('/status');
+  }
+  // If this was an ACTIVE subscriber's pending preference change, atomically install it.
+  const prefs = subscription.preferences as Record<string, unknown> | null;
+  const pendingPrefs = prefs?._pendingPreferences as { selectedServiceIds?: string[] } | null | undefined;
+  const pendingServiceIds = prefs?._pendingServiceIds as string[] | null | undefined;
+  if (subscription.state === 'ACTIVE' && pendingPrefs !== undefined) {
+    const newPrefs = pendingPrefs as unknown as Record<string, unknown> | null;
+    // Strip pending keys, install new preferences
+    const { _pendingPreferences: _a, _pendingServiceIds: _b, ...rest } = (prefs ?? {}) as Record<string, unknown>;
+    const cleanPrefs =
+      newPrefs !== undefined ? (newPrefs as unknown as Record<string, unknown>) : rest;
+    await prisma.$transaction(async tx => {
+      await tx.statusPageSubscription.update({
+        where: { id: subscription.id },
+        data: {
+          preferences: cleanPrefs as unknown as Prisma.InputJsonValue,
+          verificationToken: null,
+          verificationTokenExpiresAt: null,
+        },
+      });
+      await tx.statusPageSubscriptionService.deleteMany({ where: { subscriptionId: subscription.id } });
+      if (Array.isArray(pendingServiceIds) && pendingServiceIds.length > 0) {
+        await tx.statusPageSubscriptionService.createMany({
+          data: pendingServiceIds.map(serviceId => ({ subscriptionId: subscription.id, serviceId })),
+          skipDuplicates: true,
+        });
+      } else if (
+        newPrefs !== null &&
+        typeof newPrefs === 'object' &&
+        Array.isArray((newPrefs as Record<string, unknown>).selectedServiceIds)
+      ) {
+        const ids = (newPrefs as { selectedServiceIds: string[] }).selectedServiceIds;
+        if (ids.length > 0) {
+          await tx.statusPageSubscriptionService.createMany({
+            data: ids.map(serviceId => ({ subscriptionId: subscription.id, serviceId })),
+            skipDuplicates: true,
+          });
+        }
+      }
+    });
+  } else {
+    await prisma.statusPageSubscription.updateMany({
+      where: {
+        id: subscription.id,
+        verificationToken: hashSubscriptionToken(input.token),
+        unsubscribedAt: null,
+      },
+      data: { verified: true, state: 'ACTIVE', verificationToken: null, verificationTokenExpiresAt: null },
+    });
+  }
   redirect(getStatusPagePublicUrl(subscription.statusPage));
 }
 
@@ -56,13 +110,26 @@ export async function renderVerifySubscriptionPage(token: string, expectedSlug?:
 
     if (!sub || !statusPageSlugMatches(sub.statusPage.slug, expectedSlug)) {
       status = 'invalid';
-    } else if (sub.verified) {
-      status = 'already_verified';
-      subscription = sub;
+    } else if (isVerificationExpired(sub as unknown as { verificationTokenExpiresAt: Date | null })) {
+      status = 'invalid';
     } else {
-      // GET only displays confirmation; email scanners cannot verify a subscription.
-      status = 'success';
-      subscription = sub;
+      const prefs = sub.preferences as Record<string, unknown> | null;
+      const hasPendingPreferenceChange =
+        sub.state === 'ACTIVE' &&
+        (prefs as Record<string, unknown> | null)?._pendingPreferences !== undefined;
+      if (hasPendingPreferenceChange) {
+        // ACTIVE subscriber with a pending preference change must be able to
+        // reach the confirmation form even though verified is still true.
+        status = 'success';
+        subscription = sub;
+      } else if (sub.verified) {
+        status = 'already_verified';
+        subscription = sub;
+      } else {
+        // GET only displays confirmation; email scanners cannot verify a subscription.
+        status = 'success';
+        subscription = sub;
+      }
     }
   } catch (error) {
     logger.error('Verify error', { component: 'status-verify-page', error });
