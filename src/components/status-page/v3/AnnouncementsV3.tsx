@@ -9,8 +9,89 @@ const TYPE_LABEL: Record<string, string> = {
   MAINTENANCE: 'Maintenance',
 };
 
+export function ChangelogV3({
+  changelog,
+  timeZone,
+}: {
+  changelog: PublicChangelogEntry[] | undefined;
+  timeZone: string;
+}) {
+  if (!changelog || changelog.length === 0) return null;
+
+  return (
+    <section className="status-v3-changelog-inline" aria-labelledby="status-v3-changelog-heading">
+      <div className="status-v3-announcements-inline__head">
+        <div className="status-v3-announcements-inline__title-wrap">
+          <h2 id="status-v3-changelog-heading" className="status-v3-announcements-inline__title">
+            Changelog
+          </h2>
+          <span className="status-v3-announcements-inline__subtitle">
+            Recent changes & releases
+          </span>
+        </div>
+        <div
+          className="status-v3-announcements-inline__tally"
+          aria-label={`${changelog.length} changelog entries`}
+        >
+          <span className="status-v3-announcements-inline__tally-pill">
+            <span className="status-v3-announcements-inline__dot" aria-hidden="true" />
+            {changelog.length} {changelog.length === 1 ? 'update' : 'updates'}
+          </span>
+        </div>
+      </div>
+      <div className="status-v3-announcements-inline__list" role="list">
+        {changelog.map(item => (
+          <div key={item.id} className="status-v3-announcement-pill" role="listitem">
+            <div className="status-v3-announcement-pill__head">
+              <div className="status-v3-announcement-pill__lead">
+                <svg
+                  className="status-v3-announcement-pill__icon"
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span className="status-v3-announcement-pill__title">{item.title}</span>
+                <span className="status-v3-announcement-pill__divider" aria-hidden="true" />
+                <span className="status-v3-announcement-pill__time" suppressHydrationWarning>
+                  {formatDateTime(item.publishedAt, timeZone, {
+                    format: 'short',
+                    hour12: true,
+                  })}
+                </span>
+              </div>
+            </div>
+            {item.message && <p className="status-v3-announcement-pill__desc">{item.message}</p>}
+            {item.affectedServices && item.affectedServices.length > 0 && (
+              <div className="status-v3-announcement-pill__meta">
+                <span className="status-v3-announcement-pill__affected-label">Affects:</span>
+                {item.affectedServices.map(service => (
+                  <span
+                    key={service.id || service.name}
+                    className="status-v3-chip status-v3-chip--muted"
+                  >
+                    {service.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /**
- * Compact, card-like announcements and changelog strip matching the MaintenanceV3 architecture.
+ * Compact, card-like announcements strip matching the MaintenanceV3 architecture.
  */
 export default function AnnouncementsV3({
   announcements,
@@ -26,12 +107,12 @@ export default function AnnouncementsV3({
   if (!hasAnnouncements && !hasChangelog) return null;
 
   return (
-    <section
-      className="status-v3-announcements-inline"
-      aria-labelledby="status-v3-announcements-heading"
-    >
+    <>
       {hasAnnouncements && (
-        <>
+        <section
+          className="status-v3-announcements-inline"
+          aria-labelledby="status-v3-announcements-heading"
+        >
           <div className="status-v3-announcements-inline__head">
             <div className="status-v3-announcements-inline__title-wrap">
               <h2
@@ -124,70 +205,10 @@ export default function AnnouncementsV3({
               );
             })}
           </div>
-        </>
+        </section>
       )}
 
-      {hasChangelog && (
-        <div className="status-v3-changelog-inline">
-          <div className="status-v3-announcements-inline__head">
-            <div className="status-v3-announcements-inline__title-wrap">
-              <h3 className="status-v3-announcements-inline__title">Changelog</h3>
-              <span className="status-v3-announcements-inline__subtitle">
-                Recent changes & releases
-              </span>
-            </div>
-          </div>
-          <div className="status-v3-announcements-inline__list" role="list">
-            {changelog!.map(item => (
-              <div key={item.id} className="status-v3-announcement-pill" role="listitem">
-                <div className="status-v3-announcement-pill__head">
-                  <div className="status-v3-announcement-pill__lead">
-                    <svg
-                      className="status-v3-announcement-pill__icon"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <span className="status-v3-announcement-pill__title">{item.title}</span>
-                    <span className="status-v3-announcement-pill__divider" aria-hidden="true" />
-                    <span className="status-v3-announcement-pill__time" suppressHydrationWarning>
-                      {formatDateTime(item.publishedAt, timeZone, {
-                        format: 'short',
-                        hour12: true,
-                      })}
-                    </span>
-                  </div>
-                </div>
-                {item.message && (
-                  <p className="status-v3-announcement-pill__desc">{item.message}</p>
-                )}
-                {item.affectedServices && item.affectedServices.length > 0 && (
-                  <div className="status-v3-announcement-pill__meta">
-                    <span className="status-v3-announcement-pill__affected-label">Affects:</span>
-                    {item.affectedServices.map(service => (
-                      <span
-                        key={service.id || service.name}
-                        className="status-v3-chip status-v3-chip--muted"
-                      >
-                        {service.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
+      {hasChangelog && <ChangelogV3 changelog={changelog} timeZone={timeZone} />}
+    </>
   );
 }

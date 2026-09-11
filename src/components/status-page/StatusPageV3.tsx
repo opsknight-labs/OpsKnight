@@ -14,7 +14,7 @@ import ServiceHealthV3 from './v3/ServiceHealthV3';
 import RegionHealthV3 from './v3/RegionHealthV3';
 import MaintenanceV3 from './v3/MaintenanceV3';
 import IncidentsV3 from './v3/IncidentsV3';
-import AnnouncementsV3 from './v3/AnnouncementsV3';
+import AnnouncementsV3, { ChangelogV3 } from './v3/AnnouncementsV3';
 
 /**
  * Public status page: branding chrome around the V3-native presentation tree.
@@ -147,12 +147,8 @@ export default function StatusPageV3({
         {showMaintenance && (
           <MaintenanceV3 maintenance={snapshot.maintenance} timeZone={timeZone} />
         )}
-        {(showAnnouncements || showChangelog) && (
-          <AnnouncementsV3
-            announcements={showAnnouncements ? snapshot.announcements : []}
-            changelog={showChangelog ? snapshot.changelog : undefined}
-            timeZone={timeZone}
-          />
+        {showAnnouncements && (
+          <AnnouncementsV3 announcements={snapshot.announcements} timeZone={timeZone} />
         )}
         {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
         {showServices && (
@@ -162,6 +158,7 @@ export default function StatusPageV3({
             groupByRegion={page.showServicesByRegion === true}
           />
         )}
+        {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}
         {showUptime && <StatusPageUptimeMetrics services={snapshot.services} />}
         {showIncidents && (
           <IncidentsV3
