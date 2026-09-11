@@ -45,6 +45,8 @@ type AugmentedJWT = JWT & {
   lastActivityAt?: number;
   /** Time the IdP last authenticated this OIDC session, in epoch milliseconds. */
   oidcAuthenticatedAt?: number;
+  /** Trust-version of the provider configuration that issued this session. */
+  oidcConfigVersion?: number;
 };
 
 type AugmentedUser = User & {
@@ -109,6 +111,7 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
   delete token.name;
   delete token.lastActivityAt;
   delete token.oidcAuthenticatedAt;
+  delete token.oidcConfigVersion;
   return token;
 }
 
@@ -437,6 +440,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             if (account.provider === 'oidc') {
               try {
                 const activeConfig = await getOidcConfig();
+                if (!activeConfig) {
+                  return clearSessionToken(token as AugmentedJWT, 'OIDC_CONFIGURATION_UNAVAILABLE');
+                }
                 const issuer = activeConfig?.issuer ? normalizeIssuer(activeConfig.issuer) : null;
                 const subject = account.providerAccountId || null;
                 const identity =
@@ -468,6 +474,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 (token as AugmentedJWT).tokenVersion = dbUser.tokenVersion ?? 0;
                 (token as AugmentedJWT).lastActivityAt = Date.now();
                 (token as AugmentedJWT).oidcAuthenticatedAt = Date.now();
+                (token as AugmentedJWT).oidcConfigVersion = activeConfig.configVersion;
               } catch (error) {
                 logger.error('[Auth] JWT callback - OIDC identity lookup failed', {
                   component: 'auth:jwt',
@@ -508,6 +515,13 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           const augmentedToken = token as AugmentedJWT;
           if (!user && augmentedToken.oidcAuthenticatedAt) {
             const currentTime = Date.now();
+            const currentConfig = await getOidcConfig();
+            if (
+              !currentConfig ||
+              augmentedToken.oidcConfigVersion !== currentConfig.configVersion
+            ) {
+              return clearSessionToken(augmentedToken, 'OIDC_CONFIGURATION_CHANGED');
+            }
             if (currentTime - augmentedToken.oidcAuthenticatedAt >= oidcReauthenticateAfterMs) {
               return clearSessionToken(augmentedToken, 'OIDC_REAUTHENTICATION_REQUIRED');
             }

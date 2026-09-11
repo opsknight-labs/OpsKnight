@@ -13,6 +13,11 @@ import {
   settingsChangedState,
   type SettingsActionState,
 } from '@/lib/settings-result';
+import {
+  hasIssuerMigrationConfirmation,
+  isOidcIssuerMigration,
+  normalizeOidcIssuer,
+} from '@/lib/oidc/issuer-migration';
 
 function normalizeDomains(value: string) {
   if (!value) return [];
@@ -188,6 +193,16 @@ export async function saveOidcConfig(
     }
 
     const existing = await prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const issuerMigration = existing ? isOidcIssuerMigration(existing.issuer, issuer) : false;
+    if (issuerMigration && !hasIssuerMigrationConfirmation(formData)) {
+      return {
+        success: false,
+        code: 'VALIDATION_ERROR',
+        error:
+          'Issuer changes cross an identity trust boundary. Confirm the migration to revoke existing OIDC sessions and pending link approvals.',
+        updatedAt: expectedUpdatedAt,
+      };
+    }
     const expectedRevision = parseSettingsRevision(expectedUpdatedAt);
     if (existing && !expectedRevision) return settingsChangedState(expectedUpdatedAt);
     if (!existing && expectedRevision) return settingsChangedState(expectedUpdatedAt);
@@ -239,6 +254,22 @@ export async function saveOidcConfig(
           },
         });
         if (updated.count !== 1) throw new SettingsChangedMutationError();
+
+        if (issuerMigration) {
+          const previousIssuer = normalizeOidcIssuer(existing.issuer);
+          await tx.user.updateMany({
+            where: { oidcIdentities: { some: { issuer: previousIssuer } } },
+            data: { tokenVersion: { increment: 1 } },
+          });
+          await tx.oidcLinkingApproval.updateMany({
+            where: {
+              providerConfigId: existing.id,
+              consumedAt: null,
+              revokedAt: null,
+            },
+            data: { revokedAt: new Date() },
+          });
+        }
       } else {
         await tx.oidcConfig.create({
           data: {
@@ -293,7 +324,17 @@ export async function saveOidcConfig(
             roleMappingCount: roleMapping.length,
             hasClientSecret: Boolean(encryptedSecret),
           },
-          details: { integration: 'oidc' },
+          details: {
+            integration: 'oidc',
+            issuerMigration,
+            ...(issuerMigration
+              ? {
+                  previousIssuer: normalizeOidcIssuer(existing!.issuer),
+                  sessionsRevoked: true,
+                  pendingLinkApprovalsRevoked: true,
+                }
+              : {}),
+          },
         },
         tx
       );

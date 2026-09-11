@@ -330,6 +330,7 @@ describe('Auth JWT + OIDC callback contract', () => {
     const token = await jwt({
       token: {
         sub: 'u1',
+        oidcConfigVersion: 1,
         oidcAuthenticatedAt: now - 1_000,
         lastActivityAt: now - 14_400_000,
       },
@@ -351,6 +352,7 @@ describe('Auth JWT + OIDC callback contract', () => {
     const token = await jwt({
       token: {
         sub: 'u1',
+        oidcConfigVersion: 1,
         oidcAuthenticatedAt: now - 43_200_000,
         lastActivityAt: now,
       },
@@ -364,6 +366,27 @@ describe('Auth JWT + OIDC callback contract', () => {
 
     expect(token.sub).toBeUndefined();
     expect(token.error).toBe('OIDC_REAUTHENTICATION_REQUIRED');
+  });
+
+  it('revokes an OIDC session when its provider trust configuration changes', async () => {
+    const jwt = await getJwtCallback();
+    const token = await jwt({
+      token: {
+        sub: 'u1',
+        oidcConfigVersion: 0,
+        oidcAuthenticatedAt: Date.now(),
+        lastActivityAt: Date.now(),
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: undefined,
+      session: undefined,
+    });
+
+    expect(token.sub).toBeUndefined();
+    expect(token.error).toBe('OIDC_CONFIGURATION_CHANGED');
   });
 
   it('jwt callback revokes an existing session when tokenVersion mismatches', async () => {

@@ -178,6 +178,7 @@ export default function SsoSettingsForm({
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const [lastTested, setLastTested] = useState<string | null>(null);
+  const [issuerMigrationConfirmed, setIssuerMigrationConfirmed] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [roleMappingPreview, setRoleMappingPreview] =
     useState<RoleMappingRule[]>(initialRoleMapping);
@@ -222,6 +223,9 @@ export default function SsoSettingsForm({
   };
 
   const clientSecretRequired = !initialConfig?.hasClientSecret;
+  const issuerChanged =
+    Boolean(initialIssuer) &&
+    issuerUrl.trim().replace(/\/$/, '') !== initialIssuer.trim().replace(/\/$/, '');
   const selectedPresetNote =
     PROVIDER_PRESETS.find(preset => preset.id === selectedPreset)?.note ??
     'Enter the issuer URL from your provider.';
@@ -321,6 +325,7 @@ export default function SsoSettingsForm({
         setTestMessage('');
         setLastTested(null);
         setValidationErrors({});
+        setIssuerMigrationConfirmed(false);
         setRoleMappingPreview(initialRoleMapping);
         setRoleMappingResetKey(current => current + 1);
         setProfileMappingValues(initialProfileMapping);
@@ -472,6 +477,7 @@ export default function SsoSettingsForm({
                 value={issuerUrl}
                 onChange={event => {
                   setIssuerUrl(event.target.value);
+                  setIssuerMigrationConfirmed(false);
                   setTestStatus('idle');
                   if (validationErrors.issuer) {
                     setValidationErrors(current => ({ ...current, issuer: undefined }));
@@ -496,6 +502,28 @@ export default function SsoSettingsForm({
               <AlertTriangle className="h-3 w-3" />
               {validationErrors.issuer}
             </p>
+          )}
+
+          {issuerChanged && (
+            <Alert className="bg-destructive/5 border-destructive/30" role="alert">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="space-y-3">
+                <p>
+                  Changing the issuer replaces the identity trust boundary. Existing OIDC sessions
+                  and unused account-link approvals will be revoked.
+                </p>
+                <label className="flex items-start gap-2 font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="confirmIssuerMigration"
+                    checked={issuerMigrationConfirmed}
+                    onChange={event => setIssuerMigrationConfirmed(event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  I understand and authorize this issuer migration
+                </label>
+              </AlertDescription>
+            </Alert>
           )}
 
           {testStatus !== 'idle' && (
