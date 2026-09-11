@@ -1,28 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Lock, ShieldCheck, X } from 'lucide-react';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import AuthBrand from '@/components/auth/AuthBrand';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
+import { useCapabilityToken } from '@/components/auth/useCapabilityToken';
 import Spinner from '@/components/ui/Spinner';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
 
-function readCapabilityToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const hash = window.location.hash.startsWith('#')
-    ? window.location.hash.slice(1)
-    : window.location.hash;
-  const fragmentToken = new URLSearchParams(hash).get('token');
-  if (fragmentToken) return fragmentToken;
-  return new URLSearchParams(window.location.search).get('token');
-}
-
 function ResetPasswordForm() {
-  const capturedToken = useRef<string | null | undefined>(undefined);
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenReady, setTokenReady] = useState(false);
+  const { token, ready: tokenReady, clearToken } = useCapabilityToken();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -32,20 +21,8 @@ function ResetPasswordForm() {
   const [success, setSuccess] = useState(false);
   const passwordsMatch = Object.is(password, confirmPassword);
 
-  useEffect(() => {
-    // React Strict Mode replays effects in development. Persist the first
-    // capability read across that replay so scrubbing browser history cannot
-    // erase the in-memory token on the second effect invocation.
-    if (capturedToken.current !== undefined) return;
-    const rawToken = readCapabilityToken();
-    capturedToken.current = rawToken;
-    setToken(rawToken);
-    setTokenReady(true);
-    if (rawToken) window.history.replaceState({}, '', window.location.pathname);
-  }, []);
-
   if (!tokenReady) return <div className="flex justify-center p-8"><Spinner /></div>;
-  if (!token) {
+  if (!token && !success) {
     return (
       <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm dark:border-red-500/20 dark:bg-red-500/10">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
@@ -57,6 +34,7 @@ function ResetPasswordForm() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+    if (!token) return setError('Invalid or expired reset link.');
     if (!passwordsMatch) return setError('Passwords do not match.');
     if (!isPasswordStrong(password)) return setError('Password does not meet the security requirements.');
     setIsSubmitting(true);
@@ -70,7 +48,7 @@ function ResetPasswordForm() {
       const data = (await response.json()) as { error?: string };
       if (!response.ok) setError(data.error || 'Unable to reset password.');
       else {
-        setToken(null);
+        clearToken();
         setPassword('');
         setConfirmPassword('');
         setSuccess(true);
