@@ -16,6 +16,7 @@ import {
  */
 export const JIRA_PROVIDER_FENCE_TIMEOUT_MS = 40_000;
 export const JIRA_PROVIDER_FENCE_MAX_WAIT_MS = 5_000;
+const JIRA_ISSUE_MUTATION_FENCE_TIMEOUT_MS = 15_000;
 
 function deterministicJiraLockKey(namespace: bigint, value: string): bigint {
   const digest = crypto.createHash('sha256').update(value).digest();
@@ -34,9 +35,8 @@ export function jiraActionItemLinkLockKey(actionItemId: string): bigint {
 }
 
 /**
- * Serialize ownership changes for one provider issue identity across every
- * OpsKnight entity. This closes the cross-entity race where two callers could
- * both observe an unlinked Jira key and then compete to own the same row.
+ * Serialize ownership changes and inbound mutations for one provider issue
+ * identity across every OpsKnight entity and replica.
  */
 export function jiraExternalIssueLinkLockKey(provider: string, externalKey: string): bigint {
   return deterministicJiraLockKey(
@@ -83,6 +83,28 @@ export async function acquireJiraExternalIssueLinkFence(
   externalKey: string
 ): Promise<void> {
   await acquireAdvisoryLock(tx, jiraExternalIssueLinkLockKey(provider, externalKey));
+}
+
+/**
+ * Hold a short transaction-scoped lock while a local Jira mutation chain runs.
+ * Webhook processing performs no provider HTTP calls, so this serializes the
+ * stale-check + DB side effects without holding a connection on Atlassian I/O.
+ */
+export async function withJiraIssueMutationFence<T>(
+  provider: string,
+  externalKeyOrId: string,
+  work: () => Promise<T>
+): Promise<T> {
+  return prisma.$transaction(
+    async tx => {
+      await acquireJiraExternalIssueLinkFence(tx, provider, externalKeyOrId);
+      return work();
+    },
+    {
+      maxWait: JIRA_PROVIDER_FENCE_MAX_WAIT_MS,
+      timeout: JIRA_ISSUE_MUTATION_FENCE_TIMEOUT_MS,
+    }
+  );
 }
 
 /**
