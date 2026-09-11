@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import type { PublicStatusBranding } from '@/lib/status-pages/public-contract';
 
@@ -177,10 +178,13 @@ export default function StatusPageHeader({
     <header className="status-topbar status-page-header">
       <div className="status-topbar__inner">
         <a className="status-topbar__brand" href="https://opsknight.com/">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={logoUrl}
             alt=""
+            width={160}
+            height={32}
+            unoptimized={logoUrl.startsWith('http://') || logoUrl.startsWith('https://') || logoUrl.endsWith('.svg')}
+            style={{ height: '2.05rem', width: 'auto', maxWidth: '10rem' }}
             onError={event => {
               (event.target as HTMLImageElement).style.display = 'none';
             }}
