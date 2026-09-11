@@ -66,7 +66,7 @@ describe('SidebarSearch component', () => {
           },
         ],
       }),
-    } as any);
+    } as unknown as Response);
 
     render(<SidebarSearch />);
     const input = screen.getByPlaceholderText('Search...');
