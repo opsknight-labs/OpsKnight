@@ -56,9 +56,9 @@ describe('linkExistingJiraIssue ownership integrity', () => {
   });
 
   it('requires exactly one OpsKnight owner', async () => {
-    await expect(
-      linkExistingJiraIssue({ projectKey: undefined, jiraKey: 'OPS-123' })
-    ).rejects.toThrow('exactly one OpsKnight entity');
+    await expect(linkExistingJiraIssue({ jiraKey: 'OPS-123' })).rejects.toThrow(
+      'exactly one OpsKnight entity'
+    );
 
     await expect(
       linkExistingJiraIssue({
