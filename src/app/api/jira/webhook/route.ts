@@ -4,11 +4,22 @@ import prisma from '@/lib/prisma';
 import { decrypt } from '@/lib/encryption';
 import { isAppError } from '@/lib/errors';
 import { processJiraWebhookEvent, type JiraWebhookPayload } from '@/lib/jira-sync';
-import { withJiraWorkspaceProviderFence } from '@/lib/jira-concurrency';
+import {
+  withJiraIssueMutationFence,
+  withJiraWorkspaceProviderFence,
+} from '@/lib/jira-concurrency';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { logger, withRequestContext } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
-import { readIntegrationBody } from '@/lib/integrations/request-security';
+import {
+  claimInboundDelivery,
+  completeInboundDelivery,
+  failInboundDelivery,
+  readIntegrationBody,
+  type InboundDeliveryClaim,
+} from '@/lib/integrations/request-security';
+
+const JIRA_INBOUND_INTEGRATION_ID = 'jira:default';
 
 const JiraWebhookSchema = z
   .object({
@@ -48,6 +59,39 @@ const JiraWebhookSchema = z
     user: z.record(z.unknown()).optional(),
   })
   .passthrough();
+
+type ParsedJiraWebhook = z.infer<typeof JiraWebhookSchema>;
+
+/**
+ * Build a durable delivery identity from a real provider nonce whenever Jira
+ * supplies one. Older Jira variants do not expose that header consistently, so
+ * fall back to stable domain identifiers rather than unsafe whole-body hashes.
+ */
+export function getJiraWebhookDeliveryId(
+  payload: ParsedJiraWebhook,
+  providerDeliveryId?: string | null
+): string | null {
+  const providerNonce = providerDeliveryId?.trim();
+  if (providerNonce) return `provider:${providerNonce}`;
+
+  const issueIdentity = payload.issue?.id?.trim() || payload.issue?.key?.trim();
+  if (!issueIdentity) return null;
+
+  const event = (payload.webhookEvent || payload.issue_event_type_name || 'issue_event')
+    .trim()
+    .toLowerCase();
+  const changelogId = payload.changelog?.id?.trim();
+  if (changelogId) return `${event}:${issueIdentity}:changelog:${changelogId}`;
+
+  const commentId = payload.comment?.id?.trim();
+  if (commentId) return `${event}:${issueIdentity}:comment:${commentId}`;
+
+  if (payload.timestamp !== undefined && payload.timestamp !== null) {
+    return `${event}:${issueIdentity}:timestamp:${String(payload.timestamp)}`;
+  }
+
+  return null;
+}
 
 /**
  * Extracts webhook secret from incoming request.
@@ -135,6 +179,14 @@ function isWorkspaceUnavailable(error: unknown): boolean {
   );
 }
 
+async function completeClaim(claim: InboundDeliveryClaim | null): Promise<void> {
+  if (claim?.disposition === 'CLAIMED') await completeInboundDelivery(claim);
+}
+
+async function failClaim(claim: InboundDeliveryClaim | null, error: unknown): Promise<void> {
+  if (claim?.disposition === 'CLAIMED') await failInboundDelivery(claim, error);
+}
+
 async function postJiraWebhook(request: NextRequest) {
   try {
     const clientIp = getClientIp(request.headers);
@@ -192,26 +244,56 @@ async function postJiraWebhook(request: NextRequest) {
       return new NextResponse(null, { status: 204 });
     }
 
-    try {
-      // Hold the shared workspace fence for the entire webhook mutation chain,
-      // including linked action-item/timeline side effects. Removal cannot
-      // complete halfway through processing, and a disable/removal that wins
-      // first causes this delivery to become an acknowledged no-op.
-      const result = await withJiraWorkspaceProviderFence(() =>
-        processJiraWebhookEvent(payload as unknown as JiraWebhookPayload)
+    const claim = await claimInboundDelivery(
+      JIRA_INBOUND_INTEGRATION_ID,
+      'JIRA',
+      getJiraWebhookDeliveryId(
+        payload,
+        request.headers.get('x-atlassian-webhook-identifier')
+      )
+    );
+    if (claim?.disposition === 'COMPLETED') {
+      return NextResponse.json({ ok: true, updated: 0, reason: 'duplicate_delivery' });
+    }
+    if (claim?.disposition === 'BUSY') {
+      // Do not acknowledge an in-flight duplicate as successfully committed.
+      // If the active worker crashes after this request returns, Jira must have
+      // a reason to retry after the durable lease expires.
+      return NextResponse.json(
+        { error: 'Jira delivery is already being processed.' },
+        { status: 503, headers: { 'Retry-After': '5' } }
       );
+    }
+
+    try {
+      const issueFenceKey = (
+        payload.issue?.id?.trim() || payload.issue?.key?.trim() || 'unknown'
+      ).toUpperCase();
+
+      // The workspace fence coordinates disable/remove, while the issue fence
+      // serializes same-issue stale-check/update/side-effect chains across
+      // replicas. Webhook processing performs no provider HTTP under the issue
+      // lock, keeping the DB transaction short and deterministic.
+      const result = await withJiraWorkspaceProviderFence(() =>
+        withJiraIssueMutationFence('JIRA', issueFenceKey, () =>
+          processJiraWebhookEvent(payload as unknown as JiraWebhookPayload)
+        )
+      );
+      await completeClaim(claim);
       return NextResponse.json({ ok: true, ...result });
     } catch (error) {
       if (isWorkspaceUnavailable(error)) {
         logger.info('Jira webhook lost workspace lifecycle race; acknowledged without processing', {
           component: 'jira-webhook',
         });
+        await completeClaim(claim);
         return NextResponse.json({
           ok: true,
           updated: 0,
           reason: 'integration_disabled_or_removed',
         });
       }
+      await failClaim(claim, error);
       throw error;
     }
   } catch (error) {

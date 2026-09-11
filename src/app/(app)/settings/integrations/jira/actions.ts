@@ -97,7 +97,8 @@ export async function saveJiraConfig(
     if (existing && !expectedRevision) return settingsChangedState(expectedUpdatedAt);
     if (!existing && expectedRevision) return settingsChangedState(expectedUpdatedAt);
 
-    if (!existing && !apiToken) {
+    const hasFreshApiToken = Boolean(apiToken && apiToken !== '********');
+    if (!existing && !hasFreshApiToken) {
       return {
         success: false,
         code: 'VALIDATION_ERROR',
@@ -106,8 +107,25 @@ export async function saveJiraConfig(
       };
     }
 
-    const apiTokenEncrypted =
-      apiToken && apiToken !== '********' ? await encrypt(apiToken) : existing?.apiTokenEncrypted;
+    const originChanged = existing
+      ? new URL(existing.baseUrl).origin !== new URL(baseUrl).origin
+      : false;
+
+    // Stored outbound credentials are origin-bound. A masked token means
+    // "reuse the existing secret" and must never let an administrator redirect
+    // that secret to another host without re-entering it explicitly.
+    if (originChanged && !hasFreshApiToken) {
+      return {
+        success: false,
+        code: 'VALIDATION_ERROR',
+        error: 'Re-enter the Jira API token when changing the Jira site origin.',
+        updatedAt: expectedUpdatedAt,
+      };
+    }
+
+    const apiTokenEncrypted = hasFreshApiToken
+      ? await encrypt(apiToken)
+      : existing?.apiTokenEncrypted;
     const webhookSecretEncrypted =
       webhookSecret && webhookSecret !== '********'
         ? await encrypt(webhookSecret)
