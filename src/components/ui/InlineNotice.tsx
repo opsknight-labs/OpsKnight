@@ -58,6 +58,11 @@ export function InlineNotice({
   const resolvedUrgency: InlineNoticeUrgency = urgency ?? (isError ? 'assertive' : 'polite');
   const role = resolvedUrgency === 'assertive' ? 'alert' : 'status';
   const ariaLive = resolvedUrgency === 'assertive' ? 'assertive' : 'polite';
+  // tone is a closed union InlineNoticeTone — indexing these maps is not user-controlled.
+  // eslint-disable-next-line security/detect-object-injection
+  const toneClass = toneStyles[tone];
+  // eslint-disable-next-line security/detect-object-injection
+  const toneIcon = defaultIcons[tone];
 
   return (
     <div
@@ -65,12 +70,12 @@ export function InlineNotice({
       aria-live={ariaLive}
       className={cn(
         'flex gap-2.5 rounded-lg border p-3.5 text-sm leading-relaxed',
-        toneStyles[tone],
+        toneClass,
         className
       )}
       {...props}
     >
-      {icon !== null && (icon ?? defaultIcons[tone])}
+      {icon !== null && (icon ?? toneIcon)}
       <div className="min-w-0 flex-1 space-y-0.5">
         {title && <p className="font-semibold leading-none">{title}</p>}
         {children && <div className={cn(!title && 'font-medium')}>{children}</div>}

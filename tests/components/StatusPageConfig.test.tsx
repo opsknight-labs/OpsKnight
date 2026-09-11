@@ -1,7 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import StatusPageConfig from '@/components/StatusPageConfig';
+
+const notifySuccess = vi.fn();
+vi.mock('@/lib/toast', () => ({
+  notify: {
+    success: (...args: unknown[]) => notifySuccess(...args),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
+}));
 
 // Mock useRouter
 vi.mock('next/navigation', () => ({
@@ -134,7 +144,11 @@ describe('StatusPageConfig Component', () => {
   it('shows success message after successful save', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ success: true }),
+      json: () =>
+        Promise.resolve({
+          success: true,
+          data: { updatedAt: new Date().toISOString(), publication: { status: 'LIVE' } },
+        }),
     });
 
     render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
@@ -142,22 +156,29 @@ describe('StatusPageConfig Component', () => {
     const saveBtn = screen.getByText(/Save Settings/);
     fireEvent.click(saveBtn);
 
-    // Success message is rendered in a div with specific colors
-    const successMsg = await screen.findByText(/Settings saved successfully/i);
-    expect(successMsg).toBeDefined();
+    // Success is centralized via the global toast. No ephemeral inline "saved" banner
+    // — publication failure/pending is surfaced by the distinct persistent banner.
+    await waitFor(() => expect(notifySuccess).toHaveBeenCalled());
+    expect(notifySuccess.mock.calls[0][0]).toMatch(/Settings saved/i);
+    expect(notifySuccess.mock.calls[0][1]).toEqual(
+      expect.objectContaining({ id: expect.stringContaining('status-page:') })
+    );
   });
 
   it('saves authentication when Public Access is disabled', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ success: true }),
+      json: async () => ({
+        success: true,
+        data: { updatedAt: new Date().toISOString(), publication: { status: 'LIVE' } },
+      }),
     });
     global.fetch = fetchMock;
     render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Public Access' }));
     fireEvent.click(screen.getByText(/Save Settings/));
-    await screen.findByText(/Settings saved successfully/i);
+    await waitFor(() => expect(notifySuccess).toHaveBeenCalled());
 
     const request = fetchMock.mock.calls.find(([, options]) => options?.method === 'PATCH');
     expect(request).toBeDefined();
