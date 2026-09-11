@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, Eye, EyeOff, Lock, ShieldCheck, X } from 'lucide-react';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
@@ -20,6 +20,7 @@ function readCapabilityToken(): string | null {
 }
 
 function ResetPasswordForm() {
+  const capturedToken = useRef<string | null | undefined>(undefined);
   const [token, setToken] = useState<string | null>(null);
   const [tokenReady, setTokenReady] = useState(false);
   const [password, setPassword] = useState('');
@@ -32,10 +33,12 @@ function ResetPasswordForm() {
   const passwordsMatch = Object.is(password, confirmPassword);
 
   useEffect(() => {
-    // Capture the capability exactly once before scrubbing it. Next patches
-    // history.replaceState to synchronize router state; keying this effect to
-    // useSearchParams would re-run after the scrub and erase the in-memory token.
+    // React Strict Mode replays effects in development. Persist the first
+    // capability read across that replay so scrubbing browser history cannot
+    // erase the in-memory token on the second effect invocation.
+    if (capturedToken.current !== undefined) return;
     const rawToken = readCapabilityToken();
+    capturedToken.current = rawToken;
     setToken(rawToken);
     setTokenReady(true);
     if (rawToken) window.history.replaceState({}, '', window.location.pathname);
