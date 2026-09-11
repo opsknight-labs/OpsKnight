@@ -139,11 +139,17 @@ test.describe.serial('authentication browser contracts', () => {
     expect(await bcrypt.compare(oldPassword, updated!.passwordHash!)).toBe(false);
     expect(await bcrypt.compare(newPassword, updated!.passwordHash!)).toBe(true);
 
+    // Force a fresh document/component lifecycle before replaying the same
+    // fragment. A hash-only navigation can otherwise keep the success state
+    // mounted and make the replay assertion depend on browser navigation quirks.
+    await page.goto('/login');
     await page.goto(`/reset-password#token=${encodeURIComponent(token)}`);
     await page.getByLabel('New password').fill('Second-violet-harbor-882!');
     await page.getByLabel('Confirm password').fill('Second-violet-harbor-882!');
     await page.getByRole('button', { name: 'Set new password' }).click();
-    await expect(page.getByRole('alert')).toContainText('Invalid or expired reset link');
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Invalid or expired reset link' })
+    ).toContainText('Invalid or expired reset link');
 
     await login(page, email, oldPassword);
     await expect(page.getByText('Invalid email or password')).toBeVisible();
