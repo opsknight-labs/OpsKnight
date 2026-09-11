@@ -216,6 +216,49 @@ export default function ServiceHealthV3({
           ) : null}
         </div>
       </div>
+      <div className="status-v3-services__legend" role="note" aria-label="Service status legend">
+        <div className="status-v3-services__legend-items">
+          <span className="status-v3-services__legend-item">
+            <span
+              className="status-v3-legend-indicator status-v3-legend-indicator--operational"
+              aria-hidden="true"
+            />
+            Operational
+          </span>
+          <span className="status-v3-services__legend-item">
+            <span
+              className="status-v3-legend-indicator status-v3-legend-indicator--degraded"
+              aria-hidden="true"
+            />
+            Degraded
+          </span>
+          <span className="status-v3-services__legend-item">
+            <span
+              className="status-v3-legend-indicator status-v3-legend-indicator--outage"
+              aria-hidden="true"
+            />
+            Outage
+          </span>
+        </div>
+        <div className="status-v3-services__legend-window">
+          <svg
+            className="status-v3-legend-clock"
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span>Last 90 days</span>
+        </div>
+      </div>
       {filtered.length === 0 ? (
         <p className="status-muted">No services match your filters.</p>
       ) : groups ? (

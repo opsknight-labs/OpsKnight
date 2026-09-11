@@ -997,6 +997,73 @@ ${R} .status-v3-services__group[aria-pressed="true"] {
   background: color-mix(in srgb, var(--primary) 8%, var(--status-panel-bg));
 }
 
+/* Service Status & History Legend Strip */
+${R} .status-v3-services__legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.85rem;
+  margin-block-start: 0.65rem;
+  margin-block-end: 0.45rem;
+  background: color-mix(in srgb, var(--status-panel-muted-bg, #f8fafc) 65%, transparent);
+  border: 1px solid var(--status-panel-border, #e2e8f0);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  color: var(--status-text-muted);
+  flex-wrap: wrap;
+}
+
+${R} .status-v3-services__legend-items {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  flex-wrap: wrap;
+}
+
+${R} .status-v3-services__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--status-text-muted);
+}
+
+${R} .status-v3-legend-indicator {
+  width: 9px;
+  height: 9px;
+  border-radius: 2.5px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+${R} .status-v3-legend-indicator--operational {
+  background-color: #10b981;
+}
+
+${R} .status-v3-legend-indicator--degraded {
+  background-color: #f59e0b;
+}
+
+${R} .status-v3-legend-indicator--outage {
+  background-color: #ef4444;
+}
+
+${R} .status-v3-services__legend-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--status-text-subtle);
+}
+
+${R} .status-v3-legend-clock {
+  color: var(--status-text-subtle);
+  flex-shrink: 0;
+}
+
 ${R} .status-v3-services__list { gap: 0; }
 ${R} .status-v3-services .status-v3-service {
   padding: .8rem 0 .85rem; gap: .45rem; border-radius: 0;
