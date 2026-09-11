@@ -13,8 +13,20 @@ export default function StatusPageFooter({
       <div className="status-site-footer__inner">
         <div className="status-site-footer__grid">
           <div className="status-site-footer__brand">
-            <a className="status-site-footer__logo" href="https://opsknight.com/">
-              OpsKnight
+            <a className="status-site-footer__logo" href="https://opsknight.com/" aria-label="OpsKnight — opsknight.com">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/logo-mark.png"
+                alt=""
+                width={28}
+                height={28}
+                loading="lazy"
+                decoding="async"
+                onError={e => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+              <span>OpsKnight</span>
             </a>
             <p>{footerText || 'Status and incident communication for modern operations teams.'}</p>
           </div>
