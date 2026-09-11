@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   queryRaw: vi.fn(),
   deleteMany: vi.fn(),
+  capacityFindUnique: vi.fn().mockResolvedValue(null),
+  runtimeFindUnique: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
@@ -15,6 +17,8 @@ vi.mock('@/lib/prisma', () => ({
     $executeRaw: mocks.executeRaw,
     $queryRaw: mocks.queryRaw,
     rateLimit: { deleteMany: mocks.deleteMany, findUnique: mocks.findUnique },
+    notificationProviderCapacity: { findUnique: mocks.capacityFindUnique },
+    notificationRuntimeSettings: { findUnique: mocks.runtimeFindUnique },
   },
 }));
 import {
@@ -24,10 +28,15 @@ import {
   releaseProviderConcurrency,
   resetProviderAdmissionForTests,
 } from '@/lib/provider-admission';
+import { resetCapacityResolverForTests } from '@/lib/notification-capacity/resolver';
+
 describe('provider admission control', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.capacityFindUnique.mockResolvedValue(null);
+    mocks.runtimeFindUnique.mockResolvedValue(null);
     resetProviderAdmissionForTests();
+    resetCapacityResolverForTests();
   });
   it('opens a new distributed provider window', async () => {
     mocks.queryRaw.mockResolvedValue([{ granted: 8 }]);
