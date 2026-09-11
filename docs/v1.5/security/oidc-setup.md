@@ -76,7 +76,7 @@ OpsKnight rejects broad, non-tenant-specific authorities:
 
 Supported workforce authority hosts include the Microsoft public cloud (`login.microsoftonline.com`, `sts.windows.net`) and sovereign clouds (`login.microsoftonline.us`, `login.partner.microsoftonline.cn`). Microsoft External ID / CIAM authorities (`*.ciamlogin.com`) and Azure AD B2C are not workforce authorities and are treated under generic OIDC policy.
 
-Tenant membership is enforced by the tenant-specific authority in the issuer URL. If **Allowed Domains** are configured, OpsKnight applies them as an additional email domain filter for the tenant's authenticated users.
+Tenant membership is enforced by the tenant-specific authority in the issuer URL. Because Microsoft Entra email and preferred_username claims are mutable and not guaranteed to be present on all identities, Entra access is scoped directly to the configured tenant authority rather than relying on email domain filtering for authorization.
 
 Microsoft Entra workforce tokens commonly do not include the standard OIDC `email_verified` claim. For a validated Entra issuer, a missing claim is accepted according to the Entra provider policy, while an explicit `email_verified: false` is still rejected.
 

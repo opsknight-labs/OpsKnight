@@ -52,31 +52,22 @@ describe('OIDC provider security policy registry', () => {
     });
   });
 
-  it('enforces Allowed Domains as an additional filter on Microsoft Entra policy', () => {
+  it('scopes Microsoft Entra policy strictly to the tenant authority without email-domain authorization dependency', () => {
     const policy = getOidcProviderPolicy('https://login.microsoftonline.com/tenant/v2.0');
     expect(policy.family).toBe('azure');
 
-    // Without allowedDomains configured, any verified tenant user is permitted
+    // Tenant users are permitted by validated authority; mutable/optional email is not used as an authorization gate
     expect(policy.validateOrganizationBoundary({ email: 'user@anywhere.com' }, [])).toEqual({
       ok: true,
     });
-
-    // With allowedDomains configured, acts as an additional email domain filter
-    expect(
-      policy.validateOrganizationBoundary(
-        { email: 'user@acme.com' },
-        ['acme.com', 'subsidiary.acme.com']
-      )
-    ).toEqual({ ok: true });
-
     expect(
       policy.validateOrganizationBoundary(
         { email: 'user@external.com' },
         ['acme.com', 'subsidiary.acme.com']
       )
-    ).toEqual({
-      ok: false,
-      reason: 'OIDC_ORGANIZATION_REJECTED',
+    ).toEqual({ ok: true });
+    expect(policy.validateOrganizationBoundary({}, ['acme.com'])).toEqual({
+      ok: true,
     });
   });
 });

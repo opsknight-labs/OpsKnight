@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const tx = {
   oidcIdentity: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    update: vi.fn(),
     create: vi.fn(),
   },
   user: {
@@ -17,7 +19,11 @@ const tx = {
 
 vi.mock('@/lib/prisma', () => ({
   default: {
-    oidcIdentity: { findUnique: vi.fn() },
+    oidcIdentity: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
     user: { findUnique: vi.fn() },
   },
 }));
@@ -60,8 +66,12 @@ describe('resolveOidcIdentityForSignIn', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.update).mockResolvedValue({} as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     tx.oidcIdentity.findUnique.mockResolvedValue(null);
+    tx.oidcIdentity.findFirst.mockResolvedValue(null);
+    tx.oidcIdentity.update.mockResolvedValue({} as never);
     tx.oidcIdentity.create.mockResolvedValue({ id: 'identity-1' });
     tx.user.findUnique.mockResolvedValue(null);
     tx.user.create.mockResolvedValue(linkedUser);
@@ -167,26 +177,17 @@ describe('resolveOidcIdentityForSignIn', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('enforces configured Allowed Domains as an additional filter after Entra tenant verification', async () => {
-    const rejected = await resolveOidcIdentityForSignIn({
+  it('scopes Entra tenant verification to authority without email-domain authorization restriction', async () => {
+    const acceptedOutsideDomain = await resolveOidcIdentityForSignIn({
       ...baseInput,
       issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
       email: 'alice@outside.example',
+      allowedDomains: ['acme.com'],
       emailVerifiedClaim: undefined,
       requireEmailVerifiedClaim: false,
       claims: { tid: 'tenant-id' },
     });
-    expect(rejected).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
-
-    const acceptedMatching = await resolveOidcIdentityForSignIn({
-      ...baseInput,
-      issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
-      email: 'alice@example.com',
-      emailVerifiedClaim: undefined,
-      requireEmailVerifiedClaim: false,
-      claims: { tid: 'tenant-id' },
-    });
-    expect(acceptedMatching.ok).toBe(true);
+    expect(acceptedOutsideDomain.ok).toBe(true);
 
     const acceptedNoRestriction = await resolveOidcIdentityForSignIn({
       ...baseInput,
@@ -198,6 +199,38 @@ describe('resolveOidcIdentityForSignIn', () => {
       claims: { tid: 'tenant-id' },
     });
     expect(acceptedNoRestriction.ok).toBe(true);
+  });
+
+  it('reconciles legacy identities stored with non-canonical issuers (e.g. trailing slashes) to canonical issuer', async () => {
+    // Exact canonical match misses, but findFirst finds legacy trailing slash identity
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findFirst).mockResolvedValue({
+      id: 'legacy-id-1',
+      userId: 'user-1',
+    } as never);
+    vi.mocked(prisma.oidcIdentity.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: 'https://idp.example.com',
+      subject: 'subject-1',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.user.id).toBe('user-1');
+    expect(prisma.oidcIdentity.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          issuer: { in: expect.arrayContaining(['https://idp.example.com/']) },
+          subject: 'subject-1',
+        }),
+      })
+    );
+    expect(prisma.oidcIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'legacy-id-1' },
+      data: { issuer: 'https://idp.example.com' },
+    });
   });
 
   it('rejects an established identity whose linked OpsKnight user is disabled', async () => {

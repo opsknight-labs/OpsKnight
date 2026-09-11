@@ -33,6 +33,8 @@ vi.mock('@/lib/prisma', () => {
     },
     oidcIdentity: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
       create: vi.fn(),
     },
     oidcConfig: {

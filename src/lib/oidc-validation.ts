@@ -282,23 +282,38 @@ export async function validateOidcConnection(
       }
     }
 
-    const tokenEndpointAuthMethodsSupported = Array.isArray(
-      config.token_endpoint_auth_methods_supported
-    )
-      ? config.token_endpoint_auth_methods_supported
-          .filter((item): item is string => typeof item === 'string')
-          .map(item => item.trim())
-      : undefined;
-
-    if (
-      options?.tokenEndpointAuthMethod &&
-      tokenEndpointAuthMethodsSupported &&
-      tokenEndpointAuthMethodsSupported.length > 0
-    ) {
-      if (!tokenEndpointAuthMethodsSupported.includes(options.tokenEndpointAuthMethod)) {
+    // OpenID Connect Discovery 1.0 & RFC 8414: If omitted, the default is client_secret_basic.
+    // If explicitly provided, it must be a valid non-empty array of strings.
+    const rawMethodsSupported = config.token_endpoint_auth_methods_supported;
+    let effectiveMethods: string[];
+    if (rawMethodsSupported === undefined) {
+      effectiveMethods = ['client_secret_basic'];
+    } else if (Array.isArray(rawMethodsSupported)) {
+      const parsed = rawMethodsSupported
+        .filter((item): item is string => typeof item === 'string')
+        .map(item => item.trim())
+        .filter(Boolean);
+      if (parsed.length === 0) {
         return {
           isValid: false,
-          error: `Identity Provider does not support the selected token endpoint authentication method (${options.tokenEndpointAuthMethod}). Supported methods: ${tokenEndpointAuthMethodsSupported.join(', ')}.`,
+          error:
+            'Identity Provider metadata contains an invalid or empty token_endpoint_auth_methods_supported list.',
+        };
+      }
+      effectiveMethods = parsed;
+    } else {
+      return {
+        isValid: false,
+        error:
+          'Identity Provider metadata contains a malformed token_endpoint_auth_methods_supported entry.',
+      };
+    }
+
+    if (options?.tokenEndpointAuthMethod) {
+      if (!effectiveMethods.includes(options.tokenEndpointAuthMethod)) {
+        return {
+          isValid: false,
+          error: `Identity Provider does not support the selected token endpoint authentication method (${options.tokenEndpointAuthMethod}). Supported methods: ${effectiveMethods.join(', ')}.`,
         };
       }
     }
@@ -337,9 +352,7 @@ export async function validateOidcConnection(
         authorizationEndpoint: config.authorization_endpoint as string,
         tokenEndpoint: config.token_endpoint as string,
         jwksUri,
-        ...(tokenEndpointAuthMethodsSupported
-          ? { tokenEndpointAuthMethodsSupported }
-          : {}),
+        tokenEndpointAuthMethodsSupported: effectiveMethods,
       },
     };
   } catch (error) {

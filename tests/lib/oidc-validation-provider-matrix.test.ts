@@ -290,11 +290,37 @@ describe('OIDC discovery provider matrix', () => {
       'Identity Provider does not support the selected token endpoint authentication method (client_secret_post)'
     );
 
-    // 3. Omitting token_endpoint_auth_methods_supported in metadata allows validation (RFC default)
+    // 3. Omitting token_endpoint_auth_methods_supported defaults to client_secret_basic (OIDC Core / RFC 8414)
     setupValidFetch(200, makeMetadata('https://identity.example.com'));
-    const omittedResult = await validateOidcConnection('https://identity.example.com', {
+    const omittedBasicResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_basic',
+    });
+    expect(omittedBasicResult.isValid).toBe(true);
+    expect(omittedBasicResult.metadata?.tokenEndpointAuthMethodsSupported).toEqual([
+      'client_secret_basic',
+    ]);
+
+    // 4. Omitting token_endpoint_auth_methods_supported rejects client_secret_post
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+    const omittedPostResult = await validateOidcConnection('https://identity.example.com', {
       tokenEndpointAuthMethod: 'client_secret_post',
     });
-    expect(omittedResult.isValid).toBe(true);
+    expect(omittedPostResult.isValid).toBe(false);
+    expect(omittedPostResult.error).toContain(
+      'Identity Provider does not support the selected token endpoint authentication method (client_secret_post)'
+    );
+
+    // 5. Reject empty or malformed token_endpoint_auth_methods_supported array
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        token_endpoint_auth_methods_supported: [],
+      })
+    );
+    const emptyResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_basic',
+    });
+    expect(emptyResult.isValid).toBe(false);
+    expect(emptyResult.error).toContain('invalid or empty token_endpoint_auth_methods_supported');
   });
 });

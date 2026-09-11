@@ -86,8 +86,8 @@ const entraPolicy: OidcProviderPolicy = {
     return authority !== null && !isMicrosoftEntraGenericAuthority(authority);
   },
   // Entra tenant membership is enforced by tenant-specific issuer validation.
-  // When configured, Allowed Domains acts as an additional email domain filter.
-  validateOrganizationBoundary: emailBoundary,
+  // The mutable/optional email claim is not used as an authorization security boundary.
+  validateOrganizationBoundary: () => ({ ok: true }),
   allowsMissingEmailVerified: () => true,
 };
 

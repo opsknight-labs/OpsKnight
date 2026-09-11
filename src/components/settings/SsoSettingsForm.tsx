@@ -808,9 +808,15 @@ export default function SsoSettingsForm({
             onChange={event => setDomains(event.target.value)}
             className="font-mono text-sm h-10"
           />
-          <p className="text-xs text-muted-foreground">
-            Leave empty to allow any domain verified and sent by your identity provider.
-          </p>
+          {selectedPreset === 'azure' ? (
+            <p className="text-xs text-muted-foreground">
+              Access is scoped to the configured Microsoft Entra tenant authority. Email domain filtering is not applied for Entra authorization.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Leave empty to allow any domain verified and sent by your identity provider.
+            </p>
+          )}
         </div>
 
         {selectedPreset === 'auth0' && (
