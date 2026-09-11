@@ -23,6 +23,7 @@ import {
   getLocalAuthPolicy,
   isLocalCredentialAllowed,
 } from '@/lib/local-auth-policy';
+import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 
 function getJwtUserRefreshTtlMs() {
   const raw = process.env.JWT_USER_REFRESH_TTL_MS ?? '60000';
@@ -649,6 +650,16 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             return false;
           }
 
+          const roleEvaluation = evaluateOidcRoleClaims(claims, activeConfig.roleMapping ?? []);
+          if (!roleEvaluation.ok) {
+            logger.warn('[Auth] OIDC role claims rejected', {
+              component: 'auth:signIn',
+              reasonCode: roleEvaluation.reason,
+              providerType: activeConfig.providerType,
+            });
+            return false;
+          }
+
           let resolution;
           try {
             resolution = await resolveOidcIdentityForSignIn({
@@ -732,22 +743,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             Array.isArray(activeConfig.roleMapping) &&
             activeConfig.roleMapping.length > 0
           ) {
-            const mapping = activeConfig.roleMapping;
-            let matchedRole: 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER' | null = null;
-
-            for (const rule of mapping) {
-              const claimValue = claims[rule.claim];
-              const match = Array.isArray(claimValue)
-                ? claimValue.some(value => value === rule.value)
-                : claimValue === rule.value;
-              if (match) {
-                matchedRole = rule.role;
-                break;
-              }
-            }
-
-            const desiredRole = matchedRole ?? 'USER';
-            if (targetUser.role !== desiredRole) {
+            const desiredRole = roleEvaluation.role;
+            if (targetUser.roleSource === 'OIDC' && targetUser.role !== desiredRole) {
               updateData.role = desiredRole;
               logger.info('[Auth] OIDC role changed from mapping evaluation', {
                 component: 'auth:signIn',
