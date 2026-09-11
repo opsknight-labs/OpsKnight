@@ -56,9 +56,16 @@ function serviceMatches(service: PublicStatusService, filter: FilterKey) {
   return service.status === filter;
 }
 
+const SLA_GRADE_LABEL: Record<string, string> = {
+  EXCELLENT: 'Excellent',
+  GOOD: 'Good',
+  BELOW_TARGET: 'Below target',
+};
+
 function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZone: string }) {
   const token = statusPresentation(service.status).token;
   const slaTier = service.sla?.tier ?? service.slaTier;
+  const slaGrade = service.sla?.grade ?? service.uptime?.days90?.grade;
   const hasDetails = Boolean(slaTier || service.team?.name || (service.regions?.length ?? 0) > 0);
   const affected = service.status !== 'OPERATIONAL';
 
@@ -104,7 +111,15 @@ function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZ
             </div>
           )}
         </div>
-        <div className="status-v3-service__status">
+        <div className="status-v3-service__badges">
+          {slaGrade && (
+            <StatusBadge
+              status={slaGrade}
+              label={SLA_GRADE_LABEL[slaGrade] ?? slaGrade}
+              size="xs"
+              showDot
+            />
+          )}
           <StatusBadge
             status={service.status}
             label={statusPresentation(service.status).label}
@@ -118,7 +133,7 @@ function ServiceRow({ service, timeZone }: { service: PublicStatusService; timeZ
       {service.description && <p className="status-v3-service__desc">{service.description}</p>}
 
       {(service.history || service.uptime) && (
-        <ServiceHistoryV3 service={service} timeZone={timeZone} />
+        <ServiceHistoryV3 service={service} timeZone={timeZone} showGrade={false} />
       )}
     </div>
   );

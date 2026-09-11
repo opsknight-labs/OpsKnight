@@ -642,8 +642,8 @@ ${R} .status-v3-service__uptime-value { font-weight: 750; color: var(--status-te
 ${R} .status-v3-service__uptime-label { font-weight: 500; color: var(--status-text-muted); font-size: .8125rem; }
 
 /* Chips + grades */
-${R} .status-v3-chip { display: inline-flex; align-items: center; padding: .18rem .55rem; border-radius: 4px; border: 1px solid var(--status-panel-border); background: var(--status-panel-muted-bg); font-size: .75rem; font-weight: 600; color: var(--status-text-muted); }
-${R} .status-v3-chip--muted { font-weight: 500; }
+${R} .status-v3-chip { display: inline-flex; align-items: center; padding: .1rem .45rem; border-radius: 4px; border: 1px solid var(--status-panel-border); background: var(--status-panel-muted-bg); font-size: .7rem; font-weight: 600; color: var(--status-text-muted); line-height: 1.3; white-space: nowrap; }
+${R} .status-v3-chip--muted { font-weight: 500; color: var(--status-text-subtle); }
 ${R} .status-v3-grade { display: inline-flex; align-items: center; padding: .18rem .55rem; border-radius: 999px; font-weight: 700; font-size: .75rem; }
 ${R} .status-v3-grade--excellent { color: var(--status-operational); background: var(--status-operational-bg); }
 ${R} .status-v3-grade--good { color: var(--status-degraded); background: var(--status-degraded-bg); }
@@ -753,6 +753,7 @@ ${R} .status-v3-hero[data-status="operational"] .status-v3-dot--lg { animation: 
 
 /* Staggered entrance for each section */
 @keyframes status-v3-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes status-v3-inspector-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: none; } }
 ${R} .status-v3 > * { animation: status-v3-in .5s cubic-bezier(.2, .7, .2, 1) both; }
 ${R} .status-v3 > *:nth-child(2) { animation-delay: .06s; }
 ${R} .status-v3 > *:nth-child(3) { animation-delay: .12s; }
@@ -804,7 +805,7 @@ ${R} .status-v3-inspector {
   border: 1px solid var(--status-panel-border, #e2e8f0);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  animation: status-v3-in .22s ease both;
+  animation: status-v3-inspector-in .2s cubic-bezier(.2, .7, .2, 1) both;
 }
 ${R} .status-v3-inspector:hover {
   border-color: color-mix(in srgb, var(--primary) 25%, var(--status-panel-border));
@@ -860,6 +861,53 @@ ${R} .status-v3-inspector__close:hover {
   color: var(--status-text-strong);
   background: var(--status-panel-muted-border);
 }
+${R} .status-v3-inspector__relative {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--status-text-subtle);
+}
+${R} .status-v3-inspector__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+${R} .status-v3-inspector__nav {
+  border: 0;
+  background: var(--status-panel-muted-bg);
+  color: var(--status-text-muted);
+  inline-size: 1.7rem;
+  block-size: 1.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease;
+  flex-shrink: 0;
+}
+${R} .status-v3-inspector__nav:hover:not(:disabled) {
+  color: var(--status-text-strong);
+  background: var(--status-panel-muted-border);
+}
+${R} .status-v3-inspector__nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+${R} .status-v3-inspector__breakdown {
+  display: flex;
+  block-size: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  gap: 1px;
+  background: var(--status-panel-muted-bg);
+}
+${R} .status-v3-inspector__breakdown-seg {
+  display: block;
+  block-size: 100%;
+  background: currentColor;
+  min-inline-size: 2px;
+  border-radius: 1px;
+}
 ${R} .status-v3-inspector__chips {
   display: inline-flex;
   align-items: center;
@@ -885,7 +933,7 @@ ${R} .status-v3-hours__slice { position: absolute; inset-block: 0; background: c
 ${R} .status-v3-hours__axis { display: flex; justify-content: space-between; font-size: .66rem; color: var(--status-text-subtle); font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: reduce) {
-  ${R} .status-v3 > *, ${R} .status-v3-hero[data-status="operational"] .status-v3-dot--lg, ${R} .status-v3-inspector { animation: none !important; }
+  ${R} .status-v3 > *, ${R} .status-v3-hero[data-status="operational"] .status-v3-dot--lg, ${R} .status-v3-inspector, ${R} .status-v3-inspector__breakdown-seg { animation: none !important; }
   ${R} .status-v3-history__day { transition: none !important; }
 }
 
@@ -1301,28 +1349,34 @@ ${R} .status-v3-service__icon {
 ${R} .status-v3-services .status-v3-service__name {
   font-family: 'Space Grotesk', Inter, sans-serif;
   font-weight: 650;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   color: var(--status-text-strong);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 ${R} .status-v3-service__meta {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem 0.45rem;
+  gap: 0.3rem 0.4rem;
   flex-wrap: wrap;
 }
 
 ${R} .status-v3-service__meta .status-v3-chip {
-  font-size: 0.72rem;
-  padding: 0.12rem 0.45rem;
-  border-radius: 4px;
+  font-size: 0.68rem;
+  padding: 0.08rem 0.4rem;
+  border-radius: 3px;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--status-panel-muted-bg, #f8fafc) 80%, transparent);
 }
 
-${R} .status-v3-service__status {
+${R} .status-v3-service__badges {
   display: inline-flex;
   align-items: center;
+  gap: 0.35rem;
   flex-shrink: 0;
+}
+${R} .status-v3-service__badges [data-badge="true"] {
+  letter-spacing: 0;
 }
 
 ${R} .status-v3-services .status-v3-service__desc {

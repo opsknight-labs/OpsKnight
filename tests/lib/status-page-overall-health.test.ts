@@ -57,7 +57,7 @@ describe('deriveOverallPublicHealth', () => {
       { status: 'MAJOR_OUTAGE' },
     ]);
     expect(result.status).toBe('MAJOR_OUTAGE');
-    expect(result.headline).toBe('One service is unavailable');
+    expect(result.headline).toBe('One service is experiencing an outage');
     expect(result.note).toBe('Status unverified for 1 additional service.');
   });
 
@@ -74,13 +74,13 @@ describe('deriveOverallPublicHealth', () => {
       'One service has limited availability'
     );
     expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE')).headline).toBe(
-      'One service is unavailable'
+      'One service is experiencing an outage'
     );
     expect(
       deriveOverallPublicHealth(services('OPERATIONAL', 'MAJOR_OUTAGE', 'MAJOR_OUTAGE')).headline
-    ).toBe('Some services are unavailable');
+    ).toBe('Some services are experiencing an outage');
     expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE', 'MAJOR_OUTAGE')).headline).toBe(
-      'All services are unavailable'
+      'All services are experiencing an outage'
     );
   });
 

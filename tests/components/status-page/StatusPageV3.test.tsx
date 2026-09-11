@@ -73,8 +73,10 @@ describe('StatusPageV3', () => {
         ])}
       />
     );
-    expect(screen.getByRole('heading', { name: 'One service is unavailable' })).toBeInTheDocument();
-    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole('heading', { name: 'One service is experiencing an outage' })
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Outage').length).toBeGreaterThan(0);
     expect(screen.getByText(/Status unverified for 1 additional service/)).toBeInTheDocument();
   });
 
@@ -85,7 +87,7 @@ describe('StatusPageV3', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText('Limited availability').length).toBeGreaterThan(0);
     expect(
-      screen.queryByRole('heading', { name: 'One service is unavailable' })
+      screen.queryByRole('heading', { name: 'One service is experiencing an outage' })
     ).not.toBeInTheDocument();
   });
 

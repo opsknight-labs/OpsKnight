@@ -59,9 +59,11 @@ function StatusBreakdownBar({ timeline }: { timeline: PublicHistorySlice[] }) {
 export default function ServiceHistoryV3({
   service,
   timeZone,
+  showGrade = true,
 }: {
   service: PublicStatusService;
   timeZone: string;
+  showGrade?: boolean;
 }) {
   const days = useMemo(
     () => (service.history ? buildPublicHistoryDays(service.history, timeZone) : []),
@@ -120,7 +122,9 @@ export default function ServiceHistoryV3({
           {uptime90.value}
           <span className="status-v3-uptime__unit"> · 90-day uptime</span>
         </span>
-        {grade && <StatusBadge status={grade} label={GRADE_LABEL[grade]} size="xs" showDot />}
+        {showGrade && grade && (
+          <StatusBadge status={grade} label={GRADE_LABEL[grade]} size="xs" showDot />
+        )}
       </div>
 
       <svg

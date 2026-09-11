@@ -39,7 +39,7 @@ export const STATUS_PRESENTATION: Record<
   DEGRADED: { label: 'Performance issues', token: 'degraded', icon: '⚠' },
   MAINTENANCE: { label: 'Under maintenance', token: 'maintenance', icon: '⚙' },
   PARTIAL_OUTAGE: { label: 'Limited availability', token: 'partial-outage', icon: '◐' },
-  MAJOR_OUTAGE: { label: 'Unavailable', token: 'major-outage', icon: '✕' },
+  MAJOR_OUTAGE: { label: 'Outage', token: 'major-outage', icon: '✕' },
   UNKNOWN: { label: 'Unverified', token: 'unknown', icon: '?' },
 };
 
@@ -166,7 +166,7 @@ export function overallHeadline(
 
   switch (worst) {
     case 'MAJOR_OUTAGE':
-      return `${scope} ${counts.worstCount === 1 ? 'is' : 'are'} unavailable`;
+      return `${scope} ${counts.worstCount === 1 ? 'is' : 'are'} experiencing an outage`;
     case 'PARTIAL_OUTAGE':
       return counts.worstCount === 1
         ? 'One service has limited availability'
@@ -210,7 +210,7 @@ export const OVERALL_HEADLINE: Record<PublicServiceStatus, string> = {
   MAINTENANCE: 'Maintenance in progress',
   DEGRADED: 'Performance issues',
   PARTIAL_OUTAGE: 'Limited availability',
-  MAJOR_OUTAGE: 'Some services are unavailable',
+  MAJOR_OUTAGE: 'Outage detected',
   UNKNOWN: 'Status unavailable',
 };
 
@@ -244,7 +244,7 @@ export const OVERALL_DETAIL: Record<PublicServiceStatus, string> = {
   MAINTENANCE: 'Planned work is in progress on one or more services.',
   DEGRADED: 'At least one service is slower or less reliable than usual.',
   PARTIAL_OUTAGE: 'At least one service has limited functionality.',
-  MAJOR_OUTAGE: 'At least one service is currently unavailable.',
+  MAJOR_OUTAGE: 'One or more services are currently experiencing an outage.',
   UNKNOWN: 'We cannot verify service health right now.',
 };
 
