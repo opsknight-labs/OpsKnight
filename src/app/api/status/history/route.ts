@@ -7,6 +7,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getReportingWindowForDays } from '@/lib/retention-policy';
 import {
+  incidentDetailCutoff,
   publicStatusVisibility,
   serializePublicStatusIncident,
 } from '@/lib/status-page-public-data';
@@ -91,6 +92,10 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
     const now = new Date();
     const window = await getReportingWindowForDays(days, 'incident', now);
 
+    const detailCutoffMs = incidentDetailCutoff(
+      statusPage as unknown as Parameters<typeof incidentDetailCutoff>[0],
+      now.getTime()
+    );
     const incidents = visibility.showIncidents
       ? (
           await prisma.incident.findMany({
@@ -116,7 +121,7 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
           serializePublicStatusIncident(
             incident,
             statusPage as unknown as Parameters<typeof serializePublicStatusIncident>[1],
-            { pageId: statusPage.id, now }
+            { pageId: statusPage.id, now, detailCutoffMs }
           )
         )
       : [];

@@ -160,18 +160,23 @@ export function buildPreviewSnapshot(input: {
         })
     : [];
 
-  const redactedByAge = (createdAt: string | Date | null | undefined) => {
-    if (allow('showIncidentHistoryDetails') === false) return true;
+  const nowMs = now.getTime();
+  const previewDetailCutoffMs = (() => {
+    if (allow('showIncidentHistoryDetails') === false) return nowMs;
     const raw = Reflect.get(input.privacy ?? {}, 'incidentHistoryDetailDays') as unknown;
-    if (raw == null) return false;
+    if (raw == null) return null;
     const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));
-    if (!Number.isFinite(days)) return false;
-    const t = createdAt ? Date.parse(String(createdAt)) : NaN;
-    if (Number.isNaN(t)) return false;
-    return t < now.getTime() - days * 86_400_000;
-  };
+    if (!Number.isFinite(days)) return null;
+    return nowMs - days * 86_400_000;
+  })();
   const clampTitle = (value: string, max = 120) =>
     value.length <= max ? value : `${value.slice(0, max).trimEnd()}…`;
+  const redactedByAge = (createdAt: string | Date | null | undefined) => {
+    if (previewDetailCutoffMs == null) return false;
+    const t = createdAt ? Date.parse(String(createdAt)) : NaN;
+    if (Number.isNaN(t)) return false;
+    return t < (previewDetailCutoffMs as number);
+  };
   const incidents: PublicIncident[] = input.showIncidents
     ? input.incidents.map(incident => {
         const redacted = redactedByAge(incident.createdAt);

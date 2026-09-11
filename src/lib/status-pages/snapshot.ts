@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import prisma from '@/lib/prisma';
 import { statusPagePublicationLimits } from './publication-policy';
 import {
+  incidentDetailCutoff,
   publicStatusVisibility,
   serializePublicStatusIncident,
 } from '@/lib/status-page-public-data';
@@ -189,7 +190,8 @@ export async function buildStatusPageSnapshot(
             service: { select: { id: true, name: true, region: true } },
             events: {
               orderBy: { createdAt: 'asc' },
-              take: 50,
+              // Serialized payload caps at 8 × 400 chars; fetching more only bloats the row + snapshot bytes.
+              take: 8,
               select: { id: true, type: true, message: true, createdAt: true },
             },
             postmortem: {
@@ -548,12 +550,20 @@ export async function buildStatusPageSnapshot(
     },
     services: visibleServices,
     regions: visibility.showServices ? aggregatePublicRegions(services) : [],
-    incidents: incidents.map(incident =>
-      serializePublicStatusIncident(incident, page as unknown as Parameters<typeof serializePublicStatusIncident>[1], {
-        pageId,
-        now,
-      })
-    ),
+    incidents: (() => {
+      // Perf: precompute once — avoids Date + clamp per incident in the hot loop.
+      const detailCutoffMs = incidentDetailCutoff(
+        page as unknown as Parameters<typeof incidentDetailCutoff>[0],
+        now.getTime()
+      );
+      return incidents.map(incident =>
+        serializePublicStatusIncident(
+          incident,
+          page as unknown as Parameters<typeof serializePublicStatusIncident>[1],
+          { pageId, now, detailCutoffMs }
+        )
+      );
+    })(),
     ...(maintenanceEntries.length ? { maintenance: maintenanceEntries } : {}),
     announcements: displayAnnouncements.map(item => {
       const affected = page.showAffectedServices

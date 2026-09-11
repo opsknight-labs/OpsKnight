@@ -81,20 +81,23 @@ function serializeDate(value: string | Date | null | undefined): string | undefi
   return value instanceof Date ? value.toISOString() : value;
 }
 
-function shouldRedactIncident(
-  createdAt: string | Date | null | undefined,
-  settings: StatusPagePublicSettings,
-  now: Date
-): boolean {
-  if (settings.showIncidentHistoryDetails === false) return true;
+function incidentDetailCutoffMs(settings: StatusPagePublicSettings, nowMs: number): number | null {
+  if (settings.showIncidentHistoryDetails === false) return nowMs;
   const raw = settings.incidentHistoryDetailDays;
-  if (raw == null) return false;
+  if (raw == null) return null;
   const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));
-  if (!Number.isFinite(days)) return false;
+  if (!Number.isFinite(days)) return null;
+  return nowMs - days * 86_400_000;
+}
+
+function shouldRedactByCutoff(
+  createdAt: string | Date | null | undefined,
+  cutoffMs: number | null
+): boolean {
+  if (cutoffMs == null) return false;
   if (!createdAt) return false;
-  const created = new Date(createdAt).getTime();
-  if (Number.isNaN(created)) return false;
-  return created < now.getTime() - days * 86_400_000;
+  const ms = createdAt instanceof Date ? createdAt.getTime() : Date.parse(String(createdAt));
+  return Number.isFinite(ms) && (ms as number) < cutoffMs;
 }
 
 function truncateForRedacted(value: string, max = 120): string {
@@ -102,14 +105,31 @@ function truncateForRedacted(value: string, max = 120): string {
   return `${value.slice(0, max).trimEnd()}…`;
 }
 
+export function incidentDetailCutoff(settings: StatusPagePublicSettings, nowMs: number): number | null {
+  return incidentDetailCutoffMs(settings, nowMs);
+}
+
 /** Shape every public endpoint from the same status-page visibility controls. */
 export function serializePublicStatusIncident(
   incident: PublicIncidentInput,
   settings: StatusPagePublicSettings,
-  context?: { pageId: string; now?: Date | string }
+  context?: { pageId: string; now?: Date | string | number; detailCutoffMs?: number | null }
 ): PublicIncident {
-  const now = context?.now ? new Date(context.now) : new Date();
-  const redactedByAge = shouldRedactIncident(incident.createdAt, settings, now);
+  // Perf: allow callers batching many incidents to precompute the cutoff once.
+  let cutoffMs: number | null;
+  let now: Date;
+  if (context?.detailCutoffMs !== undefined) {
+    cutoffMs = context.detailCutoffMs;
+    now = context.now == null ? new Date() : context.now instanceof Date ? context.now : new Date(context.now as string | number);
+  } else {
+    now = context?.now == null
+      ? new Date()
+      : context.now instanceof Date
+        ? context.now
+        : new Date(context.now as string | number);
+    cutoffMs = incidentDetailCutoffMs(settings, now.getTime());
+  }
+  const redactedByAge = shouldRedactByCutoff(incident.createdAt, cutoffMs);
   const visibility = publicStatusVisibility(settings);
   const result: PublicIncident = { status: incident.status as PublicIncidentStatus };
   if (context?.pageId) {
