@@ -367,6 +367,15 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  SCHEDULE_IN_USE: {
+    status: 409,
+    category: 'conflict',
+    userMessage:
+      'Cannot delete schedule because it is currently in use by one or more escalation policies.',
+    action: 'Remove this schedule from all escalation policy steps before deleting it.',
+    retryable: false,
+    exposure: 'public',
+  },
   STATUS_PAGE_WEBHOOK_NOT_FOUND: {
     status: 404,
     category: 'not_found',

@@ -10,7 +10,7 @@ A schedule answers “who is on call now?” for an escalation-policy step. Each
 
 ## Permissions
 
-Signed-in users can view schedules they are allowed to see. Application **Responders** and **Admins** can create and edit schedules, layers, participants, and overrides.
+Signed-in users can view schedules they are allowed to see. Application **Responders** and **Admins** can create and edit schedules, layers, participants, and overrides. Deleting a schedule requires **Admin** privileges.
 
 ## Scheduling model
 
@@ -112,6 +112,24 @@ Confirm the IANA timezone and inspect the date for a daylight-saving transition.
 ### An override has no effect
 
 Confirm its schedule, start/end range, replacement user, optional replaced user, and overlap with the effective layer. Reload the timeline after saving.
+
+## Delete a schedule
+
+Deleting a schedule is an **Admin-only** operation located in the **Settings** tab under the **Danger Zone**.
+
+### Dependency safety enforcement
+
+OpsKnight strictly prohibits deleting any schedule currently assigned as an escalation target in an active escalation policy. When a schedule is linked to escalation rules:
+- Deletion is blocked with code `SCHEDULE_IN_USE` (HTTP 409 Conflict).
+- OpsKnight displays the list of dependent policies and attached services with direct links.
+- Admins must remove or reassign the schedule in those escalation policies before deletion can proceed.
+
+### Deletion lifecycle & cleanup
+
+When an unreferenced schedule is deleted:
+1. **Confirmation**: Admins must type the exact schedule name to confirm deletion in the confirmation modal.
+2. **Transactional cleanup**: All schedule-owned layers, layer user assignments, schedule overrides, and shift records are removed in an atomic transaction.
+3. **Audit trail**: A `schedule.deleted` audit record is recorded atomically within the transaction, capturing a snapshot of the deleted schedule's name, timezone, and child resource counts. If audit logging fails, the entire deletion transaction rolls back.
 
 ## Related topics
 
