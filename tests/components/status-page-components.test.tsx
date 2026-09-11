@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StatusPageSubscribe from '@/components/status-page/StatusPageSubscribe';
 import StatusPageSubscribeModal from '@/components/status-page/StatusPageSubscribeModal';
+import StatusPageFooter from '@/components/status-page/StatusPageFooter';
 
 // Mock fetch for subscribe tests
 const mockFetch = vi.fn();
@@ -165,5 +166,40 @@ describe('StatusPageSubscribeModal', () => {
     const closeBtn = screen.getByRole('button', { name: /close/i });
     fireEvent.click(closeBtn);
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+describe('StatusPageFooter', () => {
+  it('renders default footer text, live pulse indicator, and powered by badge', () => {
+    render(<StatusPageFooter links={{ resources: [], support: [] }} />);
+    expect(screen.getByText(/real-time incident & telemetry updates/i)).toBeDefined();
+    expect(
+      screen.getByText(/status, incident communication, and real-time availability tracking/i)
+    ).toBeDefined();
+    expect(screen.getByRole('link', { name: /powered by opsknight/i })).toBeDefined();
+    const logoImg = screen
+      .getByRole('link', { name: /powered by opsknight/i })
+      .querySelector('img');
+    expect(logoImg?.getAttribute('src')).toBe('/logo-mark.png');
+  });
+
+  it('renders custom footerText and resource/support pill links with icons', () => {
+    render(
+      <StatusPageFooter
+        footerText="Custom company uptime status message."
+        links={{
+          resources: [
+            { href: '/api/v1/status', label: 'JSON API' },
+            { href: '/status/rss', label: 'RSS Feed' },
+          ],
+          support: [{ href: 'https://help.example.com', label: 'Help Desk' }],
+        }}
+      />
+    );
+
+    expect(screen.getByText('Custom company uptime status message.')).toBeDefined();
+    expect(screen.getByRole('link', { name: /json api/i })).toBeDefined();
+    expect(screen.getByRole('link', { name: /rss feed/i })).toBeDefined();
+    expect(screen.getByRole('link', { name: /help desk/i })).toBeDefined();
   });
 });
