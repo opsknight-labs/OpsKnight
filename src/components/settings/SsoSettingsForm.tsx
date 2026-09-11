@@ -1,8 +1,9 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import { notify } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -278,6 +279,11 @@ export default function SsoSettingsForm({
     },
     { error: null, success: false, updatedAt: initialConfig?.updatedAt ?? null }
   );
+
+  useEffect(() => {
+    if (state?.success) notify.success('SSO configuration saved', { id: 'settings:sso:save' });
+    if (state?.error && state.code !== 'SETTINGS_CHANGED') notify.error(state.error);
+  }, [state]);
 
   const validateFields = () => {
     const errors: ValidationErrors = {};
@@ -935,14 +941,7 @@ export default function SsoSettingsForm({
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
       )}
-      {state?.success && (
-        <Alert className="bg-emerald-500/10 border-emerald-500/30" role="status">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <AlertDescription className="text-emerald-700 dark:text-emerald-300 font-medium">
-            SSO configuration saved successfully.
-          </AlertDescription>
-        </Alert>
-      )}
+
 
       <div className="sticky bottom-4 z-10 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
         <div className="text-xs text-muted-foreground">

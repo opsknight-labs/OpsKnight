@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { statusPageSectionPatch } from '@/lib/status-pages/settings-sections';
 import { Card, Button, FormField, Switch, Checkbox } from '@/components/ui';
 import StatusPageLivePreview from '@/components/status-page/StatusPageLivePreview';
+import { notify } from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
@@ -703,7 +704,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   // What the public page is actually doing, as reported by the save. Distinct from "saved",
   // because settings can persist while publishing them fails.
   const [publication, setPublication] = useState<{
@@ -992,7 +992,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccessMessage(null);
 
     startTransition(async () => {
       try {
@@ -1090,23 +1089,20 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
         if (typeof saved.data?.updatedAt === 'string') setRevision(saved.data.updatedAt);
         const state = saved.data?.publication ?? null;
         setPublication(state);
-        // Only claim success once the public page can actually serve the change. Saying "saved"
-        // while /status is unusable is what made publication failures invisible.
-        setSuccessMessage(
+        const msg =
           state?.status === 'LIVE'
-            ? 'Settings saved successfully and published.'
+            ? 'Settings saved and published.'
             : state?.status === 'DISABLED'
-              ? 'Settings saved successfully. This status page is disabled, so it is not public.'
+              ? 'Settings saved. This status page is disabled, so it is not public.'
               : state?.status === 'PUBLISHING'
-                ? 'Settings saved successfully. Publishing to the public page…'
+                ? 'Settings saved. Publishing to the public page…'
                 : state?.status === 'FAILED'
                   ? null
-                  : // No publication state reported: say the change was saved, and claim nothing
-                    // about the public page either way.
-                    'Settings saved successfully!'
-        );
-        if (state?.status !== 'PUBLISHING') {
-          setTimeout(() => setSuccessMessage(null), 3000);
+                  : 'Settings saved.';
+        if (msg) {
+          // Success is centralized via the global toast. No ephemeral inline "saved" banner
+          // — publication failure/pending is surfaced by the distinct persistent banner below.
+          notify.success(msg, { id: `status-page:${statusPage.id}:${activeSection}:save` });
         }
         router.refresh();
       } catch (err: unknown) {
@@ -1483,8 +1479,15 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
       const css = await response.text();
       setFormData(prev => ({ ...prev, customCss: css }));
       setSelectedTemplateId(template.id);
-      setSuccessMessage(`Template loaded: ${template.name}. Remember to save settings.`);
-      setTimeout(() => setSuccessMessage(null), 3000);
+      // Template is applied locally — do not claim "saved". Use a distinct amber notice so the
+      // user knows they must press Save. successMessage is reserved for actual persistence.
+      setTemplateError(null);
+      // Reuse the nearby error area but as an info notice: keep it InlineNotice below.
+      // Here we stash the notice text in templateError's sibling pattern; render handles it.
+      // To avoid overloading templateError semantics, emit an info toast with a stable id.
+      notify.info(`Template applied: ${template.name}. Unsaved changes — press Save.`, {
+        id: `status-page:${statusPage.id}:template:${template.id}`,
+      });
     } catch {
       setTemplateError('Failed to load template. Please try again.');
     } finally {
@@ -4539,33 +4542,24 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                   </div>
                 )}
 
-                {/* Error and Success Messages */}
-                {(error || successMessage) && (
+                {error && (
                   <div
                     style={{
                       marginBottom: 'var(--spacing-4)',
                       padding: 'var(--spacing-3)',
                       borderRadius: 'var(--radius-md)',
-                      background: error ? '#fee2e2' : '#d1fae5',
-                      border: `1px solid ${error ? '#fecaca' : '#a7f3d0'}`,
-                      color: error ? '#991b1b' : '#065f46',
+                      background: '#fee2e2',
+                      border: '1px solid #fecaca',
+                      color: '#991b1b',
                     }}
+                    role="alert"
                   >
-                    {error ? (
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}
-                      >
-                        <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                        <span>{error}</span>
-                      </div>
-                    ) : (
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}
-                      >
-                        <span style={{ fontSize: '1.2rem' }}>✓</span>
-                        <span>{successMessage}</span>
-                      </div>
-                    )}
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}
+                    >
+                      <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                      <span>{error}</span>
+                    </div>
                   </div>
                 )}
               </div>

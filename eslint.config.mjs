@@ -53,6 +53,25 @@ const eslintConfig = defineConfig([
       ...security.configs.recommended.rules,
     },
   },
+  {
+    // Save-feedback enterprise contract: only "@/lib/toast" + the global Toaster may touch `sonner`.
+    // Prevent ad-hoc direct sonner toasts that bypass stable ids / durations / bypass-resistance.
+    files: ['src/**/*.{ts,tsx,js,jsx}'],
+    ignores: ['src/lib/toast.ts', 'src/components/ui/shadcn/sonner.tsx', 'src/components/incident/IncidentAlertToast.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'sonner',
+              message: 'Import notify from "@/lib/toast" instead of "sonner" directly. Direct sonner usage is reserved for src/lib/toast.ts, src/components/ui/shadcn/sonner.tsx, and IncidentAlertToast.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Global ignores merged from .eslintignore and defaults
   globalIgnores([
     "**/node_modules/**",

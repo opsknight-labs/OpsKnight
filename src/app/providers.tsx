@@ -9,17 +9,21 @@ import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvide
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
 
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
+  // Enterprise contract: Light / Dark / System on all surfaces. next-themes
+  // persists the resolved choice in localStorage; desktop no longer forces light.
   const pathname = usePathname();
   const isMobileRoute = pathname?.startsWith('/m');
+
+  // Keep the prop shape stable to avoid remount churn on navigation.
   const themeProps = isMobileRoute
     ? { defaultTheme: 'system' as const, enableSystem: true }
-    : { forcedTheme: 'light' as const, defaultTheme: 'light' as const, enableSystem: false };
+    : { defaultTheme: 'system' as const, enableSystem: true };
 
   return (
     <ThemeProvider
       attribute="class"
       disableTransitionOnChange
-      enableColorScheme={false}
+      enableColorScheme={true}
       {...themeProps}
     >
       {children}
