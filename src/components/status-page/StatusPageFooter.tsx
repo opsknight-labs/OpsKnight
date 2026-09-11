@@ -8,6 +8,26 @@ interface StatusPageFooterProps {
   };
 }
 
+function ActivityIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <polyline
+        points="22 12 18 12 15 21 9 3 6 12 2 12"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function RssIcon() {
   return (
     <svg
@@ -160,16 +180,18 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
   return (
     <footer className="status-site-footer">
       <div className="status-site-footer__inner">
-        {/* Top Tier: Enterprise Observability Status & Resources */}
+        {/* Top Tier: Incident & Telemetry Info + Resource Links */}
         <div className="status-site-footer__main">
           <div className="status-site-footer__info">
             <div className="status-site-footer__status-indicator">
-              <span className="status-site-footer__pulse-dot" aria-hidden="true" />
-              <span>Continuous Service Observability</span>
+              <span className="status-site-footer__status-icon" aria-hidden="true">
+                <ActivityIcon />
+              </span>
+              <span>Incident Communication &amp; Availability</span>
             </div>
             <p className="status-site-footer__text">
               {footerText ||
-                'Enterprise-grade uptime monitoring, automated incident dispatch, and real-time SLA telemetry.'}
+                'Real-time availability tracking, incident updates, and scheduled maintenance notifications.'}
             </p>
           </div>
 
@@ -226,7 +248,7 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.svg"
-              alt=""
+              alt="OpsKnight"
               width={26}
               height={26}
               className="status-site-footer__brand-logo"
@@ -258,18 +280,18 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
           </div>
         </div>
 
-        {/* Bottom Tier: Enterprise Metadata & Synchronized Telemetry */}
+        {/* Bottom Tier: Enterprise Metadata & Synchronized History */}
         <div className="status-site-footer__bottom">
           <div className="status-site-footer__copyright">
             <span>&copy; {currentYear} System Status Portal</span>
             <span className="status-site-footer__dot-sep" aria-hidden="true">
               &bull;
             </span>
-            <span>Multi-region telemetry active</span>
+            <span>Real-time availability monitoring</span>
             <span className="status-site-footer__dot-sep" aria-hidden="true">
               &bull;
             </span>
-            <span>Incident history synchronized in real time</span>
+            <span>Incident history synchronized continuously</span>
           </div>
         </div>
       </div>

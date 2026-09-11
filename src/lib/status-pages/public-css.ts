@@ -1424,26 +1424,33 @@ ${R} .status-topbar__brand span { overflow: hidden; text-overflow: ellipsis; whi
 ${R} .status-topbar__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .45rem; }
 ${R} .status-topbar__chip {
   display: inline-flex; align-items: center; gap: .45rem;
-  padding: .46rem .82rem; border: 1px solid var(--status-panel-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--status-panel-bg) 70%, transparent);
-  color: var(--status-text); font-size: .78rem; font-weight: 620;
-  text-decoration: none; line-height: 1; letter-spacing: .01em;
-  transition: border-color .15s ease, background .15s ease, color .15s ease, box-shadow .15s ease;
+  padding: .38rem .75rem; border: 1px solid var(--status-panel-border);
+  border-radius: .5rem;
+  background: var(--status-panel-bg);
+  color: var(--status-text-muted); font-size: .8125rem; font-weight: 550;
+  text-decoration: none; line-height: 1; cursor: pointer;
+  transition: color .15s ease, border-color .15s ease, background .15s ease, transform .15s ease, box-shadow .15s ease;
 }
-${R} a.status-topbar__chip:hover {
+${R} a.status-topbar__chip:hover,
+${R} button.status-topbar__chip:hover {
   color: var(--status-text-strong);
-  border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border));
-  background: color-mix(in srgb, var(--primary) 8%, var(--status-panel-bg));
-  box-shadow: 0 6px 16px -12px color-mix(in srgb, var(--primary) 55%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--status-panel-border));
+  background: color-mix(in srgb, var(--primary) 6%, var(--status-panel-bg));
+  transform: translateY(-1px);
 }
-${R} a.status-topbar__chip:focus-visible {
-  outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 28%, transparent);
+${R} a.status-topbar__chip:focus-visible,
+${R} button.status-topbar__chip:focus-visible {
+  outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent);
 }
 ${R} .status-topbar__chip svg { flex: none; opacity: .85; }
 ${R} .status-topbar__chip--time {
   gap: .5rem; color: var(--status-text-muted); cursor: default;
   font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--status-panel-muted-bg) 60%, transparent);
+}
+${R} .status-topbar__chip--time:hover {
+  transform: none; border-color: var(--status-panel-border);
+  background: color-mix(in srgb, var(--status-panel-muted-bg) 60%, transparent);
 }
 ${R} .status-topbar__time { color: var(--status-text-strong); font-weight: 680; }
 ${R} .status-topbar__offset {
@@ -1453,10 +1460,13 @@ ${R} .status-topbar__offset {
 }
 ${R} .status-topbar__chip--accent {
   background: var(--primary); border-color: var(--primary); color: var(--status-text-inverse);
+  font-weight: 650;
 }
-${R} a.status-topbar__chip--accent:hover {
+${R} a.status-topbar__chip--accent:hover,
+${R} button.status-topbar__chip--accent:hover {
   background: var(--primary-hover); border-color: var(--primary-hover); color: var(--status-text-inverse);
-  box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--primary) 70%, transparent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 ${R} .status-v3 { padding-block: clamp(1.75rem, 4vw, 2.75rem) 0; gap: clamp(2rem, 5vw, 3.25rem); }
@@ -2607,30 +2617,18 @@ ${R} .status-site-footer__info {
 ${R} .status-site-footer__status-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
+  gap: 0.45rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--status-operational);
+  color: var(--status-text-subtle);
 }
-${R} .status-site-footer__pulse-dot {
-  inline-size: 0.5rem;
-  block-size: 0.5rem;
-  border-radius: 999px;
-  background: var(--status-operational);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-operational) 50%, transparent);
-  animation: status-pulse-dot 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-@keyframes status-pulse-dot {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-operational) 60%, transparent);
-  }
-  50% {
-    transform: scale(1.15);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-operational) 0%, transparent);
-  }
+${R} .status-site-footer__status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--status-text-muted);
 }
 ${R} .status-site-footer__text {
   margin: 0;
