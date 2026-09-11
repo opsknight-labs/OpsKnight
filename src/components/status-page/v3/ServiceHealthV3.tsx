@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import type { PublicServiceStatus, PublicStatusService } from '@/lib/status-pages/public-contract';
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
@@ -60,7 +60,7 @@ function slaGradeLabel(grade: string | undefined): string | undefined {
   }
 }
 
-function ServiceRow({
+const ServiceRow = memo(function ServiceRow({
   service,
   timeZone,
   showUptime,
@@ -148,9 +148,9 @@ function ServiceRow({
       )}
     </div>
   );
-}
+});
 
-function ServiceList({
+const ServiceList = memo(function ServiceList({
   services,
   timeZone,
   showUptime,
@@ -166,7 +166,7 @@ function ServiceList({
       ))}
     </div>
   );
-}
+});
 
 /** Service list from V3. Status, SLA grade and the history bars are all backend-supplied. */
 export default function ServiceHealthV3({

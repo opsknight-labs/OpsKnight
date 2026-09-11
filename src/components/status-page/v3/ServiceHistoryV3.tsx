@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PublicStatusService, PublicHistorySlice } from '@/lib/status-pages/public-contract';
 import { buildPublicHistoryDays } from '@/lib/status-pages/history-presentation';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
@@ -24,7 +24,11 @@ function minuteToClock(minute: number): string {
   return `${h12}:${m.toString().padStart(2, '0')} ${period}`;
 }
 
-function StatusBreakdownBar({ timeline }: { timeline: PublicHistorySlice[] }) {
+const StatusBreakdownBar = memo(function StatusBreakdownBar({
+  timeline,
+}: {
+  timeline: PublicHistorySlice[];
+}) {
   const total = timeline.at(-1)?.endMinute ?? 1440;
   if (total === 0) return null;
 
@@ -49,7 +53,7 @@ function StatusBreakdownBar({ timeline }: { timeline: PublicHistorySlice[] }) {
         ))}
     </div>
   );
-}
+});
 
 /**
  * Interactive 90-day uptime card. Every bar opens an inspector with that day's 24-hour breakdown,
@@ -63,7 +67,7 @@ function meterTier(grade: string | undefined): string {
   return 'unknown';
 }
 
-export default function ServiceHistoryV3({
+function ServiceHistoryV3Inner({
   service,
   timeZone,
   showGrade = true,
@@ -186,6 +190,8 @@ export default function ServiceHistoryV3({
 
           <div className="status-v3-history__axis" aria-hidden="true">
             <span>90 days ago</span>
+            <span>60 days ago</span>
+            <span>30 days ago</span>
             <span>Today</span>
           </div>
         </>
@@ -383,3 +389,6 @@ export default function ServiceHistoryV3({
     </div>
   );
 }
+
+const ServiceHistoryV3 = memo(ServiceHistoryV3Inner);
+export default ServiceHistoryV3;

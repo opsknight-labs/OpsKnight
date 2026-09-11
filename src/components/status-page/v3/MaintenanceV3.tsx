@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import type { PublicMaintenance } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
@@ -12,17 +13,29 @@ const STATE_LABEL: Record<PublicMaintenance['state'], string> = {
  * Compact, card-less maintenance strip matching the Region card architecture.
  * Eliminates bulky vertical boxes while keeping title, time window, badge, and expandable details.
  */
-export default function MaintenanceV3({
+function MaintenanceV3Inner({
   maintenance,
   timeZone,
 }: {
   maintenance: PublicMaintenance[] | undefined;
   timeZone: string;
 }) {
+  const counts = useMemo(() => {
+    if (!maintenance || maintenance.length === 0) return { inProgress: 0, scheduled: 0, completed: 0 };
+    let inProgress = 0;
+    let scheduled = 0;
+    let completed = 0;
+    for (const item of maintenance) {
+      if (item.state === 'IN_PROGRESS') inProgress++;
+      else if (item.state === 'SCHEDULED') scheduled++;
+      else if (item.state === 'COMPLETED') completed++;
+    }
+    return { inProgress, scheduled, completed };
+  }, [maintenance]);
+
   if (!maintenance || maintenance.length === 0) return null;
 
-  const inProgressCount = maintenance.filter(item => item.state === 'IN_PROGRESS').length;
-  const scheduledCount = maintenance.filter(item => item.state === 'SCHEDULED').length;
+  const { inProgress: inProgressCount, scheduled: scheduledCount, completed: completedCount } = counts;
 
   return (
     <section
@@ -40,17 +53,30 @@ export default function MaintenanceV3({
           className="status-v3-maintenance-inline__tally"
           aria-label={`${maintenance.length} maintenance events`}
         >
-          {inProgressCount > 0 ? (
-            <span className="status-v3-maintenance-inline__tally-pill status-v3-maintenance-inline__tally-pill--active">
-              <span className="status-v3-maintenance-inline__dot" aria-hidden="true" />
-              {inProgressCount} in progress
-            </span>
-          ) : (
-            <span className="status-v3-maintenance-inline__tally-pill status-v3-maintenance-inline__tally-pill--scheduled">
-              <span className="status-v3-maintenance-inline__dot" aria-hidden="true" />
-              {scheduledCount} scheduled
-            </span>
-          )}
+          {(() => {
+            if (inProgressCount > 0) {
+              return (
+                <span className="status-v3-maintenance-inline__tally-pill status-v3-maintenance-inline__tally-pill--active">
+                  <span className="status-v3-maintenance-inline__dot" aria-hidden="true" />
+                  {inProgressCount} in progress
+                </span>
+              );
+            }
+            if (scheduledCount > 0) {
+              return (
+                <span className="status-v3-maintenance-inline__tally-pill status-v3-maintenance-inline__tally-pill--scheduled">
+                  <span className="status-v3-maintenance-inline__dot" aria-hidden="true" />
+                  {scheduledCount} scheduled
+                </span>
+              );
+            }
+            return (
+              <span className="status-v3-maintenance-inline__tally-pill status-v3-maintenance-inline__tally-pill--completed">
+                <span className="status-v3-maintenance-inline__dot" aria-hidden="true" />
+                {completedCount} completed
+              </span>
+            );
+          })()}
         </div>
       </div>
 
@@ -61,18 +87,22 @@ export default function MaintenanceV3({
               ? ` – ${formatDateTime(item.endAt, timeZone, { format: 'short', hour12: true })}`
               : ''
           }`;
-          const hasDetails = Boolean(
-            item.description || (item.affectedServices && item.affectedServices.length > 0)
-          );
           const isInProgress = item.state === 'IN_PROGRESS';
 
+          const stateClass =
+            item.state === 'COMPLETED'
+              ? ' status-v3-maintenance-pill--completed'
+              : item.state === 'SCHEDULED'
+                ? ' status-v3-maintenance-pill--scheduled'
+                : '';
           return (
             <div
               key={item.id}
-              className={`status-v3-maintenance-pill status-v3-maintenance--${item.state.toLowerCase()}${
+              className={`status-v3-maintenance-pill status-v3-maintenance--${item.state.toLowerCase()}${stateClass}${
                 isInProgress ? ' status-v3-maintenance-pill--active' : ''
               }`}
               role="listitem"
+              data-state={item.state}
             >
               <div className="status-v3-maintenance-pill__head">
                 <div className="status-v3-maintenance-pill__lead">
@@ -111,10 +141,11 @@ export default function MaintenanceV3({
                 <p className="status-v3-maintenance-pill__desc">{item.description}</p>
               )}
 
-              {item.affectedServices && item.affectedServices.length > 0 && (
+              {(item.affectedServices && item.affectedServices.length > 0) ||
+              (item.affectedRegions && item.affectedRegions.length > 0) ? (
                 <div className="status-v3-maintenance-pill__meta">
                   <span className="status-v3-maintenance-pill__affected-label">Affects:</span>
-                  {item.affectedServices.map(service => (
+                  {item.affectedServices?.map(service => (
                     <span
                       key={service.id || service.name}
                       className="status-v3-chip status-v3-chip--muted"
@@ -122,8 +153,13 @@ export default function MaintenanceV3({
                       {service.name}
                     </span>
                   ))}
+                  {item.affectedRegions?.map(region => (
+                    <span key={region} className="status-v3-chip status-v3-chip--muted">
+                      {region}
+                    </span>
+                  ))}
                 </div>
-              )}
+              ) : null}
             </div>
           );
         })}
@@ -131,3 +167,6 @@ export default function MaintenanceV3({
     </section>
   );
 }
+
+const MaintenanceV3 = memo(MaintenanceV3Inner);
+export default MaintenanceV3;

@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react';
 import type { PublicAnnouncement, PublicChangelogEntry } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import StatusBadge from '@/components/incident/StatusBadge';
@@ -9,14 +10,19 @@ const TYPE_LABEL: Record<string, string> = {
   MAINTENANCE: 'Maintenance',
 };
 
-export function ChangelogV3({
+function ChangelogV3Inner({
   changelog,
   timeZone,
 }: {
   changelog: PublicChangelogEntry[] | undefined;
   timeZone: string;
 }) {
-  if (!changelog || changelog.length === 0) return null;
+  const recent = useMemo(() => {
+    if (!changelog || changelog.length === 0) return null;
+    return [...changelog].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+  }, [changelog]);
+
+  if (!recent) return null;
 
   return (
     <section className="status-v3-changelog-inline" aria-labelledby="status-v3-changelog-heading">
@@ -31,21 +37,21 @@ export function ChangelogV3({
         </div>
         <div
           className="status-v3-announcements-inline__tally"
-          aria-label={`${changelog.length} changelog entries`}
+          aria-label={`${recent.length} changelog entries`}
         >
-          <span className="status-v3-announcements-inline__tally-pill">
+          <span className="status-v3-announcements-inline__tally-pill status-v3-announcements-inline__tally-pill--changelog">
             <span className="status-v3-announcements-inline__dot" aria-hidden="true" />
-            {changelog.length} {changelog.length === 1 ? 'update' : 'updates'}
+            {recent.length} {recent.length === 1 ? 'update' : 'updates'}
           </span>
         </div>
       </div>
-      <div className="status-v3-announcements-inline__list" role="list">
-        {changelog.map(item => (
-          <div key={item.id} className="status-v3-announcement-pill" role="listitem">
-            <div className="status-v3-announcement-pill__head">
-              <div className="status-v3-announcement-pill__lead">
+      <div className="status-v3-changelog-inline__list" role="list">
+        {recent.map(item => (
+          <div key={item.id} className="status-v3-changelog-pill" role="listitem">
+            <div className="status-v3-changelog-pill__head">
+              <div className="status-v3-changelog-pill__lead">
                 <svg
-                  className="status-v3-announcement-pill__icon"
+                  className="status-v3-changelog-pill__icon"
                   width="13"
                   height="13"
                   viewBox="0 0 24 24"
@@ -59,20 +65,18 @@ export function ChangelogV3({
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
                 </svg>
-                <span className="status-v3-announcement-pill__title">{item.title}</span>
-                <span className="status-v3-announcement-pill__divider" aria-hidden="true" />
-                <span className="status-v3-announcement-pill__time" suppressHydrationWarning>
-                  {formatDateTime(item.publishedAt, timeZone, {
-                    format: 'short',
-                    hour12: true,
-                  })}
+                <span className="status-v3-changelog-pill__title">{item.title}</span>
+                <span className="status-v3-changelog-pill__divider" aria-hidden="true" />
+                <span className="status-v3-changelog-pill__time" suppressHydrationWarning>
+                  {formatDateTime(item.publishedAt, timeZone, { format: 'relative' })} ·{' '}
+                  {formatDateTime(item.publishedAt, timeZone, { format: 'short', hour12: true })}
                 </span>
               </div>
             </div>
-            {item.message && <p className="status-v3-announcement-pill__desc">{item.message}</p>}
+            {item.message && <p className="status-v3-changelog-pill__desc">{item.message}</p>}
             {item.affectedServices && item.affectedServices.length > 0 && (
-              <div className="status-v3-announcement-pill__meta">
-                <span className="status-v3-announcement-pill__affected-label">Affects:</span>
+              <div className="status-v3-changelog-pill__meta">
+                <span className="status-v3-changelog-pill__affected-label">Affects:</span>
                 {item.affectedServices.map(service => (
                   <span
                     key={service.id || service.name}
@@ -90,10 +94,12 @@ export function ChangelogV3({
   );
 }
 
+export const ChangelogV3 = memo(ChangelogV3Inner);
+
 /**
  * Compact, card-like announcements strip matching the MaintenanceV3 architecture.
  */
-export default function AnnouncementsV3({
+function AnnouncementsV3Inner({
   announcements,
   changelog,
   timeZone,
@@ -212,3 +218,6 @@ export default function AnnouncementsV3({
     </>
   );
 }
+
+const AnnouncementsV3 = memo(AnnouncementsV3Inner);
+export default AnnouncementsV3;
