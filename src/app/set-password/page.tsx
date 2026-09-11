@@ -1,36 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import SetPasswordForm from './SetPasswordForm';
 import { AuthCard, AuthLayout } from '@/components/auth/AuthLayout';
 import AuthBrand from '@/components/auth/AuthBrand';
+import { useCapabilityToken } from '@/components/auth/useCapabilityToken';
 import Spinner from '@/components/ui/Spinner';
 
-function readCapabilityToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  const hash = window.location.hash.startsWith('#')
-    ? window.location.hash.slice(1)
-    : window.location.hash;
-  const fragmentToken = new URLSearchParams(hash).get('token');
-  if (fragmentToken) return fragmentToken;
-  return new URLSearchParams(window.location.search).get('token');
-}
-
 function InviteActivation() {
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenReady, setTokenReady] = useState(false);
-
-  useEffect(() => {
-    // Capture the capability exactly once before scrubbing it. Next patches
-    // history.replaceState to synchronize router state, so re-running this
-    // effect after the scrub would erase the in-memory invitation token.
-    const rawToken = readCapabilityToken();
-    setToken(rawToken);
-    setTokenReady(true);
-    if (rawToken) window.history.replaceState({}, '', window.location.pathname);
-  }, []);
+  const { token, ready: tokenReady } = useCapabilityToken();
 
   if (!tokenReady) {
     return <div className="flex justify-center p-8"><Spinner /></div>;
