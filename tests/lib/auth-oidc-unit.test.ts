@@ -308,10 +308,19 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('jwt callback skips DB refresh inside the refresh TTL window', async () => {
+  it('jwt callback refreshes security state even inside the historical TTL window', async () => {
     const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      name: 'Updated User',
+      email: 'updated@example.com',
+      role: 'ADMIN',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
     const token = await jwt({
-      token: { sub: 'u1', role: 'USER', userFetchedAt: Date.now() },
+      token: { sub: 'u1', role: 'USER', tokenVersion: 0, userFetchedAt: Date.now() },
       user: undefined as never,
       account: null,
       profile: undefined,
@@ -320,8 +329,9 @@ describe('Auth JWT + OIDC callback contract', () => {
       session: undefined,
     });
 
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
-    expect(token.role).toBe('USER');
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    expect(token.role).toBe('ADMIN');
+    expect(token.email).toBe('updated@example.com');
   });
 
   it('expires an OIDC session after the configured idle timeout', async () => {

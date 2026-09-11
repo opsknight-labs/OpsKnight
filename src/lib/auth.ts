@@ -25,10 +25,13 @@ import {
 } from '@/lib/local-auth-policy';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 
+/**
+ * Security-sensitive user state is intentionally refreshed on every server-side
+ * session evaluation. Password resets, deprovisioning and administrative
+ * revocations must take effect immediately instead of inheriting a cache window.
+ */
 function getJwtUserRefreshTtlMs() {
-  const raw = process.env.JWT_USER_REFRESH_TTL_MS ?? '60000';
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 60000;
+  return 0;
 }
 
 // Augmented types to avoid 'any' usage
