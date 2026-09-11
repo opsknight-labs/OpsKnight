@@ -125,6 +125,23 @@ function MailIcon() {
   );
 }
 
+function ArrowUpRightIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.6"
+      aria-hidden="true"
+    >
+      <line x1="7" y1="17" x2="17" y2="7" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="7 7 17 7 17 17" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function getLinkIcon(label: string) {
   const l = label.toLowerCase();
   if (l.includes('rss') || l.includes('feed')) return <RssIcon />;
@@ -205,26 +222,33 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
 
           <a
             className="status-site-footer__powered"
-            href="https://opsknight.com/"
+            href="https://opsknight.com/?ref=status_page"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Powered by OpsKnight"
+            aria-label="Powered by OpsKnight — Incident Response and Status Pages"
           >
-            <span className="status-site-footer__powered-label">Powered by</span>
+            <span className="status-site-footer__powered-lead">Powered by</span>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo-mark.png"
+              src="/logo.svg"
               alt=""
-              width={16}
-              height={16}
+              width={18}
+              height={18}
               className="status-site-footer__powered-logo"
               loading="lazy"
               decoding="async"
               onError={e => {
-                (e.target as HTMLImageElement).style.display = 'none';
+                const target = e.target as HTMLImageElement;
+                if (!target.src.endsWith('/logo.png')) {
+                  target.src = '/logo.png';
+                }
               }}
             />
             <span className="status-site-footer__powered-brand">OpsKnight</span>
+            <span className="status-site-footer__powered-cta">
+              Create your status page
+              <ArrowUpRightIcon />
+            </span>
           </a>
         </div>
       </div>

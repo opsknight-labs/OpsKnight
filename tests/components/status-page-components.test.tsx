@@ -177,10 +177,11 @@ describe('StatusPageFooter', () => {
       screen.getByText(/status, incident communication, and real-time availability tracking/i)
     ).toBeDefined();
     expect(screen.getByRole('link', { name: /powered by opsknight/i })).toBeDefined();
+    expect(screen.getByText(/create your status page/i)).toBeDefined();
     const logoImg = screen
       .getByRole('link', { name: /powered by opsknight/i })
       .querySelector('img');
-    expect(logoImg?.getAttribute('src')).toBe('/logo-mark.png');
+    expect(logoImg?.getAttribute('src')).toBe('/logo.svg');
   });
 
   it('renders custom footerText and resource/support pill links with icons', () => {
