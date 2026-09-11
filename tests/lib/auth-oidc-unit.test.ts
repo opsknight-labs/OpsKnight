@@ -311,22 +311,31 @@ describe('Auth JWT + OIDC (unit)', () => {
     expect(token.role).toBe('ADMIN');
   });
 
-  it('jwt callback skips DB refresh inside TTL window', async () => {
+  it('jwt callback refreshes security state even inside the historical TTL window', async () => {
     const authOptions = await getAuthOptions();
     const jwt = authOptions.callbacks?.jwt as unknown as (args: any) => Promise<any>;
 
-    const token = { sub: 'u1', role: 'USER', userFetchedAt: Date.now() } as any;
+    const token = {
+      sub: 'u1',
+      role: 'USER',
+      tokenVersion: 0,
+      userFetchedAt: Date.now(),
+    } as any;
     (prisma.user.findUnique as any).mockResolvedValue({
       name: 'New',
       email: 'new@example.com',
       role: 'ADMIN',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
     });
 
     const result = await jwt({ token });
 
-    // Should not have refreshed from DB (keeps old role)
-    expect(prisma.user.findUnique).not.toHaveBeenCalled();
-    expect(result.role).toBe('USER');
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    expect(result.role).toBe('ADMIN');
+    expect(result.email).toBe('new@example.com');
   });
 
   it('jwt callback revokes session when tokenVersion mismatches', async () => {
