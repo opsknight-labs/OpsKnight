@@ -53,14 +53,6 @@ function revalidateJiraWorkspacePaths() {
   revalidatePath('/postmortems');
 }
 
-function jiraOrigin(value: string): string | null {
-  try {
-    return new URL(value).origin;
-  } catch {
-    return null;
-  }
-}
-
 export async function saveJiraConfig(
   prevState: SettingsActionState | undefined,
   formData: FormData
