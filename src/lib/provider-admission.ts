@@ -234,41 +234,56 @@ export async function recordProviderFailure(
   options: { statusCode?: number; retryAfterMs?: number } = {}
 ): Promise<void> {
   const now = new Date();
-  const current = await prisma.providerAdmission.findUnique({
-    where: { key },
-    select: { consecutiveFails: true, blockedUntil: true },
-  });
-  const consecutiveFails = (current?.consecutiveFails ?? 0) + 1;
-  const requestedDelay = options.retryAfterMs ?? automaticBreakerDelayMs(consecutiveFails, options.statusCode);
-  const boundedDelay = requestedDelay
-    ? Math.min(Math.max(requestedDelay, 1_000), 24 * 60 * 60_000)
-    : undefined;
-  const generatedBlockedUntil = boundedDelay ? new Date(now.getTime() + boundedDelay) : null;
-  const existingBlockedUntil =
-    current?.blockedUntil && current.blockedUntil > now ? current.blockedUntil : null;
-  const blockedUntil =
-    generatedBlockedUntil && existingBlockedUntil
-      ? generatedBlockedUntil > existingBlockedUntil
-        ? generatedBlockedUntil
-        : existingBlockedUntil
-      : generatedBlockedUntil ?? existingBlockedUntil ?? undefined;
 
-  await prisma.providerAdmission.upsert({
-    where: { key },
-    create: {
-      key,
-      state: blockedUntil ? 'OPEN' : 'DEGRADED',
-      blockedUntil,
-      consecutiveFails: 1,
-      lastFailureAt: now,
-      lastStatusCode: options.statusCode,
-    },
-    update: {
-      state: blockedUntil ? 'OPEN' : 'DEGRADED',
-      blockedUntil,
-      consecutiveFails: { increment: 1 },
-      lastFailureAt: now,
-      lastStatusCode: options.statusCode,
-    },
-  });
+  const execute = async (client: {
+    providerAdmission: {
+      findUnique: typeof prisma.providerAdmission.findUnique;
+      upsert: typeof prisma.providerAdmission.upsert;
+    };
+  }) => {
+    const current = await client.providerAdmission.findUnique({
+      where: { key },
+      select: { consecutiveFails: true, blockedUntil: true },
+    });
+    const consecutiveFails = (current?.consecutiveFails ?? 0) + 1;
+    const requestedDelay =
+      options.retryAfterMs ?? automaticBreakerDelayMs(consecutiveFails, options.statusCode);
+    const boundedDelay = requestedDelay
+      ? Math.min(Math.max(requestedDelay, 1_000), 24 * 60 * 60_000)
+      : undefined;
+    const generatedBlockedUntil = boundedDelay ? new Date(now.getTime() + boundedDelay) : null;
+    const existingBlockedUntil =
+      current?.blockedUntil && current.blockedUntil > now ? current.blockedUntil : null;
+    const blockedUntil =
+      generatedBlockedUntil && existingBlockedUntil
+        ? generatedBlockedUntil > existingBlockedUntil
+          ? generatedBlockedUntil
+          : existingBlockedUntil
+        : generatedBlockedUntil ?? existingBlockedUntil ?? undefined;
+
+    await client.providerAdmission.upsert({
+      where: { key },
+      create: {
+        key,
+        state: blockedUntil ? 'OPEN' : 'DEGRADED',
+        blockedUntil,
+        consecutiveFails: 1,
+        lastFailureAt: now,
+        lastStatusCode: options.statusCode,
+      },
+      update: {
+        state: blockedUntil ? 'OPEN' : 'DEGRADED',
+        blockedUntil,
+        consecutiveFails: { increment: 1 },
+        lastFailureAt: now,
+        lastStatusCode: options.statusCode,
+      },
+    });
+  };
+
+  if (typeof prisma.$transaction === 'function') {
+    await prisma.$transaction(execute);
+  } else {
+    await execute(prisma);
+  }
 }

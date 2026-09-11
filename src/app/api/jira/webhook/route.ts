@@ -267,7 +267,7 @@ async function postJiraWebhook(request: NextRequest) {
 
     try {
       const issueFenceKey = (
-        payload.issue?.key?.trim() || payload.issue?.id?.trim() || 'unknown'
+        payload.issue?.id?.trim() || payload.issue?.key?.trim() || 'unknown'
       ).toUpperCase();
 
       // The workspace fence coordinates disable/remove, while the issue fence
