@@ -23,12 +23,12 @@ describe('deriveOverallPublicHealth', () => {
     });
   });
 
-  it('counts healthy services in the headline', () => {
+  it('uses a systems-level headline when every known service is healthy', () => {
     expect(deriveOverallPublicHealth(services('OPERATIONAL', 'OPERATIONAL')).headline).toBe(
-      'All 2 services operational'
+      'All systems operational'
     );
     expect(deriveOverallPublicHealth(services('OPERATIONAL')).headline).toBe(
-      'All 1 service operational'
+      'All systems operational'
     );
   });
 
@@ -47,7 +47,7 @@ describe('deriveOverallPublicHealth', () => {
     expect(result.status).toBe('OPERATIONAL');
     expect(result.confidence).toBe('partial');
     expect(result.headline).toBe('All known systems operational');
-    expect(result.note).toBe('Status unavailable for 1 additional service.');
+    expect(result.note).toBe('Status unverified for 1 additional service.');
   });
 
   it('keeps a real outage visible alongside missing signal', () => {
@@ -57,18 +57,31 @@ describe('deriveOverallPublicHealth', () => {
       { status: 'MAJOR_OUTAGE' },
     ]);
     expect(result.status).toBe('MAJOR_OUTAGE');
-    expect(result.headline).toBe('Major outage');
-    expect(result.note).toBe('Status unavailable for 1 additional service.');
+    expect(result.headline).toBe('One service is unavailable');
+    expect(result.note).toBe('Status unverified for 1 additional service.');
   });
 
   it('pluralizes the caveat', () => {
-    const result = deriveOverallPublicHealth([...repeat('OPERATIONAL', 2), ...repeat('UNKNOWN', 3)]);
-    expect(result.note).toBe('Status unavailable for 3 additional services.');
+    const result = deriveOverallPublicHealth([
+      ...repeat('OPERATIONAL', 2),
+      ...repeat('UNKNOWN', 3),
+    ]);
+    expect(result.note).toBe('Status unverified for 3 additional services.');
   });
 
-  it('keeps partial and major outage distinct', () => {
-    expect(deriveOverallPublicHealth(services('PARTIAL_OUTAGE')).headline).toBe('Partial outage');
-    expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE')).headline).toBe('Major outage');
+  it('keeps partial and major impact distinct without claiming the whole page is down', () => {
+    expect(deriveOverallPublicHealth(services('PARTIAL_OUTAGE')).headline).toBe(
+      'One service has limited availability'
+    );
+    expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE')).headline).toBe(
+      'One service is unavailable'
+    );
+    expect(
+      deriveOverallPublicHealth(services('OPERATIONAL', 'MAJOR_OUTAGE', 'MAJOR_OUTAGE')).headline
+    ).toBe('Some services are unavailable');
+    expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE', 'MAJOR_OUTAGE')).headline).toBe(
+      'All services are unavailable'
+    );
   });
 
   it('never lets unknown services reduce reported severity', () => {
@@ -77,10 +90,7 @@ describe('deriveOverallPublicHealth', () => {
       if (status === 'UNKNOWN') continue;
       const alone = deriveOverallPublicHealth(services(status));
       for (const extra of [1, 5, 50]) {
-        const padded = deriveOverallPublicHealth([
-          { status },
-          ...repeat('UNKNOWN', extra),
-        ]);
+        const padded = deriveOverallPublicHealth([{ status }, ...repeat('UNKNOWN', extra)]);
         expect(padded.status).toBe(alone.status);
       }
     }

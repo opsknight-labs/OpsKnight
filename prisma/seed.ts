@@ -577,21 +577,305 @@ async function seedPublicStatusSurface(input: {
     },
   });
 
+  await publishSeededStatusPage(statusPage.id, 'default');
+
+  await seedHealthyStatusPage({
+    adminId: input.adminId,
+    teams: input.teams,
+    policies: input.policies,
+  });
+  await seedDegradedStatusPage({
+    adminId: input.adminId,
+    teams: input.teams,
+    policies: input.policies,
+  });
+
+  return statusPage;
+}
+
+const seedStatusPagePresentation = {
+  enabled: true,
+  showServices: true,
+  showIncidents: true,
+  showMetrics: true,
+  showSubscribe: true,
+  showServicesByRegion: true,
+  showRegionHeatmap: true,
+  showServiceDescriptions: true,
+  showServiceRegions: true,
+  showServiceOwners: true,
+  showServiceSlaTier: true,
+  showTeamInformation: true,
+  showUptimeHistory: true,
+  showChangelog: true,
+  showPostIncidentReview: true,
+  enableUptimeExports: true,
+  showIncidentUrgency: true,
+  showIncidentDetails: true,
+  showIncidentDescriptions: true,
+  showIncidentTimestamps: true,
+  showAffectedServices: true,
+  showRecentIncidents: true,
+  showCustomFields: false,
+  incidentHistoryDays: 90,
+  maxIncidentsToShow: 50,
+  uptimeExcellentThreshold: 99.9,
+  uptimeGoodThreshold: 99.0,
+} as const;
+
+async function publishSeededStatusPage(statusPageId: string, label: string) {
   try {
     const { rebuildStatusPageSnapshot } = await import('../src/lib/status-pages/snapshot');
-    const published = await rebuildStatusPageSnapshot(statusPage.id);
+    const published = await rebuildStatusPageSnapshot(statusPageId);
     process.stdout.write(
       published
-        ? 'Published public status snapshot.\n'
-        : 'Status snapshot was not published; open /status after the app starts.\n'
+        ? `Published ${label} status snapshot.\n`
+        : `Status snapshot for ${label} was not published; open the page after the app starts.\n`
     );
   } catch (error) {
     process.stdout.write(
-      `Could not publish status snapshot from seed: ${error instanceof Error ? error.message : String(error)}\n`
+      `Could not publish ${label} status snapshot from seed: ${error instanceof Error ? error.message : String(error)}\n`
     );
   }
+}
 
-  return statusPage;
+async function createDedicatedCatalogServices(
+  specs: ReadonlyArray<{
+    name: string;
+    description: string;
+    region: string;
+    slaTier: 'Gold' | 'Silver' | 'Bronze';
+    teamIndex: number;
+  }>,
+  teams: Array<{ id: string }>,
+  policies: Array<{ id: string; teamId: string }>
+) {
+  const created: Array<{ id: string; name: string; teamId: string }> = [];
+  for (const spec of specs) {
+    const team = teams[spec.teamIndex] ?? teams[0];
+    const policy = policies.find(item => item.teamId === team.id);
+    const service = await prisma.service.create({
+      data: {
+        name: spec.name,
+        description: spec.description,
+        status: 'OPERATIONAL',
+        region: spec.region,
+        slaTier: spec.slaTier,
+        teamId: team.id,
+        escalationPolicyId: policy?.id,
+        targetAckMinutes: spec.slaTier === 'Gold' ? 5 : spec.slaTier === 'Silver' ? 15 : 30,
+        targetResolveMinutes: spec.slaTier === 'Gold' ? 60 : spec.slaTier === 'Silver' ? 240 : 480,
+        defaultIncidentVisibility: 'PUBLIC',
+      },
+    });
+    created.push({ id: service.id, name: service.name, teamId: team.id });
+  }
+  return created;
+}
+
+async function attachServicesToStatusPage(
+  statusPageId: string,
+  services: Array<{ id: string; name: string }>
+) {
+  for (const [index, service] of services.entries()) {
+    await prisma.statusPageService.create({
+      data: {
+        statusPageId,
+        serviceId: service.id,
+        displayName: service.name,
+        order: index,
+        showOnPage: true,
+      },
+    });
+  }
+}
+
+/** Isolated all-green page so the public strip can be reviewed without the mixed outage catalog. */
+async function seedHealthyStatusPage(input: {
+  adminId: string;
+  teams: Array<{ id: string }>;
+  policies: Array<{ id: string; teamId: string }>;
+}) {
+  const services = await createDedicatedCatalogServices(
+    [
+      {
+        name: 'Docs Portal',
+        description: 'Public documentation and changelog.',
+        region: 'us-east-1',
+        slaTier: 'Gold',
+        teamIndex: 0,
+      },
+      {
+        name: 'Billing Portal',
+        description: 'Invoices, plans, and payment methods.',
+        region: 'us-west-2',
+        slaTier: 'Gold',
+        teamIndex: 2,
+      },
+      {
+        name: 'Image Pipeline',
+        description: 'Asset transcoding and CDN origin.',
+        region: 'eu-west-1',
+        slaTier: 'Silver',
+        teamIndex: 1,
+      },
+      {
+        name: 'Audit Export',
+        description: 'Compliance log export jobs.',
+        region: 'eu-central-1',
+        slaTier: 'Silver',
+        teamIndex: 4,
+      },
+    ],
+    input.teams,
+    input.policies
+  );
+
+  const statusPage = await prisma.statusPage.create({
+    data: {
+      name: 'OpsKnight Healthy Status',
+      slug: 'healthy',
+      organizationName: 'OpsKnight Labs',
+      subdomain: 'status-healthy',
+      isDefault: false,
+      footerText: 'All monitored services are operating normally.',
+      contactEmail: 'status@example.com',
+      contactUrl: 'https://opsknight.com/',
+      branding: {
+        logoUrl: '/logo.png',
+        primaryColor: '#059669',
+        backgroundColor: '#ffffff',
+        textColor: '#0f172a',
+        layout: 'wide',
+        showHeader: true,
+        showFooter: true,
+        autoRefresh: true,
+        refreshInterval: 60,
+        showApiLink: true,
+        showRssLink: true,
+        metaTitle: 'OpsKnight Healthy Status',
+        metaDescription: 'All-green demo status page for OpsKnight Labs.',
+      },
+      ...seedStatusPagePresentation,
+    },
+  });
+
+  await attachServicesToStatusPage(statusPage.id, services);
+  await prisma.statusPageAnnouncement.create({
+    data: {
+      statusPageId: statusPage.id,
+      title: 'Reliability improvements shipped',
+      message: 'Capacity and failover work is complete. No customer impact.',
+      type: 'UPDATE',
+      startDate: hoursAgo(26),
+      endDate: hoursAgo(-48),
+      isActive: true,
+    },
+  });
+  await publishSeededStatusPage(statusPage.id, 'healthy');
+}
+
+/**
+ * Isolated elevated page: one public MEDIUM incident.
+ * V3 maps MEDIUM → partial outage (LOW is degraded, HIGH is major).
+ */
+async function seedDegradedStatusPage(input: {
+  adminId: string;
+  teams: Array<{ id: string }>;
+  policies: Array<{ id: string; teamId: string }>;
+}) {
+  const services = await createDedicatedCatalogServices(
+    [
+      {
+        name: 'Catalog Browse',
+        description: 'Product listing and filters.',
+        region: 'us-east-1',
+        slaTier: 'Gold',
+        teamIndex: 0,
+      },
+      {
+        name: 'Recommendation Ranker',
+        description: 'Personalized ranking and similar-item lookup.',
+        region: 'us-east-1, eu-west-1',
+        slaTier: 'Silver',
+        teamIndex: 4,
+      },
+      {
+        name: 'Account Settings',
+        description: 'Profile, sessions, and notification preferences.',
+        region: 'eu-west-1',
+        slaTier: 'Gold',
+        teamIndex: 1,
+      },
+      {
+        name: 'Support Inbox',
+        description: 'Ticket intake and agent console.',
+        region: 'ap-south-1',
+        slaTier: 'Bronze',
+        teamIndex: 3,
+      },
+    ],
+    input.teams,
+    input.policies
+  );
+
+  const ranker = services[1];
+  await createPublicCatalogIncident({
+    serviceId: ranker.id,
+    teamId: ranker.teamId,
+    adminId: input.adminId,
+    title: 'Recommendation Ranker: elevated ranking latency',
+    description:
+      'Personalized ranking P95 is above SLO in us-east-1. Browse and checkout are unaffected; similar-item widgets may load slowly.',
+    status: 'OPEN',
+    urgency: 'MEDIUM',
+    createdHoursAgo: 4,
+  });
+
+  const statusPage = await prisma.statusPage.create({
+    data: {
+      name: 'OpsKnight Degraded Status',
+      slug: 'degraded',
+      organizationName: 'OpsKnight Labs',
+      subdomain: 'status-degraded',
+      isDefault: false,
+      footerText: 'One service is operating below target.',
+      contactEmail: 'status@example.com',
+      contactUrl: 'https://opsknight.com/',
+      branding: {
+        logoUrl: '/logo.png',
+        primaryColor: '#d97706',
+        backgroundColor: '#ffffff',
+        textColor: '#0f172a',
+        layout: 'wide',
+        showHeader: true,
+        showFooter: true,
+        autoRefresh: true,
+        refreshInterval: 60,
+        showApiLink: true,
+        showRssLink: true,
+        metaTitle: 'OpsKnight Degraded Status',
+        metaDescription: 'Medium-urgency demo status page for OpsKnight Labs.',
+      },
+      ...seedStatusPagePresentation,
+    },
+  });
+
+  await attachServicesToStatusPage(statusPage.id, services);
+  await prisma.statusPageAnnouncement.create({
+    data: {
+      statusPageId: statusPage.id,
+      title: 'Slower recommendations',
+      message:
+        'Ranking latency is elevated. Catalog browse remains available while we tune the ranker.',
+      type: 'WARNING',
+      affectedServiceIds: [ranker.id],
+      startDate: hoursAgo(4),
+      endDate: hoursAgo(-8),
+      isActive: true,
+    },
+  });
+  await publishSeededStatusPage(statusPage.id, 'degraded');
 }
 
 async function clearDatabase() {
@@ -1447,7 +1731,10 @@ async function main() {
     ],
   });
 
-  process.stdout.write('Seed complete. Admin login: admin@example.com / Password123!\n');
+  process.stdout.write(
+    'Seed complete. Admin login: admin@example.com / Password123!\n' +
+      'Status pages: /status (mixed) · /status/healthy (all green) · /status/degraded (medium-urgency / partial outage)\n'
+  );
 }
 
 main()

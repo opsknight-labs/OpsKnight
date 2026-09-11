@@ -8,6 +8,7 @@ import StatusPageHeader from './StatusPageHeader';
 import StatusPageFooter from './StatusPageFooter';
 import StatusPageUptimeMetrics from './StatusPageUptimeMetrics';
 import StatusPageSubscribe from './StatusPageSubscribe';
+import { presentOverallHeadline } from '@/lib/status-pages/status-presentation';
 import StatusHeroV3 from './v3/StatusHeroV3';
 import ServiceHealthV3 from './v3/ServiceHealthV3';
 import RegionHealthV3 from './v3/RegionHealthV3';
@@ -131,7 +132,13 @@ export default function StatusPageV3({
 
       <div className="status-v3">
         <StatusHeroV3
-          overall={snapshot.overall}
+          overall={{
+            ...snapshot.overall,
+            headline: presentOverallHeadline(
+              snapshot.overall,
+              snapshot.services.map(service => service.status)
+            ),
+          }}
           updatedLabel={formatDateTime(snapshot.generatedAt, timeZone, {
             format: 'short',
             hour12: true,

@@ -3,18 +3,18 @@
 import { useMemo, useState } from 'react';
 import type { PublicServiceStatus, PublicStatusService } from '@/lib/status-pages/public-contract';
 import { serviceRegionBucket, serviceSearchKey } from '@/lib/status-pages/presentation';
-import { statusPresentation } from '@/lib/status-pages/status-presentation';
+import { STATUS_PRESENTATION, statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadgeV3 from './StatusBadgeV3';
 import ServiceHistoryV3 from './ServiceHistoryV3';
 
 const FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'OPERATIONAL', label: 'Operational' },
-  { key: 'DEGRADED', label: 'Degraded' },
-  { key: 'PARTIAL_OUTAGE', label: 'Partial outage' },
-  { key: 'MAJOR_OUTAGE', label: 'Major outage' },
-  { key: 'MAINTENANCE', label: 'Maintenance' },
-  { key: 'UNKNOWN', label: 'Unknown' },
+  { key: 'OPERATIONAL', label: STATUS_PRESENTATION.OPERATIONAL.label },
+  { key: 'DEGRADED', label: STATUS_PRESENTATION.DEGRADED.label },
+  { key: 'PARTIAL_OUTAGE', label: STATUS_PRESENTATION.PARTIAL_OUTAGE.label },
+  { key: 'MAJOR_OUTAGE', label: STATUS_PRESENTATION.MAJOR_OUTAGE.label },
+  { key: 'MAINTENANCE', label: STATUS_PRESENTATION.MAINTENANCE.label },
+  { key: 'UNKNOWN', label: STATUS_PRESENTATION.UNKNOWN.label },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]['key'];

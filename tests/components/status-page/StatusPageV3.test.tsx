@@ -60,8 +60,8 @@ describe('StatusPageV3', () => {
         snapshot={snapshotOf([service(), service({ id: 'svc-2', name: 'Payments' })])}
       />
     );
-    expect(screen.getByText('All 2 services operational')).toBeInTheDocument();
-    expect(screen.getByText('All services are operating normally.')).toBeInTheDocument();
+    expect(screen.getByText('All systems operational')).toBeInTheDocument();
+    expect(screen.getByText('All published services are operating normally.')).toBeInTheDocument();
   });
 
   it('keeps a real outage visible while flagging unverified services', () => {
@@ -73,14 +73,20 @@ describe('StatusPageV3', () => {
         ])}
       />
     );
-    expect(screen.getAllByText('Major outage').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Status unavailable for 1 additional service/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'One service is unavailable' })).toBeInTheDocument();
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Status unverified for 1 additional service/)).toBeInTheDocument();
   });
 
   it('distinguishes partial from major outage', () => {
     render(<StatusPageV3 snapshot={snapshotOf([service({ status: 'PARTIAL_OUTAGE' })])} />);
-    expect(screen.getAllByText('Partial outage').length).toBeGreaterThan(0);
-    expect(screen.queryByRole('heading', { name: 'Major outage' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'One service has limited availability' })
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Limited availability').length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole('heading', { name: 'One service is unavailable' })
+    ).not.toBeInTheDocument();
   });
 
   it('filters services by search term', () => {
@@ -105,7 +111,7 @@ describe('StatusPageV3', () => {
         ])}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /degraded/i }));
+    fireEvent.click(screen.getByRole('button', { name: /performance issues/i }));
     expect(screen.getByText('Payments')).toBeInTheDocument();
     expect(screen.queryByText('Checkout API')).not.toBeInTheDocument();
   });

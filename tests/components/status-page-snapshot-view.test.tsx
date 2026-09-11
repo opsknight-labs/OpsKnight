@@ -21,7 +21,7 @@ const snapshot: StatusPageSnapshot = {
     knownServiceCount: 1,
     unknownServiceCount: 0,
     confidence: 'complete',
-    headline: 'Degraded performance',
+    headline: 'Performance issues',
     note: null,
   },
   page: {
