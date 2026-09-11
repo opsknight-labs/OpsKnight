@@ -24,12 +24,21 @@ function makeMetadata(issuer: string, overrides: Record<string, unknown> = {}) {
 }
 
 function setupValidFetch(status = 200, body: unknown) {
-  safeOutboundFetchMock.mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    json: vi.fn().mockResolvedValue(body),
-    headers: { get: vi.fn() },
-  } as unknown as Response);
+  safeOutboundFetchMock.mockImplementation(
+    async (url: string) =>
+      ({
+        ok: status >= 200 && status < 300,
+        status,
+        json: vi
+          .fn()
+          .mockResolvedValue(
+            url.endsWith('/jwks')
+              ? { keys: [{ kid: 'key-1', kty: 'RSA', use: 'sig', n: 'modulus', e: 'AQAB' }] }
+              : body
+          ),
+        headers: { get: vi.fn().mockReturnValue(null) },
+      }) as unknown as Response
+  );
 }
 
 describe('OIDC discovery provider matrix', () => {
@@ -194,5 +203,38 @@ describe('OIDC discovery provider matrix', () => {
     const result = await validateOidcConnection('https://identity.example.com');
 
     expect(result).toEqual({ isValid: true });
+  });
+
+  it('fetches and validates the advertised JWKS', async () => {
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+
+    const result = await validateOidcConnection('https://identity.example.com');
+
+    expect(result).toEqual({ isValid: true });
+    expect(safeOutboundFetchMock).toHaveBeenCalledWith(
+      'https://identity.example.com/jwks',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('rejects an empty or unusable JWKS', async () => {
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+    safeOutboundFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue(makeMetadata('https://identity.example.com')),
+      headers: { get: vi.fn().mockReturnValue(null) },
+    } as unknown as Response);
+    safeOutboundFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ keys: [{ kid: 'symmetric', kty: 'oct' }] }),
+      headers: { get: vi.fn().mockReturnValue(null) },
+    } as unknown as Response);
+
+    const result = await validateOidcConnection('https://identity.example.com');
+
+    expect(result.isValid).toBe(false);
+    expect(result.error).toMatch(/usable public signing key/i);
   });
 });

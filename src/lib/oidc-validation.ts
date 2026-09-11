@@ -20,6 +20,24 @@ type OidcDiscoveryMetadata = {
   id_token_signing_alg_values_supported?: unknown;
 };
 
+type JsonWebKeySet = {
+  keys?: unknown;
+};
+
+const MAX_JWKS_BYTES = 1_048_576;
+
+function hasUsableSigningKey(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const key = value as Record<string, unknown>;
+  if (typeof key.kid !== 'string' || !key.kid.trim()) return false;
+  if (key.use !== undefined && key.use !== 'sig') return false;
+  if (key.kty === 'RSA') return typeof key.n === 'string' && typeof key.e === 'string';
+  if (key.kty === 'EC') {
+    return typeof key.crv === 'string' && typeof key.x === 'string' && typeof key.y === 'string';
+  }
+  return false;
+}
+
 function hasQueryOrHash(urlObj: URL): boolean {
   const hasQuery = !!urlObj.search;
   const hasHash = !!urlObj.hash;
@@ -241,6 +259,33 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
           error: `Identity Provider must support an accepted ID-token signing algorithm (${[...permittedAlgorithms].join(', ')}).`,
         };
       }
+    }
+
+    const jwksUri = config.jwks_uri as string;
+    const jwksResponse = await safeOutboundFetch(jwksUri, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (jwksResponse.status >= 300 && jwksResponse.status < 400) {
+      return { isValid: false, error: 'OIDC JWKS redirects are not allowed.' };
+    }
+    if (!jwksResponse.ok) {
+      return {
+        isValid: false,
+        error: `Could not fetch the OIDC signing-key set (Status: ${jwksResponse.status}).`,
+      };
+    }
+    const contentLength = Number.parseInt(jwksResponse.headers.get('content-length') ?? '', 10);
+    if (Number.isFinite(contentLength) && contentLength > MAX_JWKS_BYTES) {
+      return { isValid: false, error: 'OIDC signing-key set exceeds the maximum allowed size.' };
+    }
+    const jwks = (await jwksResponse.json()) as JsonWebKeySet;
+    if (!Array.isArray(jwks.keys) || !jwks.keys.some(hasUsableSigningKey)) {
+      return {
+        isValid: false,
+        error: 'OIDC signing-key set does not contain a usable public signing key.',
+      };
     }
 
     return { isValid: true };
