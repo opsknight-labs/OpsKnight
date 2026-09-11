@@ -28,6 +28,7 @@ export type FailureReason =
   | 'INVALID_EMAIL_FORMAT'
   | 'SSO_FAILED'
   | 'SESSION_REVOKED'
+  | 'LOCAL_AUTH_DISABLED'
   | null;
 
 export interface LoginAuditData {
@@ -147,7 +148,7 @@ export async function logLoginBlocked(
   email: string,
   ip: string,
   userAgent: string,
-  reason: 'ACCOUNT_LOCKED' | 'RATE_LIMITED',
+  reason: 'ACCOUNT_LOCKED' | 'RATE_LIMITED' | 'LOCAL_AUTH_DISABLED',
   lockoutDurationMs?: number
 ): Promise<void> {
   await logLoginEvent({

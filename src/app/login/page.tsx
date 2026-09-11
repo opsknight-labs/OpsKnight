@@ -4,6 +4,7 @@ import { getAuthOptions } from '@/lib/auth';
 import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
 import { redirect } from 'next/navigation';
 import { sanitizeCallbackUrl } from '@/lib/callback-url';
+import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,7 @@ export default async function LoginPage({
       ssoEnabled={ssoEnabled}
       ssoProviderType={ssoConfig?.providerType}
       ssoProviderLabel={ssoConfig?.providerLabel}
+      localAuthEnabled={getLocalAuthPolicy().localLoginEnabled}
     />
   );
 }

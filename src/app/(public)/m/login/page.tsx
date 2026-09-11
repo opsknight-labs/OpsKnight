@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { sanitizeCallbackUrl } from '@/lib/callback-url';
+import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,7 @@ export default async function MobileLoginPage({
         ssoEnabled={ssoEnabled}
         ssoProviderType={ssoConfig?.providerType}
         ssoProviderLabel={ssoConfig?.providerLabel}
+        localAuthEnabled={getLocalAuthPolicy().localLoginEnabled}
       />
     </ThemeProvider>
   );

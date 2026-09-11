@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { initiatePasswordReset } from '@/lib/password-reset';
 import { logger } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
+import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 
 export async function POST(req: NextRequest) {
+  if (!getLocalAuthPolicy().localLoginEnabled) {
+    return NextResponse.json(
+      { message: 'Local password authentication is disabled.' },
+      { status: 403 }
+    );
+  }
   try {
     const body = await req.json();
     const { email } = body;

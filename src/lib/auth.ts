@@ -18,6 +18,11 @@ import {
   useSecureCookies,
 } from '@/lib/auth-cookies';
 import type { JWT } from 'next-auth/jwt';
+import {
+  getEnterpriseSessionPolicy,
+  getLocalAuthPolicy,
+  isLocalCredentialAllowed,
+} from '@/lib/local-auth-policy';
 
 function getJwtUserRefreshTtlMs() {
   const raw = process.env.JWT_USER_REFRESH_TTL_MS ?? '60000';
@@ -135,9 +140,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     //   - Web without "Remember Me" still gets 7 days, but with sliding refresh.
     //   - Web with "Remember Me" gets the long ceiling.
     //   - The only way to log a user out is server-side revocation via tokenVersion.
-    const sessionMaxAgeSeconds = 60 * 60 * 24 * 7;
-    const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 365;
-    const sessionUpdateAgeSeconds = 60 * 60;
+    const enterpriseSession = getEnterpriseSessionPolicy();
+    const sessionMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
+    const rememberMeMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
+    const sessionUpdateAgeSeconds = enterpriseSession.updateAgeSeconds;
+    const localAuthPolicy = getLocalAuthPolicy();
 
     if (oidcConfig) {
       logger.info('[Auth] OIDC provider will be enabled', {
@@ -231,164 +238,177 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               }),
             ]
           : []),
-        CredentialsProvider({
-          name: 'Email & Password',
-          credentials: {
-            email: { label: 'Email', type: 'email' },
-            password: { label: 'Password', type: 'password' },
-            rememberMe: { label: 'Remember Me', type: 'text' },
-          },
-          async authorize(credentials, req) {
-            const { checkLoginAttempt, recordFailedAttempt, resetLoginAttempts, isValidEmail } =
-              await import('@/lib/login-security');
-            const { logLoginSuccess, logLoginFailed, logLoginBlocked } =
-              await import('@/lib/login-audit');
-
-            const email = credentials?.email?.toLowerCase().trim() || '';
-            const password = credentials?.password || '';
-            const userAgentHeader = (req?.headers?.['user-agent'] as string) || '';
-            const isMobileClient =
-              /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(
-                userAgentHeader
-              );
-            const rememberMe = credentials?.rememberMe === 'true' || isMobileClient;
-            const { getClientIp } = await import('@/lib/client-ip');
-            const ip = getClientIp(req?.headers);
-            const userAgent = userAgentHeader || 'Unknown';
-
-            logger.debug('[Auth-Debug] Authorize started', {
-              component: 'auth:credentials',
-              email,
-              ip,
-            });
-
-            if (!email || !isValidEmail(email)) {
-              await logLoginFailed(email || 'unknown', ip, userAgent, 'INVALID_EMAIL_FORMAT');
-              return null;
-            }
-
-            if (!password) {
-              await logLoginFailed(email, ip, userAgent, 'INVALID_CREDENTIALS');
-              return null;
-            }
-
-            const { checkRateLimit } = await import('@/lib/rate-limit');
-            const distributedAttempt = await checkRateLimit(
-              `auth:credentials:${email}:${ip}`,
-              20,
-              15 * 60 * 1000
-            );
-            const accountAttempt = await checkRateLimit(
-              `auth:credentials:account:${email}`,
-              10,
-              15 * 60 * 1000
-            );
-            if (!distributedAttempt.allowed || !accountAttempt.allowed) {
-              await logLoginBlocked(
-                email,
-                ip,
-                userAgent,
-                'RATE_LIMITED',
-                Math.max(
-                  0,
-                  Math.max(distributedAttempt.resetAt, accountAttempt.resetAt) - Date.now()
-                )
-              );
-              return null;
-            }
-
-            const attemptCheck = checkLoginAttempt(email, ip);
-            if (!attemptCheck.allowed) {
-              await logLoginBlocked(
-                email,
-                ip,
-                userAgent,
-                'ACCOUNT_LOCKED',
-                attemptCheck.lockoutDurationMs || undefined
-              );
-              console.warn('[Auth] Login blocked - account locked', {
-                email,
-                ip,
-                lockedUntil: attemptCheck.lockedUntil?.toISOString(),
-              });
-              return null;
-            }
-
-            const user = await prisma.user.findUnique({ where: { email } });
-            if (!user || !user.passwordHash) {
-              recordFailedAttempt(email, ip);
-              await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
-              logger.debug('[Auth-Debug] User not found or no password hash', {
-                component: 'auth:credentials',
-                email,
-              });
-              return null;
-            }
-
-            if (user.status === 'DISABLED') {
-              await logLoginFailed(email, ip, userAgent, 'USER_DISABLED');
-              return null;
-            }
-
-            const isValid = await bcrypt.compare(password, user.passwordHash);
-            if (!isValid) {
-              const result = recordFailedAttempt(email, ip);
-              await logLoginFailed(
-                email,
-                ip,
-                userAgent,
-                'INVALID_CREDENTIALS',
-                result.attemptCount
-              );
-
-              if (result.locked) {
-                console.warn('[Auth] Account locked after failed attempts', {
-                  email,
-                  attemptCount: result.attemptCount,
-                  lockoutDurationMs: result.lockoutDurationMs,
-                });
-              }
-              logger.debug('[Auth-Debug] Invalid Password', {
-                component: 'auth:credentials',
-                email,
-              });
-              return null;
-            }
-
-            resetLoginAttempts(email, ip);
-            await logLoginSuccess(email, user.id, ip, userAgent, 'credentials');
-
-            if (rememberMe) {
-              logger.debug('[Auth] User requested "Remember Me"', { email });
-            }
-
-            if (user.status !== 'ACTIVE') {
-              await prisma.user.update({
-                where: { email: user.email },
-                data: {
-                  status: 'ACTIVE',
-                  invitedAt: null,
-                  deactivatedAt: null,
+        ...(localAuthPolicy.enabled
+          ? [
+              CredentialsProvider({
+                name: 'Email & Password',
+                credentials: {
+                  email: { label: 'Email', type: 'email' },
+                  password: { label: 'Password', type: 'password' },
+                  rememberMe: { label: 'Remember Me', type: 'text' },
                 },
-              });
-            }
+                async authorize(credentials, req) {
+                  const {
+                    checkLoginAttempt,
+                    recordFailedAttempt,
+                    resetLoginAttempts,
+                    isValidEmail,
+                  } = await import('@/lib/login-security');
+                  const { logLoginSuccess, logLoginFailed, logLoginBlocked } =
+                    await import('@/lib/login-audit');
 
-            logger.debug('[Auth-Debug] Authorize Success', {
-              component: 'auth:credentials',
-              id: user.id,
-              tokenVersion: user.tokenVersion,
-            });
+                  const email = credentials?.email?.toLowerCase().trim() || '';
+                  const password = credentials?.password || '';
+                  const userAgentHeader = (req?.headers?.['user-agent'] as string) || '';
+                  const isMobileClient =
+                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(
+                      userAgentHeader
+                    );
+                  const rememberMe = credentials?.rememberMe === 'true' || isMobileClient;
+                  const { getClientIp } = await import('@/lib/client-ip');
+                  const ip = getClientIp(req?.headers);
+                  const userAgent = userAgentHeader || 'Unknown';
 
-            return {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              tokenVersion: user.tokenVersion,
-              rememberMe,
-            } as User & { rememberMe: boolean };
-          },
-        }),
+                  if (!isLocalCredentialAllowed(email)) {
+                    await logLoginBlocked(email || 'unknown', ip, userAgent, 'LOCAL_AUTH_DISABLED');
+                    return null;
+                  }
+
+                  logger.debug('[Auth-Debug] Authorize started', {
+                    component: 'auth:credentials',
+                    email,
+                    ip,
+                  });
+
+                  if (!email || !isValidEmail(email)) {
+                    await logLoginFailed(email || 'unknown', ip, userAgent, 'INVALID_EMAIL_FORMAT');
+                    return null;
+                  }
+
+                  if (!password) {
+                    await logLoginFailed(email, ip, userAgent, 'INVALID_CREDENTIALS');
+                    return null;
+                  }
+
+                  const { checkRateLimit } = await import('@/lib/rate-limit');
+                  const distributedAttempt = await checkRateLimit(
+                    `auth:credentials:${email}:${ip}`,
+                    20,
+                    15 * 60 * 1000
+                  );
+                  const accountAttempt = await checkRateLimit(
+                    `auth:credentials:account:${email}`,
+                    10,
+                    15 * 60 * 1000
+                  );
+                  if (!distributedAttempt.allowed || !accountAttempt.allowed) {
+                    await logLoginBlocked(
+                      email,
+                      ip,
+                      userAgent,
+                      'RATE_LIMITED',
+                      Math.max(
+                        0,
+                        Math.max(distributedAttempt.resetAt, accountAttempt.resetAt) - Date.now()
+                      )
+                    );
+                    return null;
+                  }
+
+                  const attemptCheck = checkLoginAttempt(email, ip);
+                  if (!attemptCheck.allowed) {
+                    await logLoginBlocked(
+                      email,
+                      ip,
+                      userAgent,
+                      'ACCOUNT_LOCKED',
+                      attemptCheck.lockoutDurationMs || undefined
+                    );
+                    console.warn('[Auth] Login blocked - account locked', {
+                      email,
+                      ip,
+                      lockedUntil: attemptCheck.lockedUntil?.toISOString(),
+                    });
+                    return null;
+                  }
+
+                  const user = await prisma.user.findUnique({ where: { email } });
+                  if (!user || !user.passwordHash) {
+                    recordFailedAttempt(email, ip);
+                    await logLoginFailed(email, ip, userAgent, 'USER_NOT_FOUND');
+                    logger.debug('[Auth-Debug] User not found or no password hash', {
+                      component: 'auth:credentials',
+                      email,
+                    });
+                    return null;
+                  }
+
+                  if (user.status === 'DISABLED') {
+                    await logLoginFailed(email, ip, userAgent, 'USER_DISABLED');
+                    return null;
+                  }
+
+                  const isValid = await bcrypt.compare(password, user.passwordHash);
+                  if (!isValid) {
+                    const result = recordFailedAttempt(email, ip);
+                    await logLoginFailed(
+                      email,
+                      ip,
+                      userAgent,
+                      'INVALID_CREDENTIALS',
+                      result.attemptCount
+                    );
+
+                    if (result.locked) {
+                      console.warn('[Auth] Account locked after failed attempts', {
+                        email,
+                        attemptCount: result.attemptCount,
+                        lockoutDurationMs: result.lockoutDurationMs,
+                      });
+                    }
+                    logger.debug('[Auth-Debug] Invalid Password', {
+                      component: 'auth:credentials',
+                      email,
+                    });
+                    return null;
+                  }
+
+                  resetLoginAttempts(email, ip);
+                  await logLoginSuccess(email, user.id, ip, userAgent, 'credentials');
+
+                  if (rememberMe) {
+                    logger.debug('[Auth] User requested "Remember Me"', { email });
+                  }
+
+                  if (user.status !== 'ACTIVE') {
+                    await prisma.user.update({
+                      where: { email: user.email },
+                      data: {
+                        status: 'ACTIVE',
+                        invitedAt: null,
+                        deactivatedAt: null,
+                      },
+                    });
+                  }
+
+                  logger.debug('[Auth-Debug] Authorize Success', {
+                    component: 'auth:credentials',
+                    id: user.id,
+                    tokenVersion: user.tokenVersion,
+                  });
+
+                  return {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
+                    tokenVersion: user.tokenVersion,
+                    rememberMe,
+                  } as User & { rememberMe: boolean };
+                },
+              }),
+            ]
+          : []),
       ],
       pages: {
         signIn: '/login',

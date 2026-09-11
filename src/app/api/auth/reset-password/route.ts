@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import bcrypt from 'bcryptjs';
-import { createHash } from 'crypto';
-import { revokeUserSessions } from '@/lib/auth';
 import { getClientIp } from '@/lib/client-ip';
+import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 
 export async function POST(req: NextRequest) {
+  if (!getLocalAuthPolicy().localLoginEnabled) {
+    return NextResponse.json(
+      { error: 'Local password authentication is disabled.' },
+      { status: 403 }
+    );
+  }
   try {
     const body = await req.json();
     const { token, password } = body;
