@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
+import { logAudit } from '@/lib/audit';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -364,4 +365,140 @@ export async function createScheduleOverrideMutation(input: CreateScheduleOverri
     }
     throw error;
   }
+}
+
+export type ScheduleDeletionSnapshot = {
+  id: string;
+  name: string;
+  timeZone: string;
+  layerCount: number;
+  participantCount: number;
+  overrideCount: number;
+  shiftCount: number;
+};
+
+export type ScheduleDependency = {
+  policyId: string;
+  policyName: string;
+  stepOrder: number;
+  services: Array<{ id: string; name: string }>;
+};
+
+export async function deleteScheduleMutation(
+  scheduleId: string,
+  actorId: string
+): Promise<ScheduleDeletionSnapshot> {
+  return runSerializableTransaction(async tx => {
+    const schedule = await tx.onCallSchedule.findUnique({
+      where: { id: scheduleId },
+      select: {
+        id: true,
+        name: true,
+        timeZone: true,
+      },
+    });
+
+    if (!schedule) {
+      throw new AppError({
+        code: 'SCHEDULE_NOT_FOUND',
+        userMessage: 'The requested schedule could not be found.',
+        details: { scheduleId },
+      });
+    }
+
+    const referencingRules = await tx.escalationRule.findMany({
+      where: { targetScheduleId: scheduleId },
+      select: {
+        stepOrder: true,
+        policy: {
+          select: {
+            id: true,
+            name: true,
+            services: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (referencingRules.length > 0) {
+      const dependencies: ScheduleDependency[] = referencingRules.map(rule => ({
+        policyId: rule.policy.id,
+        policyName: rule.policy.name,
+        stepOrder: rule.stepOrder,
+        services: rule.policy.services,
+      }));
+
+      throw new AppError({
+        code: 'SCHEDULE_IN_USE',
+        userMessage: `Cannot delete schedule "${schedule.name}" because it is currently in use by ${dependencies.length} escalation policy step(s).`,
+        action: 'Remove this schedule from all escalation policy steps before deleting it.',
+        details: {
+          scheduleId,
+          dependencies,
+        },
+      });
+    }
+
+    const [layerCount, participantCount, overrideCount, shiftCount] = await Promise.all([
+      tx.onCallLayer.count({ where: { scheduleId } }),
+      tx.onCallLayerUser.count({ where: { layer: { scheduleId } } }),
+      tx.onCallOverride.count({ where: { scheduleId } }),
+      tx.onCallShift.count({ where: { scheduleId } }),
+    ]);
+
+    const snapshot: ScheduleDeletionSnapshot = {
+      id: schedule.id,
+      name: schedule.name,
+      timeZone: schedule.timeZone,
+      layerCount,
+      participantCount,
+      overrideCount,
+      shiftCount,
+    };
+
+    await tx.onCallLayerUser.deleteMany({
+      where: { layer: { scheduleId } },
+    });
+
+    await tx.onCallLayer.deleteMany({
+      where: { scheduleId },
+    });
+
+    await tx.onCallOverride.deleteMany({
+      where: { scheduleId },
+    });
+
+    await tx.onCallShift.deleteMany({
+      where: { scheduleId },
+    });
+
+    await tx.onCallSchedule.delete({
+      where: { id: scheduleId },
+    });
+
+    await logAudit(
+      {
+        action: 'schedule.deleted',
+        entityType: 'SCHEDULE',
+        entityId: scheduleId,
+        actorId,
+        details: {
+          name: snapshot.name,
+          timeZone: snapshot.timeZone,
+          layerCount: snapshot.layerCount,
+          participantCount: snapshot.participantCount,
+          overrideCount: snapshot.overrideCount,
+          shiftCount: snapshot.shiftCount,
+        },
+      },
+      tx
+    );
+
+    return snapshot;
+  });
 }

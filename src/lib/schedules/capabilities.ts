@@ -6,6 +6,7 @@ export type ScheduleUICapabilities = {
   canManageScheduleSettings: boolean;
   canCreateOverride: boolean;
   canDeleteOverride: boolean;
+  canDeleteSchedule: boolean;
 };
 
 type ScheduleCapabilityContext = {
@@ -33,5 +34,6 @@ export function deriveScheduleUICapabilities({
     canManageScheduleSettings: canManageRotation,
     canCreateOverride: canManageOverrides,
     canDeleteOverride: canManageOverrides,
+    canDeleteSchedule: isAdmin,
   };
 }
