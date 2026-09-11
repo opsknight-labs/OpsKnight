@@ -185,9 +185,11 @@ export default function ProviderCard({
       setSavedEnabled(enabled);
       setSavedConfig(config);
       setSavedRevision(result.updatedAt);
-      setSaveStatus('success');
+      toast.success(`${providerConfig.name} configuration saved`, {
+        id: `settings:provider:${providerConfig.key}:save`,
+      });
+      setSaveStatus('idle');
       router.refresh();
-      setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save configuration');
       setSaveStatus('error');
@@ -558,16 +560,9 @@ export default function ProviderCard({
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border/60 pt-4">
               <div className="flex-1 w-full">
-                {saveStatus === 'success' && (
-                  <Alert className="flex items-center gap-2 bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 py-2 [&>svg]:static [&>svg]:shrink-0 [&>svg+div]:translate-y-0 [&>svg~*]:pl-0">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                    <AlertDescription className="text-xs font-medium leading-4">
-                      Configuration updated successfully
-                    </AlertDescription>
-                  </Alert>
-                )}
                 {saveStatus === 'error' && error && (
                   <Alert
+                    role="alert"
                     variant="destructive"
                     className="flex items-center gap-2 py-2 [&>svg]:static [&>svg]:shrink-0 [&>svg+div]:translate-y-0 [&>svg~*]:pl-0"
                   >

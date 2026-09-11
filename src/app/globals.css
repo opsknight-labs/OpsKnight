@@ -3,6 +3,20 @@
 :root {
   /* Primary & Modern Palette: Muted Executive Slate */
   color-scheme: light;
+
+  /* Semantic toast tokens — light theme (restrained green + neutral surface) */
+  --toast-success-bg: #ecfdf5;
+  --toast-success-border: #a7f3d0;
+  --toast-success-fg: #022c22;
+  --toast-error-bg: #fff1f2;
+  --toast-error-border: #fecdd3;
+  --toast-error-fg: #4c0519;
+  --toast-warning-bg: #fffbeb;
+  --toast-warning-border: #fde68a;
+  --toast-warning-fg: #451a03;
+  --toast-info-bg: #f0f9ff;
+  --toast-info-border: #bae6fd;
+  --toast-info-fg: #0c4a6e;
   /* Tailwind expects HSL numbers (no unit, no hsl wrapper) - shadcn format */
   /* Note: shadcn tokens at line 131 define --primary: 30 41 59 */
   /* This is overridden by shadcn tokens below, so we don't define it here */
@@ -248,6 +262,43 @@
     --sidebar-width: 0px;
     --sidebar-width-collapsed: 0px;
   }
+}
+
+/* Dark theme — applies when next-themes sets class="dark" on <html> */
+.dark {
+  color-scheme: dark;
+  --background: 15 23 42;
+  --foreground: 226 232 240;
+  --card: 15 23 42;
+  --card-foreground: 226 232 240;
+  --popover: 15 23 42;
+  --popover-foreground: 226 232 240;
+  --muted: 30 41 59;
+  --muted-foreground: 148 163 184;
+  --accent: 30 41 59;
+  --accent-foreground: 226 232 240;
+  --border: 51 65 85;
+  --input: 51 65 85;
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-surface: #1e293b;
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Toast tokens — dark theme (dark neutral + emerald accent, not pale green flash) */
+  --toast-success-bg: #0f2a1f;
+  --toast-success-border: #065f46;
+  --toast-success-fg: #d1fae5;
+  --toast-error-bg: #2a0f1a;
+  --toast-error-border: #9f1239;
+  --toast-error-fg: #ffe4e6;
+  --toast-warning-bg: #2a1f0f;
+  --toast-warning-border: #92400e;
+  --toast-warning-fg: #fef3c7;
+  --toast-info-bg: #0f253a;
+  --toast-info-border: #075985;
+  --toast-info-fg: #e0f2fe;
 }
 
 

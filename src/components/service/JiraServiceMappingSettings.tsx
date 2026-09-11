@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect } from 'react';
 import { useFormStatus } from 'react-dom';
 import { saveJiraServiceMapping } from '@/app/(app)/services/actions';
 import {
@@ -15,7 +15,8 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { CheckCircle2, Loader2, Tickets, XCircle } from 'lucide-react';
+import { Loader2, Tickets, XCircle } from 'lucide-react';
+import { notify } from '@/lib/toast';
 
 type JiraMapping = {
   projectKey: string;
@@ -60,6 +61,14 @@ export default function JiraServiceMappingSettings({
     success: false,
   });
 
+  useEffect(() => {
+    if (state?.success) {
+      notify.success('Jira mapping saved', { id: `service:${serviceId}:jira-mapping:save` });
+    }
+    // Errors render as a persistent inline Alert below (field-level recovery context).
+    // Do not also toast the same text — one semantic notification per event.
+  }, [state, serviceId]);
+
   // Product contract: unavailable integrations do not leak operational/configuration
   // surfaces into normal service settings. The workspace integration page is the
   // single place to connect or re-enable Jira.
@@ -95,12 +104,6 @@ export default function JiraServiceMappingSettings({
             <Alert variant="destructive">
               <XCircle className="h-4 w-4" />
               <AlertDescription>{state.error}</AlertDescription>
-            </Alert>
-          )}
-          {state?.success && (
-            <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              <AlertDescription>Jira mapping saved.</AlertDescription>
             </Alert>
           )}
 

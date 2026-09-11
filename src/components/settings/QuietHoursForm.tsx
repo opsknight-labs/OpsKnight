@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateQuietHoursPreferences } from '@/app/(app)/settings/quiet-hours-actions';
 import { Switch } from '@/components/ui/shadcn/switch';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { SettingsRow } from '@/components/settings/layout/SettingsRow';
 import { SaveIndicator } from '@/components/settings/feedback/SaveIndicator';
 import { useAutosave } from '@/lib/hooks/use-autosave';
+import { notify } from '@/lib/toast';
 import QuietHoursTimeline from '@/components/settings/QuietHoursTimeline';
 
 type Props = {
@@ -80,17 +81,21 @@ export default function QuietHoursForm({
     weekend: weekendChecked,
   };
 
-  const { status: saveStatus, error: saveError } = useAutosave({
+  const { status: saveStatus, error: saveError, retry } = useAutosave({
     data: currentSettings,
     onSave: handleAutoSave,
     delay: 500,
     enabled: true,
   });
 
+  useEffect(() => {
+    if (saveStatus === 'error' && saveError) notify.error(saveError);
+  }, [saveStatus, saveError]);
+
   return (
     <div>
       <div className="flex justify-end pb-2">
-        <SaveIndicator status={saveStatus} error={saveError} />
+        <SaveIndicator status={saveStatus} error={saveError} onRetry={retry} />
       </div>
 
       <SettingsRow

@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
-import { CheckCircle2, Loader2, MessageCircle, XCircle } from 'lucide-react';
+import { Loader2, MessageCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { updateServiceChatOpsSettings } from '@/app/(app)/services/actions';
 import { notify } from '@/lib/toast';
@@ -58,11 +58,11 @@ export default function ChatOpsWarRoomSettings({
 
   useEffect(() => {
     if (state?.success) {
-      notify.success('ChatOps settings saved');
-    } else if (state?.error) {
-      notify.error(state.error);
+      notify.success('ChatOps settings saved', { id: `service:${serviceId}:chatops:save` });
     }
-  }, [state]);
+    // Errors render as a persistent inline Alert below (field-level recovery context).
+    // Do not also toast the same text — one semantic notification per event.
+  }, [state, serviceId]);
 
   return (
     <Card>
@@ -91,13 +91,6 @@ export default function ChatOpsWarRoomSettings({
             <Alert variant="destructive">
               <XCircle className="h-4 w-4" />
               <AlertDescription>{state.error}</AlertDescription>
-            </Alert>
-          )}
-
-          {state?.success && (
-            <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              <AlertDescription>ChatOps & war room settings saved.</AlertDescription>
             </Alert>
           )}
 

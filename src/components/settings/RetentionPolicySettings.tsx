@@ -9,7 +9,9 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import ConfirmDialog from '@/components/settings/ConfirmDialog';
+import { notify } from '@/lib/toast';
 import {
   Trash2,
   AlertTriangle,
@@ -86,7 +88,6 @@ export default function RetentionPolicySettings() {
   const [saving, setSaving] = useState(false);
   const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const [validationErrors, setValidationErrors] = useState<
     Partial<Record<keyof RetentionPolicy, string>>
@@ -175,7 +176,6 @@ export default function RetentionPolicySettings() {
     try {
       setSaving(true);
       setGeneralError(null);
-      setSuccess(null);
 
       const res = await fetch('/api/settings/retention', {
         method: 'PUT',
@@ -196,8 +196,7 @@ export default function RetentionPolicySettings() {
       setPolicy(committedPolicy);
       setInitialPolicy(committedPolicy);
       if (typeof data.updatedAt === 'string') setRevision(data.updatedAt);
-      setSuccess('Retention policy updated successfully');
-      setTimeout(() => setSuccess(null), 3000);
+      notify.success('Retention policy saved', { id: 'settings:retention:save' });
     } catch (err) {
       setGeneralError(displayError(err, 'Failed to save settings'));
     } finally {
@@ -234,9 +233,8 @@ export default function RetentionPolicySettings() {
       setCleanupResult(data.result);
 
       if (!dryRun) {
-        setSuccess('Data cleanup completed successfully');
+        notify.success('Data cleanup completed', { id: 'settings:retention:cleanup' });
         fetchData();
-        setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err) {
       setGeneralError(displayError(err, 'Failed to run cleanup'));
@@ -257,7 +255,6 @@ export default function RetentionPolicySettings() {
   const handleResetDefaults = () => {
     setPolicy(DEFAULT_POLICY);
     setValidationErrors({});
-    setSuccess('Restored defaults (unsaved).');
   };
 
   const handleResetChanges = () => {
@@ -332,13 +329,10 @@ export default function RetentionPolicySettings() {
           <AlertDescription>{generalError}</AlertDescription>
         </Alert>
       )}
-      {success && (
-        <Alert className="bg-emerald-500/10 border-emerald-500/30" role="status">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <AlertDescription className="text-emerald-700 dark:text-emerald-300 font-medium">
-            {success}
-          </AlertDescription>
-        </Alert>
+      {isDirty && (
+        <InlineNotice tone="neutral" title="Unsaved changes">
+          Retention schedule changes are staged locally. Save to apply them.
+        </InlineNotice>
       )}
 
       {stats && (
