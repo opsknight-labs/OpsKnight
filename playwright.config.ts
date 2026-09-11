@@ -9,6 +9,13 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
+  timeout: 45_000,
+  expect: {
+    // CI exercises the real Next.js dev server. The first invocation of a
+    // Server Action may include on-demand compilation, so keep assertions
+    // strict but avoid treating that one-time compile as an auth failure.
+    timeout: 15_000,
+  },
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
   use: {
     baseURL: 'http://127.0.0.1:3100',
