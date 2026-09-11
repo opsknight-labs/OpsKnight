@@ -205,7 +205,8 @@ export async function buildStatusPageSnapshot(
   // Active incidents must never be evicted by the historical display limit.
   // We fetch ALL active PUBLIC incidents plus recent/overlapping resolved incidents
   // up to the display budget, then dedupe and sort active-first.
-  let incidents: Array<(typeof INCIDENT_SELECT extends infer S ? any : never)> = [];
+  type SnapshotIncident = Prisma.IncidentGetPayload<{ select: typeof INCIDENT_SELECT }>;
+  let incidents: SnapshotIncident[] = [];
   if (ids.length && visibility.showIncidents) {
     const activeIncidents = await db.incident.findMany({
       where: {
@@ -238,7 +239,7 @@ export async function buildStatusPageSnapshot(
     });
     const seen = new Set(activeIncidents.map(i => i.id));
     const dedupedHistorical = historicalIncidents.filter(i => !seen.has(i.id));
-    const activeFirst = (a: any, b: any) => {
+    const activeFirst = (a: SnapshotIncident, b: SnapshotIncident) => {
       const aActive = a.status === 'OPEN' || a.status === 'ACKNOWLEDGED' ? 0 : 1;
       const bActive = b.status === 'OPEN' || b.status === 'ACKNOWLEDGED' ? 0 : 1;
       if (aActive !== bActive) return aActive - bActive;

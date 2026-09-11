@@ -1,6 +1,7 @@
 import prisma from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { statusPageSlugMatches } from '@/lib/status-page-resolver';
@@ -39,15 +40,16 @@ export async function confirmStatusSubscription(form: FormData) {
   const pendingPrefs = prefs?._pendingPreferences as { selectedServiceIds?: string[] } | null | undefined;
   const pendingServiceIds = prefs?._pendingServiceIds as string[] | null | undefined;
   if (subscription.state === 'ACTIVE' && pendingPrefs !== undefined) {
-    const newPrefs = pendingPrefs as unknown as object | null;
+    const newPrefs = pendingPrefs as unknown as Record<string, unknown> | null;
     // Strip pending keys, install new preferences
     const { _pendingPreferences: _a, _pendingServiceIds: _b, ...rest } = (prefs ?? {}) as Record<string, unknown>;
-    const cleanPrefs = newPrefs !== undefined ? newPrefs : rest;
+    const cleanPrefs =
+      newPrefs !== undefined ? (newPrefs as unknown as Record<string, unknown>) : rest;
     await prisma.$transaction(async tx => {
       await tx.statusPageSubscription.update({
         where: { id: subscription.id },
         data: {
-          preferences: cleanPrefs as unknown as any,
+          preferences: cleanPrefs as unknown as Prisma.InputJsonValue,
           verificationToken: null,
           verificationTokenExpiresAt: null,
         },
@@ -58,8 +60,12 @@ export async function confirmStatusSubscription(form: FormData) {
           data: pendingServiceIds.map(serviceId => ({ subscriptionId: subscription.id, serviceId })),
           skipDuplicates: true,
         });
-      } else if (newPrefs !== null && Array.isArray((newPrefs as any)?.selectedServiceIds)) {
-        const ids = (newPrefs as any).selectedServiceIds as string[];
+      } else if (
+        newPrefs !== null &&
+        typeof newPrefs === 'object' &&
+        Array.isArray((newPrefs as Record<string, unknown>).selectedServiceIds)
+      ) {
+        const ids = (newPrefs as { selectedServiceIds: string[] }).selectedServiceIds;
         if (ids.length > 0) {
           await tx.statusPageSubscriptionService.createMany({
             data: ids.map(serviceId => ({ subscriptionId: subscription.id, serviceId })),
