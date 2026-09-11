@@ -1071,16 +1071,16 @@ ${R} .status-v3-regions__grid {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.85rem;
+  gap: 0.9rem;
   grid-template-columns: 1fr;
 }
-@media (min-width: 38rem) {
+@media (min-width: 42rem) {
   ${R} .status-v3-regions__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.85rem;
+    gap: 0.95rem;
   }
 }
-@media (min-width: 60rem) {
+@media (min-width: 72rem) {
   ${R} .status-v3-regions__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 1rem;
@@ -1092,8 +1092,8 @@ ${R} .status-v3-region-card {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0.45rem;
-  padding: 1.05rem 1.25rem;
+  gap: 0.5rem;
+  padding: 1.15rem 1.35rem;
   border-radius: 0.75rem;
   border: 1px solid var(--status-panel-border, #e2e8f0);
   background: var(--status-panel-bg, #ffffff);
@@ -1110,7 +1110,7 @@ ${R} .status-v3-region-card__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 1rem;
   min-inline-size: 0;
 }
 ${R} .status-v3-region-card__name {
@@ -1128,6 +1128,7 @@ ${R} .status-v3-region-card__name {
 ${R} .status-v3-region-card__head .status-badge,
 ${R} .status-v3-region-card__head [data-badge="true"] {
   flex-shrink: 0;
+  margin-inline-start: auto;
 }
 ${R} .status-v3-region-card__sub {
   display: flex;
