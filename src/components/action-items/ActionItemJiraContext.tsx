@@ -27,9 +27,9 @@ export default function ActionItemJiraContext({
   labelClassName = 'text-[10px]',
 }: ActionItemJiraContextProps) {
   const hasHistoricalLink = Boolean(externalIssue);
-  const hasOperationalActions = jiraCapability.showOperationalJira;
+  const canStartJiraTracking = jiraCapability.canCreate || jiraCapability.canLink;
 
-  if (!hasHistoricalLink && !hasOperationalActions) return null;
+  if (!hasHistoricalLink && !canStartJiraTracking) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
