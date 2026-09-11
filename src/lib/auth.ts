@@ -712,6 +712,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               providerConfigId: 'default',
               clientId: activeConfig.clientId,
               configVersion: activeConfig.configVersion,
+              organizationId: activeConfig.organizationId,
             });
           } catch (error) {
             logger.error('[Auth] OIDC identity transaction failed', {

@@ -54,6 +54,7 @@ type ResolveOidcIdentityInput = {
   providerConfigId?: string;
   clientId?: string;
   configVersion?: number;
+  organizationId?: string | null;
 };
 
 const targetUserSelect = {
@@ -112,10 +113,11 @@ export async function resolveOidcIdentityForSignIn(
   }
 
   if (!email) return { ok: false, reason: 'OIDC_EMAIL_REQUIRED' };
-  const providerPolicy = getOidcProviderPolicy(input.issuer);
+  const providerPolicy = getOidcProviderPolicy(input.issuer, input.providerType);
   const organizationResult = providerPolicy.validateOrganizationBoundary(
     { ...(input.claims ?? {}), email },
-    input.allowedDomains
+    input.allowedDomains,
+    input.organizationId
   );
   if (!organizationResult.ok) return organizationResult;
 

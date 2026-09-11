@@ -17,7 +17,8 @@ export interface OidcProviderPolicy {
   validateIssuer(issuer: URL): boolean;
   validateOrganizationBoundary(
     claims: OidcClaims,
-    allowedDomains: string[]
+    allowedDomains: string[],
+    organizationId?: string | null
   ): OrganizationPolicyResult;
   allowsMissingEmailVerified(): boolean;
 }
@@ -97,17 +98,39 @@ const auth0Policy: OidcProviderPolicy = {
   ...genericPolicy,
   family: 'auth0',
   acceptedIdTokenAlgorithms: ['RS256'],
-};
-
-const policies: Record<OidcProviderType, OidcProviderPolicy> = {
-  google: googlePolicy,
-  azure: entraPolicy,
-  okta: oktaPolicy,
-  auth0: auth0Policy,
-  custom: genericPolicy,
+  validateOrganizationBoundary: (claims, allowedDomains, organizationId) => {
+    if (organizationId) {
+      const assertedOrganization = typeof claims.org_id === 'string' ? claims.org_id.trim() : null;
+      if (assertedOrganization !== organizationId.trim()) {
+        return { ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' };
+      }
+    }
+    return emailBoundary(claims, allowedDomains);
+  },
 };
 
 /** Security policy is derived from the trusted issuer, never from UI branding. */
-export function getOidcProviderPolicy(issuer: string): OidcProviderPolicy {
-  return policies[detectOidcProviderType(issuer)];
+export function getOidcProviderPolicy(
+  issuer: string,
+  configuredFamily?: string | null
+): OidcProviderPolicy {
+  const detected = detectOidcProviderType(issuer);
+  // Auth0 and Okta custom domains are indistinguishable by hostname. Allow an
+  // explicit family only where it tightens the generic policy. Entra/Google
+  // policy can never be selected without their validated canonical authority.
+  if (detected === 'custom' && (configuredFamily === 'auth0' || configuredFamily === 'okta')) {
+    return configuredFamily === 'auth0' ? auth0Policy : oktaPolicy;
+  }
+  switch (detected) {
+    case 'google':
+      return googlePolicy;
+    case 'azure':
+      return entraPolicy;
+    case 'okta':
+      return oktaPolicy;
+    case 'auth0':
+      return auth0Policy;
+    default:
+      return genericPolicy;
+  }
 }

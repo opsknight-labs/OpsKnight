@@ -29,4 +29,27 @@ describe('OIDC provider security policy registry', () => {
       'ES256',
     ]);
   });
+
+  it('supports strict Auth0 and Okta policy on custom domains without enabling Entra relaxation', () => {
+    expect(getOidcProviderPolicy('https://login.example.com', 'auth0').family).toBe('auth0');
+    expect(getOidcProviderPolicy('https://login.example.com', 'okta').family).toBe('okta');
+    expect(getOidcProviderPolicy('https://login.example.com', 'azure').family).toBe('custom');
+  });
+
+  it('requires an exact signed Auth0 organization claim when configured', () => {
+    const policy = getOidcProviderPolicy('https://tenant.auth0.com');
+    expect(
+      policy.validateOrganizationBoundary({ org_id: 'org_expected' }, [], 'org_expected')
+    ).toEqual({ ok: true });
+    expect(
+      policy.validateOrganizationBoundary({ org_id: 'org_other' }, [], 'org_expected')
+    ).toEqual({
+      ok: false,
+      reason: 'OIDC_ORGANIZATION_REJECTED',
+    });
+    expect(policy.validateOrganizationBoundary({}, [], 'org_expected')).toEqual({
+      ok: false,
+      reason: 'OIDC_ORGANIZATION_REJECTED',
+    });
+  });
 });

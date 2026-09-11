@@ -133,6 +133,8 @@ export async function saveOidcConfig(
     );
     const customScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
     const providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
+    const organizationId = (formData.get('organizationId') as string | null)?.trim() ?? null;
+    const requestedProviderType = (formData.get('providerType') as string | null)?.trim();
 
     let roleMapping: RoleMappingRule[];
     try {
@@ -228,7 +230,12 @@ export async function saveOidcConfig(
       };
     }
 
-    const providerType = detectProviderType(issuer);
+    const detectedProviderType = detectProviderType(issuer);
+    const providerType =
+      detectedProviderType === 'custom' &&
+      (requestedProviderType === 'auth0' || requestedProviderType === 'okta')
+        ? requestedProviderType
+        : detectedProviderType;
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';
       if (existing) {
@@ -245,6 +252,7 @@ export async function saveOidcConfig(
             customScopes,
             providerType,
             providerLabel,
+            organizationId,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
@@ -284,6 +292,7 @@ export async function saveOidcConfig(
             customScopes,
             providerType,
             providerLabel,
+            organizationId,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
@@ -309,6 +318,7 @@ export async function saveOidcConfig(
                 customScopes: existing.customScopes,
                 providerType: existing.providerType,
                 providerLabel: existing.providerLabel,
+                organizationId: existing.organizationId,
                 hasClientSecret: Boolean(existing.clientSecret),
               }
             : null,
@@ -321,6 +331,7 @@ export async function saveOidcConfig(
             customScopes,
             providerType,
             providerLabel,
+            organizationId,
             roleMappingCount: roleMapping.length,
             hasClientSecret: Boolean(encryptedSecret),
           },

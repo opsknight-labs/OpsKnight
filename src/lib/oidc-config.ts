@@ -33,6 +33,7 @@ type OidcConfigRecord = {
   customScopes?: string | null;
   providerType?: string | null;
   providerLabel?: string | null;
+  organizationId?: string | null;
   profileMapping?: unknown;
   configVersion: number;
 };
@@ -52,6 +53,7 @@ export type OidcConfig = {
   customScopes?: string | null;
   providerType?: string | null;
   providerLabel?: string | null;
+  organizationId?: string | null;
   profileMapping?: Record<string, string> | null;
   configVersion: number;
 };
@@ -154,6 +156,7 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
       hasProfileMapping: !!config.profileMapping,
       providerType: config.providerType,
       providerLabel: config.providerLabel,
+      organizationId: config.organizationId,
       configVersion: config.configVersion,
       allowedDomainCount: config.allowedDomains?.length ?? 0,
     });
@@ -279,6 +282,7 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
         customScopes: config.customScopes,
         providerType: normalizeOidcProviderType(config.providerType, config.issuer),
         providerLabel: config.providerLabel,
+        organizationId: config.organizationId,
         profileMapping: parseProfileMapping(config.profileMapping),
         configVersion: config.configVersion,
       };

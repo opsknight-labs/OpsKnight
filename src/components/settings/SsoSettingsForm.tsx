@@ -51,6 +51,7 @@ type OidcConfig = {
   customScopes?: string | null;
   providerType?: string | null;
   providerLabel?: string | null;
+  organizationId?: string | null;
   profileMapping?: ProfileMapping | null;
   updatedAt?: string;
 };
@@ -158,6 +159,7 @@ export default function SsoSettingsForm({
   const initialDomains = (initialConfig?.allowedDomains ?? []).join(', ');
   const initialEnabled = initialConfig?.enabled ?? false;
   const initialProviderLabel = initialConfig?.providerLabel ?? '';
+  const initialOrganizationId = initialConfig?.organizationId ?? '';
   const initialCustomScopes = initialConfig?.customScopes ?? '';
   const initialAutoProvision = initialConfig?.autoProvision ?? true;
   const initialProviderType = normalizeOidcProviderType(initialConfig?.providerType, initialIssuer);
@@ -172,6 +174,7 @@ export default function SsoSettingsForm({
   const [clientSecretValue, setClientSecretValue] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [providerLabelValue, setProviderLabelValue] = useState(initialProviderLabel);
+  const [organizationIdValue, setOrganizationIdValue] = useState(initialOrganizationId);
   const [customScopesValue, setCustomScopesValue] = useState(initialCustomScopes);
   const [autoProvision, setAutoProvision] = useState(initialAutoProvision);
   const [selectedPreset, setSelectedPreset] = useState(initialProviderType);
@@ -242,6 +245,7 @@ export default function SsoSettingsForm({
     clientSecretValue.trim().length > 0 ||
     domains.trim() !== initialDomains.trim() ||
     providerLabelValue.trim() !== initialProviderLabel.trim() ||
+    organizationIdValue.trim() !== initialOrganizationId.trim() ||
     customScopesValue.trim() !== initialCustomScopes.trim() ||
     autoProvision !== initialAutoProvision ||
     isRoleMappingDirty ||
@@ -318,6 +322,7 @@ export default function SsoSettingsForm({
         setDomains(initialDomains);
         setEnabled(initialEnabled);
         setProviderLabelValue(initialProviderLabel);
+        setOrganizationIdValue(initialOrganizationId);
         setCustomScopesValue(initialCustomScopes);
         setAutoProvision(initialAutoProvision);
         setSelectedPreset(initialProviderType);
@@ -332,6 +337,7 @@ export default function SsoSettingsForm({
       }}
       className="space-y-6"
     >
+      <input type="hidden" name="providerType" value={selectedPreset} />
       {!hasEncryptionKey && (
         <Alert className="bg-amber-500/10 border-amber-500/30">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -717,6 +723,25 @@ export default function SsoSettingsForm({
             Leave empty to allow any domain verified and sent by your identity provider.
           </p>
         </div>
+
+        {selectedPreset === 'auth0' && (
+          <div className="space-y-2">
+            <Label htmlFor="organization-id" className="text-sm font-semibold">
+              Required Auth0 Organization ID
+            </Label>
+            <Input
+              id="organization-id"
+              name="organizationId"
+              value={organizationIdValue}
+              onChange={event => setOrganizationIdValue(event.target.value)}
+              placeholder="org_..."
+              className="font-mono text-sm h-10"
+            />
+            <p className="text-xs text-muted-foreground">
+              When set, the signed ID-token org_id claim must match exactly.
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">

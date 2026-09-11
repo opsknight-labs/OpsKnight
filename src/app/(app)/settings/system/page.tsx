@@ -93,6 +93,7 @@ export default async function SystemSettingsPage() {
       customScopes?: string | null;
       providerType?: string | null;
       providerLabel?: string | null;
+      organizationId?: string | null;
       profileMapping?: Record<string, string> | null;
       updatedAt: string;
     } | null = null;
@@ -109,6 +110,7 @@ export default async function SystemSettingsPage() {
         customScopes: rawOidcConfig.customScopes,
         providerType: rawOidcConfig.providerType,
         providerLabel: rawOidcConfig.providerLabel,
+        organizationId: rawOidcConfig.organizationId,
         profileMapping: rawOidcConfig.profileMapping as Record<string, string> | null,
         updatedAt: rawOidcConfig.updatedAt.toISOString(),
       };
@@ -429,9 +431,10 @@ export default async function SystemSettingsPage() {
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Authentication origin mismatch</AlertTitle>
             <AlertDescription>
-              OIDC uses <strong>{authOrigin.origin}</strong> from {authOrigin.source}. Other configured
-              public origins differ. Register <strong>{authOrigin.callbackUrl}</strong> at the identity
-              provider and align the conflicting URL settings to avoid proxy/callback confusion.
+              OIDC uses <strong>{authOrigin.origin}</strong> from {authOrigin.source}. Other
+              configured public origins differ. Register <strong>{authOrigin.callbackUrl}</strong>{' '}
+              at the identity provider and align the conflicting URL settings to avoid
+              proxy/callback confusion.
             </AlertDescription>
           </Alert>
         )}
