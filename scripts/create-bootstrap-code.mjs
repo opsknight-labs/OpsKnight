@@ -4,8 +4,10 @@ import { PrismaClient } from '@prisma/client';
 const BOOTSTRAP_CONFIG_KEY = 'auth.bootstrap.authorization';
 const BOOTSTRAP_TTL_MS = 30 * 60 * 1000;
 const BOOTSTRAP_ISSUE_ATTEMPTS = 4;
-const BOOTSTRAP_LOCK_SQL =
-  "SELECT pg_advisory_xact_lock(hashtext('auth.bootstrap.authorization'))";
+const BOOTSTRAP_LOCK_SQL = `
+  SELECT TRUE AS "acquired"
+  FROM (SELECT pg_advisory_xact_lock(hashtext('auth.bootstrap.authorization'))) AS lock_result
+`;
 
 const prisma = new PrismaClient();
 
@@ -46,7 +48,12 @@ async function issueBootstrapAuthorization() {
       return await prisma.$transaction(async tx => {
         // This explicit database lock makes issuance single-winner across every
         // application/container replica without relying on process-local state.
-        await tx.$queryRawUnsafe(BOOTSTRAP_LOCK_SQL);
+        // Return a supported boolean scalar instead of PostgreSQL's `void`
+        // pseudo-type so Prisma can deserialize the result safely.
+        const rows = await tx.$queryRawUnsafe(BOOTSTRAP_LOCK_SQL);
+        if (rows[0]?.acquired !== true) {
+          throw new Error('BOOTSTRAP_LOCK_NOT_ACQUIRED');
+        }
 
         if ((await tx.user.count()) > 0) {
           throw new Error('SYSTEM_ALREADY_INITIALIZED');
