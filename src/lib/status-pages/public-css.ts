@@ -942,6 +942,9 @@ ${R} .status-v3-incident-pill__pir:hover { text-decoration: underline; text-unde
 ${R} .status-v3-incident-pill__pir--muted { color: var(--status-text-muted); text-decoration: none; }
 ${R} .status-v3-incident-pill__affects { display: flex; align-items: center; gap: 0.35rem 0.45rem; flex-wrap: wrap; margin-block-start: 0.15rem; }
 ${R} .status-v3-incident-pill__affected-label { font-size: 0.72rem; font-weight: 600; color: var(--status-text-subtle); }
+${R} .status-v3-incident-pill--redacted { border-inline-start-color: #cbd5e1 !important; opacity: 0.96; }
+${R} .status-v3-incident-pill__redacted { margin: 0; font-size: 0.78rem; line-height: 1.45; color: var(--status-text-muted); background: color-mix(in srgb, var(--status-panel-muted-bg, #f1f5f9) 75%, transparent); border: 1px dashed var(--status-panel-border, #e2e8f0); border-radius: 4px; padding: 0.4rem 0.55rem; font-style: italic; }
+${R} .status-v3-incident-pill__redacted-badge { font-size: 0.68rem; font-weight: 650; letter-spacing: 0.03em; text-transform: uppercase; color: #475569; background: #f1f5f9; border: 1px solid #cbd5e1; padding: 0.08rem 0.36rem; border-radius: 999px; white-space: nowrap; }
 ${R} .status-v3-showmore { margin-block-start: 0.6rem; padding: 0.45rem 0.9rem; border: 1px solid var(--status-panel-border); border-radius: 4px; background: var(--status-panel-muted-bg); color: var(--status-text); font-weight: 650; font-size: 0.78rem; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
 ${R} .status-v3-showmore:hover { border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border)); background: color-mix(in srgb, var(--primary) 8%, var(--status-panel-muted-bg)); }
 @media (prefers-reduced-motion: reduce) { ${R} details.status-v3-incident-pill[data-active="true"] .status-v3-incident-pill__live { animation: none; } }

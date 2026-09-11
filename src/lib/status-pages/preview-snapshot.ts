@@ -160,39 +160,57 @@ export function buildPreviewSnapshot(input: {
         })
     : [];
 
+  const redactedByAge = (createdAt: string | Date | null | undefined) => {
+    if (allow('showIncidentHistoryDetails') === false) return true;
+    const raw = Reflect.get(input.privacy ?? {}, 'incidentHistoryDetailDays') as unknown;
+    if (raw == null) return false;
+    const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));
+    if (!Number.isFinite(days)) return false;
+    const t = createdAt ? Date.parse(String(createdAt)) : NaN;
+    if (Number.isNaN(t)) return false;
+    return t < now.getTime() - days * 86_400_000;
+  };
+  const clampTitle = (value: string, max = 120) =>
+    value.length <= max ? value : `${value.slice(0, max).trimEnd()}…`;
   const incidents: PublicIncident[] = input.showIncidents
-    ? input.incidents.map(incident => ({
-        status: incident.status as PublicIncidentStatus,
-        ...(allow('showIncidentDetails') ? { id: incident.id } : {}),
-        ...(allow('showIncidentTitles') ? { title: incident.title } : {}),
-        ...(allow('showIncidentDescriptions') && incident.description
-          ? { description: incident.description }
-          : {}),
-        ...(allow('showIncidentUrgency') && incident.urgency
-          ? { urgency: incident.urgency as PublicIncidentUrgency }
-          : {}),
-        ...(allow('showIncidentTimestamps')
-          ? {
-              ...(iso(incident.createdAt) ? { createdAt: iso(incident.createdAt) } : {}),
-              ...(iso(incident.acknowledgedAt)
-                ? { acknowledgedAt: iso(incident.acknowledgedAt) }
-                : {}),
-              ...(iso(incident.resolvedAt) ? { resolvedAt: iso(incident.resolvedAt) } : {}),
-            }
-          : {}),
-        ...(allow('showAffectedServices') && incident.service
-          ? {
-              service: {
-                id: incident.service.id,
-                name: incident.service.name,
-                ...(allow('showServiceRegions')
-                  ? { regions: splitRegions(incident.service.region) }
+    ? input.incidents.map(incident => {
+        const redacted = redactedByAge(incident.createdAt);
+        return {
+          status: incident.status as PublicIncidentStatus,
+          ...(allow('showIncidentDetails') ? { id: incident.id } : {}),
+          ...(allow('showIncidentTitles') && incident.title
+            ? { title: redacted ? clampTitle(incident.title) : incident.title }
+            : {}),
+          ...(!redacted && allow('showIncidentDescriptions') && incident.description
+            ? { description: incident.description }
+            : {}),
+          ...(allow('showIncidentUrgency') && incident.urgency
+            ? { urgency: incident.urgency as PublicIncidentUrgency }
+            : {}),
+          ...(allow('showIncidentTimestamps')
+            ? {
+                ...(iso(incident.createdAt) ? { createdAt: iso(incident.createdAt) } : {}),
+                ...(iso(incident.acknowledgedAt)
+                  ? { acknowledgedAt: iso(incident.acknowledgedAt) }
                   : {}),
-              },
-            }
-          : {}),
-        ...(incident.postmortem?.isPublic ? { postIncidentReview: true } : {}),
-      }))
+                ...(iso(incident.resolvedAt) ? { resolvedAt: iso(incident.resolvedAt) } : {}),
+              }
+            : {}),
+          ...(allow('showAffectedServices') && incident.service
+            ? {
+                service: {
+                  id: incident.service.id,
+                  name: incident.service.name,
+                  ...(allow('showServiceRegions')
+                    ? { regions: splitRegions(incident.service.region) }
+                    : {}),
+                },
+              }
+            : {}),
+          ...(incident.postmortem?.isPublic ? { postIncidentReview: true } : {}),
+          ...(redacted ? { redacted: true as const } : {}),
+        };
+      })
     : [];
 
   // Same announcement-derived maintenance/changelog split the real projector uses, so the preview

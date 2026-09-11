@@ -1531,6 +1531,8 @@ model StatusPage {
   showIncidentUrgency      Boolean @default(true)
   showUptimeHistory        Boolean @default(true)
   showRecentIncidents      Boolean @default(true)
+  showIncidentHistoryDetails Boolean @default(true)
+  incidentHistoryDetailDays  Int     @default(7)
   showChangelog            Boolean @default(true)
   showRegionHeatmap        Boolean @default(true)
   showPostIncidentReview   Boolean @default(true)

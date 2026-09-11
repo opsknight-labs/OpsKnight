@@ -113,7 +113,11 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
             },
           })
         ).map(incident =>
-          serializePublicStatusIncident(incident, statusPage, { pageId: statusPage.id })
+          serializePublicStatusIncident(
+            incident,
+            statusPage as unknown as Parameters<typeof serializePublicStatusIncident>[1],
+            { pageId: statusPage.id, now }
+          )
         )
       : [];
     const services = visibility.showServices

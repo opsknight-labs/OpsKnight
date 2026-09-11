@@ -25,6 +25,8 @@ export type StatusPagePublicSettings = {
   showUptimeHistory: boolean;
   showRecentIncidents: boolean;
   showPostIncidentReview?: boolean;
+  showIncidentHistoryDetails?: boolean;
+  incidentHistoryDetailDays?: number | null;
 };
 
 export function publicStatusVisibility(settings: StatusPagePublicSettings) {
@@ -79,12 +81,35 @@ function serializeDate(value: string | Date | null | undefined): string | undefi
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function shouldRedactIncident(
+  createdAt: string | Date | null | undefined,
+  settings: StatusPagePublicSettings,
+  now: Date
+): boolean {
+  if (settings.showIncidentHistoryDetails === false) return true;
+  const raw = settings.incidentHistoryDetailDays;
+  if (raw == null) return false;
+  const days = Math.max(1, Math.min(365, Math.floor(Number(raw))));
+  if (!Number.isFinite(days)) return false;
+  if (!createdAt) return false;
+  const created = new Date(createdAt).getTime();
+  if (Number.isNaN(created)) return false;
+  return created < now.getTime() - days * 86_400_000;
+}
+
+function truncateForRedacted(value: string, max = 120): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max).trimEnd()}…`;
+}
+
 /** Shape every public endpoint from the same status-page visibility controls. */
 export function serializePublicStatusIncident(
   incident: PublicIncidentInput,
   settings: StatusPagePublicSettings,
-  context?: { pageId: string }
+  context?: { pageId: string; now?: Date | string }
 ): PublicIncident {
+  const now = context?.now ? new Date(context.now) : new Date();
+  const redactedByAge = shouldRedactIncident(incident.createdAt, settings, now);
   const visibility = publicStatusVisibility(settings);
   const result: PublicIncident = { status: incident.status as PublicIncidentStatus };
   if (context?.pageId) {
@@ -92,8 +117,10 @@ export function serializePublicStatusIncident(
   }
 
   if (visibility.showIncidentId) result.id = incident.id;
-  if (visibility.showIncidentTitle) result.title = incident.title;
-  if (visibility.showIncidentDescription && incident.description) {
+  if (visibility.showIncidentTitle && incident.title) {
+    result.title = redactedByAge ? truncateForRedacted(incident.title) : incident.title;
+  }
+  if (!redactedByAge && visibility.showIncidentDescription && incident.description) {
     result.description = incident.description;
   }
   if (visibility.showIncidentUrgency && incident.urgency) {
@@ -122,11 +149,12 @@ export function serializePublicStatusIncident(
         : {}),
     };
   }
-  if (visibility.showIncidentId && visibility.showIncidentDescription && incident.events?.length) {
-    result.updates = incident.events.map(event => ({
+  if (!redactedByAge && visibility.showIncidentId && visibility.showIncidentDescription && incident.events?.length) {
+    // G01: cap + truncate updates so a long private thread cannot leak via detail window.
+    result.updates = incident.events.slice(0, 8).map(event => ({
       id: event.id,
       type: publicUpdateType(event.type),
-      message: event.message,
+      message: truncateForRedacted(event.message, 400),
       ...(visibility.showIncidentTimestamp ? { createdAt: serializeDate(event.createdAt) } : {}),
     }));
   }
@@ -148,6 +176,8 @@ export function serializePublicStatusIncident(
       };
     }
   }
+
+  if (redactedByAge) result.redacted = true;
 
   return result;
 }
@@ -174,7 +204,7 @@ function publicUpdateType(type: string | null | undefined): PublicIncidentUpdate
 export function serializePublicStatusApiIncident(
   incident: PublicIncidentInput,
   settings: StatusPagePublicSettings,
-  context?: { pageId: string }
+  context?: { pageId: string; now?: Date | string }
 ): Record<string, unknown> {
   const result = { ...serializePublicStatusIncident(incident, settings, context) } as Record<
     string,

@@ -226,6 +226,8 @@ export const StatusPageSettingsSchema = z
     showIncidentUrgency: z.boolean().optional(),
     showUptimeHistory: z.boolean().optional(),
     showRecentIncidents: z.boolean().optional(),
+    showIncidentHistoryDetails: z.boolean().optional(),
+    incidentHistoryDetailDays: z.number().int().min(1).max(365).optional(),
     showChangelog: z.boolean().optional(),
     showRegionHeatmap: z.boolean().optional(),
     showPostIncidentReview: z.boolean().optional(),

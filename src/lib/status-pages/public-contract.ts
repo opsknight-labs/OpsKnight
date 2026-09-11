@@ -131,6 +131,8 @@ export interface PublicIncident {
   /** @deprecated Prefer `postmortem`; retained for existing consumers. */
   postIncidentReview?: boolean;
   postmortem?: PublicPostmortemRef;
+  /** Set when detail fields were redacted for privacy (older history). */
+  redacted?: boolean;
 }
 
 /** Typed branding so the contract stops shipping `unknown`. */

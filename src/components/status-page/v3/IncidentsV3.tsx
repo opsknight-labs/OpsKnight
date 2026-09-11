@@ -175,10 +175,11 @@ const IncidentCard = memo(function IncidentCard({
   const hasRegions = Boolean(incident.service?.regions?.length);
   const hasUpdates = Boolean(incident.updates?.length);
   const hasDescription = Boolean(incident.description);
+  const isRedacted = incident.redacted === true;
 
   return (
     <details
-      className={`status-v3-incident-pill${isActive ? ' status-v3-incident-pill--active' : ' status-v3-incident-pill--resolved'}`}
+      className={`status-v3-incident-pill${isActive ? ' status-v3-incident-pill--active' : ' status-v3-incident-pill--resolved'}${isRedacted ? ' status-v3-incident-pill--redacted' : ''}`}
       data-status={isActive && impactToken ? impactToken : undefined}
       data-active={isActive ? 'true' : 'false'}
       open={defaultOpen}
@@ -199,6 +200,14 @@ const IncidentCard = memo(function IncidentCard({
           {hasService && <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>}
         </span>
         <span className="status-v3-incident-pill__summary-meta">
+          {isRedacted && (
+            <span
+              className="status-v3-chip status-v3-incident-pill__redacted-badge"
+              title="Older incidents show limited detail."
+            >
+              Limited detail
+            </span>
+          )}
           {incident.publicImpact && impactLabel && (
             <StatusBadge status={incident.publicImpact} label={impactLabel} size="xs" showDot pulse={isActive} />
           )}
@@ -232,9 +241,13 @@ const IncidentCard = memo(function IncidentCard({
           </div>
         )}
 
-        {hasDescription && <ClampedDesc text={incident.description!} />}
+        {isRedacted ? (
+          <p className="status-v3-incident-pill__redacted">Detailed update is hidden for older history.</p>
+        ) : (
+          hasDescription && <ClampedDesc text={incident.description!} />
+        )}
 
-        {hasUpdates && (
+        {!isRedacted && hasUpdates && (
           <ol className="status-v3-incident-pill__updates" role="list">
             {incident.updates!.map(update => {
               const updAbsolute = update.createdAt

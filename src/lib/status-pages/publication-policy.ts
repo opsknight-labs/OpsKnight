@@ -76,6 +76,7 @@ export const STATUS_PAGE_DISCLOSURE_BOOLEANS = [
   'showCustomFields',
   'showUptimeHistory',
   'showRecentIncidents',
+  'showIncidentHistoryDetails',
   'showPostIncidentReview',
   'showChangelog',
   'enableUptimeExports',
@@ -98,6 +99,7 @@ export const STATUS_PAGE_RESTRICTION_BOOLEANS = [
 export const STATUS_PAGE_DISCLOSURE_BOUNDS = [
   { field: 'maxIncidentsToShow', tightenOn: 'decrease' },
   { field: 'incidentHistoryDays', tightenOn: 'decrease' },
+  { field: 'incidentHistoryDetailDays', tightenOn: 'decrease' },
   { field: 'dataRetentionDays', tightenOn: 'decrease' },
   { field: 'statusApiRateLimitMax', tightenOn: 'decrease' },
   // Same request ceiling over a longer window means fewer requests allowed.
@@ -213,6 +215,9 @@ function effectiveBound(field: string, value: unknown, current: StatusPageClassi
   }
   if (field === 'incidentHistoryDays') {
     return statusPagePublicationLimits({ ...settings, incidentHistoryDays: value }).historyDays;
+  }
+  if (field === 'incidentHistoryDetailDays') {
+    return Math.max(1, Math.min(365, Math.floor(value)));
   }
   return value;
 }

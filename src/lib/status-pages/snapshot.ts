@@ -548,7 +548,12 @@ export async function buildStatusPageSnapshot(
     },
     services: visibleServices,
     regions: visibility.showServices ? aggregatePublicRegions(services) : [],
-    incidents: incidents.map(incident => serializePublicStatusIncident(incident, page, { pageId })),
+    incidents: incidents.map(incident =>
+      serializePublicStatusIncident(incident, page as unknown as Parameters<typeof serializePublicStatusIncident>[1], {
+        pageId,
+        now,
+      })
+    ),
     ...(maintenanceEntries.length ? { maintenance: maintenanceEntries } : {}),
     announcements: displayAnnouncements.map(item => {
       const affected = page.showAffectedServices
