@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import type { PublicStatusBranding } from '@/lib/status-pages/public-contract';
 
 interface StatusPageHeaderProps {
   statusPage: {
@@ -8,7 +9,7 @@ interface StatusPageHeaderProps {
     contactEmail?: string | null;
     contactUrl?: string | null;
   };
-  branding?: Record<string, unknown>;
+  branding?: (PublicStatusBranding & { logo?: string }) | null;
   rssHref?: string | null;
   apiHref?: string | null;
   /** Visitor browser IANA zone. All visible timestamps on the page use this same value. */
@@ -129,9 +130,10 @@ export default function StatusPageHeader({
   generatedAt,
   refreshIntervalSeconds = null,
 }: StatusPageHeaderProps) {
+  const brand = branding ?? undefined;
   const logoUrl =
-    (typeof branding.logoUrl === 'string' && branding.logoUrl) ||
-    (typeof branding.logo === 'string' && branding.logo) ||
+    (typeof brand?.logoUrl === 'string' && brand.logoUrl) ||
+    (typeof brand?.logo === 'string' && brand.logo) ||
     '/logo.svg';
   const [now, setNow] = useState<Date | null>(null);
   const [deadlineMs, setDeadlineMs] = useState<number | null>(null);
