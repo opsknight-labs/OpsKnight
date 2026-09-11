@@ -36,10 +36,10 @@ export const STATUS_PRESENTATION: Record<
   { label: string; token: string; icon: string }
 > = {
   OPERATIONAL: { label: 'Operational', token: 'operational', icon: '✓' },
-  DEGRADED: { label: 'Performance issues', token: 'degraded', icon: '⚠' },
-  MAINTENANCE: { label: 'Under maintenance', token: 'maintenance', icon: '⚙' },
-  PARTIAL_OUTAGE: { label: 'Limited availability', token: 'partial-outage', icon: '◐' },
-  MAJOR_OUTAGE: { label: 'Outage', token: 'major-outage', icon: '✕' },
+  DEGRADED: { label: 'Degraded Performance', token: 'degraded', icon: '⚠' },
+  MAINTENANCE: { label: 'Under Maintenance', token: 'maintenance', icon: '⚙' },
+  PARTIAL_OUTAGE: { label: 'Partial Outage', token: 'partial-outage', icon: '◐' },
+  MAJOR_OUTAGE: { label: 'Major Outage', token: 'major-outage', icon: '✕' },
   UNKNOWN: { label: 'Unverified', token: 'unknown', icon: '?' },
 };
 
@@ -122,8 +122,8 @@ export function deriveOverallPublicHealth(
       knownServiceCount: 0,
       unknownServiceCount,
       confidence: 'none',
-      headline: 'Current status unavailable',
-      note: 'We could not verify service health just now. This page refreshes automatically.',
+      headline: 'Status unverified',
+      note: 'Service health could not be verified. This page refreshes automatically.',
     };
   }
 
@@ -157,29 +157,24 @@ export function overallHeadline(
       : 'All known systems operational';
   }
 
-  const scope =
-    counts.worstCount === 1
-      ? 'One service'
-      : counts.worstCount === counts.knownServiceCount
-        ? 'All services'
-        : 'Some services';
-
   switch (worst) {
     case 'MAJOR_OUTAGE':
-      return `${scope} ${counts.worstCount === 1 ? 'is' : 'are'} experiencing an outage`;
-    case 'PARTIAL_OUTAGE':
       return counts.worstCount === 1
-        ? 'One service has limited availability'
-        : `${scope} have limited availability`;
-    case 'DEGRADED':
-      return counts.worstCount === 1
-        ? 'One service has performance issues'
+        ? 'One service down'
         : counts.worstCount === counts.knownServiceCount
-          ? 'Performance issues'
-          : 'Some services have performance issues';
+          ? 'Major outage'
+          : 'Partial outage';
+    case 'PARTIAL_OUTAGE':
+      return counts.worstCount === counts.knownServiceCount
+        ? 'Partial outage'
+        : 'Some services degraded';
+    case 'DEGRADED':
+      return counts.worstCount === counts.knownServiceCount
+        ? 'Degraded performance'
+        : 'Some services degraded';
     case 'MAINTENANCE':
       return counts.worstCount === 1
-        ? 'One service is under maintenance'
+        ? 'One service under maintenance'
         : 'Maintenance in progress';
     case 'UNKNOWN':
       return OVERALL_HEADLINE.UNKNOWN;
@@ -208,10 +203,10 @@ export function presentOverallHeadline(
 export const OVERALL_HEADLINE: Record<PublicServiceStatus, string> = {
   OPERATIONAL: 'All systems operational',
   MAINTENANCE: 'Maintenance in progress',
-  DEGRADED: 'Performance issues',
-  PARTIAL_OUTAGE: 'Limited availability',
-  MAJOR_OUTAGE: 'Outage detected',
-  UNKNOWN: 'Status unavailable',
+  DEGRADED: 'Degraded performance',
+  PARTIAL_OUTAGE: 'Partial outage',
+  MAJOR_OUTAGE: 'Major outage',
+  UNKNOWN: 'Status unverified',
 };
 
 /**
@@ -241,11 +236,11 @@ export function legacyPublicStatus(status: PublicServiceStatus): LegacyPublicSta
 /** Supporting sentence under the headline. */
 export const OVERALL_DETAIL: Record<PublicServiceStatus, string> = {
   OPERATIONAL: 'All published services are operating normally.',
-  MAINTENANCE: 'Planned work is in progress on one or more services.',
-  DEGRADED: 'At least one service is slower or less reliable than usual.',
-  PARTIAL_OUTAGE: 'At least one service has limited functionality.',
-  MAJOR_OUTAGE: 'One or more services are currently experiencing an outage.',
-  UNKNOWN: 'We cannot verify service health right now.',
+  MAINTENANCE: 'Scheduled maintenance is in progress.',
+  DEGRADED: 'One or more services are experiencing degraded performance.',
+  PARTIAL_OUTAGE: 'One or more services are experiencing a partial outage.',
+  MAJOR_OUTAGE: 'One or more services are currently unavailable.',
+  UNKNOWN: 'Service health could not be verified.',
 };
 
 export function statusPresentation(status: PublicServiceStatus) {

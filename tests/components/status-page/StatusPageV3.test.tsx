@@ -74,20 +74,20 @@ describe('StatusPageV3', () => {
       />
     );
     expect(
-      screen.getByRole('heading', { name: 'One service is experiencing an outage' })
+      screen.getByRole('heading', { name: 'One service down' })
     ).toBeInTheDocument();
-    expect(screen.getAllByText('Outage').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Major Outage').length).toBeGreaterThan(0);
     expect(screen.getByText(/Status unverified for 1 additional service/)).toBeInTheDocument();
   });
 
   it('distinguishes partial from major outage', () => {
     render(<StatusPageV3 snapshot={snapshotOf([service({ status: 'PARTIAL_OUTAGE' })])} />);
     expect(
-      screen.getByRole('heading', { name: 'One service has limited availability' })
+      screen.getByRole('heading', { name: 'Partial outage' })
     ).toBeInTheDocument();
-    expect(screen.getAllByText('Limited availability').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Partial Outage').length).toBeGreaterThan(0);
     expect(
-      screen.queryByRole('heading', { name: 'One service is experiencing an outage' })
+      screen.queryByRole('heading', { name: 'One service down' })
     ).not.toBeInTheDocument();
   });
 

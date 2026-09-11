@@ -36,8 +36,8 @@ describe('deriveOverallPublicHealth', () => {
     const result = deriveOverallPublicHealth(services('UNKNOWN', 'UNKNOWN'));
     expect(result.status).toBe('UNKNOWN');
     expect(result.confidence).toBe('none');
-    expect(result.headline).toBe('Current status unavailable');
-    expect(result.note).toContain('could not verify');
+    expect(result.headline).toBe('Status unverified');
+    expect(result.note).toContain('could not be verified');
   });
 
   it('qualifies an otherwise healthy page rather than calling it unknown', () => {
@@ -57,7 +57,7 @@ describe('deriveOverallPublicHealth', () => {
       { status: 'MAJOR_OUTAGE' },
     ]);
     expect(result.status).toBe('MAJOR_OUTAGE');
-    expect(result.headline).toBe('One service is experiencing an outage');
+    expect(result.headline).toBe('One service down');
     expect(result.note).toBe('Status unverified for 1 additional service.');
   });
 
@@ -71,16 +71,16 @@ describe('deriveOverallPublicHealth', () => {
 
   it('keeps partial and major impact distinct without claiming the whole page is down', () => {
     expect(deriveOverallPublicHealth(services('PARTIAL_OUTAGE')).headline).toBe(
-      'One service has limited availability'
+      'Partial outage'
     );
     expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE')).headline).toBe(
-      'One service is experiencing an outage'
+      'One service down'
     );
     expect(
       deriveOverallPublicHealth(services('OPERATIONAL', 'MAJOR_OUTAGE', 'MAJOR_OUTAGE')).headline
-    ).toBe('Some services are experiencing an outage');
+    ).toBe('Partial outage');
     expect(deriveOverallPublicHealth(services('MAJOR_OUTAGE', 'MAJOR_OUTAGE')).headline).toBe(
-      'All services are experiencing an outage'
+      'Major outage'
     );
   });
 
