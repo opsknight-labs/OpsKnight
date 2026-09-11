@@ -45,32 +45,32 @@ export default function RegionHealthV3({ regions }: { regions: PublicRegionStatu
         </p>
       </header>
 
-      <ul className="status-v3-regions__grid">
-        {regions.map(region => {
-          const isHealthy = region.status === 'OPERATIONAL';
-          const label = statusPresentation(region.status).label;
+      <div className="status-v3-regions__panel">
+        <ul className="status-v3-regions__list">
+          {regions.map(region => {
+            const isHealthy = region.status === 'OPERATIONAL';
+            const label = statusPresentation(region.status).label;
 
-          return (
-            <li key={region.name} className="status-v3-region-card">
-              <div className="status-v3-region-card__header">
-                <span className="status-v3-region-card__name">{region.name}</span>
-              </div>
-              <div className="status-v3-region-card__status">
-                <StatusBadge
-                  status={region.status}
-                  label={label}
-                  size="sm"
-                  showDot
-                  pulse={!isHealthy}
-                />
-              </div>
-              <div className="status-v3-region-card__footer">
-                <span className="status-v3-region-card__desc">{describeRegion(region)}</span>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+            return (
+              <li key={region.name} className="status-v3-region-row">
+                <div className="status-v3-region-row__info">
+                  <span className="status-v3-region-row__name">{region.name}</span>
+                  <span className="status-v3-region-row__desc">{describeRegion(region)}</span>
+                </div>
+                <div className="status-v3-region-row__status">
+                  <StatusBadge
+                    status={region.status}
+                    label={label}
+                    size="sm"
+                    showDot
+                    pulse={!isHealthy}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }

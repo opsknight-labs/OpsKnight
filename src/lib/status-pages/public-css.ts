@@ -1066,83 +1066,78 @@ ${R} .status-v3-regions__tally-impacted {
   color: #ef4444 !important;
 }
 
-${R} .status-v3-regions__grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.9rem;
-  grid-template-columns: 1fr;
-}
-@media (min-width: 42rem) {
-  ${R} .status-v3-regions__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.95rem;
-  }
-}
-@media (min-width: 72rem) {
-  ${R} .status-v3-regions__grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
-  }
-}
-
-/* Robust, modern rectangular region card (zero text collisions) */
-${R} .status-v3-region-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1.1rem 1.25rem;
+/* Modern unified row list panel for regions (Stripe / GitHub style) */
+${R} .status-v3-regions__panel {
   border-radius: 4px;
   border: 1px solid var(--status-panel-border, #e2e8f0);
   background: var(--status-panel-bg, #ffffff);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  min-inline-size: 0;
+  overflow: hidden;
 }
-${R} .status-v3-region-card:hover {
-  border-color: color-mix(in srgb, var(--primary) 40%, var(--status-panel-border, #e2e8f0));
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-}
-${R} .status-v3-region-card__header {
+
+${R} .status-v3-regions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+}
+
+${R} .status-v3-region-row {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--status-panel-border, #e2e8f0);
+  transition: background-color 0.15s ease;
   min-inline-size: 0;
 }
-${R} .status-v3-region-card__name {
+
+${R} .status-v3-region-row:last-child {
+  border-bottom: none;
+}
+
+${R} .status-v3-region-row:hover {
+  background-color: color-mix(in srgb, var(--status-panel-muted-bg, #f8fafc) 75%, transparent);
+}
+
+${R} .status-v3-region-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-inline-size: 0;
+}
+
+${R} .status-v3-region-row__name {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.925rem;
   letter-spacing: -0.015em;
   color: var(--status-text-strong);
+  font-family: 'Space Grotesk', Inter, sans-serif;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: 'Space Grotesk', Inter, sans-serif;
 }
-${R} .status-v3-region-card__status {
-  display: flex;
-  align-items: center;
-}
-${R} .status-v3-region-card__status .status-badge,
-${R} .status-v3-region-card__status [data-badge="true"] {
-  font-size: 0.75rem;
-}
-${R} .status-v3-region-card__footer {
-  display: flex;
-  align-items: center;
-  padding-block-start: 0.55rem;
-  border-block-start: 1px solid color-mix(in srgb, var(--status-panel-border, #e2e8f0) 65%, transparent);
-}
-${R} .status-v3-region-card__desc {
+
+${R} .status-v3-region-row__desc {
   font-size: 0.8125rem;
   color: var(--status-text-muted);
   line-height: 1.35;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+${R} .status-v3-region-row__status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+${R} .status-v3-region-row__status .status-badge,
+${R} .status-v3-region-row__status [data-badge="true"] {
+  font-size: 0.75rem;
 }
 
 ${R} .status-site-footer {
