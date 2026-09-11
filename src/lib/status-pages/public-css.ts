@@ -2058,6 +2058,53 @@ ${R} .status-v3-announcement-pill__affected-label {
   font-weight: 600;
   color: var(--status-text-subtle);
 }
+${R} .status-v3-announcement-pill__desc--clamped,
+${R} .status-v3-changelog-pill__desc--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+${R} .status-v3-pill__expand {
+  align-self: flex-start;
+  margin-block-start: 0.05rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+${R} .status-v3-pill__expand:hover { text-decoration: underline; text-underline-offset: 2px; }
+${R} .status-v3-pill__expand:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+${R} .status-v3-pill__more {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--status-panel-border);
+  background: var(--status-panel-muted-bg);
+  color: var(--status-text-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+${R} .status-v3-pill__more:hover {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--status-panel-border));
+  color: var(--status-text-strong);
+}
+${R} .status-v3-pill__more:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  outline-offset: 1px;
+}
 
 /* ---- Card-less Inline Regions Strip ---- */
 ${R} .status-v3-regions-inline {
