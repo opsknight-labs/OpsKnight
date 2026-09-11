@@ -1,5 +1,3 @@
-import { isIP } from 'node:net';
-
 function isForbiddenJiraHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (
@@ -11,20 +9,32 @@ function isForbiddenJiraHost(hostname: string): boolean {
     return true;
   }
 
-  const family = isIP(host);
-  if (family === 4) {
-    const octets = host.split('.').map(Number);
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const octets = [
+      Number(ipv4Match[1]),
+      Number(ipv4Match[2]),
+      Number(ipv4Match[3]),
+      Number(ipv4Match[4]),
+    ];
+    if (octets.some(o => o < 0 || o > 255)) return true;
     const [a, b] = octets;
     return (
       a === 0 ||
       a === 127 ||
       (a === 169 && b === 254) ||
+      host.startsWith('169.254') ||
       (a === 100 && b >= 64 && b <= 127)
     );
   }
 
-  if (family === 6) {
-    return host === '::1' || host.startsWith('fe80:') || host === '::';
+  if (
+    host === '::1' ||
+    host.startsWith('fe80:') ||
+    host === '::' ||
+    host.includes(':')
+  ) {
+    return true;
   }
 
   return false;

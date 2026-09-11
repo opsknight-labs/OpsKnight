@@ -115,20 +115,20 @@ export async function saveJiraConfig(
       };
     }
 
+    const originChanged = existing
+      ? new URL(existing.baseUrl).origin !== new URL(baseUrl).origin
+      : false;
+
     // Stored outbound credentials are origin-bound. A masked token means
     // "reuse the existing secret" and must never let an administrator redirect
     // that secret to another host without re-entering it explicitly.
-    if (existing && !hasFreshApiToken) {
-      const existingOrigin = jiraOrigin(existing.baseUrl);
-      const requestedOrigin = jiraOrigin(baseUrl);
-      if (!existingOrigin || !requestedOrigin || existingOrigin !== requestedOrigin) {
-        return {
-          success: false,
-          code: 'VALIDATION_ERROR',
-          error: 'Re-enter the Jira API token when changing the Jira site origin.',
-          updatedAt: expectedUpdatedAt,
-        };
-      }
+    if (originChanged && !hasFreshApiToken) {
+      return {
+        success: false,
+        code: 'VALIDATION_ERROR',
+        error: 'Re-enter the Jira API token when changing the Jira site origin.',
+        updatedAt: expectedUpdatedAt,
+      };
     }
 
     const apiTokenEncrypted = hasFreshApiToken
