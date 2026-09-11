@@ -54,7 +54,7 @@ function slaGradeLabel(grade: string | undefined): string | undefined {
     case 'GOOD':
       return 'Good';
     case 'BELOW_TARGET':
-      return 'Below target';
+      return 'Below SLA';
     default:
       return grade;
   }

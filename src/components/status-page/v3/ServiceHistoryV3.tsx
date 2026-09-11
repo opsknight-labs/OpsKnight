@@ -11,7 +11,7 @@ import StatusBadge from '@/components/incident/StatusBadge';
 const GRADE_LABEL: Record<string, string> = {
   EXCELLENT: 'Excellent',
   GOOD: 'Good',
-  BELOW_TARGET: 'Below target',
+  BELOW_TARGET: 'Below SLA',
 };
 
 const HOUR_TICKS = ['00:00', '06:00', '12:00', '18:00', '24:00'];
