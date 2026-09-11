@@ -62,9 +62,8 @@ function profileClaims(profile: unknown): OidcProfileClaims {
 }
 
 function stringClaim(claims: OidcProfileClaims, key: string): string | null {
-  // Claim names are configuration/token data and the claims object has no prototype-sensitive use.
-  // eslint-disable-next-line security/detect-object-injection
-  const value = claims[key];
+  // Own-property lookup prevents prototype traversal for attacker-controlled claim names.
+  const value = Object.getOwnPropertyDescriptor(claims, key)?.value;
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 

@@ -5,8 +5,7 @@ export function boundedStringClaim(
   name: string,
   maximumLength: number
 ): string | null {
-  // eslint-disable-next-line security/detect-object-injection -- read-only lookup on an untrusted claims bag
-  const value = claims[name];
+  const value = Object.getOwnPropertyDescriptor(claims, name)?.value;
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
   if (!normalized || normalized.length > maximumLength) return null;
@@ -18,8 +17,7 @@ export function boundedStringArrayClaim(
   name: string,
   limits: { maximumItems: number; maximumItemLength: number }
 ): string[] | null {
-  // eslint-disable-next-line security/detect-object-injection -- read-only lookup on an untrusted claims bag
-  const value = claims[name];
+  const value = Object.getOwnPropertyDescriptor(claims, name)?.value;
   if (!Array.isArray(value) || value.length > limits.maximumItems) return null;
   if (!value.every(item => typeof item === 'string' && item.length <= limits.maximumItemLength)) {
     return null;
