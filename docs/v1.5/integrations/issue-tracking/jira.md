@@ -119,7 +119,7 @@ Incident notes are durably queued to every linked Jira issue in this form:
 NOTE_TEXT
 ```
 
-The OpsKnight note and its Jira delivery intent are committed together. A Jira outage therefore does not roll back the incident note; the external operation is retried independently. If provider delivery ultimately fails, inspect the Jira link/application operational state and Jira permissions before retrying operationally.
+The OpsKnight note and its Jira delivery intent are committed together. A Jira outage therefore does not roll back the incident note; Jira delivery is handled separately from the source incident mutation. Monitor operations after a prolonged provider outage or rate-limit window and retry/reconcile operationally if delivery remains ambiguous or failed.
 
 OpsKnight incident lifecycle transitions are **not** Jira workflow transitions and are not documented as automatically posting lifecycle comments in v1.5.
 
@@ -133,9 +133,9 @@ An action item without an incident/service mapping cannot create a correctly rou
 
 ## Reliability behavior
 
-Jira provider calls use bounded request timeouts and do not follow HTTP redirects with credentials. Durable Jira create/comment operations reconcile ambiguous provider outcomes before retrying so a lost response does not automatically create a duplicate Jira issue or comment.
+Jira provider calls use bounded request timeouts and do not follow HTTP redirects with credentials. Durable Jira create/comment operations use provider correlation/idempotency markers to reconcile ambiguous outcomes before another provider mutation, reducing duplicate Jira issues or comments after lost responses.
 
-When Jira returns `Retry-After`, OpsKnight carries that provider cooldown into durable retry scheduling. Repeated transient Jira failures can open a shared workspace-level cooldown so workers do not continuously hammer an unhealthy Jira workspace. Durable create operations become terminally `FAILED` after their retry/reconciliation budget is exhausted instead of remaining indefinitely ambiguous.
+Jira `Retry-After` values and transient provider failures are recorded in the external-operation/provider-admission state and can delay subsequent Jira work. Delivery remains asynchronous, so operators should monitor operations after long rate-limit or outage windows and explicitly retry/reconcile work that remains `AMBIGUOUS` or reaches `FAILED`. The v1.5 documentation does not guarantee that every deferred operation will automatically run until terminal completion across an arbitrarily long provider cooldown.
 
 Normal incident page rendering uses stored Jira metadata and does not perform hidden live Jira HTTP requests.
 
