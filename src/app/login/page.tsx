@@ -2,7 +2,10 @@ import LoginClient from './LoginClient';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
+import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { redirect } from 'next/navigation';
+import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,9 +20,6 @@ type SearchParams = {
   error?: string;
   password?: string;
 };
-
-import prisma from '@/lib/prisma';
-import { logger } from '@/lib/logger';
 
 export default async function LoginPage({
   searchParams,
@@ -52,8 +52,16 @@ export default async function LoginPage({
       ? 'Single sign-on is enabled but not configured correctly. Contact your administrator.'
       : null;
 
-  // Server-side check: If user is already authenticated, redirect them away
   const awaitedSearchParams = await searchParams;
+  const rawCallbackUrl =
+    typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : null;
+  // One callback policy for middleware, server-rendered login, credentials login,
+  // and SSO initiation. This rejects protocol-relative URLs, backslash tricks,
+  // auth loops, control characters, and external origins before the value ever
+  // reaches a client-side navigation API.
+  const callbackUrl = safeInternalCallbackUrl(rawCallbackUrl, '/');
+
+  // Server-side check: If user is already authenticated, redirect them away
   if (session) {
     if (session?.user?.email) {
       try {
@@ -73,20 +81,9 @@ export default async function LoginPage({
         }
       }
     }
-    const callbackUrl =
-      typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/';
-    // Only redirect to callbackUrl if it's a valid internal path (not login or signout)
-    const isValidCallback =
-      callbackUrl.startsWith('/') &&
-      !callbackUrl.startsWith('/login') &&
-      !callbackUrl.includes('/signout') &&
-      !callbackUrl.includes('/auth/signout');
-    const redirectUrl = isValidCallback ? callbackUrl : '/'; // Default to dashboard
-    redirect(redirectUrl);
+    redirect(callbackUrl);
   }
 
-  const callbackUrl =
-    typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/';
   const errorCode =
     typeof awaitedSearchParams?.error === 'string' ? awaitedSearchParams.error : null;
   const passwordSet = awaitedSearchParams?.password === '1';

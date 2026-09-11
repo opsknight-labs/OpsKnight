@@ -3,7 +3,7 @@
 import { CSSProperties } from 'react';
 
 type SpinnerSize = 'sm' | 'md' | 'lg';
-type SpinnerVariant = 'default' | 'primary' | 'white' | 'black';
+type SpinnerVariant = 'default' | 'primary' | 'white' | 'black' | 'current';
 
 interface SpinnerProps {
   size?: SpinnerSize;
@@ -12,33 +12,42 @@ interface SpinnerProps {
   style?: CSSProperties;
 }
 
-const sizeMap: Record<SpinnerSize, number> = {
-  sm: 16,
-  md: 24,
-  lg: 32,
-};
+function getSpinnerSize(size: SpinnerSize): number {
+  switch (size) {
+    case 'sm':
+      return 16;
+    case 'lg':
+      return 32;
+    case 'md':
+    default:
+      return 24;
+  }
+}
 
-const colorMap: Record<SpinnerVariant, string> = {
-  default: 'var(--text-muted)',
-  primary: 'var(--primary-color)',
-  white: '#ffffff',
-  black: '#000000',
-};
+function getSpinnerColor(variant: SpinnerVariant): string {
+  switch (variant) {
+    case 'primary':
+      return 'var(--primary-color)';
+    case 'white':
+      return '#ffffff';
+    case 'black':
+      return '#000000';
+    case 'current':
+      return 'currentColor';
+    case 'default':
+    default:
+      return 'var(--text-muted)';
+  }
+}
 
-/**
- * Spinner component for loading states
- *
- * @example
- * <Spinner size="md" variant="primary" />
- */
 export default function Spinner({
   size = 'md',
   variant = 'default',
   className = '',
   style,
 }: SpinnerProps) {
-  const spinnerSize = sizeMap[size];
-  const color = colorMap[variant];
+  const spinnerSize = getSpinnerSize(size);
+  const spinnerColor = getSpinnerColor(variant);
 
   return (
     <svg
@@ -47,14 +56,11 @@ export default function Spinner({
       height={spinnerSize}
       viewBox="0 0 24 24"
       fill="none"
-      stroke={color}
+      stroke={spinnerColor}
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{
-        animation: 'spin 1s linear infinite',
-        ...style,
-      }}
+      style={{ animation: 'spin 1s linear infinite', ...style }}
       aria-label="Loading"
       role="status"
     >

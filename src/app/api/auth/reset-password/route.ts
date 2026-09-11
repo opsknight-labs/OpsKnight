@@ -1,32 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { z } from 'zod';
+import { completePasswordReset } from '@/lib/password-reset';
+import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
 import { logger } from '@/lib/logger';
-import bcrypt from 'bcryptjs';
-import { createHash } from 'crypto';
-import { revokeUserSessions } from '@/lib/auth';
 import { getClientIp } from '@/lib/client-ip';
+import { readJsonBodyWithLimit } from '@/lib/request-body';
+
+const schema = z
+  .object({
+    token: z.string().min(32).max(512),
+    // Transport guard only. validatePasswordStrength() owns the semantic
+    // Unicode-code-point and bcrypt-byte limits.
+    password: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
+  })
+  .strict();
+
+function json(body: Record<string, unknown>, status: number) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      'Cache-Control': 'no-store, max-age=0',
+      'Referrer-Policy': 'no-referrer',
+    },
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { token, password } = body;
-
-    // Get IP for rate limiting
-    const ip = getClientIp(req.headers);
-
-    // Call shared logic which handles validation, rate limiting, hashing, and logging
-    const { completePasswordReset } = await import('@/lib/password-reset');
-    const result = await completePasswordReset(token, password, ip);
-
+    const parsed = schema.safeParse(await readJsonBodyWithLimit(req, 8192));
+    if (!parsed.success) return json({ error: 'Invalid reset request.' }, 400);
+    const result = await completePasswordReset(
+      parsed.data.token,
+      parsed.data.password,
+      getClientIp(req.headers)
+    );
     if (!result.success) {
-      // Determine status code based on error
-      const status = result.error?.includes('Too many') ? 429 : 400;
-      return NextResponse.json({ error: result.error || 'Failed to reset password' }, { status });
+      return json(
+        { error: result.error || 'Unable to reset password.' },
+        result.code === 'RATE_LIMITED' ? 429 : result.code === 'INTERNAL' ? 500 : 400
+      );
     }
-
-    return NextResponse.json({ message: result.message }, { status: 200 });
+    return json({ message: result.message }, 200);
   } catch (error) {
-    logger.error('API Error /auth/reset-password', { error });
-    return NextResponse.json({ error: 'Failed to reset password' }, { status: 500 });
+    logger.error('auth.password_reset.complete_route_failed', {
+      component: 'reset-password-route',
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return json({ error: 'Unable to reset password.' }, 500);
   }
 }

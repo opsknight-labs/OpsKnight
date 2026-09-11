@@ -143,6 +143,20 @@ jobs:
       always() &&
       (needs.release-quality.result == 'success' || needs.release-quality.result == 'skipped')
     runs-on: ubuntu-22.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_bootstrap_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -210,11 +224,42 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64
           push: false
-          tags: ${{ steps.meta_test_pr.outputs.tags }}
+          load: true
+          tags: |
+            ${{ steps.meta_test_pr.outputs.tags }}
+            opsknight-pr-validation:${{ github.sha }}
           labels: ${{ steps.meta_test_pr.outputs.labels }}
           cache-from: type=gha,scope=opsknight-main-amd64
           provenance: false
           sbom: false
+
+      - name: Prove first-admin bootstrap CLI in production image
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="opsknight-pr-validation:${GITHUB_SHA}"
+          DATABASE_URL='postgresql://postgres:postgres@localhost:5432/opsknight_bootstrap_ci?schema=public'
+
+          docker run --rm --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            --entrypoint node "$IMAGE" \
+            node_modules/prisma/build/index.js migrate deploy
+
+          FIRST_OUTPUT="$(docker run --rm --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            --entrypoint node "$IMAGE" \
+            scripts/create-bootstrap-code.mjs)"
+          printf '%s\n' "$FIRST_OUTPUT" | grep -q 'OpsKnight first-admin setup capability'
+          printf '%s\n' "$FIRST_OUTPUT" | grep -q 'Expires:'
+
+          if docker run --rm --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            --entrypoint node "$IMAGE" \
+            scripts/create-bootstrap-code.mjs; then
+            echo 'Second bootstrap issuance unexpectedly succeeded.' >&2
+            exit 1
+          fi
 
       - name: Build + push (test channel - main)
         if: github.ref == 'refs/heads/main'
