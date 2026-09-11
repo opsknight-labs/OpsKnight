@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 export type StatusBadgeProps = {
   status: string;
   label?: string;
+  variant?: 'success' | 'warning' | 'danger' | 'neutral' | 'info';
   size?: 'xs' | 'sm' | 'md' | 'lg';
   showDot?: boolean;
   pulse?: boolean;
@@ -21,6 +22,7 @@ export function getStatusVariant(
     case 'OPERATIONAL':
     case 'PUBLISHED':
     case 'COMPLETED':
+    case 'EXCELLENT':
       return 'success';
     case 'ACKNOWLEDGED':
     case 'DEGRADED':
@@ -30,13 +32,20 @@ export function getStatusVariant(
     case 'MONITORING':
     case 'IN_PROGRESS':
     case 'ARCHIVED':
+    case 'GOOD':
+    case 'MEDIUM':
       return 'warning';
     case 'OPEN':
     case 'CRITICAL':
+    case 'HIGH':
     case 'MAJOR_OUTAGE':
+    case 'BELOW_TARGET':
+    case 'POOR':
       return 'danger';
     case 'MAINTENANCE':
     case 'SCHEDULED':
+    case 'UPDATE':
+    case 'LOW':
       return 'info';
     case 'SNOOZED':
     case 'SUPPRESSED':
@@ -66,12 +75,13 @@ function getBadgeSize(size: 'xs' | 'sm' | 'md' | 'lg'): 'xs' | 'sm' | 'md' {
 function StatusBadge({
   status,
   label,
+  variant: customVariant,
   size = 'md',
   showDot = false,
   pulse = false,
   className,
 }: StatusBadgeProps) {
-  const variant = getStatusVariant(status);
+  const variant = customVariant ?? getStatusVariant(status);
   const badgeSize = getBadgeSize(size);
   const displayText = label ?? status;
 

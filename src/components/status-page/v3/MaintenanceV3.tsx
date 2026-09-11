@@ -1,5 +1,6 @@
 import type { PublicMaintenance } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
+import StatusBadge from '@/components/incident/StatusBadge';
 
 const STATE_LABEL: Record<PublicMaintenance['state'], string> = {
   SCHEDULED: 'Scheduled',
@@ -27,7 +28,13 @@ export default function MaintenanceV3({
           >
             <div className="status-v3-maintenance__head">
               <span className="status-v3-maintenance__title">{item.title}</span>
-              <span className="status-v3-maintenance__state">{STATE_LABEL[item.state]}</span>
+              <StatusBadge
+                status={item.state}
+                label={STATE_LABEL[item.state]}
+                size="sm"
+                showDot
+                pulse={item.state === 'IN_PROGRESS'}
+              />
             </div>
             <span className="status-muted" suppressHydrationWarning>
               {formatDateTime(item.startAt, timeZone, { format: 'short', hour12: true })}

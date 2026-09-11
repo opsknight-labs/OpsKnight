@@ -2,6 +2,7 @@
 
 import type { PublicStatusService, PublicUptimeWindow } from '@/lib/status-pages/public-contract';
 import { describeUptimeWindow, UPTIME_TIER_LABEL } from '@/lib/status-pages/presentation';
+import StatusBadge from '@/components/incident/StatusBadge';
 
 function publishedSlaLabel(window: PublicUptimeWindow | undefined) {
   if (window?.grade === 'EXCELLENT') return UPTIME_TIER_LABEL.excellent;
@@ -38,7 +39,18 @@ export default function StatusPageUptimeMetrics({ services }: { services: Public
             <article key={service.id} className="status-uptime-card status-panel">
               <div className="status-uptime-card__head">
                 <h3 className="status-service__name">{service.name}</h3>
-                {sla ? <span className="status-tag">{sla}</span> : null}
+                {sla ? (
+                  service.uptime?.days90?.grade ? (
+                    <StatusBadge
+                      status={service.uptime.days90.grade}
+                      label={sla}
+                      size="xs"
+                      showDot
+                    />
+                  ) : (
+                    <span className="status-tag">{sla}</span>
+                  )
+                ) : null}
               </div>
               {WINDOWS.map(({ key, label }) => {
                 const window = service.uptime?.[key];

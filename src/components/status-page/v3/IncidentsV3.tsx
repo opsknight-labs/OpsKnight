@@ -54,7 +54,7 @@ function IncidentCard({
             showDot
           />
         )}
-        {incident.urgency ? <span className="status-v3-chip">{incident.urgency}</span> : null}
+        {incident.urgency ? <StatusBadge status={incident.urgency} size="xs" /> : null}
         {incident.createdAt && (
           <span className="status-muted" suppressHydrationWarning>
             Started{' '}
@@ -66,11 +66,7 @@ function IncidentCard({
           <ol className="status-v3-incident__updates">
             {incident.updates.map(update => (
               <li key={update.id} className="status-v3-update">
-                <span
-                  className={`status-v3-update__type status-v3-update--${update.type.toLowerCase()}`}
-                >
-                  {update.type}
-                </span>
+                <StatusBadge status={update.type} size="xs" />
                 <span className="status-v3-update__message">{update.message}</span>
                 {update.createdAt && (
                   <span className="status-muted" suppressHydrationWarning>

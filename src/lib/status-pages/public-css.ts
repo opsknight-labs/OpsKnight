@@ -128,27 +128,41 @@ ${R} [data-badge="true"] .status-badge__dot {
 }
 ${R} .status-badge.status-operational,
 ${R} .status-badge.status-resolved,
+${R} .status-badge.status-completed,
+${R} .status-badge.status-excellent,
 ${R} [data-badge="true"][data-variant="success"],
 ${R} [data-badge="true"][data-status="operational"],
-${R} [data-badge="true"][data-status="resolved"] {
+${R} [data-badge="true"][data-status="resolved"],
+${R} [data-badge="true"][data-status="completed"],
+${R} [data-badge="true"][data-status="excellent"] {
   background: linear-gradient(to right, #10b981, #16a34a) !important;
   color: #ffffff !important;
 }
 ${R} .status-badge.status-degraded,
 ${R} .status-badge.status-partial-outage,
 ${R} .status-badge.status-acknowledged,
+${R} .status-badge.status-in-progress,
+${R} .status-badge.status-good,
+${R} .status-badge.status-medium,
 ${R} [data-badge="true"][data-variant="warning"],
 ${R} [data-badge="true"][data-status="degraded"],
 ${R} [data-badge="true"][data-status="partial-outage"],
-${R} [data-badge="true"][data-status="acknowledged"] {
+${R} [data-badge="true"][data-status="acknowledged"],
+${R} [data-badge="true"][data-status="in-progress"],
+${R} [data-badge="true"][data-status="good"],
+${R} [data-badge="true"][data-status="medium"] {
   background: linear-gradient(to right, #f59e0b, #ea580c) !important;
   color: #ffffff !important;
 }
 ${R} .status-badge.status-maintenance,
 ${R} .status-badge.status-scheduled,
+${R} .status-badge.status-update,
+${R} .status-badge.status-low,
 ${R} [data-badge="true"][data-variant="info"],
 ${R} [data-badge="true"][data-status="maintenance"],
-${R} [data-badge="true"][data-status="scheduled"] {
+${R} [data-badge="true"][data-status="scheduled"],
+${R} [data-badge="true"][data-status="update"],
+${R} [data-badge="true"][data-status="low"] {
   background: linear-gradient(to right, #3b82f6, #4f46e5) !important;
   color: #ffffff !important;
 }
@@ -156,11 +170,15 @@ ${R} .status-badge.status-major-outage,
 ${R} .status-badge.status-critical,
 ${R} .status-badge.status-high,
 ${R} .status-badge.status-open,
+${R} .status-badge.status-below-target,
+${R} .status-badge.status-poor,
 ${R} [data-badge="true"][data-variant="danger"],
 ${R} [data-badge="true"][data-status="major-outage"],
 ${R} [data-badge="true"][data-status="critical"],
 ${R} [data-badge="true"][data-status="high"],
-${R} [data-badge="true"][data-status="open"] {
+${R} [data-badge="true"][data-status="open"],
+${R} [data-badge="true"][data-status="below-target"],
+${R} [data-badge="true"][data-status="poor"] {
   background: linear-gradient(to right, #ef4444, #e11d48) !important;
   color: #ffffff !important;
 }
@@ -169,6 +187,9 @@ ${R} [data-badge="true"][data-variant="neutral"],
 ${R} [data-badge="true"][data-status="unknown"] {
   background: #334155 !important;
   color: #ffffff !important;
+}
+${R} .status-v3-update .status-badge {
+  justify-self: start;
 }
 
 /* ---- shared surfaces ---- */
