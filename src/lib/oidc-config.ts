@@ -173,6 +173,7 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
       profileMapping: config.profileMapping,
       providerType: config.providerType,
       providerLabel: config.providerLabel,
+      organizationId: config.organizationId,
       configVersion: config.configVersion,
     };
   } catch (error) {
