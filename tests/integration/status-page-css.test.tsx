@@ -47,14 +47,8 @@ vi.mock('@/lib/sla-server', () => ({
 vi.mock('@/components/status-page/StatusPageHeader', () => ({
   default: () => <div data-testid="status-page-header">Header</div>,
 }));
-vi.mock('@/components/status-page/StatusPageExperience', () => ({
-  default: () => <div data-testid="status-page-services">Services</div>,
-}));
-vi.mock('@/components/status-page/StatusPageIncidents', () => ({
-  default: () => <div data-testid="status-page-incidents">Incidents</div>,
-}));
-vi.mock('@/components/status-page/StatusPageAnnouncements', () => ({
-  default: () => <div data-testid="status-page-announcements">Announcements</div>,
+vi.mock('@/components/status-page/StatusPageV3', () => ({
+  default: () => <div data-testid="status-page-v3">Status Page V3</div>,
 }));
 
 describe('PublicStatusPage Custom CSS', () => {

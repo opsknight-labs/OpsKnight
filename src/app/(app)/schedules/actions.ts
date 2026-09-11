@@ -2,7 +2,11 @@
 
 import prisma from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
-import { assertAdminOrResponder, assertCanCreateScheduleOverride } from '@/lib/rbac';
+import {
+  assertAdmin,
+  assertAdminOrResponder,
+  assertCanCreateScheduleOverride,
+} from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { createInAppNotifications, getScheduleUserIds } from '@/lib/in-app-notifications';
 import { parseDateTimeInTimeZone, isValidTimeZone } from '@/lib/timezone';
@@ -16,8 +20,10 @@ import {
 import {
   addScheduleLayerUser,
   createScheduleOverrideMutation,
+  deleteScheduleMutation,
   moveScheduleLayerUser,
   removeScheduleLayerUser,
+  type ScheduleDependency,
 } from '@/lib/schedules/mutations';
 import { runSerializableTransaction } from '@/lib/db-utils';
 
@@ -845,3 +851,66 @@ export async function deleteOverride(
     return scheduleActionError(error, 'Failed to delete override.');
   }
 }
+
+export type DeleteScheduleResult = {
+  success?: boolean;
+  error?: string;
+  code?: string;
+  action?: string;
+  retryable?: boolean;
+  dependencies?: ScheduleDependency[];
+};
+
+export async function deleteSchedule(scheduleId: string): Promise<DeleteScheduleResult> {
+  let actorId: string;
+  try {
+    actorId = (await assertAdmin()).id;
+  } catch (error) {
+    if (error instanceof AppError) {
+      return {
+        success: false,
+        error: error.userMessage,
+        code: error.code,
+      };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
+      code: 'AUTHORIZATION_DENIED',
+    };
+  }
+
+  try {
+    await deleteScheduleMutation(scheduleId, actorId);
+
+    revalidatePath('/schedules');
+    revalidatePath('/audit');
+
+    return { success: true };
+  } catch (error) {
+    if (error instanceof AppError && error.code === 'SCHEDULE_IN_USE') {
+      return {
+        success: false,
+        error: error.userMessage,
+        code: error.code,
+        action: error.action,
+        dependencies: (error.details?.dependencies as ScheduleDependency[]) || [],
+      };
+    }
+
+    if (error instanceof AppError) {
+      return {
+        success: false,
+        error: error.userMessage,
+        code: error.code,
+        action: error.action,
+      };
+    }
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete schedule.',
+    };
+  }
+}
+

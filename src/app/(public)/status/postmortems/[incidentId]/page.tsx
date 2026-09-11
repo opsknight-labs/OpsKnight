@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { resolveStatusPage } from '@/lib/status-page-resolver';
 import { canPublishIncidentToStatusPage } from '@/lib/status-page-publication';
+import { serializePublicPostmortem } from '@/lib/status-pages/public-postmortem';
 import { deriveJiraCapability } from '@/lib/jira-capabilities';
 
 const PUBLIC_READ_ONLY_JIRA_CAPABILITY = deriveJiraCapability({
@@ -49,19 +50,23 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
       status: 'PUBLISHED',
       isPublic: true,
     },
-    include: {
+    select: {
+      title: true,
+      summary: true,
+      timeline: true,
+      impact: true,
+      rootCause: true,
+      resolution: true,
+      lessons: true,
+      status: true,
+      isPublic: true,
+      createdAt: true,
+      publishedAt: true,
       incident: {
         select: {
           id: true,
           title: true,
           resolvedAt: true,
-        },
-      },
-      createdBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
         },
       },
     },
@@ -71,14 +76,7 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
     notFound();
   }
 
-  const sanitizedPostmortem = {
-    ...postmortem,
-    createdBy: {
-      id: postmortem.createdBy?.id ?? 'deleted-user',
-      name: postmortem.createdBy?.name ?? 'OpsKnight Team',
-      email: '',
-    },
-  };
+  const sanitizedPostmortem = serializePublicPostmortem(postmortem);
 
   return (
     <main style={{ padding: 'var(--spacing-6)' }}>

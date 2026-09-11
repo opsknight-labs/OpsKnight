@@ -37,18 +37,6 @@ vi.mock('@/components/status-page/StatusPageHeader', () => ({
   default: () => <div>Header</div>,
 }));
 
-vi.mock('@/components/status-page/StatusPageServices', () => ({
-  default: () => <div>Services</div>,
-}));
-
-vi.mock('@/components/status-page/StatusPageIncidents', () => ({
-  default: () => <div>Incidents</div>,
-}));
-
-vi.mock('@/components/status-page/StatusPageAnnouncements', () => ({
-  default: () => <div>Announcements</div>,
-}));
-
 vi.mock('@/components/status-page/StatusPagePrivacySettings', () => ({
   default: () => <div>Privacy</div>,
 }));

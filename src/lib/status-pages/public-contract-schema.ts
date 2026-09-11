@@ -305,6 +305,7 @@ export const publicStatusPageSnapshotSchema = z
             })
             .passthrough()
             .optional(),
+          redacted: z.boolean().optional(),
         })
         .passthrough()
     ),

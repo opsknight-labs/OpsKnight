@@ -18,6 +18,22 @@ export function statusPagePublicationLimits(settings: {
 }
 
 /**
+ * Validate contactUrl at the persistence boundary: public status pages render this as a
+ * support href without additional sanitization downstream, so only safe navigable protocols
+ * are accepted here rather than relying on browser URL parsing at render time.
+ */
+export function isAllowedStatusPageContactUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'mailto:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Which publication policy a configuration change requires.
  *
  * The reason this exists: withdrawing a live status page is the right move when an administrator
@@ -76,6 +92,7 @@ export const STATUS_PAGE_DISCLOSURE_BOOLEANS = [
   'showCustomFields',
   'showUptimeHistory',
   'showRecentIncidents',
+  'showIncidentHistoryDetails',
   'showPostIncidentReview',
   'showChangelog',
   'enableUptimeExports',
@@ -98,6 +115,7 @@ export const STATUS_PAGE_RESTRICTION_BOOLEANS = [
 export const STATUS_PAGE_DISCLOSURE_BOUNDS = [
   { field: 'maxIncidentsToShow', tightenOn: 'decrease' },
   { field: 'incidentHistoryDays', tightenOn: 'decrease' },
+  { field: 'incidentHistoryDetailDays', tightenOn: 'decrease' },
   { field: 'dataRetentionDays', tightenOn: 'decrease' },
   { field: 'statusApiRateLimitMax', tightenOn: 'decrease' },
   // Same request ceiling over a longer window means fewer requests allowed.
@@ -213,6 +231,9 @@ function effectiveBound(field: string, value: unknown, current: StatusPageClassi
   }
   if (field === 'incidentHistoryDays') {
     return statusPagePublicationLimits({ ...settings, incidentHistoryDays: value }).historyDays;
+  }
+  if (field === 'incidentHistoryDetailDays') {
+    return Math.max(1, Math.min(365, Math.floor(value)));
   }
   return value;
 }

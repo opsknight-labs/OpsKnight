@@ -170,21 +170,13 @@ export function computeStatusPageTheme(params: {
 
   const font = resolveStatusPageFontFamily(params.fontFamily);
 
-  const panelBg = isDark
-    ? `color-mix(in srgb, ${bg} 78%, #ffffff 22%)`
-    : `color-mix(in srgb, #ffffff 95%, ${primary} 5%)`;
+  const panelBg = isDark ? `color-mix(in srgb, ${bg} 84%, #ffffff 16%)` : '#ffffff';
 
-  const panelBorder = isDark
-    ? `color-mix(in srgb, ${bg} 60%, #ffffff 40%)`
-    : `color-mix(in srgb, #e2e8f0 82%, ${primary} 18%)`;
+  const panelBorder = isDark ? `color-mix(in srgb, ${bg} 60%, #ffffff 40%)` : '#e2e8f0';
 
-  const panelMutedBg = isDark
-    ? `color-mix(in srgb, ${bg} 88%, #ffffff 12%)`
-    : `color-mix(in srgb, #f8fafc 88%, ${primary} 12%)`;
+  const panelMutedBg = isDark ? `color-mix(in srgb, ${bg} 90%, #ffffff 10%)` : '#f8fafc';
 
-  const panelMutedBorder = isDark
-    ? `color-mix(in srgb, ${bg} 70%, #ffffff 30%)`
-    : `color-mix(in srgb, #e2e8f0 80%, ${primary} 20%)`;
+  const panelMutedBorder = isDark ? `color-mix(in srgb, ${bg} 75%, #ffffff 25%)` : '#e2e8f0';
 
   const textMuted = isDark ? '#94a3b8' : '#64748b';
   const textSubtle = isDark ? '#64748b' : '#94a3b8';

@@ -29,4 +29,22 @@ describe('OIDC runtime provider networking', () => {
     );
     expect(provider.client?.id_token_signed_response_alg).toBe('RS256');
   });
+
+  it('uses canonical metadata issuer to match IdP ID token iss claim', () => {
+    const provider = OIDCProvider({
+      issuer: 'https://dev-example.us.auth0.com',
+      clientId: 'client-id',
+      clientSecret: 'secret',
+      metadata: {
+        issuer: 'https://dev-example.us.auth0.com/',
+        authorizationEndpoint: 'https://dev-example.us.auth0.com/authorize',
+        tokenEndpoint: 'https://dev-example.us.auth0.com/oauth/token',
+        jwksUri: 'https://dev-example.us.auth0.com/.well-known/jwks.json',
+      },
+    });
+
+    // openid-client validateJWT matches payload.iss strictly against this.issuer.issuer.
+    // Auth0 (and other providers) advertise and sign with trailing slash in iss.
+    expect(provider.issuer).toBe('https://dev-example.us.auth0.com/');
+  });
 });

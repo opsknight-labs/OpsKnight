@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 
 describe('enterprise identity documentation', () => {

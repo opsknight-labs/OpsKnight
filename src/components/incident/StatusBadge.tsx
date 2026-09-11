@@ -2,40 +2,66 @@
 
 import { memo } from 'react';
 import { cn } from '@/lib/utils';
-
 import { Badge } from '@/components/ui/shadcn/badge';
 
-type StatusBadgeProps = {
+export type StatusBadgeProps = {
   status: string;
-  size?: 'sm' | 'md' | 'lg';
+  label?: string;
+  variant?: 'success' | 'warning' | 'danger' | 'neutral' | 'info';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   showDot?: boolean;
+  pulse?: boolean;
   className?: string;
 };
 
-function getStatusVariant(status: string): 'success' | 'warning' | 'danger' | 'neutral' | 'info' {
-  switch (status) {
+export function getStatusVariant(
+  status: string
+): 'success' | 'warning' | 'danger' | 'neutral' | 'info' {
+  switch (status.toUpperCase()) {
     case 'RESOLVED':
     case 'OPERATIONAL':
     case 'PUBLISHED':
+    case 'COMPLETED':
+    case 'EXCELLENT':
       return 'success';
     case 'ACKNOWLEDGED':
     case 'DEGRADED':
+    case 'PARTIAL_OUTAGE':
+    case 'INVESTIGATING':
+    case 'IDENTIFIED':
+    case 'MONITORING':
+    case 'IN_PROGRESS':
     case 'ARCHIVED':
+    case 'GOOD':
+    case 'MEDIUM':
       return 'warning';
     case 'OPEN':
     case 'CRITICAL':
+    case 'HIGH':
+    case 'MAJOR_OUTAGE':
+    case 'BELOW_TARGET':
+    case 'POOR':
       return 'danger';
+    case 'MAINTENANCE':
+    case 'SCHEDULED':
+    case 'UPDATE':
+    case 'LOW':
+      return 'info';
     case 'SNOOZED':
     case 'SUPPRESSED':
     case 'DRAFT':
+    case 'UNKNOWN':
+    case 'UNVERIFIED':
       return 'neutral';
     default:
       return 'info';
   }
 }
 
-function getBadgeSize(size: 'sm' | 'md' | 'lg'): 'xs' | 'sm' | 'md' {
+function getBadgeSize(size: 'xs' | 'sm' | 'md' | 'lg'): 'xs' | 'sm' | 'md' {
   switch (size) {
+    case 'xs':
+      return 'xs';
     case 'sm':
       return 'xs';
     case 'lg':
@@ -46,14 +72,40 @@ function getBadgeSize(size: 'sm' | 'md' | 'lg'): 'xs' | 'sm' | 'md' {
   }
 }
 
-function StatusBadge({ status, size = 'md', showDot = false, className }: StatusBadgeProps) {
-  const variant = getStatusVariant(status);
+function StatusBadge({
+  status,
+  label,
+  variant: customVariant,
+  size = 'md',
+  showDot = false,
+  pulse = false,
+  className,
+}: StatusBadgeProps) {
+  const variant = customVariant ?? getStatusVariant(status);
   const badgeSize = getBadgeSize(size);
+  const displayText = label ?? status;
 
   return (
-    <Badge variant={variant} size={badgeSize} className={cn('uppercase', className)}>
-      {showDot && <span className="h-2 w-2 rounded-full bg-white/80" />}
-      {status}
+    <Badge
+      variant={variant}
+      size={badgeSize}
+      data-status={status.toLowerCase().replace(/_/g, '-')}
+      className={cn(
+        'status-badge',
+        `status-${status.toLowerCase().replace(/_/g, '-')}`,
+        label ? 'normal-case' : 'uppercase',
+        className
+      )}
+    >
+      {showDot && (
+        <span className="relative flex items-center justify-center shrink-0" aria-hidden="true">
+          {pulse && (
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+          )}
+          <span className="status-badge__dot relative inline-flex h-1.5 w-1.5 rounded-full bg-current opacity-90" />
+        </span>
+      )}
+      <span>{displayText}</span>
     </Badge>
   );
 }

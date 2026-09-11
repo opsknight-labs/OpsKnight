@@ -21,6 +21,8 @@ export type PrivacySettings = {
   showIncidentUrgency: boolean;
   showUptimeHistory: boolean;
   showRecentIncidents: boolean;
+  showIncidentHistoryDetails?: boolean;
+  incidentHistoryDetailDays?: number | null;
   maxIncidentsToShow: number;
   incidentHistoryDays: number;
   allowedCustomFields: string[];
@@ -385,13 +387,35 @@ export default function StatusPagePrivacySettings({
               label="Show Recent Incidents"
               helperText="Display recent incidents list"
             />
+            <Switch
+              checked={settings.showIncidentHistoryDetails ?? true}
+              onChange={checked => updateSetting('showIncidentHistoryDetails' as never, checked as never)}
+              label="Show Incident History Details"
+              helperText="When off, older resolved incidents show limited detail (title only)"
+            />
+            <FormField
+              type="input"
+              label="Incident History Detail Window (days)"
+              inputType="number"
+              value={settings.incidentHistoryDetailDays?.toString() ?? ''}
+              onChange={e =>
+                updateSetting(
+                  'incidentHistoryDetailDays' as never,
+                  (e.target.value ? parseInt(e.target.value) : null) as never
+                )
+              }
+              helperText="Resolved incidents older than this are redacted (1–365). Active incidents are never redacted."
+            />
             <FormField
               type="input"
               label="Maximum Incidents to Show"
               inputType="number"
               value={settings.maxIncidentsToShow.toString()}
-              onChange={e => updateSetting('maxIncidentsToShow', parseInt(e.target.value) || 50)}
-              helperText="Limit the number of incidents displayed (1-500)"
+              onChange={e => {
+                const next = Math.max(1, Math.min(100, parseInt(e.target.value) || 50));
+                updateSetting('maxIncidentsToShow', next);
+              }}
+              helperText="Number of incidents in the public snapshot (1–100; full history is paginated)"
             />
             <FormField
               type="input"

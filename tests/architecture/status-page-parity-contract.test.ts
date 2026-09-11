@@ -5,45 +5,49 @@ const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('status page preview/live parity contract', () => {
   it('renders the same component on both surfaces', () => {
-    // The regression this prevents: a second, smaller renderer was introduced for the public page
-    // while the admin preview kept the full one, so an administrator could configure and approve
-    // an experience visitors never received.
     const live = read('src/components/status-page/StatusPageSnapshotView.tsx');
     const preview = read('src/components/status-page/StatusPageLivePreview.tsx');
 
-    expect(live).toContain('StatusPageExperience');
-    expect(preview).toContain('StatusPageExperience');
+    expect(live).toContain('StatusPageV3');
+    expect(preview).toContain('StatusPageV3');
   });
 
   it('keeps a single services renderer', () => {
-    // Any new component that renders a list of public services is a fork of the experience and
-    // will drift from it. Extend the restored renderer instead.
     const components = readdirSync('src/components/status-page');
-    const serviceRenderers = components.filter(name =>
-      /^(Public)?StatusPage(Public)?Services/.test(name)
+    expect(components).toContain('v3');
+    expect(read('src/components/status-page/v3/ServiceHealthV3.tsx')).toContain('ServiceHistoryV3');
+    expect(read('src/components/status-page/v3/ServiceHistoryV3.tsx')).toContain(
+      'status-v3-history'
     );
-    expect(serviceRenderers).toEqual(['StatusPageServicesLegacy.tsx']);
   });
 
   it('shares one stylesheet between the document and the preview shadow root', () => {
-    // Selector-matched rules do not cross a shadow boundary, so the two surfaces must render from
-    // the same text rather than each carrying its own copy.
     const previewCss = read('src/lib/status-page-preview-css.ts');
-    const experience = read('src/components/status-page/StatusPageExperience.tsx');
+    const page = read('src/components/status-page/StatusPageV3.tsx');
 
     expect(previewCss).toContain('STATUS_PAGE_PUBLIC_CSS');
-    expect(experience).toContain('STATUS_PAGE_PUBLIC_CSS');
+    expect(page).toContain('STATUS_PAGE_PUBLIC_CSS');
+  });
+
+  it('applies custom CSS after the shared stylesheet on both surfaces', () => {
+    const live = read('src/components/status-page/StatusPageSnapshotView.tsx');
+    const preview = read('src/components/status-page/StatusPageLivePreview.tsx');
+    const portal = preview.slice(preview.indexOf('data-status-page-preview-baseline'));
+
+    expect(live).toContain('toSafeStyleTagContent');
+    expect(preview).toContain('toPreviewCustomCss');
+    expect(portal.indexOf('STATUS_PAGE_PREVIEW_BASE_CSS')).toBeLessThan(
+      portal.indexOf('toPreviewCustomCss')
+    );
   });
 
   it('keeps Tailwind utilities out of the public components', () => {
-    // They resolve from the document stylesheet, which the preview's shadow root never sees, so a
-    // utility class here is a style that silently disappears in preview only.
     const publicComponents = [
-      'StatusPageExperience',
-      'StatusPageMetricsLegacy',
+      'StatusPageV3',
+      'StatusPageUptimeMetrics',
+      'v3/ServiceHealthV3',
+      'v3/ServiceHistoryV3',
     ];
-    // The token must stand alone: a hyphen counts as a word boundary, so a naive \bgrid\b also
-    // matches project class names like `status-region-grid`.
     const utility =
       /className="[^"]*(?<![-\w])(?:mb-\d|mt-\d|p-\d|px-\d|py-\d|text-(?:sm|xs|lg|xl)|flex|grid|gap-\d|font-(?:bold|semibold)|w-full)(?![-\w])/;
 
@@ -54,10 +58,10 @@ describe('status page preview/live parity contract', () => {
   });
 
   it('derives no health severity in the presentation layer', () => {
-    // Status is decided by the projection so every surface agrees. A component that maps urgency
-    // to severity itself is a second, divergent status engine.
-    const experience = read('src/components/status-page/StatusPageExperience.tsx');
-    expect(experience).toContain('snapshot.services');
-    expect(experience).not.toContain('calculateServiceUptime');
+    const page = read('src/components/status-page/StatusPageV3.tsx');
+    expect(page).toContain('snapshot.services');
+    expect(page).not.toContain('calculateServiceUptime');
+    expect(page).not.toContain('publicStatusForIncidentUrgency');
+    expect(page).not.toContain('createStatusPageViewModel');
   });
 });

@@ -44,10 +44,10 @@
   --status-text-muted: var(--sp-muted, #6b7280);
   --status-text-subtle: var(--sp-muted-2, var(--sp-muted, #94a3b8));
   --status-text-inverse: var(--sp-inverse, #ffffff);
-  --status-panel-bg: var(--sp-panel-bg, color-mix(in srgb, #ffffff 94%, var(--status-primary, #2563eb) 6%));
-  --status-panel-border: var(--sp-panel-border, color-mix(in srgb, #e5e7eb 82%, var(--status-primary, #2563eb) 18%));
-  --status-panel-muted-bg: var(--sp-panel-muted-bg, color-mix(in srgb, #f8fafc 85%, var(--status-primary, #2563eb) 15%));
-  --status-panel-muted-border: var(--sp-panel-muted-border, color-mix(in srgb, #e2e8f0 80%, var(--status-primary, #2563eb) 20%));
+  --status-panel-bg: var(--sp-panel-bg, #ffffff);
+  --status-panel-border: var(--sp-panel-border, #e2e8f0);
+  --status-panel-muted-bg: var(--sp-panel-muted-bg, #f8fafc);
+  --status-panel-muted-border: var(--sp-panel-muted-border, #e2e8f0);
 }
 
 /* Public status-page rules now live in src/lib/status-pages/public-css.ts, so the live page and

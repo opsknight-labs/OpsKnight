@@ -25,11 +25,21 @@ const snapshot: StatusPageSnapshot = {
     note: null,
   },
   page: {
-    id: 'page-1', name: 'Acme status', showSubscribe: false, showServicesByRegion: false,
-    showRegionHeatmap: false, showPostIncidentReview: true, showChangelog: true,
-    enableUptimeExports: true, isDefault: true, requireAuth: false, enabled: true,
-    statusApiRequireToken: false, statusApiRateLimitEnabled: false,
-    statusApiRateLimitMax: 120, statusApiRateLimitWindowSec: 60,
+    id: 'page-1',
+    name: 'Acme status',
+    showSubscribe: false,
+    showServicesByRegion: false,
+    showRegionHeatmap: false,
+    showPostIncidentReview: true,
+    showChangelog: true,
+    enableUptimeExports: true,
+    isDefault: true,
+    requireAuth: false,
+    enabled: true,
+    statusApiRequireToken: false,
+    statusApiRateLimitEnabled: false,
+    statusApiRateLimitMax: 120,
+    statusApiRateLimitWindowSec: 60,
   },
   services: [
     {
@@ -58,44 +68,48 @@ const snapshot: StatusPageSnapshot = {
       service: { name: 'Payments', regions: ['eu-west-1'] },
     },
   ],
-  regions: [{
-    name: 'eu-west-1', status: 'DEGRADED', totalServices: 1, operationalServices: 0,
-    degradedServices: 1, maintenanceServices: 0, partialOutageServices: 0,
-    majorOutageServices: 0, unknownServices: 0, impactedServices: 1, serviceIds: ['service-1'],
-  }],
+  regions: [
+    {
+      name: 'eu-west-1',
+      status: 'DEGRADED',
+      totalServices: 1,
+      operationalServices: 0,
+      degradedServices: 1,
+      maintenanceServices: 0,
+      partialOutageServices: 0,
+      majorOutageServices: 0,
+      unknownServices: 0,
+      impactedServices: 1,
+      serviceIds: ['service-1'],
+    },
+  ],
   announcements: [],
   historyDays: 30,
 };
 
 describe('StatusPageSnapshotView publication parity', () => {
   it('renders every field included by the canonical visibility serializer', () => {
-    render(
-      <StatusPageSnapshotView
-        page={{ id: 'page-1', name: 'Acme status', showSubscribe: false }}
-        snapshot={snapshot}
-        stale={false}
-      />
-    );
+    render(<StatusPageSnapshotView snapshot={snapshot} stale={false} />);
 
     expect(screen.getAllByText('Payment processing').length).toBeGreaterThan(0);
     expect(screen.getByText(/Service tier: TIER_1/)).toBeInTheDocument();
     expect(screen.getByText(/Owned by Payments team/)).toBeInTheDocument();
     expect(screen.getByText('Elevated errors')).toBeInTheDocument();
     expect(screen.getByText('Card payments are delayed.')).toBeInTheDocument();
-    expect(screen.getByText('HIGH urgency')).toBeInTheDocument();
+    expect(screen.getByText('HIGH')).toBeInTheDocument();
     expect(screen.getByText(/Started/)).toBeInTheDocument();
-    expect(screen.getByText('Affected service: Payments')).toBeInTheDocument();
-    expect(screen.getByText('Incident incident-1')).toBeInTheDocument();
+    expect(screen.getAllByText('Payments').length).toBeGreaterThan(0);
   });
 
   it('does not reconstruct fields omitted by privacy projection', () => {
     render(
       <StatusPageSnapshotView
-        page={{ id: 'page-1', name: 'Acme status', showSubscribe: false }}
         snapshot={{
           ...snapshot,
           incidents: [{ status: 'OPEN' }],
-          services: [{ id: 'service-1', name: 'Payments', status: 'OPERATIONAL', activeIncidentCount: 0 }],
+          services: [
+            { id: 'service-1', name: 'Payments', status: 'OPERATIONAL', activeIncidentCount: 0 },
+          ],
         }}
         stale={false}
       />
@@ -109,33 +123,29 @@ describe('StatusPageSnapshotView publication parity', () => {
   it('honors region, changelog, post-incident review, and export settings', () => {
     render(
       <StatusPageSnapshotView
-        page={{
-          id: 'page-1',
-          name: 'Acme status',
-          showSubscribe: false,
-          showServicesByRegion: true,
-          showRegionHeatmap: true,
-          showPostIncidentReview: true,
-          showChangelog: true,
-          enableUptimeExports: true,
-        }}
         snapshot={{
           ...snapshot,
+          page: {
+            ...snapshot.page,
+            showServicesByRegion: true,
+            showRegionHeatmap: true,
+            showPostIncidentReview: true,
+            showChangelog: true,
+            enableUptimeExports: true,
+          },
           incidents: [
             {
               ...snapshot.incidents[0],
               status: 'RESOLVED',
-              postIncidentReview: true,
+              postmortem: { id: 'incident-1', available: true, title: 'Post-incident review' },
             },
           ],
-          announcements: [
+          changelog: [
             {
               id: 'update-1',
               title: 'New edge region',
               message: 'Traffic is now served closer to customers.',
-              type: 'UPDATE',
-              startDate: '2026-09-07T08:00:00.000Z',
-              endDate: null,
+              publishedAt: '2026-09-07T08:00:00.000Z',
             },
           ],
         }}
@@ -143,8 +153,7 @@ describe('StatusPageSnapshotView publication parity', () => {
       />
     );
 
-    expect(screen.getByRole('region', { name: 'eu-west-1 services' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Region health' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Regions' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Changelog' })).toBeInTheDocument();
     expect(screen.getByText('New edge region')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Post-incident review' })).toHaveAttribute(
@@ -164,23 +173,20 @@ describe('StatusPageSnapshotView publication parity', () => {
   it('honors header, footer, and changelog suppression from current page settings', () => {
     render(
       <StatusPageSnapshotView
-        page={{
-          id: 'page-1',
-          name: 'Hidden chrome status',
-          showSubscribe: false,
-          showChangelog: false,
-          branding: { showHeader: false, showFooter: false },
-        }}
         snapshot={{
           ...snapshot,
-          announcements: [
+          page: {
+            ...snapshot.page,
+            name: 'Hidden chrome status',
+            showChangelog: false,
+            branding: { showHeader: false, showFooter: false },
+          },
+          changelog: [
             {
               id: 'update-1',
               title: 'Hidden update',
               message: 'Should not render.',
-              type: 'UPDATE',
-              startDate: '2026-09-07T08:00:00.000Z',
-              endDate: null,
+              publishedAt: '2026-09-07T08:00:00.000Z',
             },
           ],
         }}
