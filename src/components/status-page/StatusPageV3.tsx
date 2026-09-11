@@ -147,6 +147,13 @@ export default function StatusPageV3({
         {showMaintenance && (
           <MaintenanceV3 maintenance={snapshot.maintenance} timeZone={timeZone} />
         )}
+        {(showAnnouncements || showChangelog) && (
+          <AnnouncementsV3
+            announcements={showAnnouncements ? snapshot.announcements : []}
+            changelog={showChangelog ? snapshot.changelog : undefined}
+            timeZone={timeZone}
+          />
+        )}
         {showRegions && <RegionHealthV3 regions={snapshot.regions} />}
         {showServices && (
           <ServiceHealthV3
@@ -165,13 +172,6 @@ export default function StatusPageV3({
                 ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`
                 : undefined
             }
-          />
-        )}
-        {(showAnnouncements || showChangelog) && (
-          <AnnouncementsV3
-            announcements={showAnnouncements ? snapshot.announcements : []}
-            changelog={showChangelog ? snapshot.changelog : undefined}
-            timeZone={timeZone}
           />
         )}
       </div>

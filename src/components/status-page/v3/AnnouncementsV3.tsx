@@ -1,7 +1,17 @@
 import type { PublicAnnouncement, PublicChangelogEntry } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
+import StatusBadge from '@/components/incident/StatusBadge';
 
-/** Announcements and changelog as two explicit V3 lists — the frontend no longer filters by type. */
+const TYPE_LABEL: Record<string, string> = {
+  INFO: 'Info',
+  WARNING: 'Warning',
+  INCIDENT: 'Notice',
+  MAINTENANCE: 'Maintenance',
+};
+
+/**
+ * Compact, card-like announcements and changelog strip matching the MaintenanceV3 architecture.
+ */
 export default function AnnouncementsV3({
   announcements,
   changelog,
@@ -16,38 +26,166 @@ export default function AnnouncementsV3({
   if (!hasAnnouncements && !hasChangelog) return null;
 
   return (
-    <section className="status-v3-announcements" aria-labelledby="status-v3-announcements-heading">
-      <h2 id="status-v3-announcements-heading">Announcements</h2>
+    <section
+      className="status-v3-announcements-inline"
+      aria-labelledby="status-v3-announcements-heading"
+    >
       {hasAnnouncements && (
-        <ul className="status-v3-announcements__list">
-          {announcements.map(item => (
-            <li
-              key={item.id}
-              className={`status-v3-announcement status-v3-announcement--${item.type.toLowerCase()}`}
+        <>
+          <div className="status-v3-announcements-inline__head">
+            <div className="status-v3-announcements-inline__title-wrap">
+              <h2
+                id="status-v3-announcements-heading"
+                className="status-v3-announcements-inline__title"
+              >
+                Announcements
+              </h2>
+              <span className="status-v3-announcements-inline__subtitle">Updates & notices</span>
+            </div>
+            <div
+              className="status-v3-announcements-inline__tally"
+              aria-label={`${announcements.length} announcements`}
             >
-              <span className="status-v3-announcement__title">{item.title}</span>
-              <span className="status-muted" suppressHydrationWarning>
-                {formatDateTime(item.startDate, timeZone, { format: 'short', hour12: true })}
+              <span className="status-v3-announcements-inline__tally-pill">
+                <span className="status-v3-announcements-inline__dot" aria-hidden="true" />
+                {announcements.length}{' '}
+                {announcements.length === 1 ? 'announcement' : 'announcements'}
               </span>
-              <p className="status-v3-announcement__message">{item.message}</p>
-            </li>
-          ))}
-        </ul>
+            </div>
+          </div>
+
+          <div className="status-v3-announcements-inline__list" role="list">
+            {announcements.map(item => {
+              const typeUpper = (item.type || 'INFO').toUpperCase();
+              const badgeLabel = TYPE_LABEL[typeUpper] || item.type;
+              const dateStr = formatDateTime(item.startDate, timeZone, {
+                format: 'short',
+                hour12: true,
+              });
+
+              return (
+                <div
+                  key={item.id}
+                  className={`status-v3-announcement-pill status-v3-announcement-pill--${typeUpper.toLowerCase()}`}
+                  role="listitem"
+                >
+                  <div className="status-v3-announcement-pill__head">
+                    <div className="status-v3-announcement-pill__lead">
+                      <svg
+                        className="status-v3-announcement-pill__icon"
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m3 11 18-5v12L3 14v-3z" />
+                        <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+                      </svg>
+                      <span className="status-v3-announcement-pill__title">{item.title}</span>
+                      <span className="status-v3-announcement-pill__divider" aria-hidden="true" />
+                      <span className="status-v3-announcement-pill__time" suppressHydrationWarning>
+                        {dateStr}
+                      </span>
+                    </div>
+                    <div className="status-v3-announcement-pill__status">
+                      <StatusBadge status={typeUpper} label={badgeLabel} size="xs" showDot />
+                    </div>
+                  </div>
+
+                  {item.message && (
+                    <p className="status-v3-announcement-pill__desc">{item.message}</p>
+                  )}
+
+                  {((item.affectedServices && item.affectedServices.length > 0) ||
+                    (item.affectedRegions && item.affectedRegions.length > 0)) && (
+                    <div className="status-v3-announcement-pill__meta">
+                      <span className="status-v3-announcement-pill__affected-label">Affects:</span>
+                      {item.affectedServices?.map(service => (
+                        <span
+                          key={service.id || service.name}
+                          className="status-v3-chip status-v3-chip--muted"
+                        >
+                          {service.name}
+                        </span>
+                      ))}
+                      {item.affectedRegions?.map(region => (
+                        <span key={region} className="status-v3-chip status-v3-chip--muted">
+                          {region}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
+
       {hasChangelog && (
-        <div className="status-v3-changelog">
-          <h3>Changelog</h3>
-          <ul className="status-v3-changelog__list">
+        <div className="status-v3-changelog-inline">
+          <div className="status-v3-announcements-inline__head">
+            <div className="status-v3-announcements-inline__title-wrap">
+              <h3 className="status-v3-announcements-inline__title">Changelog</h3>
+              <span className="status-v3-announcements-inline__subtitle">
+                Recent changes & releases
+              </span>
+            </div>
+          </div>
+          <div className="status-v3-announcements-inline__list" role="list">
             {changelog!.map(item => (
-              <li key={item.id} className="status-v3-changelog__item">
-                <span className="status-v3-changelog__title">{item.title}</span>
-                <span className="status-muted" suppressHydrationWarning>
-                  {formatDateTime(item.publishedAt, timeZone, { format: 'short', hour12: true })}
-                </span>
-                <p className="status-v3-changelog__message">{item.message}</p>
-              </li>
+              <div key={item.id} className="status-v3-announcement-pill" role="listitem">
+                <div className="status-v3-announcement-pill__head">
+                  <div className="status-v3-announcement-pill__lead">
+                    <svg
+                      className="status-v3-announcement-pill__icon"
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span className="status-v3-announcement-pill__title">{item.title}</span>
+                    <span className="status-v3-announcement-pill__divider" aria-hidden="true" />
+                    <span className="status-v3-announcement-pill__time" suppressHydrationWarning>
+                      {formatDateTime(item.publishedAt, timeZone, {
+                        format: 'short',
+                        hour12: true,
+                      })}
+                    </span>
+                  </div>
+                </div>
+                {item.message && (
+                  <p className="status-v3-announcement-pill__desc">{item.message}</p>
+                )}
+                {item.affectedServices && item.affectedServices.length > 0 && (
+                  <div className="status-v3-announcement-pill__meta">
+                    <span className="status-v3-announcement-pill__affected-label">Affects:</span>
+                    {item.affectedServices.map(service => (
+                      <span
+                        key={service.id || service.name}
+                        className="status-v3-chip status-v3-chip--muted"
+                      >
+                        {service.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
     </section>
