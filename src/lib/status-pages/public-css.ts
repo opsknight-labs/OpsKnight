@@ -537,10 +537,10 @@ ${R} .status-subscribe__segbtn--active, ${R} .status-subscribe__segbtn[aria-pres
   box-shadow: 0 1px 2px rgba(15,23,42,.06);
 }
 ${R} .status-subscribe__controls { display: flex; gap: .5rem; min-inline-size: 0; align-items: stretch; }
-${R} .status-subscribe__inputwrap { position: relative; flex: 1 1 auto; min-inline-size: 0; display: flex; align-items: center; }
-${R} .status-subscribe__inputicon { position: absolute; inset-inline-start: .65rem; color: var(--status-text-subtle); pointer-events: none; display: grid; place-items: center; }
+${R} .status-subscribe__inputwrap { position: relative; flex: 1 1 auto; min-inline-size: 0; display: block; }
+${R} .status-subscribe__inputicon { position: absolute; inset-inline-start: .72rem; inset-block-start: 50%; transform: translateY(-50%); color: var(--status-text-subtle); pointer-events: none; display: grid; place-items: center; inline-size: 1rem; block-size: 1rem; line-height: 0; }
 ${R} .status-subscribe__input {
-  min-inline-size: 0; inline-size: 100%; padding: .62rem .8rem .62rem 2rem;
+  min-inline-size: 0; inline-size: 100%; padding: .62rem .8rem .62rem 2.35rem;
   border: 1px solid var(--status-panel-border); border-radius: .6rem;
   background: var(--status-panel-bg); color: var(--status-text); font-size: .875rem;
 }
