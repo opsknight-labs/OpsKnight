@@ -16,6 +16,12 @@ const select = {
 
 type PatchOperation = { op?: unknown; path?: unknown; value?: unknown };
 
+function normalizedEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const email = value.trim().toLowerCase();
+  return /^\S+@\S+\.\S+$/.test(email) && email.length <= 320 ? email : null;
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
     return scimError(401, 'Invalid SCIM bearer token.');
@@ -72,5 +78,82 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return Response.json(serializeScimUser(user));
   } catch (error) {
     return scimError(409, error instanceof Error ? error.message : 'SCIM update rejected.');
+  }
+}
+
+export async function PUT(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
+    return scimError(401, 'Invalid SCIM bearer token.');
+  }
+  const { id } = await context.params;
+  const existing = await prisma.user.findFirst({
+    where: { id, scimExternalId: { not: null } },
+    select: { ...select, role: true },
+  });
+  if (!existing) return scimError(404, 'SCIM user not found.');
+
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const email = normalizedEmail(body?.userName);
+  if (!email) return scimError(400, 'A valid userName email is required.');
+  if (typeof body?.externalId === 'string' && body.externalId.trim() !== existing.scimExternalId) {
+    return scimError(409, 'externalId is immutable for an existing SCIM resource.');
+  }
+  const name =
+    typeof body?.displayName === 'string' && body.displayName.trim()
+      ? body.displayName.trim().slice(0, 320)
+      : existing.name;
+  const active = body?.active !== false;
+
+  try {
+    const user = await updateUserSecurityState(
+      id,
+      { status: active ? 'ACTIVE' : 'DISABLED' },
+      {
+        email,
+        name,
+        roleSource: 'SCIM',
+        tokenVersion: { increment: 1 },
+      }
+    );
+    await logAudit({
+      action: active ? 'scim.user.updated' : 'scim.user.deprovisioned',
+      entityType: 'USER',
+      entityId: id,
+      source: 'INTEGRATION',
+      details: { externalId: existing.scimExternalId, active, method: 'PUT' },
+    });
+    return Response.json(serializeScimUser(user));
+  } catch (error) {
+    return scimError(409, error instanceof Error ? error.message : 'SCIM replacement rejected.');
+  }
+}
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  if (!isScimRequestAuthorized(request.headers.get('authorization'))) {
+    return scimError(401, 'Invalid SCIM bearer token.');
+  }
+  const { id } = await context.params;
+  const existing = await prisma.user.findFirst({
+    where: { id, scimExternalId: { not: null } },
+    select: { id: true, scimExternalId: true },
+  });
+  if (!existing) return scimError(404, 'SCIM user not found.');
+
+  try {
+    await updateUserSecurityState(
+      id,
+      { status: 'DISABLED' },
+      { roleSource: 'SCIM', tokenVersion: { increment: 1 } }
+    );
+    await logAudit({
+      action: 'scim.user.deprovisioned',
+      entityType: 'USER',
+      entityId: id,
+      source: 'INTEGRATION',
+      details: { externalId: existing.scimExternalId, active: false, method: 'DELETE' },
+    });
+    return new Response(null, { status: 204 });
+  } catch (error) {
+    return scimError(409, error instanceof Error ? error.message : 'SCIM deletion rejected.');
   }
 }

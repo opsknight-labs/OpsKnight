@@ -10,6 +10,14 @@ import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
 export type OidcValidationResult = {
   isValid: boolean;
   error?: string;
+  metadata?: OidcRuntimeMetadata;
+};
+
+export type OidcRuntimeMetadata = {
+  issuer: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  jwksUri: string;
 };
 
 type OidcDiscoveryMetadata = {
@@ -25,6 +33,10 @@ type JsonWebKeySet = {
 };
 
 const MAX_JWKS_BYTES = 1_048_576;
+const RUNTIME_METADATA_TTL_MS = 300_000;
+let runtimeMetadataCache:
+  | { issuer: string; result: OidcValidationResult; expiresAt: number }
+  | undefined;
 
 function hasUsableSigningKey(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
@@ -288,7 +300,15 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
       };
     }
 
-    return { isValid: true };
+    return {
+      isValid: true,
+      metadata: {
+        issuer: config.issuer,
+        authorizationEndpoint: config.authorization_endpoint as string,
+        tokenEndpoint: config.token_endpoint as string,
+        jwksUri,
+      },
+    };
   } catch (error) {
     logger.error('[OIDC Validation] Connection error', { error });
 
@@ -305,4 +325,35 @@ export async function validateOidcConnection(issuer: string): Promise<OidcValida
       error: `Validation failed: ${errorMessage}`,
     };
   }
+}
+
+/**
+ * Resolve pinned metadata for the authentication runtime. Successful results
+ * are cached independently from the short-lived Auth.js options cache so every
+ * session evaluation does not contact the IdP. Actual token/JWKS sockets still
+ * use the protected DNS lookup supplied to openid-client.
+ */
+export async function getValidatedOidcRuntimeMetadata(
+  issuer: string
+): Promise<OidcValidationResult> {
+  const normalizedIssuer = issuer.trim();
+  if (
+    runtimeMetadataCache?.issuer === normalizedIssuer &&
+    runtimeMetadataCache.expiresAt > Date.now()
+  ) {
+    return runtimeMetadataCache.result;
+  }
+  const result = await validateOidcConnection(normalizedIssuer);
+  if (result.isValid && result.metadata) {
+    runtimeMetadataCache = {
+      issuer: normalizedIssuer,
+      result,
+      expiresAt: Date.now() + RUNTIME_METADATA_TTL_MS,
+    };
+  }
+  return result;
+}
+
+export function resetOidcRuntimeMetadataCache() {
+  runtimeMetadataCache = undefined;
 }

@@ -46,6 +46,7 @@ describe('OIDC configuration loading', () => {
       expect.objectContaining({
         organizationId: 'org_enterprise',
         configVersion: 3,
+        providerType: 'auth0',
       })
     );
   });

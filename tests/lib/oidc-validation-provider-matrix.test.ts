@@ -10,7 +10,11 @@ vi.mock('@/lib/network-security', () => ({
   safeOutboundFetch: safeOutboundFetchMock,
 }));
 
-import { validateOidcConnection } from '@/lib/oidc-validation';
+import {
+  getValidatedOidcRuntimeMetadata,
+  resetOidcRuntimeMetadataCache,
+  validateOidcConnection,
+} from '@/lib/oidc-validation';
 
 function makeMetadata(issuer: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -47,6 +51,7 @@ describe('OIDC discovery provider matrix', () => {
     assertSafeOutboundUrlMock.mockReset();
     assertSafeOutboundUrlMock.mockResolvedValue(undefined);
     safeOutboundFetchMock.mockReset();
+    resetOidcRuntimeMetadataCache();
   });
 
   it.each([
@@ -90,7 +95,7 @@ describe('OIDC discovery provider matrix', () => {
 
     const result = await validateOidcConnection(issuer);
 
-    expect(result).toEqual({ isValid: true });
+    expect(result).toEqual(expect.objectContaining({ isValid: true }));
     expect(safeOutboundFetchMock).toHaveBeenCalledWith(
       expectedDiscoveryUrl,
       expect.objectContaining({ method: 'GET' })
@@ -158,7 +163,7 @@ describe('OIDC discovery provider matrix', () => {
 
     const result = await validateOidcConnection('https://identity.example.com/');
 
-    expect(result).toEqual({ isValid: true });
+    expect(result).toEqual(expect.objectContaining({ isValid: true }));
   });
 
   it('rejects metadata with unsafe endpoints', async () => {
@@ -202,7 +207,7 @@ describe('OIDC discovery provider matrix', () => {
 
     const result = await validateOidcConnection('https://identity.example.com');
 
-    expect(result).toEqual({ isValid: true });
+    expect(result).toEqual(expect.objectContaining({ isValid: true }));
   });
 
   it('fetches and validates the advertised JWKS', async () => {
@@ -210,11 +215,22 @@ describe('OIDC discovery provider matrix', () => {
 
     const result = await validateOidcConnection('https://identity.example.com');
 
-    expect(result).toEqual({ isValid: true });
+    expect(result).toEqual(expect.objectContaining({ isValid: true }));
     expect(safeOutboundFetchMock).toHaveBeenCalledWith(
       'https://identity.example.com/jwks',
       expect.objectContaining({ method: 'GET' })
     );
+  });
+
+  it('pins validated runtime metadata without refetching it for every session', async () => {
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+
+    const first = await getValidatedOidcRuntimeMetadata('https://identity.example.com');
+    const second = await getValidatedOidcRuntimeMetadata('https://identity.example.com');
+
+    expect(first).toEqual(expect.objectContaining({ isValid: true }));
+    expect(second).toBe(first);
+    expect(safeOutboundFetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('rejects an empty or unusable JWKS', async () => {

@@ -1,11 +1,14 @@
 import type { OAuthConfig } from 'next-auth/providers/oauth';
 import { logger } from '@/lib/logger';
+import { safeOutboundLookup } from '@/lib/network-security';
+import type { OidcRuntimeMetadata } from '@/lib/oidc-validation';
 
 type OIDCConfig = {
   clientId: string;
   clientSecret: string;
   issuer: string;
   customScopes?: string | null;
+  metadata: OidcRuntimeMetadata;
 };
 
 type OIDCProfile = {
@@ -19,14 +22,12 @@ type OIDCProfile = {
 export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfile> {
   const issuer = config.issuer.replace(/\/$/, '');
   const scopes = `openid email profile ${config.customScopes || ''}`.trim();
-  const wellKnownUrl = `${issuer}/.well-known/openid-configuration`;
 
   logger.info('[OIDC] Initializing OIDC provider', {
     component: 'OIDCProvider',
     issuer,
     clientId: config.clientId,
     scopes,
-    wellKnownUrl,
     hasCustomScopes: !!config.customScopes,
   });
 
@@ -34,11 +35,18 @@ export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfil
     id: 'oidc',
     name: 'SSO',
     type: 'oauth',
-    wellKnown: wellKnownUrl,
     issuer,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
-    authorization: { params: { scope: scopes } },
+    authorization: {
+      url: config.metadata.authorizationEndpoint,
+      params: { scope: scopes },
+    },
+    token: { url: config.metadata.tokenEndpoint },
+    jwks_endpoint: config.metadata.jwksUri,
+    // openid-client performs the real token/JWKS calls. Its socket lookup must
+    // enforce the same all-address SSRF/DNS-rebinding policy as validation.
+    httpOptions: { lookup: safeOutboundLookup, timeout: 5000 },
     // openid-client validates the JOSE header against this client metadata at
     // callback time. This rejects alg=none, HS256, and algorithm downgrade;
     // discovery-time advertising alone is not a runtime security control.

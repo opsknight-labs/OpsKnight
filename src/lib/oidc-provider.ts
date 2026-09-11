@@ -47,9 +47,7 @@ export function isMicrosoftEntraGenericAuthority(authority: string | null): bool
  * authentication policy as well as UI branding, so lookalike hostnames must
  * never inherit provider-specific authentication behavior.
  */
-export function detectOidcProviderType(
-  issuerUrl: string | null | undefined
-): OidcProviderType {
+export function detectOidcProviderType(issuerUrl: string | null | undefined): OidcProviderType {
   if (!issuerUrl) return 'custom';
 
   let hostname: string;
@@ -85,10 +83,10 @@ export function detectOidcProviderType(
 }
 
 /**
- * The issuer is authoritative whenever it is available. A persisted provider
- * type is only a legacy fallback for rows that do not have an issuer. This is
- * important because provider type affects authentication policy and must not
- * be able to weaken that policy when it disagrees with the issuer hostname.
+ * A canonical provider issuer is always authoritative. Custom hostnames cannot
+ * identify an Auth0 or Okta tenant by themselves, so preserve those two stored
+ * families where they only tighten the generic policy. Never let a stored
+ * Entra or Google label grant special trust to an arbitrary hostname.
  *
  * The return is typed as string because persisted UI presets are extensible;
  * all values produced here are still constrained to OidcProviderType.
@@ -97,7 +95,16 @@ export function normalizeOidcProviderType(
   storedProviderType: string | null | undefined,
   issuerUrl: string | null | undefined
 ): string {
-  if (issuerUrl) return detectOidcProviderType(issuerUrl);
+  if (issuerUrl) {
+    const detected = detectOidcProviderType(issuerUrl);
+    if (
+      detected === 'custom' &&
+      (storedProviderType === 'auth0' || storedProviderType === 'okta')
+    ) {
+      return storedProviderType;
+    }
+    return detected;
+  }
   return isKnownProviderType(storedProviderType) ? storedProviderType : 'custom';
 }
 
@@ -127,7 +134,6 @@ export function hasOidcEmailLinkAssurance(
   emailVerifiedClaim: boolean | undefined
 ): boolean {
   return (
-    emailVerifiedClaim === true ||
-    (providerType === 'azure' && emailVerifiedClaim === undefined)
+    emailVerifiedClaim === true || (providerType === 'azure' && emailVerifiedClaim === undefined)
   );
 }

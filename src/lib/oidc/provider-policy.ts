@@ -49,7 +49,10 @@ function emailBoundary(claims: OidcClaims, allowedDomains: string[]): Organizati
 
 const genericPolicy: OidcProviderPolicy = {
   family: 'custom',
-  acceptedIdTokenAlgorithms: ['RS256', 'ES256'],
+  // The Auth.js/openid-client runtime is pinned to RS256. Keep discovery
+  // validation identical so an ES256-only provider cannot pass testing and
+  // then fail during its first real callback.
+  acceptedIdTokenAlgorithms: ['RS256'],
   validateIssuer: () => true,
   validateOrganizationBoundary: emailBoundary,
   allowsMissingEmailVerified: () => false,

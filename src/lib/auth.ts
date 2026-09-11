@@ -24,6 +24,7 @@ import {
   isLocalCredentialAllowed,
 } from '@/lib/local-auth-policy';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
+import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 
 /**
  * Security-sensitive user state is intentionally refreshed on every server-side
@@ -46,7 +47,7 @@ type AugmentedJWT = JWT & {
   rememberMe?: boolean;
   /** Last authenticated request seen for an OIDC session, in epoch milliseconds. */
   lastActivityAt?: number;
-  /** Time the IdP last authenticated this OIDC session, in epoch milliseconds. */
+  /** Time OpsKnight established this OIDC session, in epoch milliseconds. */
   oidcAuthenticatedAt?: number;
   /** Trust-version of the provider configuration that issued this session. */
   oidcConfigVersion?: number;
@@ -143,7 +144,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
   authOptionsInFlight = (async () => {
     const oidcConfig = await getOidcConfig();
-    // Enterprise OIDC sessions have independent absolute, idle, reauthentication,
+    const oidcValidation = oidcConfig
+      ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer)
+      : null;
+    const activeOidcConfig =
+      oidcConfig && oidcValidation?.isValid && oidcValidation.metadata ? oidcConfig : null;
+    // Enterprise OIDC sessions have independent absolute, idle, renewal,
     // and server-side revocation boundaries. Credentials retain remember-me
     // behavior, while OIDC never extends the original IdP authentication time.
     const enterpriseSession = getEnterpriseSessionPolicy();
@@ -154,11 +160,16 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     const oidcReauthenticateAfterMs = enterpriseSession.reauthenticateAfterSeconds * 1000;
     const localAuthPolicy = getLocalAuthPolicy();
 
-    if (oidcConfig) {
+    if (activeOidcConfig) {
       logger.info('[Auth] OIDC provider will be enabled', {
         component: 'auth',
-        issuer: oidcConfig.issuer,
-        clientId: oidcConfig.clientId,
+        issuer: activeOidcConfig.issuer,
+        clientId: activeOidcConfig.clientId,
+      });
+    } else if (oidcConfig) {
+      logger.error('[Auth] OIDC provider disabled because runtime metadata validation failed', {
+        component: 'auth',
+        error: oidcValidation?.error ?? 'Validated runtime metadata was unavailable',
       });
     } else {
       logger.debug('[Auth] OIDC provider not available, using credentials only', {
@@ -236,13 +247,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
       // operator explicitly opts in for a correctly configured reverse proxy.
       trustHost: process.env.AUTH_TRUST_HOST?.toLowerCase() === 'true',
       providers: [
-        ...(oidcConfig
+        ...(activeOidcConfig && oidcValidation?.metadata
           ? [
               OIDCProvider({
-                clientId: oidcConfig.clientId,
-                clientSecret: oidcConfig.clientSecret,
-                issuer: oidcConfig.issuer,
-                customScopes: oidcConfig.customScopes ?? null,
+                clientId: activeOidcConfig.clientId,
+                clientSecret: activeOidcConfig.clientSecret,
+                issuer: activeOidcConfig.issuer,
+                customScopes: activeOidcConfig.customScopes ?? null,
+                metadata: oidcValidation.metadata,
               }),
             ]
           : []),
@@ -525,7 +537,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               return clearSessionToken(augmentedToken, 'OIDC_CONFIGURATION_CHANGED');
             }
             if (currentTime - augmentedToken.oidcAuthenticatedAt >= oidcReauthenticateAfterMs) {
-              return clearSessionToken(augmentedToken, 'OIDC_REAUTHENTICATION_REQUIRED');
+              return clearSessionToken(augmentedToken, 'OIDC_SESSION_RENEWAL_REQUIRED');
             }
             if (
               augmentedToken.lastActivityAt &&

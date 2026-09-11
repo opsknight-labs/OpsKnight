@@ -87,10 +87,18 @@ export async function resolveOidcIdentityForSignIn(
   now = new Date()
 ): Promise<OidcIdentityResolutionResult> {
   const email = normalizeEmail(input.email);
+  const providerPolicy = getOidcProviderPolicy(input.issuer, input.providerType);
+  const organizationResult = providerPolicy.validateOrganizationBoundary(
+    { ...(input.claims ?? {}), ...(email ? { email } : {}) },
+    input.allowedDomains,
+    input.organizationId
+  );
+  if (!organizationResult.ok) return organizationResult;
 
-  // Established identity fast path. Missing or changed email/verification
-  // claims cannot move or destroy an existing immutable binding. An explicit
-  // negative email verification claim is rejected by the caller for all paths.
+  // Stable identity establishes who is signing in, while the provider policy
+  // independently establishes whether that identity is currently permitted.
+  // Re-evaluate the organization boundary on every login, including existing
+  // bindings, so tenant/domain/org policy changes take effect immediately.
   const existingIdentity = await prisma.oidcIdentity.findUnique({
     where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
     select: { userId: true },
@@ -113,13 +121,6 @@ export async function resolveOidcIdentityForSignIn(
   }
 
   if (!email) return { ok: false, reason: 'OIDC_EMAIL_REQUIRED' };
-  const providerPolicy = getOidcProviderPolicy(input.issuer, input.providerType);
-  const organizationResult = providerPolicy.validateOrganizationBoundary(
-    { ...(input.claims ?? {}), email },
-    input.allowedDomains,
-    input.organizationId
-  );
-  if (!organizationResult.ok) return organizationResult;
 
   try {
     return await runSerializableTransaction(async tx => {

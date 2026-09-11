@@ -364,6 +364,8 @@ export async function saveOidcConfig(
     // than remaining stale for several seconds.
     const { resetOidcConfigCache } = await import('@/lib/oidc-config');
     resetOidcConfigCache();
+    const { resetOidcRuntimeMetadataCache } = await import('@/lib/oidc-validation');
+    resetOidcRuntimeMetadataCache();
     revalidatePath('/settings/security');
     revalidatePath('/settings/system');
     revalidatePath('/login');

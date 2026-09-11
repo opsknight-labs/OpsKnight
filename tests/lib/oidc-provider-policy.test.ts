@@ -26,7 +26,6 @@ describe('OIDC provider security policy registry', () => {
     ]);
     expect(getOidcProviderPolicy('https://login.example.com').acceptedIdTokenAlgorithms).toEqual([
       'RS256',
-      'ES256',
     ]);
   });
 

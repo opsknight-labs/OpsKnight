@@ -16,6 +16,18 @@ vi.mock('@/lib/oidc-config', () => ({
   }),
 }));
 
+vi.mock('@/lib/oidc-validation', () => ({
+  getValidatedOidcRuntimeMetadata: vi.fn().mockResolvedValue({
+    isValid: true,
+    metadata: {
+      issuer: 'https://login.example.com/',
+      authorizationEndpoint: 'https://login.example.com/authorize',
+      tokenEndpoint: 'https://login.example.com/token',
+      jwksUri: 'https://login.example.com/jwks',
+    },
+  }),
+}));
+
 vi.mock('@/lib/oidc-identity-resolution', () => ({
   resolveOidcIdentityForSignIn: vi.fn(),
 }));
@@ -356,7 +368,7 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(token.error).toBe('OIDC_SESSION_IDLE_TIMEOUT');
   });
 
-  it('requires a fresh IdP authentication after the absolute reauthentication window', async () => {
+  it('requires a new OpsKnight OIDC session after the renewal window', async () => {
     const now = Date.now();
     const jwt = await getJwtCallback();
     const token = await jwt({
@@ -375,7 +387,7 @@ describe('Auth JWT + OIDC callback contract', () => {
     });
 
     expect(token.sub).toBeUndefined();
-    expect(token.error).toBe('OIDC_REAUTHENTICATION_REQUIRED');
+    expect(token.error).toBe('OIDC_SESSION_RENEWAL_REQUIRED');
   });
 
   it('revokes an OIDC session when its provider trust configuration changes', async () => {

@@ -8,6 +8,18 @@ vi.mock('@/lib/oidc-config', () => ({
   getOidcConfig: getOidcConfigMock,
 }));
 
+vi.mock('@/lib/oidc-validation', () => ({
+  getValidatedOidcRuntimeMetadata: vi.fn().mockImplementation(async (issuer: string) => ({
+    isValid: true,
+    metadata: {
+      issuer,
+      authorizationEndpoint: `${issuer.replace(/\/$/, '')}/authorize`,
+      tokenEndpoint: `${issuer.replace(/\/$/, '')}/token`,
+      jwksUri: `${issuer.replace(/\/$/, '')}/jwks`,
+    },
+  })),
+}));
+
 vi.mock('@/lib/prisma', () => {
   const mockPrisma = {
     user: {

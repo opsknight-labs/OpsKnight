@@ -73,7 +73,11 @@ describe('resolveOidcIdentityForSignIn', () => {
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue({ userId: 'user-1' } as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
 
-    const result = await resolveOidcIdentityForSignIn({ ...baseInput, email: null });
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      email: null,
+      allowedDomains: [],
+    });
 
     expect(result).toEqual({
       ok: true,
@@ -100,7 +104,11 @@ describe('resolveOidcIdentityForSignIn', () => {
   });
 
   it('rejects an unknown identity when no usable email exists', async () => {
-    const result = await resolveOidcIdentityForSignIn({ ...baseInput, email: null });
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      email: null,
+      allowedDomains: [],
+    });
 
     expect(result).toEqual({ ok: false, reason: 'OIDC_EMAIL_REQUIRED' });
     expect(runSerializableTransaction).not.toHaveBeenCalled();
@@ -127,6 +135,36 @@ describe('resolveOidcIdentityForSignIn', () => {
 
     expect(result.ok).toBe(true);
     expect(tx.user.create).toHaveBeenCalled();
+  });
+
+  it('rechecks the Google Workspace boundary for an established identity', async () => {
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue({ userId: 'user-1' } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: 'https://accounts.google.com',
+      claims: { hd: 'former-company.example' },
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the Auth0 organization boundary for an established identity', async () => {
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue({ userId: 'user-1' } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: 'https://login.company.example',
+      providerType: 'auth0',
+      organizationId: 'org_current',
+      claims: { org_id: 'org_former' },
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
   it('does not use an Entra email suffix as tenant membership proof', async () => {

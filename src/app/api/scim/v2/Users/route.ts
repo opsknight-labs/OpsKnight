@@ -32,7 +32,12 @@ export async function GET(request: NextRequest) {
       100,
       Math.max(1, Number(request.nextUrl.searchParams.get('count')) || 100)
     );
-    const where = filter ?? { scimExternalId: { not: null } };
+    // Collection search must expose only resources managed through SCIM. A
+    // matching local/OIDC email must not produce an ID that the resource route
+    // subsequently rejects, nor silently authorize SCIM to adopt the account.
+    const where = filter
+      ? { AND: [{ scimExternalId: { not: null } }, filter] }
+      : { scimExternalId: { not: null } };
     const [users, totalResults] = await prisma.$transaction([
       prisma.user.findMany({
         where,
