@@ -163,6 +163,7 @@ export default function StatusPageV3({
           <IncidentsV3
             incidents={snapshot.incidents}
             timeZone={timeZone}
+            historyDays={snapshot.retention?.requestedHistoryDays ?? snapshot.historyDays}
             postmortemHref={
               postmortemsEnabled
                 ? id => `${statusPagePath}/postmortems/${encodeURIComponent(id)}`

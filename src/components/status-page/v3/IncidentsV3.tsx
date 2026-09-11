@@ -1,14 +1,139 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { PublicIncident } from '@/lib/status-pages/public-contract';
 import { formatDateTime } from '@/lib/timezone';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
 import StatusBadge from '@/components/incident/StatusBadge';
 
 const INITIAL_VISIBLE = 8;
+const DESC_CLAMP_AT = 180;
 
-function IncidentCard({
+function formatDuration(start?: string, end?: string): string | null {
+  if (!start) return null;
+  const s = Date.parse(start);
+  if (Number.isNaN(s)) return null;
+  const e = end ? Date.parse(end) : Date.now();
+  if (Number.isNaN(e) || e < s) return null;
+  const mins = Math.max(1, Math.floor((e - s) / 60000));
+  const ongoing = !end;
+  if (mins < 60) return ongoing ? `Ongoing · ${mins}m` : `Resolved in ${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h < 24) {
+    const tail = m ? ` ${m}m` : '';
+    return ongoing ? `Ongoing · ${h}h${tail}` : `Resolved in ${h}h${tail}`;
+  }
+  const d = Math.floor(h / 24);
+  const rh = h % 24;
+  return ongoing ? `Ongoing · ${d}d${rh ? ` ${rh}h` : ''}` : `Resolved in ${d}d${rh ? ` ${rh}h` : ''}`;
+}
+
+function IncidentImpactIcon({ impact }: { impact?: string }) {
+  const t = (impact ?? '').toUpperCase();
+  if (t === 'MAJOR_OUTAGE') {
+    return (
+      <svg
+        className="status-v3-incident-pill__icon"
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </svg>
+    );
+  }
+  if (t === 'PARTIAL_OUTAGE') {
+    return (
+      <svg
+        className="status-v3-incident-pill__icon"
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    );
+  }
+  if (t === 'DEGRADED') {
+    return (
+      <svg
+        className="status-v3-incident-pill__icon"
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.48 12H2" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      className="status-v3-incident-pill__icon"
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 16v-4" />
+      <path d="M12 8h.01" />
+    </svg>
+  );
+}
+
+function ClampedDesc({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsClamp = text.length > DESC_CLAMP_AT;
+  return (
+    <>
+      <p
+        className={`status-v3-incident-pill__desc${needsClamp && !expanded ? ' status-v3-incident-pill__desc--clamped' : ''}`}
+      >
+        {text}
+      </p>
+      {needsClamp && (
+        <button
+          type="button"
+          className="status-v3-pill__expand"
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </>
+  );
+}
+
+const IncidentCard = memo(function IncidentCard({
   incident,
   timeZone,
   postmortemHref,
@@ -19,96 +144,168 @@ function IncidentCard({
   postmortemHref?: (postmortemId: string) => string;
   defaultOpen: boolean;
 }) {
-  const token = incident.publicImpact ? statusPresentation(incident.publicImpact).token : undefined;
+  const isActive = incident.status === 'OPEN' || incident.status === 'ACKNOWLEDGED';
+  const impactToken = incident.publicImpact
+    ? statusPresentation(incident.publicImpact as unknown as never).token
+    : undefined;
+  const impactLabel = incident.publicImpact
+    ? statusPresentation(incident.publicImpact as unknown as never).label
+    : undefined;
+
+  // Privacy-safe title fallback — title may be stripped by showIncidentTitles.
+  const title = incident.title?.trim()
+    ? incident.title
+    : incident.publicEventId
+      ? `Incident ${incident.publicEventId.slice(0, 8)}`
+      : incident.service?.name
+        ? `${incident.service.name} incident`
+        : 'Incident';
+
+  const createdAbsolute = incident.createdAt
+    ? formatDateTime(incident.createdAt, timeZone, { format: 'short', hour12: true })
+    : null;
+  const createdRelative = incident.createdAt
+    ? formatDateTime(incident.createdAt, timeZone, { format: 'relative' })
+    : null;
+  const durationLabel = incident.createdAt
+    ? formatDuration(incident.createdAt, incident.resolvedAt ?? undefined)
+    : null;
+
+  const hasService = Boolean(incident.service?.name);
+  const hasRegions = Boolean(incident.service?.regions?.length);
+  const hasUpdates = Boolean(incident.updates?.length);
+  const hasDescription = Boolean(incident.description);
+
   return (
     <details
-      className="status-v3-incident status-incident-card"
-      data-status={token}
+      className={`status-v3-incident-pill${isActive ? ' status-v3-incident-pill--active' : ' status-v3-incident-pill--resolved'}`}
+      data-status={isActive && impactToken ? impactToken : undefined}
+      data-active={isActive ? 'true' : 'false'}
       open={defaultOpen}
     >
-      <summary className="status-v3-incident__summary">
-        <span className="status-v3-incident__summary-main">
-          {token && <span className={`status-v3-dot status-${token}`} aria-hidden="true" />}
-          {incident.title ? (
-            <span className="status-v3-incident__title">{incident.title}</span>
-          ) : null}
-          {incident.service?.name && (
-            <span className="status-v3-chip status-v3-chip--muted">{incident.service.name}</span>
+      <summary className="status-v3-incident-pill__summary">
+        <span className="status-v3-incident-pill__summary-main">
+          {isActive && <span className="status-v3-incident-pill__live" aria-hidden="true" />}
+          <IncidentImpactIcon impact={incident.publicImpact} />
+          <span className="status-v3-incident-pill__title">{title}</span>
+          {createdRelative && (
+            <>
+              <span className="status-v3-incident-pill__divider" aria-hidden="true" />
+              <span className="status-v3-incident-pill__time" suppressHydrationWarning title={createdAbsolute ?? undefined}>
+                {createdRelative}
+              </span>
+            </>
           )}
+          {hasService && <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>}
         </span>
-        <span className="status-v3-incident__summary-meta">
-          {incident.createdAt && (
-            <span className="status-muted" suppressHydrationWarning>
-              {formatDateTime(incident.createdAt, timeZone, { format: 'short', hour12: true })}
+        <span className="status-v3-incident-pill__summary-meta">
+          {incident.publicImpact && impactLabel && (
+            <StatusBadge status={incident.publicImpact} label={impactLabel} size="xs" showDot pulse={isActive} />
+          )}
+          {incident.urgency && <StatusBadge status={incident.urgency} size="xs" />}
+          {durationLabel && (
+            <span className="status-v3-incident-pill__duration" suppressHydrationWarning>
+              {durationLabel}
             </span>
           )}
-          <span className="status-v3-incident__chevron" aria-hidden="true" />
+          <span className="status-v3-incident-pill__chevron" aria-hidden="true" />
         </span>
       </summary>
-      <div className="status-v3-incident__body">
-        {incident.publicImpact && (
-          <StatusBadge
-            status={incident.publicImpact}
-            label={statusPresentation(incident.publicImpact).label}
-            size="sm"
-            showDot
-          />
+
+      <div className="status-v3-incident-pill__body">
+        {/* Second line in body for deep meta — keeps summary scannable */}
+        {(hasService || hasRegions || createdAbsolute) && (
+          <div className="status-v3-incident-pill__subtle" suppressHydrationWarning>
+            {hasService && <span>{incident.service!.name}</span>}
+            {hasRegions && (
+              <>
+                {hasService && <span aria-hidden="true"> · </span>}
+                <span>{incident.service!.regions!.join(', ')}</span>
+              </>
+            )}
+            {createdAbsolute && (
+              <>
+                {(hasService || hasRegions) && <span aria-hidden="true"> · </span>}
+                <span>Started {createdAbsolute}</span>
+              </>
+            )}
+          </div>
         )}
-        {incident.urgency ? <StatusBadge status={incident.urgency} size="xs" /> : null}
-        {incident.createdAt && (
-          <span className="status-muted" suppressHydrationWarning>
-            Started{' '}
-            {formatDateTime(incident.createdAt, timeZone, { format: 'short', hour12: true })}
-          </span>
-        )}
-        {incident.description && <p className="status-v3-incident__desc">{incident.description}</p>}
-        {incident.updates && incident.updates.length > 0 && (
-          <ol className="status-v3-incident__updates">
-            {incident.updates.map(update => (
-              <li key={update.id} className="status-v3-update">
-                <StatusBadge status={update.type} size="xs" />
-                <span className="status-v3-update__message">{update.message}</span>
-                {update.createdAt && (
-                  <span className="status-muted" suppressHydrationWarning>
-                    {formatDateTime(update.createdAt, timeZone, { format: 'short', hour12: true })}
-                  </span>
-                )}
-              </li>
-            ))}
+
+        {hasDescription && <ClampedDesc text={incident.description!} />}
+
+        {hasUpdates && (
+          <ol className="status-v3-incident-pill__updates" role="list">
+            {incident.updates!.map(update => {
+              const updAbsolute = update.createdAt
+                ? formatDateTime(update.createdAt, timeZone, { format: 'short', hour12: true })
+                : null;
+              const updRelative = update.createdAt
+                ? formatDateTime(update.createdAt, timeZone, { format: 'relative' })
+                : null;
+              return (
+                <li key={update.id} className="status-v3-update" role="listitem">
+                  <StatusBadge status={update.type} size="xs" />
+                  <span className="status-v3-update__message">{update.message}</span>
+                  {updRelative && (
+                    <span className="status-v3-update__time" suppressHydrationWarning title={updAbsolute ?? undefined}>
+                      {updRelative}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         )}
+
         {incident.postmortem &&
           (postmortemHref && (incident.postmortem.id || incident.id) ? (
             <a
-              className="status-v3-incident__pir"
+              className="status-v3-incident-pill__pir"
               href={postmortemHref(incident.postmortem.id || incident.id || '')}
             >
-              {incident.postmortem.title ?? 'View post-incident review'}
+              {incident.postmortem.title ?? 'View post-incident review'} →
             </a>
           ) : (
-            <span className="status-v3-incident__pir status-muted">
+            <span className="status-v3-incident-pill__pir status-v3-incident-pill__pir--muted">
               {incident.postmortem.title ?? 'Post-incident review available'}
             </span>
           ))}
+
+        {(hasService || hasRegions) && (
+          <div className="status-v3-incident-pill__affects">
+            <span className="status-v3-incident-pill__affected-label">Affects:</span>
+            {hasService && <span className="status-v3-chip status-v3-chip--muted">{incident.service!.name}</span>}
+            {incident.service?.regions?.map(region => (
+              <span key={region} className="status-v3-chip status-v3-chip--muted">
+                {region}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </details>
   );
-}
+});
 
 /**
- * Incident timeline from V3. Impact, status and structured updates are supplied by the projector;
- * this only formats, filters and paginates them. Cards collapse natively (no JS to expand) so a long
- * history stays compact, and the service filter/"show more" run entirely client-side over the
- * already-sanitized payload.
+ * Incident feed — settings-compatible, best-in-class presentation.
+ *
+ * No new settings are introduced. Every field is optional in the contract because
+ * `serializePublicStatusIncident` may strip it; the component hides that row when
+ * the data is absent. Pagination and service filter run client-side over the
+ * already-sanitized snapshot payload.
  */
 export default function IncidentsV3({
   incidents,
   timeZone,
   postmortemHref,
+  historyDays,
 }: {
   incidents: PublicIncident[];
   timeZone: string;
   postmortemHref?: (postmortemId: string) => string;
+  historyDays?: number;
 }) {
   const [service, setService] = useState('all');
   const [visible, setVisible] = useState(INITIAL_VISIBLE);
@@ -116,85 +313,140 @@ export default function IncidentsV3({
   const services = useMemo(() => {
     const byId = new Map<string, string>();
     for (const incident of incidents) {
-      if (incident.service?.id && incident.service.name)
-        byId.set(incident.service.id, incident.service.name);
+      if (incident.service?.id && incident.service.name) byId.set(incident.service.id, incident.service.name);
     }
     return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [incidents]);
 
   const filtered = useMemo(
-    () =>
-      service === 'all'
-        ? incidents
-        : incidents.filter(incident => incident.service?.id === service),
+    () => (service === 'all' ? incidents : incidents.filter(incident => incident.service?.id === service)),
     [incidents, service]
   );
+
+  const { active, past } = useMemo(() => {
+    const a: PublicIncident[] = [];
+    const p: PublicIncident[] = [];
+    for (const item of filtered) {
+      if (item.status === 'OPEN' || item.status === 'ACKNOWLEDGED') a.push(item);
+      else p.push(item);
+    }
+    return { active: a, past: p };
+  }, [filtered]);
+
+  // Keep active incidents always above the fold; paginate the full filtered list.
   const shown = filtered.slice(0, visible);
+  const shownActive = shown.filter(i => i.status === 'OPEN' || i.status === 'ACKNOWLEDGED');
+  const shownPast = shown.filter(i => i.status !== 'OPEN' && i.status !== 'ACKNOWLEDGED');
 
   if (incidents.length === 0) {
     return (
-      <section
-        className="status-v3-incidents"
-        id="incidents"
-        aria-labelledby="status-v3-incidents-heading"
-      >
-        <h2 id="status-v3-incidents-heading">Incidents</h2>
-        <p className="status-muted">No incidents reported.</p>
+      <section className="status-v3-incidents-inline" id="incidents" aria-labelledby="status-v3-incidents-heading">
+        <div className="status-v3-incidents-inline__head">
+          <div className="status-v3-incidents-inline__title-wrap">
+            <h2 id="status-v3-incidents-heading" className="status-v3-incidents-inline__title">
+              Incidents
+            </h2>
+            <span className="status-v3-incidents-inline__subtitle">Active & recent</span>
+          </div>
+        </div>
+        <p className="status-v3-incidents-inline__empty">No incidents reported.</p>
       </section>
     );
   }
 
+  const windowLabel = historyDays ? `Past ${historyDays}d` : 'Recent';
+
   return (
-    <section
-      className="status-v3-incidents"
-      id="incidents"
-      aria-labelledby="status-v3-incidents-heading"
-    >
-      <div className="status-v3-incidents__bar">
-        <h2 id="status-v3-incidents-heading">Incidents</h2>
-        {services.length > 1 && (
-          <label className="status-v3-filter">
-            <span className="sr-only">Filter incidents by service</span>
-            <select
-              value={service}
-              onChange={event => {
-                setService(event.target.value);
-                setVisible(INITIAL_VISIBLE);
-              }}
-            >
-              <option value="all">All services ({incidents.length})</option>
-              {services.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+    <section className="status-v3-incidents-inline" id="incidents" aria-labelledby="status-v3-incidents-heading">
+      <div className="status-v3-incidents-inline__head">
+        <div className="status-v3-incidents-inline__title-wrap">
+          <h2 id="status-v3-incidents-heading" className="status-v3-incidents-inline__title">
+            Incidents
+          </h2>
+          <span className="status-v3-incidents-inline__subtitle">
+            {windowLabel} · {active.length} active · {past.length} resolved
+          </span>
+        </div>
+        <div className="status-v3-incidents-inline__tally" aria-label={`${filtered.length} incidents`}>
+          {active.length > 0 ? (
+            <span className="status-v3-incidents-inline__tally-pill status-v3-incidents-inline__tally-pill--active">
+              <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
+              {active.length} active
+            </span>
+          ) : past.length > 0 ? (
+            <span className="status-v3-incidents-inline__tally-pill status-v3-incidents-inline__tally-pill--resolved">
+              <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
+              {past.length} resolved
+            </span>
+          ) : (
+            <span className="status-v3-incidents-inline__tally-pill">
+              <span className="status-v3-incidents-inline__dot" aria-hidden="true" />
+              {filtered.length} total
+            </span>
+          )}
+          {services.length > 1 && (
+            <label className="status-v3-filter">
+              <span className="sr-only">Filter incidents by service</span>
+              <select
+                value={service}
+                onChange={event => {
+                  setService(event.target.value);
+                  setVisible(INITIAL_VISIBLE);
+                }}
+              >
+                <option value="all">All services ({incidents.length})</option>
+                {services.map(([id, name]) => (
+                  <option key={id} value={id}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
       </div>
+
       {shown.length === 0 ? (
-        <p className="status-muted">No incidents for this service.</p>
+        <div className="status-v3-incidents-inline__empty">
+          <p className="status-v3-incidents-inline__empty-title">No incidents for this service.</p>
+          <button type="button" className="status-v3-pill__more" onClick={() => setService('all')}>
+            Clear filter
+          </button>
+        </div>
       ) : (
-        <ul className="status-v3-incidents__list">
-          {shown.map((incident, index) => (
-            <li key={incident.id ?? index}>
+        <div className="status-v3-incidents-inline__list" role="list">
+          {/* Active first — always expanded */}
+          {shownActive.map((incident, index) => (
+            <div key={incident.id ?? incident.publicEventId ?? `active-${index}`} role="listitem">
               <IncidentCard
                 incident={incident}
                 timeZone={timeZone}
                 postmortemHref={postmortemHref}
-                defaultOpen={index === 0 && service === 'all'}
+                defaultOpen={true}
               />
-            </li>
+            </div>
           ))}
-        </ul>
+          {/* Past — only first past open when no active, rest collapsed */}
+          {shownPast.map((incident, index) => (
+            <div key={incident.id ?? incident.publicEventId ?? `past-${index}`} role="listitem">
+              <IncidentCard
+                incident={incident}
+                timeZone={timeZone}
+                postmortemHref={postmortemHref}
+                defaultOpen={shownActive.length === 0 && index === 0 && service === 'all'}
+              />
+            </div>
+          ))}
+        </div>
       )}
+
       {filtered.length > visible && (
         <button
           type="button"
           className="status-v3-showmore"
           onClick={() => setVisible(count => count + INITIAL_VISIBLE)}
         >
-          Show {Math.min(INITIAL_VISIBLE, filtered.length - visible)} more
+          Show {Math.min(INITIAL_VISIBLE, filtered.length - visible)} more · {filtered.length - visible} remaining
         </button>
       )}
     </section>
