@@ -317,15 +317,17 @@ export default function StatusPageSubscribe({
       className={isCard ? 'status-subscribe' : 'status-subscribe status-subscribe--modal'}
       aria-labelledby={isCard ? undefined : 'subscribe-modal-heading'}
     >
-      {/* Head — card view has title + icon; modal view inherits dialog header */}
-      {isCard ? (
+      {/* Head — rendered only in card view; modal view uses dialog header */}
+      {isCard && (
         <div className="status-subscribe__head">
           <span className="status-subscribe__icon" aria-hidden="true">
             <MailIcon />
           </span>
           <div className="status-subscribe__headcopy">
-            <strong>Subscribe to updates</strong>
-            <span>Get real-time email alerts whenever service status changes.</span>
+            <strong>Subscribe to Updates</strong>
+            <span>
+              Receive real-time notifications for active incidents and scheduled maintenance.
+            </span>
           </div>
           {rssHref && (
             <a href={rssHref} className="status-subscribe__rss" title="RSS Feed">
@@ -333,12 +335,6 @@ export default function StatusPageSubscribe({
               <span>RSS</span>
             </a>
           )}
-        </div>
-      ) : (
-        <div className="status-subscribe__modal-intro">
-          <span>
-            Choose your notification preferences below. We will only email you for what matters.
-          </span>
         </div>
       )}
 
@@ -452,7 +448,7 @@ export default function StatusPageSubscribe({
         <span className="status-subscribe__hint-icon" aria-hidden="true">
           <ShieldCheckIcon />
         </span>
-        <span>No spam. Verification required. 1-click unsubscribe in every email.</span>
+        <span>No spam. Verification required. 1-click unsubscribe anytime.</span>
         {!isCard && rssHref ? (
           <>
             {' '}

@@ -116,10 +116,10 @@ export default function StatusPageSubscribeModal({
         <div className="status-subscribe-modal__head">
           <div className="status-subscribe-modal__headcopy">
             <h2 id="subscribe-modal-heading" className="status-subscribe-modal__title">
-              Subscribe to updates
+              Subscribe to Updates
             </h2>
             <p className="status-subscribe-modal__subtitle">
-              Get notified when incident status changes or maintenance is scheduled.
+              Receive real-time notifications for active incidents and scheduled maintenance.
             </p>
           </div>
           <button
@@ -127,18 +127,21 @@ export default function StatusPageSubscribeModal({
             className="status-subscribe-modal__close"
             onClick={onClose}
             aria-label="Close dialog"
-            title="Close"
+            title="Close dialog"
           >
             <svg
-              width="16"
-              height="16"
+              width="24"
+              height="24"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.5"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         </div>

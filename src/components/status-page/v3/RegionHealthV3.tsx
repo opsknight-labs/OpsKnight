@@ -1,6 +1,3 @@
-'use client';
-
-import { useMemo } from 'react';
 import type { PublicRegionStatus } from '@/lib/status-pages/public-contract';
 import { describeRegion } from '@/lib/status-pages/presentation';
 import { statusPresentation } from '@/lib/status-pages/status-presentation';
@@ -12,14 +9,13 @@ import StatusBadge from '@/components/incident/StatusBadge';
  * Fits seamlessly across mobile, tablet, and wide screens with zero text collisions.
  */
 export default function RegionHealthV3({ regions }: { regions: PublicRegionStatus[] }) {
-  const { impactedCount, totalCount } = useMemo(() => {
-    if (!regions || regions.length === 0) return { impactedCount: 0, totalCount: 0 };
-    let impacted = 0;
+  let impactedCount = 0;
+  const totalCount = regions?.length ?? 0;
+  if (regions && regions.length > 0) {
     for (const r of regions) {
-      if (r.status !== 'OPERATIONAL') impacted++;
+      if (r.status !== 'OPERATIONAL') impactedCount++;
     }
-    return { impactedCount: impacted, totalCount: regions.length };
-  }, [regions]);
+  }
 
   if (!regions || regions.length === 0) return null;
 

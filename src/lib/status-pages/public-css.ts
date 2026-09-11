@@ -532,50 +532,64 @@ ${R} .status-subscribe__rss:hover {
   border-color: var(--status-panel-muted-border); box-shadow: 0 1px 2px rgba(0,0,0,.05);
 }
 ${R} .status-subscribe__segment {
-  display: inline-flex; gap: .3rem; padding: .3rem; border: 1px solid var(--status-panel-border); border-radius: 999px;
-  background: var(--status-panel-muted-bg); align-self: start;
+  display: grid; grid-template-columns: 1fr 1fr; gap: .35rem; padding: .3rem;
+  border: 1px solid var(--status-panel-border); border-radius: .75rem;
+  background: var(--status-panel-muted-bg);
+  inline-size: 100%; width: 100%;
 }
 ${R} .status-subscribe__segbtn {
-  padding: .45rem .85rem; border: 1px solid transparent; border-radius: 999px;
-  background: transparent; color: var(--status-text-muted); font-size: .8125rem; font-weight: 600; cursor: pointer; line-height: 1;
-  transition: all .15s ease;
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  padding: .55rem 1rem; border: 1px solid transparent; border-radius: .55rem;
+  background: transparent; color: var(--status-text-muted); font-size: .875rem; font-weight: 600;
+  cursor: pointer; line-height: 1.2; transition: all .15s ease; white-space: nowrap;
 }
+${R} .status-subscribe__segbtn svg { flex: none; inline-size: 1rem; block-size: 1rem; }
 ${R} .status-subscribe__segbtn:hover { color: var(--status-text-strong); }
 ${R} .status-subscribe__segbtn--active, ${R} .status-subscribe__segbtn[aria-pressed="true"] {
   background: var(--status-panel-bg); border-color: var(--status-panel-border); color: var(--status-text-strong);
-  box-shadow: 0 1px 3px rgba(0,0,0,.06); font-weight: 700;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); font-weight: 650;
 }
-${R} .status-subscribe__controls { display: flex; gap: .65rem; min-inline-size: 0; align-items: stretch; }
+${R} .status-subscribe__segbtn--active svg { color: var(--primary); }
+${R} .status-subscribe__controls { display: flex; gap: .65rem; min-inline-size: 0; align-items: stretch; width: 100%; }
 ${R} .status-subscribe__input {
-  flex: 1 1 auto; min-inline-size: 0; inline-size: 100%; padding: .75rem 1rem;
-  border: 1px solid var(--status-panel-border); border-radius: .75rem;
+  flex: 1 1 auto; min-inline-size: 0; inline-size: 100%; padding: .8rem 1.1rem;
+  border: 1px solid var(--status-panel-border); border-radius: .625rem;
   background: var(--status-panel-bg); color: var(--status-text); font-size: .9375rem;
   transition: border-color .15s ease, box-shadow .15s ease;
+  outline: none;
 }
 ${R} .status-subscribe__input::placeholder { color: var(--status-text-subtle); opacity: .85; }
-${R} .status-subscribe__input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--primary) 18%, transparent); }
+${R} .status-subscribe__input:focus {
+  outline: none; border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
+}
 ${R} .status-subscribe__input:disabled { opacity: .6; cursor: not-allowed; }
 ${R} .status-subscribe__button {
   display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  flex: 0 0 auto; padding: .75rem 1.4rem; border: 1px solid var(--primary); border-radius: .75rem;
-  background: var(--primary); color: var(--status-text-inverse); font-weight: 700; font-size: .9375rem;
+  flex: 0 0 auto; padding: .8rem 1.5rem; border: 1px solid var(--primary); border-radius: .625rem;
+  background: var(--primary); color: var(--status-text-inverse); font-weight: 650; font-size: .9375rem;
   cursor: pointer; white-space: nowrap; transition: all .15s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08);
 }
 ${R} .status-subscribe__button:hover:not(:disabled) {
-  background: var(--primary-hover); transform: translateY(-1px);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 28%, transparent);
+  background: var(--primary-hover); border-color: var(--primary-hover); transform: translateY(-1px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 25%, transparent);
 }
 ${R} .status-subscribe__button:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
 ${R} .status-subscribe__button:disabled { opacity: .65; cursor: wait; }
-${R} .status-subscribe__button:focus-visible { outline: 2px solid color-mix(in srgb, var(--primary) 30%, transparent); outline-offset: 2px; }
+${R} .status-subscribe__button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 ${R} .status-subscribe__spinner { animation: status-subscribe-spin .8s linear infinite; }
-${R} .status-subscribe__hint { margin: 0; font-size: .75rem; color: var(--status-text-muted); line-height: 1.45; }
-${R} .status-subscribe__hintlink { color: var(--status-text-muted); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+${R} .status-subscribe__hint {
+  display: flex; align-items: center; gap: .45rem; margin: 0;
+  font-size: .78rem; color: var(--status-text-muted); line-height: 1.45;
+}
+${R} .status-subscribe__hint-icon { flex: none; display: grid; place-items: center; color: var(--status-operational); }
+${R} .status-subscribe__hintlink { color: var(--status-text-muted); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; margin-inline-start: .25rem; }
 ${R} .status-subscribe__hintlink:hover { color: var(--primary); }
 ${R} .status-subscribe__error {
   display: flex; align-items: center; gap: .6rem; padding: .75rem .95rem;
   border: 1px solid color-mix(in srgb, var(--status-major-outage) 35%, var(--status-panel-border));
-  border-radius: .75rem; background: var(--status-major-outage-bg); color: var(--status-major-outage);
+  border-radius: .625rem; background: var(--status-major-outage-bg); color: var(--status-major-outage);
   font-size: .85rem; font-weight: 550; line-height: 1.45; animation: status-subscribe-fade-in .2s ease;
 }
 ${R} .status-subscribe__error-icon { flex: none; display: grid; place-items: center; inline-size: 1rem; block-size: 1rem; }
@@ -605,7 +619,7 @@ ${R} .status-subscribe__success-close:hover {
 }
 ${R} .status-subscribe--modal { gap: 1rem; padding: 0; border: 0; background: transparent; box-shadow: none; border-radius: 0; }
 ${R} .status-subscribe__picker {
-  display: grid; gap: .65rem; padding: .85rem 1rem; border: 1px solid var(--status-panel-border); border-radius: .85rem;
+  display: grid; gap: .65rem; padding: .85rem 1rem; border: 1px solid var(--status-panel-border); border-radius: .75rem;
   background: var(--status-panel-muted-bg);
 }
 ${R} .status-subscribe__picker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; }
@@ -627,7 +641,7 @@ ${R} .status-subscribe__picker-grid {
 }
 ${R} .status-subscribe__check {
   display: inline-flex; align-items: center; gap: .6rem; padding: .5rem .75rem;
-  border: 1px solid var(--status-panel-border); border-radius: .6rem; background: var(--status-panel-bg);
+  border: 1px solid var(--status-panel-border); border-radius: .55rem; background: var(--status-panel-bg);
   font-size: .8125rem; font-weight: 500; color: var(--status-text); cursor: pointer; line-height: 1.3;
   transition: all .15s ease; user-select: none; position: relative;
 }
@@ -678,20 +692,26 @@ ${R} .status-subscribe-modal__subtitle {
 }
 ${R} .status-subscribe-modal__body { padding: 1.35rem 1.4rem 1.55rem; display: grid; }
 ${R} .status-subscribe-modal__close {
-  flex: none; inline-size: 2.25rem; block-size: 2.25rem; display: grid; place-items: center;
-  border: 1px solid var(--status-panel-border); border-radius: 999px;
+  flex: 0 0 auto; inline-size: 2.75rem; block-size: 2.75rem; width: 2.75rem; height: 2.75rem;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid var(--status-panel-border); border-radius: 999px;
   background: var(--status-panel-muted-bg);
   color: var(--status-text-strong);
   cursor: pointer; transition: all .15s ease;
+  padding: 0; margin: 0; box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
-${R} .status-subscribe-modal__close svg { stroke: currentColor; display: block; }
+${R} .status-subscribe-modal__close svg {
+  display: block; inline-size: 1.5rem; block-size: 1.5rem; width: 1.5rem; height: 1.5rem;
+  stroke: currentColor; stroke-width: 2.6px;
+}
 ${R} .status-subscribe-modal__close:hover {
   color: var(--status-text-strong);
-  background: color-mix(in srgb, var(--status-text-strong) 10%, var(--status-panel-bg));
-  border-color: color-mix(in srgb, var(--status-text-strong) 25%, var(--status-panel-border));
-  transform: scale(1.06);
+  background: color-mix(in srgb, var(--status-text-strong) 14%, var(--status-panel-bg));
+  border-color: color-mix(in srgb, var(--status-text-strong) 40%, var(--status-panel-border));
+  transform: scale(1.08);
+  box-shadow: 0 2px 6px rgba(0,0,0,.12);
 }
-${R} .status-subscribe-modal__close:active { transform: scale(.95); }
+${R} .status-subscribe-modal__close:active { transform: scale(.94); }
 ${R} .status-subscribe-modal__close:focus-visible, ${R} .status-subscribe__button:focus-visible, ${R} .status-subscribe__picker-btn:focus-visible, ${R} .status-subscribe__segbtn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 ${R} @keyframes status-subscribe-overlay-in { from { opacity: 0; } to { opacity: 1; } }
 ${R} @keyframes status-subscribe-modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
