@@ -1,33 +1,36 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import SetPasswordForm from './SetPasswordForm';
 import { AuthCard, AuthLayout } from '@/components/auth/AuthLayout';
 import AuthBrand from '@/components/auth/AuthBrand';
 import Spinner from '@/components/ui/Spinner';
 
-function readFragmentToken(): string | null {
+function readCapabilityToken(): string | null {
   if (typeof window === 'undefined') return null;
-  const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
-  return new URLSearchParams(hash).get('token');
+  const hash = window.location.hash.startsWith('#')
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const fragmentToken = new URLSearchParams(hash).get('token');
+  if (fragmentToken) return fragmentToken;
+  return new URLSearchParams(window.location.search).get('token');
 }
 
 function InviteActivation() {
-  const searchParams = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
   const [tokenReady, setTokenReady] = useState(false);
 
   useEffect(() => {
-    // Fragment is canonical. Query support is legacy-only and immediately
-    // scrubbed so validation failures never reinsert the secret into history.
-    const rawToken = readFragmentToken() || searchParams.get('token');
+    // Capture the capability exactly once before scrubbing it. Next patches
+    // history.replaceState to synchronize router state, so re-running this
+    // effect after the scrub would erase the in-memory invitation token.
+    const rawToken = readCapabilityToken();
     setToken(rawToken);
     setTokenReady(true);
     if (rawToken) window.history.replaceState({}, '', window.location.pathname);
-  }, [searchParams]);
+  }, []);
 
   if (!tokenReady) {
     return <div className="flex justify-center p-8"><Spinner /></div>;
@@ -62,9 +65,7 @@ export default function SetPasswordPage() {
           <h1 className="font-['Space_Grotesk',sans-serif] text-2xl font-bold text-slate-950 dark:text-white">Complete your invitation</h1>
           <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Set a secure passphrase to activate your OpsKnight account.</p>
         </div>
-        <Suspense fallback={<div className="flex justify-center p-8"><Spinner /></div>}>
-          <InviteActivation />
-        </Suspense>
+        <InviteActivation />
       </AuthCard>
     </AuthLayout>
   );
