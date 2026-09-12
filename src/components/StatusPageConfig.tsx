@@ -1714,17 +1714,17 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
               style={{
                 flex: 1,
                 overflowY: 'auto',
-                padding: 'var(--spacing-6)',
+                padding: 'var(--spacing-4)',
               }}
             >
               <div
                 className="status-page-config-settings-inner"
-                style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
               >
                 {/* General Settings */}
                 {activeSection === 'general' && (
                   <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
                   >
                     <StatusPageSectionCard
                       title="Basic Settings"
@@ -1751,14 +1751,27 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                         </div>
                       }
                     >
-                      <FormField
-                        type="input"
-                        label="Status Page Name"
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                        required
-                        helperText="The name displayed at the top of your status page"
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          type="input"
+                          label="Status Page Name"
+                          value={formData.name}
+                          onChange={e => setFormData({ ...formData, name: e.target.value })}
+                          required
+                          helperText="The name displayed at the top of your status page"
+                        />
+
+                        <FormField
+                          type="input"
+                          label="Organization Name"
+                          value={formData.organizationName}
+                          onChange={e =>
+                            setFormData({ ...formData, organizationName: e.target.value })
+                          }
+                          helperText="Used in subscriber emails, email branding, and footer copyright."
+                          placeholder="e.g. OpsKnight"
+                        />
+                      </div>
 
                       <FormField
                         type="input"
@@ -1773,17 +1786,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                         placeholder="public-status"
                         helperText="Optional for the default page; required for a dedicated /status/your-slug URL."
                       />
-
-                      <FormField
-                        type="input"
-                        label="Organization Name"
-                        value={formData.organizationName}
-                        onChange={e =>
-                          setFormData({ ...formData, organizationName: e.target.value })
-                        }
-                        helperText="Used in subscriber emails, email branding, and footer copyright."
-                        placeholder="e.g. OpsKnight"
-                      />
                     </StatusPageSectionCard>
 
                     <StatusPageSectionCard
@@ -1791,26 +1793,30 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                       description="Control who can access the status page and when it is publicly visible."
                       icon={<Shield className="h-4 w-4" />}
                     >
-                      <div className="space-y-4">
-                        <Switch
-                          checked={formData.enabled}
-                          onChange={checked => setFormData(prev => ({ ...prev, enabled: checked }))}
-                          label="Enable Status Page"
-                          helperText="Make the status page accessible to users."
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                          <Switch
+                            checked={formData.enabled}
+                            onChange={checked =>
+                              setFormData(prev => ({ ...prev, enabled: checked }))
+                            }
+                            label="Enable Status Page"
+                            helperText="Make the status page accessible to users."
+                          />
+                        </div>
 
-                        {formData.enabled && (
-                          <div className="pt-2 border-t border-border/40">
+                        {formData.enabled ? (
+                          <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
                             <Switch
                               checked={!privacySettings.requireAuth}
                               onChange={checked =>
                                 setPrivacySettings(prev => ({ ...prev, requireAuth: !checked }))
                               }
                               label="Public Access"
-                              helperText="When enabled, anyone can view the status page without logging in. When disabled, users must log in to view the status page."
+                              helperText="Anyone can view without logging in."
                             />
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </StatusPageSectionCard>
 
@@ -1819,23 +1825,25 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                       description="Configure subdomains and custom domains to host your status page."
                       icon={<Link2 className="h-4 w-4" />}
                     >
-                      <FormField
-                        type="input"
-                        label="Subdomain"
-                        value={formData.subdomain}
-                        onChange={e => setFormData({ ...formData, subdomain: e.target.value })}
-                        placeholder="status"
-                        helperText="e.g., status (for status.yourcompany.com). Requires DNS configuration."
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          type="input"
+                          label="Subdomain"
+                          value={formData.subdomain}
+                          onChange={e => setFormData({ ...formData, subdomain: e.target.value })}
+                          placeholder="status"
+                          helperText="e.g., status (for status.yourcompany.com)."
+                        />
 
-                      <FormField
-                        type="input"
-                        label="Custom Domain"
-                        value={formData.customDomain}
-                        onChange={e => setFormData({ ...formData, customDomain: e.target.value })}
-                        placeholder="status.yourcompany.com"
-                        helperText="Full custom domain. Requires DNS CNAME record pointing to your status page."
-                      />
+                        <FormField
+                          type="input"
+                          label="Custom Domain"
+                          value={formData.customDomain}
+                          onChange={e => setFormData({ ...formData, customDomain: e.target.value })}
+                          placeholder="status.yourcompany.com"
+                          helperText="Full custom domain pointing to your status page."
+                        />
+                      </div>
                     </StatusPageSectionCard>
 
                     <StatusPageSectionCard
@@ -1843,25 +1851,27 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                       description="Public contact email and support portal URL for visitor inquiries."
                       icon={<Mail className="h-4 w-4" />}
                     >
-                      <FormField
-                        type="input"
-                        inputType="email"
-                        label="Contact Email"
-                        value={formData.contactEmail}
-                        onChange={e => setFormData({ ...formData, contactEmail: e.target.value })}
-                        placeholder="support@yourcompany.com"
-                        helperText="Email address for users to contact you"
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          type="input"
+                          inputType="email"
+                          label="Contact Email"
+                          value={formData.contactEmail}
+                          onChange={e => setFormData({ ...formData, contactEmail: e.target.value })}
+                          placeholder="support@yourcompany.com"
+                          helperText="Email address for users to contact you"
+                        />
 
-                      <FormField
-                        type="input"
-                        inputType="url"
-                        label="Contact URL"
-                        value={formData.contactUrl}
-                        onChange={e => setFormData({ ...formData, contactUrl: e.target.value })}
-                        placeholder="https://yourcompany.com/contact"
-                        helperText="URL for contact page or support portal"
-                      />
+                        <FormField
+                          type="input"
+                          inputType="url"
+                          label="Contact URL"
+                          value={formData.contactUrl}
+                          onChange={e => setFormData({ ...formData, contactUrl: e.target.value })}
+                          placeholder="https://yourcompany.com/contact"
+                          helperText="URL for contact page or support portal"
+                        />
+                      </div>
                     </StatusPageSectionCard>
 
                     <DangerZoneCard
@@ -1919,14 +1929,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                         </Button>
                       }
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-6)',
-                        }}
-                      >
-                        <div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-3">
                           <FormField
                             type="input"
                             inputType="text"
@@ -1934,94 +1938,44 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             value={formData.logoUrl}
                             onChange={e => setFormData({ ...formData, logoUrl: e.target.value })}
                             placeholder="https://yourcompany.com/logo.png"
-                            helperText="Full URL or relative path (e.g., /logo.svg). Recommended: 200x50px, PNG or SVG format. The logo will appear in the status page header."
+                            helperText="Full URL or relative path (e.g., /logo.svg). Recommended: 200x50px."
                             required={false}
                           />
-                          <div style={{ marginTop: 'var(--spacing-3)' }}>
-                            <label
-                              style={{
-                                display: 'block',
-                                fontSize: 'var(--font-size-sm)',
-                                fontWeight: '600',
-                                marginBottom: 'var(--spacing-2)',
-                              }}
-                            >
-                              Upload Logo
+                          <div>
+                            <label className="block text-xs font-semibold text-foreground mb-1.5">
+                              Upload Logo File
                             </label>
                             <input
                               type="file"
                               accept="image/png,image/jpeg,image/svg+xml,image/webp"
                               onChange={e => handleLogoUpload(e.target.files?.[0] || null)}
-                              style={{
-                                width: '100%',
-                                padding: '0.4rem 0',
-                                fontSize: 'var(--font-size-sm)',
-                              }}
+                              className="w-full text-xs text-muted-foreground file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                             />
-                            <div
-                              style={{
-                                fontSize: 'var(--font-size-xs)',
-                                color: 'var(--text-muted)',
-                                marginTop: 'var(--spacing-1)',
-                              }}
-                            >
-                              Uploads are stored as data URLs. Max size 2MB.
+                            <div className="text-[11px] text-muted-foreground mt-1">
+                              Uploads stored as data URLs. Max size 2MB.
                             </div>
                             {logoUploadError && (
-                              <div
-                                style={{
-                                  color: 'var(--color-error-dark)',
-                                  fontSize: 'var(--font-size-xs)',
-                                  marginTop: 'var(--spacing-1)',
-                                }}
-                              >
+                              <div className="text-[11px] text-destructive mt-1 font-medium">
                                 {logoUploadError}
                               </div>
                             )}
                           </div>
                           {formData.logoUrl && (
-                            <div
-                              style={{
-                                marginTop: 'var(--spacing-3)',
-                                padding: 'var(--spacing-4)',
-                                background: '#f9fafb',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 'var(--radius-md)',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  fontSize: 'var(--font-size-sm)',
-                                  fontWeight: '600',
-                                  marginBottom: 'var(--spacing-2)',
-                                  color: '#374151',
-                                }}
-                              >
+                            <div className="p-3 rounded-lg bg-muted/40 border border-border">
+                              <div className="text-xs font-semibold text-foreground mb-2">
                                 Logo Preview:
                               </div>
-                              <div
-                                style={{
-                                  padding: 'var(--spacing-3)',
-                                  background: 'white',
-                                  border: '1px solid #e5e7eb',
-                                  borderRadius: 'var(--radius-md)',
-                                  display: 'inline-block',
-                                }}
-                              >
+                              <div className="p-2.5 bg-background border border-border/80 rounded-md inline-block">
                                 <img
                                   src={formData.logoUrl}
                                   alt="Logo preview"
-                                  style={{
-                                    height: '50px',
-                                    maxWidth: '200px',
-                                    objectFit: 'contain',
-                                  }}
+                                  className="h-10 max-w-[180px] object-contain"
                                   onError={e => {
                                     (e.target as HTMLImageElement).style.display = 'none';
                                     const parent = (e.target as HTMLImageElement).parentElement;
                                     if (parent) {
                                       parent.innerHTML =
-                                        '<div style="padding: 1rem; color: #ef4444; font-size: 0.875rem;">Failed to load image. Please check the URL.</div>';
+                                        '<div class="p-2 text-destructive text-xs">Failed to load image.</div>';
                                     }
                                   }}
                                 />
@@ -2029,7 +1983,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             </div>
                           )}
                         </div>
-                        <div>
+
+                        <div className="space-y-3">
                           <FormField
                             type="input"
                             inputType="url"
@@ -2037,51 +1992,24 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             value={formData.faviconUrl}
                             onChange={e => setFormData({ ...formData, faviconUrl: e.target.value })}
                             placeholder="https://yourcompany.com/favicon.ico"
-                            helperText="Full URL to your favicon. Recommended: 16x16 or 32x32px, ICO or PNG format. This appears in browser tabs."
+                            helperText="Recommended: 16x16 or 32x32px, ICO or PNG format."
                           />
                           {formData.faviconUrl && (
-                            <div
-                              style={{
-                                marginTop: 'var(--spacing-3)',
-                                padding: 'var(--spacing-4)',
-                                background: '#f9fafb',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 'var(--radius-md)',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  fontSize: 'var(--font-size-sm)',
-                                  fontWeight: '600',
-                                  marginBottom: 'var(--spacing-2)',
-                                  color: '#374151',
-                                }}
-                              >
+                            <div className="p-3 rounded-lg bg-muted/40 border border-border">
+                              <div className="text-xs font-semibold text-foreground mb-2">
                                 Favicon Preview:
                               </div>
-                              <div
-                                style={{
-                                  padding: 'var(--spacing-3)',
-                                  background: 'white',
-                                  border: '1px solid #e5e7eb',
-                                  borderRadius: 'var(--radius-md)',
-                                  display: 'inline-block',
-                                }}
-                              >
+                              <div className="p-2 bg-background border border-border/80 rounded-md inline-block">
                                 <img
                                   src={formData.faviconUrl}
                                   alt="Favicon preview"
-                                  style={{
-                                    width: '32px',
-                                    height: '32px',
-                                    objectFit: 'contain',
-                                  }}
+                                  className="w-8 h-8 object-contain"
                                   onError={e => {
                                     (e.target as HTMLImageElement).style.display = 'none';
                                     const parent = (e.target as HTMLImageElement).parentElement;
                                     if (parent) {
                                       parent.innerHTML =
-                                        '<div style="padding: 0.5rem; color: #ef4444; font-size: 0.875rem;">Failed to load favicon. Please check the URL.</div>';
+                                        '<div class="p-2 text-destructive text-xs">Failed to load favicon.</div>';
                                     }
                                   }}
                                 />
@@ -2644,57 +2572,83 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                           gap: 'var(--spacing-3)',
                         }}
                       >
-                        <Switch
-                          checked={formData.showServices}
-                          onChange={checked => setFormData({ ...formData, showServices: checked })}
-                          label="Show Services"
-                          helperText="Display service status list"
-                        />
-                        <Switch
-                          checked={formData.showIncidents}
-                          onChange={checked => setFormData({ ...formData, showIncidents: checked })}
-                          label="Show Incidents"
-                          helperText="Display incidents section and timeline"
-                        />
-                        <Switch
-                          checked={formData.showMetrics}
-                          onChange={checked => setFormData({ ...formData, showMetrics: checked })}
-                          label="Show Uptime & Availability"
-                          helperText="Display service uptime metrics and availability history"
-                        />
-                        <Switch
-                          checked={formData.showSubscribe}
-                          onChange={checked => setFormData({ ...formData, showSubscribe: checked })}
-                          label="Show Subscribe to Updates"
-                          helperText="Display the email subscription section"
-                        />
-                        <Switch
-                          checked={formData.showChangelog}
-                          onChange={checked => setFormData({ ...formData, showChangelog: checked })}
-                          label="Show Changelog"
-                          helperText="Display recent update announcements as a changelog feed"
-                        />
-                        <Switch
-                          checked={formData.showRegionHeatmap}
-                          onChange={checked =>
-                            setFormData({ ...formData, showRegionHeatmap: checked })
-                          }
-                          label="Show Region Heatmap"
-                          helperText={
-                            privacySettings.showServiceRegions === false
-                              ? 'Requires Service regions to be visible — enable it in Privacy → Service Information'
-                              : 'Display a compact region impact grid'
-                          }
-                          disabled={privacySettings.showServiceRegions === false}
-                        />
-                        <Switch
-                          checked={formData.showPostIncidentReview}
-                          onChange={checked =>
-                            setFormData({ ...formData, showPostIncidentReview: checked })
-                          }
-                          label="Show Post-Incident Reviews"
-                          helperText="Show links to published postmortems on resolved incidents"
-                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                            <Switch
+                              checked={formData.showServices}
+                              onChange={checked =>
+                                setFormData({ ...formData, showServices: checked })
+                              }
+                              label="Show Services"
+                              helperText="Display service status list"
+                            />
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                            <Switch
+                              checked={formData.showIncidents}
+                              onChange={checked =>
+                                setFormData({ ...formData, showIncidents: checked })
+                              }
+                              label="Show Incidents"
+                              helperText="Display incidents section and timeline"
+                            />
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                            <Switch
+                              checked={formData.showMetrics}
+                              onChange={checked =>
+                                setFormData({ ...formData, showMetrics: checked })
+                              }
+                              label="Show Uptime & Availability"
+                              helperText="Display service uptime metrics and history"
+                            />
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                            <Switch
+                              checked={formData.showSubscribe}
+                              onChange={checked =>
+                                setFormData({ ...formData, showSubscribe: checked })
+                              }
+                              label="Show Subscribe to Updates"
+                              helperText="Display email subscription section"
+                            />
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                            <Switch
+                              checked={formData.showChangelog}
+                              onChange={checked =>
+                                setFormData({ ...formData, showChangelog: checked })
+                              }
+                              label="Show Changelog"
+                              helperText="Display recent update announcements"
+                            />
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                            <Switch
+                              checked={formData.showRegionHeatmap}
+                              onChange={checked =>
+                                setFormData({ ...formData, showRegionHeatmap: checked })
+                              }
+                              label="Show Region Heatmap"
+                              helperText={
+                                privacySettings.showServiceRegions === false
+                                  ? 'Requires Service regions in Privacy settings'
+                                  : 'Display a compact region impact grid'
+                              }
+                              disabled={privacySettings.showServiceRegions === false}
+                            />
+                          </div>
+                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors md:col-span-2">
+                            <Switch
+                              checked={formData.showPostIncidentReview}
+                              onChange={checked =>
+                                setFormData({ ...formData, showPostIncidentReview: checked })
+                              }
+                              label="Show Post-Incident Reviews"
+                              helperText="Show links to published postmortems on resolved incidents"
+                            />
+                          </div>
+                        </div>
 
                         {formData.showMetrics && (
                           <div
@@ -2798,20 +2752,14 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                       description="Search engine metadata and previews for public sharing."
                       icon={<Globe className="w-5 h-5 text-primary" />}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-4)',
-                        }}
-                      >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           type="input"
                           label="Meta Title"
                           value={formData.metaTitle}
                           onChange={e => setFormData({ ...formData, metaTitle: e.target.value })}
                           placeholder={statusPage.name}
-                          helperText="Page title for search engines (50-60 characters recommended)"
+                          helperText="Recommended: 50-60 characters"
                         />
                         <FormField
                           type="textarea"
@@ -2822,7 +2770,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             setFormData({ ...formData, metaDescription: e.target.value })
                           }
                           placeholder={`Status page for ${statusPage.name}`}
-                          helperText="Page description for search engines (150-160 characters recommended)"
+                          helperText="Recommended: 150-160 characters"
                         />
                       </div>
                     </StatusPageSectionCard>

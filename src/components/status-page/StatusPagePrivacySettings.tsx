@@ -260,53 +260,86 @@ export default function StatusPagePrivacySettings({
         description="Configure how much detail is exposed on incident reports and timeline updates."
         icon={<AlertTriangle className="h-4 w-4" />}
       >
-        <div className="space-y-3 divide-y divide-border/30">
-          <div className="pt-2 first:pt-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">
+                Show Timeline & Progress Updates
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Chronological investigation and resolution updates
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentDetails}
               onChange={checked => updateSetting('showIncidentDetails', checked)}
-              label="Show Timeline & Progress Updates"
-              helperText="Display chronological investigation, mitigation, and resolution updates"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident Titles</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Incident titles (falls back to generic title if off)
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentTitles}
               onChange={checked => updateSetting('showIncidentTitles', checked)}
-              label="Show Incident Titles"
-              helperText="Display incident titles on the status page (falls back to generic title if off)"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">
+                Show Incident Body Description
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Descriptive paragraph explaining what occurred
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentDescriptions}
               onChange={checked => updateSetting('showIncidentDescriptions', checked)}
-              label="Show Incident Body Description"
-              helperText="Display the main descriptive paragraph explaining what occurred"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Affected Services</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display which services are affected by incidents
+              </p>
+            </div>
             <Switch
               checked={settings.showAffectedServices}
               onChange={checked => updateSetting('showAffectedServices', checked)}
-              label="Show Affected Services"
-              helperText="Display which services are affected by incidents"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident Timestamps</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                When incidents occurred and were resolved
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentTimestamps}
               onChange={checked => updateSetting('showIncidentTimestamps', checked)}
-              label="Show Incident Timestamps"
-              helperText="Display when incidents occurred and were resolved"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident Urgency</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Urgency level (High/Medium/Low) for incidents
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentUrgency}
               onChange={checked => updateSetting('showIncidentUrgency', checked)}
-              label="Show Incident Urgency"
-              helperText="Display urgency level (High/Medium/Low) for incidents"
             />
           </div>
         </div>
@@ -318,37 +351,56 @@ export default function StatusPagePrivacySettings({
         description="Control visibility of service descriptions, regions, metrics, and team ownership."
         icon={<Server className="h-4 w-4" />}
       >
-        <div className="space-y-3 divide-y divide-border/30">
-          <div className="pt-2 first:pt-0">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Service Descriptions</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display service descriptions and details
+              </p>
+            </div>
             <Switch
               checked={settings.showServiceDescriptions}
               onChange={checked => updateSetting('showServiceDescriptions', checked)}
-              label="Show Service Descriptions"
-              helperText="Display service descriptions and details"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Service Regions</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display hosting regions for each service
+              </p>
+            </div>
             <Switch
               checked={settings.showServiceRegions}
               onChange={checked => updateSetting('showServiceRegions', checked)}
-              label="Show Service Regions"
-              helperText="Display hosting regions for each service"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Uptime History</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display historical uptime charts and timelines
+              </p>
+            </div>
             <Switch
               checked={settings.showUptimeHistory}
               onChange={checked => updateSetting('showUptimeHistory', checked)}
-              label="Show Uptime History"
-              helperText="Display historical uptime charts and timelines"
             />
           </div>
-          <div className="pt-3">
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Team Information</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display team names and ownership badges
+              </p>
+            </div>
             <Switch
               checked={settings.showTeamInformation}
               onChange={checked => updateSetting('showTeamInformation', checked)}
-              label="Show Team Information"
-              helperText="Display team names and ownership information"
             />
           </div>
         </div>
@@ -361,58 +413,68 @@ export default function StatusPagePrivacySettings({
         icon={<Clock className="h-4 w-4" />}
       >
         <div className="space-y-4">
-          <Switch
-            checked={settings.showIncidentHistoryDetails ?? true}
-            onChange={checked =>
-              updateSetting('showIncidentHistoryDetails' as never, checked as never)
-            }
-            label="Show Incident History Details"
-            helperText="When off, older resolved incidents show limited detail (title only). Active incidents are never redacted."
-          />
-          {settings.showIncidentHistoryDetails === false && (
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident History Details</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                When off, older resolved incidents show title only. Active incidents are never
+                redacted.
+              </p>
+            </div>
+            <Switch
+              checked={settings.showIncidentHistoryDetails ?? true}
+              onChange={checked =>
+                updateSetting('showIncidentHistoryDetails' as never, checked as never)
+              }
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {settings.showIncidentHistoryDetails === false && (
+              <FormField
+                type="input"
+                label="Incident History Detail Window (days)"
+                inputType="number"
+                value={settings.incidentHistoryDetailDays?.toString() ?? ''}
+                onChange={e =>
+                  updateSetting(
+                    'incidentHistoryDetailDays' as never,
+                    (e.target.value ? parseInt(e.target.value) : null) as never
+                  )
+                }
+                helperText="Resolved incidents older than this are redacted (1–365). Active incidents are never redacted."
+              />
+            )}
             <FormField
               type="input"
-              label="Incident History Detail Window (days)"
+              label="Maximum Incidents to Show"
               inputType="number"
-              value={settings.incidentHistoryDetailDays?.toString() ?? ''}
-              onChange={e =>
-                updateSetting(
-                  'incidentHistoryDetailDays' as never,
-                  (e.target.value ? parseInt(e.target.value) : null) as never
-                )
-              }
-              helperText="Resolved incidents older than this are redacted (1–365). Active incidents are never redacted."
+              value={settings.maxIncidentsToShow.toString()}
+              onChange={e => {
+                const next = Math.max(1, Math.min(100, parseInt(e.target.value) || 50));
+                updateSetting('maxIncidentsToShow', next);
+              }}
+              helperText="Number of incidents in the public snapshot (1–100; full history is paginated)"
             />
-          )}
-          <FormField
-            type="input"
-            label="Maximum Incidents to Show"
-            inputType="number"
-            value={settings.maxIncidentsToShow.toString()}
-            onChange={e => {
-              const next = Math.max(1, Math.min(100, parseInt(e.target.value) || 50));
-              updateSetting('maxIncidentsToShow', next);
-            }}
-            helperText="Number of incidents in the public snapshot (1–100; full history is paginated)"
-          />
-          <FormField
-            type="input"
-            label="Public Incident History Window (days)"
-            inputType="number"
-            value={settings.incidentHistoryDays.toString()}
-            onChange={e => updateSetting('incidentHistoryDays', parseInt(e.target.value) || 90)}
-            helperText="Show resolved incidents from the last N days (1–365)"
-          />
-          <FormField
-            type="input"
-            label="Public History Retention Cap (days, optional)"
-            inputType="number"
-            value={settings.dataRetentionDays?.toString() || ''}
-            onChange={e =>
-              updateSetting('dataRetentionDays', e.target.value ? parseInt(e.target.value) : null)
-            }
-            helperText="Limits how far back the public Status Page and status APIs expose incident history. Internal incident records are not deleted."
-          />
+            <FormField
+              type="input"
+              label="Public Incident History Window (days)"
+              inputType="number"
+              value={settings.incidentHistoryDays.toString()}
+              onChange={e => updateSetting('incidentHistoryDays', parseInt(e.target.value) || 90)}
+              helperText="Show resolved incidents from the last N days (1–365)"
+            />
+            <FormField
+              type="input"
+              label="Public History Retention Cap (days, optional)"
+              inputType="number"
+              value={settings.dataRetentionDays?.toString() || ''}
+              onChange={e =>
+                updateSetting('dataRetentionDays', e.target.value ? parseInt(e.target.value) : null)
+              }
+              helperText="Limits how far back the public Status Page and status APIs expose incident history."
+            />
+          </div>
         </div>
       </StatusPageSectionCard>
 
