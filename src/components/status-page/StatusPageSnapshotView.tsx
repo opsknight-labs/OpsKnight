@@ -55,8 +55,11 @@ export default function StatusPageSnapshotView({
       data-sp-density={themeDensity}
       style={{
         minHeight: '100vh',
-        background: theme.backgroundColor,
-        color: theme.textColor,
+        // Non-default themes provide these variables in their built-in CSS. Keeping the actual
+        // property as a var() reference lets Advanced CSS override the theme later in the cascade,
+        // while Default falls straight back to the page's configured/native branding colors.
+        background: `var(--sp-page-bg, ${theme.backgroundColor})`,
+        color: `var(--sp-page-text, ${theme.textColor})`,
         fontFamily: theme.fontFamily,
         padding: 0,
         ...(theme.cssVariables as CSSProperties),
