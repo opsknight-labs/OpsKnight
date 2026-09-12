@@ -184,6 +184,18 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    const subscriptionId = targetIds[0];
+    const statusPageId = pageId;
+
+    if (targetIds.length === 1) {
+      const subscription = await prisma.statusPageSubscription.findFirst({
+        where: { id: subscriptionId, statusPageId },
+      });
+      if (!subscription) {
+        return jsonError(new AppError(SUBSCRIPTION_NOT_FOUND));
+      }
+    }
+
     // Verify subscribers belong to this status page
     const existing = await prisma.statusPageSubscription.findMany({
       where: {
