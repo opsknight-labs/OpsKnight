@@ -62,7 +62,7 @@ ${R} {
 ${R} *, ${R} *::before, ${R} *::after { box-sizing: border-box; }
 ${R} img, ${R} svg, ${R} video { max-inline-size: 100%; }
 ${R} .status-page-content { inline-size: 100%; max-inline-size: 100%; min-inline-size: 0; }
-${R} h1, ${R} h2, ${R} h3, ${R} h4 { font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif; }
+${R} h1, ${R} h2, ${R} h3, ${R} h4 { font-family: var(--status-font-family, 'Space Grotesk'), Inter, ui-sans-serif, system-ui, sans-serif; }
 ${R} h1, ${R} h2, ${R} h3, ${R} h4, ${R} p, ${R} dl, ${R} dd, ${R} dt { margin: 0; }
 ${R} button, ${R} input, ${R} select { color: inherit; font: inherit; }
 

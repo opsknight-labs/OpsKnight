@@ -33,8 +33,8 @@ export type StatusPagePublicSettings = {
 };
 
 export function publicStatusVisibility(settings: StatusPagePublicSettings) {
-  const showIncidents = settings.showIncidents && settings.showRecentIncidents;
-  const showMetrics = settings.showMetrics && settings.showServiceMetrics;
+  const showIncidents = settings.showIncidents && settings.showRecentIncidents !== false;
+  const showMetrics = settings.showMetrics && settings.showServiceMetrics !== false;
 
   return {
     showServices: settings.showServices,
@@ -43,7 +43,8 @@ export function publicStatusVisibility(settings: StatusPagePublicSettings) {
     showUptime: showMetrics && settings.showUptimeHistory,
     showServiceRegion: settings.showServiceRegions,
     showServiceSlaTier: settings.showServiceSlaTier,
-    showTeam: settings.showTeamInformation || settings.showServiceOwners,
+    // Team identity is sensitive — both toggles must agree to disclose. OR would leak when either is off.
+    showTeam: settings.showTeamInformation && settings.showServiceOwners,
     showIncidentId: settings.showIncidentDetails,
     showIncidentTitle: settings.showIncidentTitles,
     showIncidentDescription: settings.showIncidentDescriptions,
@@ -65,6 +66,7 @@ type PublicIncidentInput = {
   acknowledgedAt?: string | Date | null;
   service?: { id?: string; name?: string; region?: string | null } | null;
   postmortem?: {
+    id?: string | null;
     status?: string;
     isPublic?: boolean | null;
     publishedAt?: string | Date | null;
@@ -155,7 +157,10 @@ function truncateForRedacted(value: string, max = 120): string {
   return `${value.slice(0, max).trimEnd()}…`;
 }
 
-export function incidentDetailCutoff(settings: StatusPagePublicSettings, nowMs: number): number | null {
+export function incidentDetailCutoff(
+  settings: StatusPagePublicSettings,
+  nowMs: number
+): number | null {
   return incidentDetailCutoffMs(settings, nowMs);
 }
 
@@ -170,13 +175,19 @@ export function serializePublicStatusIncident(
   let now: Date;
   if (context?.detailCutoffMs !== undefined) {
     cutoffMs = context.detailCutoffMs;
-    now = context.now == null ? new Date() : context.now instanceof Date ? context.now : new Date(context.now as string | number);
+    now =
+      context.now == null
+        ? new Date()
+        : context.now instanceof Date
+          ? context.now
+          : new Date(context.now as string | number);
   } else {
-    now = context?.now == null
-      ? new Date()
-      : context.now instanceof Date
-        ? context.now
-        : new Date(context.now as string | number);
+    now =
+      context?.now == null
+        ? new Date()
+        : context.now instanceof Date
+          ? context.now
+          : new Date(context.now as string | number);
     cutoffMs = incidentDetailCutoffMs(settings, now.getTime());
   }
   const redactedByAge = shouldRedactByCutoff(incident, cutoffMs, settings);
@@ -219,7 +230,12 @@ export function serializePublicStatusIncident(
         : {}),
     };
   }
-  if (!redactedByAge && visibility.showIncidentId && visibility.showIncidentDescription && incident.events?.length) {
+  if (
+    !redactedByAge &&
+    visibility.showIncidentId &&
+    visibility.showIncidentDescription &&
+    incident.events?.length
+  ) {
     const updates = incident.events.slice(0, 8).flatMap(event => {
       const update = serializePublicIncidentUpdate(
         incident.id,
@@ -242,7 +258,8 @@ export function serializePublicStatusIncident(
       const publishedAt = serializeDate(incident.postmortem.publishedAt);
       result.postmortem = {
         available: true,
-        id: incident.id,
+        // Use the real postmortem ID when available; fall back to incident ID for legacy data.
+        id: (incident.postmortem as { id?: string | null }).id || incident.id,
         ...(publishedAt ? { publishedAt } : {}),
         ...(incident.postmortem.title ? { title: incident.postmortem.title } : {}),
         ...(incident.postmortem.summary ? { summary: incident.postmortem.summary } : {}),
@@ -254,8 +271,6 @@ export function serializePublicStatusIncident(
 
   return result;
 }
-
-
 
 /**
  * Keep the long-standing `/api/status` incident shape while applying the

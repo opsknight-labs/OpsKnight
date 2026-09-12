@@ -827,8 +827,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     { id: 'advanced', label: 'Advanced', icon: '⚡' },
   ];
 
-  const getInitialSelectedServices = () =>
-    new Set(statusPage.services.map(s => s.serviceId));
+  const getInitialSelectedServices = () => new Set(statusPage.services.map(s => s.serviceId));
 
   const getInitialServiceConfigs = () =>
     statusPage.services.reduce(
@@ -845,9 +844,10 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
 
   const [selectedServices, setSelectedServices] = useState<Set<string>>(getInitialSelectedServices);
 
-  const [serviceConfigs, setServiceConfigs] = useState<
-    Record<string, { displayName: string; order: number; showOnPage: boolean }>
-  >(getInitialServiceConfigs);
+  const [serviceConfigs, setServiceConfigs] =
+    useState<Record<string, { displayName: string; order: number; showOnPage: boolean }>>(
+      getInitialServiceConfigs
+    );
 
   const serviceLookup = new Map(allServices.map(service => [service.id, service] as const));
 
@@ -910,7 +910,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     authProvider: statusPage.authProvider || null,
   });
 
-  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(getInitialPrivacySettings);
+  const [privacySettings, setPrivacySettings] =
+    useState<PrivacySettings>(getInitialPrivacySettings);
 
   const handleDiscardChanges = () => {
     setFormData(getInitialFormData());
@@ -1510,7 +1511,9 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
       // InlineNotice (not a transient toast) so the dirty state survives a
       // 6s toast expiry — consistent with Retention's unsaved-changes pattern.
       setTemplateError(null);
-      setTemplateAppliedNotice(`Template applied: ${template.name}. Unsaved changes — press Save to publish.`);
+      setTemplateAppliedNotice(
+        `Template applied: ${template.name}. Unsaved changes — press Save to publish.`
+      );
     } catch {
       setTemplateError('Failed to load template. Please try again.');
     } finally {
@@ -2491,14 +2494,15 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                         >
                           <FormField
                             type="select"
-                            label="Layout Style"
+                            label="Content Width"
                             value={formData.layout}
                             onChange={e => setFormData({ ...formData, layout: e.target.value })}
                             options={[
-                              { value: 'default', label: 'Default' },
-                              { value: 'compact', label: 'Compact' },
-                              { value: 'wide', label: 'Wide' },
+                              { value: 'compact', label: 'Compact (~900px)' },
+                              { value: 'default', label: 'Standard (~1280px)' },
+                              { value: 'wide', label: 'Wide (~1600px)' },
                             ]}
+                            helperText="Controls maximum page width on large displays."
                           />
                           <Switch
                             checked={formData.showHeader}
@@ -2579,12 +2583,12 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             onChange={checked =>
                               setFormData({ ...formData, showServicesByRegion: checked })
                             }
-                            label="Group services by region (public page)"
+                            label="Group by region by default"
                             helperText={
                               privacySettings.showServiceRegions === false
                                 ? 'Enable “Show Service Regions” in Privacy settings to use region grouping.'
                                 : hasSelectedRegions
-                                  ? 'Show region headers and group services on the public status page.'
+                                  ? 'Set the default grouped view for visitors. Visitors can also toggle grouping.'
                                   : 'Add regions to selected services to enable grouping.'
                             }
                             disabled={
@@ -2766,14 +2770,14 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             onChange={checked =>
                               setFormData({ ...formData, showIncidents: checked })
                             }
-                            label="Show Recent Incidents"
-                            helperText="Display recent incidents and their timeline"
+                            label="Show Incidents"
+                            helperText="Display incidents section and timeline"
                           />
                           <Switch
                             checked={formData.showMetrics}
                             onChange={checked => setFormData({ ...formData, showMetrics: checked })}
-                            label="Show Metrics"
-                            helperText="Display uptime and performance metrics"
+                            label="Show Uptime & Availability"
+                            helperText="Display service uptime metrics and availability history"
                           />
                           <Switch
                             checked={formData.showSubscribe}
@@ -2797,7 +2801,12 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                               setFormData({ ...formData, showRegionHeatmap: checked })
                             }
                             label="Show Region Heatmap"
-                            helperText="Display a compact region impact grid"
+                            helperText={
+                              privacySettings.showServiceRegions === false
+                                ? 'Requires Service regions to be visible — enable it in Privacy → Service Information'
+                                : 'Display a compact region impact grid'
+                            }
+                            disabled={privacySettings.showServiceRegions === false}
                           />
                           <Switch
                             checked={formData.showPostIncidentReview}
@@ -3711,11 +3720,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             </InlineNotice>
                           )}
                           {templateAppliedNotice && (
-                            <InlineNotice
-                              tone="neutral"
-                              title="Unsaved changes"
-                              className="mb-3"
-                            >
+                            <InlineNotice tone="neutral" title="Unsaved changes" className="mb-3">
                               {templateAppliedNotice}
                             </InlineNotice>
                           )}
@@ -4390,8 +4395,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                           onChange={checked =>
                             setFormData({ ...formData, enableUptimeExports: checked })
                           }
-                          label="Enable uptime exports"
-                          helperText="Allow admins to download monthly uptime reports."
+                          label="Enable public uptime exports"
+                          helperText="Allow visitors and admins to download monthly uptime reports (CSV/PDF) directly from the Status Page."
                         />
                         {formData.enableUptimeExports && (
                           <div

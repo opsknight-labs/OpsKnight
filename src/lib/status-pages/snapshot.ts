@@ -193,6 +193,7 @@ export async function buildStatusPageSnapshot(
     },
     postmortem: {
       select: {
+        id: true,
         status: true,
         isPublic: true,
         publishedAt: true,
