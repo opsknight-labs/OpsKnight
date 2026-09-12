@@ -37,16 +37,22 @@ export default function Input({
   const sizeStyles = {
     sm: {
       padding: '0.5rem 0.75rem',
+      paddingLeft: '0.75rem',
+      paddingRight: '0.75rem',
       fontSize: 'var(--font-size-sm)',
       height: '32px',
     },
     md: {
       padding: '0.75rem 1rem',
+      paddingLeft: '1rem',
+      paddingRight: '1rem',
       fontSize: 'var(--font-size-base)',
       height: '40px',
     },
     lg: {
       padding: '1rem 1.25rem',
+      paddingLeft: '1.25rem',
+      paddingRight: '1.25rem',
       fontSize: 'var(--font-size-lg)',
       height: '48px',
     },
@@ -128,14 +134,14 @@ export default function Input({
                 : size === 'md'
                   ? '3rem'
                   : '3.5rem'
-              : undefined,
+              : sizeStyles[size].paddingLeft,
             paddingRight: rightIcon
               ? size === 'sm'
                 ? '2.5rem'
                 : size === 'md'
                   ? '3rem'
                   : '3.5rem'
-              : undefined,
+              : sizeStyles[size].paddingRight,
           }}
           onFocus={e => {
             e.currentTarget.style.borderColor = hasError

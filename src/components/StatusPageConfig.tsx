@@ -25,6 +25,7 @@ import {
   Settings,
   Wrench,
   Eye,
+  EyeOff,
   Save,
   Trash2,
   Globe,
@@ -1777,43 +1778,22 @@ export default function StatusPageConfig({
               type="button"
               onClick={() => setShowPreview(!showPreview)}
               className={cn(
-                'status-page-config-preview-toggle group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border cursor-pointer select-none',
+                'status-page-config-preview-toggle inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 border cursor-pointer select-none',
                 showPreview
-                  ? 'bg-primary text-primary-foreground border-primary shadow-sm ring-2 ring-primary/25 hover:bg-primary/95'
-                  : 'bg-background hover:bg-muted text-foreground border-border hover:border-border/80 shadow-xs hover:shadow-sm'
+                  ? 'bg-primary text-primary-foreground border-primary shadow-xs hover:bg-primary/90'
+                  : 'bg-background hover:bg-muted text-foreground border-border shadow-xs'
               )}
               aria-pressed={showPreview}
               title={
                 showPreview ? 'Hide live status page preview' : 'Show live status page preview'
               }
             >
-              <span
-                className={cn(
-                  'w-2 h-2 rounded-full transition-all duration-300 shrink-0',
-                  showPreview
-                    ? 'bg-emerald-400 animate-pulse ring-2 ring-emerald-400/40'
-                    : 'bg-muted-foreground/40 group-hover:bg-primary'
-                )}
-              />
-              <Eye
-                className={cn(
-                  'w-3.5 h-3.5 shrink-0 transition-colors',
-                  showPreview ? 'text-primary-foreground' : 'text-primary'
-                )}
-              />
-              <span className="font-semibold tracking-tight">
-                {showPreview ? 'Hide Preview' : 'Show Preview'}
-              </span>
-              <span
-                className={cn(
-                  'text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full transition-colors leading-none',
-                  showPreview
-                    ? 'bg-primary-foreground/20 text-primary-foreground'
-                    : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
-                )}
-              >
-                {showPreview ? 'Live' : 'Off'}
-              </span>
+              {showPreview ? (
+                <EyeOff className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <Eye className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+              )}
+              <span>{showPreview ? 'Hide Preview' : 'Show Preview'}</span>
             </button>
           </div>
         </div>
@@ -2511,53 +2491,53 @@ export default function StatusPageConfig({
                       description="Select which services to show on your status page and configure display overrides."
                       icon={<CheckSquare className="w-5 h-5 text-primary" />}
                     >
-                      <div style={{ marginBottom: 'var(--spacing-4)' }}>
-                        <Switch
-                          checked={formData.showServicesByRegion}
-                          onChange={checked =>
-                            setFormData({ ...formData, showServicesByRegion: checked })
-                          }
-                          label="Group by region by default"
-                          helperText={
-                            privacySettings.showServiceRegions === false
-                              ? 'Enable “Show Service Regions” in Privacy settings to use region grouping.'
-                              : hasSelectedRegions
-                                ? 'Set the default grouped view for visitors. Visitors can also toggle grouping.'
-                                : 'Add regions to selected services to enable grouping.'
-                          }
-                          disabled={
-                            privacySettings.showServiceRegions === false || !hasSelectedRegions
-                          }
-                        />
-                        <Switch
-                          checked={formData.showServiceOwners}
-                          onChange={checked =>
-                            setFormData({ ...formData, showServiceOwners: checked })
-                          }
-                          label="Show service owners (public page)"
-                          helperText={
-                            privacySettings.showTeamInformation === false
-                              ? 'Enable “Show Team Information” in Privacy settings to display owner badges.'
-                              : 'Display “Owned by <team>” badges on service cards.'
-                          }
-                          disabled={privacySettings.showTeamInformation === false}
-                        />
-                        <Switch
-                          checked={formData.showServiceSlaTier}
-                          onChange={checked =>
-                            setFormData({ ...formData, showServiceSlaTier: checked })
-                          }
-                          label="Show SLA tier (public page)"
-                          helperText="Display SLA tier badges (e.g., Gold, Silver) on service cards."
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                          <Switch
+                            checked={formData.showServicesByRegion}
+                            onChange={checked =>
+                              setFormData({ ...formData, showServicesByRegion: checked })
+                            }
+                            label="Group by Region"
+                            helperText={
+                              privacySettings.showServiceRegions === false
+                                ? 'Enable “Show Service Regions” in Privacy settings.'
+                                : hasSelectedRegions
+                                  ? 'Set default grouped view for visitors.'
+                                  : 'Add regions to selected services to enable.'
+                            }
+                            disabled={
+                              privacySettings.showServiceRegions === false || !hasSelectedRegions
+                            }
+                          />
+                        </div>
+                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                          <Switch
+                            checked={formData.showServiceOwners}
+                            onChange={checked =>
+                              setFormData({ ...formData, showServiceOwners: checked })
+                            }
+                            label="Show Service Owners"
+                            helperText={
+                              privacySettings.showTeamInformation === false
+                                ? 'Enable “Show Team Information” in Privacy.'
+                                : 'Display “Owned by <team>” badges.'
+                            }
+                            disabled={privacySettings.showTeamInformation === false}
+                          />
+                        </div>
+                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                          <Switch
+                            checked={formData.showServiceSlaTier}
+                            onChange={checked =>
+                              setFormData({ ...formData, showServiceSlaTier: checked })
+                            }
+                            label="Show SLA Tier"
+                            helperText="Display SLA tier badges (e.g., Gold, Silver)."
+                          />
+                        </div>
                       </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-3)',
-                        }}
-                      >
+                      <div className="space-y-3">
                         {allServices.map(service => {
                           const isSelected = selectedServices.has(service.id);
                           const config = serviceConfigs[service.id] || {
@@ -2569,88 +2549,80 @@ export default function StatusPageConfig({
                           return (
                             <div
                               key={service.id}
-                              style={{
-                                padding: 'var(--spacing-4)',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 'var(--radius-md)',
-                                background: isSelected ? '#f9fafb' : 'white',
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 'var(--spacing-3)',
-                                  marginBottom: isSelected ? 'var(--spacing-3)' : '0',
-                                }}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onChange={e => {
-                                    const newSet = new Set(selectedServices);
-                                    if (e.target.checked) {
-                                      newSet.add(service.id);
-                                      if (!serviceConfigs[service.id]) {
-                                        updateServiceConfig(service.id, {
-                                          displayName: '',
-                                          order: 0,
-                                          showOnPage: true,
-                                        });
-                                      }
-                                    } else {
-                                      newSet.delete(service.id);
-                                    }
-                                    setSelectedServices(newSet);
-                                  }}
-                                />
-                                <span style={{ fontWeight: '600', flex: 1 }}>{service.name}</span>
-                              </div>
-                              {isSelected && (
-                                <div
-                                  style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: '2fr 1fr 1fr',
-                                    gap: 'var(--spacing-3)',
-                                    marginTop: 'var(--spacing-3)',
-                                    paddingTop: 'var(--spacing-3)',
-                                    borderTop: '1px solid #e5e7eb',
-                                  }}
-                                >
-                                  <FormField
-                                    type="input"
-                                    label="Display Name"
-                                    value={config.displayName}
-                                    onChange={e =>
-                                      updateServiceConfig(service.id, {
-                                        displayName: e.target.value,
-                                      })
-                                    }
-                                    placeholder={service.name}
-                                    helperText="Override service name on status page"
-                                  />
-                                  <FormField
-                                    type="input"
-                                    label="Order"
-                                    value={config.order.toString()}
-                                    onChange={e =>
-                                      updateServiceConfig(service.id, {
-                                        order: parseInt(e.target.value) || 0,
-                                      })
-                                    }
-                                    placeholder="0"
-                                    helperText="Display order (lower = first)"
-                                  />
-                                  <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                                    <Switch
-                                      checked={config.showOnPage}
-                                      onChange={checked =>
-                                        updateServiceConfig(service.id, { showOnPage: checked })
-                                      }
-                                      label="Show on Page"
-                                    />
-                                  </div>
-                                </div>
+                              className={cn(
+                                'rounded-xl border transition-all duration-150',
+                                isSelected
+                                  ? 'border-indigo-200 dark:border-indigo-900/60 bg-muted/30 shadow-xs'
+                                  : 'border-border/80 bg-card hover:border-border'
                               )}
+                            >
+                              <div className="p-4 sm:p-4.5">
+                                <div className="flex items-center gap-3">
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onChange={e => {
+                                      const newSet = new Set(selectedServices);
+                                      if (e.target.checked) {
+                                        newSet.add(service.id);
+                                        if (!serviceConfigs[service.id]) {
+                                          updateServiceConfig(service.id, {
+                                            displayName: '',
+                                            order: 0,
+                                            showOnPage: true,
+                                          });
+                                        }
+                                      } else {
+                                        newSet.delete(service.id);
+                                      }
+                                      setSelectedServices(newSet);
+                                    }}
+                                  />
+                                  <span className="font-semibold text-sm text-foreground flex-1 select-none">
+                                    {service.name}
+                                  </span>
+                                </div>
+                                {isSelected && (
+                                  <div className="mt-3.5 pt-3.5 border-t border-border/60 grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
+                                    <div className="md:col-span-6">
+                                      <FormField
+                                        type="input"
+                                        label="Display Name"
+                                        value={config.displayName}
+                                        onChange={e =>
+                                          updateServiceConfig(service.id, {
+                                            displayName: e.target.value,
+                                          })
+                                        }
+                                        placeholder={service.name}
+                                        helperText="Override service name on status page"
+                                      />
+                                    </div>
+                                    <div className="md:col-span-3">
+                                      <FormField
+                                        type="input"
+                                        label="Order"
+                                        value={config.order.toString()}
+                                        onChange={e =>
+                                          updateServiceConfig(service.id, {
+                                            order: parseInt(e.target.value) || 0,
+                                          })
+                                        }
+                                        placeholder="0"
+                                        helperText="Display order (lower = first)"
+                                      />
+                                    </div>
+                                    <div className="md:col-span-3 pt-2 md:pt-6 flex items-center">
+                                      <Switch
+                                        checked={config.showOnPage}
+                                        onChange={checked =>
+                                          updateServiceConfig(service.id, { showOnPage: checked })
+                                        }
+                                        label="Show on Page"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           );
                         })}

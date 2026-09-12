@@ -792,6 +792,9 @@
   background-color: #ffffff;
   color: #0f172a;
   border-radius: 0.5rem;
+  padding: 0.625rem 0.875rem !important;
+  box-sizing: border-box !important;
+  line-height: 1.5 !important;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 

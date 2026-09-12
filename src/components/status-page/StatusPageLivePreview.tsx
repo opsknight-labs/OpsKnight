@@ -151,9 +151,9 @@ const PREVIEW_DEVICES: Array<{
   shortLabel: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'mac', label: 'MacBook Pro', shortLabel: 'Desktop', icon: Monitor },
+  { id: 'mac', label: 'MacBook Pro', shortLabel: 'Mac', icon: Monitor },
   { id: 'ipad', label: 'iPad Pro 12.9"', shortLabel: 'iPad', icon: Tablet },
-  { id: 'iphone', label: 'iPhone 16 Pro', shortLabel: 'iPhone', icon: Smartphone },
+  { id: 'iphone', label: 'iPhone 15 Pro', shortLabel: 'iPhone', icon: Smartphone },
 ];
 
 function StatusPageLivePreview({
@@ -180,7 +180,7 @@ function StatusPageLivePreview({
     if (previewData.statusPage?.slug?.trim()) {
       return `status-${previewData.statusPage.slug.trim()}.opsknight.com`;
     }
-    return 'status.opsknight.com';
+    return 'status.example.com';
   }, [previewDomain, previewData.statusPage]);
 
   const previewSnapshot = useMemo(
@@ -368,7 +368,7 @@ function StatusPageLivePreview({
     <div className="flex flex-col h-full w-full overflow-hidden bg-background">
       {/* 1. Sleek Modern Preview Header Toolbar */}
       <div className="h-12 shrink-0 border-b border-border/80 bg-card px-3 flex items-center justify-between gap-2 select-none z-10 overflow-hidden">
-        {/* Left: Live Status & Domain indicator */}
+        {/* Left: Live Status */}
         <div className="flex items-center gap-2 shrink-0">
           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
             <span className="relative flex h-2 w-2">
@@ -376,13 +376,6 @@ function StatusPageLivePreview({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
             Live
-          </span>
-          <span
-            className="hidden 2xl:inline-flex items-center gap-1 text-[11px] font-mono text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-md truncate max-w-[140px]"
-            title={displayUrl}
-          >
-            <Lock className="w-2.5 h-2.5 text-muted-foreground/70 shrink-0" />
-            <span className="truncate">{displayUrl}</span>
           </span>
         </div>
 
@@ -429,7 +422,7 @@ function StatusPageLivePreview({
               type="button"
               onClick={() => setZoomMode(zoomMode === 'fit' ? 'manual' : 'fit')}
               className="px-1.5 py-0.5 text-[11px] font-semibold text-foreground hover:bg-background/80 rounded transition-colors min-w-[42px] text-center"
-              title={zoomMode === 'fit' ? 'Switch to manual zoom' : 'Fit to screen'}
+              title={zoomMode === 'fit' ? 'Disable Fit to Screen' : 'Enable Fit to Screen'}
             >
               {zoomMode === 'fit' ? 'Fit' : `${Math.round(scale * 100)}%`}
             </button>
@@ -586,7 +579,7 @@ function StatusPageLivePreview({
                     fontWeight: '500',
                   }}
                 >
-                  https://{displayUrl}
+                  {displayUrl}
                 </span>
               </div>
             </div>
