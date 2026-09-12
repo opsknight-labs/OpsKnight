@@ -19,6 +19,7 @@ export const NOTIFICATION_CHANNELS = [
   'SLACK',
   'WEBHOOK',
   'WHATSAPP',
+  'MICROSOFT_TEAMS',
 ] as const;
 export type NotificationDeliveryChannel = (typeof NOTIFICATION_CHANNELS)[number];
 export const NOTIFICATION_DELIVERY_STATUSES = [
@@ -320,7 +321,13 @@ export async function dispatchNotificationAttempt(
       }
       case 'SLACK':
         return { success: true, outcome: 'SKIPPED', skipped: true };
+      case 'MICROSOFT_TEAMS':
+        // Teams lifecycle delivery is through the durable central control plane
+        // (notification-control-plane.ts); legacy personal retry should skip.
+        return { success: true, outcome: 'SKIPPED', skipped: true, error: 'Microsoft Teams via central control plane' };
     }
+    // Exhaustiveness guard — NotificationDeliveryChannel is closed
+    return { success: false, outcome: 'PERMANENT_FAILURE', error: `Unsupported channel ${String((input as { channel: string }).channel)}` };
   } catch (error) {
     if (error instanceof CircuitBreakerTimeoutError)
       return {

@@ -19,6 +19,8 @@ function defaultRate(scope: ProviderAdmissionScope): number {
       return 1;
     case 'WEBHOOK':
       return 20;
+    case 'MICROSOFT_TEAMS':
+      return 2;
   }
 }
 
@@ -36,6 +38,8 @@ function defaultInFlight(scope: ProviderAdmissionScope): number {
       return 2;
     case 'WEBHOOK':
       return 10;
+    case 'MICROSOFT_TEAMS':
+      return 2;
   }
 }
 

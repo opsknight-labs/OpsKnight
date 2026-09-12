@@ -375,6 +375,28 @@ export const CircuitBreakers = {
       resetTimeout: 30000,
       timeout: 10000,
     }),
+
+  microsoftTeams: (tenantId?: string) => {
+    const key = tenantId?.trim()
+      ? `microsoftTeams:${tenantId.trim().slice(0, 80).toLowerCase()}`
+      : 'microsoftTeams';
+    // Bounded registry: keep at most 20 tenant-scoped breakers to avoid unbounded growth in MULTI mode.
+    const MAX_TENANT_BREAKERS = 20;
+    if (!breakers.has(key) && breakers.size >= MAX_TENANT_BREAKERS) {
+      // Evict oldest tenant-scoped entry (never evict shared singletons without suffix)
+      for (const k of breakers.keys()) {
+        if (k.startsWith('microsoftTeams:')) {
+          breakers.delete(k);
+          break;
+        }
+      }
+    }
+    return getCircuitBreaker(key, {
+      failureThreshold: 5,
+      resetTimeout: 30000,
+      timeout: 10000,
+    });
+  },
 };
 
 /**

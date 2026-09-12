@@ -5,6 +5,7 @@ import { logger } from './logger';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType, generateIncidentWebhookPayload } from './webhooks';
 import { getBaseUrl } from './env-validation';
+import { enqueueMicrosoftTeamsDelivery } from './microsoft-teams/delivery';
 
 export type ServiceNotificationEventType = 'triggered' | 'acknowledged' | 'resolved' | 'updated';
 
@@ -210,6 +211,37 @@ export async function sendServiceNotifications(
         });
         if (!result.success)
           errors.push(`Slack webhook notification failed: ${result.error || 'Unknown error'}`);
+      }
+    }
+
+    if (serviceChannels.includes('MICROSOFT_TEAMS' as never) && eventType !== 'updated') {
+      const teamsDestination = await prisma.microsoftTeamsDestination.findUnique({
+        where: { serviceId: service.id },
+      });
+      if (teamsDestination?.enabled) {
+        // Claim-first ExternalOperation path: idempotent row + durable BackgroundJob
+        // (ExternalOperation @@unique([provider,idempotencyKey]) + advisory lock + AMBIGUOUS semantics).
+        // Central Notification intent is superseded for Teams — this fence prevents duplicate cards
+        // when multiple replicas race the same incidentVersion.
+        const teamsEventType = eventType as 'triggered' | 'acknowledged' | 'resolved';
+        const incidentUpdatedAtForTeams =
+          options.eventAt ??
+          (teamsEventType === 'triggered'
+            ? incident.createdAt
+            : teamsEventType === 'acknowledged'
+              ? (incident.acknowledgedAt ?? incident.updatedAt)
+              : (incident.resolvedAt ?? incident.updatedAt));
+        const result = await persistIntent(async () => {
+          await enqueueMicrosoftTeamsDelivery({
+            incidentId,
+            destinationId: teamsDestination.id,
+            eventType: teamsEventType,
+            incidentUpdatedAt: incidentUpdatedAtForTeams,
+            escalationGeneration: eventGeneration,
+          });
+        });
+        if (!result.success)
+          errors.push(`Microsoft Teams notification failed: ${result.error || 'Unknown error'}`);
       }
     }
 
