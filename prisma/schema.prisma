@@ -1586,6 +1586,40 @@ model ApiKey {
   @@index([expiresAt])
 }
 
+enum NotificationCapacityMode {
+  AUTO
+  CUSTOM
+}
+
+model NotificationProviderCapacity {
+  id                   String                   @id @default(cuid())
+  provider             String
+  channel              NotificationChannel
+  mode                 NotificationCapacityMode @default(AUTO)
+  ratePerSecond        Int?
+  maxInFlight          Int?
+  bulkSharePercent     Int                      @default(80)
+  adaptiveBackpressure Boolean                  @default(true)
+  updatedBy            String?
+  revision             Int                      @default(1)
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@unique([provider, channel])
+  @@index([updatedAt])
+}
+
+model NotificationRuntimeSettings {
+  id                      String   @id @default("default")
+  bulkQueueLowWatermark   Int      @default(5000)
+  bulkQueueHighWatermark  Int      @default(25000)
+  defaultBulkSharePercent Int      @default(80)
+  adaptiveBackpressure    Boolean  @default(true)
+  revision                Int      @default(1)
+  updatedBy               String?
+  updatedAt               DateTime @updatedAt
+}
+
 // System-level notification provider configuration
 model NotificationProvider {
   id        String   @id @default(cuid())
@@ -1847,6 +1881,9 @@ model StatusPageAnnouncement {
   affectedServiceIds Json? // Array of affected service IDs (for maintenance/impact mapping)
   startDate          DateTime
   endDate            DateTime?
+  allDay             Boolean   @default(false)
+  timeMode           String    @default("EXACT") // EXACT, ALL_DAY
+  publishAt          DateTime  @default(now())
   isActive           Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -1855,6 +1892,7 @@ model StatusPageAnnouncement {
   incident   Incident?  @relation(fields: [incidentId], references: [id], onDelete: SetNull)
 
   @@index([statusPageId, isActive, startDate])
+  @@index([statusPageId, isActive, publishAt])
   @@index([incidentId])
 }
 
@@ -1894,6 +1932,7 @@ model StatusPageSubscription {
   verificationToken          String?
   verificationTokenExpiresAt DateTime?
   preferences                Json? // Notification preferences (all incidents, major only, etc.)
+  timezone                   String?   @default("UTC")
 
   statusPage       StatusPage                      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
   deliveryTokens   StatusPageSubscriptionToken[]

@@ -86,11 +86,19 @@ function MaintenanceV3({
 
       <div className="status-v3-maintenance-inline__list" role="list">
         {maintenance.map(item => {
-          const timeStr = `${formatDateTime(item.startAt, timeZone, { format: 'short', hour12: true })}${
-            item.endAt
-              ? ` – ${formatDateTime(item.endAt, timeZone, { format: 'short', hour12: true })}`
-              : ''
-          }`;
+          const isAllDay = item.allDay || item.timeMode === 'ALL_DAY';
+          const timeStr = isAllDay
+            ? `All day · ${new Date(item.startAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                timeZone: 'UTC',
+              })}`
+            : `${formatDateTime(item.startAt, timeZone, { format: 'short', hour12: true })}${
+                item.endAt
+                  ? ` – ${formatDateTime(item.endAt, timeZone, { format: 'short', hour12: true })}`
+                  : ''
+              }`;
           const isInProgress = item.state === 'IN_PROGRESS';
 
           const stateClass =

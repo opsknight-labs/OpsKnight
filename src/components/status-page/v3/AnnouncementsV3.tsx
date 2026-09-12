@@ -104,18 +104,14 @@ function AnnouncementIcon({ type }: { type: string }) {
   );
 }
 
-function ClampedDesc({
-  text,
-  className,
-}: {
-  text: string;
-  className: string;
-}) {
+function ClampedDesc({ text, className }: { text: string; className: string }) {
   const [expanded, setExpanded] = useState(false);
   const needsClamp = text.length > DESC_CLAMP_AT;
   return (
     <>
-      <p className={`${className}${needsClamp && !expanded ? ` ${className}--clamped` : ''}`}>{text}</p>
+      <p className={`${className}${needsClamp && !expanded ? ` ${className}--clamped` : ''}`}>
+        {text}
+      </p>
       {needsClamp && (
         <button
           type="button"
@@ -208,8 +204,18 @@ function ChangelogAffects({ services }: { services?: { id?: string; name: string
 function AnnouncementCard({ item, timeZone }: { item: PublicAnnouncement; timeZone: string }) {
   const typeUpper = (item.type || 'INFO').toUpperCase();
   const badgeLabel = announcementTypeLabel(typeUpper, item.type);
-  const absolute = formatDateTime(item.startDate, timeZone, { format: 'short', hour12: true });
-  const relative = formatDateTime(item.startDate, timeZone, { format: 'relative' });
+  const isAllDay = item.allDay || item.timeMode === 'ALL_DAY';
+  const absolute = isAllDay
+    ? `All day · ${new Date(item.startDate).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })}`
+    : formatDateTime(item.startDate, timeZone, { format: 'short', hour12: true });
+  const relative = isAllDay
+    ? absolute
+    : formatDateTime(item.startDate, timeZone, { format: 'relative' });
 
   return (
     <div
@@ -221,7 +227,11 @@ function AnnouncementCard({ item, timeZone }: { item: PublicAnnouncement; timeZo
           <AnnouncementIcon type={typeUpper} />
           <span className="status-v3-announcement-pill__title">{item.title}</span>
           <span className="status-v3-announcement-pill__divider" aria-hidden="true" />
-          <span className="status-v3-announcement-pill__time" suppressHydrationWarning title={absolute}>
+          <span
+            className="status-v3-announcement-pill__time"
+            suppressHydrationWarning
+            title={absolute}
+          >
             {relative}
           </span>
         </div>
@@ -230,7 +240,9 @@ function AnnouncementCard({ item, timeZone }: { item: PublicAnnouncement; timeZo
         </div>
       </div>
 
-      {item.message && <ClampedDesc text={item.message} className="status-v3-announcement-pill__desc" />}
+      {item.message && (
+        <ClampedDesc text={item.message} className="status-v3-announcement-pill__desc" />
+      )}
 
       <AffectsChips services={item.affectedServices} regions={item.affectedRegions} />
     </div>
@@ -264,12 +276,18 @@ function ChangelogCard({ item, timeZone }: { item: PublicChangelogEntry; timeZon
           </svg>
           <span className="status-v3-changelog-pill__title">{item.title}</span>
           <span className="status-v3-changelog-pill__divider" aria-hidden="true" />
-          <span className="status-v3-changelog-pill__time" suppressHydrationWarning title={absolute}>
+          <span
+            className="status-v3-changelog-pill__time"
+            suppressHydrationWarning
+            title={absolute}
+          >
             {relative}
           </span>
         </div>
       </div>
-      {item.message && <ClampedDesc text={item.message} className="status-v3-changelog-pill__desc" />}
+      {item.message && (
+        <ClampedDesc text={item.message} className="status-v3-changelog-pill__desc" />
+      )}
       <ChangelogAffects services={item.affectedServices} />
     </div>
   );
@@ -286,7 +304,9 @@ function ChangelogV3Inner({
 }) {
   const recent = useMemo(() => {
     if (!changelog || changelog.length === 0) return null;
-    return [...changelog].sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    return [...changelog].sort(
+      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+    );
   }, [changelog]);
 
   if (!recent) return null;
@@ -298,9 +318,14 @@ function ChangelogV3Inner({
           <h2 id="status-v3-changelog-heading" className="status-v3-announcements-inline__title">
             Changelog
           </h2>
-          <span className="status-v3-announcements-inline__subtitle">Recent changes & releases</span>
+          <span className="status-v3-announcements-inline__subtitle">
+            Recent changes & releases
+          </span>
         </div>
-        <div className="status-v3-announcements-inline__tally" aria-label={`${recent.length} changelog entries`}>
+        <div
+          className="status-v3-announcements-inline__tally"
+          aria-label={`${recent.length} changelog entries`}
+        >
           <span className="status-v3-announcements-inline__tally-pill status-v3-announcements-inline__tally-pill--changelog">
             <span className="status-v3-announcements-inline__dot" aria-hidden="true" />
             {recent.length} {recent.length === 1 ? 'update' : 'updates'}
@@ -337,18 +362,28 @@ function AnnouncementsV3Inner({
   return (
     <>
       {hasAnnouncements && (
-        <section className="status-v3-announcements-inline" aria-labelledby="status-v3-announcements-heading">
+        <section
+          className="status-v3-announcements-inline"
+          aria-labelledby="status-v3-announcements-heading"
+        >
           <div className="status-v3-announcements-inline__head">
             <div className="status-v3-announcements-inline__title-wrap">
-              <h2 id="status-v3-announcements-heading" className="status-v3-announcements-inline__title">
+              <h2
+                id="status-v3-announcements-heading"
+                className="status-v3-announcements-inline__title"
+              >
                 Announcements
               </h2>
               <span className="status-v3-announcements-inline__subtitle">Updates & notices</span>
             </div>
-            <div className="status-v3-announcements-inline__tally" aria-label={`${announcements.length} announcements`}>
+            <div
+              className="status-v3-announcements-inline__tally"
+              aria-label={`${announcements.length} announcements`}
+            >
               <span className="status-v3-announcements-inline__tally-pill">
                 <span className="status-v3-announcements-inline__dot" aria-hidden="true" />
-                {announcements.length} {announcements.length === 1 ? 'announcement' : 'announcements'}
+                {announcements.length}{' '}
+                {announcements.length === 1 ? 'announcement' : 'announcements'}
               </span>
             </div>
           </div>

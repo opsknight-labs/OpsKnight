@@ -85,6 +85,9 @@ export type CentralNotificationPayload =
       html?: string;
       contentId?: string;
       unsubscribeUrl?: string;
+      startTime?: string;
+      endTimeSection?: string;
+      postedAtSection?: string;
       text?: string;
       providerScope?: {
         statusPageId: string;
@@ -852,10 +855,11 @@ async function dispatchPayload(
         if (!content) {
           return { success: false, statusCode: 410, error: 'Notification content expired' };
         }
-        html = (await decrypt(content.encryptedTemplate)).replaceAll(
-          '{{unsubscribe_url}}',
-          payload.unsubscribeUrl ?? ''
-        );
+        html = (await decrypt(content.encryptedTemplate))
+          .replaceAll('{{unsubscribe_url}}', payload.unsubscribeUrl ?? '')
+          .replaceAll('{{start_time}}', payload.startTime ?? '')
+          .replaceAll('{{end_time_section}}', payload.endTimeSection ?? '')
+          .replaceAll('{{posted_at_section}}', payload.postedAtSection ?? '');
       }
       if (!html) return { success: false, statusCode: 422, error: 'Email content is missing' };
       const config = payload.providerKey
@@ -1655,37 +1659,6 @@ export async function deliverCentralNotification(
     return { success: true, claimed: true };
   }
 
-  let admission;
-  try {
-    admission = await providerAdmission(payload, candidate.trafficClass);
-  } catch (error) {
-    const errorMessage = safeError(error);
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'PENDING',
-        failedAt: null,
-        lastAttemptAt: null,
-        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
-        errorMsg: `Provider admission unavailable: ${errorMessage}`,
-      },
-    });
-    return { success: false, claimed: true, error: errorMessage };
-  }
-  if (!admission.allowed) {
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'PENDING',
-        failedAt: null,
-        lastAttemptAt: null,
-        nextAttemptAt: admission.retryAt,
-        errorMsg: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
-      },
-    });
-    return { success: false, claimed: true };
-  }
-
   const identity = await providerAdmissionIdentityAsync(payload);
   let concurrency;
   try {
@@ -1716,6 +1689,39 @@ export async function deliverCentralNotification(
         lastAttemptAt: null,
         nextAttemptAt: concurrency.retryAt,
         errorMsg: `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`,
+      },
+    });
+    return { success: false, claimed: true };
+  }
+
+  let admission;
+  try {
+    admission = await providerAdmission(payload, candidate.trafficClass);
+  } catch (error) {
+    const errorMessage = safeError(error);
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    await prisma.notification.updateMany({
+      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      data: {
+        status: 'PENDING',
+        failedAt: null,
+        lastAttemptAt: null,
+        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+        errorMsg: `Provider admission unavailable: ${errorMessage}`,
+      },
+    });
+    return { success: false, claimed: true, error: errorMessage };
+  }
+  if (!admission.allowed) {
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    await prisma.notification.updateMany({
+      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      data: {
+        status: 'PENDING',
+        failedAt: null,
+        lastAttemptAt: null,
+        nextAttemptAt: admission.retryAt,
+        errorMsg: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
       },
     });
     return { success: false, claimed: true };
@@ -1995,9 +2001,7 @@ export async function processCentralNotificationQueue(
     ? Array.from(new Set(options.trafficClasses))
     : [...ALL_NOTIFICATION_TRAFFIC_CLASSES];
   const trafficClasses = bulkPaused
-    ? requestedTrafficClasses.filter(
-        value => value !== 'PUBLIC_INCIDENT' && value !== 'BULK'
-      )
+    ? requestedTrafficClasses.filter(value => value !== 'PUBLIC_INCIDENT' && value !== 'BULK')
     : requestedTrafficClasses;
   if (trafficClasses.length === 0) return { processed: 0, succeeded: 0, failed: 0 };
 

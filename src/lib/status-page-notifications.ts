@@ -21,9 +21,11 @@ import {
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import {
   beginNotificationFanout,
+  BulkQueueBackpressureError,
   bulkQueueHasCapacity,
   recordFanoutPage,
 } from '@/lib/notification-fanout';
+import { formatDateTime, isValidTimeZone } from '@/lib/timezone';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -153,7 +155,7 @@ export async function notifyStatusPageSubscribers(
 
       while (true) {
         if (!(await bulkQueueHasCapacity())) {
-          throw new Error('Bulk notification queue reached its high watermark');
+          throw new BulkQueueBackpressureError();
         }
         // Indexed fanout: `StatusPageSubscriptionService(serviceId)` carries the
         // selective scope. Scrubbed JSON remains for rolling-deploy compat but
@@ -270,10 +272,18 @@ export async function notifyStatusPageSubscribers(
     });
     return { success: totalFailed === 0, sent: totalSent, failed: totalFailed };
   } catch (error) {
+    if (error instanceof BulkQueueBackpressureError) {
+      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
+    }
+    // Defer durable backpressure (reschedules without consuming maxAttempts).
+    // Plain failures still return success:false so the job retries via markJobFailed
+    // but the TypedError lets callers distinguish the two signals.
     logger.error('Failed to notify status page subscribers', {
       error: error instanceof Error ? error.message : 'Unknown error',
       incidentId,
+      backpressured: error instanceof BulkQueueBackpressureError,
     });
+    if (error instanceof BulkQueueBackpressureError) throw error;
     return { success: false, sent: totalSent, failed: totalFailed + 1 };
   }
 }
@@ -579,21 +589,11 @@ export async function notifyStatusPageSubscribersAnnouncement(
                 </p>
                 <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid ${theme.borderColor}; display: flex; gap: 24px; color: #6b7280; font-size: 14px;">
                     <div>
-                        <span style="font-weight: 600; color: ${theme.color};">Start:</span> ${new Date(announcement.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        <span style="font-weight: 600; color: ${theme.color};">Start:</span> {{start_time}}
                     </div>
-                    ${
-                      announcement.endDate
-                        ? `
-                    <div>
-                        <span style="font-weight: 600; color: ${theme.color};">End:</span> ${new Date(announcement.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </div>
-                    `
-                        : ''
-                    }
+                    {{end_time_section}}
                 </div>
-                <p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">
-                    Posted on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-                </p>
+                {{posted_at_section}}
             </div>
             <div style="text-align: center; margin-top: 32px;">
                 <a href="${escapeHtml(statusPageUrl)}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">View Status Page</a>
@@ -631,7 +631,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     while (true) {
       if (!(await bulkQueueHasCapacity())) {
-        throw new Error('Bulk notification queue reached its high watermark');
+        throw new BulkQueueBackpressureError();
       }
       const subscriptions = await prisma.statusPageSubscription.findMany({
         where: hasScopedServices
@@ -649,7 +649,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
         orderBy: { id: 'asc' },
         take: PAGE_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        select: { id: true, email: true, token: true },
+        select: { id: true, email: true, token: true, timezone: true, preferences: true },
       });
       if (subscriptions.length === 0) {
         await recordFanoutPage(fanout.id, {
@@ -667,36 +667,80 @@ export async function notifyStatusPageSubscribersAnnouncement(
       let pageFailed = 0;
       let pageError: unknown;
 
+      const isAllDay = announcement.allDay || (announcement as any).timeMode === 'ALL_DAY';
+
       try {
         const result = await createCentralNotificationIntentsBatch(
-          subscriptions.map(sub => ({
-            category: 'STATUS_PAGE',
-            channel: 'EMAIL',
-            recipientType: 'SUBSCRIBER',
-            recipientId: sub.id,
-            recipientAddress: sub.email,
-            templateKey: 'status-page-announcement',
-            sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
-            sourceId: announcement.id,
-            eventKey: announcement.updatedAt.toISOString(),
-            displayMessage: subject,
-            trafficClass,
-            priority:
-              announcement.type === 'INCIDENT'
-                ? NOTIFICATION_PRIORITY.STATUS_INCIDENT_ANNOUNCEMENT
-                : NOTIFICATION_PRIORITY.STATUS_ANNOUNCEMENT,
-            contentId: fanout.contentId,
-            fanoutId: fanout.id,
-            payload: {
-              kind: 'EMAIL',
-              providerKey: emailConfig.provider || undefined,
-              to: sub.email,
-              subject,
+          subscriptions.map(sub => {
+            const rawTz = sub.timezone || (sub.preferences as any)?.timezone;
+            const subTz =
+              typeof rawTz === 'string' && isValidTimeZone(rawTz.trim()) ? rawTz.trim() : 'UTC';
+
+            let startTimeForSub: string;
+            let endTimeSectionForSub = '';
+
+            if (isAllDay) {
+              startTimeForSub = `All day · ${new Date(announcement.startDate).toLocaleDateString(
+                'en-US',
+                {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  timeZone: 'UTC',
+                }
+              )}`;
+            } else {
+              startTimeForSub = formatDateTime(announcement.startDate, subTz, {
+                format: 'datetime',
+                includeTimeZone: true,
+              });
+              if (announcement.endDate) {
+                const endFormatted = formatDateTime(announcement.endDate, subTz, {
+                  format: 'datetime',
+                  includeTimeZone: true,
+                });
+                endTimeSectionForSub = `<div><span style="font-weight: 600; color: ${theme.color};">End:</span> ${endFormatted}</div>`;
+              }
+            }
+
+            const postedAtFormatted = formatDateTime(announcement.createdAt || new Date(), subTz, {
+              format: 'datetime',
+              includeTimeZone: true,
+            });
+            const postedAtSectionForSub = `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">Posted on ${postedAtFormatted}</p>`;
+
+            return {
+              category: 'STATUS_PAGE',
+              channel: 'EMAIL',
+              recipientType: 'SUBSCRIBER',
+              recipientId: sub.id,
+              recipientAddress: sub.email,
+              templateKey: 'status-page-announcement',
+              sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+              sourceId: announcement.id,
+              eventKey: announcement.updatedAt.toISOString(),
+              displayMessage: subject,
+              trafficClass,
+              priority:
+                announcement.type === 'INCIDENT'
+                  ? NOTIFICATION_PRIORITY.STATUS_INCIDENT_ANNOUNCEMENT
+                  : NOTIFICATION_PRIORITY.STATUS_ANNOUNCEMENT,
               contentId: fanout.contentId,
-              unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
-              providerScope: { statusPageId: page.id, subscriptionId: sub.id },
-            },
-          }))
+              fanoutId: fanout.id,
+              payload: {
+                kind: 'EMAIL',
+                providerKey: emailConfig.provider || undefined,
+                to: sub.email,
+                subject,
+                contentId: fanout.contentId,
+                unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
+                startTime: startTimeForSub,
+                endTimeSection: endTimeSectionForSub,
+                postedAtSection: postedAtSectionForSub,
+                providerScope: { statusPageId: page.id, subscriptionId: sub.id },
+              },
+            };
+          })
         );
         pageSent = result.created;
       } catch (error) {
@@ -738,6 +782,10 @@ export async function notifyStatusPageSubscribersAnnouncement(
     });
     return { sent, failed, skipped: sent === 0 && failed === 0 };
   } catch (error) {
+    if (error instanceof BulkQueueBackpressureError) {
+      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
+      throw error;
+    }
     logger.error('Failed to notify status page subscribers about announcement', {
       error: error instanceof Error ? error.message : 'Unknown error',
       announcementId,

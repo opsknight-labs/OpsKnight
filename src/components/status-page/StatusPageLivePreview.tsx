@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { logger } from '@/lib/logger';
 import { toPreviewCustomCss } from '@/lib/status-page-content';
@@ -8,6 +8,17 @@ import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import { buildPreviewSnapshot } from '@/lib/status-pages/preview-snapshot';
 import StatusPageV3 from '@/components/status-page/StatusPageV3';
 import { STATUS_PAGE_PREVIEW_BASE_CSS } from '@/lib/status-page-preview-css';
+import { cn } from '@/lib/utils';
+import {
+  Monitor,
+  Tablet,
+  Smartphone,
+  ZoomIn,
+  ZoomOut,
+  Lock,
+  ExternalLink,
+  RotateCcw,
+} from 'lucide-react';
 
 export interface StatusPagePreviewService {
   id: string;
@@ -90,6 +101,9 @@ export interface StatusPagePreviewPrivacySettings {
 export interface StatusPagePreviewData {
   statusPage: {
     name: string;
+    slug?: string | null;
+    subdomain?: string | null;
+    customDomain?: string | null;
     contactEmail?: string | null;
     contactUrl?: string | null;
   };
@@ -116,6 +130,9 @@ export interface StatusPagePreviewData {
   showApiLink: boolean;
   layout: string;
   privacySettings?: StatusPagePreviewPrivacySettings | null;
+  enableUptimeExports?: boolean;
+  regions?: any[];
+  maintenance?: any[];
   uptimeExcellentThreshold?: number | null;
   uptimeGoodThreshold?: number | null;
 }
@@ -123,6 +140,7 @@ export interface StatusPagePreviewData {
 export interface StatusPageLivePreviewProps {
   previewData: StatusPagePreviewData;
   maxWidth?: string;
+  previewDomain?: string;
 }
 
 type DeviceView = 'mac' | 'ipad' | 'iphone';
@@ -131,31 +149,57 @@ const PREVIEW_DEVICES: Array<{
   id: DeviceView;
   label: string;
   shortLabel: string;
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'mac', label: 'MacBook Pro', shortLabel: 'Mac', icon: '💻' },
-  { id: 'ipad', label: 'iPad Pro 12.9"', shortLabel: 'iPad', icon: '📱' },
-  { id: 'iphone', label: 'iPhone 15 Pro', shortLabel: 'iPhone', icon: '📱' },
+  { id: 'mac', label: 'MacBook Pro', shortLabel: 'Mac', icon: Monitor },
+  { id: 'ipad', label: 'iPad Pro 12.9"', shortLabel: 'iPad', icon: Tablet },
+  { id: 'iphone', label: 'iPhone 15 Pro', shortLabel: 'iPhone', icon: Smartphone },
 ];
 
-export default function StatusPageLivePreview({
+function StatusPageLivePreview({
   previewData,
   maxWidth = '1280px',
+  previewDomain,
 }: StatusPageLivePreviewProps) {
   const [deviceView, setDeviceView] = useState<DeviceView>('mac');
   const [scale, setScale] = useState(1);
   const [zoomMode, setZoomMode] = useState<'fit' | 'manual'>('fit');
   const containerRef = useRef<HTMLDivElement>(null);
   const [previewRoot, setPreviewRoot] = useState<ShadowRoot | null>(null);
-  const [frameHeight, setFrameHeight] = useState('100%');
 
-  // Overall status is no longer derived here. The preview projects the same contract the
-  // publisher does, so severity and confidence come from one implementation rather than a local
-  // approximation that could disagree with what visitors are told.
+  const displayUrl = useMemo(() => {
+    if (previewDomain && previewDomain.trim()) {
+      return previewDomain.trim();
+    }
+    if (previewData.statusPage?.customDomain?.trim()) {
+      return previewData.statusPage.customDomain.trim();
+    }
+    if (previewData.statusPage?.subdomain?.trim()) {
+      return `${previewData.statusPage.subdomain.trim()}.opsknight.com`;
+    }
+    if (previewData.statusPage?.slug?.trim()) {
+      return `status-${previewData.statusPage.slug.trim()}.opsknight.com`;
+    }
+    return 'status.example.com';
+  }, [previewDomain, previewData.statusPage]);
+
   const previewSnapshot = useMemo(
     () =>
       buildPreviewSnapshot({
         pageId: 'preview',
+        name: previewData.statusPage?.name,
+        slug: previewData.statusPage?.slug ?? undefined,
+        subdomain: previewData.statusPage?.subdomain ?? undefined,
+        customDomain: previewData.statusPage?.customDomain ?? undefined,
+        contactEmail: previewData.statusPage?.contactEmail ?? null,
+        contactUrl: previewData.statusPage?.contactUrl ?? null,
+        branding: previewData.branding,
+        presentation: {
+          showHeader: previewData.showHeader,
+          showFooter: previewData.showFooter,
+          showRssLink: previewData.showRssLink,
+          showApiLink: previewData.showApiLink,
+        },
         services: previewData.services,
         mappings: previewData.statusPageServices,
         incidents: previewData.incidents,
@@ -166,12 +210,18 @@ export default function StatusPageLivePreview({
         showIncidents: previewData.showIncidents,
         showSubscribe: previewData.showSubscribe,
         showChangelog: previewData.showChangelog,
+        showServicesByRegion: previewData.showServicesByRegion,
+        showRegionHeatmap: previewData.showRegionHeatmap,
+        showPostIncidentReview: previewData.showPostIncidentReview,
+        enableUptimeExports: previewData.enableUptimeExports,
         showServiceRegions: previewData.privacySettings?.showServiceRegions,
         showServiceOwners: previewData.showServiceOwners,
         showServiceSlaTier: previewData.showServiceSlaTier,
         showMetrics: previewData.showMetrics,
         showUptimeHistory: previewData.privacySettings?.showUptimeHistory,
         showTeamInformation: previewData.privacySettings?.showTeamInformation,
+        regions: previewData.regions,
+        maintenance: previewData.maintenance,
         thresholds: {
           uptimeExcellent:
             typeof previewData.uptimeExcellentThreshold === 'number'
@@ -186,25 +236,15 @@ export default function StatusPageLivePreview({
     [previewData]
   );
 
-  // Log mounting and prop changes for debugging
   useEffect(() => {
     logger.debug('StatusPageLivePreview mounted/updated', {
       layout: previewData.layout,
       serviceCount: previewData.services.length,
-      incidentCount: previewData.incidents.length,
       deviceView,
       zoomMode,
     });
-  }, [
-    previewData.layout,
-    previewData.services.length,
-    previewData.incidents.length,
-    deviceView,
-    zoomMode,
-  ]);
+  }, [previewData.layout, previewData.services.length, deviceView, zoomMode]);
 
-  // Use the maxWidth prop if provided, otherwise calculate from layout
-  // Parse maxWidth to get numeric value for calculations
   const contentMaxWidthStr =
     maxWidth ||
     (previewData.layout === 'wide'
@@ -213,84 +253,63 @@ export default function StatusPageLivePreview({
         ? '900px'
         : '1280px');
 
-  // Extract numeric value from string like "1600px" or "900px"
   const contentMaxWidthNum = parseInt(contentMaxWidthStr.replace(/px$/, '')) || 1280;
 
-  // Apple device frame dimensions without dynamic object index sink
+  // Target device dimensions
   const targetWidth =
     deviceView === 'iphone'
       ? 393
       : deviceView === 'ipad'
-        ? 1024
-        : Math.max(1440, contentMaxWidthNum);
+        ? 820
+        : Math.min(1280, contentMaxWidthNum);
 
-  const targetHeight = deviceView === 'iphone' ? 852 : deviceView === 'ipad' ? 1366 : 900;
+  // Chrome & Status bar heights in unscaled CSS pixels
+  const chromeTopHeight = deviceView === 'iphone' ? 50 : deviceView === 'ipad' ? 34 : 36;
+  const chromeBottomHeight = deviceView === 'iphone' ? 68 : deviceView === 'ipad' ? 24 : 0;
 
-  // Calculate scale based on container size
+  // Desktop vertical height: cut to standard balanced 700px
+  const targetHeight = deviceView === 'iphone' ? 852 : deviceView === 'ipad' ? 1080 : 700;
+
+  const viewportHeight = Math.max(200, targetHeight - chromeTopHeight - chromeBottomHeight);
+
+  // Calculate scale to fit container dynamically without flickering
   useEffect(() => {
     if (!containerRef.current) return;
 
     const updateScale = () => {
-      if (zoomMode === 'fit' && containerRef.current) {
-        const containerWidth = containerRef.current.clientWidth;
-        const containerHeight = containerRef.current.clientHeight;
+      if (!containerRef.current) return;
+      const containerWidth = containerRef.current.clientWidth;
+      const containerHeight = containerRef.current.clientHeight;
 
-        // Add some padding
-        const availableWidth = containerWidth - 48;
-        const availableHeight = containerHeight - 48;
+      const paddingX = 32;
+      const paddingY = 32;
+      const availableWidth = Math.max(100, containerWidth - paddingX);
+      const availableHeight = Math.max(100, containerHeight - paddingY);
 
-        // Calculate width scale
-        let newScale = availableWidth / targetWidth;
+      let newScale = availableWidth / targetWidth;
+      const heightScale = availableHeight / targetHeight;
+      newScale = Math.min(newScale, heightScale);
+      newScale = Math.max(0.2, Math.min(newScale, 1));
 
-        // For mobile/tablet, also constrain by height to maintain aspect ratio within view
-        if (targetHeight) {
-          const heightScale = availableHeight / targetHeight;
-          newScale = Math.min(newScale, heightScale);
-        }
-
-        // Don't scale up beyond 1.0 for "fit" mode, and ensure minimum scale
-        newScale = Math.max(0.1, Math.min(newScale, 1));
-
-        if (newScale !== scale) {
-          setScale(newScale);
-        }
-
-        // Set frame height
-        if (targetHeight) {
-          setFrameHeight(`${targetHeight}px`);
-        } else {
-          const safeHeight = Math.max(containerHeight, 400);
-          setFrameHeight(`${Math.ceil(safeHeight / newScale)}px`);
-        }
-      } else if (zoomMode === 'manual' && containerRef.current) {
-        if (targetHeight) {
-          setFrameHeight(`${targetHeight}px`);
-        } else {
-          const containerHeight = containerRef.current.clientHeight;
-          const safeHeight = Math.max(containerHeight, 400);
-          setFrameHeight(`${Math.ceil(safeHeight / scale)}px`);
-        }
+      if (zoomMode === 'fit') {
+        setScale(prev => (Math.abs(newScale - prev) > 0.005 ? newScale : prev));
       }
     };
 
-    // Update initial
     updateScale();
-
     const observer = new ResizeObserver(updateScale);
     observer.observe(containerRef.current);
 
     return () => observer.disconnect();
-  }, [zoomMode, targetWidth, targetHeight, deviceView, scale]);
+  }, [zoomMode, targetWidth, targetHeight]);
 
   const handleZoom = (delta: number) => {
-    logger.debug('Zoom adjusted', { delta, currentScale: scale });
     setZoomMode('manual');
-    setScale(prev => Math.min(Math.max(prev + delta, 0.25), 1.5)); // Limit zoom 0.25x to 1.5x
+    setScale(prev => Math.min(Math.max(Number((prev + delta).toFixed(2)), 0.2), 1.5));
   };
 
-  // For the inner content max-width (inside the scaled container)
-  // Always use 100% for ipad and iphone, use contentMaxWidthStr for mac
   const contentMaxWidth = deviceView === 'mac' ? contentMaxWidthStr : '100%';
+
   const computedTheme = useMemo(() => {
     return computeStatusPageTheme({
       primaryColor:
@@ -321,357 +340,477 @@ export default function StatusPageLivePreview({
     previewData.branding?.text,
     previewData.branding?.fontFamily,
   ]);
-  const frameHeightNumber = Number.parseFloat(frameHeight);
-  const scaledFrameHeightStyle = Number.isFinite(frameHeightNumber)
-    ? `${Math.round(frameHeightNumber * scale)}px`
-    : 'auto';
 
   const bindPreviewRoot = useCallback((host: HTMLDivElement | null) => {
     if (host) setPreviewRoot(host.shadowRoot || host.attachShadow({ mode: 'open' }));
   }, []);
 
-  /**
-   * Renders the published page component from unsaved settings.
-   *
-   * There is deliberately no preview-specific markup left here. The preview previously drew its
-   * own header, subscribe card and footer, omitted the uptime section entirely, and ignored the
-   * region and changelog toggles, which meant an administrator could approve a layout that
-   * visitors never received. Whatever this shows now is, by construction, the live page.
-   */
   const renderStatusPageContent = (contentMaxWidthValue: string) => (
     <main
       className="status-page-container"
+      data-device-view={deviceView}
       style={{
         flex: 1,
         background: computedTheme.backgroundColor,
         color: computedTheme.textColor,
         fontFamily: computedTheme.fontFamily,
         padding: 0,
+        minHeight: '100%',
         ...(computedTheme.cssVariables as CSSProperties),
         ['--status-content-width' as string]: contentMaxWidthValue,
       }}
     >
-      <StatusPageV3 snapshot={previewSnapshot} styleMode="inherited" subscribeEnabled={false} />
+      <StatusPageV3 snapshot={previewSnapshot} styleMode="inherited" subscribeEnabled={true} />
     </main>
   );
 
   return (
-    <>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Device & Zoom Controls */}
-        <div
-          className="status-page-preview-controls"
-          style={{
-            padding: 'var(--status-preview-controls-padding, var(--spacing-3) var(--spacing-4))',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            background: '#ffffff',
-            flexWrap: 'wrap',
-            gap: 'var(--spacing-3)',
-          }}
-        >
-          {/* Segmented control makes device toggles more scannable */}
-          <div
-            className="status-page-preview-device-toggle"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.2rem',
-              padding: '0.2rem',
-              borderRadius: '999px',
-              border: '1px solid #cbd5e1',
-              background: '#e2e8f0',
-            }}
-          >
-            {PREVIEW_DEVICES.map(device => {
-              const isActive = deviceView === device.id;
-              return (
-                <button
-                  key={device.id}
-                  type="button"
-                  onClick={() => {
-                    setDeviceView(device.id);
-                    setZoomMode('fit'); // Auto-fit on switch
-                    logger.debug('Switched device view', { device: device.id });
-                  }}
-                  onMouseEnter={event => {
-                    if (!isActive) {
-                      event.currentTarget.style.background = 'rgba(255, 255, 255, 0.7)';
-                    }
-                  }}
-                  onMouseLeave={event => {
-                    if (!isActive) {
-                      event.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                  className={`status-page-preview-device-btn ${isActive ? 'is-active' : ''}`}
-                  style={{
-                    padding: 'var(--status-preview-device-padding, 0.45rem 0.95rem)',
-                    background: isActive ? '#ffffff' : 'transparent',
-                    border: '1px solid transparent',
-                    borderRadius: '999px',
-                    fontSize: 'var(--status-preview-device-font, var(--font-size-xs))',
-                    fontWeight: isActive ? '700' : '600',
-                    color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                    transition: 'all 0.18s ease',
-                    boxShadow: isActive ? '0 1px 2px rgba(15, 23, 42, 0.12)' : 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                  }}
-                  title={device.label}
-                >
-                  <span style={{ fontSize: '1rem' }}>{device.icon}</span>
-                  <span style={{ textTransform: 'capitalize' }}>{device.shortLabel}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div
-            className="status-page-preview-zoom"
-            style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)' }}
-          >
-            <div
-              className="status-page-preview-zoom-controls"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--spacing-1)',
-                background: 'white',
-                border: '1px solid #e5e7eb',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--status-preview-zoom-padding, 2px)',
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => handleZoom(-0.1)}
-                style={{
-                  padding: 'var(--status-preview-zoom-button-padding, 4px 8px)',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                  fontSize: 'var(--status-preview-zoom-font, 14px)',
-                }}
-                title="Zoom Out"
-              >
-                -
-              </button>
-              <button
-                type="button"
-                onClick={() => setZoomMode(zoomMode === 'fit' ? 'manual' : 'fit')}
-                style={{
-                  padding: 'var(--status-preview-zoom-button-padding, 4px 8px)',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  fontSize: 'var(--status-preview-zoom-font, var(--font-size-xs))',
-                  fontWeight: '600',
-                  color: 'var(--text-primary)',
-                  minWidth: '60px',
-                }}
-                title={zoomMode === 'fit' ? 'Disable Fit to Screen' : 'Enable Fit to Screen'}
-              >
-                {zoomMode === 'fit' ? 'Fit' : `${Math.round(scale * 100)}%`}
-              </button>
-              <button
-                type="button"
-                onClick={() => handleZoom(0.1)}
-                style={{
-                  padding: 'var(--status-preview-zoom-button-padding, 4px 8px)',
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: 'var(--text-muted)',
-                  fontSize: 'var(--status-preview-zoom-font, 14px)',
-                }}
-                title="Zoom In"
-              >
-                +
-              </button>
-            </div>
-          </div>
+    <div className="flex flex-col h-full w-full overflow-hidden bg-background">
+      {/* 1. Sleek Modern Preview Header Toolbar */}
+      <div className="h-12 shrink-0 border-b border-border/80 bg-card px-3 flex items-center justify-between gap-2 select-none z-10 overflow-hidden">
+        {/* Left: Live Status */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Live
+          </span>
         </div>
 
-        {/* Preview Container Wrapper */}
+        {/* Center: Device Segmented Toggle */}
+        <div className="inline-flex items-center p-0.5 rounded-lg bg-muted/70 border border-border/50 gap-0.5 shrink-0">
+          {PREVIEW_DEVICES.map(device => {
+            const isActive = deviceView === device.id;
+            const Icon = device.icon;
+            return (
+              <button
+                key={device.id}
+                type="button"
+                onClick={() => {
+                  setDeviceView(device.id);
+                  setZoomMode('fit');
+                }}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-all duration-150',
+                  isActive
+                    ? 'bg-background text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+                title={device.label}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">{device.shortLabel}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right: Zoom Controls & Open Tab Link */}
+        <div className="flex items-center gap-1 shrink-0">
+          <div className="inline-flex items-center rounded-lg bg-muted/60 border border-border/50 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => handleZoom(-0.1)}
+              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80 transition-colors"
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoomMode(zoomMode === 'fit' ? 'manual' : 'fit')}
+              className="px-1.5 py-0.5 text-[11px] font-semibold text-foreground hover:bg-background/80 rounded transition-colors min-w-[42px] text-center"
+              title={zoomMode === 'fit' ? 'Disable Fit to Screen' : 'Enable Fit to Screen'}
+            >
+              {zoomMode === 'fit' ? 'Fit' : `${Math.round(scale * 100)}%`}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleZoom(0.1)}
+              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-background/80 transition-colors"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <a
+            href={`/status/${encodeURIComponent(previewData.statusPage?.slug || '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted border border-border/40 transition-colors"
+            title="Open live status page in new tab"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
+
+      {/* 2. Designer Canvas with Subtle Studio Dot Grid */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto p-4 select-none flex items-center justify-center"
+        style={{
+          background:
+            'radial-gradient(circle, hsl(var(--muted-foreground) / 0.12) 1px, transparent 1px)',
+          backgroundSize: '16px 16px',
+          backgroundColor: 'hsl(var(--muted) / 0.35)',
+        }}
+      >
+        {/* Device Frame Outer Chassis */}
         <div
-          ref={containerRef}
-          className="status-page-preview-canvas"
+          className="status-page-preview-device-frame"
           style={{
-            flex: 1,
-            overflow: 'auto',
-            background: '#eef2f7',
+            width: `${Math.round(targetWidth * scale)}px`,
+            minWidth: `${Math.round(targetWidth * scale)}px`,
+            maxWidth: `${Math.round(targetWidth * scale)}px`,
+            height: `${Math.round(targetHeight * scale)}px`,
             display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
             position: 'relative',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 'var(--status-preview-padding, 24px)',
-            minWidth: 0,
-            minHeight: 300,
+            borderRadius:
+              deviceView === 'iphone'
+                ? `${Math.round(52 * scale)}px`
+                : deviceView === 'ipad'
+                  ? `${Math.round(24 * scale)}px`
+                  : '10px',
+            border:
+              deviceView === 'iphone'
+                ? `${Math.round(10 * scale)}px solid #1c1d20`
+                : deviceView === 'ipad'
+                  ? `${Math.round(12 * scale)}px solid #1c1d20`
+                  : '1px solid rgba(0, 0, 0, 0.18)',
+            background: computedTheme.backgroundColor,
+            boxShadow:
+              deviceView === 'mac'
+                ? '0 20px 40px -10px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(15, 23, 42, 0.08)'
+                : deviceView === 'iphone'
+                  ? '0 25px 60px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.12)'
+                  : '0 20px 45px -10px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            boxSizing: 'border-box',
           }}
         >
-          <div
-            className="status-page-preview-device-frame"
-            style={{
-              width: `${Math.round(targetWidth * scale)}px`,
-              minWidth: `${Math.round(targetWidth * scale)}px`,
-              maxWidth: `${Math.round(targetWidth * scale)}px`,
-              height: scaledFrameHeightStyle,
-              overflow: 'hidden',
-              borderRadius:
-                deviceView === 'iphone'
-                  ? `${44 * scale}px`
-                  : deviceView === 'ipad'
-                    ? '18px'
-                    : '10px',
-              border:
-                deviceView === 'iphone'
-                  ? `${8 * scale}px solid #1c1c1e`
-                  : deviceView === 'ipad'
-                    ? '10px solid #1c1c1e'
-                    : '1px solid #c0c0c0',
-              background: computedTheme.backgroundColor,
-              boxShadow:
-                deviceView === 'mac'
-                  ? '0 25px 50px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.1)'
-                  : '0 20px 40px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
-              boxSizing: 'border-box',
-              position: 'relative',
-            }}
-          >
-            {/* iPhone Dynamic Island */}
-            {deviceView === 'iphone' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: `${12 * scale}px`,
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: `${126 * scale}px`,
-                  height: `${37 * scale}px`,
-                  background: '#000000',
-                  borderRadius: `${20 * scale}px`,
-                  zIndex: 10,
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-                }}
-              />
-            )}
+          {/* Top Frame Chrome: Non-overlapping, status page begins strictly below */}
+          {deviceView === 'mac' && (
+            <div
+              style={{
+                height: `${Math.max(26, Math.round(chromeTopHeight * scale))}px`,
+                background: 'linear-gradient(180deg, #ececec 0%, #dedede 100%)',
+                borderBottom: '1px solid #c8c8c8',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 10px',
+                gap: '8px',
+                userSelect: 'none',
+                flexShrink: 0,
+              }}
+            >
+              {/* Traffic lights */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <span
+                  style={{
+                    width: '9px',
+                    height: '9px',
+                    borderRadius: '50%',
+                    background: '#ff5f56',
+                    border: '0.5px solid #e0443e',
+                  }}
+                />
+                <span
+                  style={{
+                    width: '9px',
+                    height: '9px',
+                    borderRadius: '50%',
+                    background: '#ffbd2e',
+                    border: '0.5px solid #dea123',
+                  }}
+                />
+                <span
+                  style={{
+                    width: '9px',
+                    height: '9px',
+                    borderRadius: '50%',
+                    background: '#27c93f',
+                    border: '0.5px solid #1aab29',
+                  }}
+                />
+              </div>
 
-            {/* Mac Safari Browser Chrome */}
-            {deviceView === 'mac' && (
+              {/* Safari Address Bar */}
               <div
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: `${36 * scale}px`,
-                  background: 'linear-gradient(180deg, #e8e8e8 0%, #d4d4d4 100%)',
-                  borderBottom: '1px solid #b0b0b0',
+                  flex: 1,
+                  maxWidth: '360px',
+                  margin: '0 auto',
+                  height: '20px',
+                  background: '#ffffff',
+                  borderRadius: '5px',
+                  border: '1px solid #c5c5c5',
                   display: 'flex',
                   alignItems: 'center',
-                  padding: `0 ${12 * scale}px`,
-                  zIndex: 10,
-                  borderRadius: `${10 * scale}px ${10 * scale}px 0 0`,
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '11px',
+                  color: '#475569',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                  padding: '0 8px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
               >
-                {/* Traffic lights */}
-                <div style={{ display: 'flex', gap: `${6 * scale}px` }}>
-                  <div
-                    style={{
-                      width: `${12 * scale}px`,
-                      height: `${12 * scale}px`,
-                      borderRadius: '50%',
-                      background: '#ff5f57',
-                      border: '0.5px solid #e0443e',
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: `${12 * scale}px`,
-                      height: `${12 * scale}px`,
-                      borderRadius: '50%',
-                      background: '#febc2e',
-                      border: '0.5px solid #d9a123',
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: `${12 * scale}px`,
-                      height: `${12 * scale}px`,
-                      borderRadius: '50%',
-                      background: '#28c840',
-                      border: '0.5px solid #1aab29',
-                    }}
-                  />
-                </div>
-                {/* Address bar */}
-                <div
+                <Lock
                   style={{
-                    flex: 1,
-                    margin: `0 ${40 * scale}px`,
-                    height: `${22 * scale}px`,
-                    background: '#ffffff',
-                    borderRadius: `${6 * scale}px`,
-                    border: '1px solid #c0c0c0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: `${11 * scale}px`,
-                    color: '#666',
+                    width: '10px',
+                    height: '10px',
+                    color: '#10b981',
+                    flexShrink: 0,
+                  }}
+                />
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: '500',
                   }}
                 >
-                  status.example.com
+                  {displayUrl}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {deviceView === 'iphone' && (
+            <div
+              style={{
+                height: `${Math.round(chromeTopHeight * scale)}px`,
+                background: computedTheme.backgroundColor,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: `0 ${20 * scale}px`,
+                position: 'relative',
+                userSelect: 'none',
+                flexShrink: 0,
+                borderBottom: '1px solid rgba(0,0,0,0.05)',
+              }}
+            >
+              {/* Clock */}
+              <span
+                style={{
+                  fontSize: `${14 * scale}px`,
+                  fontWeight: '600',
+                  letterSpacing: '-0.02em',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+                  color: computedTheme.textColor,
+                  width: `${54 * scale}px`,
+                }}
+              >
+                9:41
+              </span>
+
+              {/* Dynamic Island */}
+              <div
+                style={{
+                  width: `${120 * scale}px`,
+                  height: `${32 * scale}px`,
+                  background: '#000000',
+                  borderRadius: '999px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: `0 ${10 * scale}px`,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                }}
+              >
+                <div
+                  style={{
+                    width: `${8 * scale}px`,
+                    height: `${8 * scale}px`,
+                    borderRadius: '50%',
+                    background: '#1c1c1e',
+                    border: '1px solid #2c2c2e',
+                  }}
+                />
+                <div
+                  style={{
+                    width: `${6 * scale}px`,
+                    height: `${6 * scale}px`,
+                    borderRadius: '50%',
+                    background: '#0a0a0a',
+                  }}
+                />
+              </div>
+
+              {/* Signal & Battery */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: `${5 * scale}px`,
+                  color: computedTheme.textColor,
+                  width: `${54 * scale}px`,
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    gap: `${1.5 * scale}px`,
+                    height: `${10 * scale}px`,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: `${2 * scale}px`,
+                      height: '35%',
+                      background: 'currentColor',
+                      borderRadius: '0.5px',
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: `${2 * scale}px`,
+                      height: '55%',
+                      background: 'currentColor',
+                      borderRadius: '0.5px',
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: `${2 * scale}px`,
+                      height: '75%',
+                      background: 'currentColor',
+                      borderRadius: '0.5px',
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: `${2 * scale}px`,
+                      height: '100%',
+                      background: 'currentColor',
+                      borderRadius: '0.5px',
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    fontSize: `${10 * scale}px`,
+                    fontWeight: '700',
+                    letterSpacing: '-0.03em',
+                  }}
+                >
+                  5G
+                </span>
+                <div
+                  style={{
+                    width: `${20 * scale}px`,
+                    height: `${10 * scale}px`,
+                    border: '1.2px solid currentColor',
+                    borderRadius: `${3 * scale}px`,
+                    padding: `${1 * scale}px`,
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: '85%',
+                      background: 'currentColor',
+                      borderRadius: `${1 * scale}px`,
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: `-${3.5 * scale}px`,
+                      width: `${2 * scale}px`,
+                      height: `${4 * scale}px`,
+                      background: 'currentColor',
+                      borderRadius: '0 1px 1px 0',
+                    }}
+                  />
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* iPad Front Camera */}
-            {deviceView === 'ipad' && (
-              <>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: `${12 * scale}px`,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: `${10 * scale}px`,
-                    height: `${10 * scale}px`,
-                    background: 'radial-gradient(circle, #1a1a2e 0%, #0a0a0a 70%)',
-                    borderRadius: '50%',
-                    zIndex: 10,
-                    boxShadow: 'inset 0 1px 2px rgba(255, 255, 255, 0.1)',
-                  }}
-                />
-                {/* Home Indicator */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: `${8 * scale}px`,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: `${140 * scale}px`,
-                    height: `${5 * scale}px`,
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    borderRadius: `${3 * scale}px`,
-                    zIndex: 10,
-                  }}
-                />
-              </>
-            )}
+          {deviceView === 'ipad' && (
+            <div
+              style={{
+                height: `${Math.round(chromeTopHeight * scale)}px`,
+                background: computedTheme.backgroundColor,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: `0 ${20 * scale}px`,
+                position: 'relative',
+                userSelect: 'none',
+                flexShrink: 0,
+                borderBottom: '1px solid rgba(0,0,0,0.06)',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: `${12 * scale}px`,
+                  fontWeight: '600',
+                  color: computedTheme.textColor,
+                }}
+              >
+                9:41 Tue Sep 12
+              </span>
+              <div
+                style={{
+                  width: `${8 * scale}px`,
+                  height: `${8 * scale}px`,
+                  borderRadius: '50%',
+                  background: '#0a0a0a',
+                  border: '1px solid #2a2a2a',
+                }}
+              />
+              <div
+                style={{
+                  fontSize: `${11 * scale}px`,
+                  fontWeight: '600',
+                  color: computedTheme.textColor,
+                }}
+              >
+                100%
+              </div>
+            </div>
+          )}
+
+          {/* Web Viewport: The real Status Page rendered strictly below top chrome */}
+          <div
+            style={{
+              width: '100%',
+              height: `${Math.round(viewportHeight * scale)}px`,
+              position: 'relative',
+              overflow: 'hidden',
+              background: computedTheme.backgroundColor,
+              flex: 1,
+            }}
+          >
             <div
               ref={bindPreviewRoot}
               className="status-page-container"
+              data-device-view={deviceView}
               style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
                 width: `${targetWidth}px`,
                 minWidth: `${targetWidth}px`,
                 maxWidth: `${targetWidth}px`,
-                height: frameHeight,
+                height: `${viewportHeight}px`,
                 transform: `scale(${scale})`,
                 transformOrigin: 'top left',
                 overflow: 'auto',
@@ -701,8 +840,115 @@ export default function StatusPageLivePreview({
                 previewRoot
               )}
           </div>
+
+          {/* Bottom Bar for Mobile / Tablet */}
+          {deviceView === 'iphone' && (
+            <div
+              style={{
+                height: `${Math.round(chromeBottomHeight * scale)}px`,
+                background: computedTheme.backgroundColor,
+                borderTop: '1px solid rgba(0,0,0,0.06)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: `0 ${16 * scale}px`,
+                gap: `${8 * scale}px`,
+                userSelect: 'none',
+                flexShrink: 0,
+              }}
+            >
+              {/* Floating iOS Safari Address Pill */}
+              <div
+                style={{
+                  width: '100%',
+                  height: `${34 * scale}px`,
+                  background: 'rgba(0, 0, 0, 0.05)',
+                  borderRadius: '999px',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: `0 ${14 * scale}px`,
+                  fontSize: `${11 * scale}px`,
+                  color: computedTheme.textColor,
+                }}
+              >
+                <span style={{ fontSize: `${11 * scale}px`, fontWeight: '700', opacity: 0.6 }}>
+                  aA
+                </span>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: `${5 * scale}px`,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Lock
+                    style={{
+                      width: `${10 * scale}px`,
+                      height: `${10 * scale}px`,
+                      color: '#10b981',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      fontWeight: '500',
+                    }}
+                  >
+                    {displayUrl}
+                  </span>
+                </div>
+                <RotateCcw
+                  style={{ width: `${11 * scale}px`, height: `${11 * scale}px`, opacity: 0.6 }}
+                />
+              </div>
+
+              {/* iOS Home Indicator */}
+              <div
+                style={{
+                  width: `${125 * scale}px`,
+                  height: `${4 * scale}px`,
+                  background: computedTheme.textColor,
+                  opacity: 0.35,
+                  borderRadius: '999px',
+                }}
+              />
+            </div>
+          )}
+
+          {deviceView === 'ipad' && (
+            <div
+              style={{
+                height: `${Math.round(chromeBottomHeight * scale)}px`,
+                background: computedTheme.backgroundColor,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                userSelect: 'none',
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: `${140 * scale}px`,
+                  height: `${4 * scale}px`,
+                  background: computedTheme.textColor,
+                  opacity: 0.35,
+                  borderRadius: '999px',
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
+
+export default memo(StatusPageLivePreview);

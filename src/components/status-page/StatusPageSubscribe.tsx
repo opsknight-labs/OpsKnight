@@ -240,12 +240,18 @@ export default function StatusPageSubscribe({
       return;
     }
 
+    let userTz = 'UTC';
+    try {
+      userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {}
+
     const payload: Record<string, unknown> = {
       statusPageId,
       email: trimmed,
+      timezone: userTz,
     };
     if (hasPicker && mode === 'selected') {
-      payload.preferences = { selectedServiceIds: [...selectedIds] };
+      payload.preferences = { selectedServiceIds: [...selectedIds], timezone: userTz };
     }
 
     startTransition(async () => {

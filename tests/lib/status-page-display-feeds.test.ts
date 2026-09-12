@@ -15,19 +15,21 @@ describe('status page display feeds', () => {
     expect(STATUS_PAGE_DISPLAY_FEED_LIMIT).toBe(200);
     expect(currentAnnouncementDisplayWhere('page-1', now)).toMatchObject({
       type: { notIn: ['MAINTENANCE', 'UPDATE'] },
-      startDate: { lte: now },
+      publishAt: { lte: now },
     });
     expect(maintenanceInProgressDisplayWhere('page-1', now)).toMatchObject({
       type: 'MAINTENANCE',
+      publishAt: { lte: now },
       startDate: { lte: now },
     });
     expect(maintenanceUpcomingDisplayWhere('page-1', now)).toMatchObject({
       type: 'MAINTENANCE',
+      publishAt: { lte: now },
       startDate: { gt: now },
     });
     expect(changelogDisplayWhere('page-1', now)).toMatchObject({
       type: 'UPDATE',
-      startDate: { lte: now },
+      publishAt: { lte: now },
     });
   });
 

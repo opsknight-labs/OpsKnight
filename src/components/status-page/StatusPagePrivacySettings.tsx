@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, FormField, Switch } from '@/components/ui';
+import { FormField, Switch } from '@/components/ui';
+import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
+import { Shield, AlertTriangle, Server, Clock, Info } from 'lucide-react';
 
 export type PrivacySettings = {
   privacyMode: 'PUBLIC' | 'RESTRICTED' | 'PRIVATE' | 'CUSTOM';
@@ -111,11 +113,13 @@ export default function StatusPagePrivacySettings({
   const [expandedPreset, setExpandedPreset] = useState<keyof typeof PRIVACY_PRESETS | null>(null);
 
   const PRESET_DETAIL_LABELS: Array<{ key: keyof PrivacySettings; label: string }> = [
+    { key: 'showRecentIncidents', label: 'Recent incidents' },
     { key: 'showIncidentDetails', label: 'Timeline & progress updates' },
     { key: 'showIncidentDescriptions', label: 'Incident body description' },
     { key: 'showIncidentTimestamps', label: 'Incident timestamps' },
     { key: 'showAffectedServices', label: 'Affected services' },
     { key: 'showIncidentUrgency', label: 'Incident urgency' },
+    { key: 'showServiceMetrics', label: 'Service metrics' },
     { key: 'showServiceDescriptions', label: 'Service descriptions' },
     { key: 'showServiceRegions', label: 'Service regions' },
     { key: 'showUptimeHistory', label: 'Uptime history' },
@@ -158,231 +162,302 @@ export default function StatusPagePrivacySettings({
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}>
+    <div className="space-y-6">
       {/* Privacy Mode Presets */}
-      <Card>
-        <div style={{ padding: 'var(--spacing-6)' }}>
-          <h2
-            style={{
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: '700',
-              marginBottom: 'var(--spacing-4)',
-            }}
-          >
-            Privacy Level
-          </h2>
-          <p
-            style={{
-              fontSize: 'var(--font-size-sm)',
-              color: 'var(--text-muted)',
-              marginBottom: 'var(--spacing-4)',
-            }}
-          >
-            Choose a privacy preset or customize individual settings below.
-          </p>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: 'var(--spacing-3)',
-            }}
-          >
-            {Object.entries(PRIVACY_PRESETS).map(([key, preset]) => (
+      <StatusPageSectionCard
+        title="Privacy Level"
+        description="Choose a privacy preset or customize individual settings below."
+        icon={<Shield className="h-4 w-4" />}
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: 'var(--spacing-3)',
+          }}
+        >
+          {Object.entries(PRIVACY_PRESETS).map(([key, preset]) => (
+            <div
+              key={key}
+              role="button"
+              onClick={() => applyPreset(key as keyof typeof PRIVACY_PRESETS)}
+              title={getPresetSummary(key as keyof typeof PRIVACY_PRESETS)}
+              tabIndex={0}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  applyPreset(key as keyof typeof PRIVACY_PRESETS);
+                }
+              }}
+              style={{
+                padding: 'var(--spacing-4)',
+                border: '2px solid',
+                borderColor: settings.privacyMode === key ? 'var(--primary-color)' : '#e5e7eb',
+                borderRadius: 'var(--radius-md)',
+                background: settings.privacyMode === key ? '#f0f9ff' : 'white',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s ease',
+                position: 'relative',
+              }}
+            >
               <div
-                key={key}
-                role="button"
-                onClick={() => applyPreset(key as keyof typeof PRIVACY_PRESETS)}
-                title={getPresetSummary(key as keyof typeof PRIVACY_PRESETS)}
-                tabIndex={0}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    applyPreset(key as keyof typeof PRIVACY_PRESETS);
-                  }
-                }}
                 style={{
-                  padding: 'var(--spacing-4)',
-                  border: '2px solid',
-                  borderColor: settings.privacyMode === key ? 'var(--primary-color)' : '#e5e7eb',
-                  borderRadius: 'var(--radius-md)',
-                  background: settings.privacyMode === key ? '#f0f9ff' : 'white',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s ease',
-                  position: 'relative',
+                  fontWeight: '600',
+                  marginBottom: 'var(--spacing-1)',
+                  color:
+                    settings.privacyMode === key ? 'var(--primary-color)' : 'var(--text-primary)',
                 }}
               >
+                {preset.label}
+              </div>
+              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
+                {preset.description}
+              </div>
+              <button
+                type="button"
+                onClick={event => {
+                  event.stopPropagation();
+                  setExpandedPreset(current =>
+                    current === key ? null : (key as keyof typeof PRIVACY_PRESETS)
+                  );
+                }}
+                style={{
+                  marginTop: 'var(--spacing-2)',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  border: '1px solid #e5e7eb',
+                  background: 'white',
+                  fontSize: 'var(--font-size-xs)',
+                  fontWeight: '600',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                {expandedPreset === key ? 'Hide details' : 'View details'}
+              </button>
+              {expandedPreset === key && (
                 <div
                   style={{
-                    fontWeight: '600',
-                    marginBottom: 'var(--spacing-1)',
-                    color:
-                      settings.privacyMode === key ? 'var(--primary-color)' : 'var(--text-primary)',
-                  }}
-                >
-                  {preset.label}
-                </div>
-                <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-                  {preset.description}
-                </div>
-                <button
-                  type="button"
-                  onClick={event => {
-                    event.stopPropagation();
-                    setExpandedPreset(current =>
-                      current === key ? null : (key as keyof typeof PRIVACY_PRESETS)
-                    );
-                  }}
-                  style={{
                     marginTop: 'var(--spacing-2)',
-                    padding: '2px 8px',
-                    borderRadius: '999px',
-                    border: '1px solid #e5e7eb',
-                    background: 'white',
+                    padding: 'var(--spacing-2)',
+                    borderRadius: 'var(--radius-md)',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
                     fontSize: 'var(--font-size-xs)',
-                    fontWeight: '600',
                     color: 'var(--text-muted)',
-                    cursor: 'pointer',
+                    lineHeight: 1.5,
                   }}
                 >
-                  {expandedPreset === key ? 'Hide details' : 'View details'}
-                </button>
-                {expandedPreset === key && (
-                  <div
-                    style={{
-                      marginTop: 'var(--spacing-2)',
-                      padding: 'var(--spacing-2)',
-                      borderRadius: 'var(--radius-md)',
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      fontSize: 'var(--font-size-xs)',
-                      color: 'var(--text-muted)',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {getPresetSummary(key as keyof typeof PRIVACY_PRESETS)}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  {getPresetSummary(key as keyof typeof PRIVACY_PRESETS)}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
-      </Card>
+      </StatusPageSectionCard>
 
       {/* Incident Privacy Settings */}
-      <Card>
-        <div style={{ padding: 'var(--spacing-6)' }}>
-          <h2
-            style={{
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: '700',
-              marginBottom: 'var(--spacing-4)',
-            }}
-          >
-            Incident Information
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-3)' }}>
+      <StatusPageSectionCard
+        title="Incident Information"
+        description="Configure how much detail is exposed on incident reports and timeline updates."
+        icon={<AlertTriangle className="h-4 w-4" />}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Recent Incidents</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display recent incidents list on the status page
+              </p>
+            </div>
+            <Switch
+              checked={settings.showRecentIncidents}
+              onChange={checked => updateSetting('showRecentIncidents', checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">
+                Show Timeline & Progress Updates
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Chronological investigation and resolution updates
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentDetails}
               onChange={checked => updateSetting('showIncidentDetails', checked)}
-              label="Show Timeline & Progress Updates"
-              helperText="Display chronological investigation, mitigation, and resolution updates"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident Titles</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Incident titles (falls back to generic title if off)
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentTitles}
               onChange={checked => updateSetting('showIncidentTitles', checked)}
-              label="Show Incident Titles"
-              helperText="Display incident titles on the status page (falls back to generic title if off)"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">
+                Show Incident Body Description
+              </p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Descriptive paragraph explaining what occurred
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentDescriptions}
               onChange={checked => updateSetting('showIncidentDescriptions', checked)}
-              label="Show Incident Body Description"
-              helperText="Display the main descriptive paragraph explaining what occurred"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Affected Services</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display which services are affected by incidents
+              </p>
+            </div>
             <Switch
               checked={settings.showAffectedServices}
               onChange={checked => updateSetting('showAffectedServices', checked)}
-              label="Show Affected Services"
-              helperText="Display which services are affected by incidents"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident Timestamps</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                When incidents occurred and were resolved
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentTimestamps}
               onChange={checked => updateSetting('showIncidentTimestamps', checked)}
-              label="Show Incident Timestamps"
-              helperText="Display when incidents occurred and were resolved"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident Urgency</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Urgency level (High/Medium/Low) for incidents
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentUrgency}
               onChange={checked => updateSetting('showIncidentUrgency', checked)}
-              label="Show Incident Urgency"
-              helperText="Display urgency level (High/Medium/Low) for incidents"
             />
           </div>
         </div>
-      </Card>
+      </StatusPageSectionCard>
 
       {/* Service Information */}
-      <Card>
-        <div style={{ padding: 'var(--spacing-6)' }}>
-          <h2
-            style={{
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: '700',
-              marginBottom: 'var(--spacing-4)',
-            }}
-          >
-            Service Information
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-3)' }}>
+      <StatusPageSectionCard
+        title="Service Information"
+        description="Control visibility of service descriptions, regions, metrics, and team ownership."
+        icon={<Server className="h-4 w-4" />}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Service Metrics</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display uptime percentages and availability metrics
+              </p>
+            </div>
+            <Switch
+              checked={settings.showServiceMetrics}
+              onChange={checked => updateSetting('showServiceMetrics', checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Service Descriptions</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display service descriptions and details
+              </p>
+            </div>
             <Switch
               checked={settings.showServiceDescriptions}
               onChange={checked => updateSetting('showServiceDescriptions', checked)}
-              label="Show Service Descriptions"
-              helperText="Display service descriptions and details"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Service Regions</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display hosting regions for each service
+              </p>
+            </div>
             <Switch
               checked={settings.showServiceRegions}
               onChange={checked => updateSetting('showServiceRegions', checked)}
-              label="Show Service Regions"
-              helperText="Display hosting regions for each service"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Uptime History</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display historical uptime charts and timelines
+              </p>
+            </div>
             <Switch
               checked={settings.showUptimeHistory}
               onChange={checked => updateSetting('showUptimeHistory', checked)}
-              label="Show Uptime History"
-              helperText="Display historical uptime charts and timelines"
             />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Team Information</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display team names and ownership badges
+              </p>
+            </div>
             <Switch
               checked={settings.showTeamInformation}
               onChange={checked => updateSetting('showTeamInformation', checked)}
-              label="Show Team Information"
-              helperText="Display team names and ownership information"
             />
           </div>
         </div>
-      </Card>
+      </StatusPageSectionCard>
 
       {/* Advanced Privacy Settings */}
-      <Card>
-        <div style={{ padding: 'var(--spacing-6)' }}>
-          <h2
-            style={{
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: '700',
-              marginBottom: 'var(--spacing-4)',
-            }}
-          >
-            Advanced Privacy Settings
-          </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
+      <StatusPageSectionCard
+        title="Advanced Privacy Settings"
+        description="Incident history windows, age-based redaction, and public retention caps."
+        icon={<Clock className="h-4 w-4" />}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Incident History Details</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                When off, older resolved incidents show limited detail (title only). Active
+                incidents are never redacted.
+              </p>
+            </div>
             <Switch
               checked={settings.showIncidentHistoryDetails ?? true}
               onChange={checked =>
                 updateSetting('showIncidentHistoryDetails' as never, checked as never)
               }
-              label="Show Incident History Details"
-              helperText="When off, older resolved incidents show limited detail (title only). Active incidents are never redacted."
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {settings.showIncidentHistoryDetails === false && (
               <FormField
                 type="input"
@@ -429,43 +504,25 @@ export default function StatusPagePrivacySettings({
             />
           </div>
         </div>
-      </Card>
+      </StatusPageSectionCard>
 
       {/* Privacy Summary */}
-      <Card>
-        <div style={{ padding: 'var(--spacing-6)' }}>
-          <h2
-            style={{
-              fontSize: 'var(--font-size-xl)',
-              fontWeight: '700',
-              marginBottom: 'var(--spacing-4)',
-            }}
-          >
-            Privacy Summary
-          </h2>
-          <div
-            style={{
-              padding: 'var(--spacing-4)',
-              background: '#f9fafb',
-              borderRadius: 'var(--radius-md)',
-            }}
-          >
-            <div
-              style={{
-                fontSize: 'var(--font-size-sm)',
-                color: 'var(--text-muted)',
-                marginBottom: 'var(--spacing-2)',
-              }}
-            >
-              Current privacy mode: <strong>{settings.privacyMode}</strong>
-            </div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}>
-              These settings control what information is visible on your public status page. Changes
-              take effect immediately after saving.
-            </div>
+      <StatusPageSectionCard
+        title="Privacy Summary"
+        description="Overview of the active privacy mode and public projection scope."
+        icon={<Info className="h-4 w-4" />}
+      >
+        <div className="p-4 bg-muted/40 rounded-lg border border-border/50 space-y-1">
+          <div className="text-sm font-medium text-foreground">
+            Current privacy mode:{' '}
+            <span className="font-bold text-primary">{settings.privacyMode}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            These settings control what information is visible on your public status page. Changes
+            take effect immediately after saving.
           </div>
         </div>
-      </Card>
+      </StatusPageSectionCard>
     </div>
   );
 }

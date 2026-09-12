@@ -68,11 +68,42 @@ export async function POST(req: NextRequest) {
       isActive,
       notifySubscribers,
       affectedServiceIds,
+      timeMode,
+      allDay,
+      publishOption,
+      notificationTiming,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
 
     if (!(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds))) {
       return jsonError('Affected services must belong to this status page.', 400);
+    }
+
+    const parsedStartDate = parseDate(startDate, 'startDate');
+    const parsedEndDate = endDate ? parseDate(endDate, 'endDate') : null;
+    const isAllDay = allDay ?? timeMode === 'ALL_DAY';
+    const effectiveTimeMode = isAllDay ? 'ALL_DAY' : 'EXACT';
+
+    // Separate concepts: eventStartAt, publishAt, notificationAt
+    // Publish NOW -> publishAt = now
+    // Publish AT_START -> publishAt = startDate
+    const now = new Date();
+    let effectivePublishAt = now;
+    if (parsed.data.publishAt) {
+      effectivePublishAt = parseDate(parsed.data.publishAt, 'publishAt');
+    } else if (publishOption === 'AT_START') {
+      effectivePublishAt = parsedStartDate;
+    }
+
+    // Notify ON_PUBLISH -> job.scheduledAt = publishAt
+    // Notify AT_START -> job.scheduledAt = startDate
+    // Notify NONE -> no job
+    const shouldNotify = notificationTiming !== 'NONE' && notifySubscribers !== false;
+    let scheduledNotificationAt = now;
+    if (notificationTiming === 'AT_START') {
+      scheduledNotificationAt = parsedStartDate;
+    } else if (notificationTiming === 'ON_PUBLISH') {
+      scheduledNotificationAt = effectivePublishAt;
     }
 
     const announcement = await prisma.$transaction(async tx => {
@@ -82,8 +113,11 @@ export async function POST(req: NextRequest) {
           title: title.trim(),
           message: message.trim(),
           type: type || 'INFO',
-          startDate: parseDate(startDate, 'startDate'),
-          endDate: endDate ? parseDate(endDate, 'endDate') : null,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          allDay: isAllDay,
+          timeMode: effectiveTimeMode,
+          publishAt: effectivePublishAt,
           isActive: isActive !== false,
           affectedServiceIds:
             normalizedAffectedServiceIds === null
@@ -91,12 +125,12 @@ export async function POST(req: NextRequest) {
               : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
         },
       });
-      if (notifySubscribers) {
+      if (shouldNotify) {
         await tx.backgroundJob.create({
           data: {
             type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
             status: 'PENDING',
-            scheduledAt: new Date(),
+            scheduledAt: scheduledNotificationAt,
             maxAttempts: 5,
             payload: { announcementId: created.id, statusPageId },
           },
@@ -107,7 +141,10 @@ export async function POST(req: NextRequest) {
 
     logger.info('api.status_page.announcement.created', {
       announcementId: announcement.id,
-      notifySubscribers,
+      timeMode: effectiveTimeMode,
+      publishAt: effectivePublishAt,
+      shouldNotify,
+      scheduledNotificationAt,
     });
     return jsonOk({ announcement }, 200);
   } catch (error: unknown) {
@@ -146,11 +183,13 @@ export async function PATCH(req: NextRequest) {
       endDate,
       isActive,
       affectedServiceIds,
+      publishOption,
+      publishAt,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
     const existing = await prisma.statusPageAnnouncement.findFirst({
       where: { id, statusPageId },
-      select: { startDate: true, endDate: true },
+      select: { startDate: true, endDate: true, publishAt: true },
     });
     if (!existing) return jsonError('Announcement not found.', 404);
     if (
@@ -166,6 +205,30 @@ export async function PATCH(req: NextRequest) {
       return jsonError('End date must be after start date.', 400);
     }
 
+    let nextPublishAt: Date | undefined;
+    if (publishAt) {
+      nextPublishAt = parseDate(publishAt, 'publishAt');
+    } else if (publishOption === 'AT_START') {
+      nextPublishAt = effectiveStart;
+    } else if (publishOption === 'NOW') {
+      nextPublishAt = new Date();
+    }
+
+    const nextAllDay =
+      parsed.data.allDay !== undefined
+        ? parsed.data.allDay
+        : parsed.data.timeMode !== undefined
+          ? parsed.data.timeMode === 'ALL_DAY'
+          : undefined;
+    const nextTimeMode =
+      parsed.data.timeMode !== undefined
+        ? parsed.data.timeMode
+        : parsed.data.allDay !== undefined
+          ? parsed.data.allDay
+            ? 'ALL_DAY'
+            : 'EXACT'
+          : undefined;
+
     const updated = await prisma.statusPageAnnouncement.update({
       where: { id },
       data: {
@@ -175,6 +238,9 @@ export async function PATCH(req: NextRequest) {
         ...(startDate ? { startDate: effectiveStart } : {}),
         ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
         ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
+        ...(nextPublishAt !== undefined ? { publishAt: nextPublishAt } : {}),
+        ...(nextTimeMode !== undefined ? { timeMode: nextTimeMode } : {}),
+        ...(nextAllDay !== undefined ? { allDay: nextAllDay } : {}),
         ...(affectedServiceIds !== undefined
           ? {
               affectedServiceIds:

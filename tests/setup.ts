@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom';
+import * as React from 'react';
 import { afterEach, afterAll, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
@@ -12,6 +13,22 @@ afterEach(() => {
     cleanup();
   }
 });
+
+// Preserve raw src for assertions — next/image otherwise absolutizes in jsdom.
+vi.mock('next/image', () => ({
+  default: (props: Record<string, unknown>) => {
+    const { src, alt, width, height, className, style, onError } = props as {
+      src: string;
+      alt: string;
+      width?: number;
+      height?: number;
+      className?: string;
+      style?: Record<string, unknown>;
+      onError?: (e: unknown) => void;
+    };
+    return React.createElement('img', { src, alt, width, height, className, style, onError });
+  },
+}));
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
@@ -75,6 +92,9 @@ const mockPrisma = {
   account: createMockModel(),
   session: createMockModel(),
 
+  notificationProviderCapacity: createMockModel(),
+  notificationRuntimeSettings: createMockModel(),
+  providerAdmission: createMockModel(),
   auditLog: createMockModel(),
   inAppNotification: createMockModel(),
   systemSettings: createMockModel(),
