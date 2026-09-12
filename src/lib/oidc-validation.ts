@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { logger } from '@/lib/logger';
 import { assertSafeOutboundUrl, safeOutboundFetch } from '@/lib/network-security';
 import { getMicrosoftEntraTenantAuthority, isMicrosoftEntraGenericAuthority, isMicrosoftEntraHost } from '@/lib/oidc-provider';
@@ -112,12 +113,25 @@ function isValidRsaSigningKey(value: unknown): boolean {
   // Reject EC keys or incompatible algorithms during connection validation.
   if (key.alg !== undefined && key.alg !== 'RS256') return false;
   if (key.kty !== 'RSA') return false;
-  return (
-    typeof key.n === 'string' &&
-    typeof key.e === 'string' &&
-    key.n.length > 0 &&
-    key.e.length > 0
-  );
+  if (
+    typeof key.n !== 'string' ||
+    typeof key.e !== 'string' ||
+    key.n.length === 0 ||
+    key.e.length === 0
+  ) {
+    return false;
+  }
+
+  // Cryptographically validate that the key material parses into a valid RSA public key
+  try {
+    const pubKey = crypto.createPublicKey({
+      key: key as crypto.JsonWebKey,
+      format: 'jwk',
+    });
+    return pubKey.type === 'public' && pubKey.asymmetricKeyType === 'rsa';
+  } catch {
+    return false;
+  }
 }
 
 function hasQueryOrHash(urlObj: URL): boolean {
@@ -404,7 +418,7 @@ export async function validateOidcConnection(
           };
         }
         const supportsCode = config.response_types_supported.some(
-          rt => typeof rt === 'string' && rt.split(' ').includes('code')
+          rt => typeof rt === 'string' && rt.trim() === 'code'
         );
         if (!supportsCode) {
           return {
@@ -467,12 +481,14 @@ export async function validateOidcConnection(
       };
     }
 
-    // If multiple candidate signing keys exist, require unambiguous kid on each
+    // If multiple candidate signing keys exist, require unambiguous distinct kid on each
     if (candidateKeys.length > 1) {
       const allHaveKid = candidateKeys.every(
         k => typeof k.kid === 'string' && k.kid.trim().length > 0
       );
-      if (!allHaveKid) {
+      const kids = candidateKeys.map(k => (typeof k.kid === 'string' ? k.kid.trim() : ''));
+      const uniqueKids = new Set(kids);
+      if (!allHaveKid || uniqueKids.size !== candidateKeys.length) {
         return {
           isValid: false,
           error:

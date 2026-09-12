@@ -48,16 +48,30 @@ async function readOidcLinkingState(
   const provider = activeProvider !== undefined ? activeProvider : await getActiveProviderConfig();
 
   // Link state is scoped to the current provider trust boundary.
-  // A historical identity for an old/migrated issuer does not satisfy the active provider.
+  // A historical identity for an old/migrated issuer or previous client ID
+  // (e.g. pairwise sub changes after recreating an Entra app registration)
+  // does not satisfy the active provider if the trust context differs.
   if (provider?.enabled && provider.issuer) {
     const canonicalIssuer = normalizeOidcIssuer(provider.issuer);
     const issuerVariants = [canonicalIssuer, ...getLegacyOidcIssuerVariants(canonicalIssuer)];
+    const currentFingerprint = provider.clientId
+      ? oidcTrustFingerprint(provider.issuer, provider.clientId)
+      : null;
+
     const existingIdentity = await prisma.oidcIdentity.findFirst({
       where: {
         userId,
         issuer: { in: issuerVariants },
+        ...(currentFingerprint
+          ? {
+              OR: [
+                { issuerFingerprint: currentFingerprint },
+                { issuerFingerprint: null },
+              ],
+            }
+          : {}),
       },
-      select: { id: true },
+      select: { id: true, issuerFingerprint: true },
     });
     if (existingIdentity) return 'linked';
   } else if (!provider) {

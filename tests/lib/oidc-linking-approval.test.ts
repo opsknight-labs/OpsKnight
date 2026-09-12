@@ -16,6 +16,14 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+vi.mock('@/lib/oidc/trust-fingerprint', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/oidc/trust-fingerprint')>();
+  return {
+    ...actual,
+    oidcTrustFingerprint: vi.fn(actual.oidcTrustFingerprint),
+  };
+});
+
 vi.mock('@/lib/prisma', () => ({
   default: {
     user: { findUnique: vi.fn() },
@@ -326,4 +334,62 @@ describe('OIDC linking approval management', () => {
     expect(allowResult.alreadyLinked).toBeUndefined();
     expect(prisma.oidcLinkingApproval.upsert).toHaveBeenCalled();
   });
+
+  it('allows approval and linking for new client registration when pairwise sub changes under the same issuer (e.g. Entra)', async () => {
+    const entraIssuer = 'https://login.microsoftonline.com/tenant-123/v2.0';
+    const oldClientId = 'client-id-A';
+    const newClientId = 'client-id-B';
+    const oldFingerprint = 'fingerprint-A';
+    const newFingerprint = 'fingerprint-B';
+
+    const { oidcTrustFingerprint } = await import('@/lib/oidc/trust-fingerprint');
+    vi.mocked(oidcTrustFingerprint).mockImplementation((iss: string, client: string) => {
+      if (client === 'client-id-A') return 'fingerprint-A';
+      if (client === 'client-id-B') return 'fingerprint-B';
+      return 'default-fingerprint';
+    });
+
+    // User Alice has an existing identity linked under old client-A (with fingerprint-A)
+    vi.mocked(prisma.oidcIdentity.findFirst).mockImplementation((async (args?: {
+      where?: {
+        OR?: Array<{ issuerFingerprint?: string | null }>;
+      };
+    }) => {
+      const orClauses = args?.where?.OR;
+      // When querying for current trust fingerprint (newFingerprint) or null:
+      if (orClauses && !orClauses.some((c) => c.issuerFingerprint === oldFingerprint)) {
+        // User does not have an identity for client-B / newFingerprint
+        return null;
+      }
+      return { id: 'ident-sub-A', issuerFingerprint: oldFingerprint };
+    }) as never);
+
+    // Active provider has same Entra issuer, but clientId changed from A to B
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+      id: 'default',
+      issuer: entraIssuer,
+      clientId: newClientId,
+      configVersion: 2,
+      enabled: true,
+    } as never);
+
+    // Alice is not considered linked to client-B yet
+    const stateResult = await getOidcLinkingState('user-1');
+    expect(stateResult.state).toBe('not-approved');
+    expect(stateResult.alreadyLinked).toBe(false);
+
+    // Admin can authorize linking for the new client ID registration
+    const allowResult = await allowOidcLinking('user-1');
+    expect(allowResult.success).toBe(true);
+    expect(allowResult.alreadyLinked).toBeUndefined();
+    expect(prisma.oidcLinkingApproval.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          issuerFingerprint: newFingerprint,
+          configVersion: 2,
+        }),
+      })
+    );
+  });
 });
+

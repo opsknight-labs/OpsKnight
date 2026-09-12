@@ -524,4 +524,66 @@ describe('resolveOidcIdentityForSignIn', () => {
       })
     );
   });
+
+  it('resolves and links pairwise sub change under the same issuer (e.g. Entra app registration migration)', async () => {
+    const entraIssuer = 'https://login.microsoftonline.com/tenant-123/v2.0';
+    const oldClientId = 'client-A';
+    const newClientId = 'client-B';
+    const newFingerprint = oidcTrustFingerprint(entraIssuer, newClientId);
+
+    // Fast path: lookup for new pairwise sub (sub-B) is a miss
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    tx.oidcIdentity.findUnique.mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([]);
+
+    // OpsKnight account exists
+    tx.user.findUnique.mockResolvedValue(linkedUser as never);
+
+    // Admin approved linking for new client registration (newFingerprint)
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-new-client',
+      userId: linkedUser.id,
+      revokedAt: null,
+      consumedAt: null,
+      expiresAt: new Date(Date.now() + 3600_000),
+      providerConfigId: 'default',
+      issuerFingerprint: newFingerprint,
+      expectedEmail: 'alice@example.com',
+      configVersion: 2,
+      generation: 1,
+    } as never);
+    tx.oidcLinkingApproval.updateMany.mockResolvedValue({ count: 1 });
+
+    // User signs in with sub-B from client-B
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: entraIssuer,
+      subject: 'sub-B',
+      email: 'alice@example.com',
+      emailVerifiedClaim: true,
+      providerType: 'microsoft',
+      clientId: newClientId,
+      configVersion: 2,
+      autoProvision: false,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.id).toBe(linkedUser.id);
+      expect(result.identityCreated).toBe(true);
+      expect(result.approvalConsumed).toBe(true);
+    }
+
+    expect(tx.oidcIdentity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          issuer: entraIssuer,
+          subject: 'sub-B',
+          issuerFingerprint: newFingerprint,
+          userId: linkedUser.id,
+        }),
+      })
+    );
+  });
 });
+

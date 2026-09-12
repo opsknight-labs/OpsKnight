@@ -282,6 +282,7 @@ export async function resolveOidcIdentityForSignIn(
             email,
             emailAtLink: email,
             providerConfigId: input.providerConfigId ?? 'default',
+            issuerFingerprint: fingerprint,
             providerObjectId: typeof input.claims?.oid === 'string' ? input.claims.oid : null,
             tenantId: typeof input.claims?.tid === 'string' ? input.claims.tid : null,
             lastLoginAt: now,
@@ -315,6 +316,10 @@ export async function resolveOidcIdentityForSignIn(
         select: targetUserSelect,
       });
 
+      const autoProvisionFingerprint = input.clientId
+        ? oidcTrustFingerprint(input.issuer, input.clientId)
+        : null;
+
       await tx.oidcIdentity.create({
         data: {
           issuer: input.issuer,
@@ -322,6 +327,7 @@ export async function resolveOidcIdentityForSignIn(
           email,
           emailAtLink: email,
           providerConfigId: input.providerConfigId ?? 'default',
+          issuerFingerprint: autoProvisionFingerprint,
           providerObjectId: typeof input.claims?.oid === 'string' ? input.claims.oid : null,
           tenantId: typeof input.claims?.tid === 'string' ? input.claims.tid : null,
           lastLoginAt: now,

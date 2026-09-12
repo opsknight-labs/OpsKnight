@@ -368,6 +368,32 @@ describe('OIDC discovery provider matrix', () => {
     expect(result.error).toContain('multiple signing keys without distinct "kid" identifiers');
   });
 
+  it('rejects multiple signing keys when keys have duplicate kid identifiers', async () => {
+    safeOutboundFetchMock.mockImplementation(
+      async (url: string) =>
+        ({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue(
+            url.endsWith('/jwks')
+              ? {
+                  keys: [
+                    { kid: 'duplicate-kid', kty: 'RSA', use: 'sig', n: 'modulus1', e: 'AQAB' },
+                    { kid: 'duplicate-kid', kty: 'RSA', use: 'sig', n: 'modulus2', e: 'AQAB' },
+                  ],
+                }
+              : makeMetadata('https://identity.example.com')
+          ),
+          headers: { get: vi.fn().mockReturnValue(null) },
+        }) as unknown as Response
+    );
+
+    const result = await validateOidcConnection('https://identity.example.com');
+    expect(result.isValid).toBe(false);
+    expect(result.error).toContain('multiple signing keys without distinct "kid" identifiers');
+  });
+
+
   it('validates generic provider authorization code and PKCE capabilities', async () => {
     // Missing code in response_types_supported
     setupValidFetch(

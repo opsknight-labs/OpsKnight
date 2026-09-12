@@ -138,7 +138,33 @@ describe('Auth session lifecycle and hardening', () => {
 
       expect(decoded).toBeNull();
     });
+
+    it('omits transient SECURITY_LOOKUP_UNAVAILABLE error from encrypted JWE cookie payload', async () => {
+      const token = {
+        sub: 'user-123',
+        email: 'user@example.com',
+        role: 'ADMIN',
+        error: 'SECURITY_LOOKUP_UNAVAILABLE',
+      };
+
+      const encoded = await customJwtEncode({
+        token,
+        secret,
+        maxAge: 3600,
+      });
+
+      const decoded = await customJwtDecode({
+        token: encoded,
+        secret,
+      });
+
+      expect(decoded).not.toBeNull();
+      expect(decoded?.sub).toBe('user-123');
+      expect(decoded?.role).toBe('ADMIN');
+      expect(decoded?.error).toBeUndefined();
+    });
   });
+
 
   describe('Finding 2: Idle timeout and user activity tracking', () => {
     it('does not bump lastActivityAt on passive reads', async () => {

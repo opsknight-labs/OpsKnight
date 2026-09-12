@@ -1,16 +1,15 @@
 ALTER TABLE "OidcConfig" ADD COLUMN "tokenEndpointAuthMethod" TEXT DEFAULT 'client_secret_basic';
 
--- Canonicalize legacy issuer strings across semantic URL equivalents
--- (trailing slashes, explicit default HTTPS port 443, uppercase hostnames)
+-- Canonicalize legacy issuer strings with trailing slashes
 UPDATE "OidcConfig"
-SET "issuer" = REGEXP_REPLACE(LOWER(rtrim("issuer", '/')), '^(https://[^/:]+):443($|/)', '\1\2')
-WHERE "issuer" LIKE '%/' OR "issuer" ~* ':443($|/)' OR "issuer" ~ '[A-Z]';
+SET "issuer" = rtrim("issuer", '/')
+WHERE "issuer" LIKE '%/';
 
--- Reconcile legacy OidcIdentity records safely across all semantic URL equivalents:
+-- Reconcile legacy trailing-slash OidcIdentity records safely:
 -- 1. If two rows exist with the same canonical issuer and subject but DIFFERENT userId,
 --    abort the migration with an exception to prevent silent account hijacking or data loss.
 -- 2. Only deduplicate identical mappings belonging to the SAME user.
--- 3. Canonicalize all remaining legacy issuer records to standard lowercase, no-443, no-trailing-slash.
+-- 3. Canonicalize all remaining legacy trailing-slash issuer records.
 DO $$
 DECLARE
   conflict_count INT;
@@ -18,8 +17,7 @@ BEGIN
   SELECT COUNT(*) INTO conflict_count
   FROM "OidcIdentity" o1
   JOIN "OidcIdentity" o2
-    ON REGEXP_REPLACE(LOWER(rtrim(o1."issuer", '/')), '^(https://[^/:]+):443($|/)', '\1\2') =
-       REGEXP_REPLACE(LOWER(rtrim(o2."issuer", '/')), '^(https://[^/:]+):443($|/)', '\1\2')
+    ON rtrim(o1."issuer", '/') = rtrim(o2."issuer", '/')
    AND o1."subject" = o2."subject"
    AND o1."userId" <> o2."userId"
    AND o1."id" < o2."id";
@@ -29,17 +27,17 @@ BEGIN
   END IF;
 
   -- Deduplicate same-user legacy records across all equivalent issuer variants
-  -- (e.g. https://idp.example.com, https://idp.example.com/, https://IDP.EXAMPLE.COM:443/)
+  -- (e.g. https://idp.example.com, https://idp.example.com/, https://idp.example.com//)
   DELETE FROM "OidcIdentity"
   WHERE "id" IN (
     SELECT "id"
     FROM (
       SELECT "id",
              ROW_NUMBER() OVER (
-               PARTITION BY REGEXP_REPLACE(LOWER(rtrim("issuer", '/')), '^(https://[^/:]+):443($|/)', '\1\2'), "subject", "userId"
+               PARTITION BY rtrim("issuer", '/'), "subject", "userId"
                ORDER BY
                  -- Keep exact canonical form if present, else oldest record
-                 CASE WHEN "issuer" NOT LIKE '%/' AND "issuer" NOT LIKE '%:443%' THEN 0 ELSE 1 END ASC,
+                 CASE WHEN "issuer" NOT LIKE '%/' THEN 0 ELSE 1 END ASC,
                  "createdAt" ASC,
                  "id" ASC
              ) AS rn
@@ -49,6 +47,6 @@ BEGIN
   );
 
   UPDATE "OidcIdentity"
-  SET "issuer" = REGEXP_REPLACE(LOWER(rtrim("issuer", '/')), '^(https://[^/:]+):443($|/)', '\1\2')
-  WHERE "issuer" LIKE '%/' OR "issuer" ~* ':443($|/)' OR "issuer" ~ '[A-Z]';
+  SET "issuer" = rtrim("issuer", '/')
+  WHERE "issuer" LIKE '%/';
 END $$;
