@@ -135,6 +135,7 @@ export async function buildStatusPageSnapshot(
     affectedServiceIds: true,
     allDay: true,
     timeMode: true,
+    publishAt: true,
     createdAt: true,
     updatedAt: true,
   } as const;
@@ -154,6 +155,7 @@ export async function buildStatusPageSnapshot(
     statusPageId: pageId,
     type: 'MAINTENANCE' as const,
     isActive: true,
+    publishAt: { lte: now },
     startDate: { lte: now },
     OR: [{ endDate: { gte: now } }, { endDate: null }],
   };
@@ -161,6 +163,7 @@ export async function buildStatusPageSnapshot(
     statusPageId: pageId,
     type: 'MAINTENANCE' as const,
     isActive: true,
+    publishAt: { lte: now },
     startDate: { lte: now },
     OR: [{ endDate: { gte: earliestRequiredStart } }, { endDate: null }],
   };
@@ -456,6 +459,7 @@ export async function buildStatusPageSnapshot(
       endAt: item.endDate ? item.endDate.toISOString() : null,
       allDay: item.allDay || item.timeMode === 'ALL_DAY',
       timeMode: (item.timeMode === 'ALL_DAY' ? 'ALL_DAY' : 'EXACT') as 'ALL_DAY' | 'EXACT',
+      publishAt: item.publishAt.toISOString(),
       ...(affected ? { affectedServices: affected } : {}),
       ...(affectedRegions ? { affectedRegions } : {}),
       createdAt: item.createdAt.toISOString(),
@@ -638,6 +642,7 @@ export async function buildStatusPageSnapshot(
         endDate: item.endDate?.toISOString() ?? null,
         allDay: item.allDay || item.timeMode === 'ALL_DAY',
         timeMode: (item.timeMode === 'ALL_DAY' ? 'ALL_DAY' : 'EXACT') as 'ALL_DAY' | 'EXACT',
+        publishAt: item.publishAt.toISOString(),
         ...(affected ? { affectedServices: affected } : {}),
         ...(affectedRegions ? { affectedRegions } : {}),
       };

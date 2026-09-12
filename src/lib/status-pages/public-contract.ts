@@ -219,6 +219,7 @@ export interface PublicMaintenance {
   updatedAt?: string;
   allDay?: boolean;
   timeMode?: 'EXACT' | 'ALL_DAY';
+  publishAt?: string;
 }
 
 export interface PublicAnnouncement {
@@ -232,6 +233,7 @@ export interface PublicAnnouncement {
   affectedRegions?: string[];
   allDay?: boolean;
   timeMode?: 'EXACT' | 'ALL_DAY';
+  publishAt?: string;
 }
 
 export interface PublicChangelogEntry {

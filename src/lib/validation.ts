@@ -305,6 +305,7 @@ export const StatusAnnouncementCreateSchema = z
     timeMode: z.enum(['EXACT', 'ALL_DAY']).optional().default('EXACT'),
     allDay: z.boolean().optional(),
     publishOption: z.enum(['NOW', 'AT_START']).optional().default('NOW'),
+    publishAt: z.string().optional(),
     notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional().default('ON_PUBLISH'),
   })
   .superRefine((data, ctx) => {
@@ -315,21 +316,59 @@ export const StatusAnnouncementCreateSchema = z
         message: 'End date must be after start date.',
       });
     }
+    if (data.allDay !== undefined) {
+      if (data.allDay && data.timeMode === 'EXACT') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['allDay'],
+          message: 'Contradictory time options: allDay cannot be true when timeMode is EXACT.',
+        });
+      }
+      if (!data.allDay && data.timeMode === 'ALL_DAY') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['allDay'],
+          message: 'Contradictory time options: allDay cannot be false when timeMode is ALL_DAY.',
+        });
+      }
+    }
   });
 
-export const StatusAnnouncementPatchSchema = z.object({
-  statusPageId: z.string().min(1),
-  id: z.string().min(1),
-  title: z.string().trim().min(1).max(200).optional(),
-  message: z.string().trim().min(1).max(5000).optional(),
-  type: z.string().trim().max(50).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional().nullable(),
-  isActive: z.boolean().optional(),
-  affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
-  timeMode: z.enum(['EXACT', 'ALL_DAY']).optional(),
-  allDay: z.boolean().optional(),
-});
+export const StatusAnnouncementPatchSchema = z
+  .object({
+    statusPageId: z.string().min(1),
+    id: z.string().min(1),
+    title: z.string().trim().min(1).max(200).optional(),
+    message: z.string().trim().min(1).max(5000).optional(),
+    type: z.string().trim().max(50).optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional().nullable(),
+    isActive: z.boolean().optional(),
+    affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
+    timeMode: z.enum(['EXACT', 'ALL_DAY']).optional(),
+    allDay: z.boolean().optional(),
+    publishOption: z.enum(['NOW', 'AT_START']).optional(),
+    publishAt: z.string().optional(),
+    notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.allDay !== undefined && data.timeMode !== undefined) {
+      if (data.allDay && data.timeMode === 'EXACT') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['allDay'],
+          message: 'Contradictory time options: allDay cannot be true when timeMode is EXACT.',
+        });
+      }
+      if (!data.allDay && data.timeMode === 'ALL_DAY') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['allDay'],
+          message: 'Contradictory time options: allDay cannot be false when timeMode is ALL_DAY.',
+        });
+      }
+    }
+  });
 
 export const StatusAnnouncementDeleteSchema = z.object({
   statusPageId: z.string().min(1),

@@ -78,6 +78,60 @@ describe('Enterprise Announcement Timing & Timezone Flow', () => {
         expect(parsed.data.notificationTiming).toBe('AT_START');
       }
     });
+    it('rejects contradictory allDay and timeMode options', () => {
+      const contradictory1 = StatusAnnouncementCreateSchema.safeParse({
+        statusPageId: 'page-123',
+        title: 'Invalid Announcement',
+        message: 'Testing validation error',
+        startDate: '2026-09-20T04:30:00.000Z',
+        allDay: true,
+        timeMode: 'EXACT',
+      });
+      expect(contradictory1.success).toBe(false);
+      if (!contradictory1.success) {
+        expect(contradictory1.error.issues[0].message).toContain('Contradictory time options');
+      }
+
+      const contradictory2 = StatusAnnouncementCreateSchema.safeParse({
+        statusPageId: 'page-123',
+        title: 'Invalid Announcement',
+        message: 'Testing validation error',
+        startDate: '2026-09-20T04:30:00.000Z',
+        allDay: false,
+        timeMode: 'ALL_DAY',
+      });
+      expect(contradictory2.success).toBe(false);
+      if (!contradictory2.success) {
+        expect(contradictory2.error.issues[0].message).toContain('Contradictory time options');
+      }
+    });
+  });
+
+  describe('Public feed queries with publishAt contract', () => {
+    it('requires publishAt <= now in display feed query builders', async () => {
+      const {
+        currentAnnouncementDisplayWhere,
+        maintenanceInProgressDisplayWhere,
+        maintenanceUpcomingDisplayWhere,
+        changelogDisplayWhere,
+      } = await import('@/lib/status-pages/display-feeds');
+
+      const now = new Date('2026-09-20T12:00:00.000Z');
+
+      const announcementWhere = currentAnnouncementDisplayWhere('sp-1', now);
+      expect(announcementWhere.publishAt).toEqual({ lte: now });
+
+      const inProgressWhere = maintenanceInProgressDisplayWhere('sp-1', now);
+      expect(inProgressWhere.publishAt).toEqual({ lte: now });
+      expect(inProgressWhere.startDate).toEqual({ lte: now });
+
+      const upcomingWhere = maintenanceUpcomingDisplayWhere('sp-1', now);
+      expect(upcomingWhere.publishAt).toEqual({ lte: now });
+      expect(upcomingWhere.startDate).toEqual({ gt: now });
+
+      const changelogWhere = changelogDisplayWhere('sp-1', now);
+      expect(changelogWhere.publishAt).toEqual({ lte: now });
+    });
   });
 
   describe('Subscriber timezone formatting', () => {
@@ -105,6 +159,25 @@ describe('Enterprise Announcement Timing & Timezone Flow', () => {
 
       expect(edt).toContain('12:30');
       expect(edt).toMatch(/(EDT|GMT-4)/i);
+    });
+
+    it('formats postedAt timestamp in subscriber timezone rather than server timezone', () => {
+      const createdAt = new Date('2026-09-18T09:00:00.000Z');
+
+      const istPosted = formatDateTime(createdAt, 'Asia/Kolkata', {
+        format: 'datetime',
+        includeTimeZone: true,
+      });
+      const edtPosted = formatDateTime(createdAt, 'America/New_York', {
+        format: 'datetime',
+        includeTimeZone: true,
+      });
+
+      expect(istPosted).toContain('2:30');
+      expect(istPosted).toMatch(/(IST|GMT\+5:30)/i);
+
+      expect(edtPosted).toContain('5:00');
+      expect(edtPosted).toMatch(/(EDT|GMT-4)/i);
     });
 
     it('formats all-day notices preserving calendar day without timezone shift', () => {

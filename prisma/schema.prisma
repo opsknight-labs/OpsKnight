@@ -1677,6 +1677,7 @@ model StatusPageAnnouncement {
   endDate            DateTime?
   allDay             Boolean   @default(false)
   timeMode           String    @default("EXACT") // EXACT, ALL_DAY
+  publishAt          DateTime  @default(now())
   isActive           Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -1685,6 +1686,7 @@ model StatusPageAnnouncement {
   incident   Incident?  @relation(fields: [incidentId], references: [id], onDelete: SetNull)
 
   @@index([statusPageId, isActive, startDate])
+  @@index([statusPageId, isActive, publishAt])
   @@index([incidentId])
 }
 

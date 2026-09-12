@@ -584,9 +584,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
                     </div>
                     {{end_time_section}}
                 </div>
-                <p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">
-                    Posted on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
-                </p>
+                {{posted_at_section}}
             </div>
             <div style="text-align: center; margin-top: 32px;">
                 <a href="${escapeHtml(statusPageUrl)}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);">View Status Page</a>
@@ -696,6 +694,12 @@ export async function notifyStatusPageSubscribersAnnouncement(
               }
             }
 
+            const postedAtFormatted = formatDateTime(announcement.createdAt || new Date(), subTz, {
+              format: 'datetime',
+              includeTimeZone: true,
+            });
+            const postedAtSectionForSub = `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">Posted on ${postedAtFormatted}</p>`;
+
             return {
               category: 'STATUS_PAGE',
               channel: 'EMAIL',
@@ -723,6 +727,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
                 unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
                 startTime: startTimeForSub,
                 endTimeSection: endTimeSectionForSub,
+                postedAtSection: postedAtSectionForSub,
                 providerScope: { statusPageId: page.id, subscriptionId: sub.id },
               },
             };

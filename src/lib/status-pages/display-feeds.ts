@@ -11,7 +11,7 @@ export function currentAnnouncementDisplayWhere(pageId: string, now: Date) {
     statusPageId: pageId,
     isActive: true,
     type: { notIn: ['MAINTENANCE', 'UPDATE'] },
-    startDate: { lte: now },
+    publishAt: { lte: now },
     ...stillOpen(now),
   };
 }
@@ -22,6 +22,7 @@ export function maintenanceInProgressDisplayWhere(pageId: string, now: Date) {
     statusPageId: pageId,
     isActive: true,
     type: 'MAINTENANCE' as const,
+    publishAt: { lte: now },
     startDate: { lte: now },
     ...stillOpen(now),
   };
@@ -33,6 +34,7 @@ export function maintenanceUpcomingDisplayWhere(pageId: string, now: Date) {
     statusPageId: pageId,
     isActive: true,
     type: 'MAINTENANCE' as const,
+    publishAt: { lte: now },
     startDate: { gt: now },
     ...stillOpen(now),
   };
@@ -44,7 +46,7 @@ export function changelogDisplayWhere(pageId: string, now: Date) {
     statusPageId: pageId,
     isActive: true,
     type: 'UPDATE' as const,
-    startDate: { lte: now },
+    publishAt: { lte: now },
     ...stillOpen(now),
   };
 }

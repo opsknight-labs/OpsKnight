@@ -57,6 +57,7 @@ export interface AnnouncementItem {
   endDate?: string | Date | null;
   allDay?: boolean;
   timeMode?: string;
+  publishAt?: string | Date;
   isActive: boolean;
   affectedServiceIds?: string[] | any;
   createdAt?: string | Date;
@@ -285,7 +286,9 @@ export default function StatusPageAnnouncementManager({
       }
       const s = new Date(a.startDate);
       const e = a.endDate ? new Date(a.endDate) : null;
-      if (s > now) {
+      const pub = a.publishAt ? new Date(a.publishAt) : null;
+      const isScheduled = pub ? pub > now : s > now;
+      if (isScheduled) {
         scheduled++;
       } else if (e && e < now) {
         concluded++;
@@ -305,7 +308,8 @@ export default function StatusPageAnnouncementManager({
     return announcements.filter(a => {
       const s = new Date(a.startDate);
       const e = a.endDate ? new Date(a.endDate) : null;
-      const isUpcoming = s > now;
+      const pub = a.publishAt ? new Date(a.publishAt) : null;
+      const isUpcoming = pub ? pub > now : s > now;
       const isEnded = e ? e < now : false;
       const isOngoing = !isUpcoming && !isEnded && a.isActive;
 

@@ -86,6 +86,7 @@ export type CentralNotificationPayload =
       unsubscribeUrl?: string;
       startTime?: string;
       endTimeSection?: string;
+      postedAtSection?: string;
       text?: string;
       providerScope?: {
         statusPageId: string;
@@ -806,7 +807,8 @@ async function dispatchPayload(
         html = (await decrypt(content.encryptedTemplate))
           .replaceAll('{{unsubscribe_url}}', payload.unsubscribeUrl ?? '')
           .replaceAll('{{start_time}}', payload.startTime ?? '')
-          .replaceAll('{{end_time_section}}', payload.endTimeSection ?? '');
+          .replaceAll('{{end_time_section}}', payload.endTimeSection ?? '')
+          .replaceAll('{{posted_at_section}}', payload.postedAtSection ?? '');
       }
       if (!html) return { success: false, statusCode: 422, error: 'Email content is missing' };
       const config = payload.providerKey
