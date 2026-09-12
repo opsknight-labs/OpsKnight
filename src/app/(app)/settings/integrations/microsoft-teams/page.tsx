@@ -9,6 +9,7 @@ import MicrosoftTeamsIntegrationPage from '@/components/settings/microsoft-teams
 import { getBaseUrl } from '@/lib/env-validation';
 import { buildMicrosoftTeamsAppManifestJson } from '@/lib/microsoft-teams/app-manifest';
 import { getTeamsGrantedRscPermissions } from '@/lib/microsoft-teams/client';
+import { getMicrosoftTeamsHealth } from '@/lib/microsoft-teams/health';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -64,6 +65,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const rscUnknown = !rscState || rscState.unknown;
   const rscMissingCount = rscState?.missing.length ?? 0;
   const rscGrantedCount = rscState?.granted?.length ?? 0;
+  const health = isConnected ? await getMicrosoftTeamsHealth({ tenantId: config?.tenantId ?? undefined }).catch(() => null) : null;
 
   return (
     <div className="space-y-6">
@@ -153,6 +155,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         destinations={destinations as unknown as MicrosoftTeamsDestinationRow[]}
         appManifestJson={manifestJson}
         isAdmin={permissions.isAdmin}
+        health={health as unknown as { lastSuccessAt: string | null; lastErrorAt: string | null; lastErrorCode: string | null; lastErrorMessage: string | null; botHealthy: boolean | null; permissionsHealthy: boolean | null } | null}
       />
     </div>
   );

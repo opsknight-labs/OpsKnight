@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { notify as toast } from '@/lib/toast';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
-import { Copy, Check, AlertTriangle, ShieldCheck, Hash, ExternalLink } from 'lucide-react';
+import { Copy, Check, AlertTriangle, ShieldCheck, Hash, ExternalLink, Activity, Clock3 } from 'lucide-react';
 
 type DestinationRow = {
   id: string;
@@ -24,16 +24,27 @@ type DestinationRow = {
   service?: { name: string } | null;
 };
 
+type TeamsHealth = {
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  botHealthy: boolean | null;
+  permissionsHealthy: boolean | null;
+} | null;
+
 export default function MicrosoftTeamsIntegrationPage({
   config,
   destinations,
   appManifestJson,
   isAdmin,
+  health,
 }: {
   config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean } | null;
   destinations: DestinationRow[];
   appManifestJson: string;
   isAdmin: boolean;
+  health?: TeamsHealth;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -195,6 +206,45 @@ export default function MicrosoftTeamsIntegrationPage({
         )}
         <p className="text-[11px] text-muted-foreground">Send Test posts an Adaptive Card to the mapped channel via Graph and exercises the durable notification control plane, provider admission, and rate limiting.</p>
       </div>
+
+      {/* Health: last delivery + bot/permissions pills (server-provided, not polling) */}
+      {isConfigured && health && (
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Delivery health</h3>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant="outline" className={health.botHealthy ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700'}>
+              {health.botHealthy == null ? 'Bot: unknown' : health.botHealthy ? 'Bot installed' : 'Bot not installed'}
+            </Badge>
+            <Badge variant="outline" className={health.permissionsHealthy ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700'}>
+              {health.permissionsHealthy == null ? 'Permissions: unknown' : health.permissionsHealthy ? 'Permissions OK' : 'Permissions missing/unknown'}
+            </Badge>
+            {health.lastSuccessAt && (
+              <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+                <Clock3 className="h-3 w-3 mr-1" /> Last success {new Date(health.lastSuccessAt).toLocaleString()}
+              </Badge>
+            )}
+          </div>
+          {health.lastErrorAt && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed">
+              <div className="font-semibold">Last failure: {health.lastErrorCode ?? 'UNKNOWN'}</div>
+              <div className="text-muted-foreground break-words">{health.lastErrorMessage ?? 'No details.'}</div>
+              <div className="text-muted-foreground mt-1">{new Date(health.lastErrorAt).toLocaleString()}</div>
+            </div>
+          )}
+          {!health.lastErrorAt && !health.lastSuccessAt && (
+            <p className="text-xs text-muted-foreground">No delivery history yet — send a test or trigger an incident to exercise the durable queue.</p>
+          )}
+          {health.lastErrorCode === 'UNKNOWN' && health.permissionsHealthy === false && (
+            <p className="text-xs text-muted-foreground">
+              Updates via Graph app-only PATCH are limited to <code className="rounded bg-muted px-1">policyViolation</code> edits — normal channel messages are publish-only until delegated auth ships.
+              No duplicate cards will be created when PATCH is unsupported.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* degraded state hint */}
       {!isConfigured && (

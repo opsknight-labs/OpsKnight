@@ -124,7 +124,7 @@ export function categorizeTeamsErrorCode(raw: string | undefined): MicrosoftTeam
   if (v === 'NOT_CONFIGURED') return 'NOT_CONFIGURED';
   if (v === 'TENANT_REQUIRED') return 'TENANT_REQUIRED';
   if (v === 'GRAPH_TOKEN_FAILED') return 'GRAPH_TOKEN_FAILED';
-  if (v === 'RATE_LIMITED' || v === 'RATE_LIMITED'.toLowerCase()) return 'RATE_LIMITED';
+  if (v === 'RATE_LIMITED') return 'RATE_LIMITED';
   if (v === 'CHANNEL_NOT_FOUND') return 'CHANNEL_NOT_FOUND';
   if (v === 'MESSAGE_NOT_FOUND') return 'MESSAGE_NOT_FOUND';
   if (v === 'DESTINATION_NOT_FOUND') return 'DESTINATION_NOT_FOUND';
