@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, useCallback, type CSSProperties } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { logger } from '@/lib/logger';
 import { toPreviewCustomCss } from '@/lib/status-page-content';
@@ -138,10 +138,7 @@ const PREVIEW_DEVICES: Array<{
   { id: 'iphone', label: 'iPhone 15 Pro', shortLabel: 'iPhone', icon: '📱' },
 ];
 
-export default function StatusPageLivePreview({
-  previewData,
-  maxWidth = '1280px',
-}: StatusPageLivePreviewProps) {
+function StatusPageLivePreview({ previewData, maxWidth = '1280px' }: StatusPageLivePreviewProps) {
   const [deviceView, setDeviceView] = useState<DeviceView>('mac');
   const [scale, setScale] = useState(1);
   const [zoomMode, setZoomMode] = useState<'fit' | 'manual'>('fit');
@@ -706,3 +703,5 @@ export default function StatusPageLivePreview({
     </>
   );
 }
+
+export default memo(StatusPageLivePreview);

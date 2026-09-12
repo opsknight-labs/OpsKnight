@@ -14,8 +14,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/shadcn/dialog';
+import { cn } from '@/lib/utils';
 
-export function StatusPageManager() {
+export function StatusPageManager({
+  className,
+  variant = 'hero',
+}: {
+  className?: string;
+  variant?: 'hero' | 'default';
+} = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -72,7 +79,13 @@ export function StatusPageManager() {
           setError(null);
           setOpen(true);
         }}
-        className="gap-2 shadow-xs"
+        className={cn(
+          'gap-2 font-semibold shadow-md transition-all text-xs h-9 px-4',
+          variant === 'hero'
+            ? 'bg-white text-zinc-900 hover:bg-white/90 dark:bg-white dark:text-zinc-900 dark:hover:bg-white/90 border border-white/20 hover:shadow-lg'
+            : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs',
+          className
+        )}
       >
         <Plus className="h-4 w-4" />
         <span>Create status page</span>

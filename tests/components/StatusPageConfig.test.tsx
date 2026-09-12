@@ -79,26 +79,22 @@ describe('StatusPageConfig Component', () => {
     vi.clearAllMocks();
   });
 
-  it('renders sidebar with emoji icons', () => {
+  it('renders sidebar navigation items', () => {
     render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
 
     expect(screen.getByText(/General/)).toBeDefined();
-    expect(screen.getByText(/⚙️/)).toBeDefined();
     expect(screen.getByText(/Appearance/)).toBeDefined();
-    expect(screen.getByText(/🎨/)).toBeDefined();
     expect(screen.getByText(/Custom CSS/)).toBeDefined();
-    expect(screen.getByText(/🖌️/)).toBeDefined();
   });
 
   it('renders the sticky save bar', () => {
     render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
 
     expect(screen.getByText(/Save Settings/)).toBeDefined();
-    expect(screen.getByText(/💾/)).toBeDefined();
     expect(screen.getByText('Cancel')).toBeDefined();
   });
 
-  it('switches sections when sidebar items are clicked', () => {
+  it('switches sections when sidebar items are clicked and allows color reset', () => {
     render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
 
     const appearanceTab = screen.getByText('Appearance');
@@ -108,6 +104,10 @@ describe('StatusPageConfig Component', () => {
     expect(screen.getByText('Color theme')).toBeDefined();
     expect(screen.getByText('Theme presets')).toBeDefined();
     expect(screen.getByText('Custom colors')).toBeDefined();
+    expect(screen.getByText('Reset to default')).toBeDefined();
+
+    // Click Reset to default
+    fireEvent.click(screen.getByText('Reset to default'));
     expect(screen.getByText('Modern Light')).toBeDefined();
     expect(screen.getByText('Midnight Dark')).toBeDefined();
     expect(screen.queryByText('Light theme defaults')).toBeNull();
@@ -192,5 +192,42 @@ describe('StatusPageConfig Component', () => {
     // Draft is deterministically reset to original value and router.refresh() is called
     expect(nameInput.value).toBe('Test Page');
     expect(mockRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders delete status page button on the action bar and requires typing delete to confirm', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true }),
+    });
+    global.fetch = fetchMock;
+
+    render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
+
+    // 1. Delete button exists on the sticky card
+    const deleteTrigger = screen.getByRole('button', { name: /delete status page/i });
+    expect(deleteTrigger).toBeDefined();
+
+    // 2. Click opens warning dialog
+    fireEvent.click(deleteTrigger);
+    expect(screen.getByRole('heading', { name: 'Delete Status Page' })).toBeDefined();
+    expect(screen.getByText(/Permanently removes this page/i)).toBeDefined();
+
+    // 3. Confirm button is disabled before typing "delete"
+    const deleteBtns = screen.getAllByRole('button', { name: /delete status page/i });
+    const confirmDeleteBtn = deleteBtns[deleteBtns.length - 1];
+    expect(confirmDeleteBtn).toBeDisabled();
+
+    // 4. Typing "delete" enables confirmation
+    const matchInput = screen.getByPlaceholderText('delete');
+    fireEvent.change(matchInput, { target: { value: 'delete' } });
+    expect(confirmDeleteBtn).not.toBeDisabled();
+
+    // 5. Clicking confirm triggers delete API
+    fireEvent.click(confirmDeleteBtn);
+    await waitFor(() => {
+      const deleteReq = fetchMock.mock.calls.find(([, options]) => options?.method === 'DELETE');
+      expect(deleteReq).toBeDefined();
+      expect(deleteReq![0]).toContain('id=sp-1');
+    });
   });
 });

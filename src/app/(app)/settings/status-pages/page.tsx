@@ -130,7 +130,7 @@ export default async function StatusPagesControlCenter() {
             publish when ready.
           </p>
           <div className="mt-5 flex justify-center">
-            <StatusPageManager />
+            <StatusPageManager variant="default" />
           </div>
         </Card>
       ) : (
@@ -157,8 +157,12 @@ export default async function StatusPagesControlCenter() {
                         <h2 className="text-base font-bold text-foreground truncate group-hover:text-primary transition-colors">
                           {page.name}
                         </h2>
-                        <p className="text-xs text-muted-foreground font-mono truncate">
-                          {domainDisplay}
+                        <p className="text-xs text-muted-foreground leading-normal">
+                          {page.isDefault
+                            ? 'Default routing surface'
+                            : page.slug
+                              ? `Route: /${page.slug}`
+                              : 'Independent status page'}
                         </p>
                       </div>
                     </div>
@@ -193,8 +197,34 @@ export default async function StatusPagesControlCenter() {
                     </div>
                   </div>
 
+                  {/* Dedicated URL Container - provides ample height and padding so descenders (p, g, y) never clip */}
+                  <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-muted/40 border border-border/60 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Globe className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="font-mono text-xs text-foreground/90 truncate leading-relaxed select-all">
+                        {domainDisplay}
+                      </span>
+                    </div>
+                    {page.enabled ? (
+                      <Link
+                        href={publicHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors shrink-0"
+                        title="Open live URL in new tab"
+                      >
+                        <span>Visit</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </Link>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground/60 italic shrink-0">
+                        Offline
+                      </span>
+                    )}
+                  </div>
+
                   {/* Metadata Chips */}
-                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-muted-foreground">
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/30 border border-border/50">
                       <Layers className="h-3 w-3 text-muted-foreground" />
                       <span>
@@ -226,21 +256,18 @@ export default async function StatusPagesControlCenter() {
 
                 {/* Card Actions Footer */}
                 <div className="px-5 py-3 bg-muted/15 border-t border-border/50 flex items-center justify-between gap-3">
-                  {page.enabled ? (
-                    <Link
-                      href={publicHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      <span>Open public page</span>
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-muted-foreground/60 italic flex items-center gap-1">
-                      <Radio className="h-3 w-3" /> Page is offline
-                    </span>
-                  )}
+                  <div className="text-xs text-muted-foreground">
+                    {page.enabled ? (
+                      <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Live status telemetry
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground/60 italic flex items-center gap-1">
+                        <Radio className="h-3 w-3" /> Offline draft
+                      </span>
+                    )}
+                  </div>
 
                   <Link href={`/settings/status-pages/${encodeURIComponent(page.id)}`}>
                     <Button size="sm" className="h-8 gap-1.5 text-xs font-semibold shadow-xs">

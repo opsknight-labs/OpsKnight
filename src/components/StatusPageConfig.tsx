@@ -1,7 +1,7 @@
 'use client';
 /* eslint-disable @typescript-eslint/no-explicit-any, security/detect-object-injection, @next/next/no-img-element, @next/next/no-html-link-for-pages */
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition, useMemo } from 'react';
 import { statusPageSectionPatch } from '@/lib/status-pages/settings-sections';
 import { Card, Button, FormField, Switch, Checkbox } from '@/components/ui';
 import StatusPageLivePreview from '@/components/status-page/StatusPageLivePreview';
@@ -19,7 +19,14 @@ import StatusPageEmailConfig from '@/components/status-page/StatusPageEmailConfi
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
 import DangerZoneCard from '@/components/settings/DangerZoneCard';
+import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
+import { cn } from '@/lib/utils';
 import {
+  Settings,
+  Wrench,
+  Eye,
+  Save,
+  Trash2,
   Globe,
   Shield,
   Link2,
@@ -35,6 +42,7 @@ import {
   Users,
   Code,
   RefreshCw,
+  RotateCcw,
   Rss,
   Key,
   FileText,
@@ -751,7 +759,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const [templateCssMap, setTemplateCssMap] = useState<Record<string, string>>({});
   const templateFetchRef = useRef<Set<string>>(new Set());
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [deleteArmed, setDeleteArmed] = useState(false);
   const [revision, setRevision] = useState(() =>
     statusPage.updatedAt ? new Date(statusPage.updatedAt).toISOString() : undefined
   );
@@ -832,23 +839,28 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   type SidebarItem = {
     id: string;
     label: string;
-    icon?: string;
+    icon?: React.ReactNode;
     badge?: number;
     link?: string;
   };
 
   // Sidebar items - defined after announcements state
   const sidebarItems: SidebarItem[] = [
-    { id: 'general', label: 'General', icon: '⚙️' },
-    { id: 'appearance', label: 'Appearance', icon: '🎨' },
-    { id: 'services', label: 'Services', icon: '🔧' },
-    { id: 'privacy', label: 'Privacy & Data', icon: '🔒' },
-    { id: 'content', label: 'Content', icon: '📝' },
-    { id: 'announcements', label: 'Announcements', icon: '📢', badge: announcements.length },
-    { id: 'integrations', label: 'Integrations', icon: '🔌' },
-    { id: 'subscribers', label: 'Subscribers', icon: '👥' },
-    { id: 'customization', label: 'Custom CSS', icon: '🖌️' },
-    { id: 'advanced', label: 'Advanced', icon: '⚡' },
+    { id: 'general', label: 'General', icon: <Settings className="w-3.5 h-3.5" /> },
+    { id: 'appearance', label: 'Appearance', icon: <Palette className="w-3.5 h-3.5" /> },
+    { id: 'services', label: 'Services', icon: <Wrench className="w-3.5 h-3.5" /> },
+    { id: 'privacy', label: 'Privacy & Data', icon: <Shield className="w-3.5 h-3.5" /> },
+    { id: 'content', label: 'Content', icon: <FileText className="w-3.5 h-3.5" /> },
+    {
+      id: 'announcements',
+      label: 'Announcements',
+      icon: <Megaphone className="w-3.5 h-3.5" />,
+      badge: announcements.length,
+    },
+    { id: 'integrations', label: 'Integrations', icon: <Link2 className="w-3.5 h-3.5" /> },
+    { id: 'subscribers', label: 'Subscribers', icon: <Users className="w-3.5 h-3.5" /> },
+    { id: 'customization', label: 'Custom CSS', icon: <Code className="w-3.5 h-3.5" /> },
+    { id: 'advanced', label: 'Advanced', icon: <Sliders className="w-3.5 h-3.5" /> },
   ];
 
   const getInitialSelectedServices = () => new Set(statusPage.services.map(s => s.serviceId));
@@ -1606,41 +1618,53 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     authProvider: privacySettings.authProvider || null,
   };
 
-  const previewData = {
-    statusPage: {
-      name: formData.name,
-      contactEmail: formData.contactEmail || null,
-      contactUrl: formData.contactUrl || null,
-    },
-    branding: previewBranding,
-    services: previewServices,
-    statusPageServices: previewStatusPageServices,
-    announcements: previewAnnouncements.map((a: any) => ({
-      ...a,
-      startDate: a.startDate.toISOString(),
-      endDate: a.endDate ? a.endDate.toISOString() : null,
-      affectedServices: buildAnnouncementAffectedServices(a.affectedServiceIds),
-    })),
-    uptime90: previewUptime90,
-    incidents: [],
-    showServices: formData.showServices,
-    showIncidents: formData.showIncidents,
-    showMetrics: formData.showMetrics,
-    showSubscribe: formData.showSubscribe,
-    showServicesByRegion: formData.showServicesByRegion,
-    showServiceOwners: formData.showServiceOwners,
-    showServiceSlaTier: formData.showServiceSlaTier,
-    showChangelog: formData.showChangelog,
-    showRegionHeatmap: formData.showRegionHeatmap,
-    showPostIncidentReview: formData.showPostIncidentReview,
-    showHeader: formData.showHeader,
-    showFooter: formData.showFooter,
-    footerText: formData.footerText || null,
-    showRssLink: formData.showRssLink,
-    showApiLink: formData.showApiLink,
-    layout: formData.layout,
-    privacySettings: previewPrivacySettings,
-  };
+  const previewData = useMemo(() => {
+    if (!showPreview) return null;
+    return {
+      statusPage: {
+        name: formData.name,
+        contactEmail: formData.contactEmail || null,
+        contactUrl: formData.contactUrl || null,
+      },
+      branding: previewBranding,
+      services: previewServices,
+      statusPageServices: previewStatusPageServices,
+      announcements: previewAnnouncements.map((a: any) => ({
+        ...a,
+        startDate: a.startDate.toISOString(),
+        endDate: a.endDate ? a.endDate.toISOString() : null,
+        affectedServices: buildAnnouncementAffectedServices(a.affectedServiceIds),
+      })),
+      uptime90: previewUptime90,
+      incidents: [],
+      showServices: formData.showServices,
+      showIncidents: formData.showIncidents,
+      showMetrics: formData.showMetrics,
+      showSubscribe: formData.showSubscribe,
+      showServicesByRegion: formData.showServicesByRegion,
+      showServiceOwners: formData.showServiceOwners,
+      showServiceSlaTier: formData.showServiceSlaTier,
+      showChangelog: formData.showChangelog,
+      showRegionHeatmap: formData.showRegionHeatmap,
+      showPostIncidentReview: formData.showPostIncidentReview,
+      showHeader: formData.showHeader,
+      showFooter: formData.showFooter,
+      footerText: formData.footerText || null,
+      showRssLink: formData.showRssLink,
+      showApiLink: formData.showApiLink,
+      layout: formData.layout,
+      privacySettings: previewPrivacySettings,
+    };
+  }, [
+    showPreview,
+    formData,
+    previewBranding,
+    previewServices,
+    previewStatusPageServices,
+    previewAnnouncements,
+    previewUptime90,
+    previewPrivacySettings,
+  ]);
 
   return (
     <form onSubmit={handleSubmit}>
@@ -1669,9 +1693,17 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                   className={`status-page-config-tab ${isActive ? 'is-active' : ''}`}
                 >
                   {item.icon && <span className="status-page-config-tab-icon">{item.icon}</span>}
-                  {item.label}
+                  <span>{item.label}</span>
                   {item.badge ? (
-                    <Badge variant={isActive ? 'info' : 'neutral'} size="xs" className="ml-auto">
+                    <Badge
+                      variant={isActive ? 'default' : 'neutral'}
+                      size="xs"
+                      className={`ml-1 px-1.5 py-0 text-[10px] font-bold ${
+                        isActive
+                          ? 'bg-primary-foreground text-primary'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
                       {item.badge}
                     </Badge>
                   ) : null}
@@ -1679,15 +1711,49 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
               );
             })}
           </div>
-          <div className="status-page-config-tabs-actions">
-            <Button
+          <div className="status-page-config-tabs-actions shrink-0">
+            <button
               type="button"
-              variant="secondary"
               onClick={() => setShowPreview(!showPreview)}
-              className="status-page-config-preview-toggle"
+              className={cn(
+                'status-page-config-preview-toggle group inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border cursor-pointer select-none',
+                showPreview
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm ring-2 ring-primary/25 hover:bg-primary/95'
+                  : 'bg-background hover:bg-muted text-foreground border-border hover:border-border/80 shadow-xs hover:shadow-sm'
+              )}
+              aria-pressed={showPreview}
+              title={
+                showPreview ? 'Hide live status page preview' : 'Show live status page preview'
+              }
             >
-              {showPreview ? 'Hide Preview' : 'Show Preview'}
-            </Button>
+              <span
+                className={cn(
+                  'w-2 h-2 rounded-full transition-all duration-300 shrink-0',
+                  showPreview
+                    ? 'bg-emerald-400 animate-pulse ring-2 ring-emerald-400/40'
+                    : 'bg-muted-foreground/40 group-hover:bg-primary'
+                )}
+              />
+              <Eye
+                className={cn(
+                  'w-3.5 h-3.5 shrink-0 transition-colors',
+                  showPreview ? 'text-primary-foreground' : 'text-primary'
+                )}
+              />
+              <span className="font-semibold tracking-tight">
+                {showPreview ? 'Hide Preview' : 'Show Preview'}
+              </span>
+              <span
+                className={cn(
+                  'text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full transition-colors leading-none',
+                  showPreview
+                    ? 'bg-primary-foreground/20 text-primary-foreground'
+                    : 'bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary'
+                )}
+              >
+                {showPreview ? 'Live' : 'Off'}
+              </span>
+            </button>
           </div>
         </div>
 
@@ -1873,39 +1939,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                         />
                       </div>
                     </StatusPageSectionCard>
-
-                    <DangerZoneCard
-                      title="Delete Status Page"
-                      description={`Permanently removes this page and its page-specific subscriptions, announcements, tokens, mappings, and webhooks. Shared services and incidents are not deleted.${statusPage.isDefault ? ' If other pages exist, make one of them the default first.' : ''}`}
-                    >
-                      <div className="pt-2">
-                        {!deleteArmed ? (
-                          <Button
-                            type="button"
-                            variant="danger"
-                            onClick={() => setDeleteArmed(true)}
-                          >
-                            Delete status page
-                          </Button>
-                        ) : (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm text-red-700 dark:text-red-400 font-medium">
-                              This cannot be undone. Confirm deletion.
-                            </span>
-                            <Button type="button" variant="danger" onClick={handleDeletePage}>
-                              Confirm permanent deletion
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={() => setDeleteArmed(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </DangerZoneCard>
                   </div>
                 )}
 
@@ -2099,6 +2132,25 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                       title="Color theme"
                       description="Start with an accessible preset, then adjust individual brand colors if needed. The preview uses the same color engine as the public page."
                       icon={<Palette className="w-5 h-5 text-primary" />}
+                      action={
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              primaryColor: STATUS_PAGE_COLOR_PRESETS[0].primary,
+                              backgroundColor: STATUS_PAGE_COLOR_PRESETS[0].background,
+                              textColor: STATUS_PAGE_COLOR_PRESETS[0].text,
+                            })
+                          }
+                          className="text-xs gap-1.5 h-8 px-2.5 shadow-xs"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Reset to default</span>
+                        </Button>
+                      }
                     >
                       {/* Quick Presets */}
                       <div style={{ marginBottom: 'var(--spacing-5)' }}>
@@ -2143,9 +2195,12 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                                   padding: '8px 12px',
                                   borderRadius: 'var(--radius-md)',
                                   border: isActive
-                                    ? '2px solid var(--primary-color)'
-                                    : '1px solid #e2e8f0',
-                                  background: isActive ? '#f8fafc' : '#ffffff',
+                                    ? '2px solid hsl(var(--primary))'
+                                    : '1px solid hsl(var(--border))',
+                                  background: isActive
+                                    ? 'hsl(var(--primary) / 0.08)'
+                                    : 'hsl(var(--card))',
+                                  color: isActive ? 'hsl(var(--primary))' : 'inherit',
                                   cursor: 'pointer',
                                   textAlign: 'left',
                                   transition: 'all 0.15s ease',
@@ -2327,16 +2382,12 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
 
                       <div
                         role="status"
-                        style={{
-                          marginTop: 'var(--spacing-4)',
-                          padding: 'var(--spacing-3)',
-                          border: '1px solid #dbeafe',
-                          borderRadius: 'var(--radius-md)',
-                          background: '#eff6ff',
-                          color: '#1e3a8a',
-                          fontSize: 'var(--font-size-xs)',
-                          lineHeight: 1.5,
-                        }}
+                        className={cn(
+                          'mt-4 p-3 rounded-lg text-xs leading-relaxed border',
+                          textContrastAdjusted
+                            ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
+                            : 'bg-primary/5 border-primary/20 text-foreground'
+                        )}
                       >
                         {textContrastAdjusted
                           ? `Readable contrast applied: public text will render as ${effectiveColorTheme.textColor}.`
@@ -2712,17 +2763,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                               />
                             </div>
                             {formData.uptimeGoodThreshold > formData.uptimeExcellentThreshold && (
-                              <div
-                                style={{
-                                  marginTop: 'var(--spacing-3)',
-                                  padding: 'var(--spacing-2) var(--spacing-3)',
-                                  background: '#fef2f2',
-                                  border: '1px solid #fecaca',
-                                  borderRadius: 'var(--radius-sm)',
-                                  fontSize: 'var(--font-size-xs)',
-                                  color: '#dc2626',
-                                }}
-                              >
+                              <div className="mt-3 px-3 py-2 rounded-md text-xs font-medium bg-destructive/10 border border-destructive/25 text-destructive">
                                 ⚠️ Good threshold must be less than or equal to Excellent threshold
                               </div>
                             )}
@@ -4146,29 +4187,22 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                 {publication && publication.status !== 'LIVE' && (
                   <div
                     role={publication.status === 'FAILED' ? 'alert' : 'status'}
-                    style={{
-                      marginBottom: 'var(--spacing-4)',
-                      padding: 'var(--spacing-3)',
-                      borderRadius: 'var(--radius-md)',
-                      background: publication.status === 'FAILED' ? '#fffbeb' : '#eff6ff',
-                      border: `1px solid ${publication.status === 'FAILED' ? '#fcd34d' : '#bfdbfe'}`,
-                      color: publication.status === 'FAILED' ? '#78350f' : '#1e3a8a',
-                      display: 'flex',
-                      gap: 'var(--spacing-3)',
-                      alignItems: 'flex-start',
-                      justifyContent: 'space-between',
-                      flexWrap: 'wrap',
-                    }}
+                    className={cn(
+                      'mb-4 p-3 rounded-lg border flex items-start justify-between gap-3 flex-wrap text-sm',
+                      publication.status === 'FAILED'
+                        ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
+                        : 'bg-primary/5 border-primary/20 text-foreground'
+                    )}
                   >
                     <div>
-                      <strong style={{ display: 'block', marginBottom: 2 }}>
+                      <strong className="block mb-0.5">
                         {publication.status === 'FAILED'
                           ? '⚠ Publication failed'
                           : publication.status === 'PUBLISHING'
                             ? '◐ Publishing'
                             : '○ Disabled'}
                       </strong>
-                      <span style={{ fontSize: '0.875rem' }}>
+                      <span className="text-xs text-muted-foreground">
                         {publication.status === 'FAILED'
                           ? 'Your settings were saved but could not be published.' +
                             (publication.stale
@@ -4200,36 +4234,59 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
             </div>
             {/* Sections with independent controls persist through their own APIs. */}
             {!['announcements', 'integrations', 'subscribers'].includes(activeSection) && (
-              <div
-                className="status-page-config-sticky-bar"
-                style={{
-                  display: 'flex',
-                  gap: 'var(--spacing-3)',
-                  justifyContent: 'flex-end',
-                  alignItems: 'center',
-                  padding: 'var(--spacing-4) var(--spacing-6)',
-                  borderTop: '1px solid #e5e7eb',
-                  background: 'linear-gradient(to right, #ffffff, #fafafa)',
-                  boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.05)',
-                }}
-              >
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={handleDiscardChanges}
-                  disabled={isPending}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" variant="primary" isLoading={isPending}>
-                  💾 Save Settings
-                </Button>
+              <div className="status-page-config-sticky-bar flex items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-card/95 backdrop-blur-md shadow-lg">
+                <div className="flex items-center gap-3">
+                  <DeleteConfirmDialog
+                    title="Delete Status Page"
+                    description={`Permanently removes this page and its page-specific subscriptions, announcements, tokens, mappings, and webhooks. Shared services and incidents are not deleted.${statusPage.isDefault ? ' If other pages exist, make one of them the default first.' : ''}`}
+                    requireMatchText="delete"
+                    confirmText="Delete status page"
+                    onConfirm={handleDeletePage}
+                    trigger={
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        disabled={isPending}
+                        className="text-xs font-semibold gap-1.5 shadow-xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete status page</span>
+                      </Button>
+                    }
+                  />
+                  <div className="text-xs text-muted-foreground hidden md:block">
+                    Unsaved modifications apply to this status page configuration.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 ml-auto">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDiscardChanges}
+                    disabled={isPending}
+                    className="text-xs font-semibold shadow-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    isLoading={isPending}
+                    className="text-xs font-semibold gap-1.5 shadow-sm"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Settings</span>
+                  </Button>
+                </div>
               </div>
             )}
           </div>
 
           {/* Preview Panel */}
-          {showPreview && (
+          {showPreview && previewData && (
             <div
               className="status-page-config-preview"
               style={{
