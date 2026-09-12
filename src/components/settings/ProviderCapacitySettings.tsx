@@ -41,6 +41,10 @@ function channelForProviderKey(providerKey: string): string {
       return 'WHATSAPP';
     case 'web-push':
       return 'PUSH';
+    case 'slack':
+      return 'SLACK';
+    case 'webhook':
+      return 'WEBHOOK';
     default:
       return 'EMAIL';
   }

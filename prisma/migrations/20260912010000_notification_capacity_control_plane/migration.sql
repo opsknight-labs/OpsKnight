@@ -38,5 +38,4 @@ CREATE TABLE "NotificationRuntimeSettings" (
 
 -- CreateIndex
 CREATE UNIQUE INDEX "NotificationProviderCapacity_provider_channel_key" ON "NotificationProviderCapacity"("provider", "channel");
-CREATE INDEX "NotificationProviderCapacity_provider_channel_idx" ON "NotificationProviderCapacity"("provider", "channel");
 CREATE INDEX "NotificationProviderCapacity_updatedAt_idx" ON "NotificationProviderCapacity"("updatedAt");

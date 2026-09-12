@@ -180,20 +180,57 @@ function staleIntentReason(
   return null;
 }
 
+async function resolveProviderKey(
+  channel: NotificationDeliveryChannel,
+  incident: IncidentDeliveryContext
+): Promise<string> {
+  if (channel === 'WEBHOOK') {
+    const url = incident.service?.webhookUrl;
+    if (!url) return 'service-webhook';
+    try {
+      return new URL(url).origin;
+    } catch {
+      return 'service-webhook';
+    }
+  }
+  if (channel === 'SLACK') return 'default';
+  // EMAIL / SMS / PUSH / WHATSAPP — resolve the actual configured provider so
+  // capacity (EMAIL:ses vs EMAIL:default) matches the central control plane.
+  try {
+    if (channel === 'EMAIL') {
+      const { getAllConfiguredEmailProviders } = await import('./notification-providers');
+      const configs = await getAllConfiguredEmailProviders();
+      const provider = configs.find(c => c.enabled && c.provider)?.provider;
+      return provider || 'default';
+    }
+    if (channel === 'SMS') {
+      const { getSMSConfig } = await import('./notification-providers');
+      const cfg = await getSMSConfig();
+      return cfg.provider || 'default';
+    }
+    if (channel === 'WHATSAPP') {
+      const { getWhatsAppConfig } = await import('./notification-providers');
+      const cfg = await getWhatsAppConfig();
+      return cfg.provider || 'default';
+    }
+    if (channel === 'PUSH') {
+      const { getPushConfig } = await import('./notification-providers');
+      const cfg = await getPushConfig();
+      return cfg.provider || 'default';
+    }
+  } catch {
+    // Provider resolution must not block delivery; fall back to default bucket.
+  }
+  return 'default';
+}
+
 async function providerAdmission(
   input: NotificationAttemptInput,
   incident: IncidentDeliveryContext
 ): Promise<NotificationAttemptResult | null> {
   if (input.channel === 'SLACK') return null;
   const scope = input.channel as ProviderAdmissionScope;
-  let providerKey = 'default';
-  if (input.channel === 'WEBHOOK' && incident.service?.webhookUrl) {
-    try {
-      providerKey = new URL(incident.service.webhookUrl).origin;
-    } catch {
-      providerKey = 'service-webhook';
-    }
-  }
+  const providerKey = await resolveProviderKey(input.channel, incident);
   const admission = await acquireProviderAdmission(scope, providerKey);
   if (admission.allowed) return null;
   return {

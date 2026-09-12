@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 
 type Capacity = {
+  provider?: string;
   channel: string;
   configuredRatePerSecond: number;
   effectiveRatePerSecond: number;
@@ -289,9 +290,11 @@ export default function NotificationCapacityOverview({
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {capacities.map(item => (
-            <div key={item.channel} className="rounded-lg border border-border/70 bg-muted/20 p-3">
+            <div key={`${item.channel}:${item.provider ?? 'default'}`} className="rounded-lg border border-border/70 bg-muted/20 p-3">
               <div className="flex items-center justify-between gap-2">
-                <strong className="text-sm">{item.channel}</strong>
+                <strong className="text-sm">
+                  {!item.provider || item.provider === 'default' ? item.channel : `${item.provider} · ${item.channel}`}
+                </strong>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {item.mode ? <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider">{item.mode}</Badge> : null}
                   {sourceBadge(item.source)}

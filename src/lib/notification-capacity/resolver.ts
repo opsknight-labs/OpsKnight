@@ -41,6 +41,20 @@ function boundedQuotaBlockSize(env: NodeJS.ProcessEnv): number {
 
 const adaptiveRates = new Map<string, { rate: number; changedAt: number }>();
 const ADAPTIVE_RECOVERY_INTERVAL_MS = 5_000;
+const ADAPTIVE_MAX_ENTRIES = 1024;
+let adaptiveEvictionsTotal = 0;
+
+function setAdaptiveRate(key: string, rate: number, nowMs: number) {
+  if (adaptiveRates.has(key)) adaptiveRates.delete(key);
+  else if (adaptiveRates.size >= ADAPTIVE_MAX_ENTRIES) {
+    const oldest = adaptiveRates.keys().next().value as string | undefined;
+    if (oldest !== undefined) {
+      adaptiveRates.delete(oldest);
+      adaptiveEvictionsTotal++;
+    }
+  }
+  adaptiveRates.set(key, { rate, changedAt: nowMs });
+}
 
 function capacityKey(channel: string, provider: string): string {
   return `${channel}:${provider}`;
@@ -58,7 +72,7 @@ function recoverAdaptiveRate(key: string, hardRate: number, configured: number, 
     adaptiveRates.delete(key);
     return hardRate;
   }
-  adaptiveRates.set(key, { rate: recovered, changedAt: state.changedAt + steps * ADAPTIVE_RECOVERY_INTERVAL_MS });
+  setAdaptiveRate(key, recovered, state.changedAt + steps * ADAPTIVE_RECOVERY_INTERVAL_MS);
   return recovered;
 }
 
@@ -245,12 +259,24 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
   const envHighRaw = env.NOTIFICATION_BULK_QUEUE_HIGH_WATERMARK;
   const hasEnv = Boolean(envLowRaw || envHighRaw);
   if (hasEnv) {
-    const bounded = (value: string | undefined, fallback: number) => {
+    const boundedLow = (value: string | undefined, fallback: number) => {
       const parsed = Number(value);
-      return Number.isSafeInteger(parsed) && parsed >= 100 && parsed <= 1_000_000 ? parsed : fallback;
+      return Number.isSafeInteger(parsed) &&
+        parsed >= HARD_LIMITS.queueLowWatermark.min &&
+        parsed <= HARD_LIMITS.queueLowWatermark.max
+        ? parsed
+        : fallback;
     };
-    const low = bounded(envLowRaw, DEFAULT_BULK_QUEUE_LOW_WATERMARK);
-    const high = bounded(envHighRaw, DEFAULT_BULK_QUEUE_HIGH_WATERMARK);
+    const boundedHigh = (value: string | undefined, fallback: number) => {
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) &&
+        parsed >= HARD_LIMITS.queueHighWatermark.min &&
+        parsed <= HARD_LIMITS.queueHighWatermark.max
+        ? parsed
+        : fallback;
+    };
+    const low = boundedLow(envLowRaw, DEFAULT_BULK_QUEUE_LOW_WATERMARK);
+    const high = boundedHigh(envHighRaw, DEFAULT_BULK_QUEUE_HIGH_WATERMARK);
     return { low, high: Math.max(low, high), source: 'ENV', revision: null };
   }
   return {
@@ -273,7 +299,7 @@ export function recordCapacityPressure(channel: NotificationChannel, provider: s
   const adaptiveCurrent = adaptiveRates.get(effectiveKey)?.rate;
   const current = adaptiveCurrent ?? cached?.effectiveRatePerSecond ?? configured;
   const reduced = Math.max(1, Math.floor(current / 2));
-  adaptiveRates.set(effectiveKey, { rate: reduced, changedAt: nowMs });
+  setAdaptiveRate(effectiveKey, reduced, nowMs);
   // Invalidate so the next admission recomputes effective.
   capacityCache.invalidate(effectiveKey);
   return reduced;
@@ -292,13 +318,18 @@ export function recordHealthyCapacity(channel: NotificationChannel, provider: st
   const effective = adaptiveCurrent ?? cached?.effectiveRatePerSecond ?? configured;
   const increased = Math.min(configured, effective + Math.max(1, Math.ceil(configured * 0.05)));
   if (increased >= configured) adaptiveRates.delete(effectiveKey);
-  else adaptiveRates.set(effectiveKey, { rate: increased, changedAt: nowMs });
+  else setAdaptiveRate(effectiveKey, increased, nowMs);
   capacityCache.invalidate(effectiveKey);
   return increased;
 }
 
+export function getAdaptiveRatesMetrics(): { entries: number; evictionsTotal: number } {
+  return { entries: adaptiveRates.size, evictionsTotal: adaptiveEvictionsTotal };
+}
+
 export function resetCapacityResolverForTests() {
   adaptiveRates.clear();
+  adaptiveEvictionsTotal = 0;
   capacityCache.invalidate();
   runtimeCache.invalidate();
 }

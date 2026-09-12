@@ -48,16 +48,35 @@ export default async function NotificationOperationsPage() {
     prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } }),
     prisma.notificationProviderCapacity.findMany({ orderBy: [{ channel: 'asc' }, { provider: 'asc' }] }),
   ]);
-  // Show actual configured provider/channel pairs rather than six synthetic `default` providers.
-  // WEBHOOK:default and SLACK:default act as logical capacity profiles governing per-origin/per-channel buckets.
-  let effectiveCapacities: Awaited<ReturnType<typeof getEffectiveCapacity>>[];
-  if (storedProviderCapacities.length > 0) {
-    effectiveCapacities = await Promise.all(
-      storedProviderCapacities.map(row => getEffectiveCapacity({ channel: row.channel as never, provider: row.provider }))
-    );
-  } else {
-    effectiveCapacities = await Promise.all(channels.map(channel => getEffectiveCapacity({ channel: channel as never, provider: 'default' })));
+  // Union inventory: never hide channels. Stored rows are authoritative, but missing
+  // channels get a synthetic `default` entry so operators always see all six lanes.
+  // WEBHOOK:default / SLACK:default are logical profiles governing per-origin buckets.
+  const seen = new Set(storedProviderCapacities.map(r => `${r.channel}:${r.provider}`));
+  const inventory: Array<{ channel: (typeof channels)[number]; provider: string }> = [
+    ...storedProviderCapacities.map(r => ({ channel: r.channel as (typeof channels)[number], provider: r.provider })),
+  ];
+  for (const channel of channels) {
+    const hasChannel = storedProviderCapacities.some(r => r.channel === channel);
+    if (!hasChannel) {
+      const key = `${channel}:default`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        inventory.push({ channel, provider: 'default' });
+      }
+    }
   }
+  // Ensure logical defaults exist even when channel already has a specific provider
+  // (e.g. EMAIL:resend present but EMAIL:default not — WEBHOOK/SLACK only use default).
+  for (const ch of ['SLACK', 'WEBHOOK'] as const) {
+    const key = `${ch}:default`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      inventory.push({ channel: ch, provider: 'default' });
+    }
+  }
+  const effectiveCapacities = await Promise.all(
+    inventory.map(({ channel, provider }) => getEffectiveCapacity({ channel: channel as never, provider }))
+  );
   const watermarks = await getEffectiveWatermarks();
   const controlValue =
     control?.value && typeof control.value === 'object' && !Array.isArray(control.value)
@@ -129,6 +148,7 @@ export default async function NotificationOperationsPage() {
 
       <NotificationCapacityOverview
         capacities={effectiveCapacities.map(c => ({
+          provider: c.provider,
           channel: c.channel,
           configuredRatePerSecond: c.configuredRatePerSecond,
           effectiveRatePerSecond: c.effectiveRatePerSecond,

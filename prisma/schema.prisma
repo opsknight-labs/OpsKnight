@@ -1431,7 +1431,6 @@ model NotificationProviderCapacity {
   updatedAt            DateTime                 @updatedAt
 
   @@unique([provider, channel])
-  @@index([provider, channel])
   @@index([updatedAt])
 }
 

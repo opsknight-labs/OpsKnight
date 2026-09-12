@@ -1,8 +1,5 @@
 'use client';
 
-import Image from 'next/image';
-import { useState } from 'react';
-
 interface StatusPageFooterProps {
   footerText?: string | null;
   links: {
@@ -176,7 +173,6 @@ function getLinkIcon(label: string) {
 
 export default function StatusPageFooter({ footerText, links }: StatusPageFooterProps) {
   const currentYear = new Date().getFullYear();
-  const [logoSrc, setLogoSrc] = useState('/logo.svg');
   const hasResources = Boolean(links?.resources && links.resources.length > 0);
   const hasSupport = Boolean(links?.support && links.support.length > 0);
   const hasAnyLinks = hasResources || hasSupport;
@@ -249,15 +245,20 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
             aria-label="Powered by OpsKnight Incident Management & Status Pages"
           >
             <span className="status-site-footer__brand-lead">Powered by</span>
-            <Image
-              src={logoSrc}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.svg"
               alt="OpsKnight"
               width={26}
               height={26}
               className="status-site-footer__brand-logo"
-              unoptimized={logoSrc.endsWith('.svg')}
-              onError={() => {
-                if (logoSrc !== '/logo.png') setLogoSrc('/logo.png');
+              loading="lazy"
+              decoding="async"
+              onError={e => {
+                const target = e.target as HTMLImageElement;
+                if (!target.src.endsWith('/logo.png')) {
+                  target.src = '/logo.png';
+                }
               }}
             />
             <span className="status-site-footer__brand-name">OpsKnight</span>

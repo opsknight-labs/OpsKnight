@@ -39,10 +39,10 @@ function createCache<T>({ maxEntries }: { maxEntries?: number } = {}) {
       return entry.value;
     },
     set(key: string, value: T, now: number, ttl = CAPACITY_TTL_MS) {
+      // Delete existing key first so eviction counts its slot as free on update.
+      if (store.has(key)) store.delete(key);
       sweepExpired(now);
       evictIfNeeded();
-      // Normalize: ensure re-insertion refreshes position
-      if (store.has(key)) store.delete(key);
       store.set(key, { value, expiresAt: now + ttl });
     },
     invalidate(key?: string) {

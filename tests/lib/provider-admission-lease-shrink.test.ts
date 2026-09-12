@@ -91,13 +91,16 @@ describe('provider-admission lease-shrink regression', () => {
     if (first.allowed) await releaseProviderConcurrency(first.leaseKey);
   });
 
-  it('operations page uses real provider/channel pairs (stored rows first, not synthetic default only)', async () => {
+  it('operations page uses union inventory (stored rows + synthetic defaults so no channel is hidden)', async () => {
     const src = await import('node:fs').then(m => m.readFileSync('src/app/(app)/settings/notifications/operations/page.tsx', 'utf8'));
     expect(src).toContain('storedProviderCapacities');
     expect(src).toContain('getEffectiveCapacity');
-    // Primary branch must map stored rows; fallback to channels:default only when no rows exist.
+    // Union inventory: stored rows are authoritative but missing lanes get a synthetic `default` entry
+    // so the operations page never hides channels.
+    expect(src).toContain('inventory');
     expect(src).toContain('storedProviderCapacities.map');
-    expect(src).toContain('storedProviderCapacities.length > 0');
-    expect(src).toMatch(/storedProviderCapacities\.map\(row\s*=>\s*getEffectiveCapacity/);
+    expect(src).toMatch(/inventory\.map\(\(\{\s*channel,\s*provider\s*\}\)\s*=>\s*getEffectiveCapacity/);
+    // Must loop over the channels constant to synthesize missing defaults
+    expect(src).toMatch(/for\s*\(\s*const\s+channel\s+of\s+channels\s*\)/);
   });
 });
