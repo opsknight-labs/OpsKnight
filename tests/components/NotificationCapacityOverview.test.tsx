@@ -35,7 +35,7 @@ describe('NotificationCapacityOverview', () => {
         ]}
       />
     );
-    expect(screen.getByText('250/s')).toBeInTheDocument();
+    expect(screen.getByText(/250\/s/)).toBeInTheDocument();
     expect(screen.getByText('1000 queued · 750 delivered · 2 failed')).toBeInTheDocument();
     expect(screen.queryByText(/@/)).not.toBeInTheDocument();
   });

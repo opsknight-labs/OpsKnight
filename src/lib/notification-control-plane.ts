@@ -1519,37 +1519,7 @@ export async function deliverCentralNotification(
     return { success: true, claimed: true };
   }
 
-  let admission;
-  try {
-    admission = await providerAdmission(payload, candidate.trafficClass);
-  } catch (error) {
-    const errorMessage = safeError(error);
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'PENDING',
-        failedAt: null,
-        lastAttemptAt: null,
-        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
-        errorMsg: `Provider admission unavailable: ${errorMessage}`,
-      },
-    });
-    return { success: false, claimed: true, error: errorMessage };
-  }
-  if (!admission.allowed) {
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'PENDING',
-        failedAt: null,
-        lastAttemptAt: null,
-        nextAttemptAt: admission.retryAt,
-        errorMsg: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
-      },
-    });
-    return { success: false, claimed: true };
-  }
-
+  // Acquire concurrency first so a later rate rejection can release the held slot.
   const identity = providerAdmissionIdentity(payload);
   let concurrency;
   try {
@@ -1580,6 +1550,39 @@ export async function deliverCentralNotification(
         lastAttemptAt: null,
         nextAttemptAt: concurrency.retryAt,
         errorMsg: `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`,
+      },
+    });
+    return { success: false, claimed: true };
+  }
+
+  let admission;
+  try {
+    admission = await providerAdmission(payload, candidate.trafficClass);
+  } catch (error) {
+    const errorMessage = safeError(error);
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    await prisma.notification.updateMany({
+      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      data: {
+        status: 'PENDING',
+        failedAt: null,
+        lastAttemptAt: null,
+        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+        errorMsg: `Provider admission unavailable: ${errorMessage}`,
+      },
+    });
+    return { success: false, claimed: true, error: errorMessage };
+  }
+  if (!admission.allowed) {
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    await prisma.notification.updateMany({
+      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+      data: {
+        status: 'PENDING',
+        failedAt: null,
+        lastAttemptAt: null,
+        nextAttemptAt: admission.retryAt,
+        errorMsg: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
       },
     });
     return { success: false, claimed: true };
