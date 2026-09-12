@@ -58,6 +58,8 @@ vi.mock('@/lib/prisma', () => ({
     },
     oidcIdentity: {
       findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     oidcLinkingApproval: {
       findFirst: vi.fn(),
@@ -138,7 +140,33 @@ describe('Auth session lifecycle and hardening', () => {
 
       expect(decoded).toBeNull();
     });
+
+    it('omits transient SECURITY_LOOKUP_UNAVAILABLE error from encrypted JWE cookie payload', async () => {
+      const token = {
+        sub: 'user-123',
+        email: 'user@example.com',
+        role: 'ADMIN',
+        error: 'SECURITY_LOOKUP_UNAVAILABLE',
+      };
+
+      const encoded = await customJwtEncode({
+        token,
+        secret,
+        maxAge: 3600,
+      });
+
+      const decoded = await customJwtDecode({
+        token: encoded,
+        secret,
+      });
+
+      expect(decoded).not.toBeNull();
+      expect(decoded?.sub).toBe('user-123');
+      expect(decoded?.role).toBe('ADMIN');
+      expect(decoded?.error).toBeUndefined();
+    });
   });
+
 
   describe('Finding 2: Idle timeout and user activity tracking', () => {
     it('does not bump lastActivityAt on passive reads', async () => {
@@ -376,9 +404,18 @@ describe('Auth session lifecycle and hardening', () => {
         trigger: 'update',
       });
 
-      expect((result as any).error).toBe('SECURITY_LOOKUP_UNAVAILABLE');
-      expect((result as any).sub).toBeUndefined();
-      expect((result as any).role).toBeUndefined();
+      const recordResult = result as unknown as Record<string, unknown>;
+      expect(recordResult.error).toBe('SECURITY_LOOKUP_UNAVAILABLE');
+      // Preserves sub so transient DB glitch does not destroy valid credentials permanently
+      expect(recordResult.sub).toBe('active-user');
+
+      // Request fails closed in session callback
+      const sessionCallback = options.callbacks?.session;
+      const sessionResult = await (sessionCallback as unknown as (params: unknown) => Promise<{ user?: unknown }>)({
+        session: { user: { id: 'active-user', name: 'Active User' }, expires: '' },
+        token: result,
+      });
+      expect(sessionResult.user).toBeUndefined();
     });
   });
 
@@ -423,6 +460,7 @@ describe('Auth session lifecycle and hardening', () => {
               token_endpoint: 'https://login.example.com/token',
               jwks_uri: 'https://login.example.com/jwks',
               id_token_signing_alg_values_supported: ['RS256'],
+              response_types_supported: ['code'],
             }),
             headers: { get: () => null },
           } as any;
@@ -467,6 +505,7 @@ describe('Auth session lifecycle and hardening', () => {
               token_endpoint: 'https://login.example.com/token',
               jwks_uri: 'https://login.example.com/jwks',
               id_token_signing_alg_values_supported: ['RS256'],
+              response_types_supported: ['code'],
             }),
             headers: { get: () => null },
           } as any;
@@ -518,6 +557,7 @@ describe('Auth session lifecycle and hardening', () => {
                 authorization_endpoint: 'https://login.example.com/auth',
                 token_endpoint: 'https://login.example.com/token',
                 jwks_uri: 'https://login.example.com/jwks',
+                response_types_supported: ['code'],
               }),
               headers: { get: () => null },
             } as any;
@@ -646,6 +686,7 @@ describe('Auth session lifecycle and hardening', () => {
               token_endpoint: 'https://login.example.com/token',
               jwks_uri: 'https://login.example.com/jwks',
               token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+              response_types_supported: ['code'],
             }),
             headers: { get: () => null },
           } as any;
@@ -794,6 +835,53 @@ describe('Auth session lifecycle and hardening', () => {
       expect(updateData.roleMapping).toEqual([
         { claim: 'groups', value: 'admins', role: 'ADMIN' },
       ]);
+    });
+
+    it('DOES increment configVersion when roleMapping rule order changes', async () => {
+      // Setup existing config with [admins -> ADMIN, responders -> RESPONDER]
+      vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+        ...baseExistingConfig,
+        roleMapping: [
+          { claim: 'groups', value: 'admins', role: 'ADMIN' },
+          { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+        ],
+      } as never);
+
+      // Reorder rules: [responders -> RESPONDER, admins -> ADMIN]
+      // Because role evaluation is first-match-wins, order change is semantically significant
+      const reordered = JSON.stringify([
+        { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+        { claim: 'groups', value: 'admins', role: 'ADMIN' },
+      ]);
+      const formData = createOidcFormData({ roleMapping: reordered });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+    });
+
+    it('does NOT increment configVersion when roleMapping rules have identical order with cosmetic whitespace', async () => {
+      vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+        ...baseExistingConfig,
+        roleMapping: [
+          { claim: 'groups', value: 'admins', role: 'ADMIN' },
+          { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+        ],
+      } as never);
+
+      const withWhitespace = JSON.stringify([
+        { claim: ' groups ', value: ' admins ', role: 'ADMIN' },
+        { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+      ]);
+      const formData = createOidcFormData({ roleMapping: withWhitespace });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toBeUndefined();
     });
 
     it('DOES increment configVersion when customScopes changes', async () => {

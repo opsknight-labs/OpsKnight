@@ -41,6 +41,11 @@ function emailDomain(claims: OidcClaims): string | null {
 function emailBoundary(claims: OidcClaims, allowedDomains: string[]): OrganizationPolicyResult {
   const allowed = normalizedAllowed(allowedDomains);
   if (allowed.size === 0) return { ok: true };
+  // If Allowed Domains is configured as an authorization security boundary,
+  // require email_verified === true to ensure verified mailbox/domain ownership.
+  if (claims.email_verified !== true) {
+    return { ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' };
+  }
   const domain = emailDomain(claims);
   return domain && allowed.has(domain)
     ? { ok: true }

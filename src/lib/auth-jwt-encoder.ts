@@ -33,7 +33,15 @@ export async function customJwtEncode(params: JWTEncodeParams): Promise<string> 
         ? token.exp
         : nowSeconds() + maxAge;
 
-  return await new EncryptJWT(token)
+  // Transient database lookup errors must fail closed for the current in-memory request,
+  // but must NEVER be persisted into the browser's session cookie. Persisting it poisons
+  // the cookie and locks the user in a middleware redirect loop even after the database recovers.
+  const payloadToEncrypt: Record<string, unknown> = { ...token };
+  if (payloadToEncrypt.error === 'SECURITY_LOOKUP_UNAVAILABLE') {
+    delete payloadToEncrypt.error;
+  }
+
+  return await new EncryptJWT(payloadToEncrypt)
     .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
     .setIssuedAt()
     .setExpirationTime(expirationTime)
