@@ -26,12 +26,18 @@ function isBulkQueueBackpressureError(error: unknown): boolean {
  * watermark. This avoids exhausting maxAttempts=5 while draining ~55min for
  * 20k targets at ~6s/page under queue saturation.
  *
- * Structural crash safety: bulk fanout jobs do NOT consume attempts on claim
- * (see claimPendingJobs — attempts increments only for non-bulk jobs). Actual
- * handler failures increment attempts via markJobFailed; backpressure just
- * defers (PENDING + delay) without touching attempts. Therefore a SIGKILL
- * between claim (no increment) and reschedule (no decrement) cannot burn the
- * logical failure budget — claiming is not a failure attempt.
+ * Crash semantics: bulk fanout jobs do NOT consume attempts on claim
+ * (see claimPendingJobs — attempts increments only for non-bulk jobs).
+ * - A caught handler failure increments attempts via markJobFailed.
+ * - A successful backpressure defer just sets PENDING+delay, no increment,
+ *   so 100 defers leave the failure budget unchanged and a SIGKILL
+ *   between claim and defer is reclaimable without a stale increment
+ *   only if the defer committed; otherwise the stale lease is treated
+ *   as an abnormal termination and the reclaim increments attempts.
+ * - A stale PROCESSING bulk lease (OOM/SIGKILL, 10m) increments attempts
+ *   on reclaim (PENDING unless attempts+1>=maxAttempts then FAILED),
+ *   so N consecutive crashes eventually fail the campaign instead of
+ *   retrying forever.
  */
 function bulkBackpressureDelayMs(): number {
   // Base 6s + jitter 0-2s avoids thundering-herd when 100 campaigns are
@@ -184,6 +190,17 @@ export async function claimPendingJobs(
   type?: JobType,
   excludeTypes: readonly JobType[] = []
 ): Promise<QueuedJob[]> {
+  // Bulk jobs do not increment attempts on claim (structural backpressure
+  // retry-neutrality). Stale bulk PROCESSING therefore would never reach
+  // attempts>=maxAttempts and would be reclaimable forever on OOM/sigkill.
+  // Increment a crash budget when reclaiming stale bulk execution: a real
+  // process crash burns one attempt; a successful backpressure defer is
+  // PENDING (not stale) and never hits this path, so 100 defers stay free.
+  await prisma
+    .$executeRaw(
+      Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING state after exceeding maxAttempts' ELSE NULL END WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`
+    )
+    .catch(err => logger.warn('[Queue] Failed to account stale bulk processing jobs', { error: err }));
   await prisma.$executeRaw(
     Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
   ).catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
