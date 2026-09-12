@@ -110,4 +110,31 @@ describe('Toast and Toaster Component Contract', () => {
       expect(screen.queryByText('Dismiss me')).toBeNull();
     });
   });
+
+  it('renders a visible cross icon inside the close button with high-contrast stroke', async () => {
+    render(<Toaster />);
+
+    notify.success('Visible cross test', { id: 'cross:1' });
+    await screen.findByText('Visible cross test');
+
+    const closeBtn = screen.getByRole('button', { name: /close/i });
+    expect(closeBtn).toBeDefined();
+
+    const closeIcon = screen.getByTestId('toast-close-icon');
+    expect(closeIcon).toBeDefined();
+    expect(closeIcon.getAttribute('class')).toContain('stroke-[2.25]');
+    expect(closeBtn.contains(closeIcon)).toBe(true);
+  });
+
+  it('supports dark mode theme configuration on the toaster', async () => {
+    render(<Toaster theme="dark" />);
+
+    notify.info('Dark mode toast', { id: 'dark:1' });
+    await screen.findByText('Dark mode toast');
+
+    const toaster = document.querySelector('[data-sonner-toaster]');
+    expect(toaster).toBeDefined();
+    expect(toaster?.getAttribute('data-sonner-theme')).toBe('dark');
+  });
 });
+
