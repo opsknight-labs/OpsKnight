@@ -151,8 +151,16 @@ export async function resolveIncidentClassification(
       scope: null,
     };
   }
-  const fallbackPolicy = policies.find(policy => policy.derivePriorityFromUrgency);
-  if (priority === null && !priorityCleared && fallbackPolicy) {
+  const fallbackPolicy = policies.find(
+    policy =>
+      policy.priorityFallbackMode === 'ENABLED' ||
+      policy.priorityFallbackMode === 'DISABLED' ||
+      (policy.priorityFallbackMode == null && policy.derivePriorityFromUrgency)
+  );
+  const fallbackEnabled =
+    fallbackPolicy?.priorityFallbackMode === 'ENABLED' ||
+    (fallbackPolicy?.priorityFallbackMode == null && fallbackPolicy?.derivePriorityFromUrgency);
+  if (priority === null && !priorityCleared && fallbackPolicy && fallbackEnabled) {
     priority = priorityFromUrgency(urgency);
     priorityProvenance = {
       source: 'URGENCY_FALLBACK',

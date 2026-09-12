@@ -192,7 +192,7 @@ async function enqueueSideEffects(
   effects: readonly EventSideEffect[],
   lifecycle?: LifecycleSideEffectContext,
   warRoom?: EventSideEffectPayload['warRoom'],
-  notBeforeByEffect?: Partial<Record<EventSideEffect, Date>>
+  notBeforeByEffect?: ReadonlyMap<EventSideEffect, Date>
 ): Promise<void> {
   if (effects.length === 0) return;
   const [eventOrderAt, incidentSnapshot] = await Promise.all([
@@ -207,10 +207,10 @@ async function enqueueSideEffects(
     data: effects.map(effect => ({
       type: 'SCHEDULED_TASK',
       status: 'PENDING',
-      scheduledAt:
-        notBeforeByEffect?.[effect] && notBeforeByEffect[effect]! > eventOrderAt
-          ? notBeforeByEffect[effect]
-          : eventOrderAt,
+      scheduledAt: (() => {
+        const notBefore = notBeforeByEffect?.get(effect);
+        return notBefore && notBefore > eventOrderAt ? notBefore : eventOrderAt;
+      })(),
       maxAttempts: 5,
       payload: {
         task: 'EVENT_SIDE_EFFECT',
@@ -283,9 +283,16 @@ export async function enqueueEventSideEffects(
   incidentId: string,
   responderNotBefore?: Date
 ): Promise<void> {
-  await enqueueSideEffects(tx, incidentId, getEventSideEffects(action), undefined, undefined, {
-    ...(responderNotBefore ? { TRIGGER_ESCALATION_NOTIFICATIONS: responderNotBefore } : {}),
-  });
+  await enqueueSideEffects(
+    tx,
+    incidentId,
+    getEventSideEffects(action),
+    undefined,
+    undefined,
+    responderNotBefore
+      ? new Map<EventSideEffect, Date>([['TRIGGER_ESCALATION_NOTIFICATIONS', responderNotBefore]])
+      : undefined
+  );
 }
 export async function enqueueIncidentUpdateSideEffects(
   tx: Prisma.TransactionClient,
@@ -311,11 +318,11 @@ export async function enqueueIncidentCreationSideEffects(
     getIncidentCreationSideEffects(input),
     undefined,
     undefined,
-    {
-      ...(input.responderNotBefore
-        ? { TRIGGER_ESCALATION_NOTIFICATIONS: input.responderNotBefore }
-        : {}),
-    }
+    input.responderNotBefore
+      ? new Map<EventSideEffect, Date>([
+          ['TRIGGER_ESCALATION_NOTIFICATIONS', input.responderNotBefore],
+        ])
+      : undefined
   );
 }
 export async function enqueueLifecycleSideEffects(

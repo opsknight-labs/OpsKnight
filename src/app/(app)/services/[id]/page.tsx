@@ -64,6 +64,7 @@ import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings'
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
+import ResponsePolicyOperations from '@/components/incident-sla/ResponsePolicyOperations';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -163,6 +164,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   } catch {
     notFound();
   }
+  const canManageResponsePolicy = currentUser.role === 'ADMIN';
   const actor = await getCurrentAuthorizationActor();
   const incidentAccess = incidentReadWhere(actor);
 
@@ -179,6 +181,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   const slaWindowDays = 30;
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - slaWindowDays * 24 * 60 * 60 * 1000);
+  const integrationPolicyScopeKeys = canManageResponsePolicy
+    ? await prisma.integration
+        .findMany({ where: { serviceId: id }, select: { id: true } })
+        .then(rows => rows.map(row => `integration:${row.id}`))
+    : [];
 
   const [
     serviceRaw,
@@ -194,6 +201,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     workspaceIncidentSlaPolicy,
     incidentClassificationPolicy,
     integrationClassificationPolicies,
+    responseSupportHoursPolicy,
   ] = await Promise.all([
     prisma.service.findFirst({
       where: { AND: [serviceReadWhere(actor), { id }] },
@@ -287,11 +295,21 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       orderBy: { version: 'desc' },
       include: { rules: true },
     }),
-    prisma.incidentClassificationPolicy.findMany({
-      where: { scopeKey: { startsWith: 'integration:' }, sealedAt: { not: null } },
-      orderBy: { version: 'desc' },
-      include: { rules: true },
-    }),
+    canManageResponsePolicy && integrationPolicyScopeKeys.length > 0
+      ? prisma.incidentClassificationPolicy.findMany({
+          where: { scopeKey: { in: integrationPolicyScopeKeys }, sealedAt: { not: null } },
+          orderBy: [{ scopeKey: 'asc' }, { version: 'desc' }],
+          distinct: ['scopeKey'],
+          include: { rules: true },
+        })
+      : Promise.resolve([]),
+    canManageResponsePolicy
+      ? prisma.responseSupportHoursPolicy.findFirst({
+          where: { scopeKey: `service:${id}`, sealedAt: { not: null } },
+          orderBy: { version: 'desc' },
+          include: { windows: true, exceptions: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   if (!serviceRaw) {
@@ -660,7 +678,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                       </div>
                     ) : null}
                   </div>
-                  {canManageService && (
+                  {canManageResponsePolicy && (
                     <details className="border-t pt-3">
                       <summary className="cursor-pointer text-xs font-semibold">
                         Classification overrides
@@ -679,6 +697,10 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                                   ? {
                                       version: policy.version,
                                       derivePriorityFromUrgency: policy.derivePriorityFromUrgency,
+                                      priorityFallbackMode: policy.priorityFallbackMode as
+                                        | 'INHERIT'
+                                        | 'ENABLED'
+                                        | 'DISABLED',
                                       rules: policy.rules.map(rule => ({
                                         matchValue: rule.matchValue as
                                           | 'critical'
@@ -892,31 +914,74 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           />
 
           {/* Slack & ChatOps Integration Settings */}
-          <IncidentSlaPolicySettings
-            scopeKey={`service:${id}`}
-            policy={incidentSlaPolicy}
-            workspacePolicy={workspaceIncidentSlaPolicy}
-            canManage={canManageService}
-          />
-          <IncidentClassificationSettings
-            scopeKey={`service:${id}`}
-            policy={
-              incidentClassificationPolicy
-                ? {
-                    version: incidentClassificationPolicy.version,
-                    derivePriorityFromUrgency:
-                      incidentClassificationPolicy.derivePriorityFromUrgency,
-                    rules: incidentClassificationPolicy.rules.map(rule => ({
-                      matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
-                      priorityMode: rule.priorityMode as 'INHERIT' | 'SET' | 'CLEAR',
-                      priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
-                      urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
-                      urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
-                    })),
-                  }
-                : null
-            }
-          />
+          {canManageResponsePolicy && (
+            <IncidentSlaPolicySettings
+              scopeKey={`service:${id}`}
+              policy={incidentSlaPolicy}
+              workspacePolicy={workspaceIncidentSlaPolicy}
+              canManage
+            />
+          )}
+          {canManageResponsePolicy && (
+            <IncidentClassificationSettings
+              scopeKey={`service:${id}`}
+              policy={
+                incidentClassificationPolicy
+                  ? {
+                      version: incidentClassificationPolicy.version,
+                      derivePriorityFromUrgency:
+                        incidentClassificationPolicy.derivePriorityFromUrgency,
+                      priorityFallbackMode: incidentClassificationPolicy.priorityFallbackMode as
+                        | 'INHERIT'
+                        | 'ENABLED'
+                        | 'DISABLED',
+                      rules: incidentClassificationPolicy.rules.map(rule => ({
+                        matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
+                        priorityMode: rule.priorityMode as 'INHERIT' | 'SET' | 'CLEAR',
+                        priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
+                        urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
+                        urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
+                      })),
+                    }
+                  : null
+              }
+            />
+          )}
+          {canManageResponsePolicy && (
+            <ResponsePolicyOperations
+              services={[]}
+              integrations={[]}
+              supportScopeKey={`service:${id}`}
+              showOperations={false}
+              supportVersion={responseSupportHoursPolicy?.version ?? 0}
+              supportTimezone={responseSupportHoursPolicy?.timezone ?? 'UTC'}
+              supportMode={
+                (responseSupportHoursPolicy?.mode as
+                  | 'INHERIT'
+                  | 'ALWAYS'
+                  | 'SCHEDULED'
+                  | undefined) ?? 'INHERIT'
+              }
+              supportWindows={
+                responseSupportHoursPolicy?.windows.map(window => ({
+                  dayOfWeek: window.dayOfWeek,
+                  startMinute: window.startMinute,
+                  endMinute: window.endMinute,
+                })) ?? []
+              }
+              supportExceptions={
+                responseSupportHoursPolicy?.exceptions.map(exception => ({
+                  localDate: exception.localDate.toISOString().slice(0, 10),
+                  available: exception.available,
+                  startMinute: exception.startMinute,
+                  endMinute: exception.endMinute,
+                  label: exception.label,
+                })) ?? []
+              }
+              schedulerMode="LEGACY"
+              schedulerIndexReady={false}
+            />
+          )}
 
           <ServiceNotificationSettings
             key={id}

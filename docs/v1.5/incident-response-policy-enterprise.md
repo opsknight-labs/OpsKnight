@@ -15,6 +15,8 @@ Escalation conditions are a bounded typed language over `PRIORITY`, `URGENCY`, a
 Use an administrator-owned API key with `response-policy:read` and, for mutations, `response-policy:write`. Writes require `If-Match: "<current-version>"`; stale writes return `409`.
 
 - `GET|PUT /api/v1/response-policy/workspace`
+- `GET|PUT /api/v1/response-policy/classification?scopeKey=...`
+- `GET|PUT /api/v1/response-policy/sla?scopeKey=...`
 - `GET|PUT /api/v1/services/:id/response-policy`
 - `GET|PUT /api/v1/integrations/:id/response-policy`
 - `POST /api/v1/response-policy/preview`

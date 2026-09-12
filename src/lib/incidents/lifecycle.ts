@@ -10,6 +10,7 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
 import { enqueueLifecycleSideEffects } from '@/lib/event-outbox';
 import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
+import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
 
 export const INCIDENT_LIFECYCLE_COMMANDS = [
   'ACKNOWLEDGE',
@@ -600,13 +601,23 @@ export async function applyIncidentLifecycleCommand(
   const updateData = updateDataForCommand(incident, input, now);
   const lifecycleEvent = eventForCommand(input, resolutionNote);
 
-  await tx.incident.update({
+  const updated = await tx.incident.update({
     where: { id: input.incidentId },
     data: {
       ...updateData,
       events: { create: lifecycleEvent },
     },
   });
+  if (updated?.slaAckTargetMs != null && updated.slaResolveTargetMs != null) {
+    const next = deriveNextSlaTransition(updated, now);
+    await tx.incident.update({
+      where: { id: input.incidentId },
+      data: {
+        nextSlaTransitionAt: next?.at ?? null,
+        nextSlaTransitionKind: next?.kind ?? null,
+      },
+    });
+  }
 
   const pauseStore = (
     tx as Prisma.TransactionClient & {

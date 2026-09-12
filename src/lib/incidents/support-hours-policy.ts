@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import { emitAuditEvent } from '@/lib/audit';
 import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
+import type { AuthorizedPolicyActor } from './policy-actor';
 
 const windowSchema = z
   .object({
@@ -55,16 +56,36 @@ export const supportHoursPolicySchema = z
         }
       }, 'Invalid IANA timezone.'),
     inheritWorkspace: z.boolean(),
+    mode: z.enum(['INHERIT', 'ALWAYS', 'SCHEDULED']).optional(),
     windows: z.array(windowSchema).max(28),
     exceptions: z.array(exceptionSchema).max(366),
   })
   .strict()
   .superRefine((value, context) => {
+    const mode = value.mode ?? (value.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
     if (value.scopeKey === 'workspace' && value.inheritWorkspace)
       context.addIssue({
         code: 'custom',
         path: ['inheritWorkspace'],
         message: 'Workspace cannot inherit.',
+      });
+    if (value.scopeKey === 'workspace' && mode === 'INHERIT')
+      context.addIssue({
+        code: 'custom',
+        path: ['mode'],
+        message: 'Workspace support hours cannot inherit.',
+      });
+    if (mode !== 'SCHEDULED' && (value.windows.length > 0 || value.exceptions.length > 0))
+      context.addIssue({
+        code: 'custom',
+        path: ['windows'],
+        message: 'Only scheduled support hours can contain windows or exceptions.',
+      });
+    if (mode === 'SCHEDULED' && value.windows.length === 0)
+      context.addIssue({
+        code: 'custom',
+        path: ['windows'],
+        message: 'Scheduled support hours require at least one recurring staffed window.',
       });
     const keys = value.windows.map(
       window => `${window.dayOfWeek}:${window.startMinute}:${window.endMinute}`
@@ -101,10 +122,18 @@ export const supportHoursPolicySchema = z
       });
   });
 
-export async function saveSupportHoursPolicy(raw: unknown, authorizedActorId?: string) {
+export async function saveSupportHoursPolicy(
+  raw: unknown,
+  authorizedActor?: AuthorizedPolicyActor
+) {
   const input = supportHoursPolicySchema.parse(raw);
-  const permissions = authorizedActorId
-    ? { authenticated: true, id: authorizedActorId, capabilities: ['admin.manage'] }
+  const mode = input.mode ?? (input.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
+  const permissions = authorizedActor
+    ? {
+        authenticated: true,
+        id: authorizedActor.actorId,
+        capabilities: authorizedActor.capabilities,
+      }
     : await getUserPermissions();
   if (
     !permissions.authenticated ||
@@ -133,7 +162,8 @@ export async function saveSupportHoursPolicy(raw: unknown, authorizedActorId?: s
         scopeKey: input.scopeKey,
         version: input.expectedVersion + 1,
         timezone: input.timezone,
-        inheritWorkspace: input.inheritWorkspace,
+        inheritWorkspace: mode === 'INHERIT',
+        mode,
         createdById: permissions.id,
         windows: { create: input.windows },
         exceptions: {
@@ -149,13 +179,14 @@ export async function saveSupportHoursPolicy(raw: unknown, authorizedActorId?: s
     await emitAuditEvent(
       {
         action: 'response_support.policy.version_created',
-        source: 'UI',
+        source: authorizedActor?.source ?? 'UI',
         target: { type: 'SYSTEM_CONFIG', id: input.scopeKey },
         actor: { type: 'USER', id: permissions.id },
         metadata: {
           previousVersion: previous?.version ?? null,
           newVersion: sealed.version,
           timezone: sealed.timezone,
+          mode: sealed.mode,
           windowCount: sealed.windows.length,
           exceptionCount: sealed.exceptions.length,
           slaClockUnaffected: true,

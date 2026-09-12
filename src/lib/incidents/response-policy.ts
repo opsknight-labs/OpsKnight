@@ -5,6 +5,7 @@ import { resolveNewIncidentSlaContract } from '@/lib/incident-sla/contract';
 import { resolveIncidentClassification, type AlertSeverity } from './classification';
 import { resolveSupportHours } from './support-hours';
 import { resolveIncidentEngagement } from './engagement';
+import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 
 export const responsePolicyPreviewSchema = z
   .object({
@@ -28,13 +29,13 @@ export async function explainIncidentResponsePolicy(
     where: { id: input.serviceId },
     select: { id: true },
   });
-  if (!service) throw new Error('Service not found.');
+  if (!service) throw new IncidentResponsePolicyError('NOT_FOUND');
   if (input.integrationId) {
     const trusted = await tx.integration.findFirst({
       where: { id: input.integrationId, serviceId: input.serviceId, enabled: true },
       select: { id: true },
     });
-    if (!trusted) throw new Error('Integration is not enabled for the selected service.');
+    if (!trusted) throw new IncidentResponsePolicyError('NOT_FOUND');
   }
   const classification = await resolveIncidentClassification(tx, {
     serviceId: input.serviceId,

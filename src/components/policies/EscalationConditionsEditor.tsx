@@ -85,9 +85,16 @@ export default function EscalationConditionsEditor({
           <Select
             value={condition.operator}
             disabled={disabled}
-            onValueChange={operator =>
-              update(index, { operator: operator as EditableEscalationCondition['operator'] })
-            }
+            onValueChange={operator => {
+              const typedOperator = operator as EditableEscalationCondition['operator'];
+              update(index, {
+                operator: typedOperator,
+                values:
+                  typedOperator === 'EQUALS' || typedOperator === 'NOT_EQUALS'
+                    ? [condition.values[0]]
+                    : condition.values,
+              });
+            }}
           >
             <SelectTrigger aria-label={`Condition ${index + 1} operator`}>
               <SelectValue />
@@ -100,22 +107,49 @@ export default function EscalationConditionsEditor({
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={condition.values[0]}
-            disabled={disabled}
-            onValueChange={selected => update(index, { values: [selected] })}
-          >
-            <SelectTrigger aria-label={`Condition ${index + 1} value`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
+          {condition.operator === 'IN' || condition.operator === 'NOT_IN' ? (
+            <div
+              className="flex flex-wrap gap-2 rounded-md border px-3 py-2"
+              aria-label={`Condition ${index + 1} values`}
+            >
               {valuesByField[condition.field].map(option => (
-                <SelectItem key={option} value={option}>
+                <label key={option} className="flex items-center gap-1 text-xs">
+                  <input
+                    type="checkbox"
+                    disabled={
+                      disabled || (condition.values.length === 1 && condition.values[0] === option)
+                    }
+                    checked={condition.values.includes(option)}
+                    onChange={event =>
+                      update(index, {
+                        values: event.target.checked
+                          ? [...new Set([...condition.values, option])]
+                          : condition.values.filter(value => value !== option),
+                      })
+                    }
+                  />
                   {option}
-                </SelectItem>
+                </label>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
+          ) : (
+            <Select
+              value={condition.values[0]}
+              disabled={disabled}
+              onValueChange={selected => update(index, { values: [selected] })}
+            >
+              <SelectTrigger aria-label={`Condition ${index + 1} value`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {valuesByField[condition.field].map(option => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Button
             type="button"
             variant="ghost"

@@ -238,6 +238,7 @@ export async function checkSLABreaches(
         incident.nextSlaTransitionAt?.getTime() !== next?.at.getTime() ||
         incident.nextSlaTransitionKind !== next?.kind
       ) {
+        const repairReason = incident.nextSlaTransitionAt ? 'stale' : 'missing';
         await prisma.incident.updateMany({
           where: { id: incident.id, updatedAt: incident.updatedAt },
           data: {
@@ -245,6 +246,7 @@ export async function checkSLABreaches(
             nextSlaTransitionKind: next?.kind ?? null,
           },
         });
+        addOperationalMetric('opsknight_sla_hint_repairs_total', 1, { reason: repairReason });
       }
     }
   }

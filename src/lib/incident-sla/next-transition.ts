@@ -6,6 +6,7 @@ import { activeIncidentStatuses } from '@/lib/incident-status';
 import { incidentSlaSelect } from './select';
 import { getIncidentSlaTransitions } from './deadlines';
 import { getSlaSchedulerMode } from './scheduler-control';
+import { addOperationalMetric, setOperationalGauge } from '@/lib/metrics/operational/registry';
 
 /** Earliest transition for the scheduler; indexed hints are enabled independently during rollout. */
 export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<Date | null> {
@@ -26,6 +27,28 @@ export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<
   for (const incident of incidents) {
     const candidate = getIncidentSlaTransitions(incident, { now }).nextTransitionAt;
     if (candidate && (!earliest || candidate < earliest)) earliest = candidate;
+  }
+  if (schedulerMode === 'SHADOW') {
+    const [indexed, nullHints, due] = await Promise.all([
+      prisma.incident.findFirst({
+        where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: { not: null } },
+        orderBy: { nextSlaTransitionAt: 'asc' },
+        select: { nextSlaTransitionAt: true },
+      }),
+      prisma.incident.count({
+        where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: null },
+      }),
+      prisma.incident.count({
+        where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: { lte: now } },
+      }),
+    ]);
+    setOperationalGauge('opsknight_sla_scheduler_null_hints', nullHints);
+    setOperationalGauge('opsknight_sla_scheduler_due', due);
+    const indexedAt = indexed?.nextSlaTransitionAt ?? null;
+    if (indexedAt?.getTime() !== earliest?.getTime())
+      addOperationalMetric('opsknight_sla_scheduler_shadow_mismatch_total', 1, {
+        reason: indexedAt ? 'different_transition' : 'missing_hint',
+      });
   }
   return earliest;
 }

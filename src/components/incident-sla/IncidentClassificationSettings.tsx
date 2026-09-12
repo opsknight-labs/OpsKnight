@@ -53,11 +53,23 @@ export default function IncidentClassificationSettings({
   policy,
   scopeKey = 'workspace',
 }: {
-  policy: { version: number; derivePriorityFromUrgency: boolean; rules: Rule[] } | null;
+  policy: {
+    version: number;
+    derivePriorityFromUrgency: boolean;
+    priorityFallbackMode?: 'INHERIT' | 'ENABLED' | 'DISABLED';
+    rules: Rule[];
+  } | null;
   scopeKey?: string;
 }) {
   const [version, setVersion] = useState(policy?.version ?? 0);
-  const [derive, setDerive] = useState(policy?.derivePriorityFromUrgency ?? false);
+  const [fallbackMode, setFallbackMode] = useState<'INHERIT' | 'ENABLED' | 'DISABLED'>(
+    policy?.priorityFallbackMode ??
+      (policy?.derivePriorityFromUrgency
+        ? 'ENABLED'
+        : scopeKey === 'workspace'
+          ? 'DISABLED'
+          : 'INHERIT')
+  );
   const [rules, setRules] = useState<Rule[]>(() =>
     ALERT_SEVERITIES.map(matchValue => ({
       matchValue,
@@ -79,7 +91,8 @@ export default function IncidentClassificationSettings({
         const result = await saveAction({
           ...(scopeKey === 'workspace' ? {} : { scopeKey }),
           expectedVersion: version,
-          derivePriorityFromUrgency: derive,
+          derivePriorityFromUrgency: fallbackMode === 'ENABLED',
+          priorityFallbackMode: fallbackMode,
           rules,
         });
         if (!result.ok) {
@@ -174,23 +187,29 @@ export default function IncidentClassificationSettings({
             </Select>
           </div>
         ))}
-        <label className="flex items-start gap-2 rounded-md border p-3 text-xs">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={derive}
+        <div className="space-y-2 rounded-md border p-3 text-xs">
+          <strong>Urgency fallback</strong>
+          <Select
+            value={fallbackMode}
             disabled={pending}
-            onChange={event => setDerive(event.target.checked)}
-          />
-          <span>
-            <strong>Derive priority from urgency when no severity rule assigns priority</strong>
-            <br />
-            <span className="text-muted-foreground">
-              HIGH → P1, MEDIUM → P3, LOW → P5. Disabled by default so paging intensity and response
-              obligation remain independent.
-            </span>
-          </span>
-        </label>
+            onValueChange={value => setFallbackMode(value as typeof fallbackMode)}
+          >
+            <SelectTrigger aria-label="Urgency fallback mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {scopeKey !== 'workspace' && (
+                <SelectItem value="INHERIT">Inherit workspace</SelectItem>
+              )}
+              <SelectItem value="ENABLED">Enabled · HIGH→P1, MEDIUM→P3, LOW→P5</SelectItem>
+              <SelectItem value="DISABLED">Disabled</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground">
+            A scoped Disabled selection overrides an enabled workspace fallback. Explicit “No
+            automatic priority” rules remain terminal.
+          </p>
+        </div>
         <div className="flex justify-end">
           <Button size="sm" disabled={pending} onClick={save}>
             {pending ? 'Saving…' : 'Save classification policy'}

@@ -7,6 +7,7 @@ import { getUserPermissions } from '@/lib/rbac';
 import { emitAuditEvent } from '@/lib/audit';
 import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
+import type { AuthorizedPolicyActor, PolicyAuditSource } from './policy-actor';
 
 export const classificationPolicyInput = z
   .object({
@@ -15,7 +16,8 @@ export const classificationPolicyInput = z
       .regex(/^(workspace|service:[A-Za-z0-9_-]+|integration:[A-Za-z0-9_-]+)$/)
       .default('workspace'),
     expectedVersion: z.number().int().min(0).max(2_147_483_646),
-    derivePriorityFromUrgency: z.boolean(),
+    derivePriorityFromUrgency: z.boolean().default(false),
+    priorityFallbackMode: z.enum(['INHERIT', 'ENABLED', 'DISABLED']).optional(),
     rules: z
       .array(
         z
@@ -35,6 +37,12 @@ export const classificationPolicyInput = z
     message: 'Each alert severity must have exactly one mapping.',
   })
   .superRefine((input, context) => {
+    if (input.scopeKey === 'workspace' && input.priorityFallbackMode === 'INHERIT')
+      context.addIssue({
+        code: 'custom',
+        path: ['priorityFallbackMode'],
+        message: 'Workspace fallback mode cannot inherit.',
+      });
     for (const [index, rule] of input.rules.entries()) {
       if ((rule.priorityMode === 'SET') !== (rule.priority !== null))
         context.addIssue({
@@ -69,12 +77,23 @@ export async function saveWorkspaceClassificationPolicy(rawInput: unknown) {
 
 export async function saveClassificationPolicy(
   rawInput: unknown,
-  source: 'UI' | 'API' | 'RESTORE' = 'UI',
-  authorizedActorId?: string
+  source: PolicyAuditSource = 'UI',
+  authorizedActor?: AuthorizedPolicyActor
 ) {
   const input = classificationPolicyInput.parse(rawInput);
-  const permissions = authorizedActorId
-    ? { authenticated: true, id: authorizedActorId, capabilities: ['admin.manage'] }
+  const priorityFallbackMode =
+    input.priorityFallbackMode ??
+    (input.derivePriorityFromUrgency
+      ? 'ENABLED'
+      : input.scopeKey === 'workspace'
+        ? 'DISABLED'
+        : 'INHERIT');
+  const permissions = authorizedActor
+    ? {
+        authenticated: true,
+        id: authorizedActor.actorId,
+        capabilities: authorizedActor.capabilities,
+      }
     : await getUserPermissions();
   if (
     !permissions.authenticated ||
@@ -111,7 +130,8 @@ export async function saveClassificationPolicy(
         scopeKey: input.scopeKey,
         version: input.expectedVersion + 1,
         inheritWorkspace: false,
-        derivePriorityFromUrgency: input.derivePriorityFromUrgency,
+        derivePriorityFromUrgency: priorityFallbackMode === 'ENABLED',
+        priorityFallbackMode,
         createdById: permissions.id,
         rules: {
           create: input.rules.map(rule => ({
@@ -135,7 +155,7 @@ export async function saveClassificationPolicy(
     await emitAuditEvent(
       {
         action: 'incident_classification.policy.version_created',
-        source: source === 'RESTORE' ? 'API' : source,
+        source,
         target: { type: 'SYSTEM_CONFIG', id: input.scopeKey },
         actor: { type: 'USER', id: permissions.id },
         metadata: {
@@ -143,6 +163,7 @@ export async function saveClassificationPolicy(
           newPolicyId: sealed.id,
           version: sealed.version,
           derivePriorityFromUrgency: sealed.derivePriorityFromUrgency,
+          priorityFallbackMode: sealed.priorityFallbackMode,
           rules: sealed.rules.map(rule => ({
             matchValue: rule.matchValue,
             priorityMode: rule.priorityMode,

@@ -140,6 +140,10 @@ export default async function IncidentSlaSettingsPage() {
             ? {
                 version: classificationPolicy.version,
                 derivePriorityFromUrgency: classificationPolicy.derivePriorityFromUrgency,
+                priorityFallbackMode: classificationPolicy.priorityFallbackMode as
+                  | 'INHERIT'
+                  | 'ENABLED'
+                  | 'DISABLED',
                 rules: classificationPolicy.rules.map(rule => ({
                   matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
                   priorityMode: rule.priorityMode as 'INHERIT' | 'SET' | 'CLEAR',
@@ -156,6 +160,7 @@ export default async function IncidentSlaSettingsPage() {
         integrations={integrations}
         supportVersion={supportHoursPolicy?.version ?? 0}
         supportTimezone={supportHoursPolicy?.timezone ?? 'UTC'}
+        supportMode={(supportHoursPolicy?.mode as 'ALWAYS' | 'SCHEDULED' | undefined) ?? 'ALWAYS'}
         supportWindows={
           supportHoursPolicy?.windows.map(window => ({
             dayOfWeek: window.dayOfWeek,

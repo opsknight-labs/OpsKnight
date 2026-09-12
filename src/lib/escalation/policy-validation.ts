@@ -11,6 +11,7 @@
  * that needs a transaction.
  */
 import type { EscalationTargetType, Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../notification-delivery';
 
 /** A week. Long enough for any real policy, short enough to catch a typo. */
@@ -52,6 +53,58 @@ export type EscalationStepValidation =
   | { valid: false; issues: EscalationStepIssue[] };
 
 const TARGET_TYPES: readonly EscalationTargetType[] = ['USER', 'TEAM', 'SCHEDULE'];
+const conditionOperator = z.enum(['IN', 'NOT_IN', 'EQUALS', 'NOT_EQUALS']);
+const escalationConditionSchema = z
+  .discriminatedUnion('field', [
+    z
+      .object({
+        field: z.literal('PRIORITY'),
+        operator: conditionOperator,
+        values: z
+          .array(z.enum(['P1', 'P2', 'P3', 'P4', 'P5']))
+          .min(1)
+          .max(10),
+      })
+      .strict(),
+    z
+      .object({
+        field: z.literal('URGENCY'),
+        operator: conditionOperator,
+        values: z
+          .array(z.enum(['HIGH', 'MEDIUM', 'LOW']))
+          .min(1)
+          .max(10),
+      })
+      .strict(),
+    z
+      .object({
+        field: z.literal('SUPPORT_HOURS_STATE'),
+        operator: conditionOperator,
+        values: z
+          .array(z.enum(['INSIDE', 'OUTSIDE', 'UNCONFIGURED']))
+          .min(1)
+          .max(10),
+      })
+      .strict(),
+  ])
+  .superRefine((condition, context) => {
+    const unique = new Set(condition.values);
+    if (unique.size !== condition.values.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['values'],
+        message: 'Condition values must be unique.',
+      });
+    if (
+      (condition.operator === 'EQUALS' || condition.operator === 'NOT_EQUALS') &&
+      condition.values.length !== 1
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['values'],
+        message: 'Equals operators require exactly one value.',
+      });
+  });
 
 /**
  * Parses a delay from form input.
@@ -155,47 +208,15 @@ export function validateEscalationStep(input: EscalationStepInput): EscalationSt
   if (rawConditions.length > 10)
     issues.push({ field: 'conditions', message: 'A step can have at most 10 conditions.' });
   for (const raw of rawConditions.slice(0, 10)) {
-    if (!raw || typeof raw !== 'object') {
-      issues.push({ field: 'conditions', message: 'Invalid escalation condition.' });
-      continue;
-    }
-    const condition = raw as Record<string, unknown>;
-    const field = ['PRIORITY', 'URGENCY', 'SUPPORT_HOURS_STATE'].find(
-      value => value === condition.field
-    ) as NonNullable<ValidatedEscalationStep['conditions']>[number]['field'] | undefined;
-    const operator = ['IN', 'NOT_IN', 'EQUALS', 'NOT_EQUALS'].find(
-      value => value === condition.operator
-    ) as NonNullable<ValidatedEscalationStep['conditions']>[number]['operator'] | undefined;
-    const allowed =
-      field === 'PRIORITY'
-        ? ['P1', 'P2', 'P3', 'P4', 'P5']
-        : field === 'URGENCY'
-          ? ['HIGH', 'MEDIUM', 'LOW']
-          : field === 'SUPPORT_HOURS_STATE'
-            ? ['INSIDE', 'OUTSIDE', 'UNCONFIGURED']
-            : [];
-    const values = Array.isArray(condition.values)
-      ? [
-          ...new Set(
-            condition.values.filter(
-              (value): value is string => typeof value === 'string' && allowed.includes(value)
-            )
-          ),
-        ].slice(0, 10)
-      : [];
-    if (
-      !field ||
-      !operator ||
-      values.length === 0 ||
-      values.length !== (Array.isArray(condition.values) ? condition.values.length : 0)
-    ) {
+    const parsed = escalationConditionSchema.safeParse(raw);
+    if (!parsed.success) {
       issues.push({
         field: 'conditions',
-        message: 'Condition values must match the selected typed field.',
+        message: parsed.error.issues[0]?.message ?? 'Invalid escalation condition.',
       });
       continue;
     }
-    conditions.push({ field, operator, values });
+    conditions.push(parsed.data);
   }
 
   if (issues.length > 0) return { valid: false, issues };

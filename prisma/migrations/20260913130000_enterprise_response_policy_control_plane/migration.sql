@@ -4,6 +4,42 @@ ALTER TABLE "IncidentClassificationPolicyRule"
   ADD COLUMN "priorityMode" TEXT,
   ADD COLUMN "urgencyMode" TEXT;
 
+ALTER TABLE "IncidentClassificationPolicy"
+  ADD COLUMN "priorityFallbackMode" TEXT;
+ALTER TABLE "IncidentClassificationPolicy" DISABLE TRIGGER incident_classification_policy_immutable;
+UPDATE "IncidentClassificationPolicy"
+SET "priorityFallbackMode" = CASE
+  WHEN "derivePriorityFromUrgency" THEN 'ENABLED'
+  WHEN "scopeKey" = 'workspace' THEN 'DISABLED'
+  ELSE 'INHERIT'
+END;
+ALTER TABLE "IncidentClassificationPolicy" ENABLE TRIGGER incident_classification_policy_immutable;
+ALTER TABLE "IncidentClassificationPolicy"
+  ALTER COLUMN "priorityFallbackMode" SET NOT NULL,
+  ALTER COLUMN "priorityFallbackMode" SET DEFAULT 'INHERIT',
+  ADD CONSTRAINT "incident_classification_fallback_mode" CHECK (
+    ("scopeKey" = 'workspace' AND "priorityFallbackMode" IN ('ENABLED', 'DISABLED')) OR
+    ("scopeKey" <> 'workspace' AND "priorityFallbackMode" IN ('INHERIT', 'ENABLED', 'DISABLED'))
+  );
+
+CREATE FUNCTION opsknight_normalize_legacy_classification_policy() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."derivePriorityFromUrgency" AND
+     (NEW."priorityFallbackMode" IS NULL OR NEW."priorityFallbackMode" = 'INHERIT') THEN
+    NEW."priorityFallbackMode" := 'ENABLED';
+  ELSIF NEW."scopeKey" = 'workspace' AND
+        (NEW."priorityFallbackMode" IS NULL OR NEW."priorityFallbackMode" = 'INHERIT') THEN
+    NEW."priorityFallbackMode" := 'DISABLED';
+  ELSIF NEW."priorityFallbackMode" IS NULL THEN
+    NEW."priorityFallbackMode" := 'INHERIT';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER incident_classification_policy_legacy_compat
+  BEFORE INSERT ON "IncidentClassificationPolicy"
+  FOR EACH ROW EXECUTE FUNCTION opsknight_normalize_legacy_classification_policy();
+
 -- Preserve the exact semantics of policies created before field modes existed.
 ALTER TABLE "IncidentClassificationPolicyRule" DISABLE TRIGGER incident_classification_rule_immutable;
 UPDATE "IncidentClassificationPolicyRule"
@@ -83,6 +119,16 @@ ALTER TABLE "Incident"
   ADD COLUMN "nextSlaTransitionAt" TIMESTAMP(3),
   ADD COLUMN "nextSlaTransitionKind" TEXT;
 
+ALTER TABLE "Incident"
+  ADD CONSTRAINT "Incident_classificationPriorityPolicyId_fkey"
+    FOREIGN KEY ("classificationPriorityPolicyId") REFERENCES "IncidentClassificationPolicy"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT "Incident_classificationUrgencyPolicyId_fkey"
+    FOREIGN KEY ("classificationUrgencyPolicyId") REFERENCES "IncidentClassificationPolicy"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT "incident_next_sla_transition_kind" CHECK (
+    "nextSlaTransitionKind" IS NULL OR "nextSlaTransitionKind" IN
+      ('ACK_WARNING', 'ACK_BREACH', 'RESOLVE_WARNING', 'RESOLVE_BREACH')
+  );
+
 -- The index is installed concurrently by the deployment operation after this
 -- transactional schema migration. INDEXED mode must remain unavailable until
 -- readiness confirms that index exists.
@@ -93,11 +139,16 @@ CREATE TABLE "ResponseSupportHoursPolicy" (
   "version" INTEGER NOT NULL,
   "timezone" TEXT NOT NULL,
   "inheritWorkspace" BOOLEAN NOT NULL DEFAULT false,
+  "mode" TEXT NOT NULL DEFAULT 'SCHEDULED',
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "createdById" TEXT,
   "sealedAt" TIMESTAMP(3),
   CONSTRAINT "response_support_scope" CHECK ("scopeKey" = 'workspace' OR "scopeKey" ~ '^service:[A-Za-z0-9_-]+$'),
-  CONSTRAINT "response_support_workspace_inheritance" CHECK ("scopeKey" <> 'workspace' OR NOT "inheritWorkspace")
+  CONSTRAINT "response_support_workspace_inheritance" CHECK ("scopeKey" <> 'workspace' OR NOT "inheritWorkspace"),
+  CONSTRAINT "response_support_mode" CHECK (
+    ("scopeKey" = 'workspace' AND "mode" IN ('ALWAYS', 'SCHEDULED')) OR
+    ("scopeKey" <> 'workspace' AND "mode" IN ('INHERIT', 'ALWAYS', 'SCHEDULED'))
+  )
 );
 CREATE UNIQUE INDEX "ResponseSupportHoursPolicy_scopeKey_version_key"
   ON "ResponseSupportHoursPolicy" ("scopeKey", "version");
@@ -126,7 +177,8 @@ CREATE TABLE "ResponseSupportException" (
   "label" TEXT,
   CONSTRAINT "response_support_exception_window" CHECK (
     (NOT "available" AND "startMinute" IS NULL AND "endMinute" IS NULL) OR
-    ("available" AND "startMinute" BETWEEN 0 AND 1439 AND "endMinute" BETWEEN 1 AND 1440 AND "startMinute" < "endMinute")
+    ("available" AND "startMinute" IS NOT NULL AND "endMinute" IS NOT NULL AND
+     "startMinute" BETWEEN 0 AND 1439 AND "endMinute" BETWEEN 1 AND 1440 AND "startMinute" < "endMinute")
   )
 );
 CREATE UNIQUE INDEX "ResponseSupportException_policyId_localDate_key"

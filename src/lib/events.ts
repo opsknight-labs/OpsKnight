@@ -10,6 +10,7 @@ import { resolveIncidentClassification } from './incidents/classification';
 import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
 import { resolveSupportHours } from './incidents/support-hours';
 import { resolveIncidentEngagement } from './incidents/engagement';
+import { addOperationalMetric } from './metrics/operational/registry';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -412,7 +413,16 @@ export async function processEvent(
           source: normalizedSource,
         });
 
-        return { action: 'resolved', incident: resolvedIncident };
+        return {
+          action: 'resolved',
+          incident: resolvedIncident,
+          telemetry: {
+            prioritySource: classification.priorityProvenance.source,
+            urgencySource: classification.urgencyProvenance.source,
+            engagementDeferred: false,
+            urgency: classification.urgency,
+          },
+        };
       }
 
       // Truncate description to prevent DB insert failures on very long payloads
@@ -537,6 +547,12 @@ export async function processEvent(
       return {
         action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
         incident: newIncident,
+        telemetry: {
+          prioritySource: classification.priorityProvenance.source,
+          urgencySource: classification.urgencyProvenance.source,
+          engagementDeferred: engagement.deferred,
+          urgency: classification.urgency,
+        },
       };
     }
 
@@ -608,6 +624,19 @@ export async function processEvent(
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
   }, EVENT_TRANSACTION_MAX_ATTEMPTS);
+
+  const telemetry = 'telemetry' in result ? result.telemetry : undefined;
+  if (telemetry) {
+    addOperationalMetric('opsknight_incident_classification_total', 1, {
+      priority_source: telemetry.prioritySource,
+      urgency_source: telemetry.urgencySource,
+    });
+    if (telemetry.engagementDeferred)
+      addOperationalMetric('opsknight_engagement_deferred_total', 1, {
+        urgency: telemetry.urgency,
+      });
+    delete (result as { telemetry?: unknown }).telemetry;
+  }
 
   // External side-effects are persisted above in the same transaction and are
   // executed by the durable PostgreSQL job worker. The API no longer waits for

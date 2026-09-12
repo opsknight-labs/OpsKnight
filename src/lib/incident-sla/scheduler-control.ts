@@ -1,4 +1,5 @@
 import prisma from '@/lib/prisma';
+import { setOperationalGauge } from '@/lib/metrics/operational/registry';
 
 export type SlaSchedulerMode = 'LEGACY' | 'SHADOW' | 'INDEXED';
 
@@ -21,6 +22,10 @@ export async function getSlaSchedulerMode(now = Date.now()): Promise<SlaSchedule
       ? value.mode
       : 'LEGACY';
   cached = { expiresAt: now + 5_000, mode };
+  for (const candidate of ['LEGACY', 'SHADOW', 'INDEXED'] as const)
+    setOperationalGauge('opsknight_sla_scheduler_mode', candidate === mode ? 1 : 0, {
+      mode: candidate.toLowerCase(),
+    });
   return mode;
 }
 

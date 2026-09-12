@@ -110,7 +110,7 @@ function findNext(policy: Policy, at: Date): Date | null {
   const index = compiled(policy);
   // One year permits long closure calendars while keeping malformed policies
   // bounded. Opening instants are calculated from policy boundaries, not sampled.
-  for (let dayOffset = 0; dayOffset <= 366; dayOffset++) {
+  for (let dayOffset = 0; dayOffset <= 370; dayOffset++) {
     const date = addLocalDays(current.date, dayOffset);
     const day = new Date(`${date}T00:00:00Z`).getUTCDay();
     const exception = index.exceptions.get(date);
@@ -142,7 +142,8 @@ export async function resolveSupportHours(
       })
     )
   );
-  const policy = service && !service.inheritWorkspace ? service : workspace;
+  const serviceMode = service?.mode ?? (service?.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
+  const policy = service && serviceMode !== 'INHERIT' ? service : workspace;
   if (!policy)
     return {
       state: 'UNCONFIGURED',
@@ -152,13 +153,14 @@ export async function resolveSupportHours(
       policyVersion: null,
       nextSupportAt: null,
     };
-  const inside = contains(policy, input.at);
+  const mode = policy.mode ?? (policy.inheritWorkspace ? 'INHERIT' : 'SCHEDULED');
+  const inside = mode === 'ALWAYS' || contains(policy, input.at);
   return {
     state: inside ? 'INSIDE' : 'OUTSIDE',
     timezone: policy.timezone,
     scope: policy.scopeKey,
     policyId: policy.id,
     policyVersion: policy.version,
-    nextSupportAt: inside ? input.at : findNext(policy, input.at),
+    nextSupportAt: inside ? input.at : mode === 'SCHEDULED' ? findNext(policy, input.at) : null,
   };
 }

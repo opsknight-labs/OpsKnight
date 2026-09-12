@@ -735,7 +735,9 @@ model Incident {
   nextSlaTransitionAt                 DateTime?
   nextSlaTransitionKind               String?
   slaPolicy                           IncidentSlaPolicy?            @relation(fields: [slaPolicyId], references: [id], onDelete: Restrict)
-  classificationPolicy                IncidentClassificationPolicy? @relation(fields: [classificationPolicyId], references: [id], onDelete: Restrict)
+  classificationPolicy                IncidentClassificationPolicy? @relation("IncidentClassificationPolicy", fields: [classificationPolicyId], references: [id], onDelete: Restrict)
+  classificationPriorityPolicy        IncidentClassificationPolicy? @relation("IncidentClassificationPriorityPolicy", fields: [classificationPriorityPolicyId], references: [id], onDelete: Restrict)
+  classificationUrgencyPolicy         IncidentClassificationPolicy? @relation("IncidentClassificationUrgencyPolicy", fields: [classificationUrgencyPolicyId], references: [id], onDelete: Restrict)
   // ChatOps War-Room fields
   slackWorkspaceId                    String? // Immutable workspace that owns this war-room instance
   slackChannelId                      String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
@@ -845,11 +847,14 @@ model IncidentClassificationPolicy {
   version                   Int
   inheritWorkspace          Boolean
   derivePriorityFromUrgency Boolean                            @default(false)
+  priorityFallbackMode      String                             @default("INHERIT")
   createdAt                 DateTime                           @default(now())
   createdById               String?
   sealedAt                  DateTime?
   rules                     IncidentClassificationPolicyRule[]
-  incidents                 Incident[]
+  incidents                 Incident[]                         @relation("IncidentClassificationPolicy")
+  priorityIncidents         Incident[]                         @relation("IncidentClassificationPriorityPolicy")
+  urgencyIncidents          Incident[]                         @relation("IncidentClassificationUrgencyPolicy")
 
   @@unique([scopeKey, version])
 }
@@ -876,6 +881,7 @@ model ResponseSupportHoursPolicy {
   version          Int
   timezone         String
   inheritWorkspace Boolean                    @default(false)
+  mode             String                     @default("SCHEDULED")
   createdAt        DateTime                   @default(now())
   createdById      String?
   sealedAt         DateTime?

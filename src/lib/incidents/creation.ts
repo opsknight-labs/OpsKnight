@@ -13,6 +13,7 @@ import { resolveIncidentClassification } from '@/lib/incidents/classification';
 import { deriveNewIncidentSlaTransition } from '@/lib/incident-sla/next-transition';
 import { resolveSupportHours } from '@/lib/incidents/support-hours';
 import { resolveIncidentEngagement } from '@/lib/incidents/engagement';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
 export const INCIDENT_CREATION_OUTCOMES = ['CREATED', 'MERGED', 'REOPENED'] as const;
 export type IncidentCreationOutcome = (typeof INCIDENT_CREATION_OUTCOMES)[number];
@@ -48,6 +49,12 @@ export interface IncidentCreationInput {
 export interface IncidentCreationResult {
   id: string;
   outcome: IncidentCreationOutcome;
+  telemetry?: {
+    prioritySource: string;
+    urgencySource: string;
+    engagementDeferred: boolean;
+    urgency: IncidentUrgency;
+  };
 }
 
 const MAX_DEDUP_KEY_LENGTH = 200;
@@ -418,11 +425,32 @@ export async function applyIncidentCreation(
     responderNotBefore: engagement?.earliestDeliveryAt,
   });
 
-  return { id: incident.id, outcome: 'CREATED' };
+  return {
+    id: incident.id,
+    outcome: 'CREATED',
+    telemetry: {
+      prioritySource: classification.priorityProvenance.source,
+      urgencySource: classification.urgencyProvenance.source,
+      engagementDeferred: engagement?.deferred ?? false,
+      urgency: classification.urgency,
+    },
+  };
 }
 
 export async function executeIncidentCreation(
   input: IncidentCreationInput
 ): Promise<IncidentCreationResult> {
-  return runSerializableTransaction(tx => applyIncidentCreation(tx, input));
+  const result = await runSerializableTransaction(tx => applyIncidentCreation(tx, input));
+  const { telemetry, ...publicResult } = result;
+  if (telemetry) {
+    addOperationalMetric('opsknight_incident_classification_total', 1, {
+      priority_source: telemetry.prioritySource,
+      urgency_source: telemetry.urgencySource,
+    });
+    if (telemetry.engagementDeferred)
+      addOperationalMetric('opsknight_engagement_deferred_total', 1, {
+        urgency: telemetry.urgency,
+      });
+  }
+  return publicResult;
 }

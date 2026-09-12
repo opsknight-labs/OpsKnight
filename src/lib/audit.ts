@@ -11,6 +11,8 @@ export type AuditEventSource =
   | 'AUTOMATION'
   | 'BACKGROUND'
   | 'AUTH'
+  | 'RESTORE'
+  | 'MIGRATION'
   | 'SYSTEM';
 export type AuditActorType = 'USER' | 'API_KEY' | 'INTEGRATION' | 'SYSTEM';
 

@@ -3,10 +3,11 @@ import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { authorizeResponsePolicyApi } from '@/lib/response-policy-api-auth';
 import { saveSupportHoursPolicy } from '@/lib/incidents/support-hours-policy';
-import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
+import { responsePolicyError } from '@/lib/response-policy-http';
 
 export async function GET(request: NextRequest) {
-  if (!(await authorizeResponsePolicyApi(request, 'read'))) return jsonError('Unauthorized', 401);
+  const auth = await authorizeResponsePolicyApi(request, 'read');
+  if (!auth.ok) return jsonError(auth.message, auth.status);
   const scopeKey = request.nextUrl.searchParams.get('scopeKey') ?? 'workspace';
   if (!/^(workspace|service:[A-Za-z0-9_-]+)$/.test(scopeKey))
     return jsonError('Invalid scopeKey', 400);
@@ -22,19 +23,17 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const auth = await authorizeResponsePolicyApi(request, 'write');
-  if (!auth) return jsonError('Unauthorized', 401);
+  if (!auth.ok) return jsonError(auth.message, auth.status);
   const expected = request.headers.get('if-match')?.replaceAll('"', '');
   if (!expected || !/^\d+$/.test(expected)) return jsonError('If-Match version is required', 428);
   try {
     const body = await request.json();
     const policy = await saveSupportHoursPolicy(
       { ...body, expectedVersion: Number(expected) },
-      auth.actor.id
+      { actorId: auth.actor.id, capabilities: ['admin.manage'], source: 'API' }
     );
     return jsonOk({ policy }, 201, { ETag: `"${policy.version}"` });
   } catch (error) {
-    if (error instanceof IncidentResponsePolicyError && error.code === 'CONFLICT')
-      return jsonError('Policy version conflict', 409);
-    return jsonError('Invalid support-hours policy', 400);
+    return responsePolicyError(error, 'Invalid support-hours policy');
   }
 }
