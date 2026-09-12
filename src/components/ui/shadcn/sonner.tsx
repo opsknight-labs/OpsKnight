@@ -98,12 +98,10 @@ const Toaster = ({ theme: propTheme, ...props }: ToasterProps) => {
           icon: '!self-start !mt-0',
           closeButton:
             '!right-2.5 !top-2.5 !left-auto !translate-x-0 !translate-y-0 ' +
-            '!h-7 !w-7 !rounded-lg !border !border-slate-200/80 dark:!border-slate-700/80 ' +
-            '!bg-slate-100/80 dark:!bg-slate-800/80 ' +
-            '!text-slate-600 dark:!text-slate-300 ' +
-            'hover:!bg-slate-200 dark:hover:!bg-slate-700 ' +
-            'hover:!text-slate-950 dark:hover:!text-white ' +
-            '!opacity-90 hover:!opacity-100 ' +
+            '!h-7 !w-7 !rounded-md !border-0 !bg-transparent ' +
+            '!text-[var(--toast-muted)] hover:!text-[var(--toast-fg)] ' +
+            'hover:!bg-black/10 dark:hover:!bg-white/15 ' +
+            '!opacity-85 hover:!opacity-100 ' +
             '!pointer-events-auto flex items-center justify-center cursor-pointer ' +
             'after:absolute after:-inset-1.5 after:content-[\'\'] after:pointer-events-auto ' +
             'transition-all duration-150 motion-reduce:transition-none focus-visible:!ring-2 focus-visible:!ring-ring focus-visible:!ring-offset-1',
