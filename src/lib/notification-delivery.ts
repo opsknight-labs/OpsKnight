@@ -75,11 +75,17 @@ function providerFailureResult(result: {
   success: boolean;
   error?: string;
   retryable?: boolean;
+  statusCode?: number;
+  retryAfterMs?: number;
+  errorCode?: string;
 }): NotificationAttemptResult {
   return {
     success: false,
     outcome: result.retryable === false ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
     error: result.error || 'Notification delivery failed',
+    statusCode: result.statusCode,
+    retryAfterMs: result.retryAfterMs,
+    errorCode: result.errorCode,
   };
 }
 export interface NotificationRetryPolicy {
@@ -100,6 +106,9 @@ export interface NotificationAttemptResult {
   error?: string;
   providerMessageId?: string;
   skipped?: boolean;
+  statusCode?: number;
+  retryAfterMs?: number;
+  errorCode?: string;
 }
 interface IncidentDeliveryContext {
   id?: string;
@@ -239,20 +248,25 @@ async function providerAdmission(
   if (input.channel === 'SLACK') return null;
   const scope = input.channel as ProviderAdmissionScope;
   const providerKey = await resolveProviderKey(input.channel, incident);
-  const admission = await acquireProviderAdmission(scope, providerKey);
-  if (!admission.allowed) {
-    return {
-      success: true,
-      outcome: 'QUEUED',
-      error: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
-    };
-  }
+  // Acquire concurrency first so rate-reject can release the held slot instead
+  // of leaking it. Rate is strictly cheaper to evaluate than the DB slot lease,
+  // but the ordering here forces explicit release handling and avoids
+  // duplicate admission accounting paths.
   const concurrency = await acquireProviderConcurrency(scope, providerKey);
   if (!concurrency.allowed) {
     return {
       success: true,
       outcome: 'QUEUED',
       error: `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`,
+    };
+  }
+  const admission = await acquireProviderAdmission(scope, providerKey);
+  if (!admission.allowed) {
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    return {
+      success: true,
+      outcome: 'QUEUED',
+      error: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
     };
   }
   return { leaseKey: concurrency.leaseKey, providerKey, scope };

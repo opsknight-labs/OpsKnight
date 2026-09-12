@@ -238,6 +238,8 @@ export async function getEffectiveCapacity(input: {
 export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; nowMs?: number }): Promise<{
   low: number;
   high: number;
+  defaultBulkSharePercent: number;
+  adaptiveBackpressure: boolean;
   source: CapacitySource;
   revision: number | null;
 }> {
@@ -251,13 +253,20 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
     return {
       low: lowClamped,
       high: Math.max(lowClamped, highClamped),
+      defaultBulkSharePercent: clampInt(runtime.defaultBulkSharePercent, HARD_LIMITS.bulkSharePercent.min, HARD_LIMITS.bulkSharePercent.max),
+      adaptiveBackpressure: runtime.adaptiveBackpressure,
       source: 'DATABASE',
       revision: runtime.revision,
     };
   }
   const envLowRaw = env.NOTIFICATION_BULK_QUEUE_LOW_WATERMARK;
   const envHighRaw = env.NOTIFICATION_BULK_QUEUE_HIGH_WATERMARK;
-  const hasEnv = Boolean(envLowRaw || envHighRaw);
+  const envBulkRaw = env.NOTIFICATION_BULK_SHARE;
+  const envAdaptiveRaw = env.NOTIFICATION_ADAPTIVE_BACKPRESSURE;
+  const hasEnvLowHigh = Boolean(envLowRaw || envHighRaw);
+  const hasBulkShare = typeof envBulkRaw === 'string' && envBulkRaw.trim() !== '' && Number.isFinite(Number(envBulkRaw)) && Number(envBulkRaw) >= 0.05 && Number(envBulkRaw) <= 1;
+  const hasAdaptive = typeof envAdaptiveRaw === 'string' && envAdaptiveRaw.trim() !== '';
+  const hasEnv = hasEnvLowHigh || hasBulkShare || hasAdaptive;
   if (hasEnv) {
     const boundedLow = (value: string | undefined, fallback: number) => {
       const parsed = Number(value);
@@ -277,11 +286,22 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
     };
     const low = boundedLow(envLowRaw, DEFAULT_BULK_QUEUE_LOW_WATERMARK);
     const high = boundedHigh(envHighRaw, DEFAULT_BULK_QUEUE_HIGH_WATERMARK);
-    return { low, high: Math.max(low, high), source: 'ENV', revision: null };
+    const bulkPercent = hasBulkShare ? Math.round(shareFromEnv(envBulkRaw) * 100) : Math.round(DEFAULT_BULK_SHARE * 100);
+    const adaptive = hasAdaptive ? envAdaptiveRaw !== 'false' : DEFAULT_ADAPTIVE_BACKPRESSURE;
+    return {
+      low,
+      high: Math.max(low, high),
+      defaultBulkSharePercent: clampInt(bulkPercent, HARD_LIMITS.bulkSharePercent.min, HARD_LIMITS.bulkSharePercent.max),
+      adaptiveBackpressure: adaptive,
+      source: 'ENV',
+      revision: null,
+    };
   }
   return {
     low: DEFAULT_BULK_QUEUE_LOW_WATERMARK,
     high: Math.max(DEFAULT_BULK_QUEUE_LOW_WATERMARK, DEFAULT_BULK_QUEUE_HIGH_WATERMARK),
+    defaultBulkSharePercent: Math.round(DEFAULT_BULK_SHARE * 100),
+    adaptiveBackpressure: DEFAULT_ADAPTIVE_BACKPRESSURE,
     source: 'DEFAULT',
     revision: null,
   };

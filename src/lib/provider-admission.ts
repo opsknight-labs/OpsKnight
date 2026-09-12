@@ -14,11 +14,22 @@ export type ProviderConcurrencyResult =
   | { allowed: true; leaseKey: string }
   | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' };
 
-const PROVIDER_LEASE_MS = 30_000;
+export const PROVIDER_LEASE_MS = 30_000;
 const WORKER_ID = process.env.OPSKNIGHT_WORKER_ID?.trim() || crypto.randomUUID();
 const localQuota = new Map<string, { remaining: number; expiresAt: number }>();
 const localConcurrency = new Map<string, { reserved: number; active: number; expiresAt: number }>();
-const concurrencyClaims = new Map<string, string>();
+type ConcurrencyClaim = { poolKey: string; expiresAt: number };
+const concurrencyClaims = new Map<string, ConcurrencyClaim>();
+const CONCURRENCY_CLAIM_SWEEP_INTERVAL_MS = 5_000;
+let lastClaimSweepAt = 0;
+
+function sweepExpiredConcurrencyClaims(nowMs = Date.now()): void {
+  if (nowMs - lastClaimSweepAt < CONCURRENCY_CLAIM_SWEEP_INTERVAL_MS) return;
+  lastClaimSweepAt = nowMs;
+  for (const [leaseKey, claim] of concurrencyClaims) {
+    if (claim.expiresAt <= nowMs) concurrencyClaims.delete(leaseKey);
+  }
+}
 
 export function resetProviderAdmissionForTests() {
   localQuota.clear();
@@ -137,6 +148,7 @@ export async function acquireProviderConcurrency(
   now: Date = new Date(),
   trafficClass?: NotificationTrafficClass
 ): Promise<ProviderConcurrencyResult> {
+  sweepExpiredConcurrencyClaims(now.getTime());
   const config = await getEffectiveCapacity({
     channel: scope as unknown as NotificationChannel,
     provider: providerKey,
@@ -194,15 +206,15 @@ export async function acquireProviderConcurrency(
   }
   local.active += 1;
   const leaseKey = `${poolKey}:${crypto.randomUUID()}`;
-  concurrencyClaims.set(leaseKey, poolKey);
+  concurrencyClaims.set(leaseKey, { poolKey, expiresAt: now.getTime() + PROVIDER_LEASE_MS });
   return { allowed: true, leaseKey };
 }
 
 export async function releaseProviderConcurrency(leaseKey: string): Promise<void> {
-  const poolKey = concurrencyClaims.get(leaseKey);
-  if (!poolKey) return;
+  const claim = concurrencyClaims.get(leaseKey);
+  if (!claim) return;
   concurrencyClaims.delete(leaseKey);
-  const local = localConcurrency.get(poolKey);
+  const local = localConcurrency.get(claim.poolKey);
   if (local) local.active = Math.max(0, local.active - 1);
 }
 

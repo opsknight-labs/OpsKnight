@@ -34,7 +34,14 @@ type Runtime = {
   updatedAt: string;
 } | null;
 
-type Watermarks = { low: number; high: number; source: string; revision: number | null };
+type Watermarks = {
+  low: number;
+  high: number;
+  source: string;
+  revision: number | null;
+  defaultBulkSharePercent?: number;
+  adaptiveBackpressure?: boolean;
+};
 
 type QueueHealth = {
   depth: number;
@@ -76,11 +83,14 @@ export default function NotificationCapacityOverview({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Global runtime form state
+  const effectiveShare = watermarks?.defaultBulkSharePercent ?? 80;
+  const effectiveAdaptive = watermarks?.adaptiveBackpressure ?? true;
+  // Lossless ENV takeover: prefill global runtime form from current effective (ENV) so first save
+  // persists effective bulkShare/adaptive rather than the hard-coded 80/true defaults.
   const [low, setLow] = useState<string>(runtime ? String(runtime.bulkQueueLowWatermark) : watermarks ? String(watermarks.low) : '5000');
   const [high, setHigh] = useState<string>(runtime ? String(runtime.bulkQueueHighWatermark) : watermarks ? String(watermarks.high) : '25000');
-  const [defaultShare, setDefaultShare] = useState<number>(runtime?.defaultBulkSharePercent ?? 80);
-  const [adaptive, setAdaptive] = useState<boolean>(runtime?.adaptiveBackpressure ?? true);
+  const [defaultShare, setDefaultShare] = useState<number>(runtime?.defaultBulkSharePercent ?? effectiveShare);
+  const [adaptive, setAdaptive] = useState<boolean>(runtime?.adaptiveBackpressure ?? effectiveAdaptive);
   const [currentRevision, setCurrentRevision] = useState<number | null>(runtime?.revision ?? watermarks?.revision ?? null);
   const [runtimeSaving, setRuntimeSaving] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
@@ -262,7 +272,9 @@ export default function NotificationCapacityOverview({
                 {watermarks ? sourceBadge(watermarks.source) : null}
                 <Badge variant="outline" className="text-[10px]">rev {currentRevision ?? runtime?.revision ?? watermarks?.revision ?? '—'}</Badge>
               </div>
-              <div className="text-[11px] text-muted-foreground mt-1">{runtime ? 'DB-managed' : watermarks?.source === 'ENV' ? 'Legacy env — save to own' : 'Defaults'}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">
+                {runtime ? 'DB-managed' : watermarks?.source === 'ENV' ? `Legacy env — save to own · ${effectiveShare}% bulk · ${effectiveAdaptive ? 'Adaptive' : 'Fixed'}` : 'Defaults'}
+              </div>
             </div>
           </div>
 

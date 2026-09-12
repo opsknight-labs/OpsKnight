@@ -215,7 +215,10 @@ export async function PATCH(request: NextRequest) {
     });
 
     // Server-enforce acknowledgement for extreme jumps so curl/direct callers cannot bypass the UI modal.
-    // Persisted row: 3× or ≥2× at ≥2k. No row yet (ENV takeover): absolute ≥2000 still gates.
+    // When no DB row exists this compares against the current effective (ENV/DEFAULT) rather than
+    // using an absolute >=2000 gate, so an ENV takeover at the same effective value (ENV 5000 ->
+    // DB 5000) does not spuriously require confirmation. Only a large relative jump vs effective
+    // still requires acknowledgeRisk.
     if (data.mode === 'CUSTOM' && data.ratePerSecond != null) {
       const nextRate = data.ratePerSecond as number;
       if (existing?.ratePerSecond != null) {
@@ -225,8 +228,18 @@ export async function PATCH(request: NextRequest) {
         if (largeJump && data.acknowledgeRisk !== true) {
           return jsonError('Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.', 400);
         }
-      } else if (nextRate >= 2000 && data.acknowledgeRisk !== true) {
-        return jsonError('Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.', 400);
+      } else {
+        const { getEffectiveCapacity: _getEff } = await import('@/lib/notification-capacity/resolver');
+        const effectiveBefore = await _getEff({ channel: channel as never, provider });
+        const effectiveRate = effectiveBefore.configuredRatePerSecond;
+        // Same-value ENV/DEFAULT takeover must not gate (ENV:5000 first DB save as 5000).
+        if (nextRate !== effectiveRate) {
+          const largeJump =
+            (nextRate > 500 && nextRate >= effectiveRate * 3) || (nextRate >= 2000 && nextRate > effectiveRate * 2);
+          if (largeJump && data.acknowledgeRisk !== true) {
+            return jsonError('Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.', 400);
+          }
+        }
       }
     }
 

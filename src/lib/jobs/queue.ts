@@ -13,6 +13,34 @@ function isNonRetryableBackgroundJobError(error: string): boolean {
   return /message_limit_exceeded|user has not enabled any notification channels/i.test(error);
 }
 
+function isBulkQueueBackpressureError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as Record<string, unknown>;
+  return e.name === 'BulkQueueBackpressureError' || (typeof e.message === 'string' && e.message.includes('high watermark'));
+}
+
+/**
+ * Durable backpressure: reschedule without consuming a retry attempt. The
+ * fanout's cursor+fanout rows persist materialized progress; polling resumes
+ * the same job with a short delay until the queue drains below the low
+ * watermark. This avoids exhausting maxAttempts=5 while draining ~55min for
+ * 20k targets at ~6s/page under queue saturation.
+ */
+async function rescheduleBulkBackpressuredJob(jobId: string): Promise<void> {
+  const delayMs = 6_000;
+  await prisma.backgroundJob.update({
+    where: { id: jobId },
+    data: {
+      status: 'PENDING',
+      scheduledAt: new Date(Date.now() + delayMs),
+      startedAt: null,
+      attempts: { decrement: 1 },
+      error: null,
+      failedAt: null,
+    },
+  });
+}
+
 export type JobType =
   | 'ESCALATION'
   | 'NOTIFICATION'
@@ -408,6 +436,19 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
     }
   } catch (error) {
+    // Backpressure never consumes maxAttempts — reschedule until queue drains.
+    if (isBulkNotificationJob(job.type as JobType) && isBulkQueueBackpressureError(error)) {
+      try {
+        await rescheduleBulkBackpressuredJob(job.id);
+      } catch (rescheduleError) {
+        logger.warn('jobs.bulk_backpressure_reschedule_failed', {
+          jobId: job.id,
+          error: rescheduleError instanceof Error ? rescheduleError.message : String(rescheduleError),
+        });
+        await markJobFailed(job.id, error instanceof Error ? error.message : 'Unknown error');
+      }
+      return false;
+    }
     await markJobFailed(job.id, error instanceof Error ? error.message : 'Unknown error');
     return false;
   } finally {

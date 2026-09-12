@@ -21,6 +21,7 @@ import {
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import {
   beginNotificationFanout,
+  BulkQueueBackpressureError,
   bulkQueueHasCapacity,
   recordFanoutPage,
 } from '@/lib/notification-fanout';
@@ -153,7 +154,7 @@ export async function notifyStatusPageSubscribers(
 
       while (true) {
         if (!(await bulkQueueHasCapacity())) {
-          throw new Error('Bulk notification queue reached its high watermark');
+          throw new BulkQueueBackpressureError();
         }
         // Indexed fanout: `StatusPageSubscriptionService(serviceId)` carries the
         // selective scope. Scrubbed JSON remains for rolling-deploy compat but
@@ -270,10 +271,18 @@ export async function notifyStatusPageSubscribers(
     });
     return { success: totalFailed === 0, sent: totalSent, failed: totalFailed };
   } catch (error) {
+    if (error instanceof BulkQueueBackpressureError) {
+      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
+    }
+    // Defer durable backpressure (reschedules without consuming maxAttempts).
+    // Plain failures still return success:false so the job retries via markJobFailed
+    // but the TypedError lets callers distinguish the two signals.
     logger.error('Failed to notify status page subscribers', {
       error: error instanceof Error ? error.message : 'Unknown error',
       incidentId,
+      backpressured: error instanceof BulkQueueBackpressureError,
     });
+    if (error instanceof BulkQueueBackpressureError) throw error;
     return { success: false, sent: totalSent, failed: totalFailed + 1 };
   }
 }
@@ -631,7 +640,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     while (true) {
       if (!(await bulkQueueHasCapacity())) {
-        throw new Error('Bulk notification queue reached its high watermark');
+        throw new BulkQueueBackpressureError();
       }
       const subscriptions = await prisma.statusPageSubscription.findMany({
         where: hasScopedServices
@@ -738,6 +747,10 @@ export async function notifyStatusPageSubscribersAnnouncement(
     });
     return { sent, failed, skipped: sent === 0 && failed === 0 };
   } catch (error) {
+    if (error instanceof BulkQueueBackpressureError) {
+      addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
+      throw error;
+    }
     logger.error('Failed to notify status page subscribers about announcement', {
       error: error instanceof Error ? error.message : 'Unknown error',
       announcementId,
