@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
-  Search,
   X,
   Download,
   Users,
@@ -283,9 +282,6 @@ export default function StatusPageSubscribers({ statusPageId }: { statusPageId: 
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Search Box with Instant Debounce & Clear Icon */}
         <div className="relative flex items-center flex-1 max-w-md">
-          <div className="absolute left-3 flex items-center justify-center pointer-events-none text-muted-foreground">
-            <Search className="w-4 h-4" />
-          </div>
           <input
             type="text"
             className="status-page-subscribers-search-input w-full text-sm bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"

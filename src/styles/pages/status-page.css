@@ -1125,9 +1125,9 @@
   }
 }
 
-/* Ensure subscribers search input has proper icon clearance and text breathing room */
+/* Ensure subscribers search input has clean text breathing room and clear icon clearance */
 .status-page-subscribers-search-input {
-  padding-left: 2.5rem !important;
+  padding-left: 0.75rem !important;
   padding-right: 2rem !important;
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
