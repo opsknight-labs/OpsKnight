@@ -112,6 +112,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 
+# Ship the legal files with the runtime artifact so image recipients can inspect
+# the current license and the preserved terms for historically incorporated material.
+COPY --from=builder --chown=nextjs:nodejs /app/LICENSE ./LICENSE
+COPY --from=builder --chown=nextjs:nodejs /app/LICENSE-TRANSITION.md ./LICENSE-TRANSITION.md
+COPY --from=builder --chown=nextjs:nodejs /app/TRADEMARKS.md ./TRADEMARKS.md
+COPY --from=builder --chown=nextjs:nodejs /app/LICENSES ./LICENSES
+
 # Copy base node_modules first
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
@@ -142,5 +149,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Run entrypoint which does: migrate → start app
 ENTRYPOINT ["./docker-entrypoint.sh"]
 
-# Link image to repository
-LABEL org.opencontainers.image.source="https://github.com/opsknight-labs/OpsKnight"
+# Link image to repository and declare the license of images built from this line.
+LABEL org.opencontainers.image.source="https://github.com/opsknight-labs/OpsKnight" \
+      org.opencontainers.image.licenses="AGPL-3.0-only"
