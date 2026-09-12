@@ -11,14 +11,20 @@
  * intentionally deferred to Phase 2 per the spec.
  */
 
-/** RSC permissions the app requests. Keep this minimal for Phase 1. */
+/** RSC permissions the app requests. Keep this minimal for Phase 1.
+ * Incident cards are posted via Bot Framework Connector (serviceUrl/Bot token),
+ * not via Graph RSC `ChannelMessage.Send.Group`. Only ChannelSettings.Read.Group
+ * is required for Teams/channel discovery. ChannelMessage.Send.Group is retained
+ * as optional for environments that still use Graph message APIs or for the
+ * AMBIGUOUS reconcile probe (ChannelMessage.Read.Group) when enabled. */
 export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
-  'ChannelSettings.Read.Group', // List teams / channels for destination picker
-  'ChannelMessage.Send.Group', // Post incident Adaptive Cards to a channel
+  'ChannelSettings.Read.Group', // List teams / channels for destination picker (Graph)
 ] as const;
 
 export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',
+  'ChannelMessage.Send.Group', // Legacy/optional: Graph channel message send (Bot transport is primary)
+  'ChannelMessage.Read.Group', // Optional: AMBIGUOUS reconcile probe (not required for core delivery)
 ] as const;
 
 export const MICROSOFT_TEAMS_RSC_PERMISSIONS: string[] = [

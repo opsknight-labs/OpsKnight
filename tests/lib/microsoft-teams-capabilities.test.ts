@@ -43,9 +43,10 @@ describe('categorizeTeamsErrorCode', () => {
 
 describe('Microsoft Teams capability invariants', () => {
   it('required RSC permissions are the fail-closed set used by capabilities/health', async () => {
+    // Phase 1 Bot transport: only ChannelSettings.Read.Group is required for
+    // discovery; ChannelMessage.Send.Group is optional (Bot Connector is primary).
     expect(MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS).toEqual([
       'ChannelSettings.Read.Group',
-      'ChannelMessage.Send.Group',
     ]);
   });
 });

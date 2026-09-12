@@ -136,6 +136,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       teamId: dest.teamId,
       channelId: dest.channelId,
       messageId: args.messageId,
+      conversationId: args.conversationId ?? undefined,
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
       disableActions: args.disableActions,

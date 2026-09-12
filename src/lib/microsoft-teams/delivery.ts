@@ -770,8 +770,13 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         }
       } else {
         // AMBIGUOUS retry reconcile: if we previously reserved and the POST may
-        // have committed server-side before the connection died, probe Graph for
-        // an existing card before re-POSTing to avoid a duplicate.
+        // have committed server-side before the connection died, try to probe
+        // Graph for an existing card before re-POSTing. The probe requires
+        // `ChannelMessage.Read.Group` which Phase-1 does NOT request, so a
+        // missing-permission/consent failure must NOT block delivery — fall
+        // through to POST with bounded duplicate risk rather than infinite
+        // AMBIGUOUS backoff. Only transient probe failures (5xx/network)
+        // back off.
         const isAmbiguousRetry = reservedByUs && operation.attempts > 1;
         if (isAmbiguousRetry) {
           try {
@@ -815,25 +820,34 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               return { success: true, providerMessageId: probe.messageId } as never;
             }
             if (probe.error) {
-              // Probe failed (Graph unavailable) — do not risk duplicate POST. Back off as AMBIGUOUS so next retry probes again.
-              await prisma.externalOperation.updateMany({
-                where: { id, status: 'PROCESSING', leaseToken },
-                data: {
-                  status: failureStatus(operation.attempts),
-                  nextAttemptAt: new Date(Date.now() + jitteredDelayMs(8_000)),
-                  lastError: `Teams reconcile probe failed — backing off: ${probe.error.slice(0, 300)}`,
-                  leaseToken: null,
-                  leaseExpiresAt: null,
-                },
-              });
-              await releaseTeamsConcurrency();
-              throw new AppError({
-                code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
-                userMessage: 'Teams reconcile probe failed, retrying shortly.',
-                details: { provider: 'microsoftTeams', providerStatus: 503, providerRetryAfterMs: 8_000, failureCode: 'UNKNOWN' },
-              });
+              const lowerErr = probe.error.toLowerCase();
+              const isPermissionError =
+                /not_configured|tenant_required|graph_token_failed|permission|consent|authorization|forbidden|unauthorized|channelmessage\.read/i.test(lowerErr) ||
+                /http\s*40[13]/i.test(probe.error);
+              if (isPermissionError) {
+                logger.info('[MicrosoftTeams] Reconcile probe unavailable (permission not granted) — proceeding to POST', { incidentId, destinationId, error: probe.error.slice(0, 200) });
+                // Fall through to POST — duplicate risk is bounded and preferable to stuck AMBIGUOUS loop
+              } else {
+                // Transient probe failure (Graph 5xx/network) — back off and retry probe next attempt
+                await prisma.externalOperation.updateMany({
+                  where: { id, status: 'PROCESSING', leaseToken },
+                  data: {
+                    status: failureStatus(operation.attempts),
+                    nextAttemptAt: new Date(Date.now() + jitteredDelayMs(8_000)),
+                    lastError: `Teams reconcile probe failed — backing off: ${probe.error.slice(0, 300)}`,
+                    leaseToken: null,
+                    leaseExpiresAt: null,
+                  },
+                });
+                await releaseTeamsConcurrency();
+                throw new AppError({
+                  code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+                  userMessage: 'Teams reconcile probe failed, retrying shortly.',
+                  details: { provider: 'microsoftTeams', providerStatus: 503, providerRetryAfterMs: 8_000, failureCode: 'UNKNOWN' },
+                });
+              }
             }
-            // No existing card found and probe succeeded — safe to POST.
+            // No existing card found and probe succeeded (or permission missing) — safe to POST.
           } catch (e) {
             if (e instanceof AppError && e.details?.provider === 'microsoftTeams') throw e;
             logger.warn('[MicrosoftTeams] Reconcile probe exception — proceeding to POST', { error: (e as Error).message });

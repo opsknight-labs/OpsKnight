@@ -1019,57 +1019,22 @@ async function dispatchPayload(
           };
     }
     case 'MICROSOFT_TEAMS_CHANNEL': {
-      const previous = await prisma.microsoftTeamsIncidentMessage.findUnique({
-        where: { incidentId_destinationId: { incidentId: payload.incident.id, destinationId: payload.destinationId } },
-        select: { messageId: true, conversationId: true },
-      });
-      // Tenant-scoped breaker: look up destination tenant for the circuit key (fallback to global if unknown).
-      const prismaAnyCp = prisma as unknown as {
-        microsoftTeamsDestination: { findUnique: (a: unknown) => Promise<{ tenantId: string } | null> };
+      // Single outbox: real incident delivery is exclusively via ExternalOperation
+      // claim-first path (`src/lib/microsoft-teams/delivery.ts` → Bot Framework
+      // `POST /v3/conversations` + `PUT .../activities`). The central Notification
+      // `MICROSOFT_TEAMS_CHANNEL` dispatch is RETIRED to eliminate the competing
+      // outbox that raced the ledger (`__reserved__` / advisory lock) and produced
+      // duplicate cards when both pipelines were enqueued. The Notification channel
+      // enum + health fallback remain for backwards-compat rows, but new Teams
+      // intents must not be created via `enqueueCentralNotification` — see
+      // `src/lib/service-notifications.ts` and `src/app/api/microsoft-teams/test`.
+      // Returning a permanent failure keeps old rows from retrying indefinitely.
+      return {
+        success: false,
+        statusCode: 410,
+        errorCode: 'DESTINATION_NOT_FOUND',
+        error: 'Microsoft Teams via central Notification is retired — use ExternalOperation delivery.',
       };
-      const destForBreaker = await prismaAnyCp.microsoftTeamsDestination
-        .findUnique({ where: { id: payload.destinationId }, select: { tenantId: true } } as never)
-        .catch(() => null);
-      const tenantBreaker = CircuitBreakers.microsoftTeams(destForBreaker?.tenantId);
-      if (previous?.messageId) {
-        const { microsoftTeamsChatProvider } = await import('./microsoft-teams/provider');
-        const updateResult = await executeProvider(tenantBreaker, () =>
-          microsoftTeamsChatProvider.updateIncidentCard({
-            destinationId: payload.destinationId,
-            messageId: previous.messageId!,
-            conversationId: previous.conversationId ?? undefined,
-            incident: payload.incident as never,
-            eventType: payload.eventType,
-          })
-        );
-        // MESSAGE_NOT_FOUND (deleted/expired) → recover by creating a fresh canonical activity and re-ledgering.
-        if (!updateResult.success && updateResult.errorCode === 'MESSAGE_NOT_FOUND') {
-          return executeProvider(tenantBreaker, () =>
-            microsoftTeamsChatProvider.recoverIncidentCard({
-              destinationId: payload.destinationId,
-              incident: payload.incident as never,
-              eventType: payload.eventType,
-            })
-          );
-        }
-        // Graph app-only PATCH for normal channel messages is limited to
-        // `policyViolation` edits per Microsoft docs. Do NOT silently duplicate
-        // the card on PATCH_NOT_SUPPORTED — surface DEGRADED/health instead so
-        // operators see that updates require delegated permissions and the single
-        // canonical activity invariant is preserved.
-        if (!updateResult.success && updateResult.errorCode === 'PATCH_NOT_SUPPORTED') {
-          return updateResult;
-        }
-        return updateResult;
-      }
-      const { microsoftTeamsChatProvider } = await import('./microsoft-teams/provider');
-      return executeProvider(tenantBreaker, () =>
-        microsoftTeamsChatProvider.sendIncidentCard({
-          destinationId: payload.destinationId,
-          incident: payload.incident as never,
-          eventType: payload.eventType,
-        })
-      );
     }
   }
 }

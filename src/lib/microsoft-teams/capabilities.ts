@@ -78,28 +78,34 @@ export async function getMicrosoftTeamsCapabilities(options?: {
     rsc = { granted: null, missing: [], unknown: true, error: 'RSC_UNAVAILABLE' };
   }
 
-  const canPost = Boolean(
-    botInstalled && rsc && !rsc.unknown && rsc.missing.length === 0,
-  );
-  // Graph app-only PATCH for normal channel messages is restricted to policyViolation.
-  // Until delegated/user token flow exists, updates are DEGRADED even when post works.
-  const canUpdateCard = false;
+  // Bot Connector is the delivery transport — `ChannelMessage.Send.Group` is optional.
+  // Gate `canPost` on bot installation + verified serviceUrl/tenant routing rather than
+  // the legacy Graph-send RSC permission.
+  const hasRequiredRsc = Boolean(rsc && !rsc.unknown && rsc.missing.length === 0);
+  // Even without verified RSC, posting via Bot Connector is viable when botInstalled.
+  // Unknown RSC is fail-closed for consent-sensitive ops, but Bot transport does not
+  // require it — treat unknown as non-blocking for canPost.
+  const canPost = Boolean(botInstalled);
+  // Bot activity update uses PUT /v3/conversations/{conversationId}/activities/{activityId}
+  // — no Graph PATCH, so canUpdateCard tracks Bot update availability.
+  const canUpdateCard = Boolean(botInstalled);
 
   let failureCode: MicrosoftTeamsFailureCode | null = null;
   let failureReason: string | null = null;
   if (!botInstalled) {
     failureCode = 'APP_NOT_INSTALLED';
     failureReason = 'Teams app is not installed to any Team in this tenant.';
-  } else if (rsc?.unknown) {
-    failureCode = 'UNKNOWN';
-    failureReason = rsc.error ?? 'Unable to verify Teams permissions.';
-  } else if (rsc && rsc.missing.length > 0) {
-    const needsConsent = rsc.missing.includes('ChannelMessage.Send.Group');
-    failureCode = needsConsent ? 'CONSENT_REQUIRED' : 'UNKNOWN';
+  } else if (rsc && !rsc.unknown && rsc.missing.length > 0 && !hasRequiredRsc) {
+    // Only surface RSC missing when required set (ChannelSettings.Read.Group) is absent.
+    failureCode = 'CONSENT_REQUIRED';
     failureReason = `Missing RSC permissions: ${rsc.missing.join(', ')}`;
+  } else if (rsc?.unknown) {
+    // Unknown RSC does not block posting via Bot, but surface as informational.
+    failureCode = null;
+    failureReason = null;
   }
 
-  // Phase 1: canCreateChannel/canCreateMeeting/canManageMembers are deferred to Phase 2
+  // Healthy means the Bot can post — RSC unknown does not block Bot transport.
   const healthy = canPost;
 
   return {

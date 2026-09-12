@@ -3,10 +3,9 @@ import { z } from 'zod';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
+import { integrationProviderError, jsonProviderError } from '@/lib/provider-errors';
 import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-url';
-import { enqueueCentralNotification } from '@/lib/notification-control-plane';
-import { incidentNotificationPriority } from '@/lib/notification-priority';
 
 const teamsTestSchema = z
   .object({
@@ -22,7 +21,10 @@ const teamsTestSchema = z
  * POST /api/microsoft-teams/test
  * Body: { destinationId: string } | { serviceId: string }
  *
- * Sends a test Adaptive Card via the durable control plane (idempotent, rate-limited).
+ * Sends a test Adaptive Card via direct Bot Framework transport (synchronous).
+ * This bypasses the central Notification outbox / lifecyclePolicy so a synthetic
+ * `test-*` incident never hits `lifecycleDeliveryRevoked` SKIPPED and the
+ * response accurately reports sent vs failed — mirroring `src/app/api/slack/test`.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -59,47 +61,56 @@ export async function POST(request: NextRequest) {
     const incidentId = `test-${Date.now()}`;
     const title = 'OpsKnight Teams test — Adaptive Card';
     const now = new Date();
-    const eventType = 'triggered' as const;
-    const deliveryKey = `teams-test:${dest.id}:${now.toISOString()}`;
 
-    await enqueueCentralNotification({
-      category: 'INCIDENT',
-      channel: 'MICROSOFT_TEAMS' as never,
-      recipientType: 'MICROSOFT_TEAMS_CHANNEL' as never,
-      recipientId: dest.id,
-      recipientAddress: `${dest.tenantId}:${dest.teamId}:${dest.channelId}`,
-      templateKey: `service-microsoft-teams-${eventType}`,
-      sourceType: 'SERVICE_INCIDENT',
-      sourceId: `${dest.serviceId}:${incidentId}`,
-      eventKey: deliveryKey,
-      displayMessage: `${eventType}: ${title}`,
-      ...incidentNotificationPriority({ eventType, priority: 'P3', urgency: 'MEDIUM' }),
-      payload: {
-        kind: 'MICROSOFT_TEAMS_CHANNEL',
-        destinationId: dest.id,
+    // Direct Bot Framework send — no Notification row, no lifecycle fencing.
+    let serviceName = dest.serviceId;
+    try {
+      const svc = await prisma.service.findUnique({ where: { id: dest.serviceId }, select: { name: true } });
+      if (svc?.name) serviceName = svc.name;
+    } catch {}
+    const { sendMicrosoftTeamsIncidentCard } = await import('@/lib/microsoft-teams/client');
+    let result: Awaited<ReturnType<typeof sendMicrosoftTeamsIncidentCard>>;
+    try {
+      result = await sendMicrosoftTeamsIncidentCard({
+        tenantId: dest.tenantId,
+        teamId: dest.teamId,
+        channelId: dest.channelId,
         incident: {
           id: incidentId,
           title,
           description: 'If you see this Adaptive Card in Teams, the integration is working.',
           status: 'OPEN',
           urgency: 'MEDIUM',
-          serviceName: dest.serviceId,
+          serviceName,
           incidentUrl: `${baseUrl}/services/${dest.serviceId}`,
           createdAt: now,
         },
-        eventType,
-        lifecyclePolicy: {
-          incidentId,
-          eventType,
-          serviceId: dest.serviceId,
-          targetKind: 'SERVICE_MICROSOFT_TEAMS_CHANNEL',
-          targetId: dest.id,
-          targetAddress: dest.channelId,
-        },
-      } as never,
-    });
+        eventType: 'triggered',
+      });
+    } catch (error) {
+      throw integrationProviderError({
+        provider: 'microsoftTeams' as never,
+        operation: 'sendBotActivity',
+        cause: error,
+      });
+    }
 
-    return jsonOk({ ok: true, destinationId: dest.id });
+    if (!result.success) {
+      const providerCode = typeof result.errorCode === 'string' ? result.errorCode : undefined;
+      const providerError = integrationProviderError({
+        provider: 'microsoftTeams' as never,
+        operation: 'sendBotActivity',
+        providerCode,
+        status: result.statusCode,
+      });
+      return jsonProviderError(providerError, {
+        legacyError: result.error || 'Failed to send Teams test card',
+        provider: 'microsoftTeams',
+        providerCode,
+      });
+    }
+
+    return jsonOk({ ok: true, destinationId: dest.id, providerMessageId: result.providerMessageId ?? null, conversationId: result.conversationId ?? null });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
     return jsonError(error instanceof Error ? error.message : 'Failed to send Teams test', 500);

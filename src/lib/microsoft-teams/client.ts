@@ -108,25 +108,26 @@ function resolveTenantForCall(explicitTenantId: string | undefined, configTenant
 async function resolveServiceUrlForDestination(
   tenantId: string,
   teamId: string
-): Promise<{ serviceUrl: string | null; conversationId: string | null }> {
+): Promise<{ serviceUrl: string | null; conversationId: string | null; botRecipientId: string | null }> {
   try {
     const prismaForInstall = (await import('@/lib/prisma')).default as unknown as {
       microsoftTeamsInstallation: {
-        findFirst: (a: unknown) => Promise<{ serviceUrl: string | null; conversationId: string | null } | null>;
+        findFirst: (a: unknown) => Promise<{ serviceUrl: string | null; conversationId: string | null; botRecipientId: string | null } | null>;
       };
     };
     const inst = await prismaForInstall.microsoftTeamsInstallation.findFirst({
       where: { tenantId, teamId, enabled: true },
-      select: { serviceUrl: true, conversationId: true },
+      select: { serviceUrl: true, conversationId: true, botRecipientId: true },
     } as never);
-    return { serviceUrl: inst?.serviceUrl ?? null, conversationId: inst?.conversationId ?? null };
+    return { serviceUrl: inst?.serviceUrl ?? null, conversationId: inst?.conversationId ?? null, botRecipientId: inst?.botRecipientId ?? null };
   } catch {
-    return { serviceUrl: null, conversationId: null };
+    return { serviceUrl: null, conversationId: null, botRecipientId: null };
   }
 }
 
 async function sendBotActivity(args: {
   serviceUrl: string;
+  botRecipientId?: string | null;
   teamId: string;
   channelId: string;
   cardJson: string;
@@ -154,55 +155,31 @@ async function sendBotActivity(args: {
     return Number.isFinite(n) && n > 0 ? n * 1000 : undefined;
   };
 
-  // Proactive Bot Framework transport: POST to {serviceUrl}/v3/conversations/{channelId}/activities
-  // Channel conversation is the Teams channel id (19:...@thread.tacv2). If the channel conversation
-  // is not yet known to the Connector, fallback to POST /v3/conversations with channelData.
+  // Proactive Bot Framework channel message. Per Bot Connector API:
+  //   POST {serviceUrl}/v3/conversations  with ConversationParameters{ isGroup, channelData, bot, activity }
+  // returns { id: conversationId, activityId: messageId, serviceUrl }.
+  // The returned `id` is the bot-scoped conversationId (distinct from channelId) and must be stored
+  // for later PUT /v3/conversations/{conversationId}/activities/{activityId}.
+  // Reference: ConversationParameters.bot + Bot Framework Connector REST API.
   const activityPayload = {
     type: 'message',
     attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: card }],
     channelData: { tenant: { id: args.tenantId } },
   };
 
-  const directEndpoint = `${normalizedServiceUrl}/v3/conversations/${encodeURIComponent(args.channelId)}/activities`;
-  const directRes = await retryFetch(
-    directEndpoint,
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(activityPayload),
-    },
-    { maxAttempts: 2, initialDelayMs: 800 }
-  );
+  // Bot address for ConversationParameters.bot. Installation's botRecipientId (28:<guid>) is the
+  // most accurate; fallback to clientId (Azure AD appId) which the Connector also accepts.
+  const botAddressId = (args.botRecipientId ?? '').trim() || args.clientId.trim();
 
-  if (directRes.ok) {
-    try {
-      const data = (await directRes.json()) as { id?: string };
-      const activityId = typeof data?.id === 'string' ? data.id : undefined;
-      return { success: true, providerMessageId: activityId, conversationId: args.channelId };
-    } catch {
-      return { success: true, providerMessageId: undefined, conversationId: args.channelId };
-    }
-  }
-
-  if (directRes.status !== 404) {
-    const text = await directRes.text().catch(() => '');
-    const code = text.slice(0, 600) || `HTTP ${directRes.status}`;
-    const status = directRes.status;
-    const retryAfterMs = parseRetryAfter(directRes);
-    if (status === 429) return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
-    if (status === 401 || status === 403) return { success: false, error: 'Teams authorization failed', errorCode: 'AUTH_EXPIRED', statusCode: status };
-    return { success: false, error: code, errorCode: `http_${status}`, statusCode: status, retryAfterMs };
-  }
-
-  // Fallback: create conversation for Teams channel (isGroup + channelData)
   const createEndpoint = `${normalizedServiceUrl}/v3/conversations`;
-  const createBody = {
+  const createBody: Record<string, unknown> = {
     isGroup: true,
     channelData: {
       channel: { id: args.channelId },
       team: { id: args.teamId },
       tenant: { id: args.tenantId },
     },
+    bot: { id: botAddressId },
     activity: activityPayload,
   };
   const createRes = await retryFetch(
@@ -227,9 +204,10 @@ async function sendBotActivity(args: {
   }
 
   try {
-    const data = (await createRes.json()) as { id?: string; activityId?: string; conversation?: { id?: string } };
-    const providerMessageId = typeof data?.activityId === 'string' ? data.activityId : typeof data?.id === 'string' ? data.id : undefined;
-    const conversationId = data?.conversation?.id ?? args.channelId;
+    const data = (await createRes.json()) as { id?: string; activityId?: string; conversation?: { id?: string }; serviceUrl?: string };
+    // Connector: `id` = conversationId, `activityId` = activity/messageId. Some SDKs nest under `conversation`.
+    const conversationId = typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : typeof data?.conversation?.id === 'string' ? data.conversation.id.trim() : args.channelId;
+    const providerMessageId = typeof data?.activityId === 'string' && data.activityId.trim() ? data.activityId.trim() : undefined;
     return { success: true, providerMessageId, conversationId };
   } catch {
     return { success: true, providerMessageId: undefined, conversationId: args.channelId };
@@ -325,17 +303,20 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
     { incident: args.incident, eventType: args.eventType },
     { disableActions: args.disableActions },
   );
-  // Resolve serviceUrl from Installation (verified via Bot Framework conversationUpdate).
+  // Resolve serviceUrl + botRecipientId from Installation (verified via Bot Framework conversationUpdate).
   // Send path uses tenantId+teamId to avoid trusting channel-scoped caller input alone.
   let serviceUrl = '';
+  let botRecipientId: string | null = null;
   try {
     const inst = await resolveServiceUrlForDestination(tenantId, args.teamId);
     serviceUrl = inst.serviceUrl ?? '';
+    botRecipientId = inst.botRecipientId ?? null;
   } catch {
     serviceUrl = '';
   }
   return sendBotActivity({
     serviceUrl,
+    botRecipientId,
     teamId: args.teamId,
     channelId: args.channelId,
     cardJson: JSON.stringify(cardObj),
@@ -351,6 +332,7 @@ export async function updateMicrosoftTeamsIncidentCard(args: {
   teamId: string;
   channelId: string;
   messageId: string;
+  conversationId?: string | null;
   incident: MicrosoftTeamsIncidentCardInput['incident'];
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
   disableActions?: boolean;
@@ -368,6 +350,7 @@ export async function updateMicrosoftTeamsIncidentCard(args: {
     teamId: args.teamId,
     channelId: args.channelId,
     messageId: args.messageId,
+    conversationId: args.conversationId ?? null,
     cardJson: JSON.stringify(cardObj),
     incidentId: args.incident.id,
     clientId: resolved.config.clientId,

@@ -30,12 +30,13 @@ describe('Microsoft Teams app manifest', () => {
   });
 
   it('uses the minimal required RSC permissions for Phase 1', () => {
+    // Bot Framework Connector is the delivery transport — ChannelMessage.Send.Group is optional
     expect([...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS]).toEqual([
       'ChannelSettings.Read.Group',
-      'ChannelMessage.Send.Group',
     ]);
+    expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('ChannelMessage.Send.Group');
     expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('TeamSettings.Read.Group');
-    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(3);
+    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(4);
   });
 
   it('declares RSC permissions as Application-scoped in the manifest', () => {
@@ -108,9 +109,8 @@ describe('findMissingRequiredRscPermissions', () => {
   });
 
   it('reports the missing required permission', () => {
-    expect(findMissingRequiredRscPermissions(['ChannelSettings.Read.Group'])).toEqual([
-      'ChannelMessage.Send.Group',
-    ]);
+    expect(findMissingRequiredRscPermissions([])).toEqual(['ChannelSettings.Read.Group']);
+    expect(findMissingRequiredRscPermissions(['TeamSettings.Read.Group'])).toEqual(['ChannelSettings.Read.Group']);
   });
 
   it('treats absent/empty grant list as everything missing', () => {
