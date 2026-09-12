@@ -86,8 +86,8 @@ export async function saveOidcConfig(
   }
 
   try {
-    const issuer = (formData.get('issuer') as string | null)?.trim() ?? '';
-    const clientId = (formData.get('clientId') as string | null)?.trim() ?? '';
+    const rawIssuer = (formData.get('issuer') as string | null)?.trim() ?? '';
+    const rawClientId = (formData.get('clientId') as string | null)?.trim() ?? '';
     const clientSecret = (formData.get('clientSecret') as string | null)?.trim() ?? '';
     const enabledValue = formData.get('enabled');
     const autoProvisionValue = formData.get('autoProvision');
@@ -131,32 +131,36 @@ export async function saveOidcConfig(
     if (pmJobTitle) profileMapping.jobTitle = pmJobTitle;
     if (pmAvatarUrl) profileMapping.avatarUrl = pmAvatarUrl;
 
-    if (!issuer || !isValidIssuer(issuer)) {
-      return {
-        success: false,
-        code: 'VALIDATION_ERROR',
-        error: 'Issuer URL must be a valid HTTPS URL.',
-        updatedAt: expectedUpdatedAt,
-      };
-    }
-    if (!clientId) {
-      return {
-        success: false,
-        code: 'VALIDATION_ERROR',
-        error: 'Client ID is required.',
-        updatedAt: expectedUpdatedAt,
-      };
-    }
-    if (allowedDomains.length > 0 && allowedDomains.some(domain => !isValidDomain(domain))) {
-      return {
-        success: false,
-        code: 'VALIDATION_ERROR',
-        error: 'Allowed domains must be valid domain names.',
-        updatedAt: expectedUpdatedAt,
-      };
-    }
+    const existing = await prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const issuer = (rawIssuer || existing?.issuer || '').trim();
+    const clientId = (rawClientId || existing?.clientId || '').trim();
 
     if (enabled) {
+      if (!issuer || !isValidIssuer(issuer)) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Issuer URL must be a valid HTTPS URL.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      if (!clientId) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Client ID is required.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      if (allowedDomains.length > 0 && allowedDomains.some(domain => !isValidDomain(domain))) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Allowed domains must be valid domain names.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+
       const { validateOidcConnection } = await import('@/lib/oidc-validation');
       const validation = await validateOidcConnection(issuer, { tokenEndpointAuthMethod });
       if (!validation.isValid) {
@@ -167,9 +171,25 @@ export async function saveOidcConfig(
           updatedAt: expectedUpdatedAt,
         };
       }
+    } else if (!existing) {
+      if (!issuer || !isValidIssuer(issuer)) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Issuer URL must be a valid HTTPS URL.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      if (!clientId) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Client ID is required.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
     }
 
-    const existing = await prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
     const issuerMigration = existing ? isOidcIssuerMigration(existing.issuer, issuer) : false;
     if (issuerMigration && !hasIssuerMigrationConfirmation(formData)) {
       return {
@@ -184,7 +204,7 @@ export async function saveOidcConfig(
     if (existing && !expectedRevision) return settingsChangedState(expectedUpdatedAt);
     if (!existing && expectedRevision) return settingsChangedState(expectedUpdatedAt);
 
-    if (!existing && !clientSecret) {
+    if (!existing && !clientSecret && enabled) {
       return {
         success: false,
         code: 'VALIDATION_ERROR',
@@ -193,8 +213,9 @@ export async function saveOidcConfig(
       };
     }
 
+    const clientSecretChanged = Boolean(clientSecret) && clientSecret !== '********';
     let encryptedSecret = existing?.clientSecret ?? null;
-    if (clientSecret && clientSecret !== '********') {
+    if (clientSecretChanged) {
       encryptedSecret = await encrypt(clientSecret);
     } else if (enabled && !encryptedSecret) {
       return {
@@ -212,7 +233,7 @@ export async function saveOidcConfig(
         const securityConfigChanged =
           normalizeOidcIssuer(existing.issuer) !== normalizeOidcIssuer(issuer) ||
           existing.clientId !== clientId ||
-          Boolean(encryptedSecret) ||
+          clientSecretChanged ||
           existing.enabled !== enabled ||
           existing.providerType !== providerType ||
           existing.organizationId !== organizationId ||
@@ -224,7 +245,7 @@ export async function saveOidcConfig(
           data: {
             issuer,
             clientId,
-            ...(encryptedSecret ? { clientSecret: encryptedSecret } : {}),
+            ...(clientSecretChanged && encryptedSecret ? { clientSecret: encryptedSecret } : {}),
             enabled,
             autoProvision,
             allowedDomains,

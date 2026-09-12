@@ -18,13 +18,9 @@ export default function ActivityTracker() {
     // Only track activity when user has an active authenticated session
     if (!session?.user) return;
 
-    if (lastSignalRef.current === 0) {
-      lastSignalRef.current = Date.now();
-    }
-
     const handleUserActivity = () => {
       const now = Date.now();
-      if (now - lastSignalRef.current >= ACTIVITY_THROTTLE_MS) {
+      if (lastSignalRef.current === 0 || now - lastSignalRef.current >= ACTIVITY_THROTTLE_MS) {
         lastSignalRef.current = now;
         void update({ activity: true }).catch(() => {
           // Ignore network errors on background activity pings

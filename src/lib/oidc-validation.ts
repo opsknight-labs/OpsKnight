@@ -41,13 +41,6 @@ const RUNTIME_METADATA_TTL_MS = 300_000; // 5 min
 const NEGATIVE_CACHE_TTL_MS = 30_000; // 30 sec negative cache
 const STALE_METADATA_MAX_MS = 3_600_000; // 1 hr stale-while-revalidate fallback
 
-let runtimeMetadataCache:
-  | { key: string; result: OidcValidationResult; expiresAt: number; staleUntil: number }
-  | undefined;
-let negativeMetadataCache:
-  | { key: string; result: OidcValidationResult; expiresAt: number }
-  | undefined;
-
 /**
  * Reads a JSON response enforcing a strict maximum byte limit even on chunked
  * or streaming responses where Content-Length is omitted.
@@ -441,11 +434,35 @@ export async function validateOidcConnection(
   }
 }
 
+const SWR_BACKOFF_MS = 30_000; // 30 sec backoff after revalidation failure
+
+type CachedMetadata = {
+  key: string;
+  result: OidcValidationResult;
+  expiresAt: number;
+  staleUntil: number;
+  nextRetryAt?: number;
+};
+
+let runtimeMetadataCache: CachedMetadata | undefined;
+let revalidationInFlight: Promise<OidcValidationResult> | undefined;
+let negativeMetadataCache:
+  | { key: string; result: OidcValidationResult; expiresAt: number }
+  | undefined;
+
 /**
  * Resolve pinned metadata for the authentication runtime. Successful results
  * are cached independently from the short-lived Auth.js options cache so every
- * session evaluation does not contact the IdP. Supports negative caching and
- * stale-while-revalidate fallback during transient IdP network outages.
+ * session evaluation does not contact the IdP.
+ *
+ * Implements true Stale-While-Revalidate (SWR):
+ * - If fresh (< 5m): returns immediately from cache.
+ * - If stale (5m - 1h): returns stale metadata IMMEDIATELY without blocking,
+ *   while kicking off an asynchronous single-flight background revalidation.
+ *   On revalidation failure, establishes a 30s backoff window (nextRetryAt) to
+ *   prevent IdP polling storms.
+ * - Cold start or fully expired (> 1h): synchronous single-flight fetch with
+ *   30s negative caching on failure.
  */
 export async function getValidatedOidcRuntimeMetadata(
   issuer: string,
@@ -457,6 +474,8 @@ export async function getValidatedOidcRuntimeMetadata(
     : normalizedIssuer;
 
   const now = Date.now();
+
+  // 1. Fresh cache hit (< 5 min)
   if (
     runtimeMetadataCache?.key === cacheKey &&
     runtimeMetadataCache.expiresAt > now
@@ -464,6 +483,53 @@ export async function getValidatedOidcRuntimeMetadata(
     return runtimeMetadataCache.result;
   }
 
+  // 2. Stale-while-revalidate hit (5 min - 1 hr)
+  if (
+    runtimeMetadataCache?.key === cacheKey &&
+    runtimeMetadataCache.result.isValid &&
+    runtimeMetadataCache.staleUntil > now
+  ) {
+    const staleResult = runtimeMetadataCache.result;
+    const nextRetry = runtimeMetadataCache.nextRetryAt ?? 0;
+
+    // Trigger asynchronous background revalidation if backoff has elapsed
+    if (!revalidationInFlight && now >= nextRetry) {
+      const currentCache = runtimeMetadataCache;
+      revalidationInFlight = (async () => {
+        try {
+          const freshResult = await validateOidcConnection(normalizedIssuer, options);
+          if (freshResult.isValid && freshResult.metadata) {
+            runtimeMetadataCache = {
+              key: cacheKey,
+              result: freshResult,
+              expiresAt: Date.now() + RUNTIME_METADATA_TTL_MS,
+              staleUntil: Date.now() + STALE_METADATA_MAX_MS,
+            };
+            negativeMetadataCache = undefined;
+            return freshResult;
+          } else {
+            currentCache.nextRetryAt = Date.now() + SWR_BACKOFF_MS;
+            logger.warn('[OIDC] Background revalidation failed; backing off and continuing with stale metadata', {
+              error: freshResult.error,
+            });
+            return staleResult;
+          }
+        } catch (error) {
+          currentCache.nextRetryAt = Date.now() + SWR_BACKOFF_MS;
+          logger.warn('[OIDC] Background revalidation threw; backing off and continuing with stale metadata', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          return staleResult;
+        } finally {
+          revalidationInFlight = undefined;
+        }
+      })();
+    }
+
+    return staleResult;
+  }
+
+  // 3. Negative cache hit (< 30s)
   if (
     negativeMetadataCache?.key === cacheKey &&
     negativeMetadataCache.expiresAt > now
@@ -471,64 +537,54 @@ export async function getValidatedOidcRuntimeMetadata(
     return negativeMetadataCache.result;
   }
 
-  try {
-    const result = await validateOidcConnection(normalizedIssuer, options);
-    if (result.isValid && result.metadata) {
-      runtimeMetadataCache = {
+  // 4. Cold start or fully expired: synchronous single-flight fetch
+  if (revalidationInFlight) {
+    return revalidationInFlight;
+  }
+
+  revalidationInFlight = (async () => {
+    try {
+      const result = await validateOidcConnection(normalizedIssuer, options);
+      if (result.isValid && result.metadata) {
+        runtimeMetadataCache = {
+          key: cacheKey,
+          result,
+          expiresAt: Date.now() + RUNTIME_METADATA_TTL_MS,
+          staleUntil: Date.now() + STALE_METADATA_MAX_MS,
+        };
+        negativeMetadataCache = undefined;
+        return result;
+      }
+
+      negativeMetadataCache = {
         key: cacheKey,
         result,
-        expiresAt: now + RUNTIME_METADATA_TTL_MS,
-        staleUntil: now + STALE_METADATA_MAX_MS,
+        expiresAt: Date.now() + NEGATIVE_CACHE_TTL_MS,
       };
-      negativeMetadataCache = undefined;
       return result;
+    } catch (error) {
+      const failResult: OidcValidationResult = {
+        isValid: false,
+        error: error instanceof Error ? error.message : 'Validation failed due to unexpected error',
+      };
+      negativeMetadataCache = {
+        key: cacheKey,
+        result: failResult,
+        expiresAt: Date.now() + NEGATIVE_CACHE_TTL_MS,
+      };
+      return failResult;
+    } finally {
+      revalidationInFlight = undefined;
     }
+  })();
 
-    // Validation returned failure. Check for stale-while-revalidate fallback.
-    if (
-      runtimeMetadataCache?.key === cacheKey &&
-      runtimeMetadataCache.result.isValid &&
-      runtimeMetadataCache.staleUntil > now
-    ) {
-      logger.warn('[OIDC] Using stale validated metadata during transient validation failure', {
-        error: result.error,
-      });
-      return runtimeMetadataCache.result;
-    }
-
-    negativeMetadataCache = {
-      key: cacheKey,
-      result,
-      expiresAt: now + NEGATIVE_CACHE_TTL_MS,
-    };
-    return result;
-  } catch (error) {
-    if (
-      runtimeMetadataCache?.key === cacheKey &&
-      runtimeMetadataCache.result.isValid &&
-      runtimeMetadataCache.staleUntil > now
-    ) {
-      logger.warn('[OIDC] Using stale validated metadata during transient network exception', {
-        error,
-      });
-      return runtimeMetadataCache.result;
-    }
-    const failResult: OidcValidationResult = {
-      isValid: false,
-      error: error instanceof Error ? error.message : 'Validation failed due to unexpected error',
-    };
-    negativeMetadataCache = {
-      key: cacheKey,
-      result: failResult,
-      expiresAt: now + NEGATIVE_CACHE_TTL_MS,
-    };
-    return failResult;
-  }
+  return revalidationInFlight;
 }
 
 export function resetOidcRuntimeMetadataCache() {
   runtimeMetadataCache = undefined;
   negativeMetadataCache = undefined;
+  revalidationInFlight = undefined;
 }
 
 export type OidcRuntimeCapability = {

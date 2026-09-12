@@ -13,6 +13,20 @@ import {
 } from '@/lib/oidc-validation';
 import prisma from '@/lib/prisma';
 import { assertSafeOutboundUrl, safeOutboundFetch } from '@/lib/network-security';
+import { saveOidcConfig } from '@/app/(app)/settings/security/actions';
+
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+}));
+
+vi.mock('@/lib/rbac', () => ({
+  assertAdmin: vi.fn().mockResolvedValue({ id: 'admin-1', role: 'ADMIN' }),
+  getCurrentUser: vi.fn().mockResolvedValue({ id: 'admin-1', role: 'ADMIN' }),
+}));
+
+vi.mock('@/lib/audit', () => ({
+  logAudit: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('@/lib/encryption', () => ({
   decrypt: vi.fn().mockImplementation(async (text: string) => text),
@@ -32,10 +46,14 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     oidcConfig: {
       findFirst: vi.fn(),
+      findUniqueOrThrow: vi.fn(),
+      updateMany: vi.fn(),
+      create: vi.fn(),
     },
     user: {
       findUnique: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
       count: vi.fn(),
     },
     oidcIdentity: {
@@ -43,6 +61,7 @@ vi.mock('@/lib/prisma', () => ({
     },
     oidcLinkingApproval: {
       findFirst: vi.fn(),
+      updateMany: vi.fn(),
     },
     $transaction: vi.fn((fn: (tx: unknown) => unknown) => fn(prisma)),
   },
@@ -481,12 +500,15 @@ describe('Auth session lifecycle and hardening', () => {
   });
 
   describe('Finding 7: Negative caching and stale-while-revalidate', () => {
-    it('uses stale-while-revalidate fallback during transient IdP outage', async () => {
-      let callCount = 0;
-      vi.mocked(safeOutboundFetch).mockImplementation(async (url: string) => {
-        callCount++;
-        if (callCount <= 2) {
-          // First pass: success
+    it('serves stale metadata immediately and revalidates in background with backoff during outage', async () => {
+      vi.useFakeTimers();
+      try {
+        const baseTime = new Date('2026-09-12T12:00:00.000Z').getTime();
+        vi.setSystemTime(baseTime);
+
+        let fetchCount = 0;
+        vi.mocked(safeOutboundFetch).mockImplementation(async (url: string) => {
+          fetchCount++;
           if (url.includes('.well-known')) {
             return {
               ok: true,
@@ -500,33 +522,293 @@ describe('Auth session lifecycle and hardening', () => {
               headers: { get: () => null },
             } as any;
           }
+          if (url.includes('/jwks')) {
+            return {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                keys: [{ kty: 'RSA', n: 'mod', e: 'AQAB', kid: 'k1', use: 'sig' }],
+              }),
+              headers: { get: () => null },
+            } as any;
+          }
+          return { ok: false, status: 404 } as any;
+        });
+
+        // 1. Initial fetch populates fresh cache
+        const initial = await getValidatedOidcRuntimeMetadata('https://login.example.com');
+        expect(initial.isValid).toBe(true);
+        expect(fetchCount).toBe(2); // discovery + jwks
+
+        // 2. Advance time past 5 min TTL (e.g. 301 seconds), within 1 hour staleUntil
+        vi.setSystemTime(baseTime + 301_000);
+
+        // Simulate IdP outage for background revalidation
+        vi.mocked(safeOutboundFetch).mockImplementation(async () => {
+          fetchCount++;
+          throw new Error('fetch failed: timeout');
+        });
+
+        // 3. Stale cache returns IMMEDIATELY without failing or waiting
+        const stale = await getValidatedOidcRuntimeMetadata('https://login.example.com');
+        expect(stale.isValid).toBe(true);
+        expect(stale.metadata?.issuer).toBe('https://login.example.com');
+
+        // Let asynchronous background revalidation execute and handle failure
+        await Promise.resolve();
+        await Promise.resolve();
+
+        const callsAfterRevalidationAttempt = fetchCount;
+
+        // 4. Backoff window (30s): calling again within 30s must NOT trigger another fetch
+        const cachedAgain = await getValidatedOidcRuntimeMetadata('https://login.example.com');
+        expect(cachedAgain.isValid).toBe(true);
+        expect(fetchCount).toBe(callsAfterRevalidationAttempt); // Backoff prevented refetch storm!
+
+        // 5. Negative cache on cold start failure
+        resetOidcRuntimeMetadataCache();
+        const fail = await getValidatedOidcRuntimeMetadata('https://login.example.com');
+        expect(fail.isValid).toBe(false);
+
+        const failCached = await getValidatedOidcRuntimeMetadata('https://login.example.com');
+        expect(failCached).toBe(fail);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('Finding: configVersion increments only on security-sensitive changes', () => {
+    const existingUpdatedAt = new Date('2026-09-12T10:00:00.000Z');
+    const baseExistingConfig = {
+      id: 'cfg-1',
+      issuer: 'https://login.example.com',
+      clientId: 'client-id',
+      clientSecret: 'encrypted-secret',
+      enabled: true,
+      autoProvision: true,
+      allowedDomains: ['example.com'],
+      roleMapping: [],
+      profileMapping: {},
+      customScopes: null,
+      providerType: 'custom',
+      providerLabel: 'Initial SSO',
+      organizationId: null,
+      tokenEndpointAuthMethod: 'client_secret_basic',
+      configVersion: 1,
+      createdAt: new Date(),
+      updatedAt: existingUpdatedAt,
+      updatedBy: 'admin-1',
+    };
+
+    const baseFormFields: Record<string, string> = {
+      issuer: 'https://login.example.com',
+      clientId: 'client-id',
+      clientSecret: '********', // existing secret preserved
+      enabled: 'true',
+      autoProvision: 'true',
+      allowedDomains: 'example.com',
+      roleMapping: '[]',
+      providerType: 'custom',
+      providerLabel: 'Initial SSO',
+      tokenEndpointAuthMethod: 'client_secret_basic',
+      expectedUpdatedAt: existingUpdatedAt.toISOString(),
+    };
+
+    function createOidcFormData(overrides: Record<string, string> = {}) {
+      const merged = { ...baseFormFields, ...overrides };
+      const formData = new FormData();
+      for (const [key, value] of Object.entries(merged)) {
+        formData.append(key, value);
+      }
+      return formData;
+    }
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(assertSafeOutboundUrl).mockResolvedValue(new URL('https://example.com'));
+      vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({ ...baseExistingConfig } as any);
+      vi.mocked(prisma.oidcConfig.findUniqueOrThrow).mockResolvedValue({
+        updatedAt: new Date('2026-09-12T10:05:00.000Z'),
+      } as any);
+      vi.mocked(prisma.oidcConfig.updateMany).mockResolvedValue({ count: 1 } as any);
+
+      vi.mocked(safeOutboundFetch).mockImplementation(async (url: string) => {
+        if (url.includes('.well-known')) {
           return {
             ok: true,
             status: 200,
             json: async () => ({
-              keys: [{ kty: 'RSA', n: 'mod', e: 'AQAB', kid: 'k1', use: 'sig' }],
+              issuer: url.includes('new-issuer')
+                ? 'https://new-issuer.example.com'
+                : 'https://login.example.com',
+              authorization_endpoint: 'https://login.example.com/auth',
+              token_endpoint: 'https://login.example.com/token',
+              jwks_uri: 'https://login.example.com/jwks',
+              token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
             }),
             headers: { get: () => null },
           } as any;
         }
-        // Second pass: network outage / timeout
-        throw new Error('fetch failed: timeout');
+        if (url.includes('/jwks')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              keys: [
+                {
+                  kty: 'RSA',
+                  n: 'valid-modulus',
+                  e: 'AQAB',
+                  kid: 'rsa-key',
+                  use: 'sig',
+                  alg: 'RS256',
+                },
+              ],
+            }),
+            headers: { get: () => null },
+          } as any;
+        }
+        return { ok: false, status: 404 } as any;
+      });
+    });
+
+    const prevState = {
+      success: false,
+      error: null,
+      updatedAt: existingUpdatedAt.toISOString(),
+    };
+
+    it('does NOT increment configVersion on cosmetic providerLabel change', async () => {
+      const formData = createOidcFormData({ providerLabel: 'New Brand Label' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.providerLabel).toBe('New Brand Label');
+      expect(updateData.configVersion).toBeUndefined();
+    });
+
+    it('does NOT increment configVersion on cosmetic profileMapping change', async () => {
+      const formData = createOidcFormData({ 'profileMapping.department': 'org_unit' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.profileMapping).toEqual({ department: 'org_unit' });
+      expect(updateData.configVersion).toBeUndefined();
+    });
+
+    it('does NOT increment configVersion when clientSecret is unchanged placeholder', async () => {
+      const formData = createOidcFormData({ clientSecret: '********' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toBeUndefined();
+    });
+
+    it('DOES increment configVersion when clientSecret is updated to a new value', async () => {
+      const formData = createOidcFormData({ clientSecret: 'fresh-secret-value-123' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.clientSecret).toBe('fresh-secret-value-123');
+    });
+
+    it('DOES increment configVersion when clientId changes', async () => {
+      const formData = createOidcFormData({ clientId: 'brand-new-client-id' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.clientId).toBe('brand-new-client-id');
+    });
+
+    it('DOES increment configVersion when tokenEndpointAuthMethod changes', async () => {
+      const formData = createOidcFormData({ tokenEndpointAuthMethod: 'client_secret_post' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data as any;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.tokenEndpointAuthMethod).toBe('client_secret_post');
+    });
+
+    it('DOES increment configVersion when allowedDomains changes', async () => {
+      const formData = createOidcFormData({ allowedDomains: 'newdomain.com, otherdomain.org' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.allowedDomains).toEqual(['newdomain.com', 'otherdomain.org']);
+    });
+
+    it('DOES increment configVersion when organizationId changes', async () => {
+      const formData = createOidcFormData({ organizationId: 'org_enterprise_123' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.organizationId).toBe('org_enterprise_123');
+    });
+
+    it('DOES increment configVersion and initiates issuer migration when issuer changes', async () => {
+      const formData = createOidcFormData({
+        issuer: 'https://new-issuer.example.com',
+        confirmIssuerMigration: 'true',
+      });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.issuer).toBe('https://new-issuer.example.com');
+    });
+  });
+
+  describe('Finding: Session callback overrides session.expires with actual expiration', () => {
+    it('sets session.expires to match token.sessionExpiresAt', async () => {
+      const authOptions = await getAuthOptions();
+      const sessionCallback = authOptions.callbacks?.session;
+      expect(sessionCallback).toBeDefined();
+
+      const futureTimestamp = 1800000000;
+      const expectedIsoString = new Date(futureTimestamp * 1000).toISOString();
+
+      const mockSession = {
+        user: { name: 'Alice', email: 'alice@example.com' },
+        expires: '2099-01-01T00:00:00.000Z',
+      };
+
+      const mockToken = {
+        sub: 'user-1',
+        role: 'USER',
+        name: 'Alice',
+        email: 'alice@example.com',
+        sessionExpiresAt: futureTimestamp,
+      };
+
+      const result = await (sessionCallback as any)({
+        session: mockSession,
+        token: mockToken,
       });
 
-      // 1. Initial success
-      const first = await getValidatedOidcRuntimeMetadata('https://login.example.com');
-      expect(first.isValid).toBe(true);
-
-      // 2. Revalidation fails due to IdP outage, but returns stale-while-revalidate
-      // Simulate cache expiry by calling validate directly or letting runtime cache fall back
-      resetOidcRuntimeMetadataCache();
-      // Without cache, initial failure returns negative cache
-      const fail = await getValidatedOidcRuntimeMetadata('https://login.example.com');
-      expect(fail.isValid).toBe(false);
-
-      // Subsequent call hits negative cache within 30 seconds without refetching
-      const failCached = await getValidatedOidcRuntimeMetadata('https://login.example.com');
-      expect(failCached).toBe(fail);
+      expect(result.expires).toBe(expectedIsoString);
     });
   });
 

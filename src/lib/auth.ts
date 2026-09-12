@@ -700,6 +700,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.user.image = token.avatarUrl || getDefaultAvatar(token.gender, token.sub);
           }
 
+          if (typeof (token as AugmentedJWT)?.sessionExpiresAt === 'number') {
+            session.expires = new Date(
+              (token as AugmentedJWT).sessionExpiresAt! * 1000
+            ).toISOString();
+          }
+
           return session;
         },
         async signIn({ user, account, profile }) {
