@@ -53,16 +53,47 @@ describe('status page design contract', () => {
     expect(css).toContain('--sp-panel-bg: #0b1020');
     expect(css).toContain('--sp-page-text: #f8fafc');
     expect(css).toContain('--sp-theme-accent: #a3e635');
+    expect(css).toContain('--sp-theme-accent-contrast: #0b1020');
     expect(css).toContain('.status-v3-service');
     expect(css).toContain('.status-v3-incident-pill__summary');
   });
 
-  it('keeps operational status colors outside the decorative theme contract', () => {
+  it('hardens dark themes against inherited light branding tokens', () => {
     const css = compileStatusPageThemeCss('command-center');
 
+    expect(resolveStatusPageTheme('command-center').mode).toBe('dark');
+    expect(css).toContain('.status-page-container .status-page-surface');
+    expect(css).toContain('color-scheme: dark');
+    expect(css).toContain('--sp-ink: #f8fafc');
+    expect(css).toContain('--status-primary: var(--sp-theme-accent)');
+    expect(css).toContain('--primary: var(--sp-theme-accent)');
+    expect(css).toContain('--status-operational: #6ee7b7');
+    expect(css).toContain('--status-operational-bg: color-mix');
+    expect(css).toContain('--status-major-outage: #fda4af');
+    expect(css).toContain('.status-topbar__chip--accent');
+    expect(css).toContain('.status-subscribe__button');
+  });
+
+  it('does not inject dark semantic overrides into light themes', () => {
+    const css = compileStatusPageThemeCss('executive');
+
+    expect(resolveStatusPageTheme('executive').mode).toBe('light');
+    expect(css).not.toContain('color-scheme: dark');
     expect(css).not.toContain('--status-operational:');
-    expect(css).not.toContain('--status-degraded:');
     expect(css).not.toContain('--status-major-outage:');
+  });
+
+  it('classifies the curated dark themes explicitly', () => {
+    const darkThemes = STATUS_PAGE_THEMES.filter(theme => theme.mode === 'dark').map(
+      theme => theme.id
+    );
+
+    expect(darkThemes).toEqual([
+      'global-operations',
+      'terminal',
+      'arena-neon',
+      'command-center',
+    ]);
   });
 
   it('keeps the curated gallery intentionally small and versioned', () => {
