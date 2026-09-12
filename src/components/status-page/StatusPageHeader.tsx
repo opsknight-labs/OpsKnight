@@ -138,8 +138,8 @@ function SubscribeIcon() {
 
 /**
  * Slim public top bar. Clock, countdown, and timestamps all use the visitor's browser zone.
- * Brand identity is intentionally not an anchor so legacy generic `.status-page-header a` rules
- * cannot turn the customer's logo/name into a CTA. Header actions have their own semantic slots.
+ * The brand remains linked to OpsKnight per the public-brand requirement. Stable semantic slots
+ * let built-in themes target header actions without relying on broad anchor selectors.
  */
 export default function StatusPageHeader({
   statusPage,
@@ -186,7 +186,11 @@ export default function StatusPageHeader({
   return (
     <header className="status-topbar status-page-header" data-sp-slot="header">
       <div className="status-topbar__inner">
-        <div className="status-topbar__brand" data-sp-slot="brand">
+        <a
+          className="status-topbar__brand"
+          data-sp-slot="brand"
+          href="https://opsknight.com/"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={logoUrl}
@@ -197,7 +201,7 @@ export default function StatusPageHeader({
             }}
           />
           <span data-sp-slot="brand-name">{statusPage.name}</span>
-        </div>
+        </a>
         <div className="status-topbar__actions" data-sp-slot="header-actions">
           {localTime && offset && (
             <span
