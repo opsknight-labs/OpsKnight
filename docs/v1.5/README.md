@@ -10,9 +10,12 @@ OpsKnight is a transparent, self-hosted incident-operations platform. It connect
 
 This tree is **v1.5**. Switch versions in the sidebar for older releases.
 
+> **License for this documentation line:** the v1.5/current development line is intended for distribution under **GNU Affero General Public License v3 only (`AGPL-3.0-only`)** once the license transition is merged. Previously published OpsKnight releases remain under the license shipped with those releases. See [Licensing and source availability](./licensing) for the exact boundary and network-source obligations.
+
 ## Start here
 
 - [Getting started](./getting-started) — 15 minutes to a test incident on Compose
+- [Licensing and source availability](./licensing) — AGPL-3.0-only, historical Apache releases, source offers, forks, and trademarks
 - [Services](./core-concepts/services) — Redesigned service workspace, SLA metrics, escalation, and alert integrations
 - [Navigation, search, and alerts](./core-concepts/navigation-search-notifications) — Find records and use the in-app inbox
 - [Installation](./getting-started/installation) — Compose, Helm, Kustomize, from source. First boot needs `NEXTAUTH_SECRET` and `ENCRYPTION_KEY`.
