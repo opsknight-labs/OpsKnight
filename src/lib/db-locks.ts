@@ -49,6 +49,13 @@ export const LOCK_KEYS = {
    * new workspace state before it can contact Jira.
    */
   JIRA_WORKSPACE: BigInt(9141005),
+
+  /**
+   * Serialize per-Teams-incident delivery. Claim-first row + advisory lock
+   * prevents duplicate Adaptive Cards when multiple replicas race the same
+   * incident→channel update.
+   */
+  MICROSOFT_TEAMS_DELIVERY: BigInt(9141006),
 } as const;
 
 /**

@@ -5,6 +5,7 @@ import { logger } from './logger';
 import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType, generateIncidentWebhookPayload } from './webhooks';
 import { getBaseUrl } from './env-validation';
+import { enqueueMicrosoftTeamsDelivery } from './microsoft-teams/delivery';
 
 export type ServiceNotificationEventType = 'triggered' | 'acknowledged' | 'resolved' | 'updated';
 
@@ -218,50 +219,25 @@ export async function sendServiceNotifications(
         where: { serviceId: service.id },
       });
       if (teamsDestination?.enabled) {
-        const teamsIncidentUrl = `${getBaseUrl()}/incidents/${incident.id}`;
+        // Claim-first ExternalOperation path: idempotent row + durable BackgroundJob
+        // (ExternalOperation @@unique([provider,idempotencyKey]) + advisory lock + AMBIGUOUS semantics).
+        // Central Notification intent is superseded for Teams — this fence prevents duplicate cards
+        // when multiple replicas race the same incidentVersion.
+        const teamsEventType = eventType as 'triggered' | 'acknowledged' | 'resolved';
+        const incidentUpdatedAtForTeams =
+          options.eventAt ??
+          (teamsEventType === 'triggered'
+            ? incident.createdAt
+            : teamsEventType === 'acknowledged'
+              ? (incident.acknowledgedAt ?? incident.updatedAt)
+              : (incident.resolvedAt ?? incident.updatedAt));
         const result = await persistIntent(async () => {
-          await enqueueCentralNotification({
-            category: 'INCIDENT',
-            channel: 'MICROSOFT_TEAMS' as never,
-            recipientType: 'MICROSOFT_TEAMS_CHANNEL' as never,
-            recipientId: teamsDestination.id,
-            recipientAddress: `${teamsDestination.tenantId}:${teamsDestination.teamId}:${teamsDestination.channelId}`,
+          await enqueueMicrosoftTeamsDelivery({
             incidentId,
-            templateKey: `service-microsoft-teams-${eventType}`,
-            sourceType: 'SERVICE_INCIDENT',
-            sourceId: `${service.id}:${incidentId}`,
-            eventKey: deliveryKey,
-            displayMessage: `${eventType}: ${incident.title}`,
-            ...incidentNotificationPriority({
-              eventType,
-              priority: incident.priority,
-              urgency: incident.urgency,
-            }),
-            payload: {
-              kind: 'MICROSOFT_TEAMS_CHANNEL',
-              destinationId: teamsDestination.id,
-              incident: {
-                id: incident.id,
-                title: incident.title,
-                description: incident.description,
-                status: incident.status,
-                urgency: incident.urgency,
-                serviceName: service.name,
-                assigneeName: incident.assignee?.name || undefined,
-                priority: incident.priority,
-                incidentUrl: teamsIncidentUrl,
-                createdAt: incident.createdAt,
-                acknowledgedAt: incident.acknowledgedAt,
-                resolvedAt: incident.resolvedAt,
-              },
-              eventType,
-              lifecyclePolicy: {
-                ...lifecyclePolicy,
-                targetKind: 'SERVICE_MICROSOFT_TEAMS_CHANNEL',
-                targetId: teamsDestination.id,
-                targetAddress: teamsDestination.channelId,
-              },
-            } as never,
+            destinationId: teamsDestination.id,
+            eventType: teamsEventType,
+            incidentUpdatedAt: incidentUpdatedAtForTeams,
+            escalationGeneration: eventGeneration,
           });
         });
         if (!result.success)

@@ -217,6 +217,7 @@ enum ActionItemSource {
 
 enum ExternalIssueProvider {
   JIRA
+  MICROSOFT_TEAMS
 }
 
 enum ExternalIssueSyncState {
