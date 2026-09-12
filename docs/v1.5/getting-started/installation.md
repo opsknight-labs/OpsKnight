@@ -6,7 +6,7 @@ description: Install OpsKnight with Docker Compose, Helm, Kustomize, or a Node.j
 
 # Installation
 
-For the fastest evaluation, use Docker Compose. For production, choose the deployment method whose database, secrets, ingress, monitoring, backup, upgrade, and recovery lifecycle your team can own.
+For the fastest evaluation, use Docker Compose. For production, choose the deployment method whose database, secrets, ingress, monitoring, backup, upgrade, recovery, and source-availability lifecycle your team can own.
 
 If you want the shortest end-to-end tutorial, follow [Getting started](./README). This page covers installation choices and source development.
 
@@ -20,6 +20,14 @@ If you want the shortest end-to-end tutorial, follow [Getting started](./README)
 | Node.js development checkout | Application development and local testing, not a packaged release. | [From source](#install-from-source)    |
 
 All methods require PostgreSQL. The published Compose and Kubernetes examples use PostgreSQL 15; the project declares PostgreSQL 14+ support. The production image and source package use Node.js 20 (`>=20 <21`).
+
+## License and source availability
+
+The **v1.5/current development documentation line** is intended for the `AGPL-3.0-only` code line once the license transition is merged. Previously published releases such as `v1.4.x` remain under the license shipped with those artifacts.
+
+If you deploy a **modified** AGPL-covered OpsKnight version for users to interact with over a network, review the section 13 source-offer requirement before exposing it. The source offer must correspond to the version actually deployed; pointing users only to upstream OpsKnight is not sufficient when your deployed version contains modifications that are part of the required Corresponding Source.
+
+See [Licensing and source availability](../licensing) for the transition boundary, historical Apache terms, source-link requirements, forks, trademarks, and future Enterprise/dual-licensing considerations.
 
 ## Install with Docker Compose
 
@@ -170,6 +178,7 @@ Do not use `docker compose down -v` as a routine troubleshooting command: `-v` d
 
 ## Next steps
 
+- [Licensing and source availability](../licensing) — AGPL, historical releases, source offers, and trademark boundaries.
 - [First steps](./first-steps) — first-week configuration.
 - [Configuration reference](./configuration) — supported environment behavior.
 - [Authentication](../administration/authentication) — bootstrap, OIDC, sessions, and recovery.
