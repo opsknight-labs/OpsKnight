@@ -207,7 +207,7 @@ export function isLegacyStatusPageTemplateCss(value: unknown): boolean {
 }
 
 /**
- * Compile a built-in theme into a small deterministic override layer.
+ * Compile a built-in theme into a small deterministic override layer for the current V3 renderer.
  *
  * The compiler intentionally does not redefine operational/degraded/outage colors. Status meaning
  * stays owned by the base renderer. Brand color also remains `--status-primary`; themes control
@@ -229,9 +229,9 @@ export function compileStatusPageThemeCss(
 
   const serviceLayout =
     shape.services === 'cards'
-      ? `.status-page-container .status-services-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }`
+      ? `.status-page-container .status-v3-services__list { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }`
       : shape.services === 'dense'
-        ? `.status-page-container .status-service-card { padding-block: ${compact ? '0.55rem' : '0.7rem'}; }`
+        ? `.status-page-container .status-v3-service { padding-block: ${compact ? '0.55rem' : '0.7rem'}; }`
         : '';
 
   const headerLayout =
@@ -245,9 +245,9 @@ export function compileStatusPageThemeCss(
 
   const incidentLayout =
     shape.incidents === 'compact'
-      ? `.status-page-container .status-incident-card { padding: ${compact ? '0.7rem' : '0.85rem'}; }`
+      ? `.status-page-container .status-v3-incident-pill__summary { padding: ${compact ? '0.7rem' : '0.85rem'}; }`
       : shape.incidents === 'cards'
-        ? `.status-page-container .status-incident-card { border-radius: calc(${shape.radius} + 2px); }`
+        ? `.status-page-container details.status-v3-incident-pill { border-radius: calc(${shape.radius} + 2px); }`
         : '';
 
   return `
@@ -264,15 +264,17 @@ export function compileStatusPageThemeCss(
   background: color-mix(in srgb, var(--status-panel-bg) 94%, var(--status-primary) 6%);
   border-bottom-color: color-mix(in srgb, var(--status-panel-border) 82%, var(--status-primary) 18%);
 }
-.status-page-container .status-service-card,
-.status-page-container .status-incident-card,
-.status-page-container .status-announce-card {
+.status-page-container .status-v3-service,
+.status-page-container details.status-v3-incident-pill {
   border-radius: var(--sp-theme-radius);
   box-shadow: var(--sp-theme-shadow);
 }
-.status-page-container .status-service-card,
-.status-page-container .status-incident-card {
+.status-page-container .status-v3-service {
   padding: var(--sp-theme-card-padding);
+}
+.status-page-container .status-v3-services__list,
+.status-page-container .status-v3-incidents__list {
+  gap: var(--sp-theme-service-gap);
 }
 .status-page-container section {
   margin-block: var(--sp-theme-section-gap);
