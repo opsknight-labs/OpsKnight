@@ -2,95 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { logger } from '@/lib/logger';
-import { buildCsv } from '@/lib/csv';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { resolveStatusPage } from '@/lib/status-page-resolver';
-
-function escapePdf(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-}
-
-function buildSimplePdf(lines: string[]): Buffer {
-  const PAGE_HEIGHT = 792;
-  const TOP_MARGIN = 750;
-  const LINE_HEIGHT = 16;
-  const LINES_PER_PAGE = Math.max(1, Math.floor((TOP_MARGIN - 50) / LINE_HEIGHT));
-
-  const pages: string[][] = [];
-  for (let i = 0; i < lines.length; i += LINES_PER_PAGE) {
-    pages.push(lines.slice(i, i + LINES_PER_PAGE));
-  }
-  if (pages.length === 0) pages.push(['']);
-
-  const pageObjectIds: number[] = [];
-  const contentObjectIds: number[] = [];
-  let nextObjId = 4; // 1=Catalog, 2=Pages, 3=Font
-
-  pages.forEach(() => {
-    pageObjectIds.push(nextObjId++);
-    contentObjectIds.push(nextObjId++);
-  });
-
-  const objects: { id: number; data: string }[] = [];
-  objects.push({ id: 1, data: '<< /Type /Catalog /Pages 2 0 R >>' });
-  objects.push({
-    id: 2,
-    data: `<< /Type /Pages /Kids [${pageObjectIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`,
-  });
-  objects.push({ id: 3, data: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' });
-
-  pages.forEach((pageLines, idx) => {
-    const pageObjId = pageObjectIds[idx];
-    const contentObjId = contentObjectIds[idx];
-
-    objects.push({
-      id: pageObjId,
-      data: `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentObjId} 0 R >>`,
-    });
-
-    const streamContent = pageLines
-      .map((line, lineIdx) => {
-        const y = TOP_MARGIN - lineIdx * LINE_HEIGHT;
-        return `BT /F1 11 50 ${y} Td (${escapePdf(line)}) Tj ET`;
-      })
-      .join('\n');
-
-    const byteLen = Buffer.byteLength(streamContent, 'utf8');
-    objects.push({
-      id: contentObjId,
-      data: `<< /Length ${byteLen} >>\nstream\n${streamContent}\nendstream`,
-    });
-  });
-
-  // Sort objects by ID for standard xref order
-  objects.sort((a, b) => a.id - b.id);
-
-  let body = '%PDF-1.4\n';
-  const xrefOffsets: number[] = [];
-
-  objects.forEach(obj => {
-    xrefOffsets.push(Buffer.byteLength(body, 'utf8'));
-    body += `${obj.id} 0 obj\n${obj.data}\nendobj\n`;
-  });
-
-  const startXref = Buffer.byteLength(body, 'utf8');
-  let xrefTable = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  xrefOffsets.forEach(off => {
-    xrefTable += `${off.toString().padStart(10, '0')} 00000 n \n`;
-  });
-
-  const trailer = `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startXref}\n%%EOF`;
-  return Buffer.from(body + xrefTable + trailer, 'utf8');
-}
+import { publicStatusVisibility } from '@/lib/status-page-public-data';
+import {
+  buildEnhancedUptimeCsv,
+  buildEnhancedUptimePdf,
+  StatusPageReportData,
+  StatusPageReportIncident,
+} from '@/lib/status-pages/reports/uptime-report-generator';
 
 export async function GET(req: NextRequest) {
   return getUptimeExportResponse(req);
 }
 
 export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
-  const resolvedPage = await resolveStatusPage(slug ? { slug } : { default: true });
-  if (!resolvedPage) return new NextResponse('Status page not found', { status: 404 });
+  const { searchParams } = new URL(req.url);
+  const statusPageId = searchParams.get('statusPageId');
+
   let isAdmin = false;
   try {
     await assertAdmin();
@@ -99,11 +29,25 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
     isAdmin = false;
   }
 
+  const resolvedPage = await resolveStatusPage(
+    slug ? { slug } : statusPageId ? { id: statusPageId } : { default: true }
+  );
+
+  let targetPage = resolvedPage;
+  // If an admin requests a draft/disabled status page by ID, resolve it directly
+  if (!targetPage && isAdmin && statusPageId) {
+    targetPage = await prisma.statusPage.findUnique({
+      where: { id: statusPageId },
+    });
+  }
+
+  if (!targetPage) return new NextResponse('Status page not found', { status: 404 });
+
   if (!isAdmin) {
-    if (!resolvedPage.enableUptimeExports) {
+    if (!targetPage.enableUptimeExports) {
       return new NextResponse('Unauthorized', { status: 403 });
     }
-    if (resolvedPage.requireAuth || resolvedPage.privacyMode === 'PRIVATE') {
+    if (targetPage.requireAuth || targetPage.privacyMode === 'PRIVATE') {
       const session = await getServerSession(await getAuthOptions());
       if (!session) {
         return new NextResponse('Authentication required', {
@@ -115,7 +59,6 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
   }
 
   try {
-    const { searchParams } = new URL(req.url);
     const format = (searchParams.get('format') || 'csv').toLowerCase();
     const monthParam = searchParams.get('month');
     const monthMatch = monthParam?.match(/^(\d{4})-(\d{2})$/);
@@ -134,11 +77,12 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
     const periodEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
 
     const statusPage = await prisma.statusPage.findUnique({
-      where: { id: resolvedPage.id },
+      where: { id: targetPage.id },
       include: {
         services: {
           include: { service: true },
           where: { showOnPage: true },
+          orderBy: { order: 'asc' },
         },
       },
     });
@@ -147,7 +91,7 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       return new NextResponse('Status page not found', { status: 404 });
     }
 
-    if (!statusPage.enableUptimeExports) {
+    if (!statusPage.enableUptimeExports && !isAdmin) {
       return new NextResponse('Uptime exports are disabled', { status: 403 });
     }
 
@@ -156,6 +100,30 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       return new NextResponse('No services configured', { status: 400 });
     }
 
+    // Enforce strict public boundary projection
+    const visibility = publicStatusVisibility({
+      showServices: statusPage.showServices,
+      showIncidents: statusPage.showIncidents,
+      showMetrics: statusPage.showMetrics,
+      showIncidentDetails: statusPage.showIncidentDetails,
+      showIncidentTitles: statusPage.showIncidentTitles,
+      showIncidentDescriptions: statusPage.showIncidentDescriptions,
+      showAffectedServices: statusPage.showAffectedServices,
+      showIncidentTimestamps: statusPage.showIncidentTimestamps,
+      showServiceMetrics: statusPage.showServiceMetrics,
+      showServiceRegions: statusPage.showServiceRegions,
+      showServiceOwners: statusPage.showServiceOwners,
+      showServiceSlaTier: statusPage.showServiceSlaTier,
+      showTeamInformation: statusPage.showTeamInformation,
+      showIncidentUrgency: statusPage.showIncidentUrgency,
+      showUptimeHistory: statusPage.showUptimeHistory,
+      showRecentIncidents: statusPage.showRecentIncidents,
+      showPostIncidentReview: statusPage.showPostIncidentReview,
+      showIncidentHistoryDetails: statusPage.showIncidentHistoryDetails,
+      incidentHistoryDetailDays: statusPage.incidentHistoryDetailDays,
+    });
+
+    // Compute uptime in PUBLIC mode
     const { calculateMultiServiceUptime } = await import('@/lib/sla-server');
     const uptimeMap = await calculateMultiServiceUptime(
       serviceIds,
@@ -164,49 +132,127 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       'PUBLIC'
     );
 
-    const uptimeRows = statusPage.services.map(sp => {
+    const totalPeriodMinutes = (periodEnd.getTime() - periodStart.getTime()) / (1000 * 60);
+    const excellentThreshold = statusPage.uptimeExcellentThreshold || 99.9;
+    const goodThreshold = statusPage.uptimeGoodThreshold || 99.0;
+
+    const reportServices = statusPage.services.map(sp => {
+      const uptime = Math.max(0, Math.min(100, uptimeMap[sp.service.id] ?? 100));
+      const downtimeMinutes = Math.max(0, ((100 - uptime) / 100) * totalPeriodMinutes);
       return {
         id: sp.service.id,
         name: sp.displayName || sp.service.name,
-        uptime: Math.max(0, Math.min(100, uptimeMap[sp.service.id] ?? 100)),
+        region: visibility.showServiceRegion ? sp.service.region : null,
+        description: statusPage.showServiceDescriptions ? sp.service.description : null,
+        uptime,
+        slaTarget: excellentThreshold,
+        downtimeMinutes,
       };
     });
 
+    // Fetch public incidents for reporting period if incidents are enabled for public
+    let reportIncidents: StatusPageReportIncident[] = [];
+    if (visibility.showIncidents && serviceIds.length > 0) {
+      const incidents = await prisma.incident.findMany({
+        where: {
+          serviceId: { in: serviceIds },
+          visibility: 'PUBLIC',
+          createdAt: { gte: periodStart, lt: periodEnd },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          resolvedAt: true,
+          status: true,
+          service: { select: { id: true, name: true } },
+        },
+      });
+
+      reportIncidents = incidents.map(inc => {
+        const resolved = inc.resolvedAt || (inc.status === 'RESOLVED' ? periodEnd : null);
+        const end = resolved ? Math.min(resolved.getTime(), periodEnd.getTime()) : now.getTime();
+        const durationMinutes = Math.max(1, (end - inc.createdAt.getTime()) / (1000 * 60));
+        return {
+          id: inc.id,
+          title: visibility.showIncidentTitle ? inc.title : 'Service Disruption',
+          serviceName: visibility.showAffectedService ? inc.service?.name : null,
+          startedAt: inc.createdAt,
+          resolvedAt: inc.resolvedAt,
+          durationMinutes,
+          status: inc.status,
+        };
+      });
+    }
+
+    const overallAvailability =
+      reportServices.length > 0
+        ? reportServices.reduce((acc, s) => acc + s.uptime, 0) / reportServices.length
+        : 100;
+
+    const compliantCount = reportServices.filter(s => s.uptime >= s.slaTarget).length;
+    const slaComplianceRate =
+      reportServices.length > 0 ? (compliantCount / reportServices.length) * 100 : 100;
+
+    // Resolve Branding Details
+    const branding = (statusPage.branding as Record<string, unknown>) || {};
+    const primaryColor =
+      typeof branding.primaryColor === 'string' && branding.primaryColor.trim().length > 0
+        ? branding.primaryColor.trim()
+        : null;
+
+    const pageUrl = statusPage.customDomain
+      ? `https://${statusPage.customDomain}`
+      : statusPage.subdomain
+        ? `https://${statusPage.subdomain}.opsknight.com`
+        : null;
+
+    const reportData: StatusPageReportData = {
+      pageId: statusPage.id,
+      pageName: statusPage.name,
+      organizationName: statusPage.organizationName || statusPage.name,
+      url: pageUrl,
+      primaryColor,
+      periodStart,
+      periodEnd,
+      generatedAt: now,
+      uptimeExcellentThreshold: excellentThreshold,
+      uptimeGoodThreshold: goodThreshold,
+      visibility: {
+        showServices: visibility.showServices,
+        showServiceRegion: visibility.showServiceRegion,
+        showServiceDescription: statusPage.showServiceDescriptions,
+        showIncidents: visibility.showIncidents,
+        showIncidentTitle: visibility.showIncidentTitle,
+        showIncidentDescription: visibility.showIncidentDescription,
+        showAffectedService: visibility.showAffectedService,
+        showIncidentTimestamp: visibility.showIncidentTimestamp,
+      },
+      services: reportServices,
+      incidents: reportIncidents,
+      overallAvailability,
+      slaComplianceRate,
+    };
+
     if (format === 'pdf') {
-      const lines = [
-        `${statusPage.name} - Monthly Uptime Report`,
-        `Period: ${periodStart.toISOString().slice(0, 10)} to ${periodEnd.toISOString().slice(0, 10)}`,
-        '',
-        ...uptimeRows.map(row => `${row.name}: ${row.uptime.toFixed(3)}%`),
-      ];
-      const pdf = buildSimplePdf(lines);
+      const pdf = buildEnhancedUptimePdf(reportData);
       return new NextResponse(new Uint8Array(pdf), {
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="uptime-${year}-${String(monthIndex + 1).padStart(2, '0')}.pdf"`,
+          'Content-Disposition': `attachment; filename="uptime-${statusPage.slug || 'report'}-${year}-${String(monthIndex + 1).padStart(2, '0')}.pdf"`,
         },
       });
     }
 
-    const csvData = uptimeRows.map(row => ({
-      serviceId: row.id,
-      serviceName: row.name,
-      uptimePercentage: row.uptime.toFixed(3),
-    }));
-
-    const csv = buildCsv(csvData, [
-      { key: 'serviceId', header: 'Service ID' },
-      { key: 'serviceName', header: 'Service Name' },
-      { key: 'uptimePercentage', header: 'Uptime %' },
-    ]);
-
+    const csv = buildEnhancedUptimeCsv(reportData);
     return new NextResponse(csv, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="uptime-${year}-${String(monthIndex + 1).padStart(2, '0')}.csv"`,
+        'Content-Disposition': `attachment; filename="uptime-${statusPage.slug || 'report'}-${year}-${String(monthIndex + 1).padStart(2, '0')}.csv"`,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('api.status.uptime_export_error', {
       error: error instanceof Error ? error.message : String(error),
     });

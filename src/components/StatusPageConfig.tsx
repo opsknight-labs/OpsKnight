@@ -1,5 +1,5 @@
 'use client';
-/* eslint-disable @typescript-eslint/no-explicit-any, security/detect-object-injection, @next/next/no-img-element, @next/next/no-html-link-for-pages */
+/* eslint-disable @typescript-eslint/no-explicit-any, security/detect-object-injection, @next/next/no-img-element */
 
 import { useEffect, useRef, useState, useTransition, useMemo } from 'react';
 import { statusPageSectionPatch } from '@/lib/status-pages/settings-sections';
@@ -4136,14 +4136,14 @@ export default function StatusPageConfig({
                             style={{ display: 'flex', gap: 'var(--spacing-2)', flexWrap: 'wrap' }}
                           >
                             <a
-                              href="/api/status/uptime-export?format=csv"
+                              href={`/api/status/uptime-export?format=csv&statusPageId=${statusPage.id}`}
                               className="glass-button"
                               style={{ padding: '0.5rem 1rem', textDecoration: 'none' }}
                             >
                               Download CSV
                             </a>
                             <a
-                              href="/api/status/uptime-export?format=pdf"
+                              href={`/api/status/uptime-export?format=pdf&statusPageId=${statusPage.id}`}
                               className="glass-button"
                               style={{ padding: '0.5rem 1rem', textDecoration: 'none' }}
                             >
