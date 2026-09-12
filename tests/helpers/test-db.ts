@@ -76,6 +76,8 @@ async function seedRequiredReferenceData() {
       matchValue,
       priority,
       urgency: urgency as 'HIGH' | 'MEDIUM' | 'LOW',
+      priorityMode: 'SET',
+      urgencyMode: 'SET',
       label: `${matchValue} alert`,
     })),
     skipDuplicates: true,

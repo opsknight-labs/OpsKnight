@@ -45,6 +45,8 @@ export const API_SCOPES = {
   INCIDENTS_WRITE: 'incidents:write',
   SERVICES_READ: 'services:read',
   SCHEDULES_READ: 'schedules:read',
+  RESPONSE_POLICY_READ: 'response-policy:read',
+  RESPONSE_POLICY_WRITE: 'response-policy:write',
 } as const;
 
 export type ApiScope = (typeof API_SCOPES)[keyof typeof API_SCOPES];

@@ -523,15 +523,27 @@ model EscalationRule {
   // Team-specific options
   notifyOnlyTeamLead Boolean @default(false) // If true, only notify team lead instead of all team members
 
-  targetUser     User?           @relation(fields: [targetUserId], references: [id])
-  targetTeam     Team?           @relation(fields: [targetTeamId], references: [id])
-  targetSchedule OnCallSchedule? @relation(fields: [targetScheduleId], references: [id])
+  targetUser     User?                     @relation(fields: [targetUserId], references: [id])
+  targetTeam     Team?                     @relation(fields: [targetTeamId], references: [id])
+  targetSchedule OnCallSchedule?           @relation(fields: [targetScheduleId], references: [id])
+  conditions     EscalationRuleCondition[]
 
   @@unique([policyId, stepOrder])
   @@index([policyId])
   @@index([targetUserId])
   @@index([targetTeamId])
   @@index([targetScheduleId])
+}
+
+model EscalationRuleCondition {
+  id       String         @id @default(cuid())
+  ruleId   String
+  field    String
+  operator String
+  values   String[]
+  rule     EscalationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
 }
 
 model Integration {
@@ -674,57 +686,69 @@ model Alert {
 }
 
 model Incident {
-  id                           String                        @id @default(cuid())
-  title                        String
-  description                  String?
-  status                       IncidentStatus                @default(OPEN)
-  urgency                      IncidentUrgency               @default(HIGH)
-  visibility                   IncidentVisibility            @default(PUBLIC)
-  priority                     String? // P1, P2.. P5
-  dedupKey                     String? // Key for deduplication
-  serviceId                    String
-  assigneeId                   String?
-  teamId                       String? // Team assignment; DB check constraint keeps it exclusive with assigneeId
-  currentEscalationStep        Int? // Current step index (0-based)
-  nextEscalationAt             DateTime? // When to execute next escalation step
-  escalationStatus             String? // ESCALATING, COMPLETED, PAUSED
-  escalationProcessingAt       DateTime? // When escalation processing was claimed
-  escalationGeneration         Int                           @default(0) // Stable logical run identity; increments on restart/loop
-  acknowledgedAt               DateTime? // When incident was acknowledged (for SLA tracking)
-  resolvedAt                   DateTime? // When incident was resolved (for SLA tracking)
-  resolutionKind               IncidentResolutionKind?
-  snoozedUntil                 DateTime? // When to auto-unsnooze (for time-based snoozing)
-  snoozeReason                 String? // Reason for snoozing
-  slaPausedMs                  BigInt                        @default(0) // Materialized closed SLA pause duration
-  slaPauseStartedAt            DateTime? // Current open SLA pause, if any
-  slaAckElapsedMs              BigInt? // Effective SLA time captured at the first ACK transition
-  slaResolveElapsedMs          BigInt? // Effective SLA time captured at the final resolve transition
-  slaAckTargetMs               Int? // Immutable effective ACK target captured when the incident is created
-  slaResolveTargetMs           Int? // Immutable effective resolve target captured when the incident is created
-  slaTargetSource              String? // Provenance for the frozen target (priority/service/default/backfill)
-  slaTargetCapturedAt          DateTime? // When the immutable target contract was captured
-  slaPolicyId                  String? // NULL for historical/legacy writers; never infer provenance
-  slaPolicyVersion             Int?
-  slaPolicyRule                String? // BASE or P1-P5; immutable together with targets
-  slaPriorityAtCapture         String? // Frozen priority used to select this SLA contract
-  classificationPrioritySource String?
-  classificationUrgencySource  String?
-  classificationPolicyId       String?
-  classificationPolicyVersion  Int?
-  classificationRule           String?
-  slaPolicy                    IncidentSlaPolicy?            @relation(fields: [slaPolicyId], references: [id], onDelete: Restrict)
-  classificationPolicy         IncidentClassificationPolicy? @relation(fields: [classificationPolicyId], references: [id], onDelete: Restrict)
+  id                                  String                        @id @default(cuid())
+  title                               String
+  description                         String?
+  status                              IncidentStatus                @default(OPEN)
+  urgency                             IncidentUrgency               @default(HIGH)
+  visibility                          IncidentVisibility            @default(PUBLIC)
+  priority                            String? // P1, P2.. P5
+  dedupKey                            String? // Key for deduplication
+  serviceId                           String
+  assigneeId                          String?
+  teamId                              String? // Team assignment; DB check constraint keeps it exclusive with assigneeId
+  currentEscalationStep               Int? // Current step index (0-based)
+  nextEscalationAt                    DateTime? // When to execute next escalation step
+  escalationStatus                    String? // ESCALATING, COMPLETED, PAUSED
+  escalationProcessingAt              DateTime? // When escalation processing was claimed
+  escalationGeneration                Int                           @default(0) // Stable logical run identity; increments on restart/loop
+  acknowledgedAt                      DateTime? // When incident was acknowledged (for SLA tracking)
+  resolvedAt                          DateTime? // When incident was resolved (for SLA tracking)
+  resolutionKind                      IncidentResolutionKind?
+  snoozedUntil                        DateTime? // When to auto-unsnooze (for time-based snoozing)
+  snoozeReason                        String? // Reason for snoozing
+  slaPausedMs                         BigInt                        @default(0) // Materialized closed SLA pause duration
+  slaPauseStartedAt                   DateTime? // Current open SLA pause, if any
+  slaAckElapsedMs                     BigInt? // Effective SLA time captured at the first ACK transition
+  slaResolveElapsedMs                 BigInt? // Effective SLA time captured at the final resolve transition
+  slaAckTargetMs                      Int? // Immutable effective ACK target captured when the incident is created
+  slaResolveTargetMs                  Int? // Immutable effective resolve target captured when the incident is created
+  slaTargetSource                     String? // Provenance for the frozen target (priority/service/default/backfill)
+  slaTargetCapturedAt                 DateTime? // When the immutable target contract was captured
+  slaPolicyId                         String? // NULL for historical/legacy writers; never infer provenance
+  slaPolicyVersion                    Int?
+  slaPolicyRule                       String? // BASE or P1-P5; immutable together with targets
+  slaPriorityAtCapture                String? // Frozen priority used to select this SLA contract
+  classificationPrioritySource        String?
+  classificationUrgencySource         String?
+  classificationPolicyId              String?
+  classificationPolicyVersion         Int?
+  classificationRule                  String?
+  classificationPriorityPolicyId      String?
+  classificationPriorityPolicyVersion Int?
+  classificationPriorityRule          String?
+  classificationPriorityScope         String?
+  classificationUrgencyPolicyId       String?
+  classificationUrgencyPolicyVersion  Int?
+  classificationUrgencyRule           String?
+  classificationUrgencyScope          String?
+  nextSlaTransitionAt                 DateTime?
+  nextSlaTransitionKind               String?
+  slaPolicy                           IncidentSlaPolicy?            @relation(fields: [slaPolicyId], references: [id], onDelete: Restrict)
+  classificationPolicy                IncidentClassificationPolicy? @relation("IncidentClassificationPolicy", fields: [classificationPolicyId], references: [id], onDelete: Restrict)
+  classificationPriorityPolicy        IncidentClassificationPolicy? @relation("IncidentClassificationPriorityPolicy", fields: [classificationPriorityPolicyId], references: [id], onDelete: Restrict)
+  classificationUrgencyPolicy         IncidentClassificationPolicy? @relation("IncidentClassificationUrgencyPolicy", fields: [classificationUrgencyPolicyId], references: [id], onDelete: Restrict)
   // ChatOps War-Room fields
-  slackWorkspaceId             String? // Immutable workspace that owns this war-room instance
-  slackChannelId               String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
-  slackChannelName             String? // Channel name (e.g. "inc-104-payments-api")
-  warRoomUrl                   String? // Video bridge URL (Jitsi/Zoom/Meet)
-  warRoomArchivedAt            DateTime? // Set when the Slack channel is archived; the channel id is kept for history
-  warRoomProvisioningStatus    WarRoomProvisioningStatus     @default(NONE)
-  warRoomProvisioningToken     String?
-  warRoomProvisioningAt        DateTime?
-  createdAt                    DateTime                      @default(now())
-  updatedAt                    DateTime                      @updatedAt
+  slackWorkspaceId                    String? // Immutable workspace that owns this war-room instance
+  slackChannelId                      String? // Slack channel ID of dedicated war-room (e.g. "C0123456789")
+  slackChannelName                    String? // Channel name (e.g. "inc-104-payments-api")
+  warRoomUrl                          String? // Video bridge URL (Jitsi/Zoom/Meet)
+  warRoomArchivedAt                   DateTime? // Set when the Slack channel is archived; the channel id is kept for history
+  warRoomProvisioningStatus           WarRoomProvisioningStatus     @default(NONE)
+  warRoomProvisioningToken            String?
+  warRoomProvisioningAt               DateTime?
+  createdAt                           DateTime                      @default(now())
+  updatedAt                           DateTime                      @updatedAt
 
   service                 Service                  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   assignee                User?                    @relation(fields: [assigneeId], references: [id])
@@ -775,6 +799,7 @@ model Incident {
   @@index([serviceId, updatedAt], name: "idx_incident_service_updated_at") // Per-service realtime updates
   // Dashboard filtering by priority (SLA dashboards, widgets, exports)
   @@index([priority, status], name: "idx_incident_priority_status")
+  @@index([status, nextSlaTransitionAt], name: "idx_incident_next_sla_transition")
 }
 
 /// Bounded transactional signal appended by database triggers whenever data
@@ -822,26 +847,72 @@ model IncidentClassificationPolicy {
   version                   Int
   inheritWorkspace          Boolean
   derivePriorityFromUrgency Boolean                            @default(false)
+  priorityFallbackMode      String                             @default("INHERIT")
   createdAt                 DateTime                           @default(now())
   createdById               String?
   sealedAt                  DateTime?
   rules                     IncidentClassificationPolicyRule[]
-  incidents                 Incident[]
+  incidents                 Incident[]                         @relation("IncidentClassificationPolicy")
+  priorityIncidents         Incident[]                         @relation("IncidentClassificationPriorityPolicy")
+  urgencyIncidents          Incident[]                         @relation("IncidentClassificationUrgencyPolicy")
 
   @@unique([scopeKey, version])
 }
 
 model IncidentClassificationPolicyRule {
-  id         String                       @id @default(cuid())
-  policyId   String
-  matchType  String
-  matchValue String
-  priority   String?
-  urgency    IncidentUrgency?
-  label      String?
-  policy     IncidentClassificationPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  id           String                       @id @default(cuid())
+  policyId     String
+  matchType    String
+  matchValue   String
+  priority     String?
+  urgency      IncidentUrgency?
+  priorityMode String
+  urgencyMode  String
+  label        String?
+  policy       IncidentClassificationPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
 
   @@unique([policyId, matchType, matchValue], map: "IncidentClassificationPolicyRule_match_key")
+}
+
+/// Append-only support-hour policy versions. Scope keys are workspace or service:<id>.
+model ResponseSupportHoursPolicy {
+  id               String                     @id @default(cuid())
+  scopeKey         String
+  version          Int
+  timezone         String
+  inheritWorkspace Boolean                    @default(false)
+  mode             String                     @default("SCHEDULED")
+  createdAt        DateTime                   @default(now())
+  createdById      String?
+  sealedAt         DateTime?
+  windows          ResponseSupportWindow[]
+  exceptions       ResponseSupportException[]
+
+  @@unique([scopeKey, version])
+}
+
+model ResponseSupportWindow {
+  id          String                     @id @default(cuid())
+  policyId    String
+  dayOfWeek   Int
+  startMinute Int
+  endMinute   Int
+  policy      ResponseSupportHoursPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
+  @@index([policyId, dayOfWeek])
+}
+
+model ResponseSupportException {
+  id          String                     @id @default(cuid())
+  policyId    String
+  localDate   DateTime                   @db.Date
+  available   Boolean
+  startMinute Int?
+  endMinute   Int?
+  label       String?
+  policy      ResponseSupportHoursPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
+  @@unique([policyId, localDate])
 }
 
 /// Durable daily rollout counters, including legacy writers that already pass explicit targets.

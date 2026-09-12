@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { processEvent } from '@/lib/events';
-import { createTestService, resetDatabase, testPrisma } from '../helpers/test-db';
+import {
+  createTestEscalationPolicy,
+  createTestService,
+  createTestUser,
+  resetDatabase,
+  testPrisma,
+} from '../helpers/test-db';
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -11,7 +17,19 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
   });
 
   it('raises deduplicated incident urgency monotonically and never lowers it', async () => {
-    const service = await createTestService('Event Dedup Urgency Service');
+    const responder = await createTestUser();
+    const policy = await createTestEscalationPolicy('Event Dedup Urgency Policy', [
+      {
+        stepOrder: 0,
+        delayMinutes: 30,
+        targetType: 'USER',
+        targetUserId: responder.id,
+        notificationChannels: [],
+      },
+    ]);
+    const service = await createTestService('Event Dedup Urgency Service', null, {
+      escalationPolicyId: policy.id,
+    });
     const dedupKey = `event-dedup-urgency-${Date.now()}`;
     const basePayload = {
       dedup_key: dedupKey,
@@ -25,11 +43,27 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
       {
         ...basePayload,
         event_action: 'trigger',
-        payload: { ...basePayload.payload, severity: 'warning' as const },
+        payload: { ...basePayload.payload, severity: 'info' as const },
       },
       service.id,
       'event-dedup'
     );
+
+    const deferredUntil = new Date(Date.now() + 3 * 24 * 60 * 60_000);
+    const deferredIncident = await testPrisma.incident.findFirstOrThrow({
+      where: { serviceId: service.id, dedupKey: `event-dedup:${dedupKey}` },
+    });
+    await testPrisma.incident.update({
+      where: { id: deferredIncident.id },
+      data: { nextEscalationAt: deferredUntil },
+    });
+    await testPrisma.backgroundJob.updateMany({
+      where: {
+        status: 'PENDING',
+        payload: { path: ['incidentId'], equals: deferredIncident.id },
+      },
+      data: { scheduledAt: deferredUntil },
+    });
 
     await processEvent(
       {
@@ -45,6 +79,17 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
       where: { serviceId: service.id, dedupKey: `event-dedup:${dedupKey}` },
     });
     expect(incident?.urgency).toBe('HIGH');
+    expect(incident?.nextEscalationAt?.getTime()).toBeLessThan(deferredUntil.getTime());
+    const releasedJobs = await testPrisma.backgroundJob.findMany({
+      where: {
+        status: 'PENDING',
+        payload: { path: ['incidentId'], equals: incident!.id },
+      },
+    });
+    const responderJob = releasedJobs.find(
+      job => (job.payload as { effect?: string }).effect === 'TRIGGER_ESCALATION_NOTIFICATIONS'
+    );
+    expect(responderJob?.scheduledAt.getTime()).toBeLessThan(deferredUntil.getTime());
 
     await processEvent(
       {
@@ -95,5 +140,54 @@ describeIfRealDB('event deduplication semantics', { timeout: 30000 }, () => {
       orderBy: { createdAt: 'asc' },
     });
     expect(event?.message).toContain('monitor <prod>');
+  });
+
+  it('releases deferred responder work on LOW to HIGH without an escalation policy', async () => {
+    const service = await createTestService('No-policy deferred responder service');
+    const dedupKey = `event-no-policy-deferral-${Date.now()}`;
+    const payload = {
+      dedup_key: dedupKey,
+      payload: { summary: 'Deferred alert', source: 'event-dedup-test' },
+    };
+    await processEvent(
+      { ...payload, event_action: 'trigger', payload: { ...payload.payload, severity: 'info' } },
+      service.id,
+      'event-dedup'
+    );
+    const incident = await testPrisma.incident.findFirstOrThrow({
+      where: { serviceId: service.id, dedupKey: `event-dedup:${dedupKey}` },
+    });
+    const deferredUntil = new Date(Date.now() + 3 * 24 * 60 * 60_000);
+    await testPrisma.backgroundJob.updateMany({
+      where: {
+        status: 'PENDING',
+        AND: [
+          { payload: { path: ['incidentId'], equals: incident.id } },
+          { payload: { path: ['effect'], equals: 'TRIGGER_ESCALATION_NOTIFICATIONS' } },
+        ],
+      },
+      data: { scheduledAt: deferredUntil },
+    });
+
+    await processEvent(
+      {
+        ...payload,
+        event_action: 'trigger',
+        payload: { ...payload.payload, severity: 'critical' },
+      },
+      service.id,
+      'event-dedup'
+    );
+
+    const responderJob = await testPrisma.backgroundJob.findFirstOrThrow({
+      where: {
+        status: 'PENDING',
+        AND: [
+          { payload: { path: ['incidentId'], equals: incident.id } },
+          { payload: { path: ['effect'], equals: 'TRIGGER_ESCALATION_NOTIFICATIONS' } },
+        ],
+      },
+    });
+    expect(responderJob.scheduledAt.getTime()).toBeLessThan(deferredUntil.getTime());
   });
 });
