@@ -1377,8 +1377,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     setAnnouncementForm(prev => ({ ...prev, affectedServiceIds: [] }));
   };
 
-  const handleCreateApiToken = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateApiToken = (e?: React.SyntheticEvent) => {
+    if (e) e.preventDefault();
     setApiTokenError(null);
     setApiTokenValue(null);
 
@@ -1687,6 +1687,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
               return (
                 <ItemComponent
                   key={item.id}
+                  data-tab-id={item.id}
                   type={!item.link ? 'button' : undefined}
                   href={item.link}
                   onClick={() => !item.link && setActiveSection(item.id)}
@@ -3912,8 +3913,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                           >
                             API tokens
                           </h3>
-                          <form
-                            onSubmit={handleCreateApiToken}
+                          <div
                             style={{
                               display: 'flex',
                               flexWrap: 'wrap',
@@ -3921,18 +3921,32 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                               alignItems: 'flex-end',
                             }}
                           >
-                            <FormField
-                              type="input"
-                              label="Token name"
-                              value={apiTokenName}
-                              onChange={e => setApiTokenName(e.target.value)}
-                              placeholder="e.g. External status monitor"
-                              required
-                            />
-                            <Button type="submit" variant="primary" isLoading={apiTokenPending}>
+                            <div
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleCreateApiToken(e);
+                                }
+                              }}
+                            >
+                              <FormField
+                                type="input"
+                                label="Token name"
+                                value={apiTokenName}
+                                onChange={e => setApiTokenName(e.target.value)}
+                                placeholder="e.g. External status monitor"
+                                required
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              variant="primary"
+                              isLoading={apiTokenPending}
+                              onClick={handleCreateApiToken}
+                            >
                               Create token
                             </Button>
-                          </form>
+                          </div>
                           {apiTokenError && (
                             <div
                               style={{
