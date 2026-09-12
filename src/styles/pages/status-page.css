@@ -741,25 +741,153 @@
 
 .status-page-config-card {
   background: var(--card-bg, #ffffff);
-  border: 1px solid var(--card-border, rgba(148, 163, 184, 0.2));
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  border: 1px solid var(--card-border, #e2e8f0);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
-.status-page-config-card .ui-card-body {
-  padding: clamp(1.1rem, 2vw, 1.5rem);
+[data-theme='dark'] .status-page-config-card {
+  background: #18181b;
+  border-color: #27272a;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.35);
+}
+
+.status-page-card-header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+[data-theme='dark'] .status-page-card-header {
+  background: #1e1e24;
+  border-bottom-color: #27272a;
+}
+
+.status-page-card-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: rgba(99, 102, 241, 0.08);
+  color: #4f46e5;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .status-page-card-icon-badge {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+/* Ensure typing sections and form inputs always have a crisp, visible resting border */
+.status-page-config input[type="text"],
+.status-page-config input[type="email"],
+.status-page-config input[type="url"],
+.status-page-config input[type="password"],
+.status-page-config input[type="number"],
+.status-page-config input[type="date"],
+.status-page-config textarea,
+.status-page-config select,
+.status-page-config .ui-input,
+.status-page-config .ui-formfield-textarea,
+.status-page-config .ui-select {
+  border: 1px solid #cbd5e1 !important;
+  background-color: #ffffff;
+  color: #0f172a;
+  border-radius: 0.5rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.status-page-config input[type="text"]:hover,
+.status-page-config input[type="email"]:hover,
+.status-page-config input[type="url"]:hover,
+.status-page-config input[type="password"]:hover,
+.status-page-config input[type="number"]:hover,
+.status-page-config input[type="date"]:hover,
+.status-page-config textarea:hover,
+.status-page-config select:hover,
+.status-page-config .ui-input:hover,
+.status-page-config .ui-formfield-textarea:hover,
+.status-page-config .ui-select:hover {
+  border-color: #94a3b8 !important;
+}
+
+.status-page-config input[type="text"]:focus,
+.status-page-config input[type="email"]:focus,
+.status-page-config input[type="url"]:focus,
+.status-page-config input[type="password"]:focus,
+.status-page-config input[type="number"]:focus,
+.status-page-config input[type="date"]:focus,
+.status-page-config textarea:focus,
+.status-page-config select:focus,
+.status-page-config .ui-input:focus,
+.status-page-config .ui-formfield-textarea:focus,
+.status-page-config .ui-select:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18) !important;
+  outline: none !important;
+}
+
+[data-theme='dark'] .status-page-config input[type="text"],
+[data-theme='dark'] .status-page-config input[type="email"],
+[data-theme='dark'] .status-page-config input[type="url"],
+[data-theme='dark'] .status-page-config input[type="password"],
+[data-theme='dark'] .status-page-config input[type="number"],
+[data-theme='dark'] .status-page-config input[type="date"],
+[data-theme='dark'] .status-page-config textarea,
+[data-theme='dark'] .status-page-config select,
+[data-theme='dark'] .status-page-config .ui-input,
+[data-theme='dark'] .status-page-config .ui-formfield-textarea,
+[data-theme='dark'] .status-page-config .ui-select {
+  border: 1px solid #3f3f46 !important;
+  background-color: #18181b;
+  color: #f4f4f5;
+}
+
+[data-theme='dark'] .status-page-config input[type="text"]:hover,
+[data-theme='dark'] .status-page-config input[type="email"]:hover,
+[data-theme='dark'] .status-page-config input[type="url"]:hover,
+[data-theme='dark'] .status-page-config input[type="password"]:hover,
+[data-theme='dark'] .status-page-config input[type="number"]:hover,
+[data-theme='dark'] .status-page-config input[type="date"]:hover,
+[data-theme='dark'] .status-page-config textarea:hover,
+[data-theme='dark'] .status-page-config select:hover,
+[data-theme='dark'] .status-page-config .ui-input:hover,
+[data-theme='dark'] .status-page-config .ui-formfield-textarea:hover,
+[data-theme='dark'] .status-page-config .ui-select:hover {
+  border-color: #52525b !important;
+}
+
+[data-theme='dark'] .status-page-config input[type="text"]:focus,
+[data-theme='dark'] .status-page-config input[type="email"]:focus,
+[data-theme='dark'] .status-page-config input[type="url"]:focus,
+[data-theme='dark'] .status-page-config input[type="password"]:focus,
+[data-theme='dark'] .status-page-config input[type="number"]:focus,
+[data-theme='dark'] .status-page-config input[type="date"]:focus,
+[data-theme='dark'] .status-page-config textarea:focus,
+[data-theme='dark'] .status-page-config select:focus,
+[data-theme='dark'] .status-page-config .ui-input:focus,
+[data-theme='dark'] .status-page-config .ui-formfield-textarea:focus,
+[data-theme='dark'] .status-page-config .ui-select:focus {
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.25) !important;
+  outline: none !important;
 }
 
 .status-page-config-card-title {
-  font-size: clamp(1.1rem, 1.8vw, 1.35rem);
-  font-weight: 700;
-  margin: 0 0 0.35rem 0;
+  font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
 }
 
 .status-page-config-card-desc {
   color: var(--text-secondary);
-  font-size: clamp(0.85rem, 1.1vw, 0.95rem);
-  margin: 0 0 var(--spacing-4) 0;
-  line-height: 1.6;
+  font-size: clamp(0.8125rem, 1vw, 0.875rem);
+  margin: 0;
+  line-height: 1.5;
 }
 
 .status-page-config-actions {

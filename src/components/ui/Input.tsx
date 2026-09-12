@@ -54,18 +54,21 @@ export default function Input({
 
   const variantStyles = {
     default: {
-      borderColor: 'var(--border)',
+      borderColor: 'hsl(var(--border, 214.3 28% 86%))',
     },
     error: {
-      borderColor: 'var(--color-error)',
+      borderColor: 'var(--color-error, #ef4444)',
     },
     success: {
-      borderColor: 'var(--color-success)',
+      borderColor: 'var(--color-success, #22c55e)',
     },
   };
 
   return (
-    <div className={`ui-input-wrapper ${fullWidth ? 'ui-input-full-width' : ''}`} style={{ width: fullWidth ? '100%' : 'auto' }}>
+    <div
+      className={`ui-input-wrapper ${fullWidth ? 'ui-input-full-width' : ''}`}
+      style={{ width: fullWidth ? '100%' : 'auto' }}
+    >
       {label && (
         <label
           htmlFor={inputId}
@@ -79,7 +82,9 @@ export default function Input({
           }}
         >
           {label}
-          {props.required && <span style={{ color: 'var(--color-error)', marginLeft: '0.25rem' }}>*</span>}
+          {props.required && (
+            <span style={{ color: 'var(--color-error)', marginLeft: '0.25rem' }}>*</span>
+          )}
         </label>
       )}
       <div
@@ -117,19 +122,43 @@ export default function Input({
             color: 'var(--text-primary)',
             fontFamily: 'inherit',
             transition: 'all var(--transition-base) var(--ease-out)',
-            paddingLeft: leftIcon ? (size === 'sm' ? '2.5rem' : size === 'md' ? '3rem' : '3.5rem') : undefined,
-            paddingRight: rightIcon ? (size === 'sm' ? '2.5rem' : size === 'md' ? '3rem' : '3.5rem') : undefined,
+            paddingLeft: leftIcon
+              ? size === 'sm'
+                ? '2.5rem'
+                : size === 'md'
+                  ? '3rem'
+                  : '3.5rem'
+              : undefined,
+            paddingRight: rightIcon
+              ? size === 'sm'
+                ? '2.5rem'
+                : size === 'md'
+                  ? '3rem'
+                  : '3.5rem'
+              : undefined,
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = hasError ? 'var(--color-error)' : hasSuccess ? 'var(--color-success)' : 'var(--border-focus)';
-            e.currentTarget.style.boxShadow = `0 0 0 3px ${hasError ? 'rgba(239, 68, 68, 0.1)' : hasSuccess ? 'rgba(34, 197, 94, 0.1)' : 'rgba(211, 47, 47, 0.1)'}`;
+          onFocus={e => {
+            e.currentTarget.style.borderColor = hasError
+              ? 'var(--color-error, #ef4444)'
+              : hasSuccess
+                ? 'var(--color-success, #22c55e)'
+                : 'hsl(var(--primary))';
+            e.currentTarget.style.boxShadow = hasError
+              ? '0 0 0 3px rgba(239, 68, 68, 0.15)'
+              : hasSuccess
+                ? '0 0 0 3px rgba(34, 197, 94, 0.15)'
+                : '0 0 0 3px rgba(99, 102, 241, 0.18)';
           }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = variantStyles[hasError ? 'error' : hasSuccess ? 'success' : 'default'].borderColor as string;
+          onBlur={e => {
+            e.currentTarget.style.borderColor = variantStyles[
+              hasError ? 'error' : hasSuccess ? 'success' : 'default'
+            ].borderColor as string;
             e.currentTarget.style.boxShadow = 'none';
           }}
           aria-invalid={hasError}
-          aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
+          aria-describedby={
+            error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined
+          }
           {...props}
         />
         {rightIcon && (
@@ -181,5 +210,3 @@ export default function Input({
     </div>
   );
 }
-
-

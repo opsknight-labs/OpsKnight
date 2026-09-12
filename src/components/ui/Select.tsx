@@ -26,7 +26,7 @@ interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'siz
 
 /**
  * Select component for dropdowns
- * 
+ *
  * @example
  * <Select
  *   label="Choose option"
@@ -86,18 +86,21 @@ export default function Select({
 
   const variantStyles = {
     default: {
-      borderColor: 'var(--border)',
+      borderColor: 'hsl(var(--border, 214.3 28% 86%))',
     },
     error: {
-      borderColor: 'var(--color-error)',
+      borderColor: 'var(--color-error, #ef4444)',
     },
     success: {
-      borderColor: 'var(--color-success)',
+      borderColor: 'var(--color-success, #22c55e)',
     },
   };
 
   return (
-    <div className={`ui-select-wrapper ${fullWidth ? 'ui-select-full-width' : ''}`} style={{ width: fullWidth ? '100%' : 'auto' }}>
+    <div
+      className={`ui-select-wrapper ${fullWidth ? 'ui-select-full-width' : ''}`}
+      style={{ width: fullWidth ? '100%' : 'auto' }}
+    >
       {label && (
         <label
           htmlFor={selectId}
@@ -111,7 +114,9 @@ export default function Select({
           }}
         >
           {label}
-          {props.required && <span style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}>*</span>}
+          {props.required && (
+            <span style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}>*</span>
+          )}
         </label>
       )}
       <div
@@ -151,7 +156,9 @@ export default function Select({
             fontFamily: 'inherit',
             transition: 'all var(--transition-base) var(--ease-out)',
             appearance: 'none',
-            backgroundImage: rightIcon ? 'none' : `url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
+            backgroundImage: rightIcon
+              ? 'none'
+              : `url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 4L6 8L10 4' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'no-repeat',
             backgroundPosition: 'right 0.75rem center',
             paddingRight: rightIcon ? undefined : '2.5rem',
@@ -160,16 +167,28 @@ export default function Select({
             boxSizing: 'border-box',
             verticalAlign: 'middle',
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = hasError ? 'var(--color-error)' : hasSuccess ? 'var(--color-success)' : 'var(--border-focus)';
-            e.currentTarget.style.boxShadow = `0 0 0 3px ${hasError ? 'rgba(239, 68, 68, 0.1)' : hasSuccess ? 'rgba(34, 197, 94, 0.1)' : 'rgba(211, 47, 47, 0.1)'}`;
+          onFocus={e => {
+            e.currentTarget.style.borderColor = hasError
+              ? 'var(--color-error, #ef4444)'
+              : hasSuccess
+                ? 'var(--color-success, #22c55e)'
+                : 'hsl(var(--primary))';
+            e.currentTarget.style.boxShadow = hasError
+              ? '0 0 0 3px rgba(239, 68, 68, 0.15)'
+              : hasSuccess
+                ? '0 0 0 3px rgba(34, 197, 94, 0.15)'
+                : '0 0 0 3px rgba(99, 102, 241, 0.18)';
           }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = variantStyles[hasError ? 'error' : hasSuccess ? 'success' : 'default'].borderColor as string;
+          onBlur={e => {
+            e.currentTarget.style.borderColor = variantStyles[
+              hasError ? 'error' : hasSuccess ? 'success' : 'default'
+            ].borderColor as string;
             e.currentTarget.style.boxShadow = 'none';
           }}
           aria-invalid={hasError}
-          aria-describedby={error ? `${selectId}-error` : helperText ? `${selectId}-helper` : undefined}
+          aria-describedby={
+            error ? `${selectId}-error` : helperText ? `${selectId}-helper` : undefined
+          }
           {...props}
         >
           {placeholder && (
@@ -177,7 +196,7 @@ export default function Select({
               {placeholder}
             </option>
           )}
-          {options.map((option) => (
+          {options.map(option => (
             <option key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </option>
