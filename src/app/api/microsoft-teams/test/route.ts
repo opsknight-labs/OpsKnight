@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -6,6 +7,16 @@ import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-url';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { incidentNotificationPriority } from '@/lib/notification-priority';
+
+const teamsTestSchema = z
+  .object({
+    destinationId: z.string().trim().min(1).max(191).optional(),
+    serviceId: z.string().trim().min(1).max(191).optional(),
+  })
+  .strict()
+  .refine(v => Boolean(v.destinationId || v.serviceId), {
+    message: 'destinationId or serviceId is required.',
+  });
 
 /**
  * POST /api/microsoft-teams/test
@@ -22,9 +33,11 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       return jsonError(new AppError({ code: 'INVALID_JSON', cause: e as Error }));
     }
-    const p = (body ?? {}) as Record<string, unknown>;
-    const destinationId = typeof p.destinationId === 'string' ? p.destinationId.trim() : '';
-    const serviceId = typeof p.serviceId === 'string' ? p.serviceId.trim() : '';
+    const parsed = teamsTestSchema.safeParse((body ?? {}) as Record<string, unknown>);
+    if (!parsed.success) {
+      return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: parsed.error.issues[0]?.message ?? 'Invalid request.' }));
+    }
+    const { destinationId, serviceId } = parsed.data as { destinationId?: string; serviceId?: string };
 
     const prismaAny = prisma as unknown as {
       microsoftTeamsDestination: {

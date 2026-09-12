@@ -76,8 +76,7 @@ export async function POST(request: NextRequest) {
       if (isTruthyString(tenantId) && isTruthyString(teamId)) {
         const botId = activity.recipient?.id?.trim();
         const botAdded = Array.isArray(activity.membersAdded) && activity.membersAdded.some(m => m?.id && botId && m.id === botId);
-        // Record on install (bot added) or on any conversationUpdate that carries tenant/team
-        if (botAdded || tenantId || teamId) {
+        if (botAdded) {
           const prismaAny = prisma as unknown as {
             microsoftTeamsInstallation: {
               upsert: (args: unknown) => Promise<unknown>;

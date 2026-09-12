@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
@@ -19,28 +20,39 @@ export async function saveMicrosoftTeamsConfig(
     return { error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.' };
   }
 
-  const clientId = (formData.get('clientId') as string | null)?.trim() ?? '';
+  const clientIdRaw = (formData.get('clientId') as string | null)?.trim() ?? '';
   const clientSecretRaw = (formData.get('clientSecret') as string | null) ?? '';
-  const tenantId = (formData.get('tenantId') as string | null)?.trim() || null;
+  const tenantIdRaw = (formData.get('tenantId') as string | null)?.trim() || null;
   const tenantModeRaw = (formData.get('tenantMode') as string | null)?.trim() ?? 'SINGLE';
-  const tenantMode = tenantModeRaw === 'MULTI' ? 'MULTI' : 'SINGLE';
   const enabledValue = formData.get('enabled');
-  const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === null;
 
-  const existing = await (prisma as unknown as Record<string, unknown> & { microsoftTeamsConfig: { findFirst: (a: unknown) => Promise<{ id: string; clientSecret: string; tenantId: string | null; clientId: string } | null> } }).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never) as
+  // Strict validation — Zod is required by AGENTS.md §4 for every Server Action.
+  const microsoftTeamsConfigSchema = z.object({
+    clientId: z.string().trim().uuid('Client ID must be a valid Azure Application (client) ID (GUID).'),
+    tenantId: z.string().trim().uuid('Tenant ID must be a valid Azure tenant GUID.').nullable(),
+    tenantMode: z.enum(['SINGLE', 'MULTI']),
+    enabledValue: z.string().nullable().optional(),
+  });
+  const existingEarly = await (prisma as unknown as Record<string, unknown> & { microsoftTeamsConfig: { findFirst: (a: unknown) => Promise<{ id: string; clientSecret: string; tenantId: string | null; clientId: string } | null> } }).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never) as
     | { id: string; clientSecret: string; clientId: string }
     | null
     | undefined;
-
-  // Allow rotating secret without re-entering clientId when config already exists
-  let effectiveClientId = clientId || (existing as unknown as { clientId?: string } | null)?.clientId;
-  if (!effectiveClientId) {
-    return { error: 'Client ID (Azure Application ID) is required.' };
+  // Allow rotating secret without re-entering clientId: reuse existing clientId when present and input is empty.
+  const resolvedClientId = clientIdRaw || (existingEarly as unknown as { clientId?: string } | null)?.clientId || '';
+  const parsed = microsoftTeamsConfigSchema.safeParse({
+    clientId: resolvedClientId,
+    tenantId: tenantIdRaw,
+    tenantMode: tenantModeRaw === 'MULTI' ? 'MULTI' : 'SINGLE',
+    enabledValue: enabledValue as string | null,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid Teams configuration.' };
   }
-  // Basic GUID shape check for Azure app id
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(effectiveClientId)) {
-    return { error: 'Client ID must be a valid Azure Application (client) ID (GUID).' };
-  }
+  const { tenantId } = parsed.data;
+  const tenantMode = parsed.data.tenantMode;
+  const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === null;
+  const effectiveClientId = parsed.data.clientId;
+  const existing = existingEarly;
 
   let encryptedSecret: string | undefined = (existing as unknown as { clientSecret?: string } | null)?.clientSecret;
   const trimmedSecret = clientSecretRaw.trim();

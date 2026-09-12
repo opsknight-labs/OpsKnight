@@ -1,5 +1,18 @@
 import { sanitizeUrl } from '@/lib/email-components';
 
+/** JSON-safe URL for Adaptive Card Action.OpenUrl (host does no HTML unescape). */
+function safeTeamsUrl(url: string | null | undefined): string {
+  if (!url) return '#';
+  const trimmed = url.trim();
+  // Only allow http(s) in channel cards; sanitizeUrl guards the same prefix but
+  // returns an HTML-escaped string (&amp;). For JSON we need the raw safe URL.
+  if (!/^(https?:\/\/)/i.test(trimmed)) return '#';
+  // sanitizeUrl also normalises &amp; → & then escapes; a passing check means
+  // the scheme is allowed — return the trimmed raw value (already validated).
+  const checked = sanitizeUrl(trimmed);
+  return checked === '#' ? '#' : trimmed;
+}
+
 export type MicrosoftTeamsIncidentCardInput = {
   incident: {
     id: string;
@@ -51,14 +64,7 @@ function safeIncidentDescription(value: string | null | undefined, maxLen = 280)
  */
 export function buildMicrosoftTeamsIncidentCard(input: MicrosoftTeamsIncidentCardInput) {
   const { incident, eventType } = input;
-  const safeUrl = (() => {
-    try {
-      const u = sanitizeUrl(incident.incidentUrl);
-      return u || incident.incidentUrl;
-    } catch {
-      return incident.incidentUrl;
-    }
-  })();
+  const safeUrl = safeTeamsUrl(incident.incidentUrl);
 
   const description = safeIncidentDescription(incident.description);
   const subtitle = `${incident.serviceName} · ${incident.urgency}${incident.priority ? ` · ${incident.priority}` : ''}`;
