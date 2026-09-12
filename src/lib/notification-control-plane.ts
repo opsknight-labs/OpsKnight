@@ -59,6 +59,7 @@ type LifecycleDeliveryPolicy = {
   targetKind?:
     | 'SERVICE_SLACK_CHANNEL'
     | 'SERVICE_SLACK_WEBHOOK'
+    | 'SERVICE_MICROSOFT_TEAMS_CHANNEL'
     | 'WEBHOOK_INTEGRATION'
     | 'LEGACY_SERVICE_WEBHOOK';
   targetId?: string;
@@ -147,6 +148,21 @@ export type CentralNotificationPayload =
       serviceId?: string;
       expectedStatus?: string;
       escalationGeneration?: number | null;
+    }
+  | {
+      kind: 'MICROSOFT_TEAMS_CHANNEL';
+      destinationId: string;
+      incident: IncidentPresentation & {
+        description?: string | null;
+        priority?: string | null;
+        assigneeName?: string | null;
+        incidentUrl: string;
+        createdAt: Date;
+        acknowledgedAt?: Date | null;
+        resolvedAt?: Date | null;
+      };
+      eventType: 'triggered' | 'acknowledged' | 'resolved';
+      lifecyclePolicy?: LifecycleDeliveryPolicy;
     };
 
 type IncidentCentralPayload = Extract<
@@ -158,6 +174,7 @@ export type CentralNotificationInput = {
   category: NotificationCategory;
   channel: NotificationChannel;
   recipientType: NotificationRecipientType;
+  // Phase 1 Teams uses serviceId as stable recipientAddress since Graph channel ids are not emails/phones.
   recipientId?: string;
   recipientAddress: string;
   userId?: string;
@@ -180,8 +197,16 @@ export type CentralNotificationInput = {
 
 const centralNotificationInputSchema = z.object({
   category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
-  channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']),
-  recipientType: z.enum(['USER', 'EMAIL', 'PHONE', 'SUBSCRIBER', 'SLACK_CHANNEL', 'WEBHOOK']),
+  channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP', 'MICROSOFT_TEAMS']),
+  recipientType: z.enum([
+    'USER',
+    'EMAIL',
+    'PHONE',
+    'SUBSCRIBER',
+    'SLACK_CHANNEL',
+    'WEBHOOK',
+    'MICROSOFT_TEAMS_CHANNEL',
+  ]),
   recipientId: z.string().max(191).optional(),
   recipientAddress: z.string().max(2_048),
   userId: z.string().max(191).optional(),
@@ -271,6 +296,7 @@ function channelForPayload(payload: CentralNotificationPayload): NotificationCha
   if (payload.kind === 'INCIDENT_PUSH') return 'PUSH';
   if (payload.kind === 'INCIDENT_WHATSAPP') return 'WHATSAPP';
   if (payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK') return 'SLACK';
+  if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL') return 'MICROSOFT_TEAMS';
   if (payload.kind === 'STATUS_PAGE_WEBHOOK') return 'WEBHOOK';
   return payload.kind;
 }
@@ -312,6 +338,8 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
       return hasText(value.channel) && isRecord(value.incident) && hasText(value.incident.id);
     case 'SLACK_WEBHOOK':
       return isRecord(value.incident) && hasText(value.incident.id);
+    case 'MICROSOFT_TEAMS_CHANNEL':
+      return hasText(value.destinationId) && isRecord(value.incident) && hasText(value.incident.id);
     case 'WEBHOOK':
       return hasText(value.url) && isRecord(value.payload);
     case 'STATUS_PAGE_WEBHOOK':
@@ -960,6 +988,32 @@ async function dispatchPayload(
             statusCode: result.statusCode,
             retryAfterMs: result.retryAfterMs,
           };
+    }
+    case 'MICROSOFT_TEAMS_CHANNEL': {
+      const previous = await prisma.microsoftTeamsIncidentMessage.findUnique({
+        where: { incidentId_destinationId: { incidentId: payload.incident.id, destinationId: payload.destinationId } },
+        select: { messageId: true, conversationId: true },
+      });
+      if (previous?.messageId) {
+        const { microsoftTeamsChatProvider } = await import('./microsoft-teams/provider');
+        return executeProvider(CircuitBreakers.microsoftTeams(), () =>
+          microsoftTeamsChatProvider.updateIncidentCard({
+            destinationId: payload.destinationId,
+            messageId: previous.messageId!,
+            conversationId: previous.conversationId ?? undefined,
+            incident: payload.incident as never,
+            eventType: payload.eventType,
+          })
+        );
+      }
+      const { microsoftTeamsChatProvider } = await import('./microsoft-teams/provider');
+      return executeProvider(CircuitBreakers.microsoftTeams(), () =>
+        microsoftTeamsChatProvider.sendIncidentCard({
+          destinationId: payload.destinationId,
+          incident: payload.incident as never,
+          eventType: payload.eventType,
+        })
+      );
     }
   }
 }

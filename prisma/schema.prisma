@@ -90,6 +90,12 @@ enum NotificationChannel {
   SLACK
   WEBHOOK
   WHATSAPP
+  MICROSOFT_TEAMS
+}
+
+enum MicrosoftTeamsTenantMode {
+  SINGLE
+  MULTI
 }
 
 enum NotificationTrafficClass {
@@ -124,6 +130,7 @@ enum NotificationRecipientType {
   SUBSCRIBER
   SLACK_CHANNEL
   WEBHOOK
+  MICROSOFT_TEAMS_CHANNEL
 }
 
 enum InAppNotificationType {
@@ -353,20 +360,23 @@ model User {
   overrideReplacements OnCallOverride[]    @relation("OverrideReplacesUser")
   layerAssignments     OnCallLayerUser[]
 
-  apiKeys             ApiKey[]
-  incidentTemplates   IncidentTemplate[]
-  updatedProviders    NotificationProvider[]
-  teamsLed            Team[]                 @relation("TeamLead")
-  slackIntegrations   SlackIntegration[]
-  slackOAuthConfigs   SlackOAuthConfig[]     @relation("SlackOAuthConfigUpdater")
-  jiraConfigsUpdated  JiraConfig[]           @relation("JiraConfigUpdater")
-  oidcConfigs         OidcConfig[]
-  oidcIdentities      OidcIdentity[]
-  oidcLinkingApproval OidcLinkingApproval?
-  avatar              UserAvatar?
-  dashboards          Dashboard[]
-  assignedActionItems ActionItem[]
-  tokens              UserToken[]
+  apiKeys                     ApiKey[]
+  incidentTemplates           IncidentTemplate[]
+  updatedProviders            NotificationProvider[]
+  teamsLed                    Team[]                       @relation("TeamLead")
+  slackIntegrations           SlackIntegration[]
+  slackOAuthConfigs           SlackOAuthConfig[]           @relation("SlackOAuthConfigUpdater")
+  jiraConfigsUpdated          JiraConfig[]                 @relation("JiraConfigUpdater")
+  microsoftTeamsConfigs       MicrosoftTeamsConfig[]       @relation("MicrosoftTeamsConfigUpdater")
+  microsoftTeamsInstallations MicrosoftTeamsInstallation[] @relation("MicrosoftTeamsInstallationInstaller")
+  microsoftTeamsDestinations  MicrosoftTeamsDestination[]  @relation("MicrosoftTeamsDestinationUpdater")
+  oidcConfigs                 OidcConfig[]
+  oidcIdentities              OidcIdentity[]
+  oidcLinkingApproval         OidcLinkingApproval?
+  avatar                      UserAvatar?
+  dashboards                  Dashboard[]
+  assignedActionItems         ActionItem[]
+  tokens                      UserToken[]
 
   @@index([email]) // CRITICAL: Performance index for email lookups (fixes 2-4s queries)
   @@index([role, status]) // For filtering users by role and status
@@ -474,14 +484,15 @@ model Service {
   incidents Incident[]
   policy    EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id])
 
-  integrations          Integration[]
-  alerts                Alert[]
-  incidentTemplates     IncidentTemplate[]
-  statusPageServices    StatusPageService[]
-  webhookIntegrations   WebhookIntegration[]
-  slackIntegration      SlackIntegration?               @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
-  jiraServiceMapping    JiraServiceMapping?
-  subscriptionServices StatusPageSubscriptionService[]
+  integrations              Integration[]
+  alerts                    Alert[]
+  incidentTemplates         IncidentTemplate[]
+  statusPageServices        StatusPageService[]
+  webhookIntegrations       WebhookIntegration[]
+  slackIntegration          SlackIntegration?               @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
+  jiraServiceMapping        JiraServiceMapping?
+  subscriptionServices      StatusPageSubscriptionService[]
+  microsoftTeamsDestination MicrosoftTeamsDestination?
 
   @@index([teamId])
   @@index([escalationPolicyId])
@@ -609,25 +620,25 @@ model SlackOAuthConfig {
 
 // OIDC Single Sign-On Configuration (Global - stored in database)
 model OidcConfig {
-  id             String   @id @default("default")
-  issuer         String
-  clientId       String
-  clientSecret   String
-  enabled        Boolean  @default(true)
-  configVersion  Int      @default(1)
-  autoProvision  Boolean  @default(true)
-  allowedDomains String[] @default([])
-  roleMapping    Json?    @default("[]") // Schema: [{ claim: string, value: string, role: Role }]
-  customScopes   String? // e.g. "groups profile email"
-  providerType   String? // e.g. 'google', 'okta', 'azure', 'auth0', 'custom'
-  providerLabel  String? // Custom display name, e.g. "Acme Corp SSO"
-  organizationId          String?  // Auth0 org_id or equivalent signed organization boundary
+  id                      String   @id @default("default")
+  issuer                  String
+  clientId                String
+  clientSecret            String
+  enabled                 Boolean  @default(true)
+  configVersion           Int      @default(1)
+  autoProvision           Boolean  @default(true)
+  allowedDomains          String[] @default([])
+  roleMapping             Json?    @default("[]") // Schema: [{ claim: string, value: string, role: Role }]
+  customScopes            String? // e.g. "groups profile email"
+  providerType            String? // e.g. 'google', 'okta', 'azure', 'auth0', 'custom'
+  providerLabel           String? // Custom display name, e.g. "Acme Corp SSO"
+  organizationId          String? // Auth0 org_id or equivalent signed organization boundary
   tokenEndpointAuthMethod String?  @default("client_secret_basic") // 'client_secret_basic' | 'client_secret_post'
   profileMapping          Json?    @default("{}") // { department: "dept", jobTitle: "title", avatarUrl: "picture" }
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  updatedBy      String?
-  updater        User?    @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  updatedBy               String?
+  updater                 User?    @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
 
   @@unique([id])
 }
@@ -650,6 +661,91 @@ model SlackIntegration {
 
   @@unique([workspaceId]) // One integration per workspace (can be global or service-specific)
   @@index([workspaceId])
+}
+
+// Microsoft Teams — Phase 1 foundation (console-UI encrypted config, team/channel install, per-service destination)
+// Naming uses `MicrosoftTeams*` intentionally: generic `Team(s)` collides with the internal Team domain.
+model MicrosoftTeamsConfig {
+  id           String                   @id @default(cuid())
+  clientId     String // Azure AD application (client) ID — stored in cleartext (not a secret)
+  clientSecret String // Encrypted via AES-256-GCM (encryptWithKey), never logged
+  tenantId     String? // Entra tenant ID for SINGLE mode; null for MULTI
+  tenantMode   MicrosoftTeamsTenantMode @default(SINGLE)
+  enabled      Boolean                  @default(true)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  updatedBy    String?
+  updater      User?                    @relation("MicrosoftTeamsConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
+  @@index([enabled])
+}
+
+model MicrosoftTeamsInstallation {
+  id          String   @id @default(cuid())
+  tenantId    String // Entra tenant ID from Teams activity (verified by SDK, never trusted from raw JSON)
+  teamId      String // Teams team id (e.g. 19:xxxx@thread.tacv2) — unique per tenant
+  teamName    String?
+  channelId   String? // Default channel where bot was installed (conversationUpdate)
+  installedBy String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  installer    User?                       @relation("MicrosoftTeamsInstallationInstaller", fields: [installedBy], references: [id], onDelete: SetNull)
+  destinations MicrosoftTeamsDestination[]
+
+  @@unique([tenantId, teamId])
+  @@index([tenantId])
+  @@index([teamId])
+  @@index([enabled])
+}
+
+model MicrosoftTeamsDestination {
+  id             String   @id @default(cuid())
+  serviceId      String   @unique // Phase 1: one Teams channel per OpsKnight service
+  tenantId       String
+  teamId         String
+  channelId      String // Teams channel id (19:...@thread.tacv2)
+  channelName    String?
+  teamName       String?
+  installationId String?
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  updatedBy      String?
+
+  service      Service                         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  installation MicrosoftTeamsInstallation?     @relation(fields: [installationId], references: [id], onDelete: SetNull)
+  updater      User?                           @relation("MicrosoftTeamsDestinationUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  messages     MicrosoftTeamsIncidentMessage[]
+
+  @@unique([tenantId, teamId, channelId])
+  @@index([tenantId, teamId])
+  @@index([channelId])
+  @@index([installationId])
+  @@index([enabled])
+}
+
+model MicrosoftTeamsIncidentMessage {
+  id             String   @id @default(cuid())
+  incidentId     String
+  destinationId  String
+  conversationId String? // Bot Framework conversation id for updateActivity
+  messageId      String? // Teams activity/message id (activityId)
+  channelId      String?
+  tenantId       String?
+  teamId         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  incident    Incident                  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  destination MicrosoftTeamsDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, destinationId])
+  @@index([incidentId])
+  @@index([destinationId])
+  @@index([conversationId])
+  @@index([messageId])
 }
 
 model Alert {
@@ -726,9 +822,9 @@ model Incident {
   createdAt                    DateTime                      @default(now())
   updatedAt                    DateTime                      @updatedAt
 
-  service                 Service                  @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  assignee                User?                    @relation(fields: [assigneeId], references: [id])
-  team                    Team?                    @relation(fields: [teamId], references: [id])
+  service                 Service                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  assignee                User?                           @relation(fields: [assigneeId], references: [id])
+  team                    Team?                           @relation(fields: [teamId], references: [id])
   events                  IncidentEvent[]
   notes                   IncidentNote[]
   postmortem              Postmortem?
@@ -741,6 +837,7 @@ model Incident {
   actionItemRecords       ActionItem[]
   externalIssueLinks      ExternalIssueLink[]
   pinnedMessages          SlackPinnedMessage[]
+  microsoftTeamsMessages  MicrosoftTeamsIncidentMessage[]
   slaPauses               IncidentSlaPause[]
 
   @@index([dedupKey]) // Index for fast deduplication lookups
@@ -1539,37 +1636,37 @@ model StatusPage {
   contactUrl       String?
 
   // Privacy settings
-  privacyMode              String? @default("PUBLIC") // PUBLIC, RESTRICTED, PRIVATE
-  showIncidentDetails      Boolean @default(true)
-  showIncidentTitles       Boolean @default(true)
-  showIncidentDescriptions Boolean @default(true)
-  showAffectedServices     Boolean @default(true)
-  showIncidentTimestamps   Boolean @default(true)
-  showServiceMetrics       Boolean @default(true)
-  showServiceDescriptions  Boolean @default(true)
-  showServiceRegions       Boolean @default(true)
-  showServicesByRegion     Boolean @default(false)
-  showServiceOwners        Boolean @default(false)
-  showServiceSlaTier       Boolean @default(false)
-  showTeamInformation      Boolean @default(false)
-  showCustomFields         Boolean @default(false)
-  showIncidentAssignees    Boolean @default(false)
-  showIncidentUrgency      Boolean @default(true)
-  showUptimeHistory        Boolean @default(true)
-  showRecentIncidents      Boolean @default(true)
+  privacyMode                String? @default("PUBLIC") // PUBLIC, RESTRICTED, PRIVATE
+  showIncidentDetails        Boolean @default(true)
+  showIncidentTitles         Boolean @default(true)
+  showIncidentDescriptions   Boolean @default(true)
+  showAffectedServices       Boolean @default(true)
+  showIncidentTimestamps     Boolean @default(true)
+  showServiceMetrics         Boolean @default(true)
+  showServiceDescriptions    Boolean @default(true)
+  showServiceRegions         Boolean @default(true)
+  showServicesByRegion       Boolean @default(false)
+  showServiceOwners          Boolean @default(false)
+  showServiceSlaTier         Boolean @default(false)
+  showTeamInformation        Boolean @default(false)
+  showCustomFields           Boolean @default(false)
+  showIncidentAssignees      Boolean @default(false)
+  showIncidentUrgency        Boolean @default(true)
+  showUptimeHistory          Boolean @default(true)
+  showRecentIncidents        Boolean @default(true)
   showIncidentHistoryDetails Boolean @default(true)
   incidentHistoryDetailDays  Int     @default(7)
-  showChangelog            Boolean @default(true)
-  showRegionHeatmap        Boolean @default(true)
-  showPostIncidentReview   Boolean @default(true)
-  maxIncidentsToShow       Int     @default(50)
-  incidentHistoryDays      Int     @default(90)
-  allowedCustomFields      Json? // Array of custom field IDs to show
-  dataRetentionDays        Int? // Auto-hide incidents older than X days
-  requireAuth              Boolean @default(false) // Require authentication
-  authProvider             String? // SSO provider if requireAuth=true
-  emailProvider            String? // Email provider for subscription notifications (resend, sendgrid, smtp, or null for auto)
-  enableUptimeExports      Boolean @default(false)
+  showChangelog              Boolean @default(true)
+  showRegionHeatmap          Boolean @default(true)
+  showPostIncidentReview     Boolean @default(true)
+  maxIncidentsToShow         Int     @default(50)
+  incidentHistoryDays        Int     @default(90)
+  allowedCustomFields        Json? // Array of custom field IDs to show
+  dataRetentionDays          Int? // Auto-hide incidents older than X days
+  requireAuth                Boolean @default(false) // Require authentication
+  authProvider               String? // SSO provider if requireAuth=true
+  emailProvider              String? // Email provider for subscription notifications (resend, sendgrid, smtp, or null for auto)
+  enableUptimeExports        Boolean @default(false)
 
   // Status API access controls
   statusApiRequireToken       Boolean @default(false)
@@ -1704,27 +1801,27 @@ model StatusPageApiToken {
 
 // Status Page Subscriptions (Email notifications)
 model StatusPageSubscription {
-  id                String                      @id @default(cuid())
-  statusPageId      String
-  email             String
-  phone             String? // For SMS (future)
-  token             String                      @unique // Unsubscribe token
-  subscribedAt      DateTime                    @default(now())
-  unsubscribedAt    DateTime?
-  verified          Boolean                     @default(false)
-  state             StatusPageSubscriptionState @default(PENDING)
-  suppressionReason String?
-  lastBounceAt      DateTime?
-  bounceCount       Int                         @default(0)
-  complainedAt      DateTime?
-  lastDeliveredAt   DateTime?
-  lastFailedAt      DateTime?
+  id                         String                      @id @default(cuid())
+  statusPageId               String
+  email                      String
+  phone                      String? // For SMS (future)
+  token                      String                      @unique // Unsubscribe token
+  subscribedAt               DateTime                    @default(now())
+  unsubscribedAt             DateTime?
+  verified                   Boolean                     @default(false)
+  state                      StatusPageSubscriptionState @default(PENDING)
+  suppressionReason          String?
+  lastBounceAt               DateTime?
+  bounceCount                Int                         @default(0)
+  complainedAt               DateTime?
+  lastDeliveredAt            DateTime?
+  lastFailedAt               DateTime?
   verificationToken          String?
   verificationTokenExpiresAt DateTime?
   preferences                Json? // Notification preferences (all incidents, major only, etc.)
 
-  statusPage      StatusPage                     @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
-  deliveryTokens  StatusPageSubscriptionToken[]
+  statusPage       StatusPage                      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  deliveryTokens   StatusPageSubscriptionToken[]
   selectedServices StatusPageSubscriptionService[]
 
   @@unique([statusPageId, email])
@@ -1738,7 +1835,7 @@ model StatusPageSubscriptionService {
   createdAt      DateTime @default(now())
 
   subscription StatusPageSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  service      Service              @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  service      Service                @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@id([subscriptionId, serviceId])
   @@index([serviceId])

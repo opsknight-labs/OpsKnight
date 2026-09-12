@@ -148,6 +148,17 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         keywords: ['alerts', 'channels', 'slack', 'bot', 'broadcast'],
       },
       {
+        id: 'microsoft-teams',
+        label: 'Microsoft Teams',
+        description:
+          'Connect Azure AD app to broadcast incident Adaptive Cards to Teams channels',
+        href: '/settings/integrations/microsoft-teams',
+        icon: 'microsoft-teams',
+        requiresAdmin: true,
+        badge: 'Admin',
+        keywords: ['alerts', 'channels', 'teams', 'microsoft', 'entra', 'adaptive card'],
+      },
+      {
         id: 'chatops',
         label: 'ChatOps War-Rooms',
         description:

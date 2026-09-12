@@ -375,6 +375,13 @@ export const CircuitBreakers = {
       resetTimeout: 30000,
       timeout: 10000,
     }),
+
+  microsoftTeams: () =>
+    getCircuitBreaker('microsoftTeams', {
+      failureThreshold: 5,
+      resetTimeout: 30000,
+      timeout: 10000,
+    }),
 };
 
 /**

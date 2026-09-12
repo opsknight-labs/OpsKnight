@@ -32,6 +32,17 @@ export function SlackLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
   );
 }
 
+export function MicrosoftTeamsLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
+  return (
+    <svg viewBox="0 0 120 120" className={className} aria-label="Microsoft Teams logo" fill="none">
+      <rect x="10" y="18" width="100" height="84" rx="16" fill="#5B5BD6" />
+      <circle cx="48" cy="52" r="14" fill="white" />
+      <path d="M70 38c10 0 18 7 18 17 0 6-3 11-8 14l8 10-9 5-8-10c-1 .2-2 .3-3 .3H62V38h8z" fill="white" opacity="0.92" />
+      <rect x="18" y="82" width="84" height="10" rx="5" fill="white" opacity="0.9" />
+    </svg>
+  );
+}
+
 export function JiraLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
   const id = useId().replace(/:/g, '');
   const gradA = `jira-grad-a-${id}`;
