@@ -253,4 +253,74 @@ describe('OIDC discovery provider matrix', () => {
     expect(result.isValid).toBe(false);
     expect(result.error).toMatch(/usable public signing key/i);
   });
+
+  it('validates configured tokenEndpointAuthMethod against advertised token_endpoint_auth_methods_supported', async () => {
+    // 1. Success when requested method is in advertised list
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+      })
+    );
+
+    const validResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_post',
+    });
+
+    expect(validResult.isValid).toBe(true);
+    expect(validResult.metadata?.tokenEndpointAuthMethodsSupported).toEqual([
+      'client_secret_basic',
+      'client_secret_post',
+    ]);
+
+    // 2. Fails when requested method is NOT in advertised list
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        token_endpoint_auth_methods_supported: ['client_secret_basic'],
+      })
+    );
+
+    const invalidResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_post',
+    });
+
+    expect(invalidResult.isValid).toBe(false);
+    expect(invalidResult.error).toContain(
+      'Identity Provider does not support the selected token endpoint authentication method (client_secret_post)'
+    );
+
+    // 3. Omitting token_endpoint_auth_methods_supported defaults to client_secret_basic (OIDC Core / RFC 8414)
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+    const omittedBasicResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_basic',
+    });
+    expect(omittedBasicResult.isValid).toBe(true);
+    expect(omittedBasicResult.metadata?.tokenEndpointAuthMethodsSupported).toEqual([
+      'client_secret_basic',
+    ]);
+
+    // 4. Omitting token_endpoint_auth_methods_supported rejects client_secret_post
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+    const omittedPostResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_post',
+    });
+    expect(omittedPostResult.isValid).toBe(false);
+    expect(omittedPostResult.error).toContain(
+      'Identity Provider does not support the selected token endpoint authentication method (client_secret_post)'
+    );
+
+    // 5. Reject empty or malformed token_endpoint_auth_methods_supported array
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        token_endpoint_auth_methods_supported: [],
+      })
+    );
+    const emptyResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_basic',
+    });
+    expect(emptyResult.isValid).toBe(false);
+    expect(emptyResult.error).toContain('invalid or empty token_endpoint_auth_methods_supported');
+  });
 });

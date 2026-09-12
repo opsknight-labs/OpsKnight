@@ -36,6 +36,7 @@ describe('OIDC configuration loading', () => {
       providerType: 'auth0',
       providerLabel: 'Company SSO',
       organizationId: 'org_enterprise',
+      tokenEndpointAuthMethod: 'client_secret_post',
       profileMapping: {},
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -45,6 +46,7 @@ describe('OIDC configuration loading', () => {
     await expect(getOidcConfig()).resolves.toEqual(
       expect.objectContaining({
         organizationId: 'org_enterprise',
+        tokenEndpointAuthMethod: 'client_secret_post',
         configVersion: 3,
         providerType: 'auth0',
       })

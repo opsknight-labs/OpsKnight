@@ -22,7 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import { calculatePasswordStrength } from '@/lib/password-strength';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
-import { sanitizeCallbackUrl } from '@/lib/callback-url';
+import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 
 type Props = {
   callbackUrl: string;
@@ -30,6 +30,7 @@ type Props = {
   ssoProviderType?: string | null;
   ssoProviderLabel?: string | null;
   localAuthEnabled: boolean;
+  breakGlassOnly?: boolean;
   errorCode?: string | null;
   ssoError?: string | null;
   passwordSet?: boolean;
@@ -58,6 +59,7 @@ export default function MobileLoginClient({
   ssoProviderType,
   ssoProviderLabel,
   localAuthEnabled,
+  breakGlassOnly,
 }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -115,13 +117,13 @@ export default function MobileLoginClient({
     setIsValid(Boolean(email) && Boolean(password));
   }, [email, password]);
 
-  const safeCallbackUrl = sanitizeCallbackUrl(callbackUrl, '/m');
+  const safeCallbackUrl = safeInternalCallbackUrl(callbackUrl, '/m');
 
   const handleSSO = async () => {
     setIsSSOLoading(true);
     setError('');
     try {
-      const finalCallbackUrl = sanitizeCallbackUrl(callbackUrl, '/m');
+      const finalCallbackUrl = safeInternalCallbackUrl(callbackUrl, '/m');
       await purgeBrowserAuthCaches();
       await signIn('oidc', { callbackUrl: finalCallbackUrl });
     } catch {
@@ -154,7 +156,7 @@ export default function MobileLoginClient({
       } else if (result?.ok) {
         setIsSubmitting(false);
         setIsSuccess(true);
-        const target = sanitizeCallbackUrl(safeCallbackUrl, '/m');
+        const target = safeInternalCallbackUrl(safeCallbackUrl, '/m');
 
         // Purge any stale Service Worker dynamic/RSC caches immediately
         void purgeBrowserAuthCaches();
@@ -276,7 +278,9 @@ export default function MobileLoginClient({
                   <div className="w-full border-t border-slate-200" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-slate-50 px-4 text-slate-400">or</span>
+                  <span className="bg-slate-50 px-4 text-slate-400">
+                    {breakGlassOnly ? 'or break-glass recovery' : 'or'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -285,6 +289,20 @@ export default function MobileLoginClient({
           {/* Login Form */}
           {localAuthEnabled && (
             <form onSubmit={handleCredentials} className="space-y-5">
+              {breakGlassOnly && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5"
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-800">Emergency Break-Glass Recovery</p>
+                    <p className="text-amber-700 mt-0.5">
+                      Standard local login is disabled. Only the designated break-glass recovery account is authorized.
+                    </p>
+                  </div>
+                </div>
+              )}
               {/* Email Field */}
               <div className="group space-y-2">
                 <label

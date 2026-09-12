@@ -2,6 +2,7 @@ import type { OAuthConfig } from 'next-auth/providers/oauth';
 import { logger } from '@/lib/logger';
 import { safeOutboundLookup } from '@/lib/network-security';
 import type { OidcRuntimeMetadata } from '@/lib/oidc-validation';
+import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 
 type OIDCConfig = {
   clientId: string;
@@ -9,6 +10,9 @@ type OIDCConfig = {
   issuer: string;
   customScopes?: string | null;
   metadata: OidcRuntimeMetadata;
+  tokenEndpointAuthMethod?: string | null;
+  providerType?: string | null;
+  organizationId?: string | null;
 };
 
 type OIDCProfile = {
@@ -20,8 +24,19 @@ type OIDCProfile = {
 };
 
 export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfile> {
-  const issuer = config.issuer.replace(/\/$/, '');
+  const issuer = normalizeOidcIssuer(config.issuer);
   const scopes = `openid email profile ${config.customScopes || ''}`.trim();
+  const tokenEndpointAuthMethod =
+    config.tokenEndpointAuthMethod === 'client_secret_post'
+      ? 'client_secret_post'
+      : 'client_secret_basic';
+
+  const authorizationParams: Record<string, string> = {
+    scope: scopes,
+    ...(config.providerType === 'auth0' && config.organizationId?.trim()
+      ? { organization: config.organizationId.trim() }
+      : {}),
+  };
 
   logger.info('[OIDC] Initializing OIDC provider', {
     component: 'OIDCProvider',
@@ -29,6 +44,9 @@ export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfil
     clientId: config.clientId,
     scopes,
     hasCustomScopes: !!config.customScopes,
+    tokenEndpointAuthMethod,
+    providerType: config.providerType ?? 'custom',
+    hasOrganizationId: !!config.organizationId,
   });
 
   const canonicalIssuer = config.metadata.issuer || issuer;
@@ -42,7 +60,7 @@ export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfil
     clientSecret: config.clientSecret,
     authorization: {
       url: config.metadata.authorizationEndpoint,
-      params: { scope: scopes },
+      params: authorizationParams,
     },
     token: { url: config.metadata.tokenEndpoint },
     jwks_endpoint: config.metadata.jwksUri,
@@ -52,7 +70,10 @@ export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfil
     // openid-client validates the JOSE header against this client metadata at
     // callback time. This rejects alg=none, HS256, and algorithm downgrade;
     // discovery-time advertising alone is not a runtime security control.
-    client: { id_token_signed_response_alg: 'RS256' },
+    client: {
+      id_token_signed_response_alg: 'RS256',
+      token_endpoint_auth_method: tokenEndpointAuthMethod,
+    },
     idToken: true,
     checks: ['pkce', 'state', 'nonce'],
     profile(profile) {

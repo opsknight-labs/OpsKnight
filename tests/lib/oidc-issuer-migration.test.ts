@@ -8,7 +8,14 @@ import {
 describe('OIDC issuer migration policy', () => {
   it('normalizes only equivalent trailing slash forms', () => {
     expect(normalizeOidcIssuer('https://id.example.com/')).toBe('https://id.example.com');
+    expect(normalizeOidcIssuer('https://id.example.com///')).toBe('https://id.example.com');
+    expect(normalizeOidcIssuer('https://id.example.com/oauth2/default//')).toBe(
+      'https://id.example.com/oauth2/default'
+    );
     expect(isOidcIssuerMigration('https://id.example.com', 'https://id.example.com/')).toBe(false);
+    expect(isOidcIssuerMigration('https://id.example.com///', 'https://id.example.com/')).toBe(
+      false
+    );
   });
 
   it('treats host and path changes as trust-boundary migrations', () => {

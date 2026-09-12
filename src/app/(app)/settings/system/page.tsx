@@ -94,6 +94,7 @@ export default async function SystemSettingsPage() {
       providerType?: string | null;
       providerLabel?: string | null;
       organizationId?: string | null;
+      tokenEndpointAuthMethod?: string | null;
       profileMapping?: Record<string, string> | null;
       updatedAt: string;
     } | null = null;
@@ -111,6 +112,7 @@ export default async function SystemSettingsPage() {
         providerType: rawOidcConfig.providerType,
         providerLabel: rawOidcConfig.providerLabel,
         organizationId: rawOidcConfig.organizationId,
+        tokenEndpointAuthMethod: rawOidcConfig.tokenEndpointAuthMethod,
         profileMapping: rawOidcConfig.profileMapping as Record<string, string> | null,
         updatedAt: rawOidcConfig.updatedAt.toISOString(),
       };

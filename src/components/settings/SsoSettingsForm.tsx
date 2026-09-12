@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Switch } from '@/components/ui/shadcn/switch';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -33,6 +34,7 @@ import {
   validateOidcConnectionAction,
 } from '@/app/(app)/settings/security/actions';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
+import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import type { SettingsActionState } from '@/lib/settings-result';
 
 type ProfileMapping = {
@@ -53,6 +55,7 @@ type OidcConfig = {
   providerType?: string | null;
   providerLabel?: string | null;
   organizationId?: string | null;
+  tokenEndpointAuthMethod?: string | null;
   profileMapping?: ProfileMapping | null;
   updatedAt?: string;
 };
@@ -161,6 +164,10 @@ export default function SsoSettingsForm({
   const initialEnabled = initialConfig?.enabled ?? false;
   const initialProviderLabel = initialConfig?.providerLabel ?? '';
   const initialOrganizationId = initialConfig?.organizationId ?? '';
+  const initialTokenEndpointAuthMethod =
+    initialConfig?.tokenEndpointAuthMethod === 'client_secret_post'
+      ? 'client_secret_post'
+      : 'client_secret_basic';
   const initialCustomScopes = initialConfig?.customScopes ?? '';
   const initialAutoProvision = initialConfig?.autoProvision ?? true;
   const initialProviderType = normalizeOidcProviderType(initialConfig?.providerType, initialIssuer);
@@ -176,6 +183,9 @@ export default function SsoSettingsForm({
   const [showSecret, setShowSecret] = useState(false);
   const [providerLabelValue, setProviderLabelValue] = useState(initialProviderLabel);
   const [organizationIdValue, setOrganizationIdValue] = useState(initialOrganizationId);
+  const [tokenEndpointAuthMethodValue, setTokenEndpointAuthMethodValue] = useState(
+    initialTokenEndpointAuthMethod
+  );
   const [customScopesValue, setCustomScopesValue] = useState(initialCustomScopes);
   const [autoProvision, setAutoProvision] = useState(initialAutoProvision);
   const [selectedPreset, setSelectedPreset] = useState(initialProviderType);
@@ -206,7 +216,9 @@ export default function SsoSettingsForm({
     setTestMessage('Testing connection...');
 
     try {
-      const result = await validateOidcConnectionAction(issuerUrl);
+      const result = await validateOidcConnectionAction(issuerUrl, {
+        tokenEndpointAuthMethod: tokenEndpointAuthMethodValue,
+      });
       if (result.isValid) {
         setTestStatus('success');
         // The test validates OIDC discovery only — it does not exercise the
@@ -229,7 +241,7 @@ export default function SsoSettingsForm({
   const clientSecretRequired = !initialConfig?.hasClientSecret;
   const issuerChanged =
     Boolean(initialIssuer) &&
-    issuerUrl.trim().replace(/\/$/, '') !== initialIssuer.trim().replace(/\/$/, '');
+    normalizeOidcIssuer(issuerUrl) !== normalizeOidcIssuer(initialIssuer);
   const selectedPresetNote =
     PROVIDER_PRESETS.find(preset => preset.id === selectedPreset)?.note ??
     'Enter the issuer URL from your provider.';
@@ -247,6 +259,7 @@ export default function SsoSettingsForm({
     domains.trim() !== initialDomains.trim() ||
     providerLabelValue.trim() !== initialProviderLabel.trim() ||
     organizationIdValue.trim() !== initialOrganizationId.trim() ||
+    tokenEndpointAuthMethodValue !== initialTokenEndpointAuthMethod ||
     customScopesValue.trim() !== initialCustomScopes.trim() ||
     autoProvision !== initialAutoProvision ||
     isRoleMappingDirty ||
@@ -261,21 +274,36 @@ export default function SsoSettingsForm({
     }
   };
   const isSaveDisabled =
-    !isIssuerValid(issuerUrl) ||
-    !clientIdValue.trim() ||
-    (clientSecretRequired && !clientSecretValue.trim());
+    enabled
+      ? !isIssuerValid(issuerUrl) ||
+        !clientIdValue.trim() ||
+        (clientSecretRequired && !clientSecretValue.trim())
+      : !initialConfig && (!isIssuerValid(issuerUrl) || !clientIdValue.trim());
   const [lastSaved, setLastSaved] = useState<string | null>(null);
 
   const [state, formAction] = useActionState<SettingsActionState, FormData>(
     async (previousState, formData) => {
-      const nextState = await saveOidcConfig(previousState, formData);
-      if (nextState.success) {
-        setClientSecretValue('');
-        setShowSecret(false);
-        setLastSaved(new Date().toLocaleString());
-        router.refresh();
+      try {
+        const nextState = await saveOidcConfig(previousState, formData);
+        if (nextState.success) {
+          setClientSecretValue('');
+          setShowSecret(false);
+          setLastSaved(new Date().toLocaleString());
+          router.refresh();
+        }
+        return nextState;
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          (err.name === 'UnrecognizedActionError' ||
+            err.message.includes('Server Action') ||
+            err.message.includes('failed-to-find-server-action'))
+        ) {
+          window.location.reload();
+          return previousState;
+        }
+        throw err;
       }
-      return nextState;
     },
     { error: null, success: false, updatedAt: initialConfig?.updatedAt ?? null }
   );
@@ -287,6 +315,7 @@ export default function SsoSettingsForm({
   }, [state]);
 
   const validateFields = () => {
+    if (!enabled && initialConfig) return true;
     const errors: ValidationErrors = {};
     if (!issuerUrl.trim()) {
       errors.issuer = 'Issuer URL is required.';
@@ -296,7 +325,7 @@ export default function SsoSettingsForm({
     if (!clientIdValue.trim()) {
       errors.clientId = 'Client ID is required.';
     }
-    if (clientSecretRequired && !clientSecretValue.trim()) {
+    if (enabled && clientSecretRequired && !clientSecretValue.trim()) {
       errors.clientSecret = 'Client secret is required for new configurations.';
     }
     setValidationErrors(errors);
@@ -330,6 +359,7 @@ export default function SsoSettingsForm({
         setEnabled(initialEnabled);
         setProviderLabelValue(initialProviderLabel);
         setOrganizationIdValue(initialOrganizationId);
+        setTokenEndpointAuthMethodValue(initialTokenEndpointAuthMethod);
         setCustomScopesValue(initialCustomScopes);
         setAutoProvision(initialAutoProvision);
         setSelectedPreset(initialProviderType);
@@ -657,6 +687,75 @@ export default function SsoSettingsForm({
           </div>
         </div>
 
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-semibold">
+              Token Endpoint Authentication
+            </Label>
+            <span className="text-[11px] text-muted-foreground">
+              client_secret_basic / client_secret_post
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label
+              htmlFor="auth-method-basic"
+              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                tokenEndpointAuthMethodValue === 'client_secret_basic'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border hover:bg-muted/30'
+              }`}
+            >
+              <input
+                type="radio"
+                id="auth-method-basic"
+                name="tokenEndpointAuthMethod"
+                value="client_secret_basic"
+                checked={tokenEndpointAuthMethodValue === 'client_secret_basic'}
+                onChange={() => setTokenEndpointAuthMethodValue('client_secret_basic')}
+                className="mt-0.5 accent-primary h-4 w-4"
+              />
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-foreground block">
+                  Client Secret Basic
+                </span>
+                <span className="text-[11px] text-muted-foreground block leading-relaxed">
+                  HTTP Basic Authorization header (default standard)
+                </span>
+              </div>
+            </label>
+
+            <label
+              htmlFor="auth-method-post"
+              className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                tokenEndpointAuthMethodValue === 'client_secret_post'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border hover:bg-muted/30'
+              }`}
+            >
+              <input
+                type="radio"
+                id="auth-method-post"
+                name="tokenEndpointAuthMethod"
+                value="client_secret_post"
+                checked={tokenEndpointAuthMethodValue === 'client_secret_post'}
+                onChange={() => setTokenEndpointAuthMethodValue('client_secret_post')}
+                className="mt-0.5 accent-primary h-4 w-4"
+              />
+              <div className="space-y-0.5">
+                <span className="text-xs font-semibold text-foreground block">
+                  Client Secret Post
+                </span>
+                <span className="text-[11px] text-muted-foreground block leading-relaxed">
+                  Credentials sent in POST body (Auth0/Okta POST client)
+                </span>
+              </div>
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Must match your application&apos;s authentication configuration in your Identity Provider.
+          </p>
+        </div>
+
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="provider-label" className="text-sm font-semibold">
@@ -726,9 +825,15 @@ export default function SsoSettingsForm({
             onChange={event => setDomains(event.target.value)}
             className="font-mono text-sm h-10"
           />
-          <p className="text-xs text-muted-foreground">
-            Leave empty to allow any domain verified and sent by your identity provider.
-          </p>
+          {selectedPreset === 'azure' ? (
+            <p className="text-xs text-muted-foreground">
+              Access is scoped to the configured Microsoft Entra tenant authority. Email domain filtering is not applied for Entra authorization.
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Leave empty to allow any domain verified and sent by your identity provider.
+            </p>
+          )}
         </div>
 
         {selectedPreset === 'auth0' && (
@@ -941,6 +1046,11 @@ export default function SsoSettingsForm({
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
+      )}
+      {state?.success && (
+        <InlineNotice tone="success" title="SSO configuration saved">
+          Your Single Sign-On and identity provider settings have been saved successfully.
+        </InlineNotice>
       )}
 
 

@@ -34,6 +34,7 @@ type OidcConfigRecord = {
   providerType?: string | null;
   providerLabel?: string | null;
   organizationId?: string | null;
+  tokenEndpointAuthMethod?: string | null;
   profileMapping?: unknown;
   configVersion: number;
 };
@@ -54,6 +55,7 @@ export type OidcConfig = {
   providerType?: string | null;
   providerLabel?: string | null;
   organizationId?: string | null;
+  tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | string;
   profileMapping?: Record<string, string> | null;
   configVersion: number;
 };
@@ -66,6 +68,7 @@ export type OidcPublicConfig = {
   allowedDomains: string[];
   providerType?: string | null;
   providerLabel?: string | null;
+  tokenEndpointAuthMethod?: string | null;
 };
 
 function normalizeDomains(domains: string[]) {
@@ -174,6 +177,7 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
       providerType: config.providerType,
       providerLabel: config.providerLabel,
       organizationId: config.organizationId,
+      tokenEndpointAuthMethod: config.tokenEndpointAuthMethod,
       configVersion: config.configVersion,
     };
   } catch (error) {
@@ -284,6 +288,10 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
         providerType: normalizeOidcProviderType(config.providerType, config.issuer),
         providerLabel: config.providerLabel,
         organizationId: config.organizationId,
+        tokenEndpointAuthMethod:
+          config.tokenEndpointAuthMethod === 'client_secret_post'
+            ? 'client_secret_post'
+            : 'client_secret_basic',
         profileMapping: parseProfileMapping(config.profileMapping),
         configVersion: config.configVersion,
       };
@@ -294,6 +302,7 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
         clientId: normalizedConfig.clientId,
         autoProvision: normalizedConfig.autoProvision,
         providerType: normalizedConfig.providerType,
+        tokenEndpointAuthMethod: normalizedConfig.tokenEndpointAuthMethod,
         allowedDomainCount: normalizedConfig.allowedDomains.length,
         hasRoleMapping: !!normalizedConfig.roleMapping,
         hasCustomScopes: !!normalizedConfig.customScopes,
@@ -338,6 +347,10 @@ export async function getOidcPublicConfig(): Promise<OidcPublicConfig | null> {
     allowedDomains: normalizeDomains(config.allowedDomains),
     providerType: normalizeOidcProviderType(config.providerType, config.issuer),
     providerLabel: config.providerLabel,
+    tokenEndpointAuthMethod:
+      config.tokenEndpointAuthMethod === 'client_secret_post'
+        ? 'client_secret_post'
+        : 'client_secret_basic',
   };
 }
 

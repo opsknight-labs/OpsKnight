@@ -68,6 +68,26 @@ function parseRoleMapping(input: string): RoleMappingRule[] {
   });
 }
 
+function stableSerializeRoleMapping(mapping: unknown): string {
+  if (!Array.isArray(mapping)) return '[]';
+  const sorted = [...mapping]
+    .map(entry => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const candidate = entry as Record<string, unknown>;
+      return {
+        claim: String(candidate.claim ?? '').trim(),
+        value: String(candidate.value ?? '').trim(),
+        role: String(candidate.role ?? '').trim(),
+      };
+    })
+    .sort((a, b) => {
+      const keyA = `${a.claim}:::${a.value}:::${a.role}`;
+      const keyB = `${b.claim}:::${b.value}:::${b.role}`;
+      return keyA.localeCompare(keyB);
+    });
+  return JSON.stringify(sorted);
+}
+
 export async function saveOidcConfig(
   prevState: SettingsActionState | undefined,
   formData: FormData
@@ -86,8 +106,8 @@ export async function saveOidcConfig(
   }
 
   try {
-    const issuer = (formData.get('issuer') as string | null)?.trim() ?? '';
-    const clientId = (formData.get('clientId') as string | null)?.trim() ?? '';
+    const rawIssuer = (formData.get('issuer') as string | null)?.trim() ?? '';
+    const rawClientId = (formData.get('clientId') as string | null)?.trim() ?? '';
     const clientSecret = (formData.get('clientSecret') as string | null)?.trim() ?? '';
     const enabledValue = formData.get('enabled');
     const autoProvisionValue = formData.get('autoProvision');
@@ -102,6 +122,13 @@ export async function saveOidcConfig(
     const customScopes = (formData.get('customScopes') as string | null)?.trim() ?? null;
     const providerLabel = (formData.get('providerLabel') as string | null)?.trim() ?? null;
     const organizationId = (formData.get('organizationId') as string | null)?.trim() ?? null;
+    const rawTokenEndpointAuthMethod = (
+      formData.get('tokenEndpointAuthMethod') as string | null
+    )?.trim();
+    const tokenEndpointAuthMethod =
+      rawTokenEndpointAuthMethod === 'client_secret_post'
+        ? 'client_secret_post'
+        : 'client_secret_basic';
     const requestedProviderType = (formData.get('providerType') as string | null)?.trim();
 
     let roleMapping: RoleMappingRule[];
@@ -124,34 +151,38 @@ export async function saveOidcConfig(
     if (pmJobTitle) profileMapping.jobTitle = pmJobTitle;
     if (pmAvatarUrl) profileMapping.avatarUrl = pmAvatarUrl;
 
-    if (!issuer || !isValidIssuer(issuer)) {
-      return {
-        success: false,
-        code: 'VALIDATION_ERROR',
-        error: 'Issuer URL must be a valid HTTPS URL.',
-        updatedAt: expectedUpdatedAt,
-      };
-    }
-    if (!clientId) {
-      return {
-        success: false,
-        code: 'VALIDATION_ERROR',
-        error: 'Client ID is required.',
-        updatedAt: expectedUpdatedAt,
-      };
-    }
-    if (allowedDomains.length > 0 && allowedDomains.some(domain => !isValidDomain(domain))) {
-      return {
-        success: false,
-        code: 'VALIDATION_ERROR',
-        error: 'Allowed domains must be valid domain names.',
-        updatedAt: expectedUpdatedAt,
-      };
-    }
+    const existing = await prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const issuer = (rawIssuer || existing?.issuer || '').trim();
+    const clientId = (rawClientId || existing?.clientId || '').trim();
 
     if (enabled) {
+      if (!issuer || !isValidIssuer(issuer)) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Issuer URL must be a valid HTTPS URL.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      if (!clientId) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Client ID is required.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      if (allowedDomains.length > 0 && allowedDomains.some(domain => !isValidDomain(domain))) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Allowed domains must be valid domain names.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+
       const { validateOidcConnection } = await import('@/lib/oidc-validation');
-      const validation = await validateOidcConnection(issuer);
+      const validation = await validateOidcConnection(issuer, { tokenEndpointAuthMethod });
       if (!validation.isValid) {
         return {
           success: false,
@@ -160,9 +191,25 @@ export async function saveOidcConfig(
           updatedAt: expectedUpdatedAt,
         };
       }
+    } else if (!existing) {
+      if (!issuer || !isValidIssuer(issuer)) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Issuer URL must be a valid HTTPS URL.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      if (!clientId) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Client ID is required.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
     }
 
-    const existing = await prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
     const issuerMigration = existing ? isOidcIssuerMigration(existing.issuer, issuer) : false;
     if (issuerMigration && !hasIssuerMigrationConfirmation(formData)) {
       return {
@@ -177,7 +224,7 @@ export async function saveOidcConfig(
     if (existing && !expectedRevision) return settingsChangedState(expectedUpdatedAt);
     if (!existing && expectedRevision) return settingsChangedState(expectedUpdatedAt);
 
-    if (!existing && !clientSecret) {
+    if (!existing && !clientSecret && enabled) {
       return {
         success: false,
         code: 'VALIDATION_ERROR',
@@ -186,8 +233,9 @@ export async function saveOidcConfig(
       };
     }
 
+    const clientSecretChanged = Boolean(clientSecret) && clientSecret !== '********';
     let encryptedSecret = existing?.clientSecret ?? null;
-    if (clientSecret && clientSecret !== '********') {
+    if (clientSecretChanged) {
       encryptedSecret = await encrypt(clientSecret);
     } else if (enabled && !encryptedSecret) {
       return {
@@ -202,12 +250,29 @@ export async function saveOidcConfig(
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';
       if (existing) {
+        const roleMappingChanged =
+          stableSerializeRoleMapping(existing.roleMapping) !==
+          stableSerializeRoleMapping(roleMapping);
+        const customScopesChanged = (existing.customScopes ?? null) !== (customScopes ?? null);
+
+        const securityConfigChanged =
+          normalizeOidcIssuer(existing.issuer) !== normalizeOidcIssuer(issuer) ||
+          existing.clientId !== clientId ||
+          clientSecretChanged ||
+          existing.enabled !== enabled ||
+          existing.providerType !== providerType ||
+          existing.organizationId !== organizationId ||
+          existing.tokenEndpointAuthMethod !== tokenEndpointAuthMethod ||
+          roleMappingChanged ||
+          customScopesChanged ||
+          JSON.stringify(existing.allowedDomains ?? []) !== JSON.stringify(allowedDomains ?? []);
+
         const updated = await tx.oidcConfig.updateMany({
           where: { id: existing.id, updatedAt: expectedRevision! },
           data: {
             issuer,
             clientId,
-            ...(encryptedSecret ? { clientSecret: encryptedSecret } : {}),
+            ...(clientSecretChanged && encryptedSecret ? { clientSecret: encryptedSecret } : {}),
             enabled,
             autoProvision,
             allowedDomains,
@@ -216,12 +281,13 @@ export async function saveOidcConfig(
             providerType,
             providerLabel,
             organizationId,
+            tokenEndpointAuthMethod,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
                 : Prisma.JsonNull,
             updatedBy: actor.id,
-            configVersion: { increment: 1 },
+            ...(securityConfigChanged ? { configVersion: { increment: 1 } } : {}),
           },
         });
         if (updated.count !== 1) throw new SettingsChangedMutationError();
@@ -256,6 +322,7 @@ export async function saveOidcConfig(
             providerType,
             providerLabel,
             organizationId,
+            tokenEndpointAuthMethod,
             profileMapping:
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
@@ -282,6 +349,7 @@ export async function saveOidcConfig(
                 providerType: existing.providerType,
                 providerLabel: existing.providerLabel,
                 organizationId: existing.organizationId,
+                tokenEndpointAuthMethod: existing.tokenEndpointAuthMethod,
                 hasClientSecret: Boolean(existing.clientSecret),
               }
             : null,
@@ -295,6 +363,7 @@ export async function saveOidcConfig(
             providerType,
             providerLabel,
             organizationId,
+            tokenEndpointAuthMethod,
             roleMappingCount: roleMapping.length,
             hasClientSecret: Boolean(encryptedSecret),
           },
@@ -350,11 +419,14 @@ export async function saveOidcConfig(
   }
 }
 
-export async function validateOidcConnectionAction(issuer: string) {
+export async function validateOidcConnectionAction(
+  issuer: string,
+  options?: { tokenEndpointAuthMethod?: string }
+) {
   await assertAdmin();
   if (!issuer) return { isValid: false, error: 'Issuer URL is missing' };
   const { validateOidcConnection } = await import('@/lib/oidc-validation');
-  return validateOidcConnection(issuer);
+  return validateOidcConnection(issuer, options);
 }
 
 export async function revokeAllSessions(): Promise<{ success?: boolean; error?: string }> {
