@@ -1,6 +1,8 @@
 'use server';
 
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
+import { Prisma } from '@prisma/client';
+import { revalidatePath } from 'next/cache';
 import {
   IncidentResponsePolicyError,
   saveIncidentSlaPolicy,
@@ -14,6 +16,8 @@ import prisma from '@/lib/prisma';
 import { explainIncidentResponsePolicy } from '@/lib/incidents/response-policy';
 import { getUserPermissions } from '@/lib/rbac';
 import { saveSupportHoursPolicy } from '@/lib/incidents/support-hours-policy';
+import { emitAuditEvent } from '@/lib/audit';
+import { invalidateSlaSchedulerMode } from '@/lib/incident-sla/scheduler-control';
 
 export type IncidentResponsePolicySaveResult =
   | { ok: true; version: number }
@@ -115,4 +119,51 @@ export async function saveSupportHoursPolicyAction(
   } catch (error) {
     return policySaveError(error, 'Unable to save support hours.');
   }
+}
+
+const schedulerModeSchema = z.enum(['LEGACY', 'SHADOW', 'INDEXED']);
+
+export async function saveSlaSchedulerModeAction(rawMode: unknown) {
+  const permissions = await getUserPermissions();
+  if (!permissions.authenticated || !permissions.id)
+    return { ok: false as const, message: 'Authentication required.' };
+  if (!permissions.capabilities.includes('admin.manage'))
+    return { ok: false as const, message: 'Admin access required.' };
+  const parsed = schedulerModeSchema.safeParse(rawMode);
+  if (!parsed.success) return { ok: false as const, message: 'Invalid scheduler mode.' };
+  const mode = parsed.data;
+  if (mode === 'INDEXED') {
+    const rows = await prisma.$queryRaw<Array<{ ready: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_index i ON i.indexrelid = c.oid
+        WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
+      ) AS ready
+    `;
+    if (!rows[0]?.ready)
+      return {
+        ok: false as const,
+        message: 'Install the SLA scheduler index before enabling Indexed mode.',
+      };
+  }
+  await prisma.$transaction(async tx => {
+    await tx.systemConfig.upsert({
+      where: { key: 'incident_sla_scheduler' },
+      create: { key: 'incident_sla_scheduler', value: { mode }, updatedBy: permissions.id },
+      update: { value: { mode } as Prisma.InputJsonValue, updatedBy: permissions.id },
+    });
+    await emitAuditEvent(
+      {
+        action: 'incident_sla.scheduler.mode_changed',
+        source: 'UI',
+        target: { type: 'SYSTEM_CONFIG', id: 'incident_sla_scheduler' },
+        actor: { type: 'USER', id: permissions.id },
+        metadata: { mode },
+      },
+      tx
+    );
+  });
+  invalidateSlaSchedulerMode();
+  revalidatePath('/settings/incident-sla');
+  return { ok: true as const, mode };
 }

@@ -7,6 +7,7 @@ import ResponsePolicyOperations from '@/components/incident-sla/ResponsePolicyOp
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Info } from 'lucide-react';
+import { getSlaSchedulerMode } from '@/lib/incident-sla/scheduler-control';
 
 export const revalidate = 0;
 
@@ -22,6 +23,8 @@ export default async function IncidentSlaSettingsPage() {
     services,
     integrations,
     supportHoursPolicy,
+    schedulerMode,
+    schedulerIndexRows,
   ] = await Promise.all([
     prisma.incidentSlaPolicy.findFirst({
       where: { scopeKey: 'workspace', sealedAt: { not: null } },
@@ -54,8 +57,16 @@ export default async function IncidentSlaSettingsPage() {
     prisma.responseSupportHoursPolicy.findFirst({
       where: { scopeKey: 'workspace', sealedAt: { not: null } },
       orderBy: { version: 'desc' },
-      select: { version: true, timezone: true },
+      include: { windows: true, exceptions: true },
     }),
+    getSlaSchedulerMode(),
+    prisma.$queryRaw<Array<{ ready: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_class c
+        JOIN pg_index i ON i.indexrelid = c.oid
+        WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
+      ) AS ready
+    `,
   ]);
   const viewPolicy = policy
     ? {
@@ -145,6 +156,24 @@ export default async function IncidentSlaSettingsPage() {
         integrations={integrations}
         supportVersion={supportHoursPolicy?.version ?? 0}
         supportTimezone={supportHoursPolicy?.timezone ?? 'UTC'}
+        supportWindows={
+          supportHoursPolicy?.windows.map(window => ({
+            dayOfWeek: window.dayOfWeek,
+            startMinute: window.startMinute,
+            endMinute: window.endMinute,
+          })) ?? []
+        }
+        supportExceptions={
+          supportHoursPolicy?.exceptions.map(exception => ({
+            localDate: exception.localDate.toISOString().slice(0, 10),
+            available: exception.available,
+            startMinute: exception.startMinute,
+            endMinute: exception.endMinute,
+            label: exception.label,
+          })) ?? []
+        }
+        schedulerMode={schedulerMode}
+        schedulerIndexReady={schedulerIndexRows[0]?.ready ?? false}
       />
       <div className="rounded-lg border p-5 text-sm">
         <h2 className="font-semibold">SLA semantics</h2>

@@ -68,6 +68,7 @@ export async function checkSLABreaches(
   config: BreachMonitorConfig = { notifySlack: true, notifyEmail: true, notifyWebhook: true }
 ): Promise<BreachCheckResult> {
   const { default: prisma } = await import('./prisma');
+  const { getSlaSchedulerMode } = await import('./incident-sla/scheduler-control');
 
   const now = new Date();
   const warnings: BreachWarning[] = [];
@@ -82,7 +83,7 @@ export async function checkSLABreaches(
   const resolveWarningThreshold = warningPolicy.resolveCeilingMs;
 
   // Get all active incidents with their service SLA targets
-  const indexedScheduler = process.env.INDEXED_SLA_SCHEDULER === 'true';
+  const indexedScheduler = (await getSlaSchedulerMode()) === 'INDEXED';
   const incidents = await prisma.incident.findMany({
     where: {
       status: { in: activeIncidentStatuses() },

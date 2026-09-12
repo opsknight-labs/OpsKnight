@@ -1,14 +1,51 @@
--- Additive, rolling-deploy-safe enterprise response-policy control plane.
+-- Additive enterprise response-policy control plane. The temporary normalization
+-- trigger keeps legacy writers compatible while replicas are upgraded.
 ALTER TABLE "IncidentClassificationPolicyRule"
-  ADD COLUMN "priorityMode" TEXT NOT NULL DEFAULT 'SET',
-  ADD COLUMN "urgencyMode" TEXT NOT NULL DEFAULT 'SET';
+  ADD COLUMN "priorityMode" TEXT,
+  ADD COLUMN "urgencyMode" TEXT;
 
 -- Preserve the exact semantics of policies created before field modes existed.
 ALTER TABLE "IncidentClassificationPolicyRule" DISABLE TRIGGER incident_classification_rule_immutable;
 UPDATE "IncidentClassificationPolicyRule"
-SET "priorityMode" = CASE WHEN "priority" IS NULL THEN 'CLEAR' ELSE 'SET' END,
+SET "priorityMode" = CASE
+      WHEN "priority" IS NOT NULL THEN 'SET'
+      WHEN EXISTS (
+        SELECT 1 FROM "IncidentClassificationPolicy" policy
+        WHERE policy."id" = "IncidentClassificationPolicyRule"."policyId"
+          AND policy."derivePriorityFromUrgency"
+      ) THEN 'INHERIT'
+      ELSE 'CLEAR'
+    END,
     "urgencyMode" = CASE WHEN "urgency" IS NULL THEN 'DEFAULT' ELSE 'SET' END;
 ALTER TABLE "IncidentClassificationPolicyRule" ENABLE TRIGGER incident_classification_rule_immutable;
+
+CREATE FUNCTION opsknight_normalize_legacy_classification_rule() RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW."priorityMode" IS NULL THEN
+    IF NEW."priority" IS NOT NULL THEN
+      NEW."priorityMode" := 'SET';
+    ELSIF EXISTS (
+      SELECT 1 FROM "IncidentClassificationPolicy" policy
+      WHERE policy."id" = NEW."policyId" AND policy."derivePriorityFromUrgency"
+    ) THEN
+      NEW."priorityMode" := 'INHERIT';
+    ELSE
+      NEW."priorityMode" := 'CLEAR';
+    END IF;
+  END IF;
+  IF NEW."urgencyMode" IS NULL THEN
+    NEW."urgencyMode" := CASE WHEN NEW."urgency" IS NULL THEN 'DEFAULT' ELSE 'SET' END;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER incident_classification_rule_legacy_compat
+  BEFORE INSERT ON "IncidentClassificationPolicyRule"
+  FOR EACH ROW EXECUTE FUNCTION opsknight_normalize_legacy_classification_rule();
+
+ALTER TABLE "IncidentClassificationPolicyRule"
+  ALTER COLUMN "priorityMode" SET NOT NULL,
+  ALTER COLUMN "urgencyMode" SET NOT NULL;
 
 ALTER TABLE "IncidentClassificationPolicyRule"
   DROP CONSTRAINT IF EXISTS "incident_classification_rule_effect";
@@ -46,8 +83,9 @@ ALTER TABLE "Incident"
   ADD COLUMN "nextSlaTransitionAt" TIMESTAMP(3),
   ADD COLUMN "nextSlaTransitionKind" TEXT;
 
-CREATE INDEX "idx_incident_next_sla_transition"
-  ON "Incident" ("status", "nextSlaTransitionAt");
+-- The index is installed concurrently by the deployment operation after this
+-- transactional schema migration. INDEXED mode must remain unavailable until
+-- readiness confirms that index exists.
 
 CREATE TABLE "ResponseSupportHoursPolicy" (
   "id" TEXT PRIMARY KEY,
@@ -112,7 +150,7 @@ BEGIN
   IF OLD."sealedAt" IS NOT NULL THEN
     RAISE EXCEPTION 'response support-hours policies are append-only' USING ERRCODE = '23514';
   END IF;
-  RETURN NEW;
+  RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 CREATE TRIGGER response_support_policy_immutable

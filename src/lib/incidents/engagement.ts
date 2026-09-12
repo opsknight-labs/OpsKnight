@@ -1,6 +1,5 @@
 import type { IncidentUrgency } from '@prisma/client';
 import type { SupportHoursDecision } from './support-hours';
-import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
 export type IncidentEngagementDecision = {
   urgency: IncidentUrgency;
@@ -23,8 +22,6 @@ export function resolveIncidentEngagement(input: {
     input.urgency === 'LOW' &&
     input.supportHours.state === 'OUTSIDE' &&
     input.supportHours.nextSupportAt !== null;
-  if (deferred)
-    addOperationalMetric('opsknight_engagement_deferred_total', 1, { urgency: input.urgency });
   return {
     urgency: input.urgency,
     trafficClass,

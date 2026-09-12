@@ -187,7 +187,7 @@ export async function executeEscalation(
     supportHoursState: supportHours.state,
   });
 
-  if (stepDelayMinutes > 0) {
+  if (applicable && stepDelayMinutes > 0) {
     if (!incident.nextEscalationAt) {
       const dueAt = escalationDueAt(now, stepDelayMinutes);
       const scheduled = await scheduleDelayedEscalationStep({
@@ -242,7 +242,7 @@ export async function executeEscalation(
       reason: `${step.targetType} step has no target ID configured`,
     };
 
-    if (targetId) {
+    if (applicable && targetId) {
       try {
         resolution = await resolveEscalationTargetDetailed({
           targetType: step.targetType,

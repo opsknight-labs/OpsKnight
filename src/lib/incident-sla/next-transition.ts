@@ -5,10 +5,12 @@ import prisma from '@/lib/prisma';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { incidentSlaSelect } from './select';
 import { getIncidentSlaTransitions } from './deadlines';
+import { getSlaSchedulerMode } from './scheduler-control';
 
 /** Earliest transition for the scheduler; indexed hints are enabled independently during rollout. */
 export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<Date | null> {
-  if (process.env.INDEXED_SLA_SCHEDULER === 'true') {
+  const schedulerMode = await getSlaSchedulerMode();
+  if (schedulerMode === 'INDEXED') {
     const row = await prisma.incident.findFirst({
       where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: { not: null } },
       orderBy: { nextSlaTransitionAt: 'asc' },

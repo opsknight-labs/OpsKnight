@@ -24,6 +24,11 @@ export async function explainIncidentResponsePolicy(
 ) {
   const input = responsePolicyPreviewSchema.parse(rawInput);
   const now = input.at ?? new Date();
+  const service = await tx.service.findUnique({
+    where: { id: input.serviceId },
+    select: { id: true },
+  });
+  if (!service) throw new Error('Service not found.');
   if (input.integrationId) {
     const trusted = await tx.integration.findFirst({
       where: { id: input.integrationId, serviceId: input.serviceId, enabled: true },
@@ -78,21 +83,35 @@ export function diffClassificationPolicies(
   to: Prisma.IncidentClassificationPolicyGetPayload<{ include: { rules: true } }>
 ) {
   const before = new Map(from.rules.map(rule => [rule.matchValue, rule]));
-  return to.rules.flatMap(rule => {
-    const old = before.get(rule.matchValue);
-    const changes = [
-      ['priority', old?.priorityMode, old?.priority, rule.priorityMode, rule.priority],
-      ['urgency', old?.urgencyMode, old?.urgency, rule.urgencyMode, rule.urgency],
-    ] as const;
-    return changes
-      .filter(
-        ([, oldMode, oldValue, newMode, newValue]) => oldMode !== newMode || oldValue !== newValue
-      )
-      .map(([field, oldMode, oldValue, newMode, newValue]) => ({
-        severity: rule.matchValue,
-        field,
-        from: { mode: oldMode ?? null, value: oldValue ?? null },
-        to: { mode: newMode, value: newValue ?? null },
-      }));
-  });
+  const policyChanges =
+    from.derivePriorityFromUrgency === to.derivePriorityFromUrgency
+      ? []
+      : [
+          {
+            severity: null,
+            field: 'derivePriorityFromUrgency',
+            from: { mode: null, value: from.derivePriorityFromUrgency },
+            to: { mode: null, value: to.derivePriorityFromUrgency },
+          },
+        ];
+  return [
+    ...policyChanges,
+    ...to.rules.flatMap(rule => {
+      const old = before.get(rule.matchValue);
+      const changes = [
+        ['priority', old?.priorityMode, old?.priority, rule.priorityMode, rule.priority],
+        ['urgency', old?.urgencyMode, old?.urgency, rule.urgencyMode, rule.urgency],
+      ] as const;
+      return changes
+        .filter(
+          ([, oldMode, oldValue, newMode, newValue]) => oldMode !== newMode || oldValue !== newValue
+        )
+        .map(([field, oldMode, oldValue, newMode, newValue]) => ({
+          severity: rule.matchValue,
+          field,
+          from: { mode: oldMode ?? null, value: oldValue ?? null },
+          to: { mode: newMode, value: newValue ?? null },
+        }));
+    }),
+  ];
 }

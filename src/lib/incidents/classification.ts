@@ -5,7 +5,6 @@ import {
   priorityFromUrgency,
   type AlertSeverity,
 } from './classification-contract';
-import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
 export { ALERT_SEVERITIES } from './classification-contract';
 export type { AlertSeverity } from './classification-contract';
@@ -52,28 +51,21 @@ async function loadPolicies(
   integrationId?: string | null
 ) {
   if (!tx.incidentClassificationPolicy) return [];
-  if (typeof tx.incidentClassificationPolicy.findMany !== 'function') {
-    const workspace = await tx.incidentClassificationPolicy.findFirst({
-      where: { scopeKey: 'workspace', sealedAt: { not: null } },
-      orderBy: { version: 'desc' },
-      include: { rules: true },
-    });
-    return workspace ? [workspace as LoadedPolicy] : [];
-  }
   const keys = [
     ...(integrationId ? [`integration:${integrationId}`] : []),
     `service:${serviceId}`,
     'workspace',
   ];
-  const versions = await tx.incidentClassificationPolicy.findMany({
-    where: { scopeKey: { in: keys }, sealedAt: { not: null } },
-    orderBy: [{ scopeKey: 'asc' }, { version: 'desc' }],
-    include: { rules: true },
-  });
-  const latest = new Map<string, LoadedPolicy>();
-  for (const policy of versions)
-    if (!latest.has(policy.scopeKey)) latest.set(policy.scopeKey, policy);
-  return keys.flatMap(key => latest.get(key) ?? []);
+  const latest = await Promise.all(
+    keys.map(scopeKey =>
+      tx.incidentClassificationPolicy.findFirst({
+        where: { scopeKey, sealedAt: { not: null } },
+        orderBy: { version: 'desc' },
+        include: { rules: true },
+      })
+    )
+  );
+  return latest.filter((policy): policy is LoadedPolicy => policy !== null);
 }
 
 function provenance(policy: LoadedPolicy, severity: AlertSeverity): ClassificationProvenance {
@@ -173,10 +165,6 @@ export async function resolveIncidentClassification(
   const compatibility = priorityProvenance.policyId ? priorityProvenance : urgencyProvenance;
   const legacySource = (value: ClassificationProvenance) =>
     value.source === 'WORKSPACE_POLICY' ? 'CLASSIFICATION_RULE' : value.source;
-  addOperationalMetric('opsknight_incident_classification_total', 1, {
-    priority_source: priorityProvenance.source,
-    urgency_source: urgencyProvenance.source,
-  });
   return {
     priority,
     urgency,

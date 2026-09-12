@@ -44,7 +44,13 @@ describe('enterprise response-policy contract', () => {
         urgency: 'MEDIUM',
       }),
     ];
-    const tx = { incidentClassificationPolicy: { findMany: vi.fn().mockResolvedValue(policies) } };
+    const tx = {
+      incidentClassificationPolicy: {
+        findFirst: vi.fn(({ where: { scopeKey } }) =>
+          Promise.resolve(policies.find(candidate => candidate.scopeKey === scopeKey) ?? null)
+        ),
+      },
+    };
     const result = await resolveIncidentClassification(tx as never, {
       serviceId: 's1',
       integrationId: 'i1',
@@ -66,7 +72,13 @@ describe('enterprise response-policy contract', () => {
         true
       ),
     ];
-    const tx = { incidentClassificationPolicy: { findMany: vi.fn().mockResolvedValue(policies) } };
+    const tx = {
+      incidentClassificationPolicy: {
+        findFirst: vi.fn(({ where: { scopeKey } }) =>
+          Promise.resolve(policies.find(candidate => candidate.scopeKey === scopeKey) ?? null)
+        ),
+      },
+    };
     const result = await resolveIncidentClassification(tx as never, {
       serviceId: 's1',
       alertSeverity: 'warning',
@@ -179,7 +191,11 @@ describe('enterprise response-policy contract', () => {
       exceptions: [],
     };
     const tx = {
-      responseSupportHoursPolicy: { findMany: vi.fn().mockResolvedValue([supportPolicy]) },
+      responseSupportHoursPolicy: {
+        findFirst: vi.fn(({ where: { scopeKey } }) =>
+          Promise.resolve(scopeKey === 'workspace' ? supportPolicy : null)
+        ),
+      },
     };
     const result = await resolveSupportHours(tx as never, { serviceId: 's1', at: new Date(iso) });
     expect(result.state).toBe(expected);

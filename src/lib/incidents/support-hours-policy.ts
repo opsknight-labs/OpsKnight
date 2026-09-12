@@ -75,6 +75,30 @@ export const supportHoursPolicySchema = z
         path: ['windows'],
         message: 'Duplicate support windows are not allowed.',
       });
+    for (let day = 0; day <= 6; day++) {
+      const windows = value.windows
+        .filter(window => window.dayOfWeek === day)
+        .sort((left, right) => left.startMinute - right.startMinute);
+      if (
+        windows.some(
+          (window, index) => index > 0 && window.startMinute < windows[index - 1].endMinute
+        )
+      )
+        context.addIssue({
+          code: 'custom',
+          path: ['windows'],
+          message: 'Support windows on the same day cannot overlap.',
+        });
+    }
+    const exceptionDates = value.exceptions.map(exception =>
+      exception.localDate.toISOString().slice(0, 10)
+    );
+    if (new Set(exceptionDates).size !== exceptionDates.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['exceptions'],
+        message: 'Only one support-hours exception is allowed per local date.',
+      });
   });
 
 export async function saveSupportHoursPolicy(raw: unknown, authorizedActorId?: string) {

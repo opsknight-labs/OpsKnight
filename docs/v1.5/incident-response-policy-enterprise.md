@@ -27,10 +27,10 @@ Restore validates an old snapshot and publishes it as a new immutable version; i
 
 ## Indexed SLA scheduler rollout
 
-1. Apply the additive migration while `INDEXED_SLA_SCHEDULER=false`.
-2. Upgrade every web and worker replica.
-3. Observe legacy capture, policy conflicts, projection errors, escalation lag, and notification backlog.
-4. Set `INDEXED_SLA_SCHEDULER=true` for scheduler/worker replicas.
-5. Roll back by setting it to `false`; captured policies and scheduling hints remain safe.
+1. Apply the additive migration and upgrade every web and worker replica.
+2. Run `npm run prisma:indexes:sla-scheduler` to build the index concurrently.
+3. In Settings → Incident Response Policy, change the scheduler from Legacy to Shadow.
+4. Observe projection health and compare shadow results before selecting Indexed.
+5. Roll back live by selecting Legacy; no environment edit, restart, or deployment is required.
 
 The indexed timestamp is only an optimization. Workers always re-run the canonical pause-aware SLA projector before emitting an idempotent event and repair stale hints.

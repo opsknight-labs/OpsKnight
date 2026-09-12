@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/shadcn/select';
 import {
   previewResponsePolicyAction,
+  saveSlaSchedulerModeAction,
   saveSupportHoursPolicyAction,
 } from '@/app/(app)/settings/incident-sla/actions';
 import { notify } from '@/lib/toast';
@@ -36,11 +37,25 @@ export default function ResponsePolicyOperations({
   integrations,
   supportVersion,
   supportTimezone,
+  supportWindows,
+  supportExceptions,
+  schedulerMode,
+  schedulerIndexReady,
 }: {
   services: Item[];
   integrations: Item[];
   supportVersion: number;
   supportTimezone: string;
+  supportWindows: Array<{ dayOfWeek: number; startMinute: number; endMinute: number }>;
+  supportExceptions: Array<{
+    localDate: string;
+    available: boolean;
+    startMinute: number | null;
+    endMinute: number | null;
+    label: string | null;
+  }>;
+  schedulerMode: 'LEGACY' | 'SHADOW' | 'INDEXED';
+  schedulerIndexReady: boolean;
 }) {
   const [serviceId, setServiceId] = useState(services[0]?.id ?? '');
   const [integrationId, setIntegrationId] = useState('none');
@@ -49,6 +64,7 @@ export default function ResponsePolicyOperations({
   const [timezone, setTimezone] = useState(supportTimezone);
   const [version, setVersion] = useState(supportVersion);
   const [pending, startTransition] = useTransition();
+  const [selectedSchedulerMode, setSelectedSchedulerMode] = useState(schedulerMode);
   const eligible = integrations.filter(item => item.serviceId === serviceId);
   const runPreview = () =>
     startTransition(async () => {
@@ -65,18 +81,13 @@ export default function ResponsePolicyOperations({
     });
   const saveHours = () =>
     startTransition(async () => {
-      const windows = [1, 2, 3, 4, 5].map(dayOfWeek => ({
-        dayOfWeek,
-        startMinute: 540,
-        endMinute: 1080,
-      }));
       const result = await saveSupportHoursPolicyAction({
         scopeKey: 'workspace',
         expectedVersion: version,
         timezone,
         inheritWorkspace: false,
-        windows,
-        exceptions: [],
+        windows: supportWindows,
+        exceptions: supportExceptions,
       });
       if (!result.ok) {
         notify.error(result.message);
@@ -84,6 +95,15 @@ export default function ResponsePolicyOperations({
       }
       setVersion(result.version);
       notify.success('Support hours saved; SLA clocks remain unchanged.');
+    });
+  const saveSchedulerMode = () =>
+    startTransition(async () => {
+      const result = await saveSlaSchedulerModeAction(selectedSchedulerMode);
+      if (!result.ok) {
+        notify.error(result.message);
+        return;
+      }
+      notify.success(`SLA scheduler changed to ${result.mode.toLowerCase()} mode.`);
     });
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -164,9 +184,46 @@ export default function ResponsePolicyOperations({
       </Card>
       <Card>
         <CardHeader>
+          <CardTitle className="text-sm">SLA scheduler</CardTitle>
+          <CardDescription>
+            Change rollout mode live across replicas. Indexed mode requires the online index.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Select
+            value={selectedSchedulerMode}
+            onValueChange={value =>
+              setSelectedSchedulerMode(value as 'LEGACY' | 'SHADOW' | 'INDEXED')
+            }
+          >
+            <SelectTrigger aria-label="SLA scheduler mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="LEGACY">Legacy</SelectItem>
+              <SelectItem value="SHADOW">Shadow</SelectItem>
+              <SelectItem value="INDEXED" disabled={!schedulerIndexReady}>
+                Indexed
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Online index: {schedulerIndexReady ? 'ready' : 'not installed'}
+          </p>
+          <Button
+            disabled={pending || selectedSchedulerMode === schedulerMode}
+            onClick={saveSchedulerMode}
+          >
+            Change mode
+          </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
           <CardTitle className="text-sm">Workspace support hours</CardTitle>
           <CardDescription>
-            Monday–Friday, 09:00–18:00. This controls engagement only and never pauses SLA.
+            Change the timezone without replacing the configured windows or exceptions. Support
+            hours control engagement only and never pause SLA.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

@@ -78,20 +78,51 @@ function contains(policy: Policy, at: Date): boolean {
   );
 }
 
+function addLocalDays(date: string, days: number) {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function localMinuteToInstant(date: string, minute: number, timezone: string): Date | null {
+  const [year, month, day] = date.split('-').map(Number);
+  const desired = Date.UTC(year, month - 1, day, Math.floor(minute / 60), minute % 60);
+  let candidate = new Date(desired);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const local = localParts(candidate, timezone);
+    const [localYear, localMonth, localDay] = local.date.split('-').map(Number);
+    const represented = Date.UTC(
+      localYear,
+      localMonth - 1,
+      localDay,
+      Math.floor(local.minute / 60),
+      local.minute % 60
+    );
+    const correction = desired - represented;
+    if (correction === 0) return candidate;
+    candidate = new Date(candidate.getTime() + correction);
+  }
+  const local = localParts(candidate, timezone);
+  return local.date === date && local.minute === minute ? candidate : null;
+}
+
 function findNext(policy: Policy, at: Date): Date | null {
-  // DST-safe bounded search. Policies have minute precision and at most a week
-  // between recurring windows; exceptions can extend that, so scan 15 days.
-  const start = new Date(Math.floor(at.getTime() / 60_000) * 60_000 + 60_000);
-  for (let offset = 0; offset < 15 * 24 * 4; offset++) {
-    const candidate = new Date(start.getTime() + offset * 15 * 60_000);
-    if (contains(policy, candidate)) {
-      let boundary = candidate;
-      for (let minute = 1; minute <= 15; minute++) {
-        const earlier = new Date(candidate.getTime() - minute * 60_000);
-        if (earlier < start || !contains(policy, earlier)) break;
-        boundary = earlier;
-      }
-      return boundary;
+  const current = localParts(at, policy.timezone);
+  const index = compiled(policy);
+  // One year permits long closure calendars while keeping malformed policies
+  // bounded. Opening instants are calculated from policy boundaries, not sampled.
+  for (let dayOffset = 0; dayOffset <= 366; dayOffset++) {
+    const date = addLocalDays(current.date, dayOffset);
+    const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const exception = index.exceptions.get(date);
+    const starts = exception
+      ? exception.available && exception.startMinute !== null
+        ? [exception.startMinute]
+        : []
+      : (index.windows.get(day) ?? []).map(window => window.startMinute);
+    for (const minute of [...starts].sort((left, right) => left - right)) {
+      if (dayOffset === 0 && minute <= current.minute) continue;
+      const candidate = localMinuteToInstant(date, minute, policy.timezone);
+      if (candidate && candidate > at && contains(policy, candidate)) return candidate;
     }
   }
   return null;
@@ -102,16 +133,16 @@ export async function resolveSupportHours(
   input: { serviceId: string; at: Date }
 ): Promise<SupportHoursDecision> {
   const keys = [`service:${input.serviceId}`, 'workspace'];
-  const versions = await tx.responseSupportHoursPolicy.findMany({
-    where: { scopeKey: { in: keys }, sealedAt: { not: null } },
-    orderBy: [{ scopeKey: 'asc' }, { version: 'desc' }],
-    include: { windows: true, exceptions: true },
-  });
-  const latest = new Map<string, Policy>();
-  for (const policy of versions)
-    if (!latest.has(policy.scopeKey)) latest.set(policy.scopeKey, policy);
-  const service = latest.get(keys[0]);
-  const policy = service && !service.inheritWorkspace ? service : latest.get('workspace');
+  const [service, workspace] = await Promise.all(
+    keys.map(scopeKey =>
+      tx.responseSupportHoursPolicy.findFirst({
+        where: { scopeKey, sealedAt: { not: null } },
+        orderBy: { version: 'desc' },
+        include: { windows: true, exceptions: true },
+      })
+    )
+  );
+  const policy = service && !service.inheritWorkspace ? service : workspace;
   if (!policy)
     return {
       state: 'UNCONFIGURED',
