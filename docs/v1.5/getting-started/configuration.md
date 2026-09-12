@@ -81,7 +81,7 @@ These limits apply to OIDC sessions and do not replace the normal credential Rem
 | Variable | Default | Allowed runtime range | Description |
 | --- | ---: | ---: | --- |
 | `AUTH_SSO_SESSION_MAX_AGE_SECONDS` | `43200` (12h) | 900–2592000 | Absolute OpsKnight OIDC session lifetime. |
-| `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS` | `3600` (1h) | 60–86400 | Session update/refresh cadence. |
+| `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS` | `3600` (1h) | 60–86400 | NextAuth database session update throttle (retained for database session parity; JWT sessions enforce per-request validation). |
 | `AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS` | `14400` (4h) | 300–604800 | Idle-time boundary for OIDC sessions. |
 | `AUTH_SSO_REAUTH_AFTER_SECONDS` | `43200` (12h) | 900–2592000 | Requires a new OpsKnight OIDC session after this age. It does not guarantee the upstream IdP prompts for credentials. |
 

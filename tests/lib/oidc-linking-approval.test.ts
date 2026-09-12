@@ -254,4 +254,76 @@ describe('OIDC linking approval management', () => {
     expect(prisma.oidcLinkingApproval.upsert).not.toHaveBeenCalled();
     expect(prisma.oidcLinkingApproval.updateMany).not.toHaveBeenCalled();
   });
+
+  it('reports stale approval and allows renewal when provider configVersion increments', async () => {
+    // Approval was issued for configVersion 1
+    vi.mocked(prisma.oidcLinkingApproval.findUnique).mockResolvedValue({
+      id: 'approval-1',
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      configVersion: 1,
+      providerConfigId: 'default',
+      issuerFingerprint: 'https://idp.example.com::client-id',
+    } as never);
+
+    // Active provider has advanced to configVersion 2
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+      id: 'default',
+      issuer: 'https://idp.example.com',
+      clientId: 'client-id',
+      configVersion: 2,
+      enabled: true,
+    } as never);
+
+    const stateResult = await getOidcLinkingState('user-1');
+    expect(stateResult.state).toBe('stale');
+    expect(stateResult.alreadyLinked).toBe(false);
+
+    // Calling allowOidcLinking renews the stale approval
+    const allowResult = await allowOidcLinking('user-1');
+    expect(allowResult.success).toBe(true);
+    expect(allowResult.renewed).toBe(true);
+    expect(prisma.oidcLinkingApproval.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          configVersion: 2,
+        }),
+      })
+    );
+  });
+
+  it('allows linking approval for new provider after issuer migration even when user has identity under old issuer', async () => {
+    // User has identity under old issuer
+    vi.mocked(prisma.oidcIdentity.findFirst).mockImplementation((async (args?: {
+      where?: { issuer?: { in?: string[] } };
+    }) => {
+      const issuerFilter = args?.where?.issuer?.in ?? [];
+      // If querying for new issuer, user has no identity
+      if (issuerFilter.includes('https://new-idp.example.com')) {
+        return null;
+      }
+      // If querying without issuer or for old issuer, returns old identity
+      return { id: 'old-identity-1' };
+    }) as never);
+
+    // Active provider is now new-idp.example.com
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+      id: 'default',
+      issuer: 'https://new-idp.example.com',
+      clientId: 'new-client-id',
+      configVersion: 2,
+      enabled: true,
+    } as never);
+
+    // User is NOT linked to current provider
+    const stateResult = await getOidcLinkingState('user-1');
+    expect(stateResult.state).toBe('not-approved');
+    expect(stateResult.alreadyLinked).toBe(false);
+
+    // Admin can successfully allow linking for the new provider
+    const allowResult = await allowOidcLinking('user-1');
+    expect(allowResult.success).toBe(true);
+    expect(allowResult.alreadyLinked).toBeUndefined();
+    expect(prisma.oidcLinkingApproval.upsert).toHaveBeenCalled();
+  });
 });

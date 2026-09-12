@@ -6,6 +6,7 @@ import { assertAdmin } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
+import { normalizeOidcIssuer, getLegacyOidcIssuerVariants } from '@/lib/oidc/issuer-migration';
 import {
   getOidcLinkingApprovalExpiry,
   getOidcLinkingApprovalState,
@@ -30,19 +31,67 @@ async function getManagedUser(userId: string) {
   });
 }
 
-async function readOidcLinkingState(userId: string, now = new Date()): Promise<OidcLinkingState> {
-  const existingIdentity = await prisma.oidcIdentity.findFirst({
-    where: { userId },
-    select: { id: true },
+async function getActiveProviderConfig() {
+  return prisma.oidcConfig.findFirst({
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, issuer: true, clientId: true, configVersion: true, enabled: true },
   });
-  if (existingIdentity) return 'linked';
+}
+
+type ActiveProvider = NonNullable<Awaited<ReturnType<typeof getActiveProviderConfig>>>;
+
+async function readOidcLinkingState(
+  userId: string,
+  now = new Date(),
+  activeProvider?: ActiveProvider | null
+): Promise<OidcLinkingState> {
+  const provider = activeProvider !== undefined ? activeProvider : await getActiveProviderConfig();
+
+  // Link state is scoped to the current provider trust boundary.
+  // A historical identity for an old/migrated issuer does not satisfy the active provider.
+  if (provider?.enabled && provider.issuer) {
+    const canonicalIssuer = normalizeOidcIssuer(provider.issuer);
+    const issuerVariants = [canonicalIssuer, ...getLegacyOidcIssuerVariants(canonicalIssuer)];
+    const existingIdentity = await prisma.oidcIdentity.findFirst({
+      where: {
+        userId,
+        issuer: { in: issuerVariants },
+      },
+      select: { id: true },
+    });
+    if (existingIdentity) return 'linked';
+  } else if (!provider) {
+    // If no provider exists at all, fall back to checking if user has any identity
+    const existingIdentity = await prisma.oidcIdentity.findFirst({
+      where: { userId },
+      select: { id: true },
+    });
+    if (existingIdentity) return 'linked';
+  }
 
   const approval = await prisma.oidcLinkingApproval.findUnique({
     where: { userId },
-    select: { id: true, revokedAt: true, consumedAt: true, expiresAt: true },
+    select: {
+      id: true,
+      revokedAt: true,
+      consumedAt: true,
+      expiresAt: true,
+      providerConfigId: true,
+      issuerFingerprint: true,
+      configVersion: true,
+    },
   });
 
-  return getOidcLinkingApprovalState(approval, now);
+  const providerContext =
+    provider && provider.enabled && provider.issuer
+      ? {
+          providerConfigId: provider.id,
+          issuerFingerprint: oidcTrustFingerprint(provider.issuer, provider.clientId),
+          configVersion: provider.configVersion,
+        }
+      : null;
+
+  return getOidcLinkingApprovalState(approval, now, providerContext);
 }
 
 export async function getOidcLinkingState(userId: string): Promise<OidcLinkingApprovalResult> {
@@ -79,8 +128,14 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
     return { error: 'OIDC linking approval can only be managed for active or invited users.' };
   }
 
+  const provider = await getActiveProviderConfig();
+  if (!provider?.enabled || !provider.issuer) {
+    return { error: 'An active OIDC configuration is required.' };
+  }
+
   const identifier = user.email.toLowerCase();
-  const state = await readOidcLinkingState(user.id);
+  const now = new Date();
+  const state = await readOidcLinkingState(user.id, now, provider);
   if (state === 'linked') {
     return { success: true, alreadyLinked: true, state };
   }
@@ -88,14 +143,9 @@ export async function allowOidcLinking(userId: string): Promise<OidcLinkingAppro
     return { success: true, alreadyApproved: true, state };
   }
 
-  const now = new Date();
   const expiresAt = getOidcLinkingApprovalExpiry(now);
-  const renewed = state === 'expired' || state === 'revoked' || state === 'consumed';
-  const provider = await prisma.oidcConfig.findFirst({
-    orderBy: { updatedAt: 'desc' },
-    select: { id: true, issuer: true, clientId: true, configVersion: true, enabled: true },
-  });
-  if (!provider?.enabled) return { error: 'An active OIDC configuration is required.' };
+  const renewed =
+    state === 'expired' || state === 'revoked' || state === 'consumed' || state === 'stale';
   const issuerFingerprint = oidcTrustFingerprint(provider.issuer, provider.clientId);
 
   await prisma.oidcLinkingApproval.upsert({

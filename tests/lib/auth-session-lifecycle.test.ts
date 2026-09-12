@@ -377,8 +377,16 @@ describe('Auth session lifecycle and hardening', () => {
       });
 
       expect((result as any).error).toBe('SECURITY_LOOKUP_UNAVAILABLE');
-      expect((result as any).sub).toBeUndefined();
-      expect((result as any).role).toBeUndefined();
+      // Preserves sub so transient DB glitch does not destroy valid credentials permanently
+      expect((result as any).sub).toBe('active-user');
+
+      // Request fails closed in session callback
+      const sessionCallback = options.callbacks?.session;
+      const sessionResult = await (sessionCallback as any)({
+        session: { user: { id: 'active-user', name: 'Active User' }, expires: '' },
+        token: result as any,
+      });
+      expect(sessionResult.user).toBeUndefined();
     });
   });
 
@@ -794,6 +802,53 @@ describe('Auth session lifecycle and hardening', () => {
       expect(updateData.roleMapping).toEqual([
         { claim: 'groups', value: 'admins', role: 'ADMIN' },
       ]);
+    });
+
+    it('DOES increment configVersion when roleMapping rule order changes', async () => {
+      // Setup existing config with [admins -> ADMIN, responders -> RESPONDER]
+      vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+        ...baseExistingConfig,
+        roleMapping: [
+          { claim: 'groups', value: 'admins', role: 'ADMIN' },
+          { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+        ],
+      } as any);
+
+      // Reorder rules: [responders -> RESPONDER, admins -> ADMIN]
+      // Because role evaluation is first-match-wins, order change is semantically significant
+      const reordered = JSON.stringify([
+        { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+        { claim: 'groups', value: 'admins', role: 'ADMIN' },
+      ]);
+      const formData = createOidcFormData({ roleMapping: reordered });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+    });
+
+    it('does NOT increment configVersion when roleMapping rules have identical order with cosmetic whitespace', async () => {
+      vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+        ...baseExistingConfig,
+        roleMapping: [
+          { claim: 'groups', value: 'admins', role: 'ADMIN' },
+          { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+        ],
+      } as any);
+
+      const withWhitespace = JSON.stringify([
+        { claim: ' groups ', value: ' admins ', role: 'ADMIN' },
+        { claim: 'groups', value: 'responders', role: 'RESPONDER' },
+      ]);
+      const formData = createOidcFormData({ roleMapping: withWhitespace });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toBeUndefined();
     });
 
     it('DOES increment configVersion when customScopes changes', async () => {

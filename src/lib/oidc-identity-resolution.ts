@@ -91,7 +91,11 @@ export async function resolveOidcIdentityForSignIn(
   const email = normalizeEmail(input.email);
   const providerPolicy = getOidcProviderPolicy(input.issuer, input.providerType);
   const organizationResult = providerPolicy.validateOrganizationBoundary(
-    { ...(input.claims ?? {}), ...(email ? { email } : {}) },
+    {
+      ...(input.claims ?? {}),
+      ...(email ? { email } : {}),
+      ...(input.emailVerifiedClaim !== undefined ? { email_verified: input.emailVerifiedClaim } : {}),
+    },
     input.allowedDomains,
     input.organizationId
   );
@@ -101,45 +105,10 @@ export async function resolveOidcIdentityForSignIn(
   // independently establishes whether that identity is currently permitted.
   // Re-evaluate the organization boundary on every login, including existing
   // bindings, so tenant/domain/org policy changes take effect immediately.
-  let existingIdentity = await prisma.oidcIdentity.findUnique({
+  const existingIdentity = await prisma.oidcIdentity.findUnique({
     where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
     select: { id: true, userId: true },
   });
-
-  // Upgrade compatibility: If lookup by canonical issuer misses, check legacy
-  // non-canonical variants (e.g. trailing slashes) and reconcile atomically.
-  if (!existingIdentity) {
-    const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
-    if (legacyVariants.length > 0) {
-      const rawMatches = await prisma.oidcIdentity.findMany({
-        where: {
-          issuer: { in: legacyVariants },
-          subject: input.subject,
-        },
-        select: { id: true, userId: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-      });
-      const legacyMatches = Array.isArray(rawMatches) ? rawMatches : [];
-
-      if (legacyMatches.length > 0) {
-        const uniqueUserIds = new Set(legacyMatches.map(m => m.userId));
-        if (uniqueUserIds.size > 1) {
-          return { ok: false, reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT' };
-        }
-        const [primaryMatch, ...duplicateMatches] = legacyMatches;
-        if (duplicateMatches.length > 0) {
-          await prisma.oidcIdentity.deleteMany({
-            where: { id: { in: duplicateMatches.map(m => m.id) } },
-          });
-        }
-        await prisma.oidcIdentity.update({
-          where: { id: primaryMatch.id },
-          data: { issuer: input.issuer },
-        });
-        existingIdentity = primaryMatch;
-      }
-    }
-  }
 
   if (existingIdentity) {
     const linkedUser = await prisma.user.findUnique({
@@ -158,7 +127,20 @@ export async function resolveOidcIdentityForSignIn(
     };
   }
 
-  if (!email) return { ok: false, reason: 'OIDC_EMAIL_REQUIRED' };
+  if (!existingIdentity && !email) {
+    const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
+    let hasLegacyIdentity = false;
+    if (legacyVariants.length > 0) {
+      const match = await prisma.oidcIdentity.findFirst({
+        where: { issuer: { in: legacyVariants }, subject: input.subject },
+        select: { id: true },
+      });
+      hasLegacyIdentity = Boolean(match);
+    }
+    if (!hasLegacyIdentity) {
+      return { ok: false, reason: 'OIDC_EMAIL_REQUIRED' };
+    }
+  }
 
   try {
     return await runSerializableTransaction(async tx => {
@@ -218,6 +200,8 @@ export async function resolveOidcIdentityForSignIn(
           approvalConsumed: false,
         };
       }
+
+      if (!email) throw new Error('OIDC_EMAIL_REQUIRED');
 
       // Strict email verification is a first-binding/provisioning assurance,
       // not an ongoing identifier for an already-established OIDC identity.

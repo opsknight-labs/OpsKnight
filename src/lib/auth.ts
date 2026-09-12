@@ -618,6 +618,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 });
 
                 if (dbUser) {
+                  delete (token as AugmentedJWT).error;
                   const dbTokenVersion =
                     typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
                   logger.debug('[Auth-Debug] User Check', {
@@ -662,7 +663,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   id: token.sub,
                   error,
                 });
-                return clearSessionToken(token as AugmentedJWT, 'SECURITY_LOOKUP_UNAVAILABLE');
+                // Availability tradeoff: Flag error so protected requests fail closed (session.user is cleared),
+                // but preserve token.sub and credentials so temporary DB connectivity glitches don't permanently
+                // overwrite the user's cookie and destroy valid sessions.
+                (token as AugmentedJWT).error = 'SECURITY_LOOKUP_UNAVAILABLE';
+                return token;
               }
               (token as AugmentedJWT).userFetchedAt = Date.now();
             }
