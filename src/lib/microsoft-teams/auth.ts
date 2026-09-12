@@ -79,14 +79,14 @@ async function fetchBotJwks(forceRefresh = false): Promise<Record<string, unknow
  */
 const ALLOWED_ISSUER_HOSTS: ReadonlySet<string> = new Set([
   'https://api.botframework.com',
-  'https://login.botframework.com',
 ]);
 
 function isAllowedBotIssuer(iss: string): boolean {
   if (!iss) return false;
   if (ALLOWED_ISSUER_HOSTS.has(iss)) return true;
-  // Tenant-suffixed AAD issuers — exactly `https://sts.windows.net/{guid}/` or
+  // Emulator / AAD tenant-suffixed issuers — exactly `https://sts.windows.net/{guid}/` or
   // `https://login.microsoftonline.com/{guid}/v2.0` with GUID tenant.
+  // `https://login.botframework.com` is the OpenID discovery host, never a valid `iss`.
   const guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
   if (new RegExp(`^https:\\/\\/sts\\.windows\\.net\\/${guid}\\/?$`).test(iss)) return true;
   if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss)) return true;
@@ -138,22 +138,37 @@ async function verifyBotFrameworkToken(
         return null;
       }
 
-      // Bot Connector spec requires serviceUrl claim to match Activity.serviceUrl
-      // when both are present — prevents token replay across serviceUrl boundaries.
+      // Bot Connector spec: serviceUrl claim must exactly match Activity.serviceUrl
+      // (normalized) when both are present — prevents token replay across serviceUrl boundaries.
+      // Fail-closed: unparseable URLs are rejected, origin-only comparison is insufficient.
       const expectedServiceUrl = options?.expectedServiceUrl?.trim() || null;
       if (serviceUrl && expectedServiceUrl) {
-        try {
-          const claimOrigin = new URL(serviceUrl).origin.toLowerCase();
-          const activityOrigin = new URL(expectedServiceUrl).origin.toLowerCase();
-          if (claimOrigin !== activityOrigin) {
-            logger.warn('[MicrosoftTeams] Bot JWT serviceUrl mismatch', {
-              claimOrigin: claimOrigin.slice(0, 60),
-              activityOrigin: activityOrigin.slice(0, 60),
-            });
+        const normalize = (value: string): string | null => {
+          try {
+            const u = new URL(value.trim());
+            // Normalize: lowercase, strip trailing slash, drop hash
+            const withoutHash = u.origin.toLowerCase() + u.pathname.replace(/\/+$/, '') + (u.search || '');
+            // Remove trailing slash artifact when pathname was "/"
+            return withoutHash.replace(/\/$/, '') || u.origin.toLowerCase();
+          } catch {
             return null;
           }
-        } catch {
-          // If either URL is unparseable, fall through — serviceUrl validation is best-effort
+        };
+        const claimNorm = normalize(serviceUrl);
+        const activityNorm = normalize(expectedServiceUrl);
+        if (!claimNorm || !activityNorm) {
+          logger.warn('[MicrosoftTeams] Bot JWT serviceUrl unparseable — rejecting', {
+            claim: serviceUrl.slice(0, 80),
+            activity: expectedServiceUrl.slice(0, 80),
+          });
+          return null;
+        }
+        if (claimNorm !== activityNorm) {
+          logger.warn('[MicrosoftTeams] Bot JWT serviceUrl mismatch', {
+            claimNorm: claimNorm.slice(0, 80),
+            activityNorm: activityNorm.slice(0, 80),
+          });
+          return null;
         }
       }
 

@@ -315,6 +315,57 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       slaResolveRemainingMs,
     };
 
+    // Stale lifecycle fencing — prevents delivering a card that no longer
+    // reflects the current incident state (e.g. triggered enqueued at T0,
+    // incident resolved at T1, worker executes at T2).
+    const payloadInstantRaw = typeof payload?.incidentUpdatedAt === 'string' ? (payload.incidentUpdatedAt as string) : '';
+    const payloadInstant = payloadInstantRaw ? new Date(payloadInstantRaw) : null;
+    const payloadGeneration = typeof payload?.escalationGeneration === 'number' ? (payload.escalationGeneration as number) : null;
+    const hasValidPayloadInstant = payloadInstant instanceof Date && !Number.isNaN(payloadInstant.getTime());
+    let staleReason: string | null = null;
+    if (eventType === 'triggered') {
+      if (incident.status !== 'OPEN') staleReason = `Incident is now ${incident.status}`;
+      else if (payloadGeneration !== null && incident.escalationGeneration !== payloadGeneration) staleReason = 'Escalation generation was superseded';
+    } else if (eventType === 'acknowledged') {
+      if (incident.status === 'RESOLVED') staleReason = 'Acknowledgement was superseded by resolution';
+      else if (!incident.acknowledgedAt) staleReason = 'Incident is no longer acknowledged';
+      else if (hasValidPayloadInstant && incident.acknowledgedAt.getTime() !== payloadInstant!.getTime()) staleReason = 'Acknowledgement generation was superseded';
+    } else if (eventType === 'resolved') {
+      if (incident.status !== 'RESOLVED') staleReason = `Resolution is no longer current — incident is ${incident.status}`;
+      else if (hasValidPayloadInstant && incident.resolvedAt && incident.resolvedAt.getTime() !== payloadInstant!.getTime()) staleReason = 'Resolution generation was superseded';
+      else if (!incident.resolvedAt) staleReason = 'Incident resolution was superseded';
+    }
+    // Service channel revocation — if the service disabled Teams after enqueue, do not deliver.
+    if (!staleReason) {
+      try {
+        const svc = await prisma.service.findUnique({
+          where: { id: incident.serviceId },
+          select: { serviceNotificationChannels: true },
+        });
+        if (svc && !(svc.serviceNotificationChannels as unknown as string[]).includes('MICROSOFT_TEAMS')) {
+          staleReason = 'Service Microsoft Teams notifications were disabled';
+        }
+      } catch {
+        // best-effort — do not block delivery on lookup failure
+      }
+    }
+    if (staleReason) {
+      await prisma.externalOperation.updateMany({
+        where: { id, status: 'PROCESSING', leaseToken },
+        data: { status: 'FAILED', lastError: staleReason, leaseToken: null, leaseExpiresAt: null },
+      });
+      try {
+        await emitAuditEvent({
+          action: 'microsoftTeams.delivery.superseded',
+          source: 'INTEGRATION',
+          target: { type: 'SERVICE', id: incident.serviceId ?? incidentId },
+          actor: { type: 'SYSTEM' },
+          metadata: { provider: 'MICROSOFT_TEAMS', incidentId, destinationId, eventType, reason: staleReason, operationId: id },
+        });
+      } catch {}
+      return null;
+    }
+
     // Reservation fencing: advisory lock serializes create vs update decision,
     // and a placeholder ledger row prevents a second replica that waited on the
     // lock from also POSTing before the first Graph call completes. We do not
@@ -585,6 +636,76 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           result = updateResult;
         }
       } else {
+        // AMBIGUOUS retry reconcile: if we previously reserved and the POST may
+        // have committed server-side before the connection died, probe Graph for
+        // an existing card before re-POSTing to avoid a duplicate.
+        const isAmbiguousRetry = reservedByUs && operation.attempts > 1;
+        if (isAmbiguousRetry) {
+          try {
+            const { probeMicrosoftTeamsForIncidentMessage } = await import('./client');
+            const probe = await probeMicrosoftTeamsForIncidentMessage({
+              tenantId: destination.tenantId,
+              teamId: destination.teamId,
+              channelId: destination.channelId,
+              incidentId: incident.id,
+            });
+            if (probe.messageId) {
+              // Reconciled: provider already has the card — ledger-upsert and complete without re-POST.
+              try {
+                await prisma.microsoftTeamsIncidentMessage.upsert({
+                  where: { incidentId_destinationId: { incidentId, destinationId } },
+                  create: {
+                    incidentId,
+                    destinationId,
+                    messageId: probe.messageId,
+                    channelId: destination.channelId,
+                    tenantId: destination.tenantId,
+                    teamId: destination.teamId,
+                    conversationId: null,
+                  },
+                  update: { messageId: probe.messageId, channelId: destination.channelId, tenantId: destination.tenantId, teamId: destination.teamId },
+                });
+              } catch {}
+              await prisma.externalOperation.updateMany({
+                where: { id, status: 'PROCESSING', leaseToken },
+                data: {
+                  status: 'COMPLETED',
+                  externalId: probe.messageId,
+                  externalKey: probe.messageId,
+                  resultPayload: { providerMessageId: probe.messageId, conversationId: null, reconciled: true } as Prisma.InputJsonObject,
+                  leaseToken: null,
+                  leaseExpiresAt: null,
+                },
+              });
+              await releaseTeamsConcurrency();
+              logger.info('[MicrosoftTeams] Delivery reconciled after AMBIGUOUS — existing card found', { incidentId, destinationId, messageId: probe.messageId });
+              return { success: true, providerMessageId: probe.messageId } as never;
+            }
+            if (probe.error) {
+              // Probe failed (Graph unavailable) — do not risk duplicate POST. Back off as AMBIGUOUS so next retry probes again.
+              await prisma.externalOperation.updateMany({
+                where: { id, status: 'PROCESSING', leaseToken },
+                data: {
+                  status: failureStatus(operation.attempts),
+                  nextAttemptAt: new Date(Date.now() + jitteredDelayMs(8_000)),
+                  lastError: `Teams reconcile probe failed — backing off: ${probe.error.slice(0, 300)}`,
+                  leaseToken: null,
+                  leaseExpiresAt: null,
+                },
+              });
+              await releaseTeamsConcurrency();
+              throw new AppError({
+                code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+                userMessage: 'Teams reconcile probe failed, retrying shortly.',
+                details: { provider: 'microsoftTeams', providerStatus: 503, providerRetryAfterMs: 8_000, failureCode: 'UNKNOWN' },
+              });
+            }
+            // No existing card found and probe succeeded — safe to POST.
+          } catch (e) {
+            if (e instanceof AppError && e.details?.provider === 'microsoftTeams') throw e;
+            logger.warn('[MicrosoftTeams] Reconcile probe exception — proceeding to POST', { error: (e as Error).message });
+          }
+        }
         result = await callWithBreaker(() =>
           microsoftTeamsChatProvider.sendIncidentCard({
             destinationId,
@@ -592,6 +713,27 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             eventType: eventType as never,
           })
         );
+        // Atomic ledger finalization: provider ledger upsert is best-effort. If it
+        // failed, the ExternalOperation may be COMPLETED while the ledger still
+        // holds __reserved__:old and blocks future lifecycle updates. Ensure the
+        // canonical message id is durably ledged here.
+        if (result.success && result.providerMessageId) {
+          try {
+            await prisma.microsoftTeamsIncidentMessage.upsert({
+              where: { incidentId_destinationId: { incidentId, destinationId } },
+              create: {
+                incidentId,
+                destinationId,
+                messageId: result.providerMessageId,
+                channelId: destination.channelId,
+                tenantId: destination.tenantId,
+                teamId: destination.teamId,
+                conversationId: result.conversationId ?? null,
+              },
+              update: { messageId: result.providerMessageId, channelId: destination.channelId, tenantId: destination.tenantId, teamId: destination.teamId, conversationId: result.conversationId ?? undefined },
+            });
+          } catch {}
+        }
       }
     } catch (e) {
       if (circuitOpened) {

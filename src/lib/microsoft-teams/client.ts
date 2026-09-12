@@ -437,6 +437,51 @@ export async function listMicrosoftTeamsForDiscovery(options?: {
   }
 }
 
+/**
+ * Reconcile probe for AMBIGUOUS send — lists recent channel messages and looks
+ * for an Adaptive Card attachment whose id matches the incident id. This is
+ * best-effort: Graph does not expose provider-side idempotency for `POST
+ * /teams/{team}/channels/{channel}/messages`, so a timeout after a successful
+ * server-side commit would otherwise cause a duplicate card on retry.
+ */
+export async function probeMicrosoftTeamsForIncidentMessage(args: {
+  tenantId: string;
+  teamId: string;
+  channelId: string;
+  incidentId: string;
+}): Promise<{ messageId: string | null; error?: string }> {
+  const { tenantId, teamId, channelId, incidentId } = args;
+  const resolved = await getMicrosoftTeamsConfig();
+  if (!resolved) return { messageId: null, error: 'NOT_CONFIGURED' };
+  const tenant = resolveTenantForCall(tenantId, resolved.config.tenantId);
+  if (!tenant) return { messageId: null, error: 'TENANT_REQUIRED' };
+  const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenant);
+  if (!token) return { messageId: null, error: 'GRAPH_TOKEN_FAILED' };
+  try {
+    const res = await retryFetch(
+      `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(teamId)}/channels/${encodeURIComponent(channelId)}/messages?$top=25`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { maxAttempts: 2, initialDelayMs: 500 },
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { messageId: null, error: text.slice(0, 400) || `HTTP ${res.status}` };
+    }
+    const data = (await res.json()) as {
+      value?: Array<{ id?: string; attachments?: Array<{ id?: string }> }>;
+    };
+    for (const msg of data.value ?? []) {
+      const attachments = msg.attachments ?? [];
+      if (attachments.some(a => a.id === incidentId) && msg.id) {
+        return { messageId: msg.id };
+      }
+    }
+    return { messageId: null };
+  } catch (e) {
+    return { messageId: null, error: e instanceof Error ? e.message.slice(0, 400) : String(e).slice(0, 400) };
+  }
+}
+
 export async function listMicrosoftTeamsChannelsForDiscovery(
   teamId: string,
   options?: { tenantId?: string },
