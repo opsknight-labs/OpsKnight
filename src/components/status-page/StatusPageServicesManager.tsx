@@ -284,14 +284,11 @@ export default function StatusPageServicesManager({
       <div className="flex flex-col gap-3.5 p-4 rounded-xl border border-border/80 bg-card shadow-2xs">
         {/* Row 1: Search & Region Dropdown & Layout Controls */}
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-          {/* Search Input */}
+          {/* Search Input (No Icon) */}
           <div className="relative flex-1 max-w-md">
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-              <Search className="w-4 h-4" />
-            </div>
             <input
               type="text"
-              className="w-full pl-9 pr-8 py-2 text-sm bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-lg placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
               placeholder={`Search ${allServices.length} services by name or region...`}
               value={searchQuery}
               onChange={e => {

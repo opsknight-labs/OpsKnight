@@ -64,18 +64,21 @@ describe('StatusPageAnnouncementManager Component', () => {
     );
   };
 
-  it('renders announcement form and recent announcements list', () => {
+  it('renders announcement dashboard with metrics, tabs, and announcements list', () => {
     renderManager();
 
-    expect(screen.getByText('Create Announcement')).toBeDefined();
-    expect(screen.getByPlaceholderText(/Scheduled Database Maintenance Window/i)).toBeDefined();
-    expect(screen.getByText('Recent Announcements')).toBeDefined();
+    expect(screen.getByText('Status Page Announcements')).toBeDefined();
+    expect(screen.getByText('Total Notices')).toBeDefined();
+    expect(screen.getByRole('button', { name: /New Announcement/i })).toBeDefined();
     expect(screen.getByText('Scheduled Database Maintenance')).toBeDefined();
     expect(screen.getByText('API Latency Investigation')).toBeDefined();
   });
 
-  it('supports toggling between Exact Time and All Day / Date Only', () => {
+  it('supports toggling between Exact Time and All Day / Date Only in composer modal', () => {
     renderManager();
+
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
 
     // Default is Exact Time
     const exactBtn = screen.getByRole('button', { name: /Exact Time/i });
@@ -96,20 +99,26 @@ describe('StatusPageAnnouncementManager Component', () => {
   it('updates end date and time via quick window buttons (+1h, +2h, +4h)', () => {
     renderManager();
 
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+
     const add1hBtn = screen.getByRole('button', { name: '+1h' });
     fireEvent.click(add1hBtn);
 
     // Duration should calculate and show window
-    expect(screen.getByText(/Window Duration:/i)).toBeDefined();
+    expect(screen.getByText(/Duration:/i)).toBeDefined();
     expect(screen.getByText('1h')).toBeDefined();
 
     const add2hBtn = screen.getByRole('button', { name: '+2h' });
     fireEvent.click(add2hBtn);
-    expect(screen.getByText(/Window Duration:/i).textContent).toContain('2h');
+    expect(screen.getByText(/Duration:/i).textContent).toContain('2h');
   });
 
   it('detects and displays time validation error when end time is earlier than start time', () => {
     renderManager();
+
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
 
     const titleInput = screen.getByPlaceholderText(/Scheduled Database Maintenance Window/i);
     const messageInput = screen.getByPlaceholderText(/Describe the scope/i);
@@ -153,6 +162,9 @@ describe('StatusPageAnnouncementManager Component', () => {
     });
 
     renderManager();
+
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
 
     const titleInput = screen.getByPlaceholderText(/Scheduled Database Maintenance Window/i);
     const messageInput = screen.getByPlaceholderText(/Describe the scope/i);
