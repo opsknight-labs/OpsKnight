@@ -2508,11 +2508,17 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             checked={formData.showHeader}
                             onChange={checked => setFormData({ ...formData, showHeader: checked })}
                             label="Show Header"
+                            helperText={
+                              formData.showHeader
+                                ? 'Display the top navigation bar with logo and page title.'
+                                : 'When hidden, subscribe and API links remain accessible via the footer (if footer is enabled).'
+                            }
                           />
                           <Switch
                             checked={formData.showFooter}
                             onChange={checked => setFormData({ ...formData, showFooter: checked })}
                             label="Show Footer"
+                            helperText="Display the footer with support links, API links, and copyright."
                           />
                         </div>
                       </div>
