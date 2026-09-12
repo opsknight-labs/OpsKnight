@@ -222,7 +222,7 @@ export async function PATCH(request: NextRequest) {
       });
     } catch (e) {
       const code = (e as { code?: string })?.code;
-      if (code === 'CAS_CONFLICT' || (e instanceof Error && e.message === 'CAS_CONFLICT')) {
+      if (code === 'CAS_CONFLICT') {
         return jsonError('Settings changed elsewhere. Reload before saving.', 409);
       }
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -339,7 +339,7 @@ export async function PATCH(request: NextRequest) {
       });
     } catch (e) {
       const code = (e as { code?: string })?.code;
-      if (code === 'CAS_CONFLICT' || (e instanceof Error && e.message === 'CAS_CONFLICT')) {
+      if (code === 'CAS_CONFLICT') {
         return jsonError('Settings changed elsewhere. Reload before saving.', 409);
       }
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
