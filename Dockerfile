@@ -77,6 +77,11 @@ RUN npx prisma generate
 ARG DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy?schema=public"
 ENV DATABASE_URL=$DATABASE_URL
 
+# Embed the source location that corresponds to this build. Official CI passes an
+# immutable commit URL. Downstream modified builds should provide their own URL.
+ARG SOURCE_CODE_URL="https://github.com/opsknight-labs/OpsKnight"
+ENV NEXT_PUBLIC_SOURCE_CODE_URL=$SOURCE_CODE_URL
+
 # Build Next.js application with production optimizations
 # Pages that need database access are marked as dynamic, so build works without DB
 RUN npm run build
@@ -97,6 +102,10 @@ RUN apk update && apk upgrade && \
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_RUNTIME=nodejs
+
+ARG SOURCE_CODE_URL="https://github.com/opsknight-labs/OpsKnight"
+ARG BUILD_REVISION=unknown
+ENV NEXT_PUBLIC_SOURCE_CODE_URL=$SOURCE_CODE_URL
 
 # Create non-root user with specific UID/GID for consistency
 RUN addgroup --system --gid 1001 nodejs && \
@@ -151,4 +160,5 @@ ENTRYPOINT ["./docker-entrypoint.sh"]
 
 # Link image to repository and declare the license of images built from this line.
 LABEL org.opencontainers.image.source="https://github.com/opsknight-labs/OpsKnight" \
-      org.opencontainers.image.licenses="AGPL-3.0-only"
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.revision=$BUILD_REVISION
