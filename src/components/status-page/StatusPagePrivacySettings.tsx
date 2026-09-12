@@ -111,8 +111,8 @@ export default function StatusPagePrivacySettings({
   const [expandedPreset, setExpandedPreset] = useState<keyof typeof PRIVACY_PRESETS | null>(null);
 
   const PRESET_DETAIL_LABELS: Array<{ key: keyof PrivacySettings; label: string }> = [
-    { key: 'showIncidentDetails', label: 'Incident timeline & details' },
-    { key: 'showIncidentDescriptions', label: 'Incident descriptions' },
+    { key: 'showIncidentDetails', label: 'Timeline & progress updates' },
+    { key: 'showIncidentDescriptions', label: 'Incident body description' },
     { key: 'showIncidentTimestamps', label: 'Incident timestamps' },
     { key: 'showAffectedServices', label: 'Affected services' },
     { key: 'showIncidentUrgency', label: 'Incident urgency' },
@@ -284,20 +284,20 @@ export default function StatusPagePrivacySettings({
             <Switch
               checked={settings.showIncidentDetails}
               onChange={checked => updateSetting('showIncidentDetails', checked)}
-              label="Show Incident Timeline & Details"
-              helperText="Show the full incident timeline and update details"
+              label="Show Timeline & Progress Updates"
+              helperText="Display chronological investigation, mitigation, and resolution updates"
             />
             <Switch
               checked={settings.showIncidentTitles}
               onChange={checked => updateSetting('showIncidentTitles', checked)}
               label="Show Incident Titles"
-              helperText="Display incident titles on the status page"
+              helperText="Display incident titles on the status page (falls back to generic title if off)"
             />
             <Switch
               checked={settings.showIncidentDescriptions}
               onChange={checked => updateSetting('showIncidentDescriptions', checked)}
-              label="Show Incident Descriptions"
-              helperText="Display detailed incident descriptions"
+              label="Show Incident Body Description"
+              helperText="Display the main descriptive paragraph explaining what occurred"
             />
             <Switch
               checked={settings.showAffectedServices}

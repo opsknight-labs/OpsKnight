@@ -230,12 +230,7 @@ export function serializePublicStatusIncident(
         : {}),
     };
   }
-  if (
-    !redactedByAge &&
-    visibility.showIncidentId &&
-    visibility.showIncidentDescription &&
-    incident.events?.length
-  ) {
+  if (!redactedByAge && visibility.showIncidentId && incident.events?.length) {
     const updates = incident.events.slice(0, 8).flatMap(event => {
       const update = serializePublicIncidentUpdate(
         incident.id,

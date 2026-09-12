@@ -38,7 +38,6 @@ describe('OIDC configuration loading', () => {
       organizationId: 'org_enterprise',
       tokenEndpointAuthMethod: 'client_secret_post',
       profileMapping: {},
-      tokenEndpointAuthMethod: 'client_secret_basic',
       createdAt: new Date(),
       updatedAt: new Date(),
       updatedBy: null,
