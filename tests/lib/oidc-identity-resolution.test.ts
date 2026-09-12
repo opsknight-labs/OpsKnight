@@ -527,7 +527,6 @@ describe('resolveOidcIdentityForSignIn', () => {
 
   it('resolves and links pairwise sub change under the same issuer (e.g. Entra app registration migration)', async () => {
     const entraIssuer = 'https://login.microsoftonline.com/tenant-123/v2.0';
-    const oldClientId = 'client-A';
     const newClientId = 'client-B';
     const newFingerprint = oidcTrustFingerprint(entraIssuer, newClientId);
 
@@ -584,6 +583,36 @@ describe('resolveOidcIdentityForSignIn', () => {
         }),
       })
     );
+  });
+
+  it('lazily backfills issuerFingerprint for legacy identities with null fingerprint on successful login', async () => {
+    const clientId = 'active-client';
+    const currentFingerprint = oidcTrustFingerprint(baseInput.issuer, clientId);
+
+    // Fast path finds existing identity with issuerFingerprint: null (legacy pre-#633)
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue({
+      id: 'legacy-ident-1',
+      userId: linkedUser.id,
+      issuerFingerprint: null,
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      clientId,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.id).toBe(linkedUser.id);
+      expect(result.identityCreated).toBe(false);
+    }
+
+    // Fingerprint is backfilled lazily
+    expect(prisma.oidcIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'legacy-ident-1' },
+      data: { issuerFingerprint: currentFingerprint },
+    });
   });
 });
 

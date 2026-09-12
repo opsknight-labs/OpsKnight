@@ -409,24 +409,25 @@ export async function validateOidcConnection(
 
     // For generic/custom providers, validate the authorization-code flow and PKCE capability contracts
     if (providerPolicy.family === 'custom') {
-      if (config.response_types_supported !== undefined) {
-        if (!Array.isArray(config.response_types_supported)) {
-          return {
-            isValid: false,
-            error:
-              'Identity Provider metadata contains a malformed response_types_supported list.',
-          };
-        }
-        const supportsCode = config.response_types_supported.some(
-          rt => typeof rt === 'string' && rt.trim() === 'code'
-        );
-        if (!supportsCode) {
-          return {
-            isValid: false,
-            error:
-              'Identity Provider must support the "code" response type for authorization code flow.',
-          };
-        }
+      if (
+        config.response_types_supported === undefined ||
+        !Array.isArray(config.response_types_supported)
+      ) {
+        return {
+          isValid: false,
+          error:
+            'Identity Provider metadata must include a valid "response_types_supported" array.',
+        };
+      }
+      const supportsCode = config.response_types_supported.some(
+        rt => typeof rt === 'string' && rt.trim() === 'code'
+      );
+      if (!supportsCode) {
+        return {
+          isValid: false,
+          error:
+            'Identity Provider must support the "code" response type for authorization code flow.',
+        };
       }
 
       if (config.code_challenge_methods_supported !== undefined) {

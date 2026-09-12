@@ -19,8 +19,8 @@ BEGIN
 
   -- Extract scheme (e.g. https://)
   IF trimmed ~* '^https?://' THEN
-    scheme := LOWER(SUBSTRING(trimmed FROM '^(https?://)'));
-    after_scheme := SUBSTRING(trimmed FROM '^[a-zA-Z0-9]+://(.*)$');
+    scheme := LOWER(SUBSTRING(trimmed FROM '^(?i)(https?://)'));
+    after_scheme := SUBSTRING(trimmed FROM '^(?i)[a-zA-Z0-9]+://(.*)$');
   ELSE
     RETURN trimmed;
   END IF;

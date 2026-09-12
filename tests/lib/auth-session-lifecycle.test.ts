@@ -58,6 +58,8 @@ vi.mock('@/lib/prisma', () => ({
     },
     oidcIdentity: {
       findUnique: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     oidcLinkingApproval: {
       findFirst: vi.fn(),
@@ -458,6 +460,7 @@ describe('Auth session lifecycle and hardening', () => {
               token_endpoint: 'https://login.example.com/token',
               jwks_uri: 'https://login.example.com/jwks',
               id_token_signing_alg_values_supported: ['RS256'],
+              response_types_supported: ['code'],
             }),
             headers: { get: () => null },
           } as any;
@@ -502,6 +505,7 @@ describe('Auth session lifecycle and hardening', () => {
               token_endpoint: 'https://login.example.com/token',
               jwks_uri: 'https://login.example.com/jwks',
               id_token_signing_alg_values_supported: ['RS256'],
+              response_types_supported: ['code'],
             }),
             headers: { get: () => null },
           } as any;
@@ -553,6 +557,7 @@ describe('Auth session lifecycle and hardening', () => {
                 authorization_endpoint: 'https://login.example.com/auth',
                 token_endpoint: 'https://login.example.com/token',
                 jwks_uri: 'https://login.example.com/jwks',
+                response_types_supported: ['code'],
               }),
               headers: { get: () => null },
             } as any;
@@ -681,6 +686,7 @@ describe('Auth session lifecycle and hardening', () => {
               token_endpoint: 'https://login.example.com/token',
               jwks_uri: 'https://login.example.com/jwks',
               token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+              response_types_supported: ['code'],
             }),
             headers: { get: () => null },
           } as any;

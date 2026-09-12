@@ -107,7 +107,7 @@ export async function resolveOidcIdentityForSignIn(
   // bindings, so tenant/domain/org policy changes take effect immediately.
   const existingIdentity = await prisma.oidcIdentity.findUnique({
     where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, issuerFingerprint: true },
   });
 
   if (existingIdentity) {
@@ -118,6 +118,17 @@ export async function resolveOidcIdentityForSignIn(
     if (!linkedUser || linkedUser.status === 'DISABLED') {
       return { ok: false, reason: 'OIDC_TARGET_NOT_OPERATIONAL' };
     }
+
+    // Lazily backfill issuerFingerprint for legacy pre-#633 identities
+    // on successful login under the active client registration.
+    if (!existingIdentity.issuerFingerprint && input.clientId) {
+      const currentFingerprint = oidcTrustFingerprint(input.issuer, input.clientId);
+      await prisma.oidcIdentity.update({
+        where: { id: existingIdentity.id },
+        data: { issuerFingerprint: currentFingerprint },
+      });
+    }
+
     return {
       ok: true,
       user: linkedUser,
@@ -148,7 +159,7 @@ export async function resolveOidcIdentityForSignIn(
       // path. Recheck first and let the stable binding win unconditionally.
       let identityInsideTransaction = await tx.oidcIdentity.findUnique({
         where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
-        select: { id: true, userId: true },
+        select: { id: true, userId: true, issuerFingerprint: true },
       });
 
       if (!identityInsideTransaction) {
@@ -159,7 +170,7 @@ export async function resolveOidcIdentityForSignIn(
               issuer: { in: legacyVariants },
               subject: input.subject,
             },
-            select: { id: true, userId: true, createdAt: true },
+            select: { id: true, userId: true, issuerFingerprint: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
           });
           const legacyMatches = Array.isArray(rawMatches) ? rawMatches : [];
@@ -192,6 +203,17 @@ export async function resolveOidcIdentityForSignIn(
         if (!linkedUser || linkedUser.status === 'DISABLED') {
           throw new Error('OIDC_TARGET_NOT_OPERATIONAL');
         }
+
+        // Lazily backfill issuerFingerprint for legacy pre-#633 identities
+        // on successful login under the active client registration.
+        if (!identityInsideTransaction.issuerFingerprint && input.clientId) {
+          const currentFingerprint = oidcTrustFingerprint(input.issuer, input.clientId);
+          await tx.oidcIdentity.update({
+            where: { id: identityInsideTransaction.id },
+            data: { issuerFingerprint: currentFingerprint },
+          });
+        }
+
         return {
           ok: true as const,
           user: linkedUser,

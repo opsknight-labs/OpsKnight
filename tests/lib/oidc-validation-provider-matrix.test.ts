@@ -22,6 +22,7 @@ function makeMetadata(issuer: string, overrides: Record<string, unknown> = {}) {
     token_endpoint: `${issuer}/token`,
     jwks_uri: `${issuer}/jwks`,
     id_token_signing_alg_values_supported: ['RS256'],
+    response_types_supported: ['code'],
     issuer,
     ...overrides,
   };
@@ -395,6 +396,17 @@ describe('OIDC discovery provider matrix', () => {
 
 
   it('validates generic provider authorization code and PKCE capabilities', async () => {
+    // Completely missing response_types_supported
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        response_types_supported: undefined,
+      })
+    );
+    const missingResult = await validateOidcConnection('https://identity.example.com');
+    expect(missingResult.isValid).toBe(false);
+    expect(missingResult.error).toContain('must include a valid "response_types_supported" array');
+
     // Missing code in response_types_supported
     setupValidFetch(
       200,

@@ -64,10 +64,7 @@ async function readOidcLinkingState(
         issuer: { in: issuerVariants },
         ...(currentFingerprint
           ? {
-              OR: [
-                { issuerFingerprint: currentFingerprint },
-                { issuerFingerprint: null },
-              ],
+              issuerFingerprint: currentFingerprint,
             }
           : {}),
       },
