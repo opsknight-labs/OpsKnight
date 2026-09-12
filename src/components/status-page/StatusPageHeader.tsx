@@ -121,7 +121,15 @@ function MailIcon() {
 
 function SubscribeIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
       <path d="M4 9a2.5 2.5 0 0 1 2.5-2.5H17A2.5 2.5 0 0 1 19.5 9V16A2.5 2.5 0 0 1 17 18.5H6.5A2.5 2.5 0 0 1 4 16V9Z" />
       <path d="m5 7.5 7 5 7-5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -130,6 +138,8 @@ function SubscribeIcon() {
 
 /**
  * Slim public top bar. Clock, countdown, and timestamps all use the visitor's browser zone.
+ * Brand identity is intentionally not an anchor so legacy generic `.status-page-header a` rules
+ * cannot turn the customer's logo/name into a CTA. Header actions have their own semantic slots.
  */
 export default function StatusPageHeader({
   statusPage,
@@ -174,23 +184,25 @@ export default function StatusPageHeader({
     now && deadlineMs != null ? Math.max(0, Math.ceil((deadlineMs - now.getTime()) / 1000)) : null;
 
   return (
-    <header className="status-topbar status-page-header">
+    <header className="status-topbar status-page-header" data-sp-slot="header">
       <div className="status-topbar__inner">
-        <a className="status-topbar__brand" href="https://opsknight.com/">
+        <div className="status-topbar__brand" data-sp-slot="brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={logoUrl}
             alt=""
+            data-sp-slot="brand-logo"
             onError={event => {
               (event.target as HTMLImageElement).style.display = 'none';
             }}
           />
-          <span>{statusPage.name}</span>
-        </a>
-        <div className="status-topbar__actions">
+          <span data-sp-slot="brand-name">{statusPage.name}</span>
+        </div>
+        <div className="status-topbar__actions" data-sp-slot="header-actions">
           {localTime && offset && (
             <span
               className="status-topbar__chip status-topbar__chip--time"
+              data-sp-slot="header-action"
               title={`Times on this page use your browser time zone (${zoneName})`}
             >
               <ClockIcon />
@@ -205,6 +217,7 @@ export default function StatusPageHeader({
           {remainingSeconds != null && (
             <span
               className="status-topbar__chip status-topbar__chip--time"
+              data-sp-slot="header-action"
               title="Seconds until this page fetches the latest published status"
             >
               <RefreshIcon />
@@ -214,25 +227,35 @@ export default function StatusPageHeader({
             </span>
           )}
           {onSubscribeClick && (
-            <button type="button" className="status-topbar__chip status-topbar__chip--accent" onClick={onSubscribeClick} aria-haspopup="dialog">
+            <button
+              type="button"
+              className="status-topbar__chip status-topbar__chip--accent"
+              data-sp-slot="header-action"
+              onClick={onSubscribeClick}
+              aria-haspopup="dialog"
+            >
               <SubscribeIcon />
               Subscribe
             </button>
           )}
           {rssHref && (
-            <a className="status-topbar__chip" href={rssHref}>
+            <a className="status-topbar__chip" data-sp-slot="header-action" href={rssHref}>
               <RssIcon />
               RSS
             </a>
           )}
           {apiHref && (
-            <a className="status-topbar__chip" href={apiHref}>
+            <a className="status-topbar__chip" data-sp-slot="header-action" href={apiHref}>
               <ApiIcon />
               JSON
             </a>
           )}
           {contactHref && (
-            <a className="status-topbar__chip status-topbar__chip--accent" href={contactHref}>
+            <a
+              className="status-topbar__chip status-topbar__chip--accent"
+              data-sp-slot="header-action"
+              href={contactHref}
+            >
               <MailIcon />
               Contact
             </a>

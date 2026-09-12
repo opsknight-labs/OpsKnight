@@ -8,10 +8,10 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import { Globe, Layers, Users, Megaphone, Key, ExternalLink } from 'lucide-react';
-import StatusPageConfig from '@/components/StatusPageConfig';
+import StatusPageWorkspace from '@/components/status-page/StatusPageWorkspace';
 import { getStatusPageSnapshot, buildStatusPageSnapshot } from '@/lib/status-pages/snapshot';
 
-export default async function StatusPageWorkspace({
+export default async function StatusPageWorkspacePage({
   params,
 }: {
   params: Promise<{ pageId: string }>;
@@ -168,7 +168,7 @@ export default async function StatusPageWorkspace({
         ]}
       />
       <div className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
-        <StatusPageConfig
+        <StatusPageWorkspace
           key={statusPage.id}
           statusPage={formattedStatusPage}
           allServices={allServices}
