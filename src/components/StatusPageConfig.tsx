@@ -865,6 +865,7 @@ export default function StatusPageConfig({
     },
     { id: 'integrations', label: 'Integrations', icon: <Link2 className="w-3.5 h-3.5" /> },
     { id: 'subscribers', label: 'Subscribers', icon: <Users className="w-3.5 h-3.5" /> },
+    { id: 'email-delivery', label: 'Email Delivery', icon: <Mail className="w-3.5 h-3.5" /> },
     { id: 'customization', label: 'Custom CSS', icon: <Code className="w-3.5 h-3.5" /> },
     { id: 'advanced', label: 'Advanced', icon: <Sliders className="w-3.5 h-3.5" /> },
   ];
@@ -3785,22 +3786,29 @@ export default function StatusPageConfig({
                     style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
                   >
                     <StatusPageSectionCard
+                      title="Subscribers"
+                      description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription."
+                      icon={<Users className="w-5 h-5 text-primary" />}
+                    >
+                      <StatusPageSubscribers statusPageId={statusPage.id} />
+                    </StatusPageSectionCard>
+                  </div>
+                )}
+
+                {/* Email Delivery */}
+                {activeSection === 'email-delivery' && (
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                  >
+                    <StatusPageSectionCard
                       title="Email Delivery"
-                      description="Choose the email provider used for subscription notifications and incident alerts."
+                      description="Configure which email provider to use for subscription verification and status page notification alerts."
                       icon={<Mail className="w-5 h-5 text-primary" />}
                     >
                       <StatusPageEmailConfig
                         statusPageId={statusPage.id}
                         currentProvider={statusPage.emailProvider}
                       />
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Subscribers"
-                      description="Manage subscriber list, verification states, and subscriber notifications."
-                      icon={<Users className="w-5 h-5 text-primary" />}
-                    >
-                      <StatusPageSubscribers statusPageId={statusPage.id} />
                     </StatusPageSectionCard>
                   </div>
                 )}
@@ -4279,7 +4287,9 @@ export default function StatusPageConfig({
               </div>
             </div>
             {/* Sections with independent controls persist through their own APIs. */}
-            {!['announcements', 'integrations', 'subscribers'].includes(activeSection) && (
+            {!['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(
+              activeSection
+            ) && (
               <div className="status-page-config-sticky-bar flex items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-card/95 backdrop-blur-md shadow-lg">
                 <div className="flex items-center gap-3">
                   <DeleteConfirmDialog
