@@ -65,7 +65,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           toast:
             'group relative flex items-start gap-2.5 ' +
-            'data-[styled=true]:!w-[min(360px,calc(100vw-24px))] data-[styled=true]:!min-w-[320px] data-[styled=true]:!max-w-[380px] ' +
+            'data-[styled=true]:!w-[min(360px,calc(100vw-24px))] sm:data-[styled=true]:!min-w-[320px] data-[styled=true]:!max-w-[380px] ' +
             'data-[styled=true]:!rounded-xl data-[styled=true]:!border data-[styled=true]:!border-[var(--toast-border)] ' +
             'data-[styled=true]:!bg-[var(--toast-bg)] data-[styled=true]:!text-[var(--toast-fg)] ' +
             'data-[styled=true]:!p-3.5 data-[styled=true]:!pr-10 ' +

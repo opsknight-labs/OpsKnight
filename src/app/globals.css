@@ -11,25 +11,25 @@
   --toast-muted: #64748b;
   --toast-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.08), 0 16px 40px rgba(0, 0, 0, 0.06);
 
-  --toast-success-accent: #10b981;
-  --toast-success-icon-bg: #ecfdf5;
+  --toast-success-accent: #059669;
+  --toast-success-icon-bg: #f0fdf4;
   --toast-success-icon-border: #a7f3d0;
   --toast-success-icon-fg: #059669;
 
-  --toast-error-accent: #f43f5e;
-  --toast-error-icon-bg: #fff1f2;
+  --toast-error-accent: #e11d48;
+  --toast-error-icon-bg: #fef2f2;
   --toast-error-icon-border: #fecdd3;
   --toast-error-icon-fg: #e11d48;
 
-  --toast-warning-accent: #f59e0b;
+  --toast-warning-accent: #d97706;
   --toast-warning-icon-bg: #fffbeb;
   --toast-warning-icon-border: #fde68a;
   --toast-warning-icon-fg: #d97706;
 
-  --toast-info-accent: #0284c7;
-  --toast-info-icon-bg: #f0f9ff;
-  --toast-info-icon-border: #bae6fd;
-  --toast-info-icon-fg: #0284c7;
+  --toast-info-accent: #2563eb;
+  --toast-info-icon-bg: #eff6ff;
+  --toast-info-icon-border: #bfdbfe;
+  --toast-info-icon-fg: #2563eb;
 
   /* Backward-compatible fallbacks */
   --toast-success-bg: var(--toast-bg);
@@ -320,25 +320,25 @@
   --toast-muted: #9ca3af;
   --toast-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5), 0 20px 48px rgba(0, 0, 0, 0.6);
 
-  --toast-success-accent: #10b981;
+  --toast-success-accent: #059669;
   --toast-success-icon-bg: #064e3b;
   --toast-success-icon-border: #047857;
   --toast-success-icon-fg: #6ee7b7;
 
-  --toast-error-accent: #f43f5e;
+  --toast-error-accent: #e11d48;
   --toast-error-icon-bg: #4c0519;
   --toast-error-icon-border: #9f1239;
   --toast-error-icon-fg: #fda4af;
 
-  --toast-warning-accent: #f59e0b;
+  --toast-warning-accent: #d97706;
   --toast-warning-icon-bg: #451a03;
   --toast-warning-icon-border: #92400e;
   --toast-warning-icon-fg: #fcd34d;
 
-  --toast-info-accent: #0284c7;
-  --toast-info-icon-bg: #082f49;
-  --toast-info-icon-border: #0369a1;
-  --toast-info-icon-fg: #7dd3fc;
+  --toast-info-accent: #2563eb;
+  --toast-info-icon-bg: #1e3a8a33;
+  --toast-info-icon-border: #1d4ed8;
+  --toast-info-icon-fg: #93c5fd;
 
   /* Backward-compatible fallbacks */
   --toast-success-bg: var(--toast-bg);
