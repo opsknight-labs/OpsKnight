@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/shadcn/sonner';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvider';
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
+import ActivityTracker from '@/components/auth/ActivityTracker';
 
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
   // Save-feedback PR keeps the existing product theme behavior: mobile routes
@@ -34,7 +35,8 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider refetchInterval={300} refetchOnWindowFocus={true}>
+    <SessionProvider refetchInterval={0} refetchOnWindowFocus={true}>
+      <ActivityTracker />
       <ChunkLoadErrorHandler />
       <AppThemeProvider>
         <TimezoneProvider>

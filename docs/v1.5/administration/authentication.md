@@ -214,7 +214,8 @@ See [SCIM Provisioning](../security/scim-provisioning.md).
 
 - Use a tenant-specific issuer.
 - Broad `common`, `organizations`, and `consumers` authorities are rejected.
-- Supported sovereign-cloud authorities are recognized.
+- Built-in Entra policy targets workforce tenants in commercial and sovereign clouds (External ID / CIAM is handled under generic OIDC).
+- Tenant boundaries are cryptographically verified via the tenant-specific issuer; Allowed Domains is informational for Entra workforce tenants.
 - Missing standard `email_verified` is handled under the validated Entra policy; explicit false is rejected.
 - Prefer Entra App Roles for authoritative role mapping when possible.
 
@@ -226,11 +227,13 @@ See [SCIM Provisioning](../security/scim-provisioning.md).
 
 - Organization and custom authorization-server issuers are supported.
 - Custom domains retain Okta provider policy.
+- Supports both `client_secret_basic` and `client_secret_post` token endpoint authentication.
 
 ### Auth0
 
 - Tenant and custom-domain issuers are supported.
-- Optional Auth0 Organization enforcement uses signed `org_id`.
+- Supports both `client_secret_basic` and `client_secret_post` token endpoint authentication.
+- Configured Auth0 Organizations pass `organization` during authorization and enforce signed `org_id` on every login.
 
 ## Unsupported authentication methods
 

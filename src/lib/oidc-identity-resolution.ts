@@ -4,6 +4,7 @@ import { hasOidcEmailLinkAssurance } from '@/lib/oidc-provider';
 import { isOidcLinkingApprovalUsable } from '@/lib/oidc-linking-approval';
 import { getOidcProviderPolicy, type OidcClaims } from '@/lib/oidc/provider-policy';
 import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
+import { getLegacyOidcIssuerVariants } from '@/lib/oidc/issuer-migration';
 
 export type OidcTargetUser = {
   id: string;
@@ -25,6 +26,7 @@ export type OidcIdentityResolutionFailure =
   | 'OIDC_AUTO_PROVISION_DISABLED'
   | 'OIDC_LINK_NOT_APPROVED'
   | 'OIDC_LINK_APPROVAL_EXPIRED'
+  | 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT'
   | 'OIDC_TARGET_NOT_OPERATIONAL';
 
 export type OidcIdentityResolutionResult =
@@ -99,10 +101,46 @@ export async function resolveOidcIdentityForSignIn(
   // independently establishes whether that identity is currently permitted.
   // Re-evaluate the organization boundary on every login, including existing
   // bindings, so tenant/domain/org policy changes take effect immediately.
-  const existingIdentity = await prisma.oidcIdentity.findUnique({
+  let existingIdentity = await prisma.oidcIdentity.findUnique({
     where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
-    select: { userId: true },
+    select: { id: true, userId: true },
   });
+
+  // Upgrade compatibility: If lookup by canonical issuer misses, check legacy
+  // non-canonical variants (e.g. trailing slashes) and reconcile atomically.
+  if (!existingIdentity) {
+    const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
+    if (legacyVariants.length > 0) {
+      const rawMatches = await prisma.oidcIdentity.findMany({
+        where: {
+          issuer: { in: legacyVariants },
+          subject: input.subject,
+        },
+        select: { id: true, userId: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      const legacyMatches = Array.isArray(rawMatches) ? rawMatches : [];
+
+      if (legacyMatches.length > 0) {
+        const uniqueUserIds = new Set(legacyMatches.map(m => m.userId));
+        if (uniqueUserIds.size > 1) {
+          return { ok: false, reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT' };
+        }
+        const [primaryMatch, ...duplicateMatches] = legacyMatches;
+        if (duplicateMatches.length > 0) {
+          await prisma.oidcIdentity.deleteMany({
+            where: { id: { in: duplicateMatches.map(m => m.id) } },
+          });
+        }
+        await prisma.oidcIdentity.update({
+          where: { id: primaryMatch.id },
+          data: { issuer: input.issuer },
+        });
+        existingIdentity = primaryMatch;
+      }
+    }
+  }
+
   if (existingIdentity) {
     const linkedUser = await prisma.user.findUnique({
       where: { id: existingIdentity.userId },
@@ -126,10 +164,44 @@ export async function resolveOidcIdentityForSignIn(
     return await runSerializableTransaction(async tx => {
       // A concurrent callback may have created the identity after the fast
       // path. Recheck first and let the stable binding win unconditionally.
-      const identityInsideTransaction = await tx.oidcIdentity.findUnique({
+      let identityInsideTransaction = await tx.oidcIdentity.findUnique({
         where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
-        select: { userId: true },
+        select: { id: true, userId: true },
       });
+
+      if (!identityInsideTransaction) {
+        const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
+        if (legacyVariants.length > 0) {
+          const rawMatches = await tx.oidcIdentity.findMany({
+            where: {
+              issuer: { in: legacyVariants },
+              subject: input.subject,
+            },
+            select: { id: true, userId: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+          });
+          const legacyMatches = Array.isArray(rawMatches) ? rawMatches : [];
+
+          if (legacyMatches.length > 0) {
+            const uniqueUserIds = new Set(legacyMatches.map(m => m.userId));
+            if (uniqueUserIds.size > 1) {
+              throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
+            }
+            const [primaryMatch, ...duplicateMatches] = legacyMatches;
+            if (duplicateMatches.length > 0) {
+              await tx.oidcIdentity.deleteMany({
+                where: { id: { in: duplicateMatches.map(m => m.id) } },
+              });
+            }
+            await tx.oidcIdentity.update({
+              where: { id: primaryMatch.id },
+              data: { issuer: input.issuer },
+            });
+            identityInsideTransaction = primaryMatch;
+          }
+        }
+      }
+
       if (identityInsideTransaction) {
         const linkedUser = await tx.user.findUnique({
           where: { id: identityInsideTransaction.userId },
@@ -291,6 +363,7 @@ export async function resolveOidcIdentityForSignIn(
       'OIDC_AUTO_PROVISION_DISABLED',
       'OIDC_LINK_NOT_APPROVED',
       'OIDC_LINK_APPROVAL_EXPIRED',
+      'OIDC_AMBIGUOUS_IDENTITY_CONFLICT',
       'OIDC_TARGET_NOT_OPERATIONAL',
     ]);
     if (knownReasons.has(reason as OidcIdentityResolutionFailure)) {

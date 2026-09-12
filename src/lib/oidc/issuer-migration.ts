@@ -1,9 +1,13 @@
 export function normalizeOidcIssuer(issuer: string): string {
-  const parsed = new URL(issuer.trim());
-  parsed.hash = '';
-  parsed.search = '';
-  parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
-  return parsed.toString().replace(/\/$/, '');
+  try {
+    const parsed = new URL(issuer.trim());
+    parsed.hash = '';
+    parsed.search = '';
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    return issuer.trim().replace(/\/+$/, '');
+  }
 }
 
 export function isOidcIssuerMigration(currentIssuer: string, candidateIssuer: string): boolean {
@@ -13,4 +17,45 @@ export function isOidcIssuerMigration(currentIssuer: string, candidateIssuer: st
 export function hasIssuerMigrationConfirmation(formData: FormData): boolean {
   const value = formData.get('confirmIssuerMigration');
   return value === 'on' || value === 'true' || value === 'confirmed';
+}
+
+/**
+ * Returns potential non-canonical issuer representations that may have been
+ * persisted in previous releases (e.g., trailing slashes or unnormalized paths)
+ * for seamless backwards-compatible lookup.
+ */
+export function getLegacyOidcIssuerVariants(canonicalIssuer: string): string[] {
+  const normalized = normalizeOidcIssuer(canonicalIssuer);
+  const variants = new Set<string>();
+
+  // Single trailing slash (legacy default behavior before multi-slash stripping)
+  variants.add(`${normalized}/`);
+  // Double trailing slash
+  variants.add(`${normalized}//`);
+  // Unnormalized input itself if different
+  if (canonicalIssuer.trim() !== normalized) {
+    variants.add(canonicalIssuer.trim());
+  }
+
+  try {
+    const parsed = new URL(normalized);
+    // Host uppercase variant
+    if (parsed.host) {
+      const upperHostUrl = `${parsed.protocol}//${parsed.host.toUpperCase()}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+      variants.add(upperHostUrl);
+      variants.add(`${upperHostUrl}/`);
+    }
+    // Explicit port 443 variant for standard HTTPS
+    if (parsed.protocol === 'https:' && !parsed.port) {
+      const explicitPortUrl = `https://${parsed.hostname}:443${parsed.pathname === '/' ? '' : parsed.pathname}`;
+      variants.add(explicitPortUrl);
+      variants.add(`${explicitPortUrl}/`);
+    }
+  } catch {
+    // Ignore URL parse failure
+  }
+
+  // Remove the canonical form itself so variants only include different legacy keys
+  variants.delete(normalized);
+  return Array.from(variants);
 }

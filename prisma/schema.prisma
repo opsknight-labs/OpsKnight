@@ -619,8 +619,9 @@ model OidcConfig {
   customScopes   String? // e.g. "groups profile email"
   providerType   String? // e.g. 'google', 'okta', 'azure', 'auth0', 'custom'
   providerLabel  String? // Custom display name, e.g. "Acme Corp SSO"
-  organizationId String? // Auth0 org_id or equivalent signed organization boundary
-  profileMapping Json?    @default("{}") // { department: "dept", jobTitle: "title", avatarUrl: "picture" }
+  organizationId          String?  // Auth0 org_id or equivalent signed organization boundary
+  tokenEndpointAuthMethod String?  @default("client_secret_basic") // 'client_secret_basic' | 'client_secret_post'
+  profileMapping          Json?    @default("{}") // { department: "dept", jobTitle: "title", avatarUrl: "picture" }
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   updatedBy      String?

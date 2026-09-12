@@ -547,7 +547,10 @@ export default async function middleware(req: NextRequest) {
     cookieName: SESSION_TOKEN_COOKIE_NAME,
     secureCookie: useSecureCookies,
   });
-  const isAuthenticated = !!token && !token.error && !!token.sub;
+  const isSessionExpired =
+    typeof (token as { sessionExpiresAt?: unknown })?.sessionExpiresAt === 'number' &&
+    Date.now() >= ((token as { sessionExpiresAt: number }).sessionExpiresAt * 1000);
+  const isAuthenticated = !!token && !token.error && !!token.sub && !isSessionExpired;
 
   if (isAuthenticated) {
     const isLoginPage =
