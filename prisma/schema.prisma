@@ -1746,6 +1746,9 @@ model StatusPageAnnouncement {
   affectedServiceIds Json? // Array of affected service IDs (for maintenance/impact mapping)
   startDate          DateTime
   endDate            DateTime?
+  allDay             Boolean   @default(false)
+  timeMode           String    @default("EXACT") // EXACT, ALL_DAY
+  publishAt          DateTime  @default(now())
   isActive           Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -1754,6 +1757,7 @@ model StatusPageAnnouncement {
   incident   Incident?  @relation(fields: [incidentId], references: [id], onDelete: SetNull)
 
   @@index([statusPageId, isActive, startDate])
+  @@index([statusPageId, isActive, publishAt])
   @@index([incidentId])
 }
 
@@ -1793,6 +1797,7 @@ model StatusPageSubscription {
   verificationToken          String?
   verificationTokenExpiresAt DateTime?
   preferences                Json? // Notification preferences (all incidents, major only, etc.)
+  timezone                   String?   @default("UTC")
 
   statusPage      StatusPage                     @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
   deliveryTokens  StatusPageSubscriptionToken[]

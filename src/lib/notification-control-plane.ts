@@ -84,6 +84,9 @@ export type CentralNotificationPayload =
       html?: string;
       contentId?: string;
       unsubscribeUrl?: string;
+      startTime?: string;
+      endTimeSection?: string;
+      postedAtSection?: string;
       text?: string;
       providerScope?: {
         statusPageId: string;
@@ -178,29 +181,31 @@ export type CentralNotificationInput = {
   tenantKey?: string;
 };
 
-const centralNotificationInputSchema = z.object({
-  category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
-  channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']),
-  recipientType: z.enum(['USER', 'EMAIL', 'PHONE', 'SUBSCRIBER', 'SLACK_CHANNEL', 'WEBHOOK']),
-  recipientId: z.string().max(191).optional(),
-  recipientAddress: z.string().max(2_048),
-  userId: z.string().max(191).optional(),
-  incidentId: z.string().max(191).optional(),
-  templateKey: z.string().max(191),
-  sourceType: z.string().max(191),
-  sourceId: z.string().max(191),
-  eventKey: z.string().max(512),
-  displayMessage: z.string().max(2_000),
-  payload: z.unknown(),
-  priority: z.number().int().optional(),
-  trafficClass: z.enum(['CRITICAL', 'TRANSACTIONAL', 'PUBLIC_INCIDENT', 'BULK']).optional(),
-  scheduledAt: z.date().optional(),
-  expiresAt: z.date().optional(),
-  maxAttempts: z.number().int().optional(),
-  contentId: z.string().max(191).optional(),
-  fanoutId: z.string().max(191).optional(),
-  tenantKey: z.string().trim().min(1).max(191).optional(),
-}).strict();
+const centralNotificationInputSchema = z
+  .object({
+    category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
+    channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']),
+    recipientType: z.enum(['USER', 'EMAIL', 'PHONE', 'SUBSCRIBER', 'SLACK_CHANNEL', 'WEBHOOK']),
+    recipientId: z.string().max(191).optional(),
+    recipientAddress: z.string().max(2_048),
+    userId: z.string().max(191).optional(),
+    incidentId: z.string().max(191).optional(),
+    templateKey: z.string().max(191),
+    sourceType: z.string().max(191),
+    sourceId: z.string().max(191),
+    eventKey: z.string().max(512),
+    displayMessage: z.string().max(2_000),
+    payload: z.unknown(),
+    priority: z.number().int().optional(),
+    trafficClass: z.enum(['CRITICAL', 'TRANSACTIONAL', 'PUBLIC_INCIDENT', 'BULK']).optional(),
+    scheduledAt: z.date().optional(),
+    expiresAt: z.date().optional(),
+    maxAttempts: z.number().int().optional(),
+    contentId: z.string().max(191).optional(),
+    fanoutId: z.string().max(191).optional(),
+    tenantKey: z.string().trim().min(1).max(191).optional(),
+  })
+  .strict();
 
 type NotificationStore = Pick<Prisma.TransactionClient, 'notification'>;
 
@@ -799,10 +804,11 @@ async function dispatchPayload(
         if (!content) {
           return { success: false, statusCode: 410, error: 'Notification content expired' };
         }
-        html = (await decrypt(content.encryptedTemplate)).replaceAll(
-          '{{unsubscribe_url}}',
-          payload.unsubscribeUrl ?? ''
-        );
+        html = (await decrypt(content.encryptedTemplate))
+          .replaceAll('{{unsubscribe_url}}', payload.unsubscribeUrl ?? '')
+          .replaceAll('{{start_time}}', payload.startTime ?? '')
+          .replaceAll('{{end_time_section}}', payload.endTimeSection ?? '')
+          .replaceAll('{{posted_at_section}}', payload.postedAtSection ?? '');
       }
       if (!html) return { success: false, statusCode: 422, error: 'Email content is missing' };
       const config = payload.providerKey
@@ -1859,9 +1865,7 @@ export async function processCentralNotificationQueue(
     ? Array.from(new Set(options.trafficClasses))
     : [...ALL_NOTIFICATION_TRAFFIC_CLASSES];
   const trafficClasses = bulkPaused
-    ? requestedTrafficClasses.filter(
-        value => value !== 'PUBLIC_INCIDENT' && value !== 'BULK'
-      )
+    ? requestedTrafficClasses.filter(value => value !== 'PUBLIC_INCIDENT' && value !== 'BULK')
     : requestedTrafficClasses;
   if (trafficClasses.length === 0) return { processed: 0, succeeded: 0, failed: 0 };
 
