@@ -12,7 +12,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     notificationProviderCapacity: { findUnique: mocks.capacityFindUnique, findMany: mocks.capacityFindMany },
     notificationRuntimeSettings: { findUnique: mocks.runtimeFindUnique },
-    $transaction: vi.fn().mockImplementation((cb: (tx: any) => unknown) => cb({})),
+    $transaction: vi.fn().mockImplementation((cb: (tx: unknown) => unknown) => cb({} as unknown)),
     $executeRaw: vi.fn(),
     $queryRaw: vi.fn(),
     rateLimit: { findUnique: vi.fn(), deleteMany: vi.fn() },

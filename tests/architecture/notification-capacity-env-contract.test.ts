@@ -1,3 +1,6 @@
+/* eslint-disable security/detect-unsafe-regex -- static allowlist of capacity env var names, not user input */
+/* eslint-disable security/detect-non-literal-fs-filename -- arch test deliberately walks src/ to enforce env fence; path is join(process.cwd(),'src') */
+/* eslint-disable security/detect-non-literal-regexp -- re-creates existing literal pattern for lastIndex safety; source is static */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';

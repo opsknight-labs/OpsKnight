@@ -62,6 +62,7 @@ describe('notification capacity control plane — API regression', () => {
     mocks.prisma.notificationRuntimeSettings.findUnique.mockResolvedValue(null);
     mocks.prisma.systemConfig.findUnique.mockResolvedValue(null);
     // $transaction default: execute callback with a tx-like object
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma $transaction callback is typed as any in mocks
     mocks.prisma.$transaction.mockImplementation(async (cb: any) => {
       if (typeof cb === 'function') {
         const tx = {
@@ -169,11 +170,12 @@ describe('notification capacity control plane — API regression', () => {
       revision: 3,
       updatedAt: new Date(),
     };
-    mocks.prisma.notificationProviderCapacity.findUnique.mockResolvedValue(existing as any);
+    mocks.prisma.notificationProviderCapacity.findUnique.mockResolvedValue(existing as unknown as typeof existing);
     mocks.prisma.notificationProviderCapacity.updateMany.mockResolvedValue({ count: 1 });
     mocks.prisma.notificationProviderCapacity.findUniqueOrThrow.mockResolvedValue({ revision: 4, updatedAt: new Date() });
     // Audit throws inside TX => TX should reject and route should not return 200
     mocks.logAudit.mockRejectedValueOnce(new Error('audit down'));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Prisma $transaction callback mock
     mocks.prisma.$transaction.mockImplementationOnce(async (cb: any) => {
       const tx = {
         notificationProviderCapacity: mocks.prisma.notificationProviderCapacity,
@@ -209,7 +211,7 @@ describe('notification capacity control plane — API regression', () => {
 
   it('GET returns revision for provider capacities', async () => {
     mocks.getUserPermissions.mockResolvedValue(admin);
-    mocks.prisma.systemConfig.findUnique.mockResolvedValue({ value: { bulkPaused: false } } as any);
+    mocks.prisma.systemConfig.findUnique.mockResolvedValue({ value: { bulkPaused: false } } as unknown as Awaited<ReturnType<typeof mocks.prisma.systemConfig.findUnique>>);
     mocks.prisma.notificationRuntimeSettings.findUnique.mockResolvedValue({
       id: 'default',
       bulkQueueLowWatermark: 5000,
@@ -218,7 +220,7 @@ describe('notification capacity control plane — API regression', () => {
       adaptiveBackpressure: true,
       revision: 7,
       updatedAt: new Date('2026-09-01T00:00:00.000Z'),
-    } as any);
+    } as unknown as Awaited<ReturnType<typeof mocks.prisma.notificationRuntimeSettings.findUnique>>);
     mocks.prisma.notificationProviderCapacity.findMany.mockResolvedValue([
       {
         provider: 'ses',
@@ -231,7 +233,7 @@ describe('notification capacity control plane — API regression', () => {
         revision: 4,
         updatedAt: new Date(),
       },
-    ] as any);
+    ] as unknown as Awaited<ReturnType<typeof mocks.prisma.notificationProviderCapacity.findMany>>);
     const res = await GET();
     expect(res.status).toBe(200);
     const body = await res.json();
