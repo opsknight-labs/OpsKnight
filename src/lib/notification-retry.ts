@@ -7,6 +7,7 @@ import {
   notificationRetryDelayMs,
   NOTIFICATION_RETRY_POLICY,
   type NotificationEventType,
+  type NotificationDeliveryChannel,
 } from './notification-delivery';
 
 const LEGACY_RETRY_MIDPOINT = () => 0.5;
@@ -94,7 +95,7 @@ export async function retryFailedNotifications(): Promise<{
               notificationId: notification.id,
               incidentId: notification.incidentId,
               userId: notification.userId,
-              channel: notification.channel,
+              channel: notification.channel as unknown as NotificationDeliveryChannel,
               eventType: notification.eventType as NotificationEventType,
               message: notification.message,
               incident: notification.incident,

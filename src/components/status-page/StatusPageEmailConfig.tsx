@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { logger } from '@/lib/logger';
-import { Mail, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Mail, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 interface EmailProviderConfigProps {
   statusPageId: string;
@@ -25,7 +26,6 @@ export default function StatusPageEmailConfig({
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
-    // Fetch available email providers
     fetch('/api/settings/email-providers')
       .then(res => res.json())
       .then((data: { providers?: EmailProviderSummary[] }) => {
@@ -58,19 +58,17 @@ export default function StatusPageEmailConfig({
         }),
       });
 
-      if (response.ok) {
-        setNotice({ kind: 'success', message: 'Email provider saved.' });
-      } else {
-        const result = (await response.json()) as { error?: string };
-        setNotice({ kind: 'error', message: result.error || 'Failed to save email provider.' });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to save email provider');
       }
-    } catch (error) {
-      if (error instanceof Error) {
-        logger.error('Error saving email provider', { error: error.message });
-      } else {
-        logger.error('Error saving email provider', { error: String(error) });
-      }
-      setNotice({ kind: 'error', message: 'An error occurred while saving email settings.' });
+
+      setNotice({ kind: 'success', message: 'Email provider settings updated successfully.' });
+    } catch (err) {
+      setNotice({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to save email provider',
+      });
     } finally {
       setSaving(false);
     }
@@ -80,224 +78,125 @@ export default function StatusPageEmailConfig({
     {
       value: 'auto',
       label: 'Auto (Use System Default)',
-      description: 'Automatically uses the first available email provider',
+      description:
+        'Automatically uses the first available email provider configured in system settings.',
     },
-    { value: 'resend', label: 'Resend', description: 'Use Resend for subscription emails' },
-    { value: 'sendgrid', label: 'SendGrid', description: 'Use SendGrid for subscription emails' },
-    { value: 'smtp', label: 'SMTP', description: 'Use SMTP for subscription emails' },
-    { value: 'ses', label: 'Amazon SES', description: 'Use Amazon SES for subscription emails' },
+    {
+      value: 'resend',
+      label: 'Resend',
+      description: 'Modern developer-first email API with high deliverability rates.',
+    },
+    {
+      value: 'sendgrid',
+      label: 'SendGrid',
+      description: 'Enterprise email service provider by Twilio.',
+    },
+    {
+      value: 'smtp',
+      label: 'Custom SMTP',
+      description: 'Direct connection using standard SMTP server credentials.',
+    },
+    {
+      value: 'ses',
+      label: 'Amazon SES',
+      description: 'Amazon Simple Email Service cloud delivery platform.',
+    },
   ];
 
   return (
-    <div className="email-provider-config">
-      <style jsx>{`
-        .email-provider-config {
-          background: white;
-          border-radius: 8px;
-          padding: 24px;
-          border: 1px solid #e5e7eb;
-        }
-
-        .config-header {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 16px;
-        }
-
-        .config-title {
-          font-size: 16px;
-          font-weight: 600;
-          color: #1f2937;
-        }
-
-        .config-description {
-          font-size: 14px;
-          color: #6b7280;
-          margin-bottom: 20px;
-        }
-
-        .provider-options {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          margin-bottom: 20px;
-        }
-
-        .provider-option {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          padding: 16px;
-          border: 2px solid #e5e7eb;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .provider-option:hover {
-          border-color: #667eea;
-          background: #f9fafb;
-        }
-
-        .provider-option.selected {
-          border-color: #667eea;
-          background: #eef2ff;
-        }
-
-        .provider-option.disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .provider-option.disabled:hover {
-          border-color: #e5e7eb;
-          background: white;
-        }
-
-        .radio-input {
-          margin-top: 4px;
-          width: 18px;
-          height: 18px;
-          cursor: pointer;
-        }
-
-        .provider-info {
-          flex: 1;
-        }
-
-        .provider-label {
-          font-size: 14px;
-          font-weight: 600;
-          color: #1f2937;
-          margin-bottom: 4px;
-        }
-
-        .provider-description {
-          font-size: 13px;
-          color: #6b7280;
-        }
-
-        .provider-status {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          margin-top: 6px;
-          font-size: 12px;
-          padding: 4px 8px;
-          border-radius: 4px;
-        }
-
-        .provider-status.available {
-          background: #d1fae5;
-          color: #065f46;
-        }
-
-        .provider-status.unavailable {
-          background: #fee2e2;
-          color: #991b1b;
-        }
-
-        .save-button {
-          padding: 10px 20px;
-          background: #667eea;
-          color: white;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 600;
-          transition: background 0.2s;
-        }
-
-        .save-button:hover {
-          background: #5568d3;
-        }
-
-        .save-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .loading {
-          padding: 20px;
-          text-align: center;
-          color: #6b7280;
-        }
-      `}</style>
-
-      <div className="config-header">
-        <Mail size={20} style={{ color: '#667eea' }} />
-        <h3 className="config-title">Email Provider for Subscriptions</h3>
-      </div>
-
-      <p className="config-description">
-        Choose which email provider to use for sending verification and notification emails to
-        status page subscribers.
-      </p>
+    <div className="flex flex-col gap-5 text-foreground">
+      {notice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`flex items-center gap-2 p-3 text-xs font-medium rounded-lg border ${
+            notice.kind === 'success'
+              ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+              : 'text-destructive bg-destructive/10 border-destructive/20'
+          }`}
+        >
+          {notice.kind === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-4 h-4 shrink-0 text-destructive" />
+          )}
+          <span>{notice.message}</span>
+        </div>
+      )}
 
       {loading ? (
-        <div className="loading">Loading providers...</div>
+        <div className="py-12 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+          <RefreshCw className="w-5 h-5 animate-spin text-primary" />
+          <p className="text-xs font-medium">Checking available system email providers...</p>
+        </div>
       ) : (
         <>
-          <div className="provider-options">
+          <div className="grid grid-cols-1 gap-3">
             {providerOptions.map(option => {
               const isConfigured =
                 option.value === 'auto' || availableProviders.includes(option.value);
               const isDisabled = !isConfigured && option.value !== 'auto';
+              const isSelected = provider === option.value;
 
               return (
                 <label
                   key={option.value}
-                  className={`provider-option ${provider === option.value ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
+                  className={`relative flex items-start gap-3.5 p-4 rounded-xl border transition-all cursor-pointer select-none ${
+                    isDisabled
+                      ? 'opacity-50 cursor-not-allowed bg-muted/20 border-border/50'
+                      : isSelected
+                        ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20 shadow-xs'
+                        : 'border-border/80 bg-card hover:border-border hover:bg-muted/30'
+                  }`}
                 >
                   <input
                     type="radio"
-                    className="radio-input"
                     name="emailProvider"
                     value={option.value}
-                    checked={provider === option.value}
+                    checked={isSelected}
                     onChange={e => setProvider(e.target.value)}
                     disabled={isDisabled}
+                    className="mt-0.5 h-4 w-4 text-primary border-border focus:ring-primary cursor-pointer disabled:cursor-not-allowed"
                   />
-                  <div className="provider-info">
-                    <div className="provider-label">{option.label}</div>
-                    <div className="provider-description">{option.description}</div>
-                    {option.value !== 'auto' && (
-                      <div
-                        className={`provider-status ${isConfigured ? 'available' : 'unavailable'}`}
-                      >
-                        {isConfigured ? (
-                          <>
-                            <CheckCircle2 size={12} />
-                            Configured in System Settings
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle size={12} />
-                            Not configured
-                          </>
-                        )}
-                      </div>
-                    )}
+                  <div className="flex-1 flex flex-col gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-foreground">{option.label}</span>
+                      {option.value !== 'auto' && (
+                        <div>
+                          {isConfigured ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Configured in Settings
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-muted text-muted-foreground border border-border">
+                              <AlertCircle className="w-3 h-3 text-muted-foreground" />
+                              Not configured
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {option.description}
+                    </p>
                   </div>
                 </label>
               );
             })}
           </div>
 
-          <button className="save-button" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save Email Provider'}
-          </button>
-          {notice && (
-            <p
-              role="status"
-              aria-live="polite"
-              style={{ marginTop: 12, color: notice.kind === 'success' ? '#047857' : '#b91c1c' }}
+          <div className="flex items-center justify-end pt-2">
+            <Button
+              type="button"
+              variant="primary"
+              isLoading={saving}
+              onClick={handleSave}
+              leftIcon={<Mail className="w-4 h-4" />}
             >
-              {notice.message}
-            </p>
-          )}
+              Save Email Provider
+            </Button>
+          </div>
         </>
       )}
     </div>

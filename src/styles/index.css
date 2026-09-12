@@ -37,6 +37,8 @@
 
       --border: 214.3 28% 86%;
       --input: 214.3 28% 86%;
+      --border-color: hsl(214.3 28% 86%);
+      --input-color: hsl(214.3 28% 86%);
 
       --primary: 222.2 47.4% 11.2%;
       --primary-foreground: 210 40% 98%;
@@ -70,6 +72,8 @@
 
       --border: 240 3.7% 15.9%;
       --input: 240 3.7% 15.9%;
+      --border-color: hsl(240 3.7% 15.9%);
+      --input-color: hsl(240 3.7% 15.9%);
 
       --primary: 210 40% 98%;
       --primary-foreground: 222.2 47.4% 1.2%;

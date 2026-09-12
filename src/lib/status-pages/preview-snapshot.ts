@@ -5,6 +5,8 @@ import type {
   PublicServiceStatus,
   PublicStatusPageSnapshot,
   PublicStatusService,
+  PublicStatusBranding,
+  PublicPagePresentation,
 } from './public-contract';
 import { aggregatePublicRegions } from './history';
 import {
@@ -77,6 +79,14 @@ function splitRegions(region: string | null | undefined): string[] {
  */
 export function buildPreviewSnapshot(input: {
   pageId: string;
+  name?: string;
+  slug?: string | null;
+  subdomain?: string | null;
+  customDomain?: string | null;
+  contactEmail?: string | null;
+  contactUrl?: string | null;
+  branding?: PublicStatusBranding;
+  presentation?: PublicPagePresentation;
   services: PreviewService[];
   mappings: PreviewMapping[];
   incidents: PreviewIncident[];
@@ -87,12 +97,18 @@ export function buildPreviewSnapshot(input: {
   showIncidents: boolean;
   showSubscribe?: boolean;
   showChangelog?: boolean;
+  showServicesByRegion?: boolean;
+  showRegionHeatmap?: boolean;
+  showPostIncidentReview?: boolean;
+  enableUptimeExports?: boolean;
   showServiceRegions?: boolean;
   showServiceOwners?: boolean;
   showServiceSlaTier?: boolean;
   showMetrics?: boolean;
   showUptimeHistory?: boolean;
   showTeamInformation?: boolean;
+  regions?: any[];
+  maintenance?: any[];
   thresholds: { uptimeExcellent: number; uptimeGood: number };
   now?: Date;
 }): PublicStatusPageSnapshot {
@@ -113,11 +129,70 @@ export function buildPreviewSnapshot(input: {
     activeByService.set(incident.service.id, entry);
   }
 
+  const rangeEnd = now;
+  const rangeStart = new Date(now.getTime() - 90 * 86_400_000);
+
   const services: PublicStatusService[] = input.showServices
     ? input.services
         .filter(service => visible.has(service.id))
         .map(service => {
           const impact = activeByService.get(service.id);
+          const rawStatus = (service as any).status;
+          const status = impact
+            ? getWorstPublicStatus(impact.statuses)
+            : rawStatus && rawStatus !== 'OPERATIONAL'
+              ? rawStatus
+              : 'OPERATIONAL';
+
+          const uptimePct =
+            typeof input.uptime90?.[service.id] === 'number'
+              ? input.uptime90[service.id]
+              : typeof (service as any).uptime?.days90?.percentage === 'number'
+                ? (service as any).uptime.days90.percentage
+                : status === 'OPERATIONAL'
+                  ? 100
+                  : 98.5;
+
+          const grade =
+            uptimePct >= input.thresholds.uptimeExcellent
+              ? ('EXCELLENT' as const)
+              : uptimePct >= input.thresholds.uptimeGood
+                ? ('GOOD' as const)
+                : ('BELOW_TARGET' as const);
+
+          const serviceHistory = (service as any).history ?? {
+            rangeStart: rangeStart.toISOString(),
+            rangeEnd: rangeEnd.toISOString(),
+            coverage: 'COMPLETE' as const,
+            segments:
+              status !== 'OPERATIONAL'
+                ? [
+                    {
+                      startAt: new Date(now.getTime() - 4 * 3600_000).toISOString(),
+                      endAt: now.toISOString(),
+                      status: status as any,
+                    },
+                  ]
+                : [],
+          };
+
+          const serviceUptime = (service as any).uptime ?? {
+            days30: {
+              percentage: uptimePct,
+              incidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+              measuredDays: 30,
+              complete: true,
+              grade,
+            },
+            days90: {
+              percentage: uptimePct,
+              incidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+              measuredDays: 90,
+              complete: true,
+              grade,
+            },
+          };
+
           return {
             id: service.id,
             name: visible.get(service.id)?.displayName || service.name,
@@ -126,15 +201,20 @@ export function buildPreviewSnapshot(input: {
               : {}),
             ...(allow('showServiceRegions') ? { regions: splitRegions(service.region) } : {}),
             ...(input.showServiceSlaTier !== false && service.slaTier
-              ? { slaTier: service.slaTier }
+              ? {
+                  slaTier: service.slaTier,
+                  sla: { tier: service.slaTier, grade },
+                }
               : {}),
             ...(input.showServiceOwners !== false &&
             input.showTeamInformation === true &&
             allow('showTeamInformation')
               ? { team: service.team ?? null }
               : {}),
-            status: impact ? getWorstPublicStatus(impact.statuses) : 'OPERATIONAL',
-            activeIncidentCount: impact?.count ?? 0,
+            status,
+            activeIncidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
+            uptime: serviceUptime,
+            history: serviceHistory,
           };
         })
     : [];
@@ -258,7 +338,14 @@ export function buildPreviewSnapshot(input: {
     generatedAt: now.toISOString(),
     page: {
       id: input.pageId,
-      name: 'preview',
+      name: input.name || 'Status Page',
+      slug: input.slug ?? null,
+      subdomain: input.subdomain ?? null,
+      customDomain: input.customDomain ?? null,
+      contactEmail: input.contactEmail ?? null,
+      contactUrl: input.contactUrl ?? null,
+      branding: input.branding,
+      presentation: input.presentation,
       capabilities: {
         services: true,
         serviceHistory: true,
@@ -290,10 +377,10 @@ export function buildPreviewSnapshot(input: {
         verificationRequired: true,
         serviceSelectionSupported: false,
       },
-      showSubscribe: true,
-      showServicesByRegion: false,
-      showRegionHeatmap: false,
-      showPostIncidentReview: false,
+      showSubscribe: input.showSubscribe !== false,
+      showServicesByRegion: input.showServicesByRegion ?? false,
+      showRegionHeatmap: input.showRegionHeatmap ?? false,
+      showPostIncidentReview: input.showPostIncidentReview ?? false,
       showChangelog: input.showChangelog !== false,
       visibility: {
         services: input.showServices,
@@ -308,7 +395,7 @@ export function buildPreviewSnapshot(input: {
         changelog: input.showChangelog !== false,
         subscribe: input.showSubscribe !== false,
       },
-      enableUptimeExports: false,
+      enableUptimeExports: input.enableUptimeExports ?? false,
       isDefault: true,
       requireAuth: false,
       enabled: true,
@@ -330,9 +417,14 @@ export function buildPreviewSnapshot(input: {
     },
     thresholds: input.thresholds,
     services,
-    regions: aggregatePublicRegions(services),
+    regions:
+      input.regions && input.regions.length > 0 ? input.regions : aggregatePublicRegions(services),
     incidents,
-    ...(maintenanceEntries.length ? { maintenance: maintenanceEntries } : {}),
+    ...(input.maintenance && input.maintenance.length > 0
+      ? { maintenance: input.maintenance }
+      : maintenanceEntries.length
+        ? { maintenance: maintenanceEntries }
+        : {}),
     announcements: input.announcements
       .filter(item => (item.type ?? 'INFO') !== 'MAINTENANCE' && (item.type ?? 'INFO') !== 'UPDATE')
       .map(item => ({

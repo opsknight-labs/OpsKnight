@@ -119,7 +119,7 @@ export function formatDateTime(
 
       case 'datetime':
       default:
-        const formatted = new Intl.DateTimeFormat('en-US', {
+        return new Intl.DateTimeFormat('en-US', {
           year: 'numeric',
           month: 'short',
           day: 'numeric',
@@ -127,17 +127,8 @@ export function formatDateTime(
           minute: '2-digit',
           hour12,
           timeZone,
+          ...(includeTimeZone ? { timeZoneName: 'short' } : {}),
         }).format(d);
-
-        if (includeTimeZone) {
-          const tzName = new Intl.DateTimeFormat('en-US', {
-            timeZone,
-            timeZoneName: 'short',
-          }).format(d);
-          return `${formatted} ${tzName}`;
-        }
-
-        return formatted;
 
       case 'relative':
         return formatRelativeTime(d, timeZone);

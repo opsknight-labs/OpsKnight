@@ -17,7 +17,16 @@ interface BaseFormFieldProps {
 
 interface InputFormFieldProps extends BaseFormFieldProps {
   type: 'input';
-  inputType?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'search' | 'date' | 'datetime-local';
+  inputType?:
+    | 'text'
+    | 'email'
+    | 'password'
+    | 'number'
+    | 'tel'
+    | 'url'
+    | 'search'
+    | 'date'
+    | 'datetime-local';
   placeholder?: string;
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -49,11 +58,15 @@ interface SwitchFormFieldProps extends BaseFormFieldProps {
   onChange: (checked: boolean) => void;
 }
 
-type FormFieldProps = InputFormFieldProps | TextareaFormFieldProps | SelectFormFieldProps | SwitchFormFieldProps;
+type FormFieldProps =
+  | InputFormFieldProps
+  | TextareaFormFieldProps
+  | SelectFormFieldProps
+  | SwitchFormFieldProps;
 
 /**
  * FormField wrapper component for consistent form inputs
- * 
+ *
  * @example
  * <FormField
  *   type="input"
@@ -108,7 +121,10 @@ export default function FormField(props: FormFieldProps) {
     const hasError = !!error;
 
     return (
-      <div className={`ui-formfield-wrapper ${fullWidth ? 'ui-formfield-full-width' : ''}`} style={{ width: fullWidth ? '100%' : 'auto' }}>
+      <div
+        className={`ui-formfield-wrapper ${fullWidth ? 'ui-formfield-full-width' : ''}`}
+        style={{ width: fullWidth ? '100%' : 'auto' }}
+      >
         <label
           htmlFor={id}
           className="ui-formfield-label"
@@ -121,7 +137,9 @@ export default function FormField(props: FormFieldProps) {
           }}
         >
           {label}
-          {required && <span style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}>*</span>}
+          {required && (
+            <span style={{ color: 'var(--color-error)', marginLeft: 'var(--spacing-1)' }}>*</span>
+          )}
         </label>
         <textarea
           id={id}
@@ -133,7 +151,7 @@ export default function FormField(props: FormFieldProps) {
           style={{
             width: '100%',
             padding: 'var(--spacing-3) var(--spacing-4)',
-            border: `1px solid ${hasError ? 'var(--color-error)' : 'var(--border)'}`,
+            border: `1px solid ${hasError ? 'var(--color-error, #ef4444)' : 'hsl(var(--border, 214.3 28% 86%))'}`,
             borderRadius: 'var(--radius-md)',
             backgroundColor: 'var(--bg-secondary)',
             color: 'var(--text-primary)',
@@ -142,12 +160,18 @@ export default function FormField(props: FormFieldProps) {
             transition: 'all var(--transition-base) var(--ease-out)',
             resize: 'vertical',
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = hasError ? 'var(--color-error)' : 'var(--border-focus)';
-            e.currentTarget.style.boxShadow = `0 0 0 3px ${hasError ? 'rgba(239, 68, 68, 0.1)' : 'rgba(211, 47, 47, 0.1)'}`;
+          onFocus={e => {
+            e.currentTarget.style.borderColor = hasError
+              ? 'var(--color-error, #ef4444)'
+              : 'hsl(var(--primary))';
+            e.currentTarget.style.boxShadow = hasError
+              ? '0 0 0 3px rgba(239, 68, 68, 0.15)'
+              : '0 0 0 3px rgba(99, 102, 241, 0.18)';
           }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = hasError ? 'var(--color-error)' : 'var(--border)';
+          onBlur={e => {
+            e.currentTarget.style.borderColor = hasError
+              ? 'var(--color-error, #ef4444)'
+              : 'hsl(var(--border, 214.3 28% 86%))';
             e.currentTarget.style.boxShadow = 'none';
           }}
           aria-invalid={hasError}
@@ -203,10 +227,3 @@ export default function FormField(props: FormFieldProps) {
 
   return null;
 }
-
-
-
-
-
-
-

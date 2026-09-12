@@ -19,6 +19,7 @@ export type DeleteConfirmDialogProps = {
   title?: string;
   description: ReactNode;
   requireMatchText?: string;
+  caseSensitive?: boolean;
   matchPrompt?: string;
   confirmText?: string;
   cancelText?: string;
@@ -34,6 +35,7 @@ export default function DeleteConfirmDialog({
   title = 'Are you absolutely sure?',
   description,
   requireMatchText,
+  caseSensitive = false,
   matchPrompt,
   confirmText = 'Delete',
   cancelText = 'Cancel',
@@ -61,7 +63,11 @@ export default function DeleteConfirmDialog({
     }
   };
 
-  const isMatchValid = requireMatchText ? typedMatchText.trim() === requireMatchText.trim() : true;
+  const isMatchValid = requireMatchText
+    ? caseSensitive
+      ? typedMatchText.trim() === requireMatchText.trim()
+      : typedMatchText.trim().toLowerCase() === requireMatchText.trim().toLowerCase()
+    : true;
 
   const handleConfirm = () => {
     if (!isMatchValid || isPending) return;
