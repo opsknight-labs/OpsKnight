@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { notify as toast } from '@/lib/toast';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
@@ -21,6 +22,7 @@ import {
  * Lets an admin supply or rotate the Slack signing secret on an already-configured workspace.
  */
 export default function SlackSigningSecretCard({ isConfigured }: { isConfigured: boolean }) {
+  const router = useRouter();
   const [signingSecret, setSigningSecret] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,11 +55,12 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
       }
 
       toast.success('Signing Secret saved', {
+        id: 'settings:slack:signing-secret:save',
         description: 'Slack commands, buttons and events are verified from now on.',
       });
       setSigningSecret('');
       setIsEditing(false);
-      window.location.reload();
+      router.refresh();
     } catch (error) {
       toast.error('Failed to save Signing Secret', {
         description: error instanceof Error ? error.message : 'Unexpected error',

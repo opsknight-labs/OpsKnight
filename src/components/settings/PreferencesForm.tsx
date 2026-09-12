@@ -7,9 +7,7 @@ import TimeZoneSelect from '@/components/TimeZoneSelect';
 import { Clock } from 'lucide-react';
 import { z } from 'zod';
 import { updatePreferences } from '@/app/(app)/settings/actions';
-import { useRouter } from 'next/navigation';
 import { Controller } from 'react-hook-form';
-import { notify as toast } from '@/lib/toast';
 
 type Props = {
   timeZone: string;
@@ -22,7 +20,6 @@ const preferencesSchema = z.object({
 type PreferencesFormData = z.infer<typeof preferencesSchema>;
 
 export default function PreferencesForm({ timeZone }: Props) {
-  const router = useRouter();
   const [currentTimeStr, setCurrentTimeStr] = useState<string>('');
   const [selectedTimeZone, setSelectedTimeZone] = useState<string>(timeZone);
 
@@ -62,15 +59,8 @@ export default function PreferencesForm({ timeZone }: Props) {
 
     const result = await updatePreferences({ error: null, success: false }, formData);
 
-    if (result.success) {
-      toast.success('Timezone updated');
-      setTimeout(() => {
-        router.refresh();
-      }, 500);
-    } else {
-      toast.error(result.error || 'Failed to update timezone');
-    }
-
+    // AutosaveForm owns feedback: Saving → Saved → idle. UseAutosave shows retry on error via SaveIndicator.
+    // Do not emit a toast here; it would duplicate the indicator and the FormData refresh is handled by AutosaveForm's onSave contract.
     return {
       success: result.success ?? false,
       error: result.error ?? undefined,

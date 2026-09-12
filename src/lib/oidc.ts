@@ -31,11 +31,13 @@ export default function OIDCProvider(config: OIDCConfig): OAuthConfig<OIDCProfil
     hasCustomScopes: !!config.customScopes,
   });
 
+  const canonicalIssuer = config.metadata.issuer || issuer;
+
   return {
     id: 'oidc',
     name: 'SSO',
     type: 'oauth',
-    issuer,
+    issuer: canonicalIssuer,
     clientId: config.clientId,
     clientSecret: config.clientSecret,
     authorization: {

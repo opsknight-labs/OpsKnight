@@ -9,6 +9,11 @@ import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvide
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
 
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
+  // Save-feedback PR keeps the existing product theme behavior: mobile routes
+  // may follow the system theme, desktop remains forced light. Toast/InlineNotice
+  // tokens are dark-capable (see globals.css .dark / --toast-*), but enabling
+  // global desktop dark mode is a separate product change that requires a full
+  // authenticated-surface audit. Do not broaden scope here.
   const pathname = usePathname();
   const isMobileRoute = pathname?.startsWith('/m');
   const themeProps = isMobileRoute

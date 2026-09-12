@@ -1,8 +1,9 @@
 'use client';
 
-import { useActionState, useMemo, useState, useTransition } from 'react';
+import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
+import { notify } from '@/lib/toast';
 import {
   removeJiraWorkspace,
   saveJiraConfig,
@@ -116,6 +117,10 @@ export default function JiraIntegrationPage({
   const [removeConfirmation, setRemoveConfirmation] = useState('');
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [isRemoving, startRemoveTransition] = useTransition();
+
+  useEffect(() => {
+    if (state?.success) notify.success('Jira settings saved', { id: 'settings:jira:save' });
+  }, [state]);
 
   const browserOrigin = typeof window !== 'undefined' ? window.location.origin : '';
   const effectiveAppUrl =
@@ -241,15 +246,7 @@ export default function JiraIntegrationPage({
           </div>
         </div>
       )}
-      {state?.success && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm flex gap-2">
-          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0 text-emerald-600" />
-          <div>
-            <p className="font-semibold">Configuration Saved</p>
-            <p>Jira settings and encrypted credentials were committed successfully.</p>
-          </div>
-        </div>
-      )}
+
 
       <section className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

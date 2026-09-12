@@ -24,6 +24,8 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import EmptyState from '@/components/ui/EmptyState';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
+import ServiceSettingsFlashToast from '@/components/service/ServiceSettingsFlashToast';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 
 // Icons
 import {
@@ -681,18 +683,13 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   // --- TAB 4: SETTINGS & CHATOPS CONTENT ---
   const settingsContent = (
     <div className="space-y-6">
-      {isSaved && (
-        <div className="rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 p-3.5 text-xs flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span>Service settings updated successfully.</span>
-        </div>
+      {(isSaved || errorCode === 'duplicate-service') && (
+        <ServiceSettingsFlashToast serviceId={id} />
       )}
-
       {errorCode === 'duplicate-service' && (
-        <div className="rounded-xl border border-rose-300 bg-rose-50 text-rose-800 p-3.5 text-xs flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
-          <span>A service with this name already exists. Please choose a unique name.</span>
-        </div>
+        <InlineNotice tone="error" title="Duplicate service">
+          A service with this name already exists. Please choose a unique name.
+        </InlineNotice>
       )}
 
       {canManageService ? (

@@ -5,6 +5,8 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { statusPageSectionPatch } from '@/lib/status-pages/settings-sections';
 import { Card, Button, FormField, Switch, Checkbox } from '@/components/ui';
 import StatusPageLivePreview from '@/components/status-page/StatusPageLivePreview';
+import { InlineNotice } from '@/components/ui/InlineNotice';
+import { notify } from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatDateTime } from '@/lib/timezone';
@@ -702,7 +704,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   // What the public page is actually doing, as reported by the save. Distinct from "saved",
   // because settings can persist while publishing them fails.
   const [publication, setPublication] = useState<{
@@ -719,6 +720,9 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [templateLoadingId, setTemplateLoadingId] = useState<string | null>(null);
   const [templateError, setTemplateError] = useState<string | null>(null);
+  // Persistent dirty-state notice after a template is applied locally but not yet saved.
+  // Unlike a transient toast, this survives until Save succeeds or the draft is discarded.
+  const [templateAppliedNotice, setTemplateAppliedNotice] = useState<string | null>(null);
   const [templateFilter, setTemplateFilter] = useState<'all' | TemplateCategory>('all');
   const [templateCssMap, setTemplateCssMap] = useState<Record<string, string>>({});
   const templateFetchRef = useRef<Set<string>>(new Set());
@@ -731,7 +735,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   // Parse branding JSON
   const branding = isStatusPageBranding(statusPage.branding) ? statusPage.branding : {};
 
-  const [formData, setFormData] = useState({
+  const getInitialFormData = () => ({
     name: statusPage.name,
     slug: statusPage.slug || '',
     isDefault: statusPage.isDefault ?? false,
@@ -782,6 +786,8 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     statusApiRateLimitWindowSec: statusPage.statusApiRateLimitWindowSec ?? 60,
   });
 
+  const [formData, setFormData] = useState(getInitialFormData);
+
   const [announcementForm, setAnnouncementForm] = useState({
     title: '',
     message: '',
@@ -821,13 +827,10 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     { id: 'advanced', label: 'Advanced', icon: '⚡' },
   ];
 
-  const [selectedServices, setSelectedServices] = useState<Set<string>>(
-    new Set(statusPage.services.map(s => s.serviceId))
-  );
+  const getInitialSelectedServices = () =>
+    new Set(statusPage.services.map(s => s.serviceId));
 
-  const [serviceConfigs, setServiceConfigs] = useState<
-    Record<string, { displayName: string; order: number; showOnPage: boolean }>
-  >(
+  const getInitialServiceConfigs = () =>
     statusPage.services.reduce(
       (acc, sp) => {
         acc[sp.serviceId] = {
@@ -838,8 +841,13 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
         return acc;
       },
       {} as Record<string, { displayName: string; order: number; showOnPage: boolean }>
-    )
-  );
+    );
+
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(getInitialSelectedServices);
+
+  const [serviceConfigs, setServiceConfigs] = useState<
+    Record<string, { displayName: string; order: number; showOnPage: boolean }>
+  >(getInitialServiceConfigs);
 
   const serviceLookup = new Map(allServices.map(service => [service.id, service] as const));
 
@@ -876,7 +884,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   };
 
   // Privacy settings - with defaults if not in statusPage
-  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>({
+  const getInitialPrivacySettings = (): PrivacySettings => ({
     privacyMode: (statusPage.privacyMode as PrivacySettings['privacyMode']) || 'PUBLIC',
     showIncidentDetails: statusPage.showIncidentDetails !== false,
     showIncidentTitles: statusPage.showIncidentTitles !== false,
@@ -901,6 +909,20 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     requireAuth: statusPage.requireAuth || false,
     authProvider: statusPage.authProvider || null,
   });
+
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(getInitialPrivacySettings);
+
+  const handleDiscardChanges = () => {
+    setFormData(getInitialFormData());
+    setPrivacySettings(getInitialPrivacySettings());
+    setSelectedServices(getInitialSelectedServices());
+    setServiceConfigs(getInitialServiceConfigs());
+    setTemplateAppliedNotice(null);
+    setSelectedTemplateId(null);
+    setTemplateError(null);
+    setError(null);
+    router.refresh();
+  };
 
   const selectedServiceIds = Array.from(selectedServices);
   const announcementServiceOptions = allServices.filter(service =>
@@ -993,7 +1015,6 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccessMessage(null);
 
     startTransition(async () => {
       try {
@@ -1093,24 +1114,23 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
         if (typeof saved.data?.updatedAt === 'string') setRevision(saved.data.updatedAt);
         const state = saved.data?.publication ?? null;
         setPublication(state);
-        // Only claim success once the public page can actually serve the change. Saying "saved"
-        // while /status is unusable is what made publication failures invisible.
-        setSuccessMessage(
+        const msg =
           state?.status === 'LIVE'
-            ? 'Settings saved successfully and published.'
+            ? 'Settings saved and published.'
             : state?.status === 'DISABLED'
-              ? 'Settings saved successfully. This status page is disabled, so it is not public.'
+              ? 'Settings saved. This status page is disabled, so it is not public.'
               : state?.status === 'PUBLISHING'
-                ? 'Settings saved successfully. Publishing to the public page…'
+                ? 'Settings saved. Publishing to the public page…'
                 : state?.status === 'FAILED'
                   ? null
-                  : // No publication state reported: say the change was saved, and claim nothing
-                    // about the public page either way.
-                    'Settings saved successfully!'
-        );
-        if (state?.status !== 'PUBLISHING') {
-          setTimeout(() => setSuccessMessage(null), 3000);
+                  : 'Settings saved.';
+        if (msg) {
+          // Success is centralized via the global toast. No ephemeral inline "saved" banner
+          // — publication failure/pending is surfaced by the distinct persistent banner below.
+          notify.success(msg, { id: `status-page:${statusPage.id}:${activeSection}:save` });
         }
+        // A successful save commits any locally-applied template draft.
+        setTemplateAppliedNotice(null);
         router.refresh();
       } catch (err: unknown) {
         const { getUserFacingErrorMessage } = await import('@/lib/user-facing-error');
@@ -1486,8 +1506,11 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
       const css = await response.text();
       setFormData(prev => ({ ...prev, customCss: css }));
       setSelectedTemplateId(template.id);
-      setSuccessMessage(`Template loaded: ${template.name}. Remember to save settings.`);
-      setTimeout(() => setSuccessMessage(null), 3000);
+      // Template is applied locally — do not claim "saved". Render a persistent
+      // InlineNotice (not a transient toast) so the dirty state survives a
+      // 6s toast expiry — consistent with Retention's unsaved-changes pattern.
+      setTemplateError(null);
+      setTemplateAppliedNotice(`Template applied: ${template.name}. Unsaved changes — press Save to publish.`);
     } catch {
       setTemplateError('Failed to load template. Please try again.');
     } finally {
@@ -3683,19 +3706,18 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             </div>
                           </div>
                           {templateError && (
-                            <div
-                              style={{
-                                padding: 'var(--spacing-2) var(--spacing-3)',
-                                borderRadius: 'var(--radius-md)',
-                                background: '#fee2e2',
-                                border: '1px solid #fecaca',
-                                color: '#991b1b',
-                                fontSize: 'var(--font-size-sm)',
-                                marginBottom: 'var(--spacing-3)',
-                              }}
-                            >
+                            <InlineNotice tone="error" className="mb-3">
                               {templateError}
-                            </div>
+                            </InlineNotice>
+                          )}
+                          {templateAppliedNotice && (
+                            <InlineNotice
+                              tone="neutral"
+                              title="Unsaved changes"
+                              className="mb-3"
+                            >
+                              {templateAppliedNotice}
+                            </InlineNotice>
                           )}
                           <div
                             style={{
@@ -4543,34 +4565,10 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                   </div>
                 )}
 
-                {/* Error and Success Messages */}
-                {(error || successMessage) && (
-                  <div
-                    style={{
-                      marginBottom: 'var(--spacing-4)',
-                      padding: 'var(--spacing-3)',
-                      borderRadius: 'var(--radius-md)',
-                      background: error ? '#fee2e2' : '#d1fae5',
-                      border: `1px solid ${error ? '#fecaca' : '#a7f3d0'}`,
-                      color: error ? '#991b1b' : '#065f46',
-                    }}
-                  >
-                    {error ? (
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}
-                      >
-                        <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                        <span>{error}</span>
-                      </div>
-                    ) : (
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}
-                      >
-                        <span style={{ fontSize: '1.2rem' }}>✓</span>
-                        <span>{successMessage}</span>
-                      </div>
-                    )}
-                  </div>
+                {error && (
+                  <InlineNotice tone="error" className="mb-4">
+                    {error}
+                  </InlineNotice>
                 )}
               </div>
             </div>
@@ -4592,7 +4590,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => router.refresh()}
+                  onClick={handleDiscardChanges}
                   disabled={isPending}
                 >
                   Cancel
