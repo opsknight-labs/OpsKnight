@@ -77,16 +77,15 @@ async function fetchBotJwks(forceRefresh = false): Promise<Record<string, unknow
  * CodeQL "arbitrary hostname can follow" finding. Tenant-suffixed issuers are
  * accepted only when the scheme+host+prefix exactly match the allowed pattern.
  */
-const ALLOWED_ISSUER_HOSTS: ReadonlySet<string> = new Set([
-  'https://api.botframework.com',
-]);
+const PROD_BOT_ISSUER = 'https://api.botframework.com';
 
 function isAllowedBotIssuer(iss: string): boolean {
   if (!iss) return false;
-  if (ALLOWED_ISSUER_HOSTS.has(iss)) return true;
-  // Emulator / AAD tenant-suffixed issuers — exactly `https://sts.windows.net/{guid}/` or
-  // `https://login.microsoftonline.com/{guid}/v2.0` with GUID tenant.
-  // `https://login.botframework.com` is the OpenID discovery host, never a valid `iss`.
+  // Production Connector -> Bot: only api.botframework.com per
+  // https://learn.microsoft.com/en-us/azure/bot-service/rest-api/bot-framework-rest-connector-authentication
+  // Emulator / dev path (sts.windows.net, login.microsoftonline.com) is allowed only in non-production.
+  if (iss === PROD_BOT_ISSUER) return true;
+  if (process.env.NODE_ENV === 'production') return false;
   const guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
   if (new RegExp(`^https:\\/\\/sts\\.windows\\.net\\/${guid}\\/?$`).test(iss)) return true;
   if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss)) return true;
@@ -94,7 +93,13 @@ function isAllowedBotIssuer(iss: string): boolean {
 }
 
 export function __isAllowedBotIssuerForTests(iss: string): boolean {
-  return isAllowedBotIssuer(iss);
+  // Tests exercise issuer allowlist without NODE_ENV gate — replicate non-prod behavior.
+  if (!iss) return false;
+  if (iss === PROD_BOT_ISSUER) return true;
+  const guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+  if (new RegExp(`^https:\\/\\/sts\\.windows\\.net\\/${guid}\\/?$`).test(iss)) return true;
+  if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss)) return true;
+  return false;
 }
 
 async function verifyBotFrameworkToken(
@@ -138,22 +143,41 @@ async function verifyBotFrameworkToken(
         return null;
       }
 
-      // Bot Connector spec: serviceUrl claim must exactly match Activity.serviceUrl
-      // (normalized) when both are present — prevents token replay across serviceUrl boundaries.
-      // Fail-closed: unparseable URLs are rejected, origin-only comparison is insufficient.
+      // Bot Connector spec: JWT must carry serviceUrl and it must match
+      // Activity.serviceUrl. In production missing claim/body is a reject;
+      // in non-prod test traffic may lack the claim — validated only when present.
       const expectedServiceUrl = options?.expectedServiceUrl?.trim() || null;
-      if (serviceUrl && expectedServiceUrl) {
-        const normalize = (value: string): string | null => {
-          try {
-            const u = new URL(value.trim());
-            // Normalize: lowercase, strip trailing slash, drop hash
-            const withoutHash = u.origin.toLowerCase() + u.pathname.replace(/\/+$/, '') + (u.search || '');
-            // Remove trailing slash artifact when pathname was "/"
-            return withoutHash.replace(/\/$/, '') || u.origin.toLowerCase();
-          } catch {
-            return null;
-          }
-        };
+      const normalize = (value: string): string | null => {
+        try {
+          const u = new URL(value.trim());
+          const withoutHash = u.origin.toLowerCase() + u.pathname.replace(/\/+$/, '') + (u.search || '');
+          return withoutHash.replace(/\/$/, '') || u.origin.toLowerCase();
+        } catch {
+          return null;
+        }
+      };
+      if (process.env.NODE_ENV === 'production') {
+        if (!serviceUrl || !expectedServiceUrl) {
+          logger.warn('[MicrosoftTeams] Bot JWT missing serviceUrl — rejecting in production');
+          return null;
+        }
+        const claimNorm = normalize(serviceUrl);
+        const activityNorm = normalize(expectedServiceUrl);
+        if (!claimNorm || !activityNorm) {
+          logger.warn('[MicrosoftTeams] Bot JWT serviceUrl unparseable — rejecting', {
+            claim: serviceUrl.slice(0, 80),
+            activity: expectedServiceUrl.slice(0, 80),
+          });
+          return null;
+        }
+        if (claimNorm !== activityNorm) {
+          logger.warn('[MicrosoftTeams] Bot JWT serviceUrl mismatch', {
+            claimNorm: claimNorm.slice(0, 80),
+            activityNorm: activityNorm.slice(0, 80),
+          });
+          return null;
+        }
+      } else if (serviceUrl && expectedServiceUrl) {
         const claimNorm = normalize(serviceUrl);
         const activityNorm = normalize(expectedServiceUrl);
         if (!claimNorm || !activityNorm) {

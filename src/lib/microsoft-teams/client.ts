@@ -7,75 +7,93 @@ export type TeamsDeliveryResult = { success: true; providerMessageId?: string; c
 
 type GraphToken = { access_token: string; expires_in: number };
 
-// Tenant-scoped token cache — prevents cross-tenant reuse (P0 fix).
-// Key: `${clientId}:${tenantId}`, bounded to 50 entries (LRU eviction).
-const tokenCache = new Map<string, { token: string; expiresAt: number }>();
+// Separate tenant-scoped caches for Graph vs Bot Connector.
+// Must not reuse Graph tokens for serviceUrl calls — different `scope` / audience.
+type TokenCache = Map<string, { token: string; expiresAt: number }>;
+const graphTokenCache: TokenCache = new Map();
+const botTokenCache: TokenCache = new Map();
 const TOKEN_CACHE_MAX = 50;
 
 function tokenCacheKey(clientId: string, tenantId: string): string {
   return `${clientId}:${tenantId}`;
 }
 
-function getCachedToken(clientId: string, tenantId: string): string | null {
+function getCachedToken(cache: TokenCache, clientId: string, tenantId: string): string | null {
   const key = tokenCacheKey(clientId, tenantId);
-  const entry = tokenCache.get(key);
+  const entry = cache.get(key);
   if (!entry) return null;
   if (entry.expiresAt <= Date.now() + 60_000) {
-    tokenCache.delete(key);
+    cache.delete(key);
     return null;
   }
-  // Refresh LRU order
-  tokenCache.delete(key);
-  tokenCache.set(key, entry);
+  cache.delete(key);
+  cache.set(key, entry);
   return entry.token;
 }
 
-function putCachedToken(clientId: string, tenantId: string, token: string, expiresIn: number): void {
+function putCachedToken(cache: TokenCache, clientId: string, tenantId: string, token: string, expiresIn: number): void {
   const key = tokenCacheKey(clientId, tenantId);
-  if (tokenCache.size >= TOKEN_CACHE_MAX) {
-    const firstKey = tokenCache.keys().next().value as string | undefined;
-    if (firstKey) tokenCache.delete(firstKey);
+  if (cache.size >= TOKEN_CACHE_MAX) {
+    const firstKey = cache.keys().next().value as string | undefined;
+    if (firstKey) cache.delete(firstKey);
   }
-  tokenCache.set(key, { token, expiresAt: Date.now() + (expiresIn - 60) * 1000 });
+  cache.set(key, { token, expiresAt: Date.now() + (expiresIn - 60) * 1000 });
 }
 
 export function __clearGraphTokenCacheForTests(): void {
-  tokenCache.clear();
+  graphTokenCache.clear();
+  botTokenCache.clear();
+}
+export function __clearBotTokenCacheForTests(): void {
+  botTokenCache.clear();
 }
 
-async function graphToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
+async function acquireToken(
+  cache: TokenCache,
+  scope: string,
+  clientId: string,
+  clientSecret: string,
+  tenantId: string,
+  label: string
+): Promise<string | null> {
   const normalizedTenant = tenantId.trim();
   if (!normalizedTenant) {
-    logger.warn('[MicrosoftTeams] Graph token requires explicit tenantId — refusing /common fallback');
+    logger.warn(`[MicrosoftTeams] ${label} token requires explicit tenantId — refusing /common fallback`);
     return null;
   }
-  const cached = getCachedToken(clientId, normalizedTenant);
+  const cached = getCachedToken(cache, clientId, normalizedTenant);
   if (cached) return cached;
-
   const body = new URLSearchParams({
     client_id: clientId,
     client_secret: clientSecret,
-    scope: 'https://graph.microsoft.com/.default',
+    scope,
     grant_type: 'client_credentials',
   });
   try {
-    const res = await retryFetch(`https://login.microsoftonline.com/${encodeURIComponent(normalizedTenant)}/oauth2/v2.0/token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    }, { maxAttempts: 2, initialDelayMs: 800 });
+    const res = await retryFetch(
+      `https://login.microsoftonline.com/${encodeURIComponent(normalizedTenant)}/oauth2/v2.0/token`,
+      { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() },
+      { maxAttempts: 2, initialDelayMs: 800 }
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      logger.warn('[MicrosoftTeams] Graph token failed', { status: res.status, body: text.slice(0, 400) });
+      logger.warn(`[MicrosoftTeams] ${label} token failed`, { status: res.status, body: text.slice(0, 400) });
       return null;
     }
     const data = (await res.json()) as GraphToken;
-    putCachedToken(clientId, normalizedTenant, data.access_token, data.expires_in);
+    putCachedToken(cache, clientId, normalizedTenant, data.access_token, data.expires_in);
     return data.access_token;
   } catch (e) {
-    logger.warn('[MicrosoftTeams] Graph token exception', { error: (e as Error).message });
+    logger.warn(`[MicrosoftTeams] ${label} token exception`, { error: (e as Error).message });
     return null;
   }
+}
+
+async function graphToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
+  return acquireToken(graphTokenCache, 'https://graph.microsoft.com/.default', clientId, clientSecret, tenantId, 'Graph');
+}
+async function botToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
+  return acquireToken(botTokenCache, 'https://api.botframework.com/.default', clientId, clientSecret, tenantId, 'Bot');
 }
 
 function resolveTenantForCall(explicitTenantId: string | undefined, configTenantId: string | null | undefined): string | null {
@@ -87,11 +105,24 @@ function resolveTenantForCall(explicitTenantId: string | undefined, configTenant
 // Bot Framework Activity transport (send + update)
 // ---------------------------------------------------------------------------
 
-async function botToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
-  // Bot Framework uses the same Entra client-credentials flow, scope is Bot Framework resource
-  // For Phase 1 we use the Graph scope token re-use where applicable; Bot serviceUrl auth
-  // is via the Graph token when available, falling back to Bot-specific OAuth.
-  return graphToken(clientId, clientSecret, tenantId);
+async function resolveServiceUrlForDestination(
+  tenantId: string,
+  teamId: string
+): Promise<{ serviceUrl: string | null; conversationId: string | null }> {
+  try {
+    const prismaForInstall = (await import('@/lib/prisma')).default as unknown as {
+      microsoftTeamsInstallation: {
+        findFirst: (a: unknown) => Promise<{ serviceUrl: string | null; conversationId: string | null } | null>;
+      };
+    };
+    const inst = await prismaForInstall.microsoftTeamsInstallation.findFirst({
+      where: { tenantId, teamId, enabled: true },
+      select: { serviceUrl: true, conversationId: true },
+    } as never);
+    return { serviceUrl: inst?.serviceUrl ?? null, conversationId: inst?.conversationId ?? null };
+  } catch {
+    return { serviceUrl: null, conversationId: null };
+  }
 }
 
 async function sendBotActivity(args: {
@@ -104,35 +135,91 @@ async function sendBotActivity(args: {
   clientSecret: string;
   tenantId: string;
 }): Promise<TeamsDeliveryResult> {
-  const token = await botToken(args.clientId, args.clientSecret, args.tenantId);
-  if (!token) return { success: false, error: 'Failed to acquire Graph token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
+  const normalizedServiceUrl = args.serviceUrl.replace(/\/+$/, '');
+  if (!normalizedServiceUrl) {
+    return { success: false, error: 'Teams serviceUrl is not configured for this Team — bot not installed', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
+  }
+  let token: string | null = null;
+  try {
+    token = await botToken(args.clientId, args.clientSecret, args.tenantId);
+  } catch {}
+  if (!token) return { success: false, error: 'Failed to acquire Bot Framework token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
 
-  // Phase 1 strategy: use Graph RSC `ChannelMessage.Send.Group` to post the Adaptive Card.
-  // App-only Graph PATCH is not used for updates — updates go via bot activity or fresh card fallback.
   const card = JSON.parse(args.cardJson) as unknown;
-  const endpoint = `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(args.teamId)}/channels/${encodeURIComponent(args.channelId)}/messages`;
-  const body = {
-    body: { contentType: 'html', content: `<attachment id="${args.incidentId}"></attachment>` },
-    attachments: [{ id: args.incidentId, contentType: 'application/vnd.microsoft.card.adaptive', content: JSON.stringify(card) }],
-  };
 
-  const res = await retryFetch(endpoint, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }, { maxAttempts: 2, initialDelayMs: 800 });
-
-  const retryAfterMs = (() => {
+  const parseRetryAfter = (res: Response): number | undefined => {
     const v = res.headers?.get?.('Retry-After');
     if (!v) return undefined;
     const n = Number.parseInt(v, 10);
     return Number.isFinite(n) && n > 0 ? n * 1000 : undefined;
-  })();
+  };
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    const code = text.slice(0, 600) || `HTTP ${res.status}`;
-    const status = res.status;
+  // Proactive Bot Framework transport: POST to {serviceUrl}/v3/conversations/{channelId}/activities
+  // Channel conversation is the Teams channel id (19:...@thread.tacv2). If the channel conversation
+  // is not yet known to the Connector, fallback to POST /v3/conversations with channelData.
+  const activityPayload = {
+    type: 'message',
+    attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: card }],
+    channelData: { tenant: { id: args.tenantId } },
+  };
+
+  const directEndpoint = `${normalizedServiceUrl}/v3/conversations/${encodeURIComponent(args.channelId)}/activities`;
+  const directRes = await retryFetch(
+    directEndpoint,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(activityPayload),
+    },
+    { maxAttempts: 2, initialDelayMs: 800 }
+  );
+
+  if (directRes.ok) {
+    try {
+      const data = (await directRes.json()) as { id?: string };
+      const activityId = typeof data?.id === 'string' ? data.id : undefined;
+      return { success: true, providerMessageId: activityId, conversationId: args.channelId };
+    } catch {
+      return { success: true, providerMessageId: undefined, conversationId: args.channelId };
+    }
+  }
+
+  if (directRes.status !== 404) {
+    const text = await directRes.text().catch(() => '');
+    const code = text.slice(0, 600) || `HTTP ${directRes.status}`;
+    const status = directRes.status;
+    const retryAfterMs = parseRetryAfter(directRes);
+    if (status === 429) return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
+    if (status === 401 || status === 403) return { success: false, error: 'Teams authorization failed', errorCode: 'AUTH_EXPIRED', statusCode: status };
+    return { success: false, error: code, errorCode: `http_${status}`, statusCode: status, retryAfterMs };
+  }
+
+  // Fallback: create conversation for Teams channel (isGroup + channelData)
+  const createEndpoint = `${normalizedServiceUrl}/v3/conversations`;
+  const createBody = {
+    isGroup: true,
+    channelData: {
+      channel: { id: args.channelId },
+      team: { id: args.teamId },
+      tenant: { id: args.tenantId },
+    },
+    activity: activityPayload,
+  };
+  const createRes = await retryFetch(
+    createEndpoint,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(createBody),
+    },
+    { maxAttempts: 2, initialDelayMs: 800 }
+  );
+
+  if (!createRes.ok) {
+    const text = await createRes.text().catch(() => '');
+    const code = text.slice(0, 600) || `HTTP ${createRes.status}`;
+    const status = createRes.status;
+    const retryAfterMs = parseRetryAfter(createRes);
     if (status === 429) return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
     if (status === 404) return { success: false, error: 'Teams channel not found', errorCode: 'CHANNEL_NOT_FOUND', statusCode: 404 };
     if (status === 401 || status === 403) return { success: false, error: 'Teams authorization failed', errorCode: 'AUTH_EXPIRED', statusCode: status };
@@ -140,10 +227,12 @@ async function sendBotActivity(args: {
   }
 
   try {
-    const data = (await res.json()) as { id?: string };
-    return { success: true, providerMessageId: data?.id, conversationId: undefined };
+    const data = (await createRes.json()) as { id?: string; activityId?: string; conversation?: { id?: string } };
+    const providerMessageId = typeof data?.activityId === 'string' ? data.activityId : typeof data?.id === 'string' ? data.id : undefined;
+    const conversationId = data?.conversation?.id ?? args.channelId;
+    return { success: true, providerMessageId, conversationId };
   } catch {
-    return { success: true };
+    return { success: true, providerMessageId: undefined, conversationId: args.channelId };
   }
 }
 
@@ -151,29 +240,46 @@ async function updateBotActivity(args: {
   teamId: string;
   channelId: string;
   messageId: string;
+  conversationId?: string | null;
+  serviceUrl?: string | null;
   cardJson: string;
   incidentId: string;
   clientId: string;
   clientSecret: string;
   tenantId: string;
 }): Promise<TeamsDeliveryResult> {
-  const token = await graphToken(args.clientId, args.clientSecret, args.tenantId);
-  if (!token) return { success: false, error: 'Failed to acquire Graph token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
+  const rawServiceUrl = (args.serviceUrl ?? '').trim();
+  let serviceUrl = rawServiceUrl.replace(/\/+$/, '');
+  if (!serviceUrl) {
+    const resolved = await resolveServiceUrlForDestination(args.tenantId, args.teamId);
+    serviceUrl = (resolved.serviceUrl ?? '').replace(/\/+$/, '');
+  }
+  if (!serviceUrl) {
+    return { success: false, error: 'Teams serviceUrl is not configured — cannot update card', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
+  }
+  const token = await botToken(args.clientId, args.clientSecret, args.tenantId);
+  if (!token) return { success: false, error: 'Failed to acquire Bot Framework token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
 
-  // Attempt Graph PATCH for update. App-only permissions restrict normal message updates
-  // to `policyViolation` per Microsoft docs — so we attempt PATCH, and on 403/405 with
-  // app-permission signal, caller falls back to posting a new card.
   const card = JSON.parse(args.cardJson) as unknown;
-  const endpoint = `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(args.teamId)}/channels/${encodeURIComponent(args.channelId)}/messages/${encodeURIComponent(args.messageId)}`;
+  const conversationId = (args.conversationId ?? args.channelId).trim() || args.channelId;
+
+  // Bot Framework update: PUT {serviceUrl}/v3/conversations/{conversationId}/activities/{activityId}
+  const endpoint = `${serviceUrl}/v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(args.messageId)}`;
   const body = {
-    body: { contentType: 'html', content: `<attachment id="${args.incidentId}"></attachment>` },
-    attachments: [{ id: args.incidentId, contentType: 'application/vnd.microsoft.card.adaptive', content: JSON.stringify(card) }],
+    type: 'message',
+    id: args.messageId,
+    attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: card }],
+    channelData: { tenant: { id: args.tenantId } },
   };
-  const res = await retryFetch(endpoint, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  }, { maxAttempts: 2, initialDelayMs: 800 });
+  const res = await retryFetch(
+    endpoint,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+    { maxAttempts: 2, initialDelayMs: 800 }
+  );
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     const s = res.status;
@@ -183,14 +289,19 @@ async function updateBotActivity(args: {
       const retryAfterMs = Number.isFinite(n) && n > 0 ? n * 1000 : undefined;
       return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
     }
-    // Signal to caller that PATCH is not supported for this auth context — do NOT silently duplicate
-    if (s === 403 || s === 405) {
-      return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: 'PATCH_NOT_SUPPORTED', statusCode: s };
-    }
+    // Bot Connector returns 403 when the bot is removed or not allowed to edit; treat as MESSAGE_NOT_FOUND for recover path,
+    // except preserve PATCH_NOT_SUPPORTED compat for callers that expect DEGRADED on Graph.
     if (s === 404) return { success: false, error: 'Teams message not found', errorCode: 'MESSAGE_NOT_FOUND', statusCode: 404 };
+    if (s === 403) {
+      // Distinguish between auth expiry and removal — surface as AUTH_EXPIRED so caller can re-probe.
+      if (/not.?found|does not exist/i.test(text)) {
+        return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: 'MESSAGE_NOT_FOUND', statusCode: 404 };
+      }
+      return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: 'AUTH_EXPIRED', statusCode: s };
+    }
     return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: `http_${s}`, statusCode: s };
   }
-  return { success: true, providerMessageId: args.messageId };
+  return { success: true, providerMessageId: args.messageId, conversationId };
 }
 
 // ---------------------------------------------------------------------------
@@ -214,8 +325,17 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
     { incident: args.incident, eventType: args.eventType },
     { disableActions: args.disableActions },
   );
+  // Resolve serviceUrl from Installation (verified via Bot Framework conversationUpdate).
+  // Send path uses tenantId+teamId to avoid trusting channel-scoped caller input alone.
+  let serviceUrl = '';
+  try {
+    const inst = await resolveServiceUrlForDestination(tenantId, args.teamId);
+    serviceUrl = inst.serviceUrl ?? '';
+  } catch {
+    serviceUrl = '';
+  }
   return sendBotActivity({
-    serviceUrl: '',
+    serviceUrl,
     teamId: args.teamId,
     channelId: args.channelId,
     cardJson: JSON.stringify(cardObj),
