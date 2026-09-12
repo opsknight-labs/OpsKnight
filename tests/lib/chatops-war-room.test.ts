@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   generateBridgeUrl,
@@ -570,15 +571,15 @@ describe('ChatOps War-Room Engine', () => {
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-      } as any);
+      } as never);
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
         archiveOnResolve: true,
-      } as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      } as never);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
       vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
         json: async () => ({ ok: false, error: 'already_archived' }),
-      } as any);
+      } as never);
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(true);
@@ -595,15 +596,15 @@ describe('ChatOps War-Room Engine', () => {
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-      } as any);
+      } as never);
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
         archiveOnResolve: true,
-      } as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      } as never);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
       vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
         json: async () => ({ ok: false, error: 'channel_not_found' }),
-      } as any);
+      } as never);
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(true);
