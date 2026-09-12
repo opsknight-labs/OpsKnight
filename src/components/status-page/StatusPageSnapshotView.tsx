@@ -5,10 +5,42 @@ import type { StatusPageSnapshot } from '@/lib/status-pages/snapshot';
 import { toSafeStyleTagContent } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import {
+  DEFAULT_STATUS_PAGE_THEME_ID,
   compileStatusPageThemeCss,
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
+  type StatusPageThemeDefinition,
 } from '@/lib/status-pages/theme-contract';
+
+function compileStatusPageThemePaletteCss(theme: StatusPageThemeDefinition): string {
+  if (theme.id === DEFAULT_STATUS_PAGE_THEME_ID) return '';
+
+  const { surface, surfaceAlt, accent, text } = theme.preview;
+  return `
+.status-page-container {
+  --sp-page-bg: ${surfaceAlt};
+  --sp-page-text: ${text};
+  --sp-panel-bg: ${surface};
+  --sp-panel-muted-bg: ${surfaceAlt};
+  --sp-ink: ${text};
+  --sp-ink-strong: ${text};
+  --sp-muted: color-mix(in srgb, ${text} 72%, ${surface} 28%);
+  --sp-muted-2: color-mix(in srgb, ${text} 56%, ${surface} 44%);
+  --sp-panel-border: color-mix(in srgb, ${text} 16%, ${surface} 84%);
+  --sp-panel-muted-border: color-mix(in srgb, ${text} 13%, ${surfaceAlt} 87%);
+  --sp-theme-accent: ${accent};
+}
+.status-page-container .status-topbar,
+.status-page-container .status-page-header {
+  background: color-mix(in srgb, var(--sp-panel-bg) 92%, var(--sp-theme-accent) 8%);
+  border-bottom-color: color-mix(in srgb, var(--sp-panel-border) 72%, var(--sp-theme-accent) 28%);
+}
+.status-page-container .status-v3-service,
+.status-page-container details.status-v3-incident-pill {
+  border-color: color-mix(in srgb, var(--sp-panel-border) 86%, var(--sp-theme-accent) 14%);
+}
+`;
+}
 
 /**
  * Themed shell for the published status page.
@@ -44,7 +76,7 @@ export default function StatusPageSnapshotView({
   const customCss = toSafeStyleTagContent(branding.customCss);
   const selectedTheme = resolveStatusPageTheme(themeBranding.themeId);
   const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
-  const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
+  const builtInThemeCss = `${compileStatusPageThemeCss(selectedTheme.id, themeDensity)}${compileStatusPageThemePaletteCss(selectedTheme)}`;
   const autoRefresh = presentation?.autoRefresh ?? branding.autoRefresh;
 
   return (
