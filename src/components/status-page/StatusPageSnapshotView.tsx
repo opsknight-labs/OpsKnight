@@ -4,6 +4,7 @@ import StatusPageV3 from './StatusPageV3';
 import type { StatusPageSnapshot } from '@/lib/status-pages/snapshot';
 import { toSafeStyleTagContent } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
+import { resolveStatusPageCustomCss } from '@/lib/status-pages/theme-custom-css';
 import {
   compileStatusPageThemeCss,
   resolveStatusPageTheme,
@@ -41,8 +42,10 @@ export default function StatusPageSnapshotView({
   const refreshInterval =
     presentation?.refreshInterval ??
     (typeof branding.refreshInterval === 'number' ? branding.refreshInterval : 60);
-  const customCss = toSafeStyleTagContent(branding.customCss);
   const selectedTheme = resolveStatusPageTheme(themeBranding.themeId);
+  const customCss = toSafeStyleTagContent(
+    resolveStatusPageCustomCss(selectedTheme.id, branding.customCss)
+  );
   const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
   const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
   const autoRefresh = presentation?.autoRefresh ?? branding.autoRefresh;
