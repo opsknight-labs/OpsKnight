@@ -146,6 +146,9 @@ export interface PublicStatusBranding {
   metaTitle?: string;
   metaDescription?: string;
   customCss?: string;
+  themeId?: string;
+  themeVersion?: number;
+  themeDensity?: 'comfortable' | 'compact';
   layout?: 'default' | 'compact' | 'wide';
   showHeader?: boolean;
   showFooter?: boolean;
