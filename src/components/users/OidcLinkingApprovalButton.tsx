@@ -99,7 +99,7 @@ export default function OidcLinkingApprovalButton({
     }
   };
 
-  const isRenewal = state === 'expired' || state === 'revoked';
+  const isRenewal = state === 'expired' || state === 'revoked' || state === 'stale';
 
   return (
     <>
@@ -134,6 +134,17 @@ export default function OidcLinkingApprovalButton({
         >
           <Clock3 className="mr-2 h-4 w-4" />
           <span>Expired — Renew approval</span>
+        </DropdownMenuItem>
+      ) : state === 'stale' ? (
+        <DropdownMenuItem
+          onSelect={event => {
+            event.preventDefault();
+            setDialog('allow');
+          }}
+          className="text-amber-700 focus:text-amber-800"
+        >
+          <RotateCcw className="mr-2 h-4 w-4" />
+          <span>Config changed — Renew approval</span>
         </DropdownMenuItem>
       ) : state === 'revoked' ? (
         <DropdownMenuItem

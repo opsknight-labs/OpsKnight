@@ -70,22 +70,18 @@ function parseRoleMapping(input: string): RoleMappingRule[] {
 
 function stableSerializeRoleMapping(mapping: unknown): string {
   if (!Array.isArray(mapping)) return '[]';
-  const sorted = [...mapping]
-    .map(entry => {
-      if (!entry || typeof entry !== 'object') return entry;
-      const candidate = entry as Record<string, unknown>;
-      return {
-        claim: String(candidate.claim ?? '').trim(),
-        value: String(candidate.value ?? '').trim(),
-        role: String(candidate.role ?? '').trim(),
-      };
-    })
-    .sort((a, b) => {
-      const keyA = `${a.claim}:::${a.value}:::${a.role}`;
-      const keyB = `${b.claim}:::${b.value}:::${b.role}`;
-      return keyA.localeCompare(keyB);
-    });
-  return JSON.stringify(sorted);
+  // Preserve rule order: role evaluation in mapClaimsToRole uses first-match-wins semantics,
+  // so rule order changes are semantically significant security changes.
+  const normalized = mapping.map(entry => {
+    if (!entry || typeof entry !== 'object') return entry;
+    const candidate = entry as Record<string, unknown>;
+    return {
+      claim: String(candidate.claim ?? '').trim(),
+      value: String(candidate.value ?? '').trim(),
+      role: String(candidate.role ?? '').trim(),
+    };
+  });
+  return JSON.stringify(normalized);
 }
 
 export async function saveOidcConfig(
@@ -298,6 +294,8 @@ export async function saveOidcConfig(
             where: { oidcIdentities: { some: { issuer: previousIssuer } } },
             data: { tokenVersion: { increment: 1 } },
           });
+        }
+        if (securityConfigChanged) {
           await tx.oidcLinkingApproval.updateMany({
             where: {
               providerConfigId: existing.id,

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { logger } from '@/lib/logger';
 import { assertSafeOutboundUrl, safeOutboundFetch } from '@/lib/network-security';
 import { getMicrosoftEntraTenantAuthority, isMicrosoftEntraGenericAuthority, isMicrosoftEntraHost } from '@/lib/oidc-provider';
@@ -25,6 +26,8 @@ type OidcDiscoveryMetadata = {
   jwks_uri?: unknown;
   id_token_signing_alg_values_supported?: unknown;
   token_endpoint_auth_methods_supported?: unknown;
+  response_types_supported?: unknown;
+  code_challenge_methods_supported?: unknown;
 };
 
 export type ValidateOidcConnectionOptions = {
@@ -101,17 +104,34 @@ async function readBoundedJson<T>(response: Response, maxBytes: number): Promise
   throw new Error('Unsupported response body format.');
 }
 
-function hasUsableSigningKey(value: unknown): boolean {
+function isValidRsaSigningKey(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const key = value as Record<string, unknown>;
-  if (typeof key.kid !== 'string' || !key.kid.trim()) return false;
   if (key.use !== undefined && key.use !== 'sig') return false;
   if (key.key_ops && Array.isArray(key.key_ops) && !key.key_ops.includes('verify')) return false;
   // OpsKnight NextAuth runtime pins RS256 for token verification.
   // Reject EC keys or incompatible algorithms during connection validation.
   if (key.alg !== undefined && key.alg !== 'RS256') return false;
   if (key.kty !== 'RSA') return false;
-  return typeof key.n === 'string' && typeof key.e === 'string' && key.n.length > 0 && key.e.length > 0;
+  if (
+    typeof key.n !== 'string' ||
+    typeof key.e !== 'string' ||
+    key.n.length === 0 ||
+    key.e.length === 0
+  ) {
+    return false;
+  }
+
+  // Cryptographically validate that the key material parses into a valid RSA public key
+  try {
+    const pubKey = crypto.createPublicKey({
+      key: key as crypto.JsonWebKey,
+      format: 'jwk',
+    });
+    return pubKey.type === 'public' && pubKey.asymmetricKeyType === 'rsa';
+  } catch {
+    return false;
+  }
 }
 
 function hasQueryOrHash(urlObj: URL): boolean {
@@ -229,7 +249,11 @@ export async function validateOidcConnection(
     // Build the discovery URL only from validated primitives.
     const cleanPath = parsedUrl.pathname.replace(/\/+$/, '');
     const pathSegments = cleanPath.split('/').filter(Boolean);
-    if (pathSegments.some(seg => seg === '..' || seg === '.' || !/^[a-zA-Z0-9._~%-]+$/.test(seg))) {
+    if (
+      pathSegments.some(
+        seg => seg === '..' || seg === '.' || !/^[a-zA-Z0-9._~%:@!$&'()*+,;=-]+$/.test(seg)
+      )
+    ) {
       return {
         isValid: false,
         error: 'Issuer URL path contains invalid characters or path traversal.',
@@ -383,6 +407,50 @@ export async function validateOidcConnection(
       }
     }
 
+    // For generic/custom providers, validate the authorization-code flow and PKCE capability contracts
+    if (providerPolicy.family === 'custom') {
+      if (
+        config.response_types_supported === undefined ||
+        !Array.isArray(config.response_types_supported)
+      ) {
+        return {
+          isValid: false,
+          error:
+            'Identity Provider metadata must include a valid "response_types_supported" array.',
+        };
+      }
+      const supportsCode = config.response_types_supported.some(
+        rt => typeof rt === 'string' && rt.trim() === 'code'
+      );
+      if (!supportsCode) {
+        return {
+          isValid: false,
+          error:
+            'Identity Provider must support the "code" response type for authorization code flow.',
+        };
+      }
+
+      if (config.code_challenge_methods_supported !== undefined) {
+        if (!Array.isArray(config.code_challenge_methods_supported)) {
+          return {
+            isValid: false,
+            error:
+              'Identity Provider metadata contains a malformed code_challenge_methods_supported list.',
+          };
+        }
+        const supportsS256 = config.code_challenge_methods_supported.some(
+          method => typeof method === 'string' && method.trim().toUpperCase() === 'S256'
+        );
+        if (!supportsS256) {
+          return {
+            isValid: false,
+            error:
+              'Identity Provider must support the "S256" code challenge method for PKCE.',
+          };
+        }
+      }
+    }
+
     const jwksUri = config.jwks_uri as string;
     const jwksResponse = await safeOutboundFetch(jwksUri, {
       method: 'GET',
@@ -399,11 +467,35 @@ export async function validateOidcConnection(
       };
     }
     const jwks = await readBoundedJson<JsonWebKeySet>(jwksResponse, MAX_JWKS_BYTES);
-    if (!Array.isArray(jwks.keys) || !jwks.keys.some(hasUsableSigningKey)) {
+    if (!Array.isArray(jwks.keys)) {
       return {
         isValid: false,
         error: 'OIDC signing-key set does not contain a usable public signing key.',
       };
+    }
+
+    const candidateKeys = jwks.keys.filter(isValidRsaSigningKey) as Record<string, unknown>[];
+    if (candidateKeys.length === 0) {
+      return {
+        isValid: false,
+        error: 'OIDC signing-key set does not contain a usable public signing key.',
+      };
+    }
+
+    // If multiple candidate signing keys exist, require unambiguous distinct kid on each
+    if (candidateKeys.length > 1) {
+      const allHaveKid = candidateKeys.every(
+        k => typeof k.kid === 'string' && k.kid.trim().length > 0
+      );
+      const kids = candidateKeys.map(k => (typeof k.kid === 'string' ? k.kid.trim() : ''));
+      const uniqueKids = new Set(kids);
+      if (!allHaveKid || uniqueKids.size !== candidateKeys.length) {
+        return {
+          isValid: false,
+          error:
+            'OIDC signing-key set contains multiple signing keys without distinct "kid" identifiers.',
+        };
+      }
     }
 
     return {

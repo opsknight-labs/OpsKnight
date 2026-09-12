@@ -2414,9 +2414,15 @@ export default function StatusPageConfig({
                           <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
                             <Switch
                               checked={formData.showIncidents}
-                              onChange={checked =>
-                                setFormData({ ...formData, showIncidents: checked })
-                              }
+                              onChange={checked => {
+                                setFormData({ ...formData, showIncidents: checked });
+                                if (checked && privacySettings.showRecentIncidents === false) {
+                                  setPrivacySettings(prev => ({
+                                    ...prev,
+                                    showRecentIncidents: true,
+                                  }));
+                                }
+                              }}
                               label="Show Incidents"
                               helperText="Display incidents section and timeline"
                             />
@@ -2424,9 +2430,15 @@ export default function StatusPageConfig({
                           <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
                             <Switch
                               checked={formData.showMetrics}
-                              onChange={checked =>
-                                setFormData({ ...formData, showMetrics: checked })
-                              }
+                              onChange={checked => {
+                                setFormData({ ...formData, showMetrics: checked });
+                                if (checked && privacySettings.showServiceMetrics === false) {
+                                  setPrivacySettings(prev => ({
+                                    ...prev,
+                                    showServiceMetrics: true,
+                                  }));
+                                }
+                              }}
                               label="Show Uptime & Availability"
                               helperText="Display service uptime metrics and history"
                             />

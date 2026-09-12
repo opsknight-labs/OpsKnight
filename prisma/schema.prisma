@@ -393,6 +393,7 @@ model OidcIdentity {
   providerConfigId String?   @default("default")
   providerObjectId String?
   tenantId         String?
+  issuerFingerprint String?
   emailAtLink      String?
   lastLoginAt      DateTime?
   userId           String
@@ -405,6 +406,7 @@ model OidcIdentity {
   @@index([userId])
   @@index([issuer])
   @@index([providerConfigId])
+  @@index([issuerFingerprint])
 }
 
 model Team {

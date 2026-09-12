@@ -113,11 +113,13 @@ export default function StatusPagePrivacySettings({
   const [expandedPreset, setExpandedPreset] = useState<keyof typeof PRIVACY_PRESETS | null>(null);
 
   const PRESET_DETAIL_LABELS: Array<{ key: keyof PrivacySettings; label: string }> = [
+    { key: 'showRecentIncidents', label: 'Recent incidents' },
     { key: 'showIncidentDetails', label: 'Timeline & progress updates' },
     { key: 'showIncidentDescriptions', label: 'Incident body description' },
     { key: 'showIncidentTimestamps', label: 'Incident timestamps' },
     { key: 'showAffectedServices', label: 'Affected services' },
     { key: 'showIncidentUrgency', label: 'Incident urgency' },
+    { key: 'showServiceMetrics', label: 'Service metrics' },
     { key: 'showServiceDescriptions', label: 'Service descriptions' },
     { key: 'showServiceRegions', label: 'Service regions' },
     { key: 'showUptimeHistory', label: 'Uptime history' },
@@ -263,6 +265,19 @@ export default function StatusPagePrivacySettings({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
             <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Recent Incidents</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display recent incidents list on the status page
+              </p>
+            </div>
+            <Switch
+              checked={settings.showRecentIncidents}
+              onChange={checked => updateSetting('showRecentIncidents', checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
               <p className="text-xs font-semibold text-foreground">
                 Show Timeline & Progress Updates
               </p>
@@ -354,6 +369,19 @@ export default function StatusPagePrivacySettings({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
             <div className="space-y-0.5 pr-2">
+              <p className="text-xs font-semibold text-foreground">Show Service Metrics</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Display uptime percentages and availability metrics
+              </p>
+            </div>
+            <Switch
+              checked={settings.showServiceMetrics}
+              onChange={checked => updateSetting('showServiceMetrics', checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-3 rounded-lg border border-border/70 bg-muted/15 hover:bg-muted/30 transition-colors">
+            <div className="space-y-0.5 pr-2">
               <p className="text-xs font-semibold text-foreground">Show Service Descriptions</p>
               <p className="text-[11px] text-muted-foreground leading-snug">
                 Display service descriptions and details
@@ -417,8 +445,8 @@ export default function StatusPagePrivacySettings({
             <div className="space-y-0.5 pr-2">
               <p className="text-xs font-semibold text-foreground">Show Incident History Details</p>
               <p className="text-[11px] text-muted-foreground leading-snug">
-                When off, older resolved incidents show title only. Active incidents are never
-                redacted.
+                When off, older resolved incidents show limited detail (title only). Active
+                incidents are never redacted.
               </p>
             </div>
             <Switch
@@ -472,7 +500,7 @@ export default function StatusPagePrivacySettings({
               onChange={e =>
                 updateSetting('dataRetentionDays', e.target.value ? parseInt(e.target.value) : null)
               }
-              helperText="Limits how far back the public Status Page and status APIs expose incident history."
+              helperText="Limits how far back the public Status Page and status APIs expose incident history. Internal incident records are not deleted."
             />
           </div>
         </div>

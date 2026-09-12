@@ -192,6 +192,9 @@ AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS
 AUTH_SSO_REAUTH_AFTER_SECONDS
 ```
 
+> [!NOTE]
+> Under OpsKnight's JWT session strategy, session lifecycle is governed per-request by absolute expiration (`AUTH_SSO_SESSION_MAX_AGE_SECONDS`), user-interaction idle timeout (`AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS`), and server-side config/token versions. `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS` configures NextAuth's database session update cadence and is retained for database session parity.
+
 OpsKnight refreshes security-sensitive user state during server-side session evaluation so account disablement, token-version changes, SCIM deprovisioning, and trust/config-version changes can invalidate access without waiting for the original JWT lifetime.
 
 The `AUTH_SSO_REAUTH_AFTER_SECONDS` control requires a new OpsKnight OIDC session; it does not guarantee that the upstream IdP prompts the user for credentials instead of reusing its own SSO session.
