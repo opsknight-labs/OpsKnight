@@ -28,16 +28,37 @@ interface StatusPageDesignSettingsProps {
   };
 }
 
-const FAMILY_LABELS: Record<StatusPageThemeFamily | 'all', string> = {
-  all: 'All',
-  universal: 'Universal',
-  enterprise: 'Enterprise',
-  saas: 'SaaS',
-  developer: 'Developer',
-  gaming: 'Gaming',
-  regulated: 'Regulated',
-  consumer: 'Consumer',
-};
+type ThemeFamilyFilter = StatusPageThemeFamily | 'all';
+
+const FAMILY_FILTERS: ReadonlyArray<{ id: ThemeFamilyFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'universal', label: 'Universal' },
+  { id: 'enterprise', label: 'Enterprise' },
+  { id: 'saas', label: 'SaaS' },
+  { id: 'developer', label: 'Developer' },
+  { id: 'gaming', label: 'Gaming' },
+  { id: 'regulated', label: 'Regulated' },
+  { id: 'consumer', label: 'Consumer' },
+];
+
+function getFamilyLabel(family: StatusPageThemeFamily): string {
+  switch (family) {
+    case 'universal':
+      return 'Universal';
+    case 'enterprise':
+      return 'Enterprise';
+    case 'saas':
+      return 'SaaS';
+    case 'developer':
+      return 'Developer';
+    case 'gaming':
+      return 'Gaming';
+    case 'regulated':
+      return 'Regulated';
+    case 'consumer':
+      return 'Consumer';
+  }
+}
 
 function asBranding(value: unknown): BrandingRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -55,7 +76,7 @@ export default function StatusPageDesignSettings({ statusPage }: StatusPageDesig
   const [themeId, setThemeId] = useState(initialTheme.id);
   const [density, setDensity] = useState<StatusPageThemeDensity>(initialDensity);
   const [customCss, setCustomCss] = useState(initialCustomCss);
-  const [family, setFamily] = useState<StatusPageThemeFamily | 'all'>('all');
+  const [family, setFamily] = useState<ThemeFamilyFilter>('all');
   const [revision, setRevision] = useState(() =>
     statusPage.updatedAt ? new Date(statusPage.updatedAt).toISOString() : undefined
   );
@@ -165,23 +186,23 @@ export default function StatusPageDesignSettings({ statusPage }: StatusPageDesig
             <p className="text-xs text-muted-foreground mt-0.5">
               {selectedTheme.id === DEFAULT_STATUS_PAGE_THEME_ID
                 ? 'Default uses the native Status Page renderer with zero built-in theme CSS.'
-                : `${selectedTheme.name} · ${FAMILY_LABELS[selectedTheme.family]} · v${selectedTheme.version}`}
+                : `${selectedTheme.name} · ${getFamilyLabel(selectedTheme.family)} · v${selectedTheme.version}`}
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5" aria-label="Theme family filter">
-            {(Object.keys(FAMILY_LABELS) as Array<StatusPageThemeFamily | 'all'>).map(key => (
+            {FAMILY_FILTERS.map(filter => (
               <button
-                key={key}
+                key={filter.id}
                 type="button"
-                onClick={() => setFamily(key)}
+                onClick={() => setFamily(filter.id)}
                 className={cn(
                   'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors',
-                  family === key
+                  family === filter.id
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
                 )}
               >
-                {FAMILY_LABELS[key]}
+                {filter.label}
               </button>
             ))}
           </div>
