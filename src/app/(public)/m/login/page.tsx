@@ -2,11 +2,11 @@ import MobileLoginClient from './MobileLoginClient';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
+import { getOidcRuntimeCapability } from '@/lib/oidc-validation';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { sanitizeCallbackUrl } from '@/lib/callback-url';
+import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 
 export const dynamic = 'force-dynamic';
@@ -43,52 +43,49 @@ export default async function MobileLoginPage({
   }
 
   const session = await getServerSession(await getAuthOptions());
-  const oidcConfig = await getOidcConfig();
-  const ssoConfig = await getOidcPublicConfig();
-  const ssoEnabled = Boolean(oidcConfig);
-  const ssoError =
-    ssoConfig?.enabled && !oidcConfig
-      ? 'Single sign-on is enabled but not configured correctly. Contact your administrator.'
-      : null;
+  const ssoCapability = await getOidcRuntimeCapability();
+  const ssoEnabled = ssoCapability.runtimeReady;
+  const ssoError = ssoCapability.error;
 
-  // If already authenticated, redirect to mobile dashboard
-  if (session) {
-    if (session?.user?.email) {
-      try {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: session.user.email },
-          select: { id: true },
+  const awaitedSearchParams = await searchParams;
+  const rawCallbackUrl =
+    typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : null;
+  const callbackUrl = safeInternalCallbackUrl(rawCallbackUrl, '/m');
+
+  // If already authenticated with a valid user, redirect to mobile dashboard.
+  // Invalidated or cleared sessions do not redirect, preventing redirect loops.
+  if (session?.user?.email) {
+    try {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      });
+      if (!existingUser) {
+        redirect('/api/auth/signout?callbackUrl=/m/login');
+      }
+    } catch (error) {
+      if (!isNextRedirectError(error)) {
+        logger.error('[Mobile Login] Failed to verify session user', {
+          component: 'mobile-login-page',
+          error,
         });
-        if (!existingUser) {
-          redirect('/api/auth/signout?callbackUrl=/m/login');
-        }
-      } catch (error) {
-        if (!isNextRedirectError(error)) {
-          logger.error('[Mobile Login] Failed to verify session user', {
-            component: 'mobile-login-page',
-            error,
-          });
-        }
       }
     }
-    const awaitedSearchParams = await searchParams;
-    const callbackUrl = sanitizeCallbackUrl(
-      typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/m',
-      '/m'
-    );
 
     // Redirect to mobile callback or mobile dashboard
     redirect(callbackUrl);
   }
 
-  const awaitedSearchParams = await searchParams;
-  const callbackUrl = sanitizeCallbackUrl(
-    typeof awaitedSearchParams?.callbackUrl === 'string' ? awaitedSearchParams.callbackUrl : '/m',
-    '/m'
-  );
   const errorCode =
     typeof awaitedSearchParams?.error === 'string' ? awaitedSearchParams.error : null;
   const passwordSet = awaitedSearchParams?.password === '1';
+
+  const localAuthPolicy = getLocalAuthPolicy();
+  const credentialEntryEnabled = localAuthPolicy.enabled;
+  const breakGlassOnly =
+    !localAuthPolicy.localLoginEnabled &&
+    localAuthPolicy.breakGlassEnabled &&
+    Boolean(localAuthPolicy.breakGlassEmail);
 
   return (
     <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
@@ -98,9 +95,10 @@ export default async function MobileLoginPage({
         passwordSet={passwordSet}
         ssoError={ssoError}
         ssoEnabled={ssoEnabled}
-        ssoProviderType={ssoConfig?.providerType}
-        ssoProviderLabel={ssoConfig?.providerLabel}
-        localAuthEnabled={getLocalAuthPolicy().localLoginEnabled}
+        ssoProviderType={ssoCapability.providerType}
+        ssoProviderLabel={ssoCapability.providerLabel}
+        localAuthEnabled={credentialEntryEnabled}
+        breakGlassOnly={breakGlassOnly}
       />
     </ThemeProvider>
   );

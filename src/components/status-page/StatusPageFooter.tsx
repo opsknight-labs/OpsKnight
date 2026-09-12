@@ -171,11 +171,16 @@ function getLinkIcon(label: string) {
   return <SupportIcon />;
 }
 
-export default function StatusPageFooter({ footerText, links }: StatusPageFooterProps) {
+export default function StatusPageFooter({
+  footerText,
+  links,
+  organizationName,
+}: StatusPageFooterProps & { organizationName?: string | null }) {
   const currentYear = new Date().getFullYear();
   const hasResources = Boolean(links?.resources && links.resources.length > 0);
   const hasSupport = Boolean(links?.support && links.support.length > 0);
   const hasAnyLinks = hasResources || hasSupport;
+  const orgLabel = organizationName?.trim() ? organizationName.trim() : null;
 
   return (
     <footer className="status-site-footer">
@@ -283,7 +288,9 @@ export default function StatusPageFooter({ footerText, links }: StatusPageFooter
         {/* Bottom Tier: Enterprise Metadata & Synchronized History */}
         <div className="status-site-footer__bottom">
           <div className="status-site-footer__copyright">
-            <span>&copy; {currentYear} System Status Portal</span>
+            <span>
+              &copy; {currentYear} {orgLabel ?? 'System Status Portal'}
+            </span>
             <span className="status-site-footer__dot-sep" aria-hidden="true">
               &bull;
             </span>

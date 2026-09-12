@@ -39,18 +39,16 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
     }
   }
 
-  if (!(await canPublishIncidentToStatusPage(statusPage.id, incidentId, 'postmortem'))) {
-    notFound();
-  }
-
   const postmortem = await prisma.postmortem.findFirst({
     where: {
-      incidentId,
+      OR: [{ id: incidentId }, { incidentId }],
       incident: { visibility: 'PUBLIC' },
       status: 'PUBLISHED',
       isPublic: true,
     },
     select: {
+      id: true,
+      incidentId: true,
       title: true,
       summary: true,
       timeline: true,
@@ -73,6 +71,10 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
   });
 
   if (!postmortem) {
+    notFound();
+  }
+
+  if (!(await canPublishIncidentToStatusPage(statusPage.id, postmortem.incidentId, 'postmortem'))) {
     notFound();
   }
 

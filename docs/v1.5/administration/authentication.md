@@ -192,6 +192,9 @@ AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS
 AUTH_SSO_REAUTH_AFTER_SECONDS
 ```
 
+> [!NOTE]
+> Under OpsKnight's JWT session strategy, session lifecycle is governed per-request by absolute expiration (`AUTH_SSO_SESSION_MAX_AGE_SECONDS`), user-interaction idle timeout (`AUTH_SSO_SESSION_IDLE_TIMEOUT_SECONDS`), and server-side config/token versions. `AUTH_SSO_SESSION_UPDATE_AGE_SECONDS` configures NextAuth's database session update cadence and is retained for database session parity.
+
 OpsKnight refreshes security-sensitive user state during server-side session evaluation so account disablement, token-version changes, SCIM deprovisioning, and trust/config-version changes can invalidate access without waiting for the original JWT lifetime.
 
 The `AUTH_SSO_REAUTH_AFTER_SECONDS` control requires a new OpsKnight OIDC session; it does not guarantee that the upstream IdP prompts the user for credentials instead of reusing its own SSO session.
@@ -214,7 +217,8 @@ See [SCIM Provisioning](../security/scim-provisioning.md).
 
 - Use a tenant-specific issuer.
 - Broad `common`, `organizations`, and `consumers` authorities are rejected.
-- Supported sovereign-cloud authorities are recognized.
+- Built-in Entra policy targets workforce tenants in commercial and sovereign clouds (External ID / CIAM is handled under generic OIDC).
+- Tenant boundaries are cryptographically verified via the tenant-specific issuer; Allowed Domains is informational for Entra workforce tenants.
 - Missing standard `email_verified` is handled under the validated Entra policy; explicit false is rejected.
 - Prefer Entra App Roles for authoritative role mapping when possible.
 
@@ -226,11 +230,13 @@ See [SCIM Provisioning](../security/scim-provisioning.md).
 
 - Organization and custom authorization-server issuers are supported.
 - Custom domains retain Okta provider policy.
+- Supports both `client_secret_basic` and `client_secret_post` token endpoint authentication.
 
 ### Auth0
 
 - Tenant and custom-domain issuers are supported.
-- Optional Auth0 Organization enforcement uses signed `org_id`.
+- Supports both `client_secret_basic` and `client_secret_post` token endpoint authentication.
+- Configured Auth0 Organizations pass `organization` during authorization and enforce signed `org_id` on every login.
 
 ## Unsupported authentication methods
 

@@ -1,7 +1,7 @@
 import LoginClient from './LoginClient';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
-import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
+import { getOidcRuntimeCapability } from '@/lib/oidc-validation';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { redirect } from 'next/navigation';
 import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
@@ -45,13 +45,9 @@ export default async function LoginPage({
   }
 
   const session = await getServerSession(await getAuthOptions());
-  const oidcConfig = await getOidcConfig();
-  const ssoConfig = await getOidcPublicConfig();
-  const ssoEnabled = Boolean(oidcConfig);
-  const ssoError =
-    ssoConfig?.enabled && !oidcConfig
-      ? 'Single sign-on is enabled but not configured correctly. Contact your administrator.'
-      : null;
+  const ssoCapability = await getOidcRuntimeCapability();
+  const ssoEnabled = ssoCapability.runtimeReady;
+  const ssoError = ssoCapability.error;
 
   const awaitedSearchParams = await searchParams;
   const rawCallbackUrl =
@@ -62,24 +58,24 @@ export default async function LoginPage({
   // reaches a client-side navigation API.
   const callbackUrl = safeInternalCallbackUrl(rawCallbackUrl, '/');
 
-  // Server-side check: If user is already authenticated, redirect them away
-  if (session) {
-    if (session?.user?.email) {
-      try {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: session.user.email },
-          select: { id: true },
+  // Server-side check: If user is already authenticated with a valid user, redirect them away.
+  // Invalidated or cleared sessions (e.g. tokenVersion mismatch or timeout) do not redirect,
+  // preventing infinite redirect loops between protected pages and login.
+  if (session?.user?.email) {
+    try {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: session.user.email },
+        select: { id: true },
+      });
+      if (!existingUser) {
+        redirect('/api/auth/signout?callbackUrl=/login');
+      }
+    } catch (error) {
+      if (!isNextRedirectError(error)) {
+        logger.error('[Login Page] Failed to verify session user', {
+          component: 'login-page',
+          error,
         });
-        if (!existingUser) {
-          redirect('/api/auth/signout?callbackUrl=/login');
-        }
-      } catch (error) {
-        if (!isNextRedirectError(error)) {
-          logger.error('[Login Page] Failed to verify session user', {
-            component: 'login-page',
-            error,
-          });
-        }
       }
     }
     redirect(callbackUrl);
@@ -88,6 +84,13 @@ export default async function LoginPage({
     typeof awaitedSearchParams?.error === 'string' ? awaitedSearchParams.error : null;
   const passwordSet = awaitedSearchParams?.password === '1';
 
+  const localAuthPolicy = getLocalAuthPolicy();
+  const credentialEntryEnabled = localAuthPolicy.enabled;
+  const breakGlassOnly =
+    !localAuthPolicy.localLoginEnabled &&
+    localAuthPolicy.breakGlassEnabled &&
+    Boolean(localAuthPolicy.breakGlassEmail);
+
   return (
     <LoginClient
       callbackUrl={callbackUrl}
@@ -95,9 +98,10 @@ export default async function LoginPage({
       passwordSet={passwordSet}
       ssoError={ssoError}
       ssoEnabled={ssoEnabled}
-      ssoProviderType={ssoConfig?.providerType}
-      ssoProviderLabel={ssoConfig?.providerLabel}
-      localAuthEnabled={getLocalAuthPolicy().localLoginEnabled}
+      ssoProviderType={ssoCapability.providerType}
+      ssoProviderLabel={ssoCapability.providerLabel}
+      localAuthEnabled={credentialEntryEnabled}
+      breakGlassOnly={breakGlassOnly}
     />
   );
 }

@@ -60,13 +60,13 @@ OpsKnight applies the following rules regardless of provider:
 
 ### Microsoft Entra ID
 
-Use a tenant-specific workforce issuer:
+OpsKnight's built-in Microsoft Entra ID integration targets workforce tenants across Microsoft commercial and sovereign clouds. Use a tenant-specific workforce issuer:
 
 ```text
 https://login.microsoftonline.com/YOUR_TENANT_ID/v2.0
 ```
 
-OpsKnight rejects broad authorities such as:
+OpsKnight rejects broad, non-tenant-specific authorities:
 
 ```text
 /common/v2.0
@@ -74,7 +74,9 @@ OpsKnight rejects broad authorities such as:
 /consumers/v2.0
 ```
 
-Supported Entra authority hosts include the Microsoft public cloud and supported sovereign-cloud endpoints.
+Supported workforce authority hosts include the Microsoft public cloud (`login.microsoftonline.com`, `sts.windows.net`) and sovereign clouds (`login.microsoftonline.us`, `login.partner.microsoftonline.cn`). Microsoft External ID / CIAM authorities (`*.ciamlogin.com`) and Azure AD B2C are not workforce authorities and are treated under generic OIDC policy.
+
+Tenant membership is enforced by the tenant-specific authority in the issuer URL. Because Microsoft Entra email and preferred_username claims are mutable and not guaranteed to be present on all identities, Entra access is scoped directly to the configured tenant authority rather than relying on email domain filtering for authorization.
 
 Microsoft Entra workforce tokens commonly do not include the standard OIDC `email_verified` claim. For a validated Entra issuer, a missing claim is accepted according to the Entra provider policy, while an explicit `email_verified: false` is still rejected.
 
@@ -108,6 +110,8 @@ https://example.okta.com/oauth2/YOUR_SERVER_ID
 
 Okta custom domains can also be used. Saving an Okta custom-domain issuer preserves the Okta provider policy rather than degrading it to generic OIDC behavior.
 
+Okta supports both `client_secret_basic` (default) and `client_secret_post` token authentication. Ensure the selected **Token Endpoint Authentication** method in OpsKnight matches the client authentication configured in your Okta application.
+
 If roles are mapped from an Okta `groups` claim, configure the claim in Okta so it is actually included in the ID token used by OpsKnight.
 
 ### Auth0
@@ -119,7 +123,11 @@ https://tenant.eu.auth0.com
 https://login.example.com
 ```
 
-When an Auth0 Organization is configured, OpsKnight validates the signed `org_id` claim on every login, including logins from identities that were linked previously.
+Auth0 applications support both **Client Secret Basic** (HTTP Basic header) and **Client Secret Post** (body parameters). If your Auth0 application is set to POST, set **Token Endpoint Authentication** to `Client Secret Post` in OpsKnight.
+
+When an Auth0 Organization ID (`org_...`) is configured:
+1. OpsKnight passes `organization: <organizationId>` on the `/authorize` request so the user authenticates in the designated organization context.
+2. OpsKnight validates the signed `org_id` claim in the received token on every login, failing closed if the claim is missing or does not match.
 
 For custom role/profile claims, use namespaced Auth0 claims where appropriate.
 

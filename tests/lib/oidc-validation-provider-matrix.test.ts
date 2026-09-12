@@ -22,6 +22,7 @@ function makeMetadata(issuer: string, overrides: Record<string, unknown> = {}) {
     token_endpoint: `${issuer}/token`,
     jwks_uri: `${issuer}/jwks`,
     id_token_signing_alg_values_supported: ['RS256'],
+    response_types_supported: ['code'],
     issuer,
     ...overrides,
   };
@@ -252,5 +253,199 @@ describe('OIDC discovery provider matrix', () => {
 
     expect(result.isValid).toBe(false);
     expect(result.error).toMatch(/usable public signing key/i);
+  });
+
+  it('validates configured tokenEndpointAuthMethod against advertised token_endpoint_auth_methods_supported', async () => {
+    // 1. Success when requested method is in advertised list
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
+      })
+    );
+
+    const validResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_post',
+    });
+
+    expect(validResult.isValid).toBe(true);
+    expect(validResult.metadata?.tokenEndpointAuthMethodsSupported).toEqual([
+      'client_secret_basic',
+      'client_secret_post',
+    ]);
+
+    // 2. Fails when requested method is NOT in advertised list
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        token_endpoint_auth_methods_supported: ['client_secret_basic'],
+      })
+    );
+
+    const invalidResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_post',
+    });
+
+    expect(invalidResult.isValid).toBe(false);
+    expect(invalidResult.error).toContain(
+      'Identity Provider does not support the selected token endpoint authentication method (client_secret_post)'
+    );
+
+    // 3. Omitting token_endpoint_auth_methods_supported defaults to client_secret_basic (OIDC Core / RFC 8414)
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+    const omittedBasicResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_basic',
+    });
+    expect(omittedBasicResult.isValid).toBe(true);
+    expect(omittedBasicResult.metadata?.tokenEndpointAuthMethodsSupported).toEqual([
+      'client_secret_basic',
+    ]);
+
+    // 4. Omitting token_endpoint_auth_methods_supported rejects client_secret_post
+    setupValidFetch(200, makeMetadata('https://identity.example.com'));
+    const omittedPostResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_post',
+    });
+    expect(omittedPostResult.isValid).toBe(false);
+    expect(omittedPostResult.error).toContain(
+      'Identity Provider does not support the selected token endpoint authentication method (client_secret_post)'
+    );
+
+    // 5. Reject empty or malformed token_endpoint_auth_methods_supported array
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        token_endpoint_auth_methods_supported: [],
+      })
+    );
+    const emptyResult = await validateOidcConnection('https://identity.example.com', {
+      tokenEndpointAuthMethod: 'client_secret_basic',
+    });
+    expect(emptyResult.isValid).toBe(false);
+    expect(emptyResult.error).toContain('invalid or empty token_endpoint_auth_methods_supported');
+  });
+
+  it('accepts a single valid RSA signing key without kid when key selection is unambiguous', async () => {
+    safeOutboundFetchMock.mockImplementation(
+      async (url: string) =>
+        ({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue(
+            url.endsWith('/jwks')
+              ? { keys: [{ kty: 'RSA', use: 'sig', n: 'modulus', e: 'AQAB' }] } // no kid
+              : makeMetadata('https://identity.example.com')
+          ),
+          headers: { get: vi.fn().mockReturnValue(null) },
+        }) as unknown as Response
+    );
+
+    const result = await validateOidcConnection('https://identity.example.com');
+    expect(result.isValid).toBe(true);
+  });
+
+  it('rejects multiple signing keys when any key is missing a kid identifier', async () => {
+    safeOutboundFetchMock.mockImplementation(
+      async (url: string) =>
+        ({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue(
+            url.endsWith('/jwks')
+              ? {
+                  keys: [
+                    { kid: 'key-1', kty: 'RSA', use: 'sig', n: 'modulus1', e: 'AQAB' },
+                    { kty: 'RSA', use: 'sig', n: 'modulus2', e: 'AQAB' }, // missing kid
+                  ],
+                }
+              : makeMetadata('https://identity.example.com')
+          ),
+          headers: { get: vi.fn().mockReturnValue(null) },
+        }) as unknown as Response
+    );
+
+    const result = await validateOidcConnection('https://identity.example.com');
+    expect(result.isValid).toBe(false);
+    expect(result.error).toContain('multiple signing keys without distinct "kid" identifiers');
+  });
+
+  it('rejects multiple signing keys when keys have duplicate kid identifiers', async () => {
+    safeOutboundFetchMock.mockImplementation(
+      async (url: string) =>
+        ({
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue(
+            url.endsWith('/jwks')
+              ? {
+                  keys: [
+                    { kid: 'duplicate-kid', kty: 'RSA', use: 'sig', n: 'modulus1', e: 'AQAB' },
+                    { kid: 'duplicate-kid', kty: 'RSA', use: 'sig', n: 'modulus2', e: 'AQAB' },
+                  ],
+                }
+              : makeMetadata('https://identity.example.com')
+          ),
+          headers: { get: vi.fn().mockReturnValue(null) },
+        }) as unknown as Response
+    );
+
+    const result = await validateOidcConnection('https://identity.example.com');
+    expect(result.isValid).toBe(false);
+    expect(result.error).toContain('multiple signing keys without distinct "kid" identifiers');
+  });
+
+
+  it('validates generic provider authorization code and PKCE capabilities', async () => {
+    // Completely missing response_types_supported
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        response_types_supported: undefined,
+      })
+    );
+    const missingResult = await validateOidcConnection('https://identity.example.com');
+    expect(missingResult.isValid).toBe(false);
+    expect(missingResult.error).toContain('must include a valid "response_types_supported" array');
+
+    // Missing code in response_types_supported
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        response_types_supported: ['id_token', 'token'],
+      })
+    );
+    const noCodeResult = await validateOidcConnection('https://identity.example.com');
+    expect(noCodeResult.isValid).toBe(false);
+    expect(noCodeResult.error).toContain('must support the "code" response type');
+
+    // Missing S256 in code_challenge_methods_supported
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        code_challenge_methods_supported: ['plain'],
+      })
+    );
+    const noPkceResult = await validateOidcConnection('https://identity.example.com');
+    expect(noPkceResult.isValid).toBe(false);
+    expect(noPkceResult.error).toContain('must support the "S256" code challenge method for PKCE');
+
+    // Valid generic provider with code and S256
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        response_types_supported: ['code', 'code id_token'],
+        code_challenge_methods_supported: ['S256', 'plain'],
+      })
+    );
+    const validResult = await validateOidcConnection('https://identity.example.com');
+    expect(validResult.isValid).toBe(true);
+  });
+
+  it('permits RFC 3986 pchar characters in issuer path segments', async () => {
+    const issuer = 'https://identity.example.com/auth/realms/org:123+team=sec';
+    setupValidFetch(200, makeMetadata(issuer));
+
+    const result = await validateOidcConnection(issuer);
+    expect(result.isValid).toBe(true);
   });
 });

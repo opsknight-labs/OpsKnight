@@ -4,6 +4,15 @@ export type OidcLinkingApprovalRecord = {
   revokedAt: Date | null;
   consumedAt?: Date | null;
   expiresAt: Date | null;
+  providerConfigId?: string | null;
+  issuerFingerprint?: string | null;
+  configVersion?: number | null;
+};
+
+export type CurrentProviderTrustContext = {
+  providerConfigId?: string | null;
+  issuerFingerprint?: string | null;
+  configVersion?: number | null;
 };
 
 export type OidcLinkingApprovalState =
@@ -11,7 +20,8 @@ export type OidcLinkingApprovalState =
   | 'approved'
   | 'expired'
   | 'revoked'
-  | 'consumed';
+  | 'consumed'
+  | 'stale';
 
 /**
  * Single source of truth for whether a first-time OIDC linking approval is
@@ -19,20 +29,39 @@ export type OidcLinkingApprovalState =
  */
 export function getOidcLinkingApprovalState(
   approval: OidcLinkingApprovalRecord | null | undefined,
-  now = new Date()
+  now = new Date(),
+  providerContext?: CurrentProviderTrustContext | null
 ): OidcLinkingApprovalState {
   if (!approval) return 'not-approved';
   if (approval.consumedAt) return 'consumed';
   if (approval.revokedAt) return 'revoked';
   if (approval.expiresAt && approval.expiresAt.getTime() <= now.getTime()) return 'expired';
+
+  if (providerContext) {
+    if (
+      (approval.providerConfigId &&
+        providerContext.providerConfigId &&
+        approval.providerConfigId !== providerContext.providerConfigId) ||
+      (approval.issuerFingerprint &&
+        providerContext.issuerFingerprint &&
+        approval.issuerFingerprint !== providerContext.issuerFingerprint) ||
+      (approval.configVersion != null &&
+        providerContext.configVersion != null &&
+        approval.configVersion !== providerContext.configVersion)
+    ) {
+      return 'stale';
+    }
+  }
+
   return 'approved';
 }
 
 export function isOidcLinkingApprovalUsable(
   approval: OidcLinkingApprovalRecord | null | undefined,
-  now = new Date()
+  now = new Date(),
+  providerContext?: CurrentProviderTrustContext | null
 ): boolean {
-  return getOidcLinkingApprovalState(approval, now) === 'approved';
+  return getOidcLinkingApprovalState(approval, now, providerContext) === 'approved';
 }
 
 /**

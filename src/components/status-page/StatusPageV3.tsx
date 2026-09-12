@@ -97,9 +97,14 @@ export default function StatusPageV3({
   const showSubscribe =
     visible('subscribe', capabilities?.subscriptions) &&
     (page.subscription?.enabled ?? page.showSubscribe) === true;
+  // When the JSON/RSS API requires a token, anonymous footer/header links would 401 — hide them.
+  const apiRequiresToken = page.statusApiRequireToken === true;
   const showApi =
-    (presentation?.showApiLink ?? branding.showApiLink) !== false && resources?.jsonApi !== false;
+    !apiRequiresToken &&
+    (presentation?.showApiLink ?? branding.showApiLink) !== false &&
+    resources?.jsonApi !== false;
   const showRss =
+    !apiRequiresToken &&
     (presentation?.showRssLink ?? branding.showRssLink) !== false &&
     capabilities?.rss !== false &&
     resources?.rss !== false;
@@ -205,7 +210,11 @@ export default function StatusPageV3({
             <span className="status-section__count">Get notified when service status changes</span>
           </div>
           {subscribeEnabled ? (
-            <StatusPageSubscribe statusPageId={page.id} services={serviceOptions} rssHref={rssHref} />
+            <StatusPageSubscribe
+              statusPageId={page.id}
+              services={serviceOptions}
+              rssHref={rssHref}
+            />
           ) : (
             <p className="status-muted">Subscriptions are accepted on the published status page.</p>
           )}
@@ -225,6 +234,7 @@ export default function StatusPageV3({
       {showFooter && (
         <StatusPageFooter
           footerText={page.footerText}
+          organizationName={page.organizationName}
           links={{
             resources: [
               ...(showApi ? [{ href: apiPath, label: 'JSON API' }] : []),

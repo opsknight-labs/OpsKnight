@@ -41,6 +41,11 @@ function emailDomain(claims: OidcClaims): string | null {
 function emailBoundary(claims: OidcClaims, allowedDomains: string[]): OrganizationPolicyResult {
   const allowed = normalizedAllowed(allowedDomains);
   if (allowed.size === 0) return { ok: true };
+  // If Allowed Domains is configured as an authorization security boundary,
+  // require email_verified === true to ensure verified mailbox/domain ownership.
+  if (claims.email_verified !== true) {
+    return { ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' };
+  }
   const domain = emailDomain(claims);
   return domain && allowed.has(domain)
     ? { ok: true }
@@ -85,8 +90,8 @@ const entraPolicy: OidcProviderPolicy = {
     const authority = getMicrosoftEntraTenantAuthority(issuer);
     return authority !== null && !isMicrosoftEntraGenericAuthority(authority);
   },
-  // Entra membership is bounded by the tenant-specific issuer. An email suffix
-  // is not tenant proof and must never be used as one.
+  // Entra tenant membership is enforced by tenant-specific issuer validation.
+  // The mutable/optional email claim is not used as an authorization security boundary.
   validateOrganizationBoundary: () => ({ ok: true }),
   allowsMissingEmailVerified: () => true,
 };

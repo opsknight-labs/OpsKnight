@@ -18,6 +18,7 @@ import {
   useSecureCookies,
 } from '@/lib/auth-cookies';
 import type { JWT } from 'next-auth/jwt';
+import { customJwtEncode, customJwtDecode } from '@/lib/auth-jwt-encoder';
 import {
   getEnterpriseSessionPolicy,
   getLocalAuthPolicy,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/local-auth-policy';
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
+import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 
 /**
  * Security-sensitive user state is intentionally refreshed on every server-side
@@ -49,6 +51,8 @@ type AugmentedJWT = JWT & {
   lastActivityAt?: number;
   /** Time OpsKnight established this OIDC session, in epoch milliseconds. */
   oidcAuthenticatedAt?: number;
+  /** Absolute session expiration timestamp in epoch seconds. */
+  sessionExpiresAt?: number;
   /** Trust-version of the provider configuration that issued this session. */
   oidcConfigVersion?: number;
 };
@@ -88,7 +92,7 @@ function safeTtlMs(value: number, fallback: number) {
 const AUTH_TTL_MS = safeTtlMs(AUTH_OPTIONS_CACHE_TTL_MS, 5000);
 
 function normalizeIssuer(issuer: string) {
-  return issuer.replace(/\/$/, '');
+  return normalizeOidcIssuer(issuer);
 }
 
 function coerceBooleanClaim(value: unknown): boolean | undefined {
@@ -115,6 +119,7 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
   delete token.lastActivityAt;
   delete token.oidcAuthenticatedAt;
   delete token.oidcConfigVersion;
+  delete token.sessionExpiresAt;
   return token;
 }
 
@@ -145,7 +150,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
   authOptionsInFlight = (async () => {
     const oidcConfig = await getOidcConfig();
     const oidcValidation = oidcConfig
-      ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer)
+      ? await getValidatedOidcRuntimeMetadata(oidcConfig.issuer, {
+          tokenEndpointAuthMethod: oidcConfig.tokenEndpointAuthMethod,
+        })
       : null;
     const activeOidcConfig =
       oidcConfig && oidcValidation?.isValid && oidcValidation.metadata ? oidcConfig : null;
@@ -187,7 +194,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
         maxAge: rememberMeMaxAgeSeconds,
         updateAge: sessionUpdateAgeSeconds,
       },
-      jwt: { maxAge: rememberMeMaxAgeSeconds },
+      jwt: {
+        maxAge: rememberMeMaxAgeSeconds,
+        encode: customJwtEncode,
+        decode: customJwtDecode,
+      },
       useSecureCookies,
       cookies: {
         sessionToken: {
@@ -259,6 +270,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 issuer: activeOidcConfig.issuer,
                 customScopes: activeOidcConfig.customScopes ?? null,
                 metadata: oidcValidation.metadata,
+                tokenEndpointAuthMethod: activeOidcConfig.tokenEndpointAuthMethod,
+                providerType: activeOidcConfig.providerType,
+                organizationId: activeOidcConfig.organizationId,
               }),
             ]
           : []),
@@ -439,7 +453,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
         signOut: '/auth/signout',
       },
       callbacks: {
-        async jwt({ token, user, account, trigger, session: _session }) {
+        async jwt({ token, user, account, trigger, session }) {
           logger.debug('[Auth-Debug] JWT callback started', {
             component: 'auth:jwt',
             hasSub: !!token.sub,
@@ -517,7 +531,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 : remember
                   ? rememberMeMaxAgeSeconds
                   : credentialSessionMaxAgeSeconds;
-            token.exp = Math.floor(Date.now() / 1000) + ttlSeconds;
+            const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+            token.exp = sessionExpiresAt;
+            (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
           } else if (user) {
             delete (token as AugmentedJWT).error;
             logger.debug('[Auth-Debug] Initial Sign In (Fallback)', {
@@ -529,6 +545,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             token.name = user.name;
             token.email = user.email;
             (token as AugmentedJWT).tokenVersion = (user as AugmentedUser).tokenVersion ?? 0;
+            const ttlSeconds = credentialSessionMaxAgeSeconds;
+            const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+            token.exp = sessionExpiresAt;
+            (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
           }
 
           if (trigger === 'update') {
@@ -536,6 +556,15 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           const augmentedToken = token as AugmentedJWT;
+
+          // Check absolute session maximum age independently from outer cookie maxAge
+          if (
+            typeof augmentedToken.sessionExpiresAt === 'number' &&
+            Date.now() >= augmentedToken.sessionExpiresAt * 1000
+          ) {
+            return clearSessionToken(augmentedToken, 'SESSION_EXPIRED');
+          }
+
           if (!user && augmentedToken.oidcAuthenticatedAt) {
             const currentTime = Date.now();
             const currentConfig = await getOidcConfig();
@@ -554,7 +583,16 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             ) {
               return clearSessionToken(augmentedToken, 'OIDC_SESSION_IDLE_TIMEOUT');
             }
-            augmentedToken.lastActivityAt = currentTime;
+
+            // Only bump lastActivityAt when an explicit user interaction/activity signal
+            // is dispatched, preventing passive background /api/auth/session polling
+            // from defeating enterprise idle timeout.
+            const isActivitySignal =
+              trigger === 'update' &&
+              Boolean((session as { activity?: boolean } | undefined)?.activity);
+            if (isActivitySignal) {
+              augmentedToken.lastActivityAt = currentTime;
+            }
           }
 
           if (token.sub && typeof token.sub === 'string') {
@@ -580,6 +618,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                 });
 
                 if (dbUser) {
+                  delete (token as AugmentedJWT).error;
                   const dbTokenVersion =
                     typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
                   logger.debug('[Auth-Debug] User Check', {
@@ -612,13 +651,23 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   token.gender = dbUser.gender;
                   (token as AugmentedJWT).tokenVersion = dbTokenVersion;
                 } else {
-                  logger.debug('[Auth-Debug] User NOT FOUND in DB', {
+                  logger.warn('[Auth] User NOT FOUND in database; invalidating session', {
                     component: 'auth:jwt',
                     id: token.sub,
                   });
+                  return clearSessionToken(token as AugmentedJWT, 'USER_NOT_FOUND');
                 }
               } catch (error) {
-                console.error('[Auth-Debug] DB Fetch Error', error);
+                logger.error('[Auth] User DB verification failed; failing closed', {
+                  component: 'auth:jwt',
+                  id: token.sub,
+                  error,
+                });
+                // Availability tradeoff: Flag error so protected requests fail closed (session.user is cleared),
+                // but preserve token.sub and credentials so temporary DB connectivity glitches don't permanently
+                // overwrite the user's cookie and destroy valid sessions.
+                (token as AugmentedJWT).error = 'SECURITY_LOOKUP_UNAVAILABLE';
+                return token;
               }
               (token as AugmentedJWT).userFetchedAt = Date.now();
             }
@@ -654,6 +703,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.user.avatarUrl = token.avatarUrl;
             session.user.gender = token.gender;
             session.user.image = token.avatarUrl || getDefaultAvatar(token.gender, token.sub);
+          }
+
+          if (typeof (token as AugmentedJWT)?.sessionExpiresAt === 'number') {
+            session.expires = new Date(
+              (token as AugmentedJWT).sessionExpiresAt! * 1000
+            ).toISOString();
           }
 
           return session;
@@ -795,13 +850,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             });
           }
 
-          if (
-            activeConfig.roleMapping &&
-            Array.isArray(activeConfig.roleMapping) &&
-            activeConfig.roleMapping.length > 0
-          ) {
+          // When OIDC owns the user's role, sync the evaluated role from IdP claims.
+          // If all role mappings were deleted or no rule matches, evaluateOidcRoleClaims returns USER (the safe default).
+          if (targetUser.roleSource === 'OIDC') {
             const desiredRole = roleEvaluation.role;
-            if (targetUser.roleSource === 'OIDC' && targetUser.role !== desiredRole) {
+            if (targetUser.role !== desiredRole) {
               updateData.role = desiredRole;
               logger.info('[Auth] OIDC role changed from mapping evaluation', {
                 component: 'auth:signIn',

@@ -4,6 +4,7 @@ import { hasOidcEmailLinkAssurance } from '@/lib/oidc-provider';
 import { isOidcLinkingApprovalUsable } from '@/lib/oidc-linking-approval';
 import { getOidcProviderPolicy, type OidcClaims } from '@/lib/oidc/provider-policy';
 import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
+import { getLegacyOidcIssuerVariants } from '@/lib/oidc/issuer-migration';
 
 export type OidcTargetUser = {
   id: string;
@@ -25,6 +26,7 @@ export type OidcIdentityResolutionFailure =
   | 'OIDC_AUTO_PROVISION_DISABLED'
   | 'OIDC_LINK_NOT_APPROVED'
   | 'OIDC_LINK_APPROVAL_EXPIRED'
+  | 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT'
   | 'OIDC_TARGET_NOT_OPERATIONAL';
 
 export type OidcIdentityResolutionResult =
@@ -89,7 +91,11 @@ export async function resolveOidcIdentityForSignIn(
   const email = normalizeEmail(input.email);
   const providerPolicy = getOidcProviderPolicy(input.issuer, input.providerType);
   const organizationResult = providerPolicy.validateOrganizationBoundary(
-    { ...(input.claims ?? {}), ...(email ? { email } : {}) },
+    {
+      ...(input.claims ?? {}),
+      ...(email ? { email } : {}),
+      ...(input.emailVerifiedClaim !== undefined ? { email_verified: input.emailVerifiedClaim } : {}),
+    },
     input.allowedDomains,
     input.organizationId
   );
@@ -101,8 +107,9 @@ export async function resolveOidcIdentityForSignIn(
   // bindings, so tenant/domain/org policy changes take effect immediately.
   const existingIdentity = await prisma.oidcIdentity.findUnique({
     where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
-    select: { userId: true },
+    select: { id: true, userId: true, issuerFingerprint: true },
   });
+
   if (existingIdentity) {
     const linkedUser = await prisma.user.findUnique({
       where: { id: existingIdentity.userId },
@@ -111,6 +118,17 @@ export async function resolveOidcIdentityForSignIn(
     if (!linkedUser || linkedUser.status === 'DISABLED') {
       return { ok: false, reason: 'OIDC_TARGET_NOT_OPERATIONAL' };
     }
+
+    // Lazily backfill issuerFingerprint for legacy pre-#633 identities
+    // on successful login under the active client registration.
+    if (!existingIdentity.issuerFingerprint && input.clientId) {
+      const currentFingerprint = oidcTrustFingerprint(input.issuer, input.clientId);
+      await prisma.oidcIdentity.update({
+        where: { id: existingIdentity.id },
+        data: { issuerFingerprint: currentFingerprint },
+      });
+    }
+
     return {
       ok: true,
       user: linkedUser,
@@ -120,16 +138,63 @@ export async function resolveOidcIdentityForSignIn(
     };
   }
 
-  if (!email) return { ok: false, reason: 'OIDC_EMAIL_REQUIRED' };
+  if (!existingIdentity && !email) {
+    const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
+    let hasLegacyIdentity = false;
+    if (legacyVariants.length > 0) {
+      const match = await prisma.oidcIdentity.findFirst({
+        where: { issuer: { in: legacyVariants }, subject: input.subject },
+        select: { id: true },
+      });
+      hasLegacyIdentity = Boolean(match);
+    }
+    if (!hasLegacyIdentity) {
+      return { ok: false, reason: 'OIDC_EMAIL_REQUIRED' };
+    }
+  }
 
   try {
     return await runSerializableTransaction(async tx => {
       // A concurrent callback may have created the identity after the fast
       // path. Recheck first and let the stable binding win unconditionally.
-      const identityInsideTransaction = await tx.oidcIdentity.findUnique({
+      let identityInsideTransaction = await tx.oidcIdentity.findUnique({
         where: { issuer_subject: { issuer: input.issuer, subject: input.subject } },
-        select: { userId: true },
+        select: { id: true, userId: true, issuerFingerprint: true },
       });
+
+      if (!identityInsideTransaction) {
+        const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
+        if (legacyVariants.length > 0) {
+          const rawMatches = await tx.oidcIdentity.findMany({
+            where: {
+              issuer: { in: legacyVariants },
+              subject: input.subject,
+            },
+            select: { id: true, userId: true, issuerFingerprint: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
+          });
+          const legacyMatches = Array.isArray(rawMatches) ? rawMatches : [];
+
+          if (legacyMatches.length > 0) {
+            const uniqueUserIds = new Set(legacyMatches.map(m => m.userId));
+            if (uniqueUserIds.size > 1) {
+              throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
+            }
+            const [primaryMatch, ...duplicateMatches] = legacyMatches;
+            if (duplicateMatches.length > 0) {
+              await tx.oidcIdentity.deleteMany({
+                where: { id: { in: duplicateMatches.map(m => m.id) } },
+              });
+            }
+            await tx.oidcIdentity.update({
+              where: { id: primaryMatch.id },
+              data: { issuer: input.issuer },
+            });
+            identityInsideTransaction = primaryMatch;
+          }
+        }
+      }
+
       if (identityInsideTransaction) {
         const linkedUser = await tx.user.findUnique({
           where: { id: identityInsideTransaction.userId },
@@ -138,6 +203,17 @@ export async function resolveOidcIdentityForSignIn(
         if (!linkedUser || linkedUser.status === 'DISABLED') {
           throw new Error('OIDC_TARGET_NOT_OPERATIONAL');
         }
+
+        // Lazily backfill issuerFingerprint for legacy pre-#633 identities
+        // on successful login under the active client registration.
+        if (!identityInsideTransaction.issuerFingerprint && input.clientId) {
+          const currentFingerprint = oidcTrustFingerprint(input.issuer, input.clientId);
+          await tx.oidcIdentity.update({
+            where: { id: identityInsideTransaction.id },
+            data: { issuerFingerprint: currentFingerprint },
+          });
+        }
+
         return {
           ok: true as const,
           user: linkedUser,
@@ -146,6 +222,8 @@ export async function resolveOidcIdentityForSignIn(
           approvalConsumed: false,
         };
       }
+
+      if (!email) throw new Error('OIDC_EMAIL_REQUIRED');
 
       // Strict email verification is a first-binding/provisioning assurance,
       // not an ongoing identifier for an already-established OIDC identity.
@@ -226,6 +304,7 @@ export async function resolveOidcIdentityForSignIn(
             email,
             emailAtLink: email,
             providerConfigId: input.providerConfigId ?? 'default',
+            issuerFingerprint: fingerprint,
             providerObjectId: typeof input.claims?.oid === 'string' ? input.claims.oid : null,
             tenantId: typeof input.claims?.tid === 'string' ? input.claims.tid : null,
             lastLoginAt: now,
@@ -259,6 +338,10 @@ export async function resolveOidcIdentityForSignIn(
         select: targetUserSelect,
       });
 
+      const autoProvisionFingerprint = input.clientId
+        ? oidcTrustFingerprint(input.issuer, input.clientId)
+        : null;
+
       await tx.oidcIdentity.create({
         data: {
           issuer: input.issuer,
@@ -266,6 +349,7 @@ export async function resolveOidcIdentityForSignIn(
           email,
           emailAtLink: email,
           providerConfigId: input.providerConfigId ?? 'default',
+          issuerFingerprint: autoProvisionFingerprint,
           providerObjectId: typeof input.claims?.oid === 'string' ? input.claims.oid : null,
           tenantId: typeof input.claims?.tid === 'string' ? input.claims.tid : null,
           lastLoginAt: now,
@@ -291,6 +375,7 @@ export async function resolveOidcIdentityForSignIn(
       'OIDC_AUTO_PROVISION_DISABLED',
       'OIDC_LINK_NOT_APPROVED',
       'OIDC_LINK_APPROVAL_EXPIRED',
+      'OIDC_AMBIGUOUS_IDENTITY_CONFLICT',
       'OIDC_TARGET_NOT_OPERATIONAL',
     ]);
     if (knownReasons.has(reason as OidcIdentityResolutionFailure)) {

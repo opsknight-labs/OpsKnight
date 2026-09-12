@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const tx = {
   oidcIdentity: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+    deleteMany: vi.fn(),
     create: vi.fn(),
   },
   user: {
@@ -17,7 +21,13 @@ const tx = {
 
 vi.mock('@/lib/prisma', () => ({
   default: {
-    oidcIdentity: { findUnique: vi.fn() },
+    oidcIdentity: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     user: { findUnique: vi.fn() },
   },
 }));
@@ -31,6 +41,7 @@ vi.mock('@/lib/db-utils', () => ({
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { resolveOidcIdentityForSignIn } from '@/lib/oidc-identity-resolution';
+import { oidcTrustFingerprint } from '@/lib/oidc/trust-fingerprint';
 
 const linkedUser = {
   id: 'user-1',
@@ -60,8 +71,16 @@ describe('resolveOidcIdentityForSignIn', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.oidcIdentity.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.oidcIdentity.deleteMany).mockResolvedValue({ count: 0 });
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     tx.oidcIdentity.findUnique.mockResolvedValue(null);
+    tx.oidcIdentity.findFirst.mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([]);
+    tx.oidcIdentity.update.mockResolvedValue({} as never);
+    tx.oidcIdentity.deleteMany.mockResolvedValue({ count: 0 });
     tx.oidcIdentity.create.mockResolvedValue({ id: 'identity-1' });
     tx.user.findUnique.mockResolvedValue(null);
     tx.user.create.mockResolvedValue(linkedUser);
@@ -167,17 +186,63 @@ describe('resolveOidcIdentityForSignIn', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('does not use an Entra email suffix as tenant membership proof', async () => {
-    const result = await resolveOidcIdentityForSignIn({
+  it('scopes Entra tenant verification to authority without email-domain authorization restriction', async () => {
+    const acceptedOutsideDomain = await resolveOidcIdentityForSignIn({
       ...baseInput,
       issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
       email: 'alice@outside.example',
+      allowedDomains: ['acme.com'],
       emailVerifiedClaim: undefined,
       requireEmailVerifiedClaim: false,
       claims: { tid: 'tenant-id' },
     });
+    expect(acceptedOutsideDomain.ok).toBe(true);
+
+    const acceptedNoRestriction = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: 'https://login.microsoftonline.com/tenant-id/v2.0',
+      email: 'alice@outside.example',
+      allowedDomains: [],
+      emailVerifiedClaim: undefined,
+      requireEmailVerifiedClaim: false,
+      claims: { tid: 'tenant-id' },
+    });
+    expect(acceptedNoRestriction.ok).toBe(true);
+  });
+
+  it('reconciles legacy identities stored with non-canonical issuers (e.g. trailing slashes) to canonical issuer', async () => {
+    // Exact canonical match misses, but findMany finds legacy trailing slash identity
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([
+      {
+        id: 'legacy-id-1',
+        userId: 'user-1',
+        createdAt: new Date(),
+      },
+    ] as never);
+    tx.oidcIdentity.update.mockResolvedValue({} as never);
+    tx.user.findUnique.mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: 'https://idp.example.com',
+      subject: 'subject-1',
+    });
 
     expect(result.ok).toBe(true);
+    if (result.ok) expect(result.user.id).toBe('user-1');
+    expect(tx.oidcIdentity.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          issuer: { in: expect.arrayContaining(['https://idp.example.com/']) },
+          subject: 'subject-1',
+        }),
+      })
+    );
+    expect(tx.oidcIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'legacy-id-1' },
+      data: { issuer: 'https://idp.example.com' },
+    });
   });
 
   it('rejects an established identity whose linked OpsKnight user is disabled', async () => {
@@ -344,6 +409,7 @@ describe('resolveOidcIdentityForSignIn', () => {
   it('requires strict email verification only when creating a new binding', async () => {
     const result = await resolveOidcIdentityForSignIn({
       ...baseInput,
+      allowedDomains: [],
       emailVerifiedClaim: undefined,
       requireEmailVerifiedClaim: true,
     });
@@ -351,4 +417,202 @@ describe('resolveOidcIdentityForSignIn', () => {
     expect(result).toEqual({ ok: false, reason: 'OIDC_EMAIL_ASSURANCE_REQUIRED' });
     expect(tx.user.create).not.toHaveBeenCalled();
   });
+
+  it('rejects sign-in when allowedDomains is configured and email_verified is missing/false', async () => {
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      allowedDomains: ['example.com'],
+      emailVerifiedClaim: undefined,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_ORGANIZATION_REJECTED' });
+    expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects ambiguous legacy identity reconciliation when variants belong to different users', async () => {
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([
+      { id: 'ident-1', userId: 'user-1', createdAt: new Date('2026-01-01') },
+      { id: 'ident-2', userId: 'user-2', createdAt: new Date('2026-01-02') },
+    ] as never);
+
+    const result = await resolveOidcIdentityForSignIn(baseInput);
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT' });
+    expect(tx.oidcIdentity.update).not.toHaveBeenCalled();
+    expect(tx.oidcIdentity.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('safely deduplicates same-user legacy variants and reconciles the primary record to canonical issuer', async () => {
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([
+      { id: 'ident-primary', userId: 'user-1', createdAt: new Date('2026-01-01') },
+      { id: 'ident-duplicate', userId: 'user-1', createdAt: new Date('2026-01-02') },
+    ] as never);
+    tx.user.findUnique.mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn(baseInput);
+
+    expect(result).toEqual({
+      ok: true,
+      user: linkedUser,
+      identityCreated: false,
+      userCreated: false,
+      approvalConsumed: false,
+    });
+    expect(tx.oidcIdentity.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['ident-duplicate'] } },
+    });
+    expect(tx.oidcIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'ident-primary' },
+      data: { issuer: baseInput.issuer },
+    });
+  });
+
+  it('completes the full issuer migration and re-link lifecycle without dead-ending linked users', async () => {
+    // 1. User Alice had an established identity under old issuer
+    const newIssuer = 'https://new-idp.example.com';
+
+    // Fast path lookup for new issuer returns null (user is not yet linked to new issuer)
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    tx.oidcIdentity.findUnique.mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([]);
+
+    // OpsKnight account exists
+    tx.user.findUnique.mockResolvedValue(linkedUser as never);
+
+    // 2. Admin approves Alice for the new provider (configVersion 2)
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-new-provider',
+      userId: linkedUser.id,
+      revokedAt: null,
+      consumedAt: null,
+      expiresAt: new Date(Date.now() + 3600_000),
+      providerConfigId: 'default',
+      issuerFingerprint: oidcTrustFingerprint(newIssuer, 'new-client'),
+      expectedEmail: 'alice@example.com',
+      configVersion: 2,
+      generation: 2,
+    } as never);
+
+    // 3. User signs in using new issuer
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: newIssuer,
+      subject: 'alice-new-subject',
+      clientId: 'new-client',
+      configVersion: 2,
+      autoProvision: false, // requires approval
+    });
+
+    // 4. Resolves to the exact same OpsKnight user account, consuming approval and creating new immutable identity
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.id).toBe(linkedUser.id);
+      expect(result.identityCreated).toBe(true);
+      expect(result.userCreated).toBe(false);
+      expect(result.approvalConsumed).toBe(true);
+    }
+
+    expect(tx.oidcIdentity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          issuer: newIssuer,
+          subject: 'alice-new-subject',
+          userId: linkedUser.id,
+        }),
+      })
+    );
+  });
+
+  it('resolves and links pairwise sub change under the same issuer (e.g. Entra app registration migration)', async () => {
+    const entraIssuer = 'https://login.microsoftonline.com/tenant-123/v2.0';
+    const newClientId = 'client-B';
+    const newFingerprint = oidcTrustFingerprint(entraIssuer, newClientId);
+
+    // Fast path: lookup for new pairwise sub (sub-B) is a miss
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    tx.oidcIdentity.findUnique.mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([]);
+
+    // OpsKnight account exists
+    tx.user.findUnique.mockResolvedValue(linkedUser as never);
+
+    // Admin approved linking for new client registration (newFingerprint)
+    tx.oidcLinkingApproval.findUnique.mockResolvedValue({
+      id: 'approval-new-client',
+      userId: linkedUser.id,
+      revokedAt: null,
+      consumedAt: null,
+      expiresAt: new Date(Date.now() + 3600_000),
+      providerConfigId: 'default',
+      issuerFingerprint: newFingerprint,
+      expectedEmail: 'alice@example.com',
+      configVersion: 2,
+      generation: 1,
+    } as never);
+    tx.oidcLinkingApproval.updateMany.mockResolvedValue({ count: 1 });
+
+    // User signs in with sub-B from client-B
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      issuer: entraIssuer,
+      subject: 'sub-B',
+      email: 'alice@example.com',
+      emailVerifiedClaim: true,
+      providerType: 'microsoft',
+      clientId: newClientId,
+      configVersion: 2,
+      autoProvision: false,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.id).toBe(linkedUser.id);
+      expect(result.identityCreated).toBe(true);
+      expect(result.approvalConsumed).toBe(true);
+    }
+
+    expect(tx.oidcIdentity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          issuer: entraIssuer,
+          subject: 'sub-B',
+          issuerFingerprint: newFingerprint,
+          userId: linkedUser.id,
+        }),
+      })
+    );
+  });
+
+  it('lazily backfills issuerFingerprint for legacy identities with null fingerprint on successful login', async () => {
+    const clientId = 'active-client';
+    const currentFingerprint = oidcTrustFingerprint(baseInput.issuer, clientId);
+
+    // Fast path finds existing identity with issuerFingerprint: null (legacy pre-#633)
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue({
+      id: 'legacy-ident-1',
+      userId: linkedUser.id,
+      issuerFingerprint: null,
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn({
+      ...baseInput,
+      clientId,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.user.id).toBe(linkedUser.id);
+      expect(result.identityCreated).toBe(false);
+    }
+
+    // Fingerprint is backfilled lazily
+    expect(prisma.oidcIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'legacy-ident-1' },
+      data: { issuerFingerprint: currentFingerprint },
+    });
+  });
 });
+
