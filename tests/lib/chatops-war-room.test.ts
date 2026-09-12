@@ -564,6 +564,56 @@ describe('ChatOps War-Room Engine', () => {
       const result = await archiveWarRoomChannel('inc-104', { force: true });
       expect(result.success).toBe(true);
     });
+
+    it('should treat already_archived as idempotent success and stamp warRoomArchivedAt', async () => {
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        slackChannelId: 'C123',
+        slackChannelName: 'inc-104-payments',
+        serviceId: 'srv-1',
+      } as any);
+      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
+        archiveOnResolve: true,
+      } as any);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
+        json: async () => ({ ok: false, error: 'already_archived' }),
+      } as any);
+
+      const result = await archiveWarRoomChannel('inc-104');
+      expect(result.success).toBe(true);
+      expect(prisma.incident.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'inc-104' },
+          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+        })
+      );
+    });
+
+    it('should treat channel_not_found as idempotent success and stamp warRoomArchivedAt', async () => {
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        slackChannelId: 'C123',
+        slackChannelName: 'inc-104-payments',
+        serviceId: 'srv-1',
+      } as any);
+      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
+        archiveOnResolve: true,
+      } as any);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
+        json: async () => ({ ok: false, error: 'channel_not_found' }),
+      } as any);
+
+      const result = await archiveWarRoomChannel('inc-104');
+      expect(result.success).toBe(true);
+      expect(prisma.incident.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'inc-104' },
+          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+        })
+      );
+    });
   });
 
   describe('archived war-room guards', () => {

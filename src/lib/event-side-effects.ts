@@ -44,6 +44,8 @@ const EXPECTED_WAR_ROOM_SKIPS = [
   'Archive on resolve is disabled',
   'No Slack bot token',
   'not configured',
+  'already_archived',
+  'channel_not_found',
 ];
 function requireWarRoomDelivery(result: { success: boolean; error?: string }, label: string): void {
   if (result.success || EXPECTED_WAR_ROOM_SKIPS.some(reason => result.error?.includes(reason)))
