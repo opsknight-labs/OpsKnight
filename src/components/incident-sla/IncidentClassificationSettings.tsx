@@ -219,6 +219,13 @@ export default function IncidentClassificationSettings({
             A scoped Disabled selection overrides an enabled workspace fallback. Explicit “No
             automatic priority” rules remain terminal.
           </p>
+          {fallbackMode === 'ENABLED' &&
+            rules.some(rule => (rule.priorityMode ?? 'CLEAR') === 'CLEAR') && (
+              <p className="text-amber-600 dark:text-amber-400">
+                Rules set to “No automatic priority” override this fallback. Choose “Use urgency
+                fallback” on those severities to apply HIGH→P1, MEDIUM→P3, or LOW→P5.
+              </p>
+            )}
         </div>
         <div className="flex justify-end">
           <Button size="sm" disabled={pending} onClick={save}>

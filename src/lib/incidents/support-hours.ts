@@ -83,26 +83,26 @@ function addLocalDays(date: string, days: number) {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
-function localMinuteToInstant(date: string, minute: number, timezone: string): Date | null {
+function localIntervalOpeningToInstant(
+  date: string,
+  startMinute: number,
+  endMinute: number,
+  timezone: string,
+  after: Date
+): Date | null {
   const [year, month, day] = date.split('-').map(Number);
-  const desired = Date.UTC(year, month - 1, day, Math.floor(minute / 60), minute % 60);
-  let candidate = new Date(desired);
-  for (let attempt = 0; attempt < 3; attempt++) {
+  const nominal = Date.UTC(year, month - 1, day, Math.floor(startMinute / 60), startMinute % 60);
+  // Search the complete timezone-offset range. This deliberately clamps a
+  // nonexistent opening to the first valid minute in the interval and chooses
+  // the earliest future occurrence when a local minute repeats at a DST fold.
+  for (let offset = -14 * 60; offset <= 14 * 60; offset++) {
+    const candidate = new Date(nominal + offset * 60_000);
+    if (candidate <= after) continue;
     const local = localParts(candidate, timezone);
-    const [localYear, localMonth, localDay] = local.date.split('-').map(Number);
-    const represented = Date.UTC(
-      localYear,
-      localMonth - 1,
-      localDay,
-      Math.floor(local.minute / 60),
-      local.minute % 60
-    );
-    const correction = desired - represented;
-    if (correction === 0) return candidate;
-    candidate = new Date(candidate.getTime() + correction);
+    if (local.date === date && local.minute >= startMinute && local.minute < endMinute)
+      return candidate;
   }
-  const local = localParts(candidate, timezone);
-  return local.date === date && local.minute === minute ? candidate : null;
+  return null;
 }
 
 function findNext(policy: Policy, at: Date): Date | null {
@@ -110,18 +110,25 @@ function findNext(policy: Policy, at: Date): Date | null {
   const index = compiled(policy);
   // One year permits long closure calendars while keeping malformed policies
   // bounded. Opening instants are calculated from policy boundaries, not sampled.
-  for (let dayOffset = 0; dayOffset <= 370; dayOffset++) {
+  for (let dayOffset = 0; dayOffset <= 400; dayOffset++) {
     const date = addLocalDays(current.date, dayOffset);
     const day = new Date(`${date}T00:00:00Z`).getUTCDay();
     const exception = index.exceptions.get(date);
-    const starts = exception
-      ? exception.available && exception.startMinute !== null
-        ? [exception.startMinute]
+    const intervals = exception
+      ? exception.available && exception.startMinute !== null && exception.endMinute !== null
+        ? [{ startMinute: exception.startMinute, endMinute: exception.endMinute }]
         : []
-      : (index.windows.get(day) ?? []).map(window => window.startMinute);
-    for (const minute of [...starts].sort((left, right) => left - right)) {
-      if (dayOffset === 0 && minute <= current.minute) continue;
-      const candidate = localMinuteToInstant(date, minute, policy.timezone);
+      : (index.windows.get(day) ?? []);
+    for (const interval of [...intervals].sort(
+      (left, right) => left.startMinute - right.startMinute
+    )) {
+      const candidate = localIntervalOpeningToInstant(
+        date,
+        interval.startMinute,
+        interval.endMinute,
+        policy.timezone,
+        at
+      );
       if (candidate && candidate > at && contains(policy, candidate)) return candidate;
     }
   }

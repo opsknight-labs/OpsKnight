@@ -274,4 +274,40 @@ describe('enterprise response-policy contract', () => {
     });
     expect(result.nextSupportAt?.toISOString()).toBe('2026-09-21T09:02:00.000Z');
   });
+
+  it.each([
+    ['2026-03-08T06:00:00Z', 150, 240, '2026-03-08T07:00:00.000Z'],
+    ['2026-11-01T05:29:00Z', 90, 150, '2026-11-01T05:30:00.000Z'],
+  ])(
+    'resolves DST gap/fold openings to the earliest future staffed instant',
+    async (at, startMinute, endMinute, expected) => {
+      const supportPolicy = {
+        id: 'dst-hours',
+        scopeKey: 'workspace',
+        version: 1,
+        timezone: 'America/New_York',
+        mode: 'SCHEDULED',
+        inheritWorkspace: false,
+        createdAt: new Date(),
+        createdById: null,
+        sealedAt: new Date(),
+        windows: [
+          { id: 'dst-window', policyId: 'dst-hours', dayOfWeek: 0, startMinute, endMinute },
+        ],
+        exceptions: [],
+      };
+      const tx = {
+        responseSupportHoursPolicy: {
+          findFirst: vi.fn(({ where: { scopeKey } }) =>
+            Promise.resolve(scopeKey === 'workspace' ? supportPolicy : null)
+          ),
+        },
+      };
+      const result = await resolveSupportHours(tx as never, {
+        serviceId: 's1',
+        at: new Date(at),
+      });
+      expect(result.nextSupportAt?.toISOString()).toBe(expected);
+    }
+  );
 });

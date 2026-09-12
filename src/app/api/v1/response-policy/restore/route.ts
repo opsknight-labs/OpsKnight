@@ -7,6 +7,7 @@ import { saveClassificationPolicy } from '@/lib/incidents/classification-policy'
 import { responsePolicyError } from '@/lib/response-policy-http';
 import { saveIncidentSlaPolicy } from '@/lib/incident-sla/policy-config';
 import { saveSupportHoursPolicy } from '@/lib/incidents/support-hours-policy';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
 const schema = z
   .object({
@@ -16,6 +17,10 @@ const schema = z
     resource: z.enum(['classification', 'sla', 'support-hours']).default('classification'),
   })
   .strict();
+const recordRestore = (scopeKey: string) =>
+  addOperationalMetric('opsknight_response_policy_restore_total', 1, {
+    scope_type: scopeKey === 'workspace' ? 'workspace' : scopeKey.split(':', 1)[0],
+  });
 export async function POST(request: NextRequest) {
   const auth = await authorizeResponsePolicyApi(request, 'write');
   if (!auth.ok) return jsonError(auth.message, auth.status);
@@ -49,6 +54,7 @@ export async function POST(request: NextRequest) {
         },
         actor
       );
+      recordRestore(input.scopeKey);
       return jsonOk({ policy }, 201);
     }
     if (input.resource === 'support-hours') {
@@ -83,6 +89,7 @@ export async function POST(request: NextRequest) {
         },
         actor
       );
+      recordRestore(input.scopeKey);
       return jsonOk({ policy }, 201);
     }
     const source = await prisma.incidentClassificationPolicy.findUnique({
@@ -107,6 +114,7 @@ export async function POST(request: NextRequest) {
       'RESTORE',
       { actorId: auth.actor.id, capabilities: ['admin.manage'], source: 'RESTORE' }
     );
+    recordRestore(input.scopeKey);
     return jsonOk({ policy }, 201);
   } catch (error) {
     return responsePolicyError(error, 'Invalid restore request');

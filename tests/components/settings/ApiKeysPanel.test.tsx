@@ -88,6 +88,15 @@ describe('ApiKeysPanel Component', () => {
     expect(screen.getByText('Generate New API Key')).toBeDefined();
     expect(screen.getByLabelText(/key name \/ client identifier \*/i)).toBeDefined();
     expect(screen.getByLabelText(/expiration duration/i)).toBeDefined();
+    expect(screen.getByText('Response Policy Read')).toBeDefined();
+    expect(screen.getByText('Response Policy Write')).toBeDefined();
+  });
+
+  it('keeps response-policy read available while hiding write scope without write access', () => {
+    render(<ApiKeysPanel keys={mockKeys} canCreateWriteKeys={false} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /generate api key/i })[0]);
+    expect(screen.getByText('Response Policy Read')).toBeDefined();
+    expect(screen.queryByText('Response Policy Write')).toBeNull();
   });
 
   it('renders developer API quickstart code examples', () => {

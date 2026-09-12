@@ -35,18 +35,67 @@ export async function GET(request: NextRequest) {
   if (!before || !after) return jsonError('Policy version not found', 404);
   if (resource === 'classification')
     return jsonOk({ changes: diffClassificationPolicies(before as never, after as never) });
-  const omitMetadata = (value: Record<string, unknown>) => {
-    const {
-      id: _id,
-      version: _version,
-      createdAt: _createdAt,
-      createdById: _createdById,
-      sealedAt: _sealedAt,
-      ...behavior
-    } = value;
-    return behavior;
-  };
+  const normalizeSla = (
+    value: (typeof versions)[number] & { rules?: Array<Record<string, unknown>> }
+  ) => ({
+    scopeKey: value.scopeKey,
+    inheritWorkspace: 'inheritWorkspace' in value ? value.inheritWorkspace : false,
+    baseAckTargetMs: 'baseAckTargetMs' in value ? value.baseAckTargetMs : null,
+    baseResolveTargetMs: 'baseResolveTargetMs' in value ? value.baseResolveTargetMs : null,
+    rules: [...(value.rules ?? [])]
+      .map(rule => ({
+        priority: rule.priority,
+        ackTargetMs: rule.ackTargetMs,
+        resolveTargetMs: rule.resolveTargetMs,
+        label: rule.label,
+      }))
+      .sort((left, right) => String(left.priority).localeCompare(String(right.priority))),
+  });
+  const normalizeSupportHours = (
+    value: (typeof versions)[number] & {
+      windows?: Array<Record<string, unknown>>;
+      exceptions?: Array<Record<string, unknown>>;
+    }
+  ) => ({
+    scopeKey: value.scopeKey,
+    timezone: 'timezone' in value ? value.timezone : null,
+    mode: 'mode' in value ? value.mode : null,
+    inheritWorkspace: 'inheritWorkspace' in value ? value.inheritWorkspace : false,
+    windows: [...(value.windows ?? [])]
+      .map(window => ({
+        dayOfWeek: window.dayOfWeek,
+        startMinute: window.startMinute,
+        endMinute: window.endMinute,
+      }))
+      .sort(
+        (left, right) =>
+          Number(left.dayOfWeek) - Number(right.dayOfWeek) ||
+          Number(left.startMinute) - Number(right.startMinute)
+      ),
+    exceptions: [...(value.exceptions ?? [])]
+      .map(exception => ({
+        localDate:
+          exception.localDate instanceof Date
+            ? exception.localDate.toISOString().slice(0, 10)
+            : exception.localDate,
+        available: exception.available,
+        startMinute: exception.startMinute,
+        endMinute: exception.endMinute,
+        label: exception.label,
+      }))
+      .sort((left, right) => String(left.localDate).localeCompare(String(right.localDate))),
+  });
   return jsonOk({
-    changes: [{ field: resource, from: omitMetadata(before), to: omitMetadata(after) }],
+    changes: [
+      {
+        field: resource,
+        from:
+          resource === 'sla'
+            ? normalizeSla(before as never)
+            : normalizeSupportHours(before as never),
+        to:
+          resource === 'sla' ? normalizeSla(after as never) : normalizeSupportHours(after as never),
+      },
+    ],
   });
 }

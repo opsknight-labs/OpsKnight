@@ -17,7 +17,10 @@ import { explainIncidentResponsePolicy } from '@/lib/incidents/response-policy';
 import { getUserPermissions } from '@/lib/rbac';
 import { saveSupportHoursPolicy } from '@/lib/incidents/support-hours-policy';
 import { emitAuditEvent } from '@/lib/audit';
-import { invalidateSlaSchedulerMode } from '@/lib/incident-sla/scheduler-control';
+import {
+  invalidateSlaSchedulerMode,
+  MIN_CLEAN_SHADOW_CHECKS,
+} from '@/lib/incident-sla/scheduler-control';
 
 export type IncidentResponsePolicySaveResult =
   | { ok: true; version: number }
@@ -132,7 +135,27 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
   const parsed = schedulerModeSchema.safeParse(rawMode);
   if (!parsed.success) return { ok: false as const, message: 'Invalid scheduler mode.' };
   const mode = parsed.data;
+  const current = await prisma.systemConfig.findUnique({
+    where: { key: 'incident_sla_scheduler' },
+    select: { value: true },
+  });
+  const currentValue =
+    current?.value && typeof current.value === 'object' && !Array.isArray(current.value)
+      ? (current.value as Record<string, unknown>)
+      : {};
   if (mode === 'INDEXED') {
+    if (currentValue.mode !== 'SHADOW')
+      return { ok: false as const, message: 'Run Shadow mode before enabling Indexed mode.' };
+    if (Number(currentValue.lastShadowMismatchCount ?? 1) !== 0)
+      return {
+        ok: false as const,
+        message: 'Resolve Shadow mismatches before enabling Indexed mode.',
+      };
+    if (Number(currentValue.consecutiveCleanChecks ?? 0) < MIN_CLEAN_SHADOW_CHECKS)
+      return {
+        ok: false as const,
+        message: `Wait for ${MIN_CLEAN_SHADOW_CHECKS} consecutive clean Shadow checks before enabling Indexed mode.`,
+      };
     const rows = await prisma.$queryRaw<Array<{ ready: boolean; missing_hints: bigint }>>`
       SELECT EXISTS (
         SELECT 1 FROM pg_class c
@@ -156,11 +179,15 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
         message: 'Run Shadow mode until all active incidents have scheduling hints.',
       };
   }
+  const nextValue =
+    mode === 'SHADOW'
+      ? { mode, consecutiveCleanChecks: 0, lastShadowMismatchCount: 0 }
+      : { ...currentValue, mode };
   await prisma.$transaction(async tx => {
     await tx.systemConfig.upsert({
       where: { key: 'incident_sla_scheduler' },
-      create: { key: 'incident_sla_scheduler', value: { mode }, updatedBy: permissions.id },
-      update: { value: { mode } as Prisma.InputJsonValue, updatedBy: permissions.id },
+      create: { key: 'incident_sla_scheduler', value: nextValue, updatedBy: permissions.id },
+      update: { value: nextValue as Prisma.InputJsonValue, updatedBy: permissions.id },
     });
     await emitAuditEvent(
       {

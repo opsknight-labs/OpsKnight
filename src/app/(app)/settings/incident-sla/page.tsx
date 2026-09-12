@@ -24,6 +24,7 @@ export default async function IncidentSlaSettingsPage() {
     integrations,
     supportHoursPolicy,
     schedulerMode,
+    schedulerConfig,
     schedulerReadinessRows,
   ] = await Promise.all([
     prisma.incidentSlaPolicy.findFirst({
@@ -60,6 +61,10 @@ export default async function IncidentSlaSettingsPage() {
       include: { windows: true, exceptions: true },
     }),
     getSlaSchedulerMode(),
+    prisma.systemConfig.findUnique({
+      where: { key: 'incident_sla_scheduler' },
+      select: { value: true },
+    }),
     prisma.$queryRaw<Array<{ ready: boolean; missing_hints: bigint; due: bigint }>>`
       SELECT EXISTS (
         SELECT 1 FROM pg_class c
@@ -74,6 +79,12 @@ export default async function IncidentSlaSettingsPage() {
           AND i."nextSlaTransitionAt" <= now())::bigint AS due
     `,
   ]);
+  const schedulerHealth =
+    schedulerConfig?.value &&
+    typeof schedulerConfig.value === 'object' &&
+    !Array.isArray(schedulerConfig.value)
+      ? (schedulerConfig.value as Record<string, unknown>)
+      : {};
   const viewPolicy = policy
     ? {
         version: policy.version,
@@ -187,6 +198,8 @@ export default async function IncidentSlaSettingsPage() {
         schedulerIndexReady={schedulerReadinessRows[0]?.ready ?? false}
         schedulerMissingHints={Number(schedulerReadinessRows[0]?.missing_hints ?? 0)}
         schedulerDue={Number(schedulerReadinessRows[0]?.due ?? 0)}
+        schedulerShadowCleanChecks={Number(schedulerHealth.consecutiveCleanChecks ?? 0)}
+        schedulerShadowMismatches={Number(schedulerHealth.lastShadowMismatchCount ?? 0)}
       />
       <div className="rounded-lg border p-5 text-sm">
         <h2 className="font-semibold">SLA semantics</h2>

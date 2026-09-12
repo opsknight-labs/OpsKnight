@@ -604,6 +604,14 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 4,
   },
   {
+    name: 'opsknight_sla_scheduler_config_read_failures_total',
+    help: 'Scheduler configuration reads that fell back to a safe runtime mode',
+    kind: 'counter',
+    labels: ['fallback'],
+    scope: 'counter',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_sla_scheduler_null_hints',
     help: 'Active incidents without an indexed SLA transition hint',
     kind: 'gauge',

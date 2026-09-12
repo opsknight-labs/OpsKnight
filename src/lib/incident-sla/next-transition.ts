@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { incidentSlaSelect } from './select';
 import { getIncidentSlaTransitions } from './deadlines';
-import { getSlaSchedulerMode } from './scheduler-control';
+import { getSlaSchedulerMode, recordSlaSchedulerShadowObservation } from './scheduler-control';
 import { addOperationalMetric, setOperationalGauge } from '@/lib/metrics/operational/registry';
 
 /** Earliest transition for the scheduler; indexed hints are enabled independently during rollout. */
@@ -25,7 +25,12 @@ export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<
   }
   const incidents = await prisma.incident.findMany({
     where: eligible,
-    select: incidentSlaSelect,
+    select: {
+      id: true,
+      nextSlaTransitionAt: true,
+      nextSlaTransitionKind: true,
+      ...incidentSlaSelect,
+    },
   });
   let earliest: Date | null = null;
   for (const incident of incidents) {
@@ -48,11 +53,17 @@ export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<
     ]);
     setOperationalGauge('opsknight_sla_scheduler_null_hints', nullHints);
     setOperationalGauge('opsknight_sla_scheduler_due', due);
-    const indexedAt = indexed?.nextSlaTransitionAt ?? null;
-    if (indexedAt?.getTime() !== earliest?.getTime())
-      addOperationalMetric('opsknight_sla_scheduler_shadow_mismatch_total', 1, {
-        reason: indexedAt ? 'different_transition' : 'missing_hint',
-      });
+    let mismatches = 0;
+    for (const incident of incidents.slice(0, 500)) {
+      const canonical = deriveNextSlaTransition(incident, now);
+      const storedAt = incident.nextSlaTransitionAt;
+      const reason = compareSlaTransitionHint(canonical, storedAt, incident.nextSlaTransitionKind);
+      if (reason) {
+        mismatches += 1;
+        addOperationalMetric('opsknight_sla_scheduler_shadow_mismatch_total', 1, { reason });
+      }
+    }
+    await recordSlaSchedulerShadowObservation({ checkedAt: now, mismatches });
   }
   return earliest;
 }
@@ -63,6 +74,18 @@ export type NextSlaTransitionKind =
   | 'RESOLVE_WARNING'
   | 'RESOLVE_BREACH';
 export type NextSlaTransition = { at: Date; kind: NextSlaTransitionKind } | null;
+
+export function compareSlaTransitionHint(
+  canonical: NextSlaTransition,
+  storedAt: Date | null,
+  storedKind: string | null
+): 'missing_hint' | 'unexpected_hint' | 'wrong_time' | 'wrong_kind' | null {
+  if (canonical && !storedAt) return 'missing_hint';
+  if (!canonical && storedAt) return 'unexpected_hint';
+  if (canonical && storedAt && canonical.at.getTime() !== storedAt.getTime()) return 'wrong_time';
+  if (canonical && canonical.kind !== storedKind) return 'wrong_kind';
+  return null;
+}
 
 /** Derives scheduling hints only from the canonical projector. */
 export function deriveNextSlaTransition(

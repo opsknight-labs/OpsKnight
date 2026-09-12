@@ -6,7 +6,10 @@ vi.mock('@/lib/prisma', () => ({
   default: { systemConfig: { findUnique } },
 }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn() } }));
-vi.mock('@/lib/metrics/operational/registry', () => ({ setOperationalGauge: vi.fn() }));
+vi.mock('@/lib/metrics/operational/registry', () => ({
+  addOperationalMetric: vi.fn(),
+  setOperationalGauge: vi.fn(),
+}));
 
 import {
   getSlaSchedulerMode,

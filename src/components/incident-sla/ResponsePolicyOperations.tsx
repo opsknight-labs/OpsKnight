@@ -51,6 +51,8 @@ export default function ResponsePolicyOperations({
   schedulerIndexReady,
   schedulerMissingHints = 0,
   schedulerDue = 0,
+  schedulerShadowCleanChecks = 0,
+  schedulerShadowMismatches = 0,
   supportScopeKey = 'workspace',
   showOperations = true,
 }: {
@@ -71,6 +73,8 @@ export default function ResponsePolicyOperations({
   schedulerIndexReady: boolean;
   schedulerMissingHints?: number;
   schedulerDue?: number;
+  schedulerShadowCleanChecks?: number;
+  schedulerShadowMismatches?: number;
   supportScopeKey?: string;
   showOperations?: boolean;
 }) {
@@ -234,7 +238,10 @@ export default function ResponsePolicyOperations({
             <p className="text-xs text-muted-foreground">
               Online index: {schedulerIndexReady ? 'ready' : 'not installed'}
             </p>
-            <p className="text-xs text-muted-foreground">Canonical projector: healthy</p>
+            <p className="text-xs text-muted-foreground">
+              Shadow certification: {schedulerShadowCleanChecks} clean checks ·{' '}
+              {schedulerShadowMismatches} mismatches in latest check
+            </p>
             <p className="text-xs text-muted-foreground">
               Missing hints: {schedulerMissingHints} · Due transitions: {schedulerDue}
             </p>
@@ -329,7 +336,8 @@ export default function ResponsePolicyOperations({
                           <Input
                             type="time"
                             aria-label={`${day} end`}
-                            value={asTime(window.endMinute)}
+                            disabled={window.endMinute === 1440}
+                            value={window.endMinute === 1440 ? '' : asTime(window.endMinute)}
                             onChange={event =>
                               setWindows(current =>
                                 current.map((item, index) =>
@@ -340,6 +348,22 @@ export default function ResponsePolicyOperations({
                               )
                             }
                           />
+                          <label className="flex items-center gap-1 whitespace-nowrap text-xs">
+                            <input
+                              type="checkbox"
+                              checked={window.endMinute === 1440}
+                              onChange={event =>
+                                setWindows(current =>
+                                  current.map((item, index) =>
+                                    index === absoluteIndex
+                                      ? { ...item, endMinute: event.target.checked ? 1440 : 1080 }
+                                      : item
+                                  )
+                                )
+                              }
+                            />
+                            End of day
+                          </label>
                           <Button
                             type="button"
                             variant="ghost"
@@ -440,8 +464,12 @@ export default function ResponsePolicyOperations({
                     />
                     <Input
                       type="time"
-                      disabled={!exception.available}
-                      value={exception.endMinute === null ? '' : asTime(exception.endMinute)}
+                      disabled={!exception.available || exception.endMinute === 1440}
+                      value={
+                        exception.endMinute === null || exception.endMinute === 1440
+                          ? ''
+                          : asTime(exception.endMinute)
+                      }
                       onChange={event =>
                         setExceptions(current =>
                           current.map((item, candidate) =>
@@ -452,6 +480,23 @@ export default function ResponsePolicyOperations({
                         )
                       }
                     />
+                    <label className="flex items-center gap-1 whitespace-nowrap text-xs">
+                      <input
+                        type="checkbox"
+                        disabled={!exception.available}
+                        checked={exception.endMinute === 1440}
+                        onChange={event =>
+                          setExceptions(current =>
+                            current.map((item, candidate) =>
+                              candidate === index
+                                ? { ...item, endMinute: event.target.checked ? 1440 : 1080 }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                      End of day
+                    </label>
                     <Button
                       type="button"
                       variant="ghost"

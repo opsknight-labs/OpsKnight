@@ -11,7 +11,10 @@ vi.mock('@/lib/prisma', () => ({
   default: { incident: { findMany, findFirst, count } },
 }));
 
-import { getNextIncidentSlaTransitionAt } from '@/lib/incident-sla/next-transition';
+import {
+  compareSlaTransitionHint,
+  getNextIncidentSlaTransitionAt,
+} from '@/lib/incident-sla/next-transition';
 
 const minute = 60_000;
 const createdAt = new Date('2026-09-08T00:00:00.000Z');
@@ -77,5 +80,16 @@ describe('next incident SLA transition', () => {
         where: expect.objectContaining({ service: { serviceNotifyOnSlaBreach: true } }),
       })
     );
+  });
+
+  it('classifies incident-level shadow mismatches by bounded reason', () => {
+    const canonical = { at: new Date('2026-09-08T01:00:00Z'), kind: 'ACK_WARNING' as const };
+    expect(compareSlaTransitionHint(canonical, null, null)).toBe('missing_hint');
+    expect(compareSlaTransitionHint(null, canonical.at, canonical.kind)).toBe('unexpected_hint');
+    expect(
+      compareSlaTransitionHint(canonical, new Date('2026-09-08T02:00:00Z'), canonical.kind)
+    ).toBe('wrong_time');
+    expect(compareSlaTransitionHint(canonical, canonical.at, 'ACK_BREACH')).toBe('wrong_kind');
+    expect(compareSlaTransitionHint(canonical, canonical.at, canonical.kind)).toBeNull();
   });
 });

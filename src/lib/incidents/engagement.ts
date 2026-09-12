@@ -16,6 +16,13 @@ export function resolveIncidentEngagement(input: {
   supportHours: SupportHoursDecision;
   now: Date;
 }): IncidentEngagementDecision {
+  if (
+    input.urgency === 'LOW' &&
+    input.supportHours.state === 'OUTSIDE' &&
+    input.supportHours.nextSupportAt === null
+  ) {
+    throw new Error('Support-hours policy has no resolvable future staffed interval');
+  }
   const trafficClass =
     input.urgency === 'HIGH' ? 'CRITICAL' : input.urgency === 'LOW' ? 'DEFERABLE' : 'STANDARD';
   const deferred =

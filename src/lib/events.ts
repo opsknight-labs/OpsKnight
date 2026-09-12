@@ -166,7 +166,16 @@ export async function processEvent(
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
       where: { id: serviceId },
-      select: { id: true, name: true, defaultIncidentVisibility: true },
+      select: {
+        id: true,
+        name: true,
+        defaultIncidentVisibility: true,
+        policy: {
+          select: {
+            steps: { orderBy: { stepOrder: 'asc' }, take: 1, select: { delayMinutes: true } },
+          },
+        },
+      },
     });
 
     if (!service) {
@@ -273,12 +282,61 @@ export async function processEvent(
         const incomingUrgency = incomingClassification.urgency;
         const effectiveUrgency = maxUrgency(existingIncident.urgency, incomingUrgency);
         const urgencyRaised = effectiveUrgency !== existingIncident.urgency;
+        const now = new Date();
+        const firstStep = service.policy?.steps[0];
+        const policyDueAt = firstStep
+          ? new Date(existingIncident.createdAt.getTime() + firstStep.delayMinutes * 60_000)
+          : null;
+        const releaseSupportHoursDeferral =
+          urgencyRaised &&
+          existingIncident.urgency === 'LOW' &&
+          effectiveUrgency !== 'LOW' &&
+          policyDueAt !== null &&
+          existingIncident.currentEscalationStep === 0 &&
+          existingIncident.escalationStatus === 'ESCALATING' &&
+          existingIncident.nextEscalationAt !== null &&
+          existingIncident.nextEscalationAt > policyDueAt;
+        const restoredEscalationAt = releaseSupportHoursDeferral
+          ? new Date(Math.max(now.getTime(), policyDueAt!.getTime()))
+          : null;
         if (urgencyRaised) {
           await tx.incident.update({
             where: { id: existingIncident.id },
-            data: { urgency: effectiveUrgency },
+            data: {
+              urgency: effectiveUrgency,
+              ...(restoredEscalationAt ? { nextEscalationAt: restoredEscalationAt } : {}),
+            },
           });
           existingIncident.urgency = effectiveUrgency;
+          if (restoredEscalationAt) {
+            existingIncident.nextEscalationAt = restoredEscalationAt;
+            await Promise.all([
+              tx.backgroundJob.updateMany({
+                where: {
+                  type: 'ESCALATION',
+                  status: 'PENDING',
+                  payload: { path: ['incidentId'], equals: existingIncident.id },
+                },
+                data: { scheduledAt: restoredEscalationAt },
+              }),
+              tx.backgroundJob.updateMany({
+                where: {
+                  type: 'SCHEDULED_TASK',
+                  status: 'PENDING',
+                  AND: [
+                    { payload: { path: ['incidentId'], equals: existingIncident.id } },
+                    {
+                      payload: {
+                        path: ['effect'],
+                        equals: 'TRIGGER_ESCALATION_NOTIFICATIONS',
+                      },
+                    },
+                  ],
+                },
+                data: { scheduledAt: now },
+              }),
+            ]);
+          }
         }
 
         // Log an event instead of note (no userId needed)
@@ -286,7 +344,7 @@ export async function processEvent(
         await tx.incidentEvent.create({
           data: {
             incidentId: existingIncident.id,
-            message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}`,
+            message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}${releaseSupportHoursDeferral ? ' Support-hours engagement deferral released.' : ''}`,
           },
         });
 
