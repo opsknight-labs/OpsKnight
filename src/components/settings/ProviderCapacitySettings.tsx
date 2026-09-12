@@ -53,6 +53,7 @@ type CapacitySnapshot = {
 function channelForProviderKey(providerKey: string): string {
   switch (providerKey) {
     case 'twilio':
+    case 'aws-sns':
       return 'SMS';
     case 'whatsapp':
       return 'WHATSAPP';

@@ -45,17 +45,14 @@ function bulkBackpressureDelayMs(): number {
 
 async function rescheduleBulkBackpressuredJob(jobId: string): Promise<void> {
   const delayMs = bulkBackpressureDelayMs();
-  await prisma.backgroundJob.update({
-    where: { id: jobId },
-    data: {
-      status: 'PENDING',
-      scheduledAt: new Date(Date.now() + delayMs),
-      startedAt: null,
-      attempts: { decrement: 1 },
-      error: null,
-      failedAt: null,
-    },
-  });
+  // Persist durable backpressure marker so zombie rescue can distinguish a
+  // SIGKILL between claim (attempts+1) and this reschedule (attempts-1) from a
+  // genuinely defective bulk job that should eventually hit FAILED.
+  // Single atomic UPDATE avoids a read-modify-write window where a crash
+  // between findUnique and update would lose the marker.
+  await prisma.$executeRaw(
+    Prisma.sql`UPDATE "BackgroundJob" SET "status"='PENDING',"scheduledAt"=${new Date(Date.now() + delayMs)},"startedAt"=NULL,"attempts"=GREATEST(0,"attempts"-1),"error"=NULL,"failedAt"=NULL,"payload"=COALESCE("payload"::jsonb,'{}'::jsonb) || '{"deferReason":"BULK_BACKPRESSURE"}'::jsonb WHERE "id"=${jobId}`
+  );
 }
 
 export type JobType =
@@ -186,9 +183,12 @@ export async function claimPendingJobs(
   // that would otherwise be swept to FAILED as zombies; rewind the claim
   // increment and reschedule with jittered delay so 5 crashes cannot kill a
   // 100k campaign. This runs before the generic zombie-FAILED sweep.
+  // Guard: only rescue durably backpressured jobs (payload.deferReason =
+  // BULK_BACKPRESSURE); a genuinely defective bulk job that repeatedly fails
+  // must still reach FAILED instead of being immortal.
   await prisma
     .$executeRaw(
-      Prisma.sql`UPDATE "BackgroundJob" SET "status"='PENDING',"scheduledAt"=NOW()+INTERVAL '6 seconds' + (FLOOR(RANDOM()*2) * INTERVAL '1 second'),"startedAt"=NULL,"attempts"=GREATEST(0,"attempts"-1),"error"=NULL,"failedAt"=NULL WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`
+      Prisma.sql`UPDATE "BackgroundJob" SET "status"='PENDING',"scheduledAt"=NOW()+INTERVAL '6 seconds' + (FLOOR(RANDOM()*2) * INTERVAL '1 second'),"startedAt"=NULL,"attempts"=GREATEST(0,"attempts"-1),"error"=NULL,"failedAt"=NULL,"payload"=(("payload"::jsonb - 'deferReason')::json) WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType") AND ("payload"->>'deferReason' = 'BULK_BACKPRESSURE');`
     )
     .catch(err => logger.warn('[Queue] Failed to rescue stale bulk processing jobs', { error: err }));
   await prisma.$executeRaw(
@@ -253,6 +253,14 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
   if (!job) return;
   const shouldRetry =
     job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
+  // Clear durable backpressure marker so a previously backpressured bulk job
+  // that now fails defectively does not get immortal rescue via claimPendingJobs.
+  let payloadPatch: Record<string, unknown> | undefined;
+  const rawPayload = job.payload as unknown as Record<string, unknown> | null;
+  if (rawPayload && typeof rawPayload === 'object' && !Array.isArray(rawPayload) && 'deferReason' in rawPayload) {
+    const { deferReason: _omitted, ...rest } = rawPayload;
+    payloadPatch = rest;
+  }
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: {
@@ -268,6 +276,7 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
               )
           )
         : job.scheduledAt,
+      ...(payloadPatch !== undefined ? { payload: payloadPatch as unknown as Prisma.InputJsonValue } : {}),
     },
   });
 }

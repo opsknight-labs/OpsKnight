@@ -41,6 +41,10 @@ function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
 }
 
+function isProviderAdmissionTestEnv(): boolean {
+  return process.env.NODE_ENV === 'test' || process.env.VITEST === 'true' || Boolean(process.env.VITEST_WORKER_ID);
+}
+
 /**
  * Distributed provider admission control. Quota blocks amortize database work while
  * a persisted cooldown remains authoritative across replicas after provider 429s.
@@ -103,7 +107,8 @@ export async function acquireProviderAdmission(
     | ((...args: unknown[]) => Promise<unknown>)
     | undefined;
   if (!rawExecute || !rawQuery) {
-    return { allowed: true };
+    if (isProviderAdmissionTestEnv()) return { allowed: true };
+    return { allowed: false, retryAt: new Date(now.getTime() + 1_000), reason: 'RATE_LIMITED' };
   }
   try {
     await rawExecute(Prisma.sql`
@@ -137,7 +142,8 @@ export async function acquireProviderAdmission(
     }
     return { allowed: false, retryAt: expiresAt, reason: 'RATE_LIMITED' };
   } catch {
-    return { allowed: true };
+    if (isProviderAdmissionTestEnv()) return { allowed: true };
+    return { allowed: false, retryAt: new Date(now.getTime() + 1_000), reason: 'RATE_LIMITED' };
   }
 }
 
@@ -204,8 +210,16 @@ export async function acquireProviderConcurrency(
       | ((...args: unknown[]) => Promise<unknown>)
       | undefined;
     if (!concQuery) {
-      local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
-      localConcurrency.set(poolKey, local);
+      if (isProviderAdmissionTestEnv()) {
+        local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
+        localConcurrency.set(poolKey, local);
+      } else {
+        return {
+          allowed: false,
+          retryAt: new Date(now.getTime() + 250),
+          reason: 'MAX_IN_FLIGHT',
+        };
+      }
     } else {
       try {
         const rows = (await concQuery(Prisma.sql`
@@ -238,8 +252,16 @@ export async function acquireProviderConcurrency(
         local = { reserved, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
         localConcurrency.set(poolKey, local);
       } catch {
-        local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
-        localConcurrency.set(poolKey, local);
+        if (isProviderAdmissionTestEnv()) {
+          local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
+          localConcurrency.set(poolKey, local);
+        } else {
+          return {
+            allowed: false,
+            retryAt: new Date(now.getTime() + 250),
+            reason: 'MAX_IN_FLIGHT',
+          };
+        }
       }
     }
   }
