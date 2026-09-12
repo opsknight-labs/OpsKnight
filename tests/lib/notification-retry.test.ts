@@ -39,6 +39,9 @@ vi.mock('@/lib/circuit-breaker', () => ({
 }));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
+  acquireProviderConcurrency: vi.fn().mockResolvedValue({ allowed: true, leaseKey: 'lease-1' }),
+  releaseProviderConcurrency: vi.fn().mockResolvedValue(undefined),
+  deferProviderAdmission: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/notifications', () => ({ sendNotification: vi.fn() }));
 vi.mock('@/lib/email', () => ({ sendIncidentEmail }));

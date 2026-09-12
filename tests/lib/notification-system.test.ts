@@ -60,6 +60,22 @@ vi.mock('@/lib/prisma', () => ({
     },
     slackIntegration: { findFirst: vi.fn() },
     incidentEvent: { create: vi.fn() },
+    // Capacity / admission control plane (DB-backed runtime). Per-file mock must
+    // include these — the global tests/setup.ts mock does, but this file overrides
+    // it. Missing models caused `Cannot read properties of undefined (reading
+    // 'findUnique')` in resolver/provider-admission under unit tests (see CI
+    // run 34677831585). Return neutral defaults so notification-system tests
+    // exercise escalation/routing without coupling to capacity DB state.
+    notificationProvider: { findUnique: vi.fn().mockResolvedValue(null) },
+    notificationProviderCapacity: { findUnique: vi.fn().mockResolvedValue(null) },
+    notificationRuntimeSettings: { findUnique: vi.fn().mockResolvedValue(null) },
+    providerAdmission: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn().mockResolvedValue({}),
+    },
+    rateLimit: { findUnique: vi.fn().mockResolvedValue(null) },
+    $executeRaw: vi.fn().mockResolvedValue(0),
+    $queryRaw: vi.fn().mockResolvedValue([{ granted: 1, reservedSlots: 20 }]),
     $transaction: vi.fn(arg => {
       if (Array.isArray(arg)) return Promise.all(arg);
       return arg(prisma);
