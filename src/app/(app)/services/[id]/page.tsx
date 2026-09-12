@@ -164,7 +164,6 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   } catch {
     notFound();
   }
-  const canManageResponsePolicy = currentUser.role === 'ADMIN';
   const actor = await getCurrentAuthorizationActor();
   const incidentAccess = incidentReadWhere(actor);
 
@@ -175,6 +174,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   } catch {
     // The service is viewable but this user cannot change its configuration.
   }
+  const canManageResponsePolicy = canManageService;
 
   const { calculateActorSLAMetrics, calculateActorMultiServiceUptime } =
     await import('@/lib/actor-metrics');

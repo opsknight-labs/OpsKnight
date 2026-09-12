@@ -9,7 +9,7 @@ describe('enterprise response-policy migration', () => {
   it('is additive, preserves legacy policy meaning and enforces bounded contracts', () => {
     expect(sql).toContain(`policy."derivePriorityFromUrgency"`);
     expect(sql).toContain(`THEN 'INHERIT'`);
-    expect(sql).toContain(`"priorityMode" IN ('INHERIT', 'CLEAR')`);
+    expect(sql).toContain(`"priorityMode" IN ('INHERIT', 'FALLBACK', 'CLEAR')`);
     expect(sql).toContain(`"urgencyMode" IN ('INHERIT', 'DEFAULT')`);
     expect(sql).toContain(`"scopeKey" ~ '^integration:[A-Za-z0-9_-]+$'`);
     expect(sql).not.toContain('CREATE INDEX "idx_incident_next_sla_transition"');

@@ -1,7 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertCanModifyService, getUserPermissions } from '@/lib/rbac';
 import { emitAuditEvent } from '@/lib/audit';
 import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 import type { AuthorizedPolicyActor } from './policy-actor';
@@ -135,12 +135,16 @@ export async function saveSupportHoursPolicy(
         capabilities: authorizedActor.capabilities,
       }
     : await getUserPermissions();
-  if (
-    !permissions.authenticated ||
-    !permissions.capabilities.includes('admin.manage') ||
-    !permissions.id
-  )
+  if (!permissions.authenticated || !permissions.id)
     throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  if (authorizedActor) {
+    if (!permissions.capabilities.includes('admin.manage'))
+      throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  } else if (input.scopeKey.startsWith('service:')) {
+    await assertCanModifyService(input.scopeKey.slice(8));
+  } else if (!permissions.capabilities.includes('admin.manage')) {
+    throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  }
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`response-support:${input.scopeKey}`}, 0))`;
     const previous = await tx.responseSupportHoursPolicy.findFirst({

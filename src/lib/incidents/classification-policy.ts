@@ -3,7 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertCanModifyService, getUserPermissions } from '@/lib/rbac';
 import { emitAuditEvent } from '@/lib/audit';
 import { IncidentResponsePolicyError } from '@/lib/incident-sla/policy-config';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
@@ -95,11 +95,22 @@ export async function saveClassificationPolicy(
         capabilities: authorizedActor.capabilities,
       }
     : await getUserPermissions();
-  if (
-    !permissions.authenticated ||
-    !permissions.capabilities.includes('admin.manage') ||
-    !permissions.id
-  ) {
+  if (!permissions.authenticated || !permissions.id) {
+    throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  }
+  if (authorizedActor) {
+    if (!permissions.capabilities.includes('admin.manage'))
+      throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  } else if (input.scopeKey.startsWith('service:')) {
+    await assertCanModifyService(input.scopeKey.slice(8));
+  } else if (input.scopeKey.startsWith('integration:')) {
+    const integration = await prisma.integration.findUnique({
+      where: { id: input.scopeKey.slice(12) },
+      select: { serviceId: true },
+    });
+    if (!integration) throw new IncidentResponsePolicyError('NOT_FOUND');
+    await assertCanModifyService(integration.serviceId);
+  } else if (!permissions.capabilities.includes('admin.manage')) {
     throw new IncidentResponsePolicyError('UNAUTHORIZED');
   }
 

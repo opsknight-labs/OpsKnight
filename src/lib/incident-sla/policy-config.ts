@@ -1,6 +1,6 @@
 import 'server-only';
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
+import { assertCanModifyService, getUserPermissions } from '@/lib/rbac';
 import { revalidatePath } from 'next/cache';
 import { incidentSlaPolicyInputSchema } from './policy-validation';
 import { emitAuditEvent } from '@/lib/audit';
@@ -43,13 +43,17 @@ export async function saveIncidentSlaPolicy(
         capabilities: authorizedActor.capabilities,
       }
     : await getUserPermissions();
-  if (
-    !permissions.authenticated ||
-    !permissions.id ||
-    !permissions.capabilities.includes('admin.manage')
-  )
+  if (!permissions.authenticated || !permissions.id)
     throw new IncidentResponsePolicyError('UNAUTHORIZED');
   const serviceId = input.scopeKey.startsWith('service:') ? input.scopeKey.slice(8) : null;
+  if (authorizedActor) {
+    if (!permissions.capabilities.includes('admin.manage'))
+      throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  } else if (serviceId) {
+    await assertCanModifyService(serviceId);
+  } else if (!permissions.capabilities.includes('admin.manage')) {
+    throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  }
   const result = await prisma.$transaction(async tx => {
     // Scope-specific xact lock serializes even first-version creation (no row exists yet).
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`incident-sla:${input.scopeKey}`}, 0))`;
