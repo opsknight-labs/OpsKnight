@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, Code, RotateCcw, Save, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { InlineNotice } from '@/components/ui/InlineNotice';
@@ -29,6 +30,12 @@ interface StatusPageDesignSettingsProps {
 }
 
 type ThemeFamilyFilter = StatusPageThemeFamily | 'all';
+
+interface SavedDesignState {
+  themeId: string;
+  density: StatusPageThemeDensity;
+  customCss: string;
+}
 
 const FAMILY_FILTERS: ReadonlyArray<{ id: ThemeFamilyFilter; label: string }> = [
   { id: 'all', label: 'All' },
@@ -67,6 +74,7 @@ function asBranding(value: unknown): BrandingRecord {
 }
 
 export default function StatusPageDesignSettings({ statusPage }: StatusPageDesignSettingsProps) {
+  const router = useRouter();
   const initialBranding = useMemo(() => asBranding(statusPage.branding), [statusPage.branding]);
   const initialTheme = resolveStatusPageTheme(initialBranding.themeId);
   const initialDensity = resolveStatusPageThemeDensity(initialBranding.themeDensity);
@@ -76,6 +84,11 @@ export default function StatusPageDesignSettings({ statusPage }: StatusPageDesig
   const [themeId, setThemeId] = useState(initialTheme.id);
   const [density, setDensity] = useState<StatusPageThemeDensity>(initialDensity);
   const [customCss, setCustomCss] = useState(initialCustomCss);
+  const [savedDesign, setSavedDesign] = useState<SavedDesignState>(() => ({
+    themeId: initialTheme.id,
+    density: initialDensity,
+    customCss: initialCustomCss,
+  }));
   const [family, setFamily] = useState<ThemeFamilyFilter>('all');
   const [revision, setRevision] = useState(() =>
     statusPage.updatedAt ? new Date(statusPage.updatedAt).toISOString() : undefined
@@ -89,7 +102,9 @@ export default function StatusPageDesignSettings({ statusPage }: StatusPageDesig
     family === 'all' ? STATUS_PAGE_THEMES : STATUS_PAGE_THEMES.filter(item => item.family === family);
 
   const dirty =
-    themeId !== initialTheme.id || density !== initialDensity || customCss !== initialCustomCss;
+    themeId !== savedDesign.themeId ||
+    density !== savedDesign.density ||
+    customCss !== savedDesign.customCss;
 
   const selectTheme = (nextThemeId: string) => {
     setThemeId(nextThemeId);
@@ -134,10 +149,33 @@ export default function StatusPageDesignSettings({ statusPage }: StatusPageDesig
           throw new Error(payload?.error || 'Failed to save status page design');
         }
 
-        if (typeof payload?.data?.updatedAt === 'string') setRevision(payload.data.updatedAt);
-        notify.success('Status page design saved and published.', {
-          id: `status-page:${statusPage.id}:design:save`,
-        });
+        const nextRevision = payload?.data?.updatedAt;
+        if (typeof nextRevision === 'string') setRevision(nextRevision);
+        setSavedDesign({ themeId, density, customCss });
+
+        const publicationStatus = payload?.data?.publication?.status;
+        const notificationId = `status-page:${statusPage.id}:design:save`;
+        if (publicationStatus === 'LIVE') {
+          notify.success('Status page design saved and published.', { id: notificationId });
+        } else if (publicationStatus === 'DISABLED') {
+          notify.info('Status page design saved. This status page is disabled, so it is not public.', {
+            id: notificationId,
+          });
+        } else if (publicationStatus === 'PUBLISHING') {
+          notify.info('Status page design saved. Publishing to the public page…', {
+            id: notificationId,
+          });
+        } else if (publicationStatus === 'FAILED') {
+          notify.warning('Status page design saved, but publishing to the public page failed.', {
+            id: notificationId,
+          });
+        } else {
+          notify.success('Status page design saved.', { id: notificationId });
+        }
+
+        // Refresh the server-owned status-page record so switching back to Settings receives the
+        // new optimistic-concurrency revision instead of submitting the pre-design updatedAt.
+        router.refresh();
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : 'Failed to save status page design';
         setError(message);
