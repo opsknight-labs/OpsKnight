@@ -48,10 +48,16 @@ export async function getPublicStatusMetadata(slug?: string): Promise<Metadata> 
   const rssUrl = slug
     ? `${baseUrl}/api/status/${encodeURIComponent(slug)}/rss`
     : `${baseUrl}/api/status/rss`;
+  const rawFavicon = typeof branding.faviconUrl === 'string' ? branding.faviconUrl.trim() : '';
+  const safeFavicon =
+    rawFavicon && !rawFavicon.startsWith('data:') && /^(\/|https?:\/\/)/.test(rawFavicon)
+      ? rawFavicon
+      : undefined;
 
   return {
     title,
     description,
+    ...(safeFavicon ? { icons: { icon: safeFavicon } } : {}),
     openGraph: {
       title,
       description,

@@ -128,7 +128,8 @@ export function buildPreviewSnapshot(input: {
             ...(input.showServiceSlaTier !== false && service.slaTier
               ? { slaTier: service.slaTier }
               : {}),
-            ...((input.showServiceOwners !== false || input.showTeamInformation === true) &&
+            ...(input.showServiceOwners !== false &&
+            input.showTeamInformation === true &&
             allow('showTeamInformation')
               ? { team: service.team ?? null }
               : {}),
@@ -149,7 +150,10 @@ export function buildPreviewSnapshot(input: {
   })();
   const clampTitle = (value: string, max = 120) =>
     value.length <= max ? value : `${value.slice(0, max).trimEnd()}…`;
-  const redactedByAge = (incident: { status: string; createdAt: string | Date | null | undefined }) => {
+  const redactedByAge = (incident: {
+    status: string;
+    createdAt: string | Date | null | undefined;
+  }) => {
     if (previewDetailCutoffMs == null) return false;
     if (incident.status === 'OPEN' || incident.status === 'ACKNOWLEDGED') return false;
     const showHistoryDetails = allow('showIncidentHistoryDetails');

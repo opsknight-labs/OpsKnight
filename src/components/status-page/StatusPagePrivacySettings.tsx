@@ -77,15 +77,16 @@ const PRIVACY_PRESETS = {
     },
   },
   PRIVATE: {
-    label: 'Private',
-    description: 'Minimal information - show only basic status',
+    label: 'Minimal details',
+    description:
+      'Minimal information - show only basic status. (To require sign-in, use Access control in General)',
     settings: {
       showIncidentDetails: false,
       showIncidentTitles: true,
       showIncidentDescriptions: false,
       showAffectedServices: true,
       showIncidentTimestamps: false,
-      showServiceMetrics: false,
+      showServiceMetrics: true,
       showServiceDescriptions: false,
       showServiceRegions: false,
       showTeamInformation: false,
@@ -110,16 +111,15 @@ export default function StatusPagePrivacySettings({
   const [expandedPreset, setExpandedPreset] = useState<keyof typeof PRIVACY_PRESETS | null>(null);
 
   const PRESET_DETAIL_LABELS: Array<{ key: keyof PrivacySettings; label: string }> = [
-    { key: 'showIncidentDetails', label: 'Incident details' },
-    { key: 'showIncidentDescriptions', label: 'Incident descriptions' },
+    { key: 'showIncidentDetails', label: 'Timeline & progress updates' },
+    { key: 'showIncidentDescriptions', label: 'Incident body description' },
     { key: 'showIncidentTimestamps', label: 'Incident timestamps' },
     { key: 'showAffectedServices', label: 'Affected services' },
     { key: 'showIncidentUrgency', label: 'Incident urgency' },
-    { key: 'showServiceMetrics', label: 'Service metrics' },
     { key: 'showServiceDescriptions', label: 'Service descriptions' },
     { key: 'showServiceRegions', label: 'Service regions' },
     { key: 'showUptimeHistory', label: 'Uptime history' },
-    { key: 'showRecentIncidents', label: 'Recent incidents' },
+    { key: 'showTeamInformation', label: 'Team ownership' },
   ];
 
   const getPresetSummary = (presetKey: keyof typeof PRIVACY_PRESETS) => {
@@ -284,20 +284,20 @@ export default function StatusPagePrivacySettings({
             <Switch
               checked={settings.showIncidentDetails}
               onChange={checked => updateSetting('showIncidentDetails', checked)}
-              label="Show Incident Details"
-              helperText="Show the full incident timeline and update details"
+              label="Show Timeline & Progress Updates"
+              helperText="Display chronological investigation, mitigation, and resolution updates"
             />
             <Switch
               checked={settings.showIncidentTitles}
               onChange={checked => updateSetting('showIncidentTitles', checked)}
               label="Show Incident Titles"
-              helperText="Display incident titles on the status page"
+              helperText="Display incident titles on the status page (falls back to generic title if off)"
             />
             <Switch
               checked={settings.showIncidentDescriptions}
               onChange={checked => updateSetting('showIncidentDescriptions', checked)}
-              label="Show Incident Descriptions"
-              helperText="Display detailed incident descriptions"
+              label="Show Incident Body Description"
+              helperText="Display the main descriptive paragraph explaining what occurred"
             />
             <Switch
               checked={settings.showAffectedServices}
@@ -334,12 +334,6 @@ export default function StatusPagePrivacySettings({
             Service Information
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-3)' }}>
-            <Switch
-              checked={settings.showServiceMetrics}
-              onChange={checked => updateSetting('showServiceMetrics', checked)}
-              label="Show Service Metrics"
-              helperText="Display uptime percentages and availability metrics"
-            />
             <Switch
               checked={settings.showServiceDescriptions}
               onChange={checked => updateSetting('showServiceDescriptions', checked)}
@@ -382,30 +376,28 @@ export default function StatusPagePrivacySettings({
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
             <Switch
-              checked={settings.showRecentIncidents}
-              onChange={checked => updateSetting('showRecentIncidents', checked)}
-              label="Show Recent Incidents"
-              helperText="Display recent incidents list"
-            />
-            <Switch
               checked={settings.showIncidentHistoryDetails ?? true}
-              onChange={checked => updateSetting('showIncidentHistoryDetails' as never, checked as never)}
-              label="Show Incident History Details"
-              helperText="When off, older resolved incidents show limited detail (title only)"
-            />
-            <FormField
-              type="input"
-              label="Incident History Detail Window (days)"
-              inputType="number"
-              value={settings.incidentHistoryDetailDays?.toString() ?? ''}
-              onChange={e =>
-                updateSetting(
-                  'incidentHistoryDetailDays' as never,
-                  (e.target.value ? parseInt(e.target.value) : null) as never
-                )
+              onChange={checked =>
+                updateSetting('showIncidentHistoryDetails' as never, checked as never)
               }
-              helperText="Resolved incidents older than this are redacted (1–365). Active incidents are never redacted."
+              label="Show Incident History Details"
+              helperText="When off, older resolved incidents show limited detail (title only). Active incidents are never redacted."
             />
+            {settings.showIncidentHistoryDetails === false && (
+              <FormField
+                type="input"
+                label="Incident History Detail Window (days)"
+                inputType="number"
+                value={settings.incidentHistoryDetailDays?.toString() ?? ''}
+                onChange={e =>
+                  updateSetting(
+                    'incidentHistoryDetailDays' as never,
+                    (e.target.value ? parseInt(e.target.value) : null) as never
+                  )
+                }
+                helperText="Resolved incidents older than this are redacted (1–365). Active incidents are never redacted."
+              />
+            )}
             <FormField
               type="input"
               label="Maximum Incidents to Show"
@@ -419,21 +411,21 @@ export default function StatusPagePrivacySettings({
             />
             <FormField
               type="input"
-              label="Incident History Days"
+              label="Public Incident History Window (days)"
               inputType="number"
               value={settings.incidentHistoryDays.toString()}
               onChange={e => updateSetting('incidentHistoryDays', parseInt(e.target.value) || 90)}
-              helperText="How many days of incident history to display"
+              helperText="Show resolved incidents from the last N days (1–365)"
             />
             <FormField
               type="input"
-              label="Data Retention Days (Optional)"
+              label="Public History Retention Cap (days, optional)"
               inputType="number"
               value={settings.dataRetentionDays?.toString() || ''}
               onChange={e =>
                 updateSetting('dataRetentionDays', e.target.value ? parseInt(e.target.value) : null)
               }
-              helperText="Auto-hide incidents older than this many days. Leave empty for no limit."
+              helperText="Limits how far back the public Status Page and status APIs expose incident history. Internal incident records are not deleted."
             />
           </div>
         </div>
