@@ -376,15 +376,16 @@ describe('Auth session lifecycle and hardening', () => {
         trigger: 'update',
       });
 
-      expect((result as any).error).toBe('SECURITY_LOOKUP_UNAVAILABLE');
+      const recordResult = result as unknown as Record<string, unknown>;
+      expect(recordResult.error).toBe('SECURITY_LOOKUP_UNAVAILABLE');
       // Preserves sub so transient DB glitch does not destroy valid credentials permanently
-      expect((result as any).sub).toBe('active-user');
+      expect(recordResult.sub).toBe('active-user');
 
       // Request fails closed in session callback
       const sessionCallback = options.callbacks?.session;
-      const sessionResult = await (sessionCallback as any)({
+      const sessionResult = await (sessionCallback as unknown as (params: unknown) => Promise<{ user?: unknown }>)({
         session: { user: { id: 'active-user', name: 'Active User' }, expires: '' },
-        token: result as any,
+        token: result,
       });
       expect(sessionResult.user).toBeUndefined();
     });
@@ -812,7 +813,7 @@ describe('Auth session lifecycle and hardening', () => {
           { claim: 'groups', value: 'admins', role: 'ADMIN' },
           { claim: 'groups', value: 'responders', role: 'RESPONDER' },
         ],
-      } as any);
+      } as never);
 
       // Reorder rules: [responders -> RESPONDER, admins -> ADMIN]
       // Because role evaluation is first-match-wins, order change is semantically significant
@@ -836,7 +837,7 @@ describe('Auth session lifecycle and hardening', () => {
           { claim: 'groups', value: 'admins', role: 'ADMIN' },
           { claim: 'groups', value: 'responders', role: 'RESPONDER' },
         ],
-      } as any);
+      } as never);
 
       const withWhitespace = JSON.stringify([
         { claim: ' groups ', value: ' admins ', role: 'ADMIN' },
