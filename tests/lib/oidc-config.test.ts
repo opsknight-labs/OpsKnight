@@ -37,6 +37,7 @@ describe('OIDC configuration loading', () => {
       providerLabel: 'Company SSO',
       organizationId: 'org_enterprise',
       profileMapping: {},
+      tokenEndpointAuthMethod: 'client_secret_basic',
       createdAt: new Date(),
       updatedAt: new Date(),
       updatedBy: null,
