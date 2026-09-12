@@ -67,15 +67,35 @@ describe('Toast and Toaster Component Contract', () => {
     expect(await screen.findByText('Informational notice')).toBeDefined();
   });
 
-  it('provides close button with touch-friendly 40x40 dimension classes', async () => {
+  it('provides a 28x28 visual close button with expanded touch target', async () => {
     render(<Toaster />);
 
     notify.success('Touch target test', { id: 'touch:1' });
     await screen.findByText('Touch target test');
 
     const closeBtn = screen.getByRole('button', { name: /close/i });
-    expect(closeBtn.className).toContain('!h-10');
-    expect(closeBtn.className).toContain('!w-10');
+    expect(closeBtn.className).toContain('!h-7');
+    expect(closeBtn.className).toContain('!w-7');
+    expect(closeBtn.className).toContain('after:-inset-1.5');
+  });
+
+  it('renders semantic icon badge and neutral card surface with status rail', async () => {
+    render(<Toaster />);
+
+    notify.success('Card styling test', { id: 'style:1' });
+    const toastTitle = await screen.findByText('Card styling test');
+
+    // Semantic icon badge container is rendered
+    const badge = screen.getByTestId('toast-icon-badge');
+    expect(badge).toBeDefined();
+    expect(badge.className).toContain('h-7');
+    expect(badge.className).toContain('w-7');
+
+    // Toast container contains neutral surface and status rail classes
+    const toastCard = toastTitle.closest('li');
+    expect(toastCard).toBeDefined();
+    expect(toastCard?.className).toContain('data-[styled=true]:!bg-[var(--toast-bg)]');
+    expect(toastCard?.className).toContain('before:!bg-[var(--toast-success-accent)]');
   });
 
   it('allows programmatic dismiss via notify.dismiss', async () => {
@@ -90,4 +110,31 @@ describe('Toast and Toaster Component Contract', () => {
       expect(screen.queryByText('Dismiss me')).toBeNull();
     });
   });
+
+  it('renders a visible cross icon inside the close button with high-contrast stroke', async () => {
+    render(<Toaster />);
+
+    notify.success('Visible cross test', { id: 'cross:1' });
+    await screen.findByText('Visible cross test');
+
+    const closeBtn = screen.getByRole('button', { name: /close/i });
+    expect(closeBtn).toBeDefined();
+
+    const closeIcon = screen.getByTestId('toast-close-icon');
+    expect(closeIcon).toBeDefined();
+    expect(closeIcon.getAttribute('class')).toContain('stroke-[2.25]');
+    expect(closeBtn.contains(closeIcon)).toBe(true);
+  });
+
+  it('supports dark mode theme configuration on the toaster', async () => {
+    render(<Toaster theme="dark" />);
+
+    notify.info('Dark mode toast', { id: 'dark:1' });
+    await screen.findByText('Dark mode toast');
+
+    const toaster = document.querySelector('[data-sonner-toaster]');
+    expect(toaster).toBeDefined();
+    expect(toaster?.getAttribute('data-sonner-theme')).toBe('dark');
+  });
 });
+
