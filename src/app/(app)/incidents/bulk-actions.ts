@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { logger } from '@/lib/logger';
+import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import {
   executeIncidentLifecycleBatch,
@@ -360,6 +361,10 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
   try {
     const user = await getCurrentUser();
     const updatedCount = await prisma.$transaction(async tx => {
+      const current = await tx.incident.findMany({
+        where: { id: { in: incidentIds } },
+        select: { id: true, urgency: true },
+      });
       const updated = await tx.incident.updateMany({
         where: { id: { in: incidentIds } },
         data: { urgency },
@@ -370,6 +375,12 @@ export async function bulkUpdateUrgency(incidentIds: string[], urgency: 'HIGH' |
           message: `Bulk urgency updated to ${urgency}${user ? ` by ${user.name}` : ''}`,
         })),
       });
+      for (const incident of current)
+        await reconcileIncidentEngagementAfterUrgencyChange(tx, {
+          incidentId: incident.id,
+          previousUrgency: incident.urgency,
+          urgency,
+        });
       return updated.count;
     });
 

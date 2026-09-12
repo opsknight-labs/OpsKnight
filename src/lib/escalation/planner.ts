@@ -60,6 +60,8 @@ export interface EscalationPlanInput {
   nextStepDelayMinutes: number | null;
   stepDelayMinutes: number;
   now: Date;
+  /** False when typed policy conditions do not match the incident context. */
+  applicable?: boolean;
 }
 
 function stepLabel(stepIndex: number): string {
@@ -119,6 +121,13 @@ function planUnreachedStep(
 
 /** Plans one escalation step. Every branch returns a complete plan. */
 export function planEscalationStep(input: EscalationPlanInput): EscalationPlan {
+  if (input.applicable === false) {
+    return planUnreachedStep(input, {
+      outcome: 'NO_ELIGIBLE_RESPONDERS',
+      message: `${stepLabel(input.stepIndex)} conditions did not match.`,
+      terminalSuffix: ' Escalation completed: no conditional steps remain.',
+    });
+  }
   if (input.targetId === null) {
     return planUnreachedStep(input, {
       outcome: 'INVALID_TARGET',

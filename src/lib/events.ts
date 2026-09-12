@@ -7,6 +7,11 @@ import { enqueueEventSideEffects, enqueueLifecycleSideEffects } from './event-ou
 import { applyIncidentLifecycleCommand } from './incidents/lifecycle';
 import { resolveNewIncidentSlaContract } from './incident-sla/contract';
 import { resolveIncidentClassification } from './incidents/classification';
+import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
+import { resolveSupportHours } from './incidents/support-hours';
+import { resolveIncidentEngagement } from './incidents/engagement';
+import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
+import { addOperationalMetric } from './metrics/operational/registry';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
 
@@ -162,7 +167,11 @@ export async function processEvent(
     // 1. Validate serviceId exists (prevents orphaned incidents)
     const service = await tx.service.findUnique({
       where: { id: serviceId },
-      select: { id: true, name: true, defaultIncidentVisibility: true },
+      select: {
+        id: true,
+        name: true,
+        defaultIncidentVisibility: true,
+      },
     });
 
     if (!service) {
@@ -269,12 +278,21 @@ export async function processEvent(
         const incomingUrgency = incomingClassification.urgency;
         const effectiveUrgency = maxUrgency(existingIncident.urgency, incomingUrgency);
         const urgencyRaised = effectiveUrgency !== existingIncident.urgency;
+        let releaseSupportHoursDeferral = false;
         if (urgencyRaised) {
+          const previousUrgency = existingIncident.urgency;
           await tx.incident.update({
             where: { id: existingIncident.id },
             data: { urgency: effectiveUrgency },
           });
           existingIncident.urgency = effectiveUrgency;
+          releaseSupportHoursDeferral = (
+            await reconcileIncidentEngagementAfterUrgencyChange(tx, {
+              incidentId: existingIncident.id,
+              previousUrgency,
+              urgency: effectiveUrgency,
+            })
+          ).released;
         }
 
         // Log an event instead of note (no userId needed)
@@ -282,7 +300,7 @@ export async function processEvent(
         await tx.incidentEvent.create({
           data: {
             incidentId: existingIncident.id,
-            message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}`,
+            message: `Re-triggered by event from ${normalizedSource}. Summary: ${safeSummary}${urgencyRaised ? ` Urgency raised to ${effectiveUrgency}.` : ''}${releaseSupportHoursDeferral ? ' Support-hours engagement deferral released.' : ''}`,
           },
         });
 
@@ -365,6 +383,16 @@ export async function processEvent(
             classificationPolicyId: classification.policyId,
             classificationPolicyVersion: classification.policyVersion,
             classificationRule: classification.rule,
+            classificationPriorityPolicyId: classification.priorityProvenance.policyId,
+            classificationPriorityPolicyVersion: classification.priorityProvenance.policyVersion,
+            classificationPriorityRule: classification.priorityProvenance.rule,
+            classificationPriorityScope: classification.priorityProvenance.scope,
+            classificationUrgencyPolicyId: classification.urgencyProvenance.policyId,
+            classificationUrgencyPolicyVersion: classification.urgencyProvenance.policyVersion,
+            classificationUrgencyRule: classification.urgencyProvenance.rule,
+            classificationUrgencyScope: classification.urgencyProvenance.scope,
+            nextSlaTransitionAt: null,
+            nextSlaTransitionKind: null,
             escalationStatus: 'COMPLETED',
           },
         });
@@ -399,7 +427,16 @@ export async function processEvent(
           source: normalizedSource,
         });
 
-        return { action: 'resolved', incident: resolvedIncident };
+        return {
+          action: 'resolved',
+          incident: resolvedIncident,
+          telemetry: {
+            prioritySource: classification.priorityProvenance.source,
+            urgencySource: classification.urgencyProvenance.source,
+            engagementDeferred: false,
+            urgency: classification.urgency,
+          },
+        };
       }
 
       // Truncate description to prevent DB insert failures on very long payloads
@@ -416,6 +453,11 @@ export async function processEvent(
       const newSla = await resolveNewIncidentSlaContract(tx, {
         serviceId,
         priority: classification.priority,
+        now: incidentCreatedAt,
+      });
+      const engagement = resolveIncidentEngagement({
+        urgency,
+        supportHours: await resolveSupportHours(tx, { serviceId, at: incidentCreatedAt }),
         now: incidentCreatedAt,
       });
       const newIncident = await tx.incident.create({
@@ -441,6 +483,18 @@ export async function processEvent(
           classificationPolicyId: classification.policyId,
           classificationPolicyVersion: classification.policyVersion,
           classificationRule: classification.rule,
+          classificationPriorityPolicyId: classification.priorityProvenance.policyId,
+          classificationPriorityPolicyVersion: classification.priorityProvenance.policyVersion,
+          classificationPriorityRule: classification.priorityProvenance.rule,
+          classificationPriorityScope: classification.priorityProvenance.scope,
+          classificationUrgencyPolicyId: classification.urgencyProvenance.policyId,
+          classificationUrgencyPolicyVersion: classification.urgencyProvenance.policyVersion,
+          classificationUrgencyRule: classification.urgencyProvenance.rule,
+          classificationUrgencyScope: classification.urgencyProvenance.scope,
+          ...(() => {
+            const next = deriveNewIncidentSlaTransition(newSla, incidentCreatedAt);
+            return { nextSlaTransitionAt: next?.at, nextSlaTransitionKind: next?.kind };
+          })(),
           createdAt: incidentCreatedAt,
           ...(isFlapping
             ? {
@@ -493,13 +547,26 @@ export async function processEvent(
         await initializeEscalationExecution(tx, {
           incidentId: newIncident.id,
           serviceId,
+          now: incidentCreatedAt,
+          notBefore: engagement.earliestDeliveryAt,
         });
-        await enqueueEventSideEffects(tx, 'triggered', newIncident.id);
+        await enqueueEventSideEffects(
+          tx,
+          'triggered',
+          newIncident.id,
+          engagement.earliestDeliveryAt
+        );
       }
 
       return {
         action: isFlapping ? ('suppressed' as const) : ('triggered' as const),
         incident: newIncident,
+        telemetry: {
+          prioritySource: classification.priorityProvenance.source,
+          urgencySource: classification.urgencyProvenance.source,
+          engagementDeferred: engagement.deferred,
+          urgency: classification.urgency,
+        },
       };
     }
 
@@ -571,6 +638,19 @@ export async function processEvent(
     });
     return { action: 'ignored', reason: `Unknown event action: ${event_action}` };
   }, EVENT_TRANSACTION_MAX_ATTEMPTS);
+
+  const telemetry = 'telemetry' in result ? result.telemetry : undefined;
+  if (telemetry) {
+    addOperationalMetric('opsknight_incident_classification_total', 1, {
+      priority_source: telemetry.prioritySource,
+      urgency_source: telemetry.urgencySource,
+    });
+    if (telemetry.engagementDeferred)
+      addOperationalMetric('opsknight_engagement_deferred_total', 1, {
+        urgency: telemetry.urgency,
+      });
+    delete (result as { telemetry?: unknown }).telemetry;
+  }
 
   // External side-effects are persisted above in the same transaction and are
   // executed by the durable PostgreSQL job worker. The API no longer waits for

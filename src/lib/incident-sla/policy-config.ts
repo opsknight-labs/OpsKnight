@@ -4,6 +4,7 @@ import { assertCanModifyService, getUserPermissions } from '@/lib/rbac';
 import { revalidatePath } from 'next/cache';
 import { incidentSlaPolicyInputSchema } from './policy-validation';
 import { emitAuditEvent } from '@/lib/audit';
+import type { AuthorizedPolicyActor } from '@/lib/incidents/policy-actor';
 
 export type IncidentResponsePolicyErrorCode = 'CONFLICT' | 'UNAUTHORIZED' | 'NOT_FOUND';
 
@@ -30,12 +31,25 @@ export async function getIncidentSlaPolicy(scopeKey: string) {
   });
 }
 
-export async function saveIncidentSlaPolicy(rawInput: unknown) {
+export async function saveIncidentSlaPolicy(
+  rawInput: unknown,
+  authorizedActor?: AuthorizedPolicyActor
+) {
   const input = incidentSlaPolicyInputSchema.parse(rawInput);
-  const permissions = await getUserPermissions();
-  if (!permissions.authenticated) throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  const permissions = authorizedActor
+    ? {
+        authenticated: true,
+        id: authorizedActor.actorId,
+        capabilities: authorizedActor.capabilities,
+      }
+    : await getUserPermissions();
+  if (!permissions.authenticated || !permissions.id)
+    throw new IncidentResponsePolicyError('UNAUTHORIZED');
   const serviceId = input.scopeKey.startsWith('service:') ? input.scopeKey.slice(8) : null;
-  if (serviceId) {
+  if (authorizedActor) {
+    if (!permissions.capabilities.includes('admin.manage'))
+      throw new IncidentResponsePolicyError('UNAUTHORIZED');
+  } else if (serviceId) {
     await assertCanModifyService(serviceId);
   } else if (!permissions.capabilities.includes('admin.manage')) {
     throw new IncidentResponsePolicyError('UNAUTHORIZED');
@@ -76,7 +90,7 @@ export async function saveIncidentSlaPolicy(rawInput: unknown) {
     await emitAuditEvent(
       {
         action: 'incident_sla.policy.version_created',
-        source: 'UI',
+        source: authorizedActor?.source ?? 'UI',
         target: { type: serviceId ? 'SERVICE' : 'SYSTEM_CONFIG', id: serviceId ?? 'workspace' },
         actor: { type: 'USER', id: permissions.id },
         metadata: {
