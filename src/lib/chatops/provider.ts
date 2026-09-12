@@ -24,7 +24,7 @@ export interface ChatProviderContext {
 }
 
 export type ChatDeliveryResult =
-  | { success: true; providerMessageId?: string }
+  | { success: true; providerMessageId?: string; conversationId?: string }
   | { success: false; error: string; statusCode?: number; retryAfterMs?: number; errorCode?: string };
 
 /**

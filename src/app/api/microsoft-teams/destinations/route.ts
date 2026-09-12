@@ -79,54 +79,70 @@ export async function POST(request: NextRequest) {
     if (!service) return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Service not found.' }));
 
     const prismaAny = prisma as unknown as {
-      microsoftTeamsInstallation: { findFirst: (a: unknown) => Promise<{ id: string } | null> };
+      microsoftTeamsInstallation: { findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null> };
       microsoftTeamsDestination: {
         upsert: (a: unknown) => Promise<{ id: string }>;
         findUnique: (a: unknown) => Promise<unknown>;
       };
     };
 
-    const installation = await prismaAny.microsoftTeamsInstallation.findFirst({ where: { tenantId, teamId } });
+    // Phase 2: verified installation chain — destination requires an enabled installation
+    // Do not allow orphaned destinations (installationId:null) which could be spoofed teamIds.
+    const installation = await prismaAny.microsoftTeamsInstallation.findFirst({ where: { tenantId, teamId, enabled: true } });
+    if (!installation?.id) {
+      return jsonError(
+        new AppError({
+          code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+          userMessage: 'Teams app is not installed to this Team. Install the bot to the target Team first, then link the destination.',
+          details: { tenantId: tenantId.slice(0, 8) + '…', teamId: teamId.slice(0, 12) + '…' },
+        }),
+      );
+    }
 
     const currentUser = await (await import('@/lib/rbac')).getCurrentUser().catch(() => null);
     const actorId = currentUser?.id ?? null;
 
-    const dest = await prismaAny.microsoftTeamsDestination.upsert({
-      where: { serviceId },
-      create: {
-        serviceId,
-        tenantId,
-        teamId,
-        channelId,
-        channelName: channelName ?? null,
-        teamName: teamName ?? null,
-        installationId: installation?.id ?? null,
-        enabled: true,
-        updatedBy: actorId,
-      },
-      update: {
-        tenantId,
-        teamId,
-        channelId,
-        channelName: channelName ?? null,
-        teamName: teamName ?? null,
-        installationId: installation?.id ?? null,
-        enabled: true,
-        updatedBy: actorId,
-      },
-    } as never);
-
-    // Also ensure serviceNotificationChannels includes MICROSOFT_TEAMS so dispatch honours the mapping.
-    try {
-      const svc = await prisma.service.findUnique({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
-      const channels = new Set((svc?.serviceNotificationChannels ?? []) as string[]);
-      if (!channels.has('MICROSOFT_TEAMS')) {
-        channels.add('MICROSOFT_TEAMS');
-        await prisma.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: [...channels] as never } });
+    // Phase 2: transaction — destination upsert + service channel enable must be atomic
+    const dest = await prisma.$transaction(async tx => {
+      const txAny = tx as unknown as typeof prismaAny & {
+        service: { findUnique: (a: unknown) => Promise<{ serviceNotificationChannels: string[] } | null>; update: (a: unknown) => Promise<unknown> };
+      };
+      const created = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.upsert({
+        where: { serviceId },
+        create: {
+          serviceId,
+          tenantId,
+          teamId,
+          channelId,
+          channelName: channelName ?? null,
+          teamName: teamName ?? null,
+          installationId: installation.id,
+          enabled: true,
+          updatedBy: actorId,
+        },
+        update: {
+          tenantId,
+          teamId,
+          channelId,
+          channelName: channelName ?? null,
+          teamName: teamName ?? null,
+          installationId: installation.id,
+          enabled: true,
+          updatedBy: actorId,
+        },
+      } as never);
+      try {
+        const svc = await txAny.service.findUnique({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
+        const channels = new Set((svc?.serviceNotificationChannels ?? []) as string[]);
+        if (!channels.has('MICROSOFT_TEAMS')) {
+          channels.add('MICROSOFT_TEAMS');
+          await txAny.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: [...channels] as never } });
+        }
+      } catch (e) {
+        logger.warn('[MicrosoftTeams] Failed to auto-enable channel on service (tx)', { error: (e as Error).message });
       }
-    } catch (e) {
-      logger.warn('[MicrosoftTeams] Failed to auto-enable channel on service', { error: (e as Error).message });
-    }
+      return created;
+    });
 
     await logAudit({
       action: 'microsoftTeams.destination.upserted',

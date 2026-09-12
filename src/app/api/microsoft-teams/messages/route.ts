@@ -97,6 +97,9 @@ export async function POST(request: NextRequest) {
         const botAdded =
           Array.isArray(activity.membersAdded) &&
           activity.membersAdded.some(m => m?.id && botId && m.id === botId);
+        const botRemoved =
+          Array.isArray(activity.membersRemoved) &&
+          activity.membersRemoved.some(m => m?.id && botId && m.id === botId);
         if (botAdded) {
           const prismaAny = prisma as unknown as {
             microsoftTeamsInstallation: {
@@ -109,6 +112,20 @@ export async function POST(request: NextRequest) {
             update: { teamName: teamName ?? undefined, channelId: channelId || undefined, enabled: true },
           } as unknown as never);
           logger.info('[MicrosoftTeams] Installation recorded', { tenantId, teamId });
+        } else if (botRemoved) {
+          const prismaAny = prisma as unknown as {
+            microsoftTeamsInstallation: { updateMany: (a: unknown) => Promise<unknown> };
+            microsoftTeamsDestination: { updateMany: (a: unknown) => Promise<unknown> };
+          };
+          await prismaAny.microsoftTeamsInstallation.updateMany({
+            where: { tenantId, teamId },
+            data: { enabled: false },
+          } as unknown as never);
+          await prismaAny.microsoftTeamsDestination.updateMany({
+            where: { tenantId, teamId },
+            data: { enabled: false },
+          } as unknown as never);
+          logger.info('[MicrosoftTeams] Installation revoked — destinations disabled', { tenantId, teamId });
         }
       }
       return jsonOk({ ok: true });

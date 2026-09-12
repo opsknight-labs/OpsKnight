@@ -34,6 +34,32 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     };
     eventType: 'triggered' | 'acknowledged' | 'resolved';
   }): Promise<ChatDeliveryResult> {
+    return this.createIncidentCard(args);
+  }
+
+  /** Canonical create: POST /teams/{team}/channels/{channel}/messages with Adaptive Card. Persists conversation+activity ledger. */
+  async createIncidentCard(args: {
+    destinationId: string;
+    incident: {
+      id: string;
+      title: string;
+      description?: string | null;
+      status: string;
+      urgency: string;
+      priority?: string | null;
+      serviceName: string;
+      assigneeName?: string | null;
+      incidentUrl: string;
+      slaAckRemainingMs?: number | null;
+      slaResolveRemainingMs?: number | null;
+      acknowledgedBy?: string | null;
+      resolvedBy?: string | null;
+      createdAt: Date;
+      acknowledgedAt?: Date | null;
+      resolvedAt?: Date | null;
+    };
+    eventType: 'triggered' | 'acknowledged' | 'resolved';
+  }): Promise<ChatDeliveryResult> {
     const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: args.destinationId } });
     if (!dest) return { success: false, error: 'Teams destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
     const url = args.incident.incidentUrl || incidentUrl(args.incident.id);
@@ -71,6 +97,12 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     return res;
   }
 
+  /**
+   * Canonical update: PATCH /teams/{team}/channels/{channel}/messages/{message}
+   * Returns PATCH_NOT_SUPPORTED when app-only PATCH is restricted (policyViolation
+   * only) — caller must NOT silently duplicate the card; surface DEGRADED instead.
+   * Supports `disableActions` for terminal resolved state (Phase 2 seam).
+   */
   async updateIncidentCard(args: {
     destinationId: string;
     messageId: string;
@@ -94,6 +126,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       resolvedAt?: Date | null;
     };
     eventType: 'triggered' | 'acknowledged' | 'resolved';
+    disableActions?: boolean;
   }): Promise<ChatDeliveryResult> {
     const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: args.destinationId } });
     if (!dest) return { success: false, error: 'Teams destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
@@ -105,7 +138,64 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       messageId: args.messageId,
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
+      disableActions: args.disableActions,
     });
+  }
+
+  /** Terminal state: re-render the canonical activity with actions disabled. */
+  async disableActionsCard(args: {
+    destinationId: string;
+    messageId: string;
+    conversationId?: string;
+    incident: {
+      id: string;
+      title: string;
+      description?: string | null;
+      status: string;
+      urgency: string;
+      priority?: string | null;
+      serviceName: string;
+      assigneeName?: string | null;
+      incidentUrl: string;
+      acknowledgedBy?: string | null;
+      resolvedBy?: string | null;
+      createdAt: Date;
+      acknowledgedAt?: Date | null;
+      resolvedAt?: Date | null;
+    };
+    eventType: 'triggered' | 'acknowledged' | 'resolved';
+  }): Promise<ChatDeliveryResult> {
+    return this.updateIncidentCard({ ...args, disableActions: true });
+  }
+
+  /**
+   * Recover path: when the canonical message is 404 (deleted/expired), create a
+   * fresh activity and re-ledger it. Caller should invoke this only on
+   * MESSAGE_NOT_FOUND — not on PATCH_NOT_SUPPORTED.
+   */
+  async recoverIncidentCard(args: {
+    destinationId: string;
+    incident: {
+      id: string;
+      title: string;
+      description?: string | null;
+      status: string;
+      urgency: string;
+      priority?: string | null;
+      serviceName: string;
+      assigneeName?: string | null;
+      incidentUrl: string;
+      slaAckRemainingMs?: number | null;
+      slaResolveRemainingMs?: number | null;
+      acknowledgedBy?: string | null;
+      resolvedBy?: string | null;
+      createdAt: Date;
+      acknowledgedAt?: Date | null;
+      resolvedAt?: Date | null;
+    };
+    eventType: 'triggered' | 'acknowledged' | 'resolved';
+  }): Promise<ChatDeliveryResult> {
+    return this.createIncidentCard(args);
   }
 
   async testConnection(destinationId: string): Promise<ChatDeliveryResult> {

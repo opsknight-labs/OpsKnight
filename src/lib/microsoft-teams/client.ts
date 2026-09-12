@@ -133,9 +133,9 @@ async function sendBotActivity(args: {
     const text = await res.text().catch(() => '');
     const code = text.slice(0, 600) || `HTTP ${res.status}`;
     const status = res.status;
-    if (status === 429) return { success: false, error: 'Teams rate limited', errorCode: 'rate_limited', statusCode: 429, retryAfterMs };
+    if (status === 429) return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
     if (status === 404) return { success: false, error: 'Teams channel not found', errorCode: 'CHANNEL_NOT_FOUND', statusCode: 404 };
-    if (status === 401 || status === 403) return { success: false, error: 'Teams authorization failed', errorCode: 'not_authed', statusCode: status };
+    if (status === 401 || status === 403) return { success: false, error: 'Teams authorization failed', errorCode: 'AUTH_EXPIRED', statusCode: status };
     return { success: false, error: code, errorCode: `http_${status}`, statusCode: status, retryAfterMs };
   }
 
@@ -177,11 +177,16 @@ async function updateBotActivity(args: {
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     const s = res.status;
-    // Signal to caller that PATCH is not supported for this auth context — fall back to new card
+    if (s === 429) {
+      const raw = res.headers?.get?.('Retry-After');
+      const n = raw ? Number.parseInt(raw, 10) : NaN;
+      const retryAfterMs = Number.isFinite(n) && n > 0 ? n * 1000 : undefined;
+      return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
+    }
+    // Signal to caller that PATCH is not supported for this auth context — do NOT silently duplicate
     if (s === 403 || s === 405) {
       return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: 'PATCH_NOT_SUPPORTED', statusCode: s };
     }
-    if (s === 429) return { success: false, error: 'Teams rate limited', errorCode: 'rate_limited', statusCode: 429 };
     if (s === 404) return { success: false, error: 'Teams message not found', errorCode: 'MESSAGE_NOT_FOUND', statusCode: 404 };
     return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: `http_${s}`, statusCode: s };
   }
@@ -198,13 +203,17 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
   channelId: string;
   incident: MicrosoftTeamsIncidentCardInput['incident'];
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
+  disableActions?: boolean;
 }): Promise<TeamsDeliveryResult> {
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
   const tenantId = resolveTenantForCall(args.tenantId, resolved.config.tenantId);
   if (!tenantId) return { success: false, error: 'Teams tenant is not configured', errorCode: 'TENANT_REQUIRED', statusCode: 422 };
 
-  const cardObj = buildMicrosoftTeamsIncidentCard({ incident: args.incident, eventType: args.eventType });
+  const cardObj = buildMicrosoftTeamsIncidentCard(
+    { incident: args.incident, eventType: args.eventType },
+    { disableActions: args.disableActions },
+  );
   return sendBotActivity({
     serviceUrl: '',
     teamId: args.teamId,
@@ -224,13 +233,17 @@ export async function updateMicrosoftTeamsIncidentCard(args: {
   messageId: string;
   incident: MicrosoftTeamsIncidentCardInput['incident'];
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
+  disableActions?: boolean;
 }): Promise<TeamsDeliveryResult> {
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
   const tenantId = resolveTenantForCall(args.tenantId, resolved.config.tenantId);
   if (!tenantId) return { success: false, error: 'Teams tenant is not configured', errorCode: 'TENANT_REQUIRED', statusCode: 422 };
 
-  const cardObj = buildMicrosoftTeamsIncidentCard({ incident: args.incident, eventType: args.eventType });
+  const cardObj = buildMicrosoftTeamsIncidentCard(
+    { incident: args.incident, eventType: args.eventType },
+    { disableActions: args.disableActions },
+  );
   return updateBotActivity({
     teamId: args.teamId,
     channelId: args.channelId,
@@ -380,6 +393,12 @@ export async function getTeamsGrantedRscPermissions(options?: {
   }
 }
 
+/**
+ * Installation-scoped team discovery (Phase 4).
+ * Source of truth is MicrosoftTeamsInstallation (verified via Bot Framework
+ * conversationUpdate). We enrich with cached teamName and optionally verify
+ * via Graph per-team (Team.Read) — no broad GET /teams enumeration.
+ */
 export async function listMicrosoftTeamsForDiscovery(options?: {
   tenantId?: string;
 }): Promise<{ teams: Array<{ id: string; displayName: string; description?: string | null }>; error?: string }> {
@@ -387,23 +406,32 @@ export async function listMicrosoftTeamsForDiscovery(options?: {
   if (!resolved) return { teams: [], error: 'NOT_CONFIGURED' };
   const tenantId = resolveTenantForCall(options?.tenantId, resolved.config.tenantId);
   if (!tenantId) return { teams: [], error: 'TENANT_REQUIRED' };
-  const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
-  if (!token) return { teams: [], error: 'GRAPH_TOKEN_FAILED' };
-  const res = await retryFetch(
-    'https://graph.microsoft.com/v1.0/teams?$top=100',
-    { headers: { Authorization: `Bearer ${token}` } },
-    { maxAttempts: 2, initialDelayMs: 600 },
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { teams: [], error: text.slice(0, 400) || `HTTP ${res.status}` };
-  }
+  const prismaForTeams = (await import('@/lib/prisma')).default as unknown as {
+    microsoftTeamsInstallation: {
+      findMany: (a: unknown) => Promise<Array<{ teamId: string; teamName: string | null }>>;
+    };
+  };
   try {
-    const data = (await res.json()) as { value?: Array<{ id: string; displayName: string; description?: string | null }> };
-    const teams = (data.value ?? []).map(t => ({ id: t.id, displayName: t.displayName, description: t.description ?? null }));
+    const installations = await prismaForTeams.microsoftTeamsInstallation.findMany({
+      where: { tenantId, enabled: true },
+      select: { teamId: true, teamName: true },
+      orderBy: { teamName: 'asc' },
+      take: 100,
+    });
+    if (installations.length === 0) {
+      return { teams: [], error: undefined };
+    }
+    const teams = installations.map(i => ({
+      id: i.teamId,
+      displayName: i.teamName ?? i.teamId,
+      description: null as string | null,
+    }));
     return { teams };
-  } catch {
-    return { teams: [], error: 'Failed to parse teams list' };
+  } catch (e) {
+    return {
+      teams: [],
+      error: e instanceof Error ? e.message.slice(0, 400) : String(e).slice(0, 400),
+    };
   }
 }
 

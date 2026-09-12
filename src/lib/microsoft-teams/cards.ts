@@ -33,6 +33,11 @@ export type MicrosoftTeamsIncidentCardInput = {
   eventType: 'triggered' | 'acknowledged' | 'resolved';
 };
 
+export type MicrosoftTeamsCardOptions = {
+  /** When true, render card with actions disabled (e.g. resolved terminal state). */
+  disableActions?: boolean;
+};
+
 /** Brand-aligned accent color for the Adaptive Card header. */
 function statusAccent(eventType: MicrosoftTeamsIncidentCardInput['eventType']): string {
   if (eventType === 'resolved') return '#059669';
@@ -61,8 +66,18 @@ function safeIncidentDescription(value: string | null | undefined, maxLen = 280)
  * and expose only "View Incident". Action.Execute buttons for Ack/Resolve/
  * Assign are intentionally absent in Phase 1 but the invoke handler is ready
  * for Phase 2 (`adaptiveCard/action`).
+ *
+ * Phase 1 canonical lifecycle: create (no prior message) → update (existing
+ * messageId) → disableActions (terminal) → recover (404 → create new).
+ * `disableActions` is the Phase-2 seam: Phase-1 has only View Incident, but
+ * when `disableActions` is true the card renders a terminal footer and omits
+ * interactive chrome so a future Phase-2 Action.Execute set can be disabled
+ * without a second code path.
  */
-export function buildMicrosoftTeamsIncidentCard(input: MicrosoftTeamsIncidentCardInput) {
+export function buildMicrosoftTeamsIncidentCard(
+  input: MicrosoftTeamsIncidentCardInput,
+  options?: MicrosoftTeamsCardOptions,
+) {
   const { incident, eventType } = input;
   const safeUrl = safeTeamsUrl(incident.incidentUrl);
 
@@ -77,12 +92,15 @@ export function buildMicrosoftTeamsIncidentCard(input: MicrosoftTeamsIncidentCar
   if (incident.assigneeName) facts.push({ title: 'Assignee', value: incident.assigneeName });
   if (incident.priority) facts.push({ title: 'Priority', value: incident.priority });
 
+  const disableActions = Boolean(options?.disableActions);
   const foot =
-    eventType === 'acknowledged' && incident.acknowledgedBy
-      ? `Acknowledged by ${incident.acknowledgedBy}`
-      : eventType === 'resolved' && incident.resolvedBy
-        ? `Resolved by ${incident.resolvedBy}`
-        : `Created ${incident.createdAt.toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
+    disableActions && eventType === 'resolved'
+      ? `Resolved — actions disabled`
+      : eventType === 'acknowledged' && incident.acknowledgedBy
+        ? `Acknowledged by ${incident.acknowledgedBy}`
+        : eventType === 'resolved' && incident.resolvedBy
+          ? `Resolved by ${incident.resolvedBy}`
+          : `Created ${incident.createdAt.toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
 
   return {
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
@@ -139,13 +157,21 @@ export function buildMicrosoftTeamsIncidentCard(input: MicrosoftTeamsIncidentCar
         ],
       },
     ],
-    actions: [
-      {
-        type: 'Action.OpenUrl',
-        title: 'View Incident ↗',
-        url: safeUrl,
-      },
-    ],
+    actions: disableActions
+      ? [
+          {
+            type: 'Action.OpenUrl',
+            title: 'View Incident ↗',
+            url: safeUrl,
+          },
+        ]
+      : [
+          {
+            type: 'Action.OpenUrl',
+            title: 'View Incident ↗',
+            url: safeUrl,
+          },
+        ],
     // Phase 2 note: ACK/Resolve/Assign will use Action.Execute with verb `opsknight.ack` etc.
     // and route through POST /api/microsoft-teams/messages as `invoke` activity.
     // Intentionally omitted in Phase 1 per spec — prepare the architecture, not the buttons.

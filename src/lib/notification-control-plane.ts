@@ -1013,16 +1013,23 @@ async function dispatchPayload(
             eventType: payload.eventType,
           })
         );
-        // Graph app-only PATCH for normal messages is limited to policyViolation.
-        // Fall back to posting a fresh Adaptive Card rather than retry-storming PATCH.
-        if (!updateResult.success && updateResult.errorCode === 'PATCH_NOT_SUPPORTED') {
+        // MESSAGE_NOT_FOUND (deleted/expired) → recover by creating a fresh canonical activity and re-ledgering.
+        if (!updateResult.success && updateResult.errorCode === 'MESSAGE_NOT_FOUND') {
           return executeProvider(tenantBreaker, () =>
-            microsoftTeamsChatProvider.sendIncidentCard({
+            microsoftTeamsChatProvider.recoverIncidentCard({
               destinationId: payload.destinationId,
               incident: payload.incident as never,
               eventType: payload.eventType,
             })
           );
+        }
+        // Graph app-only PATCH for normal channel messages is limited to
+        // `policyViolation` edits per Microsoft docs. Do NOT silently duplicate
+        // the card on PATCH_NOT_SUPPORTED — surface DEGRADED/health instead so
+        // operators see that updates require delegated permissions and the single
+        // canonical activity invariant is preserved.
+        if (!updateResult.success && updateResult.errorCode === 'PATCH_NOT_SUPPORTED') {
+          return updateResult;
         }
         return updateResult;
       }

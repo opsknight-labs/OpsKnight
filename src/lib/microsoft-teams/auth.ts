@@ -143,6 +143,40 @@ export async function assertMicrosoftTeamsActivityAuth(request: Request): Promis
   return verifyBotFrameworkToken(token, resolved.config.clientId);
 }
 
+/**
+ * Tenant allowlist enforcement — fail-closed.
+ * SINGLE: verified tid must equal config.tenantId
+ * MULTI: verified tid must have an enabled installation
+ * __test__ bypass is never allowlisted as a real tenant.
+ */
+export async function enforceMicrosoftTeamsTenantAllowlist(
+  verifiedTenantId: string,
+  config: { tenantId: string | null; tenantMode: string },
+): Promise<{ allowed: true } | { allowed: false; reason: string; code: string }> {
+  if (!verifiedTenantId || verifiedTenantId === '__test__') {
+    return { allowed: false, reason: 'Tenant is not verified', code: 'TENANT_REQUIRED' };
+  }
+  if (config.tenantMode === 'SINGLE') {
+    const cfgTid = config.tenantId?.trim();
+    if (!cfgTid) return { allowed: false, reason: 'SINGLE tenant not configured', code: 'TENANT_REQUIRED' };
+    if (verifiedTenantId !== cfgTid) {
+      return { allowed: false, reason: 'Tenant not allowed for SINGLE-mode config', code: 'TENANT_NOT_ALLOWED' };
+    }
+    return { allowed: true };
+  }
+  // MULTI — must have at least one enabled installation for this tenant
+  const prismaAny = prisma as unknown as {
+    microsoftTeamsInstallation: { count: (a: unknown) => Promise<number> };
+  };
+  const count = await prismaAny.microsoftTeamsInstallation.count({
+    where: { tenantId: verifiedTenantId, enabled: true },
+  } as never);
+  if (count === 0) {
+    return { allowed: false, reason: 'Teams app not installed for tenant', code: 'APP_NOT_INSTALLED' };
+  }
+  return { allowed: true };
+}
+
 // Test-only helpers
 export function __clearBotJwksCacheForTests(): void {
   botJwksCache = null;
