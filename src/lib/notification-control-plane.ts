@@ -994,9 +994,17 @@ async function dispatchPayload(
         where: { incidentId_destinationId: { incidentId: payload.incident.id, destinationId: payload.destinationId } },
         select: { messageId: true, conversationId: true },
       });
+      // Tenant-scoped breaker: look up destination tenant for the circuit key (fallback to global if unknown).
+      const prismaAnyCp = prisma as unknown as {
+        microsoftTeamsDestination: { findUnique: (a: unknown) => Promise<{ tenantId: string } | null> };
+      };
+      const destForBreaker = await prismaAnyCp.microsoftTeamsDestination
+        .findUnique({ where: { id: payload.destinationId }, select: { tenantId: true } } as never)
+        .catch(() => null);
+      const tenantBreaker = CircuitBreakers.microsoftTeams(destForBreaker?.tenantId);
       if (previous?.messageId) {
         const { microsoftTeamsChatProvider } = await import('./microsoft-teams/provider');
-        return executeProvider(CircuitBreakers.microsoftTeams(), () =>
+        const updateResult = await executeProvider(tenantBreaker, () =>
           microsoftTeamsChatProvider.updateIncidentCard({
             destinationId: payload.destinationId,
             messageId: previous.messageId!,
@@ -1005,9 +1013,21 @@ async function dispatchPayload(
             eventType: payload.eventType,
           })
         );
+        // Graph app-only PATCH for normal messages is limited to policyViolation.
+        // Fall back to posting a fresh Adaptive Card rather than retry-storming PATCH.
+        if (!updateResult.success && updateResult.errorCode === 'PATCH_NOT_SUPPORTED') {
+          return executeProvider(tenantBreaker, () =>
+            microsoftTeamsChatProvider.sendIncidentCard({
+              destinationId: payload.destinationId,
+              incident: payload.incident as never,
+              eventType: payload.eventType,
+            })
+          );
+        }
+        return updateResult;
       }
       const { microsoftTeamsChatProvider } = await import('./microsoft-teams/provider');
-      return executeProvider(CircuitBreakers.microsoftTeams(), () =>
+      return executeProvider(tenantBreaker, () =>
         microsoftTeamsChatProvider.sendIncidentCard({
           destinationId: payload.destinationId,
           incident: payload.incident as never,
@@ -1167,6 +1187,36 @@ async function serviceTargetDeliveryRevoked(
     });
     return target ? null : 'Webhook integration was disabled, removed, or retargeted';
   }
+  if (policy.targetKind === 'SERVICE_MICROSOFT_TEAMS_CHANNEL') {
+    const prismaAny = prisma as unknown as {
+      microsoftTeamsDestination: {
+        findUnique: (a: unknown) => Promise<{
+          enabled: boolean;
+          channelId: string;
+          serviceId: string;
+        } | null>;
+      };
+    };
+    const dest = await prismaAny.microsoftTeamsDestination.findUnique({
+      where: { id: policy.targetId },
+    });
+    if (!dest || !dest.enabled || dest.serviceId !== policy.serviceId) {
+      return 'Microsoft Teams destination was disabled, removed, or retargeted';
+    }
+    if (policy.targetAddress && dest.channelId !== policy.targetAddress) {
+      return 'Microsoft Teams channel was retargeted';
+    }
+    // Also verify the service still has MICROSOFT_TEAMS in its channels
+    const service = await prisma.service.findUnique({
+      where: { id: policy.serviceId },
+      select: { serviceNotificationChannels: true, serviceNotifyOnTriggered: true, serviceNotifyOnAck: true, serviceNotifyOnResolved: true },
+    });
+    if (!service || !serviceEventEnabled(service, policy.eventType)) return 'Service notification target was disabled';
+    if (!service.serviceNotificationChannels.includes('MICROSOFT_TEAMS' as never)) {
+      return 'Service Microsoft Teams notifications were disabled';
+    }
+    return null;
+  }
   const service = await prisma.service.findUnique({
     where: { id: policy.serviceId },
     select: {
@@ -1203,7 +1253,7 @@ async function lifecycleDeliveryRevoked(
   payload: CentralNotificationPayload
 ): Promise<string | null> {
   const policy =
-    payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK'
+    payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK' || payload.kind === 'MICROSOFT_TEAMS_CHANNEL'
       ? (payload.lifecyclePolicy ?? {
           incidentId: payload.incident.id,
           eventType: payload.eventType,

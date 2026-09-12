@@ -7,7 +7,8 @@ import { Shield, Globe, KeyRound, RefreshCw, CheckCircle2, AlertTriangle } from 
 import prisma from '@/lib/prisma';
 import MicrosoftTeamsIntegrationPage from '@/components/settings/microsoft-teams/MicrosoftTeamsIntegrationPage';
 import { getBaseUrl } from '@/lib/env-validation';
-import { buildMicrosoftTeamsAppManifestJson, MICROSOFT_TEAMS_RSC_PERMISSIONS, findMissingRequiredRscPermissions } from '@/lib/microsoft-teams/app-manifest';
+import { buildMicrosoftTeamsAppManifestJson } from '@/lib/microsoft-teams/app-manifest';
+import { getTeamsGrantedRscPermissions } from '@/lib/microsoft-teams/client';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -55,8 +56,14 @@ export default async function MicrosoftTeamsIntegrationRoute() {
 
   const isConnected = Boolean(config?.enabled && config?.clientId);
 
-  const manifestJson = buildMicrosoftTeamsAppManifestJson({ appUrl: getBaseUrl() });
-  const missingPermissions = findMissingRequiredRscPermissions(MICROSOFT_TEAMS_RSC_PERMISSIONS);
+  const manifestJson = buildMicrosoftTeamsAppManifestJson({
+    appUrl: getBaseUrl(),
+    botId: config?.clientId ?? '11111111-1111-1111-1111-111111111111',
+  });
+  const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
+  const rscUnknown = !rscState || rscState.unknown;
+  const rscMissingCount = rscState?.missing.length ?? 0;
+  const rscGrantedCount = rscState?.granted?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -126,12 +133,17 @@ export default async function MicrosoftTeamsIntegrationRoute() {
           },
           {
             label: 'Permissions',
-            value: isConnected && missingPermissions.length === 0 ? `${MICROSOFT_TEAMS_RSC_PERMISSIONS.length} granted` : isConnected ? `${missingPermissions.length} missing` : 'Not configured',
+            value: !isConnected
+              ? 'Not configured'
+              : rscUnknown
+                ? 'Unknown (install/inspect)'
+                : rscMissingCount === 0 ? `${rscGrantedCount} granted` : `${rscMissingCount} missing`,
             icon: <RefreshCw className="h-4 w-4" />,
-            valueClassName: missingPermissions.length === 0
+            valueClassName: !rscUnknown && rscMissingCount === 0
               ? 'text-emerald-300 font-semibold text-sm sm:text-base'
+              : rscUnknown ? 'text-primary-foreground/70 font-semibold text-sm sm:text-base'
               : 'text-amber-300 font-semibold text-sm sm:text-base',
-            subtext: 'RSC permissions',
+            subtext: rscUnknown && isConnected ? `Graph check: ${rscState?.error ?? 'pending install'}` : 'RSC permissions',
           },
         ]}
       />

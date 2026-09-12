@@ -1,6 +1,7 @@
 import type { IncidentChatProvider, ChatDeliveryResult } from '@/lib/chatops/provider';
 import prisma from '@/lib/prisma';
 import { getBaseUrl } from '@/lib/env-validation';
+import { logger } from '@/lib/logger';
 import { sendMicrosoftTeamsIncidentCard, updateMicrosoftTeamsIncidentCard, testMicrosoftTeamsConnection } from './client';
 
 function incidentUrl(incidentId: string): string {
@@ -44,19 +45,28 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       eventType: args.eventType,
     });
     if (res.success && res.providerMessageId) {
-      await prisma.microsoftTeamsIncidentMessage.upsert({
-        where: { incidentId_destinationId: { incidentId: args.incident.id, destinationId: args.destinationId } },
-        create: {
-          incidentId: args.incident.id,
+      try {
+        await prisma.microsoftTeamsIncidentMessage.upsert({
+          where: { incidentId_destinationId: { incidentId: args.incident.id, destinationId: args.destinationId } },
+          create: {
+            incidentId: args.incident.id,
+            destinationId: args.destinationId,
+            messageId: res.providerMessageId,
+            channelId: dest.channelId,
+            tenantId: dest.tenantId,
+            teamId: dest.teamId,
+            conversationId: res.conversationId ?? null,
+          },
+          update: { messageId: res.providerMessageId, channelId: dest.channelId, tenantId: dest.tenantId, teamId: dest.teamId, conversationId: res.conversationId ?? undefined },
+        });
+      } catch (error) {
+        // Delivery succeeded at provider — ledger failure must not flip to retry. Log and return success.
+        logger.warn('[MicrosoftTeams] Incident message ledger upsert failed after successful send', {
           destinationId: args.destinationId,
-          messageId: res.providerMessageId,
-          channelId: dest.channelId,
-          tenantId: dest.tenantId,
-          teamId: dest.teamId,
-          conversationId: res.conversationId ?? null,
-        },
-        update: { messageId: res.providerMessageId, channelId: dest.channelId, tenantId: dest.tenantId, teamId: dest.teamId, conversationId: res.conversationId ?? undefined },
-      }).catch(() => undefined);
+          incidentId: args.incident.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     return res;
   }

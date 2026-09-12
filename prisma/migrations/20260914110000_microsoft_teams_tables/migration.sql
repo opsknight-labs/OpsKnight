@@ -1,13 +1,10 @@
+-- Depends on 20260914100000_microsoft_teams_enum_extend for enum values.
 -- Microsoft Teams Phase 1 foundation
 -- Encrypted console-UI config, team/channel install destinations, and incident message ledger for Adaptive Card updates.
 -- Naming uses MicrosoftTeams* to avoid collision with the internal Team domain.
 
 -- New enums
 CREATE TYPE "MicrosoftTeamsTenantMode" AS ENUM ('SINGLE', 'MULTI');
-
--- Extend existing enums (idempotent)
-ALTER TYPE "NotificationChannel" ADD VALUE IF NOT EXISTS 'MICROSOFT_TEAMS';
-ALTER TYPE "NotificationRecipientType" ADD VALUE IF NOT EXISTS 'MICROSOFT_TEAMS_CHANNEL';
 
 -- MicrosoftTeamsConfig (console UI, encrypted clientSecret)
 CREATE TABLE IF NOT EXISTS "MicrosoftTeamsConfig" (

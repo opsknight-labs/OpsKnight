@@ -19,7 +19,6 @@ export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
 
 export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',
-  'ChannelSettings.Read.All',
 ] as const;
 
 export const MICROSOFT_TEAMS_RSC_PERMISSIONS: string[] = [
@@ -33,21 +32,31 @@ export const MICROSOFT_TEAMS_GRAPH_SCOPES = ['https://graph.microsoft.com/.defau
 export interface MicrosoftTeamsManifestOptions {
   /** Public app origin, e.g. https://opsknight.example.com */
   appUrl: string;
+  botId: string; // Entra Application (client) ID — GUID
   appName?: string;
   appDescription?: string;
+  manifestId?: string; // GUID for manifest `id` field, defaults to stable placeholder
+}
+
+// Messaging endpoint is configured on the Azure Bot resource, not in the manifest.
+// Use getMicrosoftTeamsBotMessagingEndpoint() to derive the canonical URL.
+export function getMicrosoftTeamsBotMessagingEndpoint(appUrl: string): string {
+  return `${appUrl.replace(/\/+$/, '')}/api/microsoft-teams/messages`;
 }
 
 export function buildMicrosoftTeamsAppManifest({
   appUrl,
+  botId,
   appName = 'OpsKnight',
   appDescription = 'OpsKnight incident operations for Microsoft Teams',
+  manifestId = '11111111-1111-1111-1111-111111111111',
 }: MicrosoftTeamsManifestOptions) {
   const origin = appUrl.replace(/\/+$/, '');
   return {
     $schema: 'https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json',
     manifestVersion: '1.16',
     version: '1.0.0',
-    id: 'opsknight-teams-phase1',
+    id: manifestId, // placeholder GUID — replaced by real GUID at packaging time; manifest `id` must be a GUID per Microsoft spec
     packageName: 'com.opsknight.teams',
     developer: {
       name: 'OpsKnight Labs',
@@ -61,7 +70,7 @@ export function buildMicrosoftTeamsAppManifest({
     accentColor: '#0f172a',
     bots: [
       {
-        botId: '${MicrosoftAppId}',
+        botId,
         scopes: ['team', 'groupChat', 'personal'],
         // Single bot endpoint for all Teams activities. The server switches
         // on activity.type: conversationUpdate / invoke (Action.Execute) / message.
@@ -72,18 +81,14 @@ export function buildMicrosoftTeamsAppManifest({
     ],
     validDomains: [new URL(origin).hostname],
     webApplicationInfo: {
-      id: '${MicrosoftAppId}',
-      resource: `api://${new URL(origin).hostname}/\${MicrosoftAppId}`,
+      id: botId,
+      resource: `api://${new URL(origin).hostname}/${botId}`,
     },
     authorization: {
       permissions: {
         resourceSpecific: MICROSOFT_TEAMS_RSC_PERMISSIONS.map(name => ({ name, type: 'Application' as const })),
       },
     },
-    // The only inbound URL the Teams service calls. Keep it stable — the
-    // manifest is deployed to AppSource / admin center and cannot be changed
-    // without a resubmission.
-    botsEndpoint: `${origin}/api/microsoft-teams/messages`,
   };
 }
 
