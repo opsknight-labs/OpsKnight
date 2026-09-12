@@ -17,6 +17,7 @@ import {
 } from '@/lib/incidents/operator-lifecycle';
 import { executeIncidentCreation, type IncidentCreationSource } from '@/lib/incidents/creation';
 import { enqueueIncidentUpdateSideEffects, enqueueWarRoomSideEffects } from '@/lib/event-outbox';
+import { reconcileIncidentEngagementAfterUrgencyChange } from '@/lib/incidents/engagement-reconciliation';
 
 const LEGACY_NOT_FOUND_MESSAGE =
   'The requested item could not be found. It may have been deleted or you may not have access to it.';
@@ -51,6 +52,10 @@ export async function updateIncidentUrgency(id: string, urgency: string) {
   await assertResponderOrAbove();
   const parsedUrgency = parseIncidentUrgency(urgency);
   await prisma.$transaction(async tx => {
+    const current = await tx.incident.findUniqueOrThrow({
+      where: { id },
+      select: { urgency: true },
+    });
     await tx.incident.update({
       where: { id },
       data: {
@@ -62,6 +67,11 @@ export async function updateIncidentUrgency(id: string, urgency: string) {
           },
         },
       },
+    });
+    await reconcileIncidentEngagementAfterUrgencyChange(tx, {
+      incidentId: id,
+      previousUrgency: current.urgency,
+      urgency: parsedUrgency,
     });
     await enqueueWarRoomSideEffects(tx, id, [
       { effect: 'WAR_ROOM_MESSAGE', message: `🔔 *Urgency updated to ${parsedUrgency}*` },

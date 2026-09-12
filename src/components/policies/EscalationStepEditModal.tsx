@@ -24,6 +24,9 @@ import {
 import { Checkbox } from '@/components/ui/shadcn/checkbox';
 import { Clock, Users, Calendar, User, ShieldAlert } from 'lucide-react';
 import PolicyTargetCombobox from './PolicyTargetCombobox';
+import EscalationConditionsEditor, {
+  type EditableEscalationCondition,
+} from './EscalationConditionsEditor';
 
 type EscalationStep = {
   id: string;
@@ -47,6 +50,7 @@ type EscalationStep = {
   } | null;
   targetSchedule?: { id: string; name: string } | null;
   notifyOnlyTeamLead: boolean;
+  conditions?: EditableEscalationCondition[];
 };
 
 type EscalationStepEditModalProps = {
@@ -92,6 +96,9 @@ export default function EscalationStepEditModal({
   );
   const [delayMinutes, setDelayMinutes] = useState<number>(step.delayMinutes);
   const [notifyOnlyTeamLead, setNotifyOnlyTeamLead] = useState<boolean>(step.notifyOnlyTeamLead);
+  const [conditions, setConditions] = useState<EditableEscalationCondition[]>(
+    step.conditions ?? []
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,6 +111,8 @@ export default function EscalationStepEditModal({
     }
     if (targetType === 'SCHEDULE') formData.append('targetScheduleId', targetScheduleId);
     formData.append('delayMinutes', String(delayMinutes));
+    formData.append('conditionsSubmitted', 'true');
+    formData.append('conditions', JSON.stringify(conditions));
 
     startTransition(async () => {
       try {
@@ -274,6 +283,12 @@ export default function EscalationStepEditModal({
                 : `Responders at this step are notified after ${delayMinutes} minutes if previous steps are unacknowledged.`}
             </p>
           </div>
+
+          <EscalationConditionsEditor
+            value={conditions}
+            onChange={setConditions}
+            disabled={isPending}
+          />
 
           <DialogFooter className="pt-3 gap-2 sm:gap-0">
             <Button

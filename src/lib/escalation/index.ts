@@ -27,6 +27,8 @@ import {
   scheduleDelayedEscalationStep,
 } from './repository';
 import { settleEscalationFallbackOutcome } from './fallback-repository';
+import { escalationConditionsMatch, type EscalationCondition } from './conditions';
+import { resolveSupportHours } from '@/lib/incidents/support-hours';
 
 export * from './types';
 export * from './state';
@@ -40,6 +42,7 @@ export { selectEscalationAssignment, type EscalationAssignment } from './assigne
 export { planEscalationStep, type EscalationPlan } from './planner';
 
 type PolicyStepRow = {
+  id: string;
   delayMinutes: number;
   targetType: 'USER' | 'TEAM' | 'SCHEDULE';
   targetUserId: string | null;
@@ -167,8 +170,24 @@ export async function executeEscalation(
 
   const now = new Date();
   const stepDelayMinutes = step.delayMinutes || 0;
+  const conditions: EscalationCondition[] = prisma.escalationRuleCondition
+    ? await prisma.escalationRuleCondition.findMany({
+        where: { ruleId: step.id },
+        select: { field: true, operator: true, values: true },
+      })
+    : [];
+  const supportHours = conditions.some(condition => condition.field === 'SUPPORT_HOURS_STATE')
+    ? await prisma.$transaction(tx =>
+        resolveSupportHours(tx, { serviceId: incident.serviceId, at: now })
+      )
+    : { state: 'UNCONFIGURED' as const };
+  const applicable = escalationConditionsMatch(conditions, {
+    priority: incident.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
+    urgency: incident.urgency,
+    supportHoursState: supportHours.state,
+  });
 
-  if (stepDelayMinutes > 0) {
+  if (applicable && stepDelayMinutes > 0) {
     if (!incident.nextEscalationAt) {
       const dueAt = escalationDueAt(now, stepDelayMinutes);
       const scheduled = await scheduleDelayedEscalationStep({
@@ -223,7 +242,7 @@ export async function executeEscalation(
       reason: `${step.targetType} step has no target ID configured`,
     };
 
-    if (targetId) {
+    if (applicable && targetId) {
       try {
         resolution = await resolveEscalationTargetDetailed({
           targetType: step.targetType,
@@ -260,6 +279,7 @@ export async function executeEscalation(
       stepDelayMinutes,
       nextStepDelayMinutes: policySteps.at(currentStepIndex + 1)?.delayMinutes ?? null,
       now,
+      applicable,
     });
 
     const targetName = resolution.outcome === 'INVALID_TARGET' ? 'Unknown' : resolution.targetName;

@@ -21,6 +21,17 @@ export type PolicyFormState = {
   policyId?: string;
 };
 
+function parseSubmittedConditions(formData: FormData): unknown[] {
+  const raw = formData.get('conditions');
+  if (typeof raw !== 'string' || raw.trim() === '') return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    return Array.isArray(value) ? value : [{ invalid: true }];
+  } catch {
+    return [{ invalid: true }];
+  }
+}
+
 export async function createPolicyAction(
   _prevState: PolicyFormState,
   formData: FormData
@@ -148,7 +159,10 @@ export async function createPolicy(formData: FormData) {
       name: normalizedName,
       description: description || undefined,
       steps: {
-        create: steps,
+        create: steps.map(({ conditions = [], ...step }) => ({
+          ...step,
+          conditions: conditions.length > 0 ? { create: conditions } : undefined,
+        })),
       },
     },
     include: {
@@ -274,6 +288,7 @@ export async function addPolicyStep(
     delayMinutes: formData.get('delayMinutes'),
     notificationChannels: formData.getAll('notificationChannels'),
     notifyOnlyTeamLead: formData.get('notifyOnlyTeamLead') === 'true',
+    conditions: parseSubmittedConditions(formData),
   });
   if (!validation.valid) {
     return { error: firstEscalationStepIssue(validation.issues) };
@@ -295,8 +310,9 @@ export async function addPolicyStep(
 
       const order = maxStep ? maxStep.stepOrder + 1 : 0;
 
+      const { conditions = [], ...stepData } = step;
       await tx.escalationRule.create({
-        data: { policyId, stepOrder: order, ...step },
+        data: { policyId, stepOrder: order, ...stepData, conditions: { create: conditions } },
       });
 
       return order;
@@ -331,7 +347,7 @@ export async function updatePolicyStep(
 
   const existing = await prisma.escalationRule.findUnique({
     where: { id: stepId },
-    include: { policy: true },
+    include: { policy: true, conditions: true },
   });
 
   if (!existing) {
@@ -348,6 +364,7 @@ export async function updatePolicyStep(
   // clear its channel restriction and silently widen the step to every channel
   // the recipient has enabled.
   const channelsSubmitted = formData.get(ESCALATION_STEP_CHANNELS_SUBMITTED) === 'true';
+  const conditionsSubmitted = formData.get('conditionsSubmitted') === 'true';
 
   const validation = validateEscalationStep({
     targetType,
@@ -359,6 +376,7 @@ export async function updatePolicyStep(
       ? formData.getAll('notificationChannels')
       : existing.notificationChannels,
     notifyOnlyTeamLead: formData.get('notifyOnlyTeamLead') === 'true',
+    ...(conditionsSubmitted ? { conditions: parseSubmittedConditions(formData) } : {}),
   });
   if (!validation.valid) {
     return { error: firstEscalationStepIssue(validation.issues) };
@@ -371,7 +389,15 @@ export async function updatePolicyStep(
       if (!(await escalationTargetExists(tx, step.targetType, targetId))) {
         throw new Error(`The selected ${step.targetType.toLowerCase()} no longer exists.`);
       }
-      await tx.escalationRule.update({ where: { id: stepId }, data: step });
+      const { conditions = [], ...stepData } = step;
+      await tx.escalationRule.update({ where: { id: stepId }, data: stepData });
+      if (conditionsSubmitted) {
+        await tx.escalationRuleCondition.deleteMany({ where: { ruleId: stepId } });
+        if (conditions.length > 0)
+          await tx.escalationRuleCondition.createMany({
+            data: conditions.map(condition => ({ ruleId: stepId, ...condition })),
+          });
+      }
     });
 
     await logAudit({

@@ -10,6 +10,7 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
 import { enqueueLifecycleSideEffects } from '@/lib/event-outbox';
 import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
+import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
 
 export const INCIDENT_LIFECYCLE_COMMANDS = [
   'ACKNOWLEDGE',
@@ -376,6 +377,10 @@ function updateDataForCommand(
 ): Prisma.IncidentUpdateInput {
   const data: Prisma.IncidentUpdateInput = {
     status: targetStatusFor(input.command),
+    // Cleared on every lifecycle mutation. The SLA monitor re-projects from
+    // the immutable contract and repairs the indexed scheduling hint.
+    nextSlaTransitionAt: null,
+    nextSlaTransitionKind: null,
     // Any real lifecycle transition invalidates a worker that claimed the
     // previous escalation generation. The worker re-checks this lock token
     // before assignment, notification delivery, and final state mutation.
@@ -596,13 +601,23 @@ export async function applyIncidentLifecycleCommand(
   const updateData = updateDataForCommand(incident, input, now);
   const lifecycleEvent = eventForCommand(input, resolutionNote);
 
-  await tx.incident.update({
+  const updated = await tx.incident.update({
     where: { id: input.incidentId },
     data: {
       ...updateData,
       events: { create: lifecycleEvent },
     },
   });
+  if (updated?.slaAckTargetMs != null && updated.slaResolveTargetMs != null) {
+    const next = deriveNextSlaTransition(updated, now);
+    await tx.incident.update({
+      where: { id: input.incidentId },
+      data: {
+        nextSlaTransitionAt: next?.at ?? null,
+        nextSlaTransitionKind: next?.kind ?? null,
+      },
+    });
+  }
 
   const pauseStore = (
     tx as Prisma.TransactionClient & {
@@ -784,4 +799,13 @@ export async function executeIncidentLifecycleTargetBatch(
     }
     return results;
   });
+}
+
+/** Lifecycle-owned repair used when an engagement gate is released. */
+export async function setIncidentNextEscalationAt(
+  tx: Prisma.TransactionClient,
+  incidentId: string,
+  nextEscalationAt: Date
+) {
+  await tx.incident.update({ where: { id: incidentId }, data: { nextEscalationAt } });
 }

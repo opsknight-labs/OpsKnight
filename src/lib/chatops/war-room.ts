@@ -710,9 +710,22 @@ export async function archiveWarRoomChannel(
       channel: incident.slackChannelId,
     });
 
-    if (!archiveResult.ok && archiveResult.error !== 'already_archived') {
+    const isIdempotentSuccess =
+      archiveResult.ok ||
+      archiveResult.error === 'already_archived' ||
+      archiveResult.error === 'channel_not_found';
+
+    if (!isIdempotentSuccess) {
       logger.warn('[ChatOps] Failed to archive channel', { error: archiveResult.error });
       return { success: false, error: archiveResult.error || 'Failed to archive Slack channel' };
+    }
+
+    if (archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found') {
+      logger.info('[ChatOps] Channel already archived or not found in Slack; treating as archived', {
+        incidentId,
+        channelId: incident.slackChannelId,
+        slackError: archiveResult.error,
+      });
     }
 
     // Mark the war-room as archived. The channel id is kept so the incident

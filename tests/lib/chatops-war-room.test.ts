@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   generateBridgeUrl,
@@ -563,6 +564,56 @@ describe('ChatOps War-Room Engine', () => {
 
       const result = await archiveWarRoomChannel('inc-104', { force: true });
       expect(result.success).toBe(true);
+    });
+
+    it('should treat already_archived as idempotent success and stamp warRoomArchivedAt', async () => {
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        slackChannelId: 'C123',
+        slackChannelName: 'inc-104-payments',
+        serviceId: 'srv-1',
+      } as never);
+      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
+        archiveOnResolve: true,
+      } as never);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
+      vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
+        json: async () => ({ ok: false, error: 'already_archived' }),
+      } as never);
+
+      const result = await archiveWarRoomChannel('inc-104');
+      expect(result.success).toBe(true);
+      expect(prisma.incident.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'inc-104' },
+          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+        })
+      );
+    });
+
+    it('should treat channel_not_found as idempotent success and stamp warRoomArchivedAt', async () => {
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        slackChannelId: 'C123',
+        slackChannelName: 'inc-104-payments',
+        serviceId: 'srv-1',
+      } as never);
+      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
+        archiveOnResolve: true,
+      } as never);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
+      vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
+        json: async () => ({ ok: false, error: 'channel_not_found' }),
+      } as never);
+
+      const result = await archiveWarRoomChannel('inc-104');
+      expect(result.success).toBe(true);
+      expect(prisma.incident.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'inc-104' },
+          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+        })
+      );
     });
   });
 
