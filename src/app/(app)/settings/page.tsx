@@ -20,13 +20,12 @@ import {
   Puzzle,
   Bell,
   ArrowRight,
-  Lock,
   Globe,
   Activity,
   MessageSquare,
   KeyRound,
   SlidersHorizontal,
-  Tickets,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { SlackLogo, JiraLogo } from '@/components/common/BrandLogos';
@@ -46,6 +45,7 @@ const itemIcons: Record<string, LucideIcon | React.ComponentType<{ className?: s
   'status-page': Globe,
   'api-keys': KeyRound,
   'audit-logs': Activity,
+  'security-compliance': ShieldCheck,
   integrations: Puzzle,
   slack: SlackLogo,
   chatops: MessageSquare,
