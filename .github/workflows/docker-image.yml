@@ -60,6 +60,18 @@ jobs:
           HUSKY: '0'
         run: npm ci --legacy-peer-deps
 
+      - name: Validate release licensing contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./package.json').license")" = 'AGPL-3.0-only'
+          test -f LICENSE
+          test -f LICENSE-TRANSITION.md
+          test -f TRADEMARKS.md
+          test -f LICENSES/Apache-2.0.txt
+          grep -q 'GNU AFFERO GENERAL PUBLIC LICENSE' LICENSE
+          grep -q 'AGPL-3.0-only' docs/v1.5/licensing.md
+
       - name: Clean-install and migration contract
         run: |
           mkdir -p reports
@@ -229,6 +241,9 @@ jobs:
             ${{ steps.meta_test_pr.outputs.tags }}
             opsknight-pr-validation:${{ github.sha }}
           labels: ${{ steps.meta_test_pr.outputs.labels }}
+          build-args: |
+            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
           cache-from: type=gha,scope=opsknight-main-amd64
           provenance: false
           sbom: false
@@ -271,6 +286,9 @@ jobs:
           push: true
           tags: ${{ steps.meta_test_main.outputs.tags }}
           labels: ${{ steps.meta_test_main.outputs.labels }}
+          build-args: |
+            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
           cache-from: type=gha,scope=opsknight-main-amd64
           cache-to: type=gha,scope=opsknight-main-amd64,mode=max
           provenance: false
@@ -286,6 +304,9 @@ jobs:
           push: true
           tags: ${{ steps.meta_release_tag.outputs.tags }}
           labels: ${{ steps.meta_release_tag.outputs.labels }}
+          build-args: |
+            SOURCE_CODE_URL=https://github.com/${{ github.repository }}/tree/${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
           cache-from: |
             type=gha,scope=opsknight-release
             type=gha,scope=opsknight-main-amd64
