@@ -16,6 +16,7 @@ import StatusPagePrivacySettings, {
 import StatusPageWebhooksSettings from '@/components/status-page/StatusPageWebhooksSettings';
 import StatusPageSubscribers from '@/components/status-page/StatusPageSubscribers';
 import StatusPageEmailConfig from '@/components/status-page/StatusPageEmailConfig';
+import StatusPageServicesManager from '@/components/status-page/StatusPageServicesManager';
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
 import DangerZoneCard from '@/components/settings/DangerZoneCard';
@@ -2484,152 +2485,17 @@ export default function StatusPageConfig({
 
                 {/* Services Configuration */}
                 {activeSection === 'services' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Services to Display"
-                      description="Select which services to show on your status page and configure display overrides."
-                      icon={<CheckSquare className="w-5 h-5 text-primary" />}
-                    >
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                          <Switch
-                            checked={formData.showServicesByRegion}
-                            onChange={checked =>
-                              setFormData({ ...formData, showServicesByRegion: checked })
-                            }
-                            label="Group by Region"
-                            helperText={
-                              privacySettings.showServiceRegions === false
-                                ? 'Enable “Show Service Regions” in Privacy settings.'
-                                : hasSelectedRegions
-                                  ? 'Set default grouped view for visitors.'
-                                  : 'Add regions to selected services to enable.'
-                            }
-                            disabled={
-                              privacySettings.showServiceRegions === false || !hasSelectedRegions
-                            }
-                          />
-                        </div>
-                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                          <Switch
-                            checked={formData.showServiceOwners}
-                            onChange={checked =>
-                              setFormData({ ...formData, showServiceOwners: checked })
-                            }
-                            label="Show Service Owners"
-                            helperText={
-                              privacySettings.showTeamInformation === false
-                                ? 'Enable “Show Team Information” in Privacy.'
-                                : 'Display “Owned by <team>” badges.'
-                            }
-                            disabled={privacySettings.showTeamInformation === false}
-                          />
-                        </div>
-                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                          <Switch
-                            checked={formData.showServiceSlaTier}
-                            onChange={checked =>
-                              setFormData({ ...formData, showServiceSlaTier: checked })
-                            }
-                            label="Show SLA Tier"
-                            helperText="Display SLA tier badges (e.g., Gold, Silver)."
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-3">
-                        {allServices.map(service => {
-                          const isSelected = selectedServices.has(service.id);
-                          const config = serviceConfigs[service.id] || {
-                            displayName: '',
-                            order: 0,
-                            showOnPage: true,
-                          };
-
-                          return (
-                            <div
-                              key={service.id}
-                              className={cn(
-                                'rounded-xl border transition-all duration-150',
-                                isSelected
-                                  ? 'border-indigo-200 dark:border-indigo-900/60 bg-muted/30 shadow-xs'
-                                  : 'border-border/80 bg-card hover:border-border'
-                              )}
-                            >
-                              <div className="p-4 sm:p-4.5">
-                                <div className="flex items-center gap-3">
-                                  <Checkbox
-                                    checked={isSelected}
-                                    onChange={e => {
-                                      const newSet = new Set(selectedServices);
-                                      if (e.target.checked) {
-                                        newSet.add(service.id);
-                                        if (!serviceConfigs[service.id]) {
-                                          updateServiceConfig(service.id, {
-                                            displayName: '',
-                                            order: 0,
-                                            showOnPage: true,
-                                          });
-                                        }
-                                      } else {
-                                        newSet.delete(service.id);
-                                      }
-                                      setSelectedServices(newSet);
-                                    }}
-                                  />
-                                  <span className="font-semibold text-sm text-foreground flex-1 select-none">
-                                    {service.name}
-                                  </span>
-                                </div>
-                                {isSelected && (
-                                  <div className="mt-3.5 pt-3.5 border-t border-border/60 grid grid-cols-1 md:grid-cols-12 gap-3.5 items-start">
-                                    <div className="md:col-span-6">
-                                      <FormField
-                                        type="input"
-                                        label="Display Name"
-                                        value={config.displayName}
-                                        onChange={e =>
-                                          updateServiceConfig(service.id, {
-                                            displayName: e.target.value,
-                                          })
-                                        }
-                                        placeholder={service.name}
-                                        helperText="Override service name on status page"
-                                      />
-                                    </div>
-                                    <div className="md:col-span-3">
-                                      <FormField
-                                        type="input"
-                                        label="Order"
-                                        value={config.order.toString()}
-                                        onChange={e =>
-                                          updateServiceConfig(service.id, {
-                                            order: parseInt(e.target.value) || 0,
-                                          })
-                                        }
-                                        placeholder="0"
-                                        helperText="Display order (lower = first)"
-                                      />
-                                    </div>
-                                    <div className="md:col-span-3 pt-2 md:pt-6 flex items-center">
-                                      <Switch
-                                        checked={config.showOnPage}
-                                        onChange={checked =>
-                                          updateServiceConfig(service.id, { showOnPage: checked })
-                                        }
-                                        label="Show on Page"
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </StatusPageSectionCard>
-                  </div>
+                  <StatusPageServicesManager
+                    allServices={allServices}
+                    selectedServices={selectedServices}
+                    setSelectedServices={setSelectedServices}
+                    serviceConfigs={serviceConfigs}
+                    updateServiceConfig={updateServiceConfig}
+                    formData={formData}
+                    setFormData={setFormData}
+                    privacySettings={privacySettings}
+                    hasSelectedRegions={hasSelectedRegions}
+                  />
                 )}
 
                 {/* Privacy Settings */}
