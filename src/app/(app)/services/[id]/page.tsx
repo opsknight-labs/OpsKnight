@@ -683,11 +683,6 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
   // --- TAB 4: SETTINGS & CHATOPS CONTENT ---
   const settingsContent = (
     <div className="space-y-6">
-      {isSaved && (
-        <InlineNotice tone="success" title="Service settings saved">
-          Service configuration updated successfully.
-        </InlineNotice>
-      )}
       {(isSaved || errorCode === 'duplicate-service') && (
         <ServiceSettingsFlashToast serviceId={id} />
       )}

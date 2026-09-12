@@ -26,6 +26,7 @@ export type OidcIdentityResolutionFailure =
   | 'OIDC_AUTO_PROVISION_DISABLED'
   | 'OIDC_LINK_NOT_APPROVED'
   | 'OIDC_LINK_APPROVAL_EXPIRED'
+  | 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT'
   | 'OIDC_TARGET_NOT_OPERATIONAL';
 
 export type OidcIdentityResolutionResult =
@@ -110,19 +111,32 @@ export async function resolveOidcIdentityForSignIn(
   if (!existingIdentity) {
     const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
     if (legacyVariants.length > 0) {
-      const legacyMatch = await prisma.oidcIdentity.findFirst({
+      const rawMatches = await prisma.oidcIdentity.findMany({
         where: {
           issuer: { in: legacyVariants },
           subject: input.subject,
         },
-        select: { id: true, userId: true },
+        select: { id: true, userId: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
       });
-      if (legacyMatch) {
+      const legacyMatches = Array.isArray(rawMatches) ? rawMatches : [];
+
+      if (legacyMatches.length > 0) {
+        const uniqueUserIds = new Set(legacyMatches.map(m => m.userId));
+        if (uniqueUserIds.size > 1) {
+          return { ok: false, reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT' };
+        }
+        const [primaryMatch, ...duplicateMatches] = legacyMatches;
+        if (duplicateMatches.length > 0) {
+          await prisma.oidcIdentity.deleteMany({
+            where: { id: { in: duplicateMatches.map(m => m.id) } },
+          });
+        }
         await prisma.oidcIdentity.update({
-          where: { id: legacyMatch.id },
+          where: { id: primaryMatch.id },
           data: { issuer: input.issuer },
         });
-        existingIdentity = legacyMatch;
+        existingIdentity = primaryMatch;
       }
     }
   }
@@ -158,19 +172,32 @@ export async function resolveOidcIdentityForSignIn(
       if (!identityInsideTransaction) {
         const legacyVariants = getLegacyOidcIssuerVariants(input.issuer);
         if (legacyVariants.length > 0) {
-          const legacyMatch = await tx.oidcIdentity.findFirst({
+          const rawMatches = await tx.oidcIdentity.findMany({
             where: {
               issuer: { in: legacyVariants },
               subject: input.subject,
             },
-            select: { id: true, userId: true },
+            select: { id: true, userId: true, createdAt: true },
+            orderBy: { createdAt: 'asc' },
           });
-          if (legacyMatch) {
+          const legacyMatches = Array.isArray(rawMatches) ? rawMatches : [];
+
+          if (legacyMatches.length > 0) {
+            const uniqueUserIds = new Set(legacyMatches.map(m => m.userId));
+            if (uniqueUserIds.size > 1) {
+              throw new Error('OIDC_AMBIGUOUS_IDENTITY_CONFLICT');
+            }
+            const [primaryMatch, ...duplicateMatches] = legacyMatches;
+            if (duplicateMatches.length > 0) {
+              await tx.oidcIdentity.deleteMany({
+                where: { id: { in: duplicateMatches.map(m => m.id) } },
+              });
+            }
             await tx.oidcIdentity.update({
-              where: { id: legacyMatch.id },
+              where: { id: primaryMatch.id },
               data: { issuer: input.issuer },
             });
-            identityInsideTransaction = legacyMatch;
+            identityInsideTransaction = primaryMatch;
           }
         }
       }
@@ -336,6 +363,7 @@ export async function resolveOidcIdentityForSignIn(
       'OIDC_AUTO_PROVISION_DISABLED',
       'OIDC_LINK_NOT_APPROVED',
       'OIDC_LINK_APPROVAL_EXPIRED',
+      'OIDC_AMBIGUOUS_IDENTITY_CONFLICT',
       'OIDC_TARGET_NOT_OPERATIONAL',
     ]);
     if (knownReasons.has(reason as OidcIdentityResolutionFailure)) {

@@ -68,6 +68,26 @@ function parseRoleMapping(input: string): RoleMappingRule[] {
   });
 }
 
+function stableSerializeRoleMapping(mapping: unknown): string {
+  if (!Array.isArray(mapping)) return '[]';
+  const sorted = [...mapping]
+    .map(entry => {
+      if (!entry || typeof entry !== 'object') return entry;
+      const candidate = entry as Record<string, unknown>;
+      return {
+        claim: String(candidate.claim ?? '').trim(),
+        value: String(candidate.value ?? '').trim(),
+        role: String(candidate.role ?? '').trim(),
+      };
+    })
+    .sort((a, b) => {
+      const keyA = `${a.claim}:::${a.value}:::${a.role}`;
+      const keyB = `${b.claim}:::${b.value}:::${b.role}`;
+      return keyA.localeCompare(keyB);
+    });
+  return JSON.stringify(sorted);
+}
+
 export async function saveOidcConfig(
   prevState: SettingsActionState | undefined,
   formData: FormData
@@ -230,6 +250,11 @@ export async function saveOidcConfig(
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';
       if (existing) {
+        const roleMappingChanged =
+          stableSerializeRoleMapping(existing.roleMapping) !==
+          stableSerializeRoleMapping(roleMapping);
+        const customScopesChanged = (existing.customScopes ?? null) !== (customScopes ?? null);
+
         const securityConfigChanged =
           normalizeOidcIssuer(existing.issuer) !== normalizeOidcIssuer(issuer) ||
           existing.clientId !== clientId ||
@@ -238,6 +263,8 @@ export async function saveOidcConfig(
           existing.providerType !== providerType ||
           existing.organizationId !== organizationId ||
           existing.tokenEndpointAuthMethod !== tokenEndpointAuthMethod ||
+          roleMappingChanged ||
+          customScopesChanged ||
           JSON.stringify(existing.allowedDomains ?? []) !== JSON.stringify(allowedDomains ?? []);
 
         const updated = await tx.oidcConfig.updateMany({

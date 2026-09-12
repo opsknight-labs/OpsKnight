@@ -4,7 +4,9 @@ const tx = {
   oidcIdentity: {
     findUnique: vi.fn(),
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     update: vi.fn(),
+    deleteMany: vi.fn(),
     create: vi.fn(),
   },
   user: {
@@ -22,7 +24,9 @@ vi.mock('@/lib/prisma', () => ({
     oidcIdentity: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
+      deleteMany: vi.fn(),
     },
     user: { findUnique: vi.fn() },
   },
@@ -67,11 +71,15 @@ describe('resolveOidcIdentityForSignIn', () => {
     vi.clearAllMocks();
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.oidcIdentity.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findMany).mockResolvedValue([]);
     vi.mocked(prisma.oidcIdentity.update).mockResolvedValue({} as never);
+    vi.mocked(prisma.oidcIdentity.deleteMany).mockResolvedValue({ count: 0 });
     vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
     tx.oidcIdentity.findUnique.mockResolvedValue(null);
     tx.oidcIdentity.findFirst.mockResolvedValue(null);
+    tx.oidcIdentity.findMany.mockResolvedValue([]);
     tx.oidcIdentity.update.mockResolvedValue({} as never);
+    tx.oidcIdentity.deleteMany.mockResolvedValue({ count: 0 });
     tx.oidcIdentity.create.mockResolvedValue({ id: 'identity-1' });
     tx.user.findUnique.mockResolvedValue(null);
     tx.user.create.mockResolvedValue(linkedUser);
@@ -202,12 +210,15 @@ describe('resolveOidcIdentityForSignIn', () => {
   });
 
   it('reconciles legacy identities stored with non-canonical issuers (e.g. trailing slashes) to canonical issuer', async () => {
-    // Exact canonical match misses, but findFirst finds legacy trailing slash identity
+    // Exact canonical match misses, but findMany finds legacy trailing slash identity
     vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
-    vi.mocked(prisma.oidcIdentity.findFirst).mockResolvedValue({
-      id: 'legacy-id-1',
-      userId: 'user-1',
-    } as never);
+    vi.mocked(prisma.oidcIdentity.findMany).mockResolvedValue([
+      {
+        id: 'legacy-id-1',
+        userId: 'user-1',
+        createdAt: new Date(),
+      },
+    ] as never);
     vi.mocked(prisma.oidcIdentity.update).mockResolvedValue({} as never);
     vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
 
@@ -219,7 +230,7 @@ describe('resolveOidcIdentityForSignIn', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.user.id).toBe('user-1');
-    expect(prisma.oidcIdentity.findFirst).toHaveBeenCalledWith(
+    expect(prisma.oidcIdentity.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           issuer: { in: expect.arrayContaining(['https://idp.example.com/']) },
@@ -403,5 +414,45 @@ describe('resolveOidcIdentityForSignIn', () => {
 
     expect(result).toEqual({ ok: false, reason: 'OIDC_EMAIL_ASSURANCE_REQUIRED' });
     expect(tx.user.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects ambiguous legacy identity reconciliation when variants belong to different users', async () => {
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findMany).mockResolvedValue([
+      { id: 'ident-1', userId: 'user-1', createdAt: new Date('2026-01-01') },
+      { id: 'ident-2', userId: 'user-2', createdAt: new Date('2026-01-02') },
+    ] as never);
+
+    const result = await resolveOidcIdentityForSignIn(baseInput);
+
+    expect(result).toEqual({ ok: false, reason: 'OIDC_AMBIGUOUS_IDENTITY_CONFLICT' });
+    expect(prisma.oidcIdentity.update).not.toHaveBeenCalled();
+    expect(prisma.oidcIdentity.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('safely deduplicates same-user legacy variants and reconciles the primary record to canonical issuer', async () => {
+    vi.mocked(prisma.oidcIdentity.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.oidcIdentity.findMany).mockResolvedValue([
+      { id: 'ident-primary', userId: 'user-1', createdAt: new Date('2026-01-01') },
+      { id: 'ident-duplicate', userId: 'user-1', createdAt: new Date('2026-01-02') },
+    ] as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(linkedUser as never);
+
+    const result = await resolveOidcIdentityForSignIn(baseInput);
+
+    expect(result).toEqual({
+      ok: true,
+      user: linkedUser,
+      identityCreated: false,
+      userCreated: false,
+      approvalConsumed: false,
+    });
+    expect(prisma.oidcIdentity.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['ident-duplicate'] } },
+    });
+    expect(prisma.oidcIdentity.update).toHaveBeenCalledWith({
+      where: { id: 'ident-primary' },
+      data: { issuer: baseInput.issuer },
+    });
   });
 });

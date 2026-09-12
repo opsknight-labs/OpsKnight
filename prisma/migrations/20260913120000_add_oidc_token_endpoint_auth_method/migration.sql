@@ -26,14 +26,25 @@ BEGIN
     RAISE EXCEPTION 'Cannot apply migration: found % conflicting OidcIdentity records with the same canonical issuer and subject but different userId values. Resolve identity ownership manually before migrating.', conflict_count;
   END IF;
 
-  DELETE FROM "OidcIdentity" o1
-  WHERE o1."issuer" LIKE '%/'
-    AND EXISTS (
-      SELECT 1 FROM "OidcIdentity" o2
-      WHERE o2."issuer" = rtrim(o1."issuer", '/')
-        AND o2."subject" = o1."subject"
-        AND o2."userId" = o1."userId"
-    );
+  -- Deduplicate same-user legacy records across all equivalent issuer variants
+  -- (e.g. https://idp.example.com, https://idp.example.com/, https://idp.example.com//)
+  DELETE FROM "OidcIdentity"
+  WHERE "id" IN (
+    SELECT "id"
+    FROM (
+      SELECT "id",
+             ROW_NUMBER() OVER (
+               PARTITION BY rtrim("issuer", '/'), "subject", "userId"
+               ORDER BY
+                 -- Keep exact canonical form if present, else oldest record
+                 CASE WHEN "issuer" NOT LIKE '%/' THEN 0 ELSE 1 END ASC,
+                 "createdAt" ASC,
+                 "id" ASC
+             ) AS rn
+      FROM "OidcIdentity"
+    ) ranked
+    WHERE ranked.rn > 1
+  );
 
   UPDATE "OidcIdentity"
   SET "issuer" = rtrim("issuer", '/')

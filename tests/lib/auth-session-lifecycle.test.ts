@@ -779,6 +779,33 @@ describe('Auth session lifecycle and hardening', () => {
       expect(updateData.configVersion).toEqual({ increment: 1 });
       expect(updateData.issuer).toBe('https://new-issuer.example.com');
     });
+
+    it('DOES increment configVersion when roleMapping changes', async () => {
+      const newRoleMapping = JSON.stringify([
+        { claim: 'groups', value: 'admins', role: 'ADMIN' },
+      ]);
+      const formData = createOidcFormData({ roleMapping: newRoleMapping });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.roleMapping).toEqual([
+        { claim: 'groups', value: 'admins', role: 'ADMIN' },
+      ]);
+    });
+
+    it('DOES increment configVersion when customScopes changes', async () => {
+      const formData = createOidcFormData({ customScopes: 'openid profile email groups' });
+      const result = await saveOidcConfig(prevState, formData);
+
+      expect(result.success).toBe(true);
+      expect(prisma.oidcConfig.updateMany).toHaveBeenCalled();
+      const updateData = vi.mocked(prisma.oidcConfig.updateMany).mock.calls[0][0].data;
+      expect(updateData.configVersion).toEqual({ increment: 1 });
+      expect(updateData.customScopes).toBe('openid profile email groups');
+    });
   });
 
   describe('Finding: Session callback overrides session.expires with actual expiration', () => {

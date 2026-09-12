@@ -34,7 +34,9 @@ vi.mock('@/lib/prisma', () => {
     oidcIdentity: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn(),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       create: vi.fn(),
     },
     oidcConfig: {
