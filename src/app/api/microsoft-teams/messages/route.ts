@@ -55,10 +55,13 @@ export async function POST(request: NextRequest) {
 
   const activity = (body ?? {}) as TeamsActivity;
   const activityType = typeof activity.type === 'string' ? activity.type : '';
+  const activityServiceUrl = typeof activity.serviceUrl === 'string' ? activity.serviceUrl : null;
 
   // Verify the request is genuinely from Bot Framework / Teams via JWT.
-  // `assertMicrosoftTeamsActivityAuth` allows `x-opsknight-teams-test: 1` only in non-production.
-  const verifiedIdentity = await assertMicrosoftTeamsActivityAuth(request);
+  // Pass Activity.serviceUrl for token claim binding (prevents token replay across serviceUrl boundaries).
+  const verifiedIdentity = await assertMicrosoftTeamsActivityAuth(request, {
+    expectedServiceUrl: activityServiceUrl,
+  });
   if (!verifiedIdentity) {
     // In production without a valid Bearer token, reject with 401.
     // In non-production, allow through only if test header is set (handled inside assertMicrosoftTeamsActivityAuth).
@@ -169,10 +172,29 @@ export async function POST(request: NextRequest) {
               upsert: (args: unknown) => Promise<unknown>;
             };
           };
+          const serviceUrl = typeof activity.serviceUrl === 'string' ? activity.serviceUrl.trim().slice(0, 512) : null;
+          const conversationId = typeof activity.conversation?.id === 'string' ? activity.conversation.id.trim().slice(0, 512) : null;
+          const botRecipientId = activity.recipient?.id?.trim().slice(0, 256) || null;
           await prismaAny.microsoftTeamsInstallation.upsert({
             where: { tenantId_teamId: { tenantId, teamId } },
-            create: { tenantId, teamId, teamName, channelId: channelId || null, enabled: true },
-            update: { teamName: teamName ?? undefined, channelId: channelId || undefined, enabled: true },
+            create: {
+              tenantId,
+              teamId,
+              teamName,
+              channelId: channelId || null,
+              serviceUrl,
+              conversationId,
+              botRecipientId,
+              enabled: true,
+            },
+            update: {
+              teamName: teamName ?? undefined,
+              channelId: channelId || undefined,
+              ...(serviceUrl ? { serviceUrl } : {}),
+              ...(conversationId ? { conversationId } : {}),
+              ...(botRecipientId ? { botRecipientId } : {}),
+              enabled: true,
+            },
           } as unknown as never);
           logger.info('[MicrosoftTeams] Installation recorded', { tenantId, teamId });
           try {

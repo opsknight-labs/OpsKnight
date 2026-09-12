@@ -102,7 +102,46 @@ export async function POST(request: NextRequest) {
     const currentUser = await (await import('@/lib/rbac')).getCurrentUser().catch(() => null);
     const actorId = currentUser?.id ?? null;
 
-    // Phase 2: transaction — destination upsert + service channel enable must be atomic
+    // Verify channel actually belongs to the team (prevents spoofed channelId).
+    // Uses Graph `GET /teams/{team}/channels` scoped to the verified installation tenant.
+    type ChannelVerified = { ok: true } | { ok: false; reason: string };
+    const channelVerified: ChannelVerified = await (async (): Promise<ChannelVerified> => {
+      try {
+        const { listMicrosoftTeamsChannelsForDiscovery } = await import('@/lib/microsoft-teams/client');
+        const res = await listMicrosoftTeamsChannelsForDiscovery(teamId, { tenantId });
+        if (res.error) {
+          if (res.error === 'APP_NOT_INSTALLED') return { ok: false, reason: 'APP_NOT_INSTALLED' };
+          if (res.error === 'GRAPH_TOKEN_FAILED' || res.error === 'TENANT_REQUIRED') return { ok: false, reason: res.error };
+          return { ok: false, reason: res.error };
+        }
+        const found = res.channels.some(c => c.id === channelId);
+        return found ? { ok: true } : { ok: false, reason: 'CHANNEL_NOT_FOUND' };
+      } catch (e) {
+        return { ok: false, reason: (e instanceof Error ? e.message : String(e)).slice(0, 80) };
+      }
+    })();
+    if (!channelVerified.ok) {
+      const reason = channelVerified.reason ?? 'CHANNEL_NOT_FOUND';
+      if (reason === 'CHANNEL_NOT_FOUND') {
+        return jsonError(
+          new AppError({
+            code: 'RESOURCE_NOT_FOUND',
+            userMessage: 'Channel not found in the selected Team. Pick a channel from the Teams discovery list.',
+            details: { teamId: teamId.slice(0, 12) + '…', channelId: channelId.slice(0, 12) + '…' },
+          }),
+        );
+      }
+      return jsonError(
+        new AppError({
+          code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+          userMessage: `Failed to verify Teams channel: ${reason}`,
+          details: { teamId: teamId.slice(0, 12) + '…', channelId: channelId.slice(0, 12) + '…', reason },
+        }),
+      );
+    }
+
+    // Transaction — destination upsert + service channel enable must be atomic.
+    // If serviceNotificationChannels cannot be updated, the destination must not commit half-configured.
     const dest = await prisma.$transaction(async tx => {
       const txAny = tx as unknown as typeof prismaAny & {
         service: { findUnique: (a: unknown) => Promise<{ serviceNotificationChannels: string[] } | null>; update: (a: unknown) => Promise<unknown> };
@@ -131,15 +170,11 @@ export async function POST(request: NextRequest) {
           updatedBy: actorId,
         },
       } as never);
-      try {
-        const svc = await txAny.service.findUnique({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
-        const channels = new Set((svc?.serviceNotificationChannels ?? []) as string[]);
-        if (!channels.has('MICROSOFT_TEAMS')) {
-          channels.add('MICROSOFT_TEAMS');
-          await txAny.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: [...channels] as never } });
-        }
-      } catch (e) {
-        logger.warn('[MicrosoftTeams] Failed to auto-enable channel on service (tx)', { error: (e as Error).message });
+      const svc = await txAny.service.findUnique({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
+      const channels = new Set((svc?.serviceNotificationChannels ?? []) as string[]);
+      if (!channels.has('MICROSOFT_TEAMS')) {
+        channels.add('MICROSOFT_TEAMS');
+        await txAny.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: [...channels] as never } });
       }
       return created;
     });
@@ -170,14 +205,34 @@ export async function DELETE(request: NextRequest) {
     const sid = parsed.data.serviceId;
     await assertCanModifyService(sid);
 
-    const prismaAny = prisma as unknown as {
-      microsoftTeamsDestination: { deleteMany: (a: unknown) => Promise<{ count: number }> };
-    };
-    if (parsed.data.destinationId) {
-      await prismaAny.microsoftTeamsDestination.deleteMany({ where: { id: parsed.data.destinationId, serviceId: sid } } as never);
-    } else {
-      await prismaAny.microsoftTeamsDestination.deleteMany({ where: { serviceId: sid } } as never);
-    }
+    // Atomic: delete destination(s) and prune MICROSOFT_TEAMS from service channels when no destinations remain.
+    // Prevents half-configured state where service claims Teams channel but has no destination rows.
+    await prisma.$transaction(async tx => {
+      const txAny = tx as unknown as {
+        microsoftTeamsDestination: {
+          deleteMany: (a: unknown) => Promise<{ count: number }>;
+          count: (a: unknown) => Promise<number>;
+        };
+        service: {
+          findUnique: (a: unknown) => Promise<{ serviceNotificationChannels: string[] } | null>;
+          update: (a: unknown) => Promise<unknown>;
+        };
+      };
+      if (parsed.data.destinationId) {
+        await txAny.microsoftTeamsDestination.deleteMany({ where: { id: parsed.data.destinationId, serviceId: sid } } as never);
+      } else {
+        await txAny.microsoftTeamsDestination.deleteMany({ where: { serviceId: sid } } as never);
+      }
+      const remaining = await txAny.microsoftTeamsDestination.count({ where: { serviceId: sid } } as never);
+      if (remaining === 0) {
+        const svc = await txAny.service.findUnique({ where: { id: sid }, select: { serviceNotificationChannels: true } });
+        const channels = (svc?.serviceNotificationChannels ?? []) as string[];
+        if (channels.includes('MICROSOFT_TEAMS')) {
+          const next = channels.filter(c => c !== 'MICROSOFT_TEAMS');
+          await txAny.service.update({ where: { id: sid }, data: { serviceNotificationChannels: next as never } });
+        }
+      }
+    });
 
     const user = await (await import('@/lib/rbac')).getCurrentUser().catch(() => null);
     await logAudit({

@@ -60,6 +60,10 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const manifestJson = buildMicrosoftTeamsAppManifestJson({
     appUrl: getBaseUrl(),
     botId: config?.clientId ?? '11111111-1111-1111-1111-111111111111',
+    // Only emit webApplicationInfo when an Entra Application ID URI is configured
+    applicationIdUri: process.env.MICROSOFT_TEAMS_APPLICATION_ID_URI?.trim() || undefined,
+    // Optional RSC surface — disabled by default (minimal Phase-1 manifest)
+    includeOptionalPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
   });
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;

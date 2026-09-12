@@ -36,6 +36,14 @@ export interface MicrosoftTeamsManifestOptions {
   appName?: string;
   appDescription?: string;
   manifestId?: string; // GUID for manifest `id` field, defaults to stable placeholder
+  /** Entra Application ID URI for SSO (e.g. `api://opsknight.example.com/<appId>`).
+   * When omitted, `webApplicationInfo` is excluded — Teams validates it strictly
+   * and a fabricated `api://host/botId` will fail submission. */
+  applicationIdUri?: string;
+  /** When true, include optional RSC permissions (TeamSettings.Read.Group).
+   * Defaults to false — Phase 1 minimal surface; enable only when the
+   * corresponding capability (e.g. member management) is active. */
+  includeOptionalPermissions?: boolean;
 }
 
 // Messaging endpoint is configured on the Azure Bot resource, not in the manifest.
@@ -44,19 +52,45 @@ export function getMicrosoftTeamsBotMessagingEndpoint(appUrl: string): string {
   return `${appUrl.replace(/\/+$/, '')}/api/microsoft-teams/messages`;
 }
 
+export type MicrosoftTeamsAppManifest = {
+  $schema: string;
+  manifestVersion: string;
+  version: string;
+  id: string;
+  packageName: string;
+  developer: { name: string; websiteUrl: string; privacyUrl: string; termsOfUseUrl: string };
+  name: { short: string; full: string };
+  description: { short: string; full: string };
+  icons: { outline: string; color: string };
+  accentColor: string;
+  bots: Array<{ botId: string; scopes: string[]; commandLists: unknown[]; isNotificationOnly: boolean }>;
+  validDomains: string[];
+  authorization: {
+    permissions: {
+      resourceSpecific: Array<{ name: string; type: 'Application' }>;
+    };
+  };
+  webApplicationInfo?: { id: string; resource: string };
+};
+
 export function buildMicrosoftTeamsAppManifest({
   appUrl,
   botId,
   appName = 'OpsKnight',
   appDescription = 'OpsKnight incident operations for Microsoft Teams',
   manifestId = '11111111-1111-1111-1111-111111111111',
-}: MicrosoftTeamsManifestOptions) {
+  applicationIdUri,
+  includeOptionalPermissions = false,
+}: MicrosoftTeamsManifestOptions): MicrosoftTeamsAppManifest {
   const origin = appUrl.replace(/\/+$/, '');
-  return {
+  const rscPermissions = includeOptionalPermissions
+    ? MICROSOFT_TEAMS_RSC_PERMISSIONS
+    : [...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS];
+  const manifest: MicrosoftTeamsAppManifest = {
     $schema: 'https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json',
     manifestVersion: '1.16',
     version: '1.0.0',
-    id: manifestId, // placeholder GUID — replaced by real GUID at packaging time; manifest `id` must be a GUID per Microsoft spec
+    id: manifestId,
     packageName: 'com.opsknight.teams',
     developer: {
       name: 'OpsKnight Labs',
@@ -72,24 +106,23 @@ export function buildMicrosoftTeamsAppManifest({
       {
         botId,
         scopes: ['team', 'groupChat', 'personal'],
-        // Single bot endpoint for all Teams activities. The server switches
-        // on activity.type: conversationUpdate / invoke (Action.Execute) / message.
-        // Never trust tenantId / teamId / userId from raw JSON — auth verifies them.
         commandLists: [],
         isNotificationOnly: false,
       },
     ],
     validDomains: [new URL(origin).hostname],
-    webApplicationInfo: {
-      id: botId,
-      resource: `api://${new URL(origin).hostname}/${botId}`,
-    },
     authorization: {
       permissions: {
-        resourceSpecific: MICROSOFT_TEAMS_RSC_PERMISSIONS.map(name => ({ name, type: 'Application' as const })),
+        resourceSpecific: rscPermissions.map(name => ({ name, type: 'Application' as const })),
       },
     },
   };
+  // Only emit webApplicationInfo when a real Entra Application ID URI is configured.
+  // A fabricated api://host/botId fails Teams app validation.
+  if (applicationIdUri?.trim()) {
+    (manifest as MicrosoftTeamsAppManifest & { webApplicationInfo: { id: string; resource: string } }).webApplicationInfo = { id: botId, resource: applicationIdUri.trim() };
+  }
+  return manifest;
 }
 
 export function buildMicrosoftTeamsAppManifestJson(options: MicrosoftTeamsManifestOptions): string {

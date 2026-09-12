@@ -363,9 +363,11 @@ export async function getTeamsGrantedRscPermissions(options?: {
       }
       hadSuccess = true;
       try {
-        const data = (await res.json()) as { value?: Array<{ resourceSpecificPermission?: string }> };
+        // Graph `GET /teams/{id}/permissionGrants` returns `permission` (resource-specific
+        // consent string like `ChannelMessage.Send.Group`), NOT `resourceSpecificPermission`.
+        const data = (await res.json()) as { value?: Array<{ permission?: string; resourceSpecificPermission?: string }> };
         const perms = (data.value ?? [])
-          .map(v => v.resourceSpecificPermission)
+          .map(v => v.permission ?? v.resourceSpecificPermission)
           .filter((p): p is string => typeof p === 'string' && p.length > 0);
         if (allGranted === null) allGranted = [];
         for (const p of perms) {
@@ -443,8 +445,29 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
   if (!tid) return { channels: [], error: 'teamId is required' };
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return { channels: [], error: 'NOT_CONFIGURED' };
-  const tenantId = resolveTenantForCall(options?.tenantId, resolved.config.tenantId);
+  // Derive tenant from installation when caller omits it (MULTI mode).
+  // This ensures channels are scoped to a verified installation, never a raw teamId.
+  let tenantId = resolveTenantForCall(options?.tenantId, resolved.config.tenantId);
+  if (!tenantId) {
+    const prismaForLookup = (await import('@/lib/prisma')).default as unknown as {
+      microsoftTeamsInstallation: { findFirst: (a: unknown) => Promise<{ tenantId: string } | null> };
+    };
+    const inst = await prismaForLookup.microsoftTeamsInstallation.findFirst({
+      where: { teamId: tid, enabled: true },
+      select: { tenantId: true },
+    } as never);
+    if (inst?.tenantId) tenantId = inst.tenantId;
+  }
   if (!tenantId) return { channels: [], error: 'TENANT_REQUIRED' };
+  // Verify the team is actually installed (prevents probing arbitrary teamIds)
+  const prismaForCheck = (await import('@/lib/prisma')).default as unknown as {
+    microsoftTeamsInstallation: { findFirst: (a: unknown) => Promise<{ id: string } | null> };
+  };
+  const hasInstallation = await prismaForCheck.microsoftTeamsInstallation.findFirst({
+    where: { tenantId, teamId: tid, enabled: true },
+    select: { id: true },
+  } as never);
+  if (!hasInstallation) return { channels: [], error: 'APP_NOT_INSTALLED' };
   const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
   if (!token) return { channels: [], error: 'GRAPH_TOKEN_FAILED' };
   const res = await retryFetch(

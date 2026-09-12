@@ -641,10 +641,32 @@ function payloadProviderKey(payload: CentralNotificationPayload): string {
       return 'invalid-webhook';
     }
   }
+  if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL' && payload.lifecyclePolicy?.serviceId) {
+    // Will be resolved to tenant-scoped key by async helper below; fallthrough keeps sync callers safe
+    return 'default';
+  }
   if ('providerKey' in payload && payload.providerKey) return payload.providerKey;
   // Provider budgets are account-wide. A conservative shared key prevents
   // tenant/page/channel partitions from multiplying the upstream allowance.
   return 'default';
+}
+
+async function payloadProviderKeyAsync(payload: CentralNotificationPayload): Promise<string> {
+  if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL') {
+    try {
+      const anyPrisma = prisma as unknown as {
+        microsoftTeamsDestination: { findUnique: (a: unknown) => Promise<{ tenantId: string } | null> };
+      };
+      const dest = await anyPrisma.microsoftTeamsDestination.findUnique({
+        where: { id: payload.destinationId },
+        select: { tenantId: true },
+      } as never);
+      if (dest?.tenantId) return `tenant:${dest.tenantId}`;
+    } catch {
+      // best-effort — fall through to default
+    }
+  }
+  return payloadProviderKey(payload);
 }
 
 async function providerAdmission(
@@ -652,18 +674,21 @@ async function providerAdmission(
   trafficClass: NotificationTrafficClass
 ) {
   const channel = channelForPayload(payload);
-  return acquireProviderAdmission(
-    channel as ProviderAdmissionScope,
-    payloadProviderKey(payload),
-    new Date(),
-    trafficClass
-  );
+  const key = await payloadProviderKeyAsync(payload);
+  return acquireProviderAdmission(channel as ProviderAdmissionScope, key, new Date(), trafficClass);
 }
 
 function providerAdmissionIdentity(payload: CentralNotificationPayload) {
   return {
     scope: channelForPayload(payload) as ProviderAdmissionScope,
     providerKey: payloadProviderKey(payload),
+  };
+}
+
+async function providerAdmissionIdentityAsync(payload: CentralNotificationPayload) {
+  return {
+    scope: channelForPayload(payload) as ProviderAdmissionScope,
+    providerKey: await payloadProviderKeyAsync(payload),
   };
 }
 
@@ -1661,7 +1686,7 @@ export async function deliverCentralNotification(
     return { success: false, claimed: true };
   }
 
-  const identity = providerAdmissionIdentity(payload);
+  const identity = await providerAdmissionIdentityAsync(payload);
   let concurrency;
   try {
     concurrency = await acquireProviderConcurrency(

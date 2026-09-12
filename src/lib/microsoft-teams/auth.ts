@@ -70,7 +70,38 @@ async function fetchBotJwks(forceRefresh = false): Promise<Record<string, unknow
   return jwks;
 }
 
-async function verifyBotFrameworkToken(token: string, expectedAppId: string): Promise<VerifiedTeamsIdentity | null> {
+/**
+ * Protocol-correct Bot Framework JWT issuers per
+ * https://learn.microsoft.com/en-us/azure/bot-service/rest-api/bot-framework-rest-connector-authentication
+ * Issuer is compared by exact host/path — not `startsWith` — to avoid the
+ * CodeQL "arbitrary hostname can follow" finding. Tenant-suffixed issuers are
+ * accepted only when the scheme+host+prefix exactly match the allowed pattern.
+ */
+const ALLOWED_ISSUER_HOSTS: ReadonlySet<string> = new Set([
+  'https://api.botframework.com',
+  'https://login.botframework.com',
+]);
+
+function isAllowedBotIssuer(iss: string): boolean {
+  if (!iss) return false;
+  if (ALLOWED_ISSUER_HOSTS.has(iss)) return true;
+  // Tenant-suffixed AAD issuers — exactly `https://sts.windows.net/{guid}/` or
+  // `https://login.microsoftonline.com/{guid}/v2.0` with GUID tenant.
+  const guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+  if (new RegExp(`^https:\\/\\/sts\\.windows\\.net\\/${guid}\\/?$`).test(iss)) return true;
+  if (new RegExp(`^https:\\/\\/login\\.microsoftonline\\.com\\/${guid}\\/v2\\.0\\/?$`).test(iss)) return true;
+  return false;
+}
+
+export function __isAllowedBotIssuerForTests(iss: string): boolean {
+  return isAllowedBotIssuer(iss);
+}
+
+async function verifyBotFrameworkToken(
+  token: string,
+  expectedAppId: string,
+  options?: { expectedServiceUrl?: string | null }
+): Promise<VerifiedTeamsIdentity | null> {
   let jwks = await fetchBotJwks();
   const jose = await import('jose');
 
@@ -78,9 +109,9 @@ async function verifyBotFrameworkToken(token: string, expectedAppId: string): Pr
     try {
       const localSet = jose.createLocalJWKSet(jwks as never);
       const result = await jose.jwtVerify(token, localSet as never, {
-        // Bot Framework uses multiple issuers — validate manually below
         issuer: undefined,
         audience: undefined,
+        algorithms: ['RS256', 'RS384', 'RS512'],
       });
       const claims = result.payload as Record<string, unknown>;
       const rawAud = claims.aud;
@@ -102,14 +133,28 @@ async function verifyBotFrameworkToken(token: string, expectedAppId: string): Pr
         return null;
       }
 
-      const issOk =
-        iss.startsWith('https://api.botframework.com') ||
-        iss.startsWith('https://login.botframework.com') ||
-        iss.startsWith('https://sts.windows.net/') ||
-        iss.startsWith('https://login.microsoftonline.com/');
-      if (!issOk) {
-        logger.warn('[MicrosoftTeams] Bot JWT unexpected issuer', { iss });
+      if (!isAllowedBotIssuer(iss)) {
+        logger.warn('[MicrosoftTeams] Bot JWT unexpected issuer', { iss: iss.slice(0, 120) });
         return null;
+      }
+
+      // Bot Connector spec requires serviceUrl claim to match Activity.serviceUrl
+      // when both are present — prevents token replay across serviceUrl boundaries.
+      const expectedServiceUrl = options?.expectedServiceUrl?.trim() || null;
+      if (serviceUrl && expectedServiceUrl) {
+        try {
+          const claimOrigin = new URL(serviceUrl).origin.toLowerCase();
+          const activityOrigin = new URL(expectedServiceUrl).origin.toLowerCase();
+          if (claimOrigin !== activityOrigin) {
+            logger.warn('[MicrosoftTeams] Bot JWT serviceUrl mismatch', {
+              claimOrigin: claimOrigin.slice(0, 60),
+              activityOrigin: activityOrigin.slice(0, 60),
+            });
+            return null;
+          }
+        } catch {
+          // If either URL is unparseable, fall through — serviceUrl validation is best-effort
+        }
       }
 
       return { tenantId: tid || '', serviceUrl, appId: aud };
@@ -127,7 +172,10 @@ async function verifyBotFrameworkToken(token: string, expectedAppId: string): Pr
   return null;
 }
 
-export async function assertMicrosoftTeamsActivityAuth(request: Request): Promise<VerifiedTeamsIdentity | null> {
+export async function assertMicrosoftTeamsActivityAuth(
+  request: Request,
+  options?: { expectedServiceUrl?: string | null }
+): Promise<VerifiedTeamsIdentity | null> {
   // Test harness bypass — only in non-production
   if (process.env.NODE_ENV !== 'production' && request.headers.get('x-opsknight-teams-test') === '1') {
     return { tenantId: '__test__', serviceUrl: null, appId: '__test__' };
@@ -140,7 +188,7 @@ export async function assertMicrosoftTeamsActivityAuth(request: Request): Promis
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return null;
 
-  return verifyBotFrameworkToken(token, resolved.config.clientId);
+  return verifyBotFrameworkToken(token, resolved.config.clientId, options);
 }
 
 /**

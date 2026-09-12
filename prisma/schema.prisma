@@ -694,15 +694,18 @@ model MicrosoftTeamsConfig {
 }
 
 model MicrosoftTeamsInstallation {
-  id          String   @id @default(cuid())
-  tenantId    String // Entra tenant ID from Teams activity (verified by SDK, never trusted from raw JSON)
-  teamId      String // Teams team id (e.g. 19:xxxx@thread.tacv2) — unique per tenant
-  teamName    String?
-  channelId   String? // Default channel where bot was installed (conversationUpdate)
-  installedBy String?
-  enabled     Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  tenantId       String // Entra tenant ID from Teams activity (verified by SDK, never trusted from raw JSON)
+  teamId         String // Teams team id (e.g. 19:xxxx@thread.tacv2) — unique per tenant
+  teamName       String?
+  channelId      String? // Default channel where bot was installed (conversationUpdate)
+  serviceUrl     String? // Bot Framework serviceUrl for proactive updateActivity (Graph PATCH is policyViolation-only)
+  conversationId String? // Last known conversation id for proactive messaging
+  botRecipientId String? // Bot recipient id from activity.recipient.id (used for updateActivity auth)
+  installedBy    String?
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   installer    User?                       @relation("MicrosoftTeamsInstallationInstaller", fields: [installedBy], references: [id], onDelete: SetNull)
   destinations MicrosoftTeamsDestination[]

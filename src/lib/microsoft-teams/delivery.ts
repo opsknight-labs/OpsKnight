@@ -6,8 +6,14 @@ import { AppError } from '@/lib/errors';
 import { acquireAdvisoryLock } from '@/lib/db-locks';
 import { getBaseUrl } from '@/lib/env-validation';
 import { CircuitBreakerError, CircuitBreakers } from '@/lib/circuit-breaker';
-import { acquireProviderAdmission, deferProviderAdmission } from '@/lib/provider-admission';
+import {
+  acquireProviderAdmission,
+  acquireProviderConcurrency,
+  deferProviderAdmission,
+  releaseProviderConcurrency,
+} from '@/lib/provider-admission';
 import { emitAuditEvent } from '@/lib/audit';
+import { effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 
 const TEAMS_PROVIDER: ExternalIssueProvider = ExternalIssueProvider.MICROSOFT_TEAMS;
 const LEASE_MS = 5 * 60_000;
@@ -234,6 +240,13 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
   // row is the cross-replica fence; the advisory lock serializes the Graph
   // mutation window inside the transaction.
   const lockKey = microsoftTeamsDeliveryLockKey(incidentId, destinationId);
+  let teamsConcurrencyLease: string | null = null;
+  const releaseTeamsConcurrency = async () => {
+    if (!teamsConcurrencyLease) return;
+    const lk = teamsConcurrencyLease;
+    teamsConcurrencyLease = null;
+    try { await releaseProviderConcurrency(lk); } catch {}
+  };
 
   try {
     const incident = await prisma.incident.findUnique({
@@ -263,6 +276,28 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     }
 
     const isResolved = incident.status === 'RESOLVED';
+    // Lightweight SLA remaining — no DB helper needed; incident already carries frozen targets.
+    const slaRemainingArgs = incident as unknown as {
+      slaAckTargetMs: number | null | undefined;
+      slaResolveTargetMs: number | null | undefined;
+      slaPausedMs: bigint | null | undefined;
+      slaPauseStartedAt: Date | null | undefined;
+    };
+    let slaAckRemainingMs: number | null = null;
+    let slaResolveRemainingMs: number | null = null;
+    try {
+      const now = new Date();
+      const elapsedMs = effectiveMaterializedElapsedMs({
+        startedAt: incident.createdAt,
+        evaluationAt: now,
+        pausedMs: slaRemainingArgs.slaPausedMs ?? null,
+        pauseStartedAt: slaRemainingArgs.slaPauseStartedAt ?? null,
+      });
+      if (typeof slaRemainingArgs.slaAckTargetMs === 'number') slaAckRemainingMs = slaRemainingArgs.slaAckTargetMs - elapsedMs;
+      if (typeof slaRemainingArgs.slaResolveTargetMs === 'number') slaResolveRemainingMs = slaRemainingArgs.slaResolveTargetMs - elapsedMs;
+    } catch {
+      // SLA is best-effort adornment — never block delivery.
+    }
     const incidentInput = {
       id: incident.id,
       title: incident.title,
@@ -276,26 +311,99 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       createdAt: incident.createdAt,
       acknowledgedAt: incident.acknowledgedAt,
       resolvedAt: incident.resolvedAt,
+      slaAckRemainingMs,
+      slaResolveRemainingMs,
     };
 
-    const previous = await prisma.microsoftTeamsIncidentMessage.findUnique({
+    // Reservation fencing: advisory lock serializes create vs update decision,
+    // and a placeholder ledger row prevents a second replica that waited on the
+    // lock from also POSTing before the first Graph call completes. We do not
+    // hold the transaction across the network call. A reservation tagged with
+    // the *same* operation id is owned by this operation (retry after AMBIGUOUS)
+    // and must be allowed to proceed.
+    const RESERVED_PREFIX = '__reserved__:';
+    const ownReservation = `${RESERVED_PREFIX}${id}`;
+    let previous = await prisma.microsoftTeamsIncidentMessage.findUnique({
       where: { incidentId_destinationId: { incidentId, destinationId } },
       select: { messageId: true, conversationId: true },
     });
 
-    // Hold advisory lock while deciding create vs update (fence duplicate POSTs).
+    let reservedByUs = false;
+    let concurrentReservation = false;
     await prisma.$transaction(async tx => {
       await acquireAdvisoryLock(tx, lockKey);
       const inside = await tx.microsoftTeamsIncidentMessage.findUnique({
         where: { incidentId_destinationId: { incidentId, destinationId } },
-        select: { messageId: true },
+        select: { messageId: true, conversationId: true },
       });
-      void inside;
+      // Re-read inside the lock — `previous` may be stale due to a concurrent writer.
+      if (inside) {
+        previous = inside;
+        if (inside.messageId?.startsWith(RESERVED_PREFIX)) {
+          if (inside.messageId === ownReservation) {
+            // Own prior reservation (retry after AMBIGUOUS) — proceed to create.
+            previous = { messageId: null, conversationId: null } as unknown as typeof previous;
+            reservedByUs = true;
+            return;
+          }
+          // Reserved by a different in-flight operation — back off.
+          concurrentReservation = true;
+          return;
+        }
+        return;
+      }
+      // No ledger row — reserve it so the next waiter sees the reservation before we POST.
+      if (!inside) {
+        try {
+          await tx.microsoftTeamsIncidentMessage.create({
+            data: {
+              incidentId,
+              destinationId,
+              messageId: ownReservation,
+              channelId: destination.channelId,
+              tenantId: destination.tenantId,
+              teamId: destination.teamId,
+              conversationId: null,
+            },
+          });
+          reservedByUs = true;
+          previous = { messageId: null, conversationId: null } as unknown as typeof previous;
+        } catch {
+          const recheck = await tx.microsoftTeamsIncidentMessage.findUnique({
+            where: { incidentId_destinationId: { incidentId, destinationId } },
+            select: { messageId: true, conversationId: true },
+          });
+          if (recheck) {
+            previous = recheck;
+            if (recheck.messageId !== ownReservation && recheck.messageId?.startsWith(RESERVED_PREFIX)) {
+              concurrentReservation = true;
+            } else if (recheck.messageId === ownReservation) {
+              reservedByUs = true;
+              previous = { messageId: null, conversationId: null } as unknown as typeof previous;
+            }
+          }
+        }
+      }
     });
 
-    // Phase 11: distributed admission + tenant-scoped circuit breaker.
+    if (concurrentReservation) {
+      await prisma.externalOperation.updateMany({
+        where: { id, status: 'PROCESSING', leaseToken },
+        data: {
+          status: failureStatus(operation.attempts),
+          nextAttemptAt: new Date(Date.now() + jitteredDelayMs(1500)),
+          lastError: 'Teams delivery reserved by concurrent operation — retrying',
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      throw new Error('Teams delivery reserved by concurrent operation');
+    }
+
+    // Phase 11: distributed admission + tenant-scoped circuit breaker + distributed concurrency.
+    const tenantProviderKey = `tenant:${destination.tenantId}`;
     const tenantBreaker = CircuitBreakers.microsoftTeams(destination.tenantId);
-    const admission = await acquireProviderAdmission('MICROSOFT_TEAMS', 'default');
+    const admission = await acquireProviderAdmission('MICROSOFT_TEAMS', tenantProviderKey);
     if (!admission.allowed) {
       const retryAfterMs = Math.max(1_000, admission.retryAt.getTime() - Date.now());
       const admittedErr = new AppError({
@@ -314,6 +422,33 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         },
       });
       throw admittedErr;
+    }
+    try {
+      const concurrency = await acquireProviderConcurrency('MICROSOFT_TEAMS', tenantProviderKey);
+      if (!concurrency.allowed) {
+        const retryAfterMs = Math.max(250, concurrency.retryAt.getTime() - Date.now());
+        const err = new AppError({
+          code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+          userMessage: 'Microsoft Teams delivery is at capacity, retrying shortly.',
+          details: { provider: 'microsoftTeams', providerRetryAfterMs: retryAfterMs, failureCode: 'RATE_LIMITED' },
+        });
+        await prisma.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: failureStatus(operation.attempts),
+            nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
+            lastError: `Teams concurrency at capacity: retry at ${concurrency.retryAt.toISOString()}`,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        throw err;
+      }
+      teamsConcurrencyLease = concurrency.leaseKey;
+    } catch (e) {
+      if (e instanceof AppError && e.details?.failureCode === 'RATE_LIMITED') throw e;
+      // Concurrency table unavailable — degrade open (allow delivery) rather than fail-closed.
+      logger.warn('[MicrosoftTeams] Concurrency admission unavailable — proceeding', { error: (e as Error).message });
     }
 
     const { microsoftTeamsChatProvider } = await import('./provider');
@@ -392,12 +527,14 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     };
 
     try {
-      if (previous?.messageId) {
+      const prevMessageId = previous?.messageId ?? null;
+      const prevConversationId = previous?.conversationId ?? null;
+      if (prevMessageId) {
         const updateResult = await callWithBreaker(() =>
           microsoftTeamsChatProvider.updateIncidentCard({
             destinationId,
-            messageId: previous.messageId!,
-            conversationId: previous.conversationId ?? undefined,
+            messageId: prevMessageId,
+            conversationId: prevConversationId ?? undefined,
             incident: incidentInput,
             eventType: eventType as never,
             disableActions: isResolved,
@@ -422,6 +559,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               resultPayload: { degraded: true, errorCode: 'PATCH_NOT_SUPPORTED' } as Prisma.InputJsonObject,
             },
           });
+          await releaseTeamsConcurrency();
           logger.warn('[MicrosoftTeams] Canonical update not supported — DEGRADED', { incidentId, destinationId });
           try {
             await emitAuditEvent({
@@ -456,11 +594,15 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         );
       }
     } catch (e) {
-      if (circuitOpened) throw e;
+      if (circuitOpened) {
+        await releaseTeamsConcurrency();
+        throw e;
+      }
       throw e;
     }
 
     if (!result.success) {
+      await releaseTeamsConcurrency();
       const code = categorizeTeamsErrorCode(result.errorCode);
       const statusCode = result.statusCode;
       const retryAfterMs = result.retryAfterMs;
@@ -472,7 +614,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       if (result.errorCode === 'RATE_LIMITED' || statusCode === 429) {
         const providerRetryAt = new Date(Date.now() + Math.max(retryAfterMs ?? 60_000, 1_000));
         try {
-          await deferProviderAdmission('MICROSOFT_TEAMS', 'default', providerRetryAt);
+          await deferProviderAdmission('MICROSOFT_TEAMS', tenantProviderKey, providerRetryAt);
         } catch {}
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
@@ -508,6 +650,13 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       }
       const { terminal } = classifyTeamsError(err);
       if (terminal) {
+        if (reservedByUs) {
+          try {
+            await prisma.microsoftTeamsIncidentMessage.deleteMany({
+              where: { incidentId, destinationId, messageId: ownReservation },
+            });
+          } catch {}
+        }
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: { status: 'FAILED', lastError: err.message.slice(0, 1000), leaseToken: null, leaseExpiresAt: null },
@@ -559,6 +708,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         leaseExpiresAt: null,
       },
     });
+    await releaseTeamsConcurrency();
     logger.info('[MicrosoftTeams] Delivery completed', { incidentId, destinationId, messageId: result.providerMessageId });
     try {
       await emitAuditEvent({
@@ -581,6 +731,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     } catch {}
     return result;
   } catch (error) {
+    await releaseTeamsConcurrency();
     // If we already transitioned to FAILED/AMBIGUOUS via explicit updateMany above, don't overwrite.
     const current = await prisma.externalOperation.findUnique({ where: { id }, select: { status: true, leaseToken: true } });
     if (current?.status === 'PROCESSING' && current.leaseToken === leaseToken) {

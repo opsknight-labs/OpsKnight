@@ -29,6 +29,8 @@ export type MicrosoftTeamsIncidentCardInput = {
     createdAt: Date;
     acknowledgedAt?: Date | null;
     resolvedAt?: Date | null;
+    slaAckRemainingMs?: number | null;
+    slaResolveRemainingMs?: number | null;
   };
   eventType: 'triggered' | 'acknowledged' | 'resolved';
 };
@@ -93,14 +95,27 @@ export function buildMicrosoftTeamsIncidentCard(
   if (incident.priority) facts.push({ title: 'Priority', value: incident.priority });
 
   const disableActions = Boolean(options?.disableActions);
-  const foot =
-    disableActions && eventType === 'resolved'
-      ? `Resolved — actions disabled`
-      : eventType === 'acknowledged' && incident.acknowledgedBy
-        ? `Acknowledged by ${incident.acknowledgedBy}`
-        : eventType === 'resolved' && incident.resolvedBy
-          ? `Resolved by ${incident.resolvedBy}`
-          : `Created ${incident.createdAt.toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
+  function slaLabel(remainingMs: number | null | undefined): string | null {
+    if (remainingMs == null || !Number.isFinite(remainingMs)) return null;
+    if (remainingMs <= 0) return 'SLA breached';
+    const mins = Math.ceil(remainingMs / 60_000);
+    if (mins < 60) return `SLA ${mins}m remaining`;
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem ? `SLA ${hrs}h ${rem}m remaining` : `SLA ${hrs}h remaining`;
+  }
+  const slaRemaining = eventType === 'acknowledged' ? null : eventType === 'resolved' ? incident.slaResolveRemainingMs : incident.slaAckRemainingMs;
+  const slaText = slaLabel(slaRemaining ?? null);
+  const disableActionsFoot = disableActions && eventType === 'resolved' ? `Resolved — actions disabled` : null;
+  const actorFoot =
+    eventType === 'acknowledged' && incident.acknowledgedBy
+      ? `Acknowledged by ${incident.acknowledgedBy}`
+      : eventType === 'resolved' && incident.resolvedBy
+        ? `Resolved by ${incident.resolvedBy}`
+        : null;
+  const timeFoot = `Created ${incident.createdAt.toLocaleString('en-US', { timeZone: 'UTC' })} UTC`;
+  const footParts = [disableActionsFoot ?? actorFoot ?? timeFoot, slaText].filter(Boolean) as string[];
+  const foot = footParts.join(' · ');
 
   return {
     $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',

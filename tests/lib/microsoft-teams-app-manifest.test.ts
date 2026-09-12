@@ -22,7 +22,11 @@ describe('Microsoft Teams app manifest', () => {
     expect(getMicrosoftTeamsBotMessagingEndpoint(`${BASE}/`)).toBe(`${BASE}/api/microsoft-teams/messages`);
     const m = buildMicrosoftTeamsAppManifest({ appUrl: `${BASE}/`, botId: BOT_ID });
     expect(m.validDomains).toEqual([new URL(BASE).hostname]);
-    expect(m.webApplicationInfo.resource).toContain(new URL(BASE).hostname);
+    // webApplicationInfo is only emitted when applicationIdUri is provided — no fabricated api://host/botId
+    expect((m as Record<string, unknown>).webApplicationInfo).toBeUndefined();
+    const mWithUri = buildMicrosoftTeamsAppManifest({ appUrl: `${BASE}/`, botId: BOT_ID, applicationIdUri: `api://${new URL(BASE).hostname}/${BOT_ID}` });
+    expect((mWithUri as Record<string, unknown>).webApplicationInfo).toBeDefined();
+    expect((mWithUri.webApplicationInfo as { resource: string }).resource).toContain(new URL(BASE).hostname);
   });
 
   it('uses the minimal required RSC permissions for Phase 1', () => {
@@ -30,21 +34,39 @@ describe('Microsoft Teams app manifest', () => {
       'ChannelSettings.Read.Group',
       'ChannelMessage.Send.Group',
     ]);
-    // Optional permissions are available but not required for Phase 1 card delivery.
     expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('TeamSettings.Read.Group');
-    // Total RSC set is 2 required + 1 optional = 3
     expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(3);
   });
 
   it('declares RSC permissions as Application-scoped in the manifest', () => {
+    // Default: only required perms (Phase 1 minimal surface)
     const m = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID });
-    const names = m.authorization.permissions.resourceSpecific.map(p => p.name);
-    for (const perm of MICROSOFT_TEAMS_RSC_PERMISSIONS) {
+    const names = (m.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
+    for (const perm of MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS) {
       expect(names).toContain(perm);
     }
-    for (const entry of m.authorization.permissions.resourceSpecific) {
+    for (const entry of m.authorization.permissions.resourceSpecific as Array<{ type: string }>) {
       expect(entry.type).toBe('Application');
     }
+    // No optional perms by default
+    for (const opt of MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS) {
+      expect(names).not.toContain(opt);
+    }
+    // With includeOptionalPermissions, all perms are emitted
+    const mFull = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeOptionalPermissions: true });
+    const fullNames = (mFull.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
+    for (const perm of MICROSOFT_TEAMS_RSC_PERMISSIONS) {
+      expect(fullNames).toContain(perm);
+    }
+  });
+
+  it('only emits webApplicationInfo when applicationIdUri is provided', () => {
+    const mDefault = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID });
+    expect((mDefault as Record<string, unknown>).webApplicationInfo).toBeUndefined();
+    const uri = `api://${new URL(BASE).hostname}/${BOT_ID}`;
+    const mWithUri = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, applicationIdUri: uri });
+    expect((mWithUri.webApplicationInfo as { id: string; resource: string }).id).toBe(BOT_ID);
+    expect((mWithUri.webApplicationInfo as { id: string; resource: string }).resource).toBe(uri);
   });
 
   it('advertises only Graph default scope for app-only token', () => {
@@ -64,9 +86,9 @@ describe('Microsoft Teams app manifest', () => {
     expect(m.manifestVersion).toBe('1.16');
     expect(m.bots[0].scopes).toEqual(expect.arrayContaining(['team', 'groupChat']));
     expect(m.bots[0].botId).toBe(BOT_ID);
-    expect(m.webApplicationInfo.id).toBe(BOT_ID);
-    expect(m.id).toBe(BOT_ID);
-    // messaging endpoint is on Azure Bot resource, not in manifest
+    expect((m as Record<string, unknown>).webApplicationInfo).toBeUndefined();
+    // manifest `id` is the packaging manifestId, not the botId
+    expect(m.id).toBe('11111111-1111-1111-1111-111111111111');
     expect((m as unknown as Record<string, unknown>).botsEndpoint).toBeUndefined();
   });
 
