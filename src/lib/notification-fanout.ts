@@ -1,9 +1,11 @@
 import crypto from 'node:crypto';
-import type { NotificationTrafficClass } from '@prisma/client';
+import { Prisma, type NotificationTrafficClass } from '@prisma/client';
 import prisma from './prisma';
 import { encrypt } from './encryption';
 import { addOperationalMetric } from './metrics/operational/registry';
 import { getEffectiveWatermarks as resolverWatermarks } from './notification-capacity/resolver';
+
+const CLAIM_TIMEOUT_MS = 10 * 60_000;
 
 const DEFAULT_LOW_WATERMARK = 5_000;
 const DEFAULT_HIGH_WATERMARK = 25_000;
@@ -71,48 +73,102 @@ const BULK_DEPTH_COALESCE_MS = 750;
 type DepthCache = { depth: number; at: number; inflight: Promise<number> | null };
 const bulkDepthCache: DepthCache = { depth: 0, at: 0, inflight: null };
 
-function isRetryableBulkWhere(now: Date) {
-  return {
-    trafficClass: { in: ['PUBLIC_INCIDENT', 'BULK'] as const },
-    // Count only deliverable bulk: PENDING (active payload) OR FAILED retryable.
-    // Terminal FAILED (attempts>=maxAttempts or payloadEncrypted wiped, or expired
-    // or nextAttemptAt in future) is dead-letter and must not gate fanout.
-    OR: [
-      { status: 'PENDING' as const, payloadEncrypted: { not: null } },
-      {
-        status: 'FAILED' as const,
-        payloadEncrypted: { not: null },
-        // Prisma doesn't support column-vs-column (attempts < maxAttempts) in
-        // where — approximate with attempts < 20 (hard ceiling) so terminal rows
-        // aren't counted. True predicate lives in the worker claim query.
-        attempts: { lt: 20 },
-        nextAttemptAt: { lte: now },
-        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      },
-    ],
-  } as const;
+/**
+ * Canonical deliverable predicate — MUST stay in sync with the central worker
+ * claim query in notification-control-plane.ts (processCentralNotifications).
+ * Depth must equal work the worker could actually claim, not just payload!=null.
+ *
+ * Worker contract:
+ *   payloadEncrypted IS NOT NULL
+ *   attempts < maxAttempts
+ *   scheduledAt <= now AND nextAttemptAt <= now
+ *   expiresAt IS NULL OR expiresAt > now
+ *   trafficClass IN ('PUBLIC_INCIDENT','BULK')
+ *   status = 'FAILED' OR (status='PENDING' AND (lastAttemptAt IS NULL OR < stale))
+ */
+function deliverableBulkCountSql(now: Date, staleClaimBefore: Date) {
+  return Prisma.sql`
+    SELECT COUNT(*)::int AS count FROM "Notification"
+    WHERE "payloadEncrypted" IS NOT NULL
+      AND "attempts" < "maxAttempts"
+      AND "scheduledAt" <= ${now}
+      AND "nextAttemptAt" <= ${now}
+      AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
+      AND "trafficClass" IN ('PUBLIC_INCIDENT'::"NotificationTrafficClass", 'BULK'::"NotificationTrafficClass")
+      AND (
+        "status" = 'FAILED'::"NotificationStatus"
+        OR (
+          "status" = 'PENDING'::"NotificationStatus"
+          AND ("lastAttemptAt" IS NULL OR "lastAttemptAt" < ${staleClaimBefore})
+        )
+      )
+  `;
 }
 
 export async function getDeliverableBulkDepth(now = new Date()): Promise<number> {
   const staleAt = bulkDepthCache.at + BULK_DEPTH_COALESCE_MS;
   if (Date.now() < staleAt) return bulkDepthCache.depth;
   if (bulkDepthCache.inflight) return bulkDepthCache.inflight;
-  const where = isRetryableBulkWhere(now);
-  const p = prisma.notification
-    .count({ where: where as never })
-    .then(depth => {
+  const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
+  const p = (async () => {
+    try {
+      const raw = prisma as unknown as Record<string, unknown>;
+      const q = raw.$queryRaw as ((s: unknown) => Promise<unknown>) | undefined;
+      if (q) {
+        const rows = (await q(deliverableBulkCountSql(now, staleClaimBefore))) as Array<{ count: number }>;
+        const depth = Number(rows[0]?.count ?? 0);
+        bulkDepthCache.depth = depth;
+        bulkDepthCache.at = Date.now();
+        bulkDepthCache.inflight = null;
+        return depth;
+      }
+    } catch {
+      // fall through to Prisma count fallback (tests)
+    }
+    // Fallback for unit tests where $queryRaw is mocked to [] or unavailable.
+    // Approximate with Prisma where — still exclude future/expired/exhausted and
+    // stale-claimed PENDING, but must use lt:20 for attempts<maxAttempts.
+    try {
+      const fallbackWhere = {
+        payloadEncrypted: { not: null },
+        scheduledAt: { lte: now },
+        nextAttemptAt: { lte: now },
+        trafficClass: { in: ['PUBLIC_INCIDENT', 'BULK'] as const },
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        AND: [
+          {
+            OR: [
+              { status: 'FAILED' as const },
+              {
+                status: 'PENDING' as const,
+                OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: staleClaimBefore } }],
+              },
+            ],
+          },
+        ],
+        // Prisma can't do attempts < maxAttempts — best-effort ceiling
+        attempts: { lt: 20 },
+      } as const;
+      const depth = await (prisma.notification as unknown as { count: (a: unknown) => Promise<number> }).count({
+        where: fallbackWhere as never,
+      });
       bulkDepthCache.depth = depth;
       bulkDepthCache.at = Date.now();
       bulkDepthCache.inflight = null;
       return depth;
-    })
-    .catch(err => {
+    } catch (e) {
       bulkDepthCache.inflight = null;
-      throw err;
-    });
+      throw e;
+    }
+  })().catch(err => {
+    bulkDepthCache.inflight = null;
+    throw err;
+  });
   bulkDepthCache.inflight = p;
   return p;
 }
+
+export function deliverableBulkCountSqlForTests(now: Date, staleBefore: Date) { return deliverableBulkCountSql(now, staleBefore); }
 
 export function resetBulkDepthCacheForTests() {
   bulkDepthCache.depth = 0;

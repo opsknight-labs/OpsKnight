@@ -25,9 +25,26 @@ function isBulkQueueBackpressureError(error: unknown): boolean {
  * the same job with a short delay until the queue drains below the low
  * watermark. This avoids exhausting maxAttempts=5 while draining ~55min for
  * 20k targets at ~6s/page under queue saturation.
+ *
+ * Crash safety: normal path compensates the claim's attempts+1 with
+ * attempts-1. A worker crash between claim and reschedule would leave the job
+ * PROCESSING with attempts==maxAttempts and be swept to FAILED by
+ * claimPendingJobs. To make backpressure structurally retry-neutral,
+ * claimPendingJobs' zombie sweep rescues bulk jobs before marking FAILED
+ * (see claimPendingJobs below) by rewinding attempts and rescheduling with
+ * jitter — so even an untimely SIGKILL cannot burn a retry.
  */
+function bulkBackpressureDelayMs(): number {
+  // Base 6s + jitter 0-2s avoids thundering-herd when 100 campaigns are
+  // simultaneously backpressured (all wake ~6s). Future improvement: adaptive
+  // 6s/10s/15s/30s with reset on low-watermark crossing.
+  const baseMs = 6_000;
+  const jitterMs = Math.floor(Math.random() * 2_000);
+  return baseMs + jitterMs;
+}
+
 async function rescheduleBulkBackpressuredJob(jobId: string): Promise<void> {
-  const delayMs = 6_000;
+  const delayMs = bulkBackpressureDelayMs();
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: {
@@ -164,6 +181,16 @@ export async function claimPendingJobs(
   type?: JobType,
   excludeTypes: readonly JobType[] = []
 ): Promise<QueuedJob[]> {
+  // Bulk jobs must never burn a retry due to backpressure + crash between
+  // claim (attempts+1) and reschedule (attempts-1). Rescue stale bulk jobs
+  // that would otherwise be swept to FAILED as zombies; rewind the claim
+  // increment and reschedule with jittered delay so 5 crashes cannot kill a
+  // 100k campaign. This runs before the generic zombie-FAILED sweep.
+  await prisma
+    .$executeRaw(
+      Prisma.sql`UPDATE "BackgroundJob" SET "status"='PENDING',"scheduledAt"=NOW()+INTERVAL '6 seconds' + (FLOOR(RANDOM()*2) * INTERVAL '1 second'),"startedAt"=NULL,"attempts"=GREATEST(0,"attempts"-1),"error"=NULL,"failedAt"=NULL WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`
+    )
+    .catch(err => logger.warn('[Queue] Failed to rescue stale bulk processing jobs', { error: err }));
   await prisma.$executeRaw(
     Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
   ).catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
