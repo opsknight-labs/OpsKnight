@@ -55,8 +55,10 @@ export default function StatusPageSnapshotView({
       data-sp-density={themeDensity}
       style={{
         minHeight: '100vh',
-        background: theme.backgroundColor,
-        color: theme.textColor,
+        // Built-in themes define these variables in their CSS layer. Default defines nothing and
+        // therefore falls back to the configured/native branding palette exactly as before.
+        background: `var(--sp-page-bg, ${theme.backgroundColor})`,
+        color: `var(--sp-page-text, ${theme.textColor})`,
         fontFamily: theme.fontFamily,
         padding: 0,
         ...(theme.cssVariables as CSSProperties),

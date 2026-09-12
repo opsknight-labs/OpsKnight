@@ -20,8 +20,8 @@ describe('status page design contract', () => {
       text: '#111827',
     });
 
-    // StatusPageConfigLegacy currently uses the first preset for its Reset button. Keep that target
-    // explicitly native so "Reset to default" can never mean "Modern Light" again.
+    // StatusPageConfig uses the first preset for its Reset button. Keep that target explicitly
+    // native so "Reset to default" can never mean "Modern Light" again.
     expect(STATUS_PAGE_COLOR_PRESETS[0]).toMatchObject({
       id: 'native-default',
       ...DEFAULT_STATUS_PAGE_COLORS,
@@ -43,6 +43,26 @@ describe('status page design contract', () => {
   it('defines Default as the native renderer with no built-in theme CSS', () => {
     expect(resolveStatusPageTheme(undefined).id).toBe(DEFAULT_STATUS_PAGE_THEME_ID);
     expect(compileStatusPageThemeCss(DEFAULT_STATUS_PAGE_THEME_ID)).toBe('');
+  });
+
+  it('compiles the selected theme palette into the live V3 token layer', () => {
+    const css = compileStatusPageThemeCss('command-center', 'compact');
+
+    expect(css).toContain('OpsKnight Status Page Theme: Command Center v1');
+    expect(css).toContain('--sp-page-bg: #111a30');
+    expect(css).toContain('--sp-panel-bg: #0b1020');
+    expect(css).toContain('--sp-page-text: #f8fafc');
+    expect(css).toContain('--sp-theme-accent: #a3e635');
+    expect(css).toContain('.status-v3-service');
+    expect(css).toContain('.status-v3-incident-pill__summary');
+  });
+
+  it('keeps operational status colors outside the decorative theme contract', () => {
+    const css = compileStatusPageThemeCss('command-center');
+
+    expect(css).not.toContain('--status-operational:');
+    expect(css).not.toContain('--status-degraded:');
+    expect(css).not.toContain('--status-major-outage:');
   });
 
   it('keeps the curated gallery intentionally small and versioned', () => {
