@@ -27,16 +27,41 @@ export interface JobWorkerConfig {
   busyPollMs: number;
 }
 
-let timer: NodeJS.Timeout | null = null;
-let initialized = false;
-let activeRun: Promise<void> | null = null;
-let workerConfig: JobWorkerConfig | null = null;
-let lastRunAt: Date | null = null;
-let lastSuccessAt: Date | null = null;
-let startedAt: Date | null = null;
-let lastError: string | null = null;
 export type JobWorkerLane = 'all' | 'critical' | 'bulk' | 'projector';
-let workerLane: JobWorkerLane = 'all';
+
+interface JobWorkerSharedState {
+  timer: NodeJS.Timeout | null;
+  initialized: boolean;
+  activeRun: Promise<void> | null;
+  workerConfig: JobWorkerConfig | null;
+  lastRunAt: Date | null;
+  lastSuccessAt: Date | null;
+  startedAt: Date | null;
+  lastError: string | null;
+  workerLane: JobWorkerLane;
+}
+
+declare global {
+  var jobWorkerGlobalState: JobWorkerSharedState | undefined;
+}
+
+const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
+  timer: null,
+  initialized: false,
+  activeRun: null,
+  workerConfig: null,
+  lastRunAt: null,
+  lastSuccessAt: null,
+  startedAt: null,
+  lastError: null,
+  workerLane: 'all',
+};
+
+// Next.js standalone webpack builds isolate module scopes between
+// instrumentation.ts and app/api/health/route.ts. Attaching worker lifecycle
+// state to globalThis ensures /api/health?mode=readiness accurately reflects
+// the running in-process worker started by instrumentation.
+globalThis.jobWorkerGlobalState = workerState;
 
 function readBoundedInteger(
   rawValue: string | undefined,
@@ -109,75 +134,83 @@ function withIdleJitter(delayMs: number): number {
 }
 
 function scheduleNextRun(delayMs: number): void {
-  if (!initialized) return;
+  if (!workerState.initialized) return;
 
-  if (timer) clearTimeout(timer);
-  timer = setTimeout(() => {
-    timer = null;
-    activeRun = runOnce().finally(() => {
-      activeRun = null;
+  if (workerState.timer) clearTimeout(workerState.timer);
+  workerState.timer = setTimeout(() => {
+    workerState.timer = null;
+    workerState.activeRun = runOnce().finally(() => {
+      workerState.activeRun = null;
     });
-    void activeRun;
+    void workerState.activeRun;
   }, delayMs);
 }
 
 async function runOnce(): Promise<void> {
-  if (!initialized || !workerConfig) return;
+  if (!workerState.initialized || !workerState.workerConfig) return;
 
-  lastRunAt = new Date();
-  const startedAt = Date.now();
+  workerState.lastRunAt = new Date();
+  const batchStartedAt = Date.now();
 
   try {
-    if (workerLane === 'projector') {
+    if (workerState.workerLane === 'projector') {
       const { reconcileStatusPageSnapshots } = await import('./status-pages/snapshot');
-      const projection = await reconcileStatusPageSnapshots(workerConfig.batchSize);
-      lastSuccessAt = new Date();
-      lastError = null;
-      scheduleNextRun(projection.attempted > 0 ? workerConfig.busyPollMs : workerConfig.idlePollMs);
+      const projection = await reconcileStatusPageSnapshots(workerState.workerConfig.batchSize);
+      workerState.lastSuccessAt = new Date();
+      workerState.lastError = null;
+      scheduleNextRun(
+        projection.attempted > 0
+          ? workerState.workerConfig.busyPollMs
+          : workerState.workerConfig.idlePollMs
+      );
       return;
     }
 
-    if (workerLane === 'bulk') {
+    if (workerState.workerLane === 'bulk') {
       const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
       if (await isBulkNotificationDeliveryPaused()) {
-        lastSuccessAt = new Date();
-        lastError = null;
-        scheduleNextRun(withIdleJitter(workerConfig.idlePollMs));
+        workerState.lastSuccessAt = new Date();
+        workerState.lastError = null;
+        scheduleNextRun(withIdleJitter(workerState.workerConfig.idlePollMs));
         return;
       }
       const { processCentralNotificationQueue } = await import('./notification-control-plane');
       const notifications = await processCentralNotificationQueue({
         trafficClasses: ['PUBLIC_INCIDENT', 'BULK'],
-        batchSize: workerConfig.batchSize,
-        concurrency: workerConfig.concurrency,
+        batchSize: workerState.workerConfig.batchSize,
+        concurrency: workerState.workerConfig.concurrency,
       });
       const incidentFanout = await processPendingJobsByType(
         'STATUS_PAGE_NOTIFICATION',
-        workerConfig.batchSize,
-        workerConfig.concurrency
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
       );
       const announcementFanout = await processPendingJobsByType(
         'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
-        workerConfig.batchSize,
-        workerConfig.concurrency
+        workerState.workerConfig.batchSize,
+        workerState.workerConfig.concurrency
       );
       const failed = notifications.failed + incidentFanout.failed + announcementFanout.failed;
       if (failed > 0) {
-        lastError = `${failed} bulk delivery job(s) failed`;
+        workerState.lastError = `${failed} bulk delivery job(s) failed`;
         logger.warn('[JobWorker] Bulk lane degraded', { failed });
       } else {
-        lastSuccessAt = new Date();
-        lastError = null;
+        workerState.lastSuccessAt = new Date();
+        workerState.lastError = null;
       }
       const busy = notifications.processed + incidentFanout.total + announcementFanout.total > 0;
-      scheduleNextRun(busy ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs));
+      scheduleNextRun(
+        busy
+          ? workerState.workerConfig.busyPollMs
+          : withIdleJitter(workerState.workerConfig.idlePollMs)
+      );
       return;
     }
 
-    if (workerLane === 'critical') {
+    if (workerState.workerLane === 'critical') {
       const escalation = await runCriticalEscalationCycle({
-        batchSize: Math.min(workerConfig.batchSize, 50),
-        concurrency: Math.min(workerConfig.concurrency, 10),
+        batchSize: Math.min(workerState.workerConfig.batchSize, 50),
+        concurrency: Math.min(workerState.workerConfig.concurrency, 10),
       });
       const notifications = await runCriticalNotificationCycle();
       const laneErrors = [...escalation.errors, ...notifications.errors];
@@ -186,16 +219,20 @@ async function runOnce(): Promise<void> {
       if (notifications.centralFailed > 0)
         laneErrors.push(`${notifications.centralFailed} central notification(s) failed`);
       if (laneErrors.length > 0) {
-        lastError = laneErrors.join('; ');
+        workerState.lastError = laneErrors.join('; ');
         logger.warn('[JobWorker] Critical lane degraded', { errors: laneErrors });
       } else {
-        lastSuccessAt = new Date();
-        lastError = null;
+        workerState.lastSuccessAt = new Date();
+        workerState.lastError = null;
       }
       const busy =
         criticalEscalationCycleWasBusy(escalation) ||
         criticalNotificationCycleWasBusy(notifications);
-      scheduleNextRun(busy ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs));
+      scheduleNextRun(
+        busy
+          ? workerState.workerConfig.busyPollMs
+          : withIdleJitter(workerState.workerConfig.idlePollMs)
+      );
       return;
     }
 
@@ -203,8 +240,8 @@ async function runOnce(): Promise<void> {
     // a backlog of webhooks or status-page notifications, and this lane owns
     // escalation's recovery so it does not depend on the scheduler lease.
     const escalation = await runCriticalEscalationCycle({
-      batchSize: Math.min(workerConfig.batchSize, 50),
-      concurrency: Math.min(workerConfig.concurrency, 10),
+      batchSize: Math.min(workerState.workerConfig.batchSize, 50),
+      concurrency: Math.min(workerState.workerConfig.concurrency, 10),
     });
 
     // Then the pages escalation already made durable. A page committed in about
@@ -212,7 +249,10 @@ async function runOnce(): Promise<void> {
     // recovery runs on every replica too.
     const notifications = await runCriticalNotificationCycle();
 
-    const result = await processPendingJobs(workerConfig.batchSize, workerConfig.concurrency);
+    const result = await processPendingJobs(
+      workerState.workerConfig.batchSize,
+      workerState.workerConfig.concurrency
+    );
     const laneErrors = [...escalation.errors, ...notifications.errors];
     if (escalation.jobsFailed > 0) {
       laneErrors.push(`${escalation.jobsFailed} escalation job(s) failed`);
@@ -221,10 +261,10 @@ async function runOnce(): Promise<void> {
       laneErrors.push(`${notifications.centralFailed} central notification(s) failed`);
     }
     if (laneErrors.length === 0) {
-      lastSuccessAt = new Date();
-      lastError = null;
+      workerState.lastSuccessAt = new Date();
+      workerState.lastError = null;
     } else {
-      lastError = laneErrors.join('; ');
+      workerState.lastError = laneErrors.join('; ');
       logger.warn('[JobWorker] Critical lane degraded', { errors: laneErrors });
     }
 
@@ -234,7 +274,7 @@ async function runOnce(): Promise<void> {
       claimed: result.total,
       escalation,
       notifications,
-      durationMs: Date.now() - startedAt,
+      durationMs: Date.now() - batchStartedAt,
     });
 
     const busy =
@@ -242,17 +282,19 @@ async function runOnce(): Promise<void> {
       criticalEscalationCycleWasBusy(escalation) ||
       criticalNotificationCycleWasBusy(notifications) ||
       consumeEscalationWakeRequest();
-    const delay = busy ? workerConfig.busyPollMs : withIdleJitter(workerConfig.idlePollMs);
+    const delay = busy
+      ? workerState.workerConfig.busyPollMs
+      : withIdleJitter(workerState.workerConfig.idlePollMs);
     scheduleNextRun(delay);
   } catch (error) {
-    lastError = error instanceof Error ? error.message : String(error);
+    workerState.lastError = error instanceof Error ? error.message : String(error);
     logger.error('[JobWorker] Batch failed', {
-      error: lastError,
-      durationMs: Date.now() - startedAt,
+      error: workerState.lastError,
+      durationMs: Date.now() - batchStartedAt,
     });
 
     // A queue/database failure must not create a hot retry loop.
-    scheduleNextRun(withIdleJitter(workerConfig.idlePollMs));
+    scheduleNextRun(withIdleJitter(workerState.workerConfig.idlePollMs));
   }
 }
 
@@ -262,25 +304,25 @@ async function runOnce(): Promise<void> {
  * call this loop against the same database.
  */
 export function startJobWorker(lane: JobWorkerLane = 'all'): void {
-  if (initialized) {
+  if (workerState.initialized) {
     logger.debug('[JobWorker] Already initialized, skipping');
     return;
   }
 
-  workerConfig = getJobWorkerConfig();
-  workerLane = lane;
-  initialized = true;
-  lastRunAt = null;
-  lastSuccessAt = null;
-  startedAt = new Date();
-  lastError = null;
+  workerState.workerConfig = getJobWorkerConfig();
+  workerState.workerLane = lane;
+  workerState.initialized = true;
+  workerState.lastRunAt = null;
+  workerState.lastSuccessAt = null;
+  workerState.startedAt = new Date();
+  workerState.lastError = null;
 
   logger.info('[JobWorker] Starting', {
-    batchSize: workerConfig.batchSize,
-    concurrency: workerConfig.concurrency,
-    idlePollMs: workerConfig.idlePollMs,
-    busyPollMs: workerConfig.busyPollMs,
-    lane: workerLane,
+    batchSize: workerState.workerConfig.batchSize,
+    concurrency: workerState.workerConfig.concurrency,
+    idlePollMs: workerState.workerConfig.idlePollMs,
+    busyPollMs: workerState.workerConfig.busyPollMs,
+    lane: workerState.workerLane,
   });
 
   // Start immediately. Subsequent iterations are paced based on queue activity.
@@ -294,21 +336,22 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
  * process kill.
  */
 export async function stopJobWorker(): Promise<void> {
-  const wasRunning = initialized || timer !== null || activeRun !== null;
-  initialized = false;
+  const wasRunning =
+    workerState.initialized || workerState.timer !== null || workerState.activeRun !== null;
+  workerState.initialized = false;
 
-  if (timer) {
-    clearTimeout(timer);
-    timer = null;
+  if (workerState.timer) {
+    clearTimeout(workerState.timer);
+    workerState.timer = null;
   }
 
-  const inFlight = activeRun;
+  const inFlight = workerState.activeRun;
   if (inFlight) {
     await inFlight;
   }
 
-  workerConfig = null;
-  startedAt = null;
+  workerState.workerConfig = null;
+  workerState.startedAt = null;
 
   if (wasRunning) {
     logger.info('[JobWorker] Stopped');
@@ -317,13 +360,13 @@ export async function stopJobWorker(): Promise<void> {
 
 export function getJobWorkerStatus() {
   return {
-    running: initialized,
-    inFlight: activeRun !== null,
-    lastRunAt,
-    lastSuccessAt,
-    startedAt,
-    lastError,
-    config: workerConfig ? { ...workerConfig } : null,
-    lane: workerLane,
+    running: workerState.initialized,
+    inFlight: workerState.activeRun !== null,
+    lastRunAt: workerState.lastRunAt,
+    lastSuccessAt: workerState.lastSuccessAt,
+    startedAt: workerState.startedAt,
+    lastError: workerState.lastError,
+    config: workerState.workerConfig ? { ...workerState.workerConfig } : null,
+    lane: workerState.workerLane,
   };
 }

@@ -308,4 +308,20 @@ describe('dedicated job worker', () => {
     expect(processPendingJobs).toHaveBeenCalledTimes(1);
     expect(getJobWorkerStatus().running).toBe(false);
   });
+
+  it('shares worker lifecycle state via globalThis for isolated standalone webpack chunks', async () => {
+    expect(globalThis.jobWorkerGlobalState).toBeDefined();
+
+    startJobWorker('critical');
+    expect(globalThis.jobWorkerGlobalState?.initialized).toBe(true);
+    expect(globalThis.jobWorkerGlobalState?.workerLane).toBe('critical');
+    expect(globalThis.jobWorkerGlobalState?.startedAt).toBeInstanceOf(Date);
+    expect(getJobWorkerStatus().running).toBe(true);
+    expect(getJobWorkerStatus().lane).toBe('critical');
+
+    await stopJobWorker();
+    expect(globalThis.jobWorkerGlobalState?.initialized).toBe(false);
+    expect(globalThis.jobWorkerGlobalState?.startedAt).toBeNull();
+    expect(getJobWorkerStatus().running).toBe(false);
+  });
 });

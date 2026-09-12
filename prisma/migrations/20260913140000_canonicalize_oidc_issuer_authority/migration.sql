@@ -17,18 +17,21 @@ BEGIN
 
   trimmed := rtrim(raw_issuer, '/');
 
-  -- Extract scheme (e.g. https://)
-  IF trimmed ~* '^https?://' THEN
-    scheme := LOWER(SUBSTRING(trimmed FROM '^(?i)(https?://)'));
-    after_scheme := SUBSTRING(trimmed FROM '^(?i)[a-zA-Z0-9]+://(.*)$');
+  -- Extract scheme (e.g. https:// or http://)
+  IF lower(trimmed) ~ '^https://' THEN
+    scheme := 'https://';
+    after_scheme := substr(trimmed, 9);
+  ELSIF lower(trimmed) ~ '^http://' THEN
+    scheme := 'http://';
+    after_scheme := substr(trimmed, 8);
   ELSE
     RETURN trimmed;
   END IF;
 
   -- Separate authority from path
   IF position('/' IN after_scheme) > 0 THEN
-    authority := SUBSTRING(after_scheme FROM '^([^/]+)');
-    path_part := SUBSTRING(after_scheme FROM position('/' IN after_scheme));
+    authority := substr(after_scheme, 1, position('/' IN after_scheme) - 1);
+    path_part := substr(after_scheme, position('/' IN after_scheme));
   ELSE
     authority := after_scheme;
     path_part := '';
@@ -37,9 +40,9 @@ BEGIN
   -- Authority: lowercase hostname and strip default port 443 for HTTPS (or 80 for HTTP)
   canon_authority := LOWER(authority);
   IF scheme = 'https://' AND canon_authority ~ ':443$' THEN
-    canon_authority := SUBSTRING(canon_authority FROM '^(.+):443$');
+    canon_authority := substr(canon_authority, 1, length(canon_authority) - 4);
   ELSIF scheme = 'http://' AND canon_authority ~ ':80$' THEN
-    canon_authority := SUBSTRING(canon_authority FROM '^(.+):80$');
+    canon_authority := substr(canon_authority, 1, length(canon_authority) - 3);
   END IF;
 
   RETURN scheme || canon_authority || path_part;
