@@ -10,6 +10,7 @@ export type StatusPageThemeFamily =
   | 'consumer';
 
 export type StatusPageThemeDensity = 'comfortable' | 'compact';
+export type StatusPageThemeMode = 'light' | 'dark';
 
 export interface StatusPageThemeDefinition {
   id: string;
@@ -17,6 +18,7 @@ export interface StatusPageThemeDefinition {
   name: string;
   family: StatusPageThemeFamily;
   description: string;
+  mode: StatusPageThemeMode;
   preview: {
     surface: string;
     surfaceAlt: string;
@@ -32,6 +34,24 @@ export interface StatusPageThemeDefinition {
   };
 }
 
+function isDarkHex(value: string): boolean {
+  const hex = value.replace('#', '').trim();
+  if (hex.length !== 3 && hex.length !== 6) return false;
+  const fullHex =
+    hex.length === 3
+      ? hex
+          .split('')
+          .map(part => part + part)
+          .join('')
+      : hex;
+  const parsed = Number.parseInt(fullHex, 16);
+  if (Number.isNaN(parsed)) return false;
+  const red = (parsed >> 16) & 255;
+  const green = (parsed >> 8) & 255;
+  const blue = parsed & 255;
+  return 0.299 * red + 0.587 * green + 0.114 * blue < 145;
+}
+
 const theme = (
   id: string,
   name: string,
@@ -45,6 +65,7 @@ const theme = (
   name,
   family,
   description,
+  mode: isDarkHex(preview.surface) ? 'dark' : 'light',
   preview,
   shape,
 });
@@ -210,9 +231,9 @@ export function isLegacyStatusPageTemplateCss(value: unknown): boolean {
  * Compile a built-in theme into the single deterministic override layer used by both the public
  * Status Page and the admin live preview.
  *
- * Operational/degraded/outage colors deliberately remain owned by the base renderer. Built-in
- * themes control page/panel surfaces, readable ink, decorative accent, geometry, spacing, and
- * composition. Customer Advanced CSS is applied after this layer and therefore remains the final
+ * Operational/degraded/outage colors remain semantically owned by the base renderer. Dark themes
+ * only provide dark-safe foreground/background values for those same semantics; they never change
+ * what a status means. Customer Advanced CSS is applied after this layer and remains the final
  * override. Default is the native renderer and returns an empty string by contract.
  */
 export function compileStatusPageThemeCss(
@@ -228,6 +249,7 @@ export function compileStatusPageThemeCss(
   const sectionGap = compact ? '1rem' : '1.5rem';
   const cardPadding = compact ? '0.75rem' : '1rem';
   const { shape, preview } = selected;
+  const accentContrast = isDarkHex(preview.accent) ? '#ffffff' : '#0b1020';
 
   const serviceLayout =
     shape.services === 'cards'
@@ -252,6 +274,52 @@ export function compileStatusPageThemeCss(
         ? `.status-page-container details.status-v3-incident-pill { border-radius: calc(${shape.radius} + 2px); }`
         : '';
 
+  // SnapshotView currently carries branding variables inline on the outer container. Inline custom
+  // properties outrank built-in theme CSS on that same element, which is mostly invisible on light
+  // themes because their ink is similar to the native palette but can make dark themes inherit dark
+  // branding text. Re-declaring the selected dark palette on the child surface wins by normal
+  // inheritance without using !important and keeps Advanced CSS free to override it afterwards.
+  const darkSurfaceLayer =
+    selected.mode === 'dark'
+      ? `
+.status-page-container,
+.status-page-container .status-page-surface {
+  color-scheme: dark;
+}
+.status-page-container .status-page-surface {
+  --sp-ink: ${preview.text};
+  --sp-ink-strong: ${preview.text};
+  --sp-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);
+  --sp-muted-2: color-mix(in srgb, ${preview.text} 56%, ${preview.surface} 44%);
+  --sp-panel-bg: ${preview.surface};
+  --sp-panel-muted-bg: ${preview.surfaceAlt};
+  --sp-panel-border: color-mix(in srgb, ${preview.text} 16%, ${preview.surface} 84%);
+  --sp-panel-muted-border: color-mix(in srgb, ${preview.text} 13%, ${preview.surfaceAlt} 87%);
+  --status-primary: var(--sp-theme-accent);
+  --status-primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
+  --primary: var(--sp-theme-accent);
+  --primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
+  --status-operational: #6ee7b7;
+  --status-operational-bg: color-mix(in srgb, #10b981 14%, var(--sp-panel-bg) 86%);
+  --status-degraded: #fcd34d;
+  --status-degraded-bg: color-mix(in srgb, #f59e0b 14%, var(--sp-panel-bg) 86%);
+  --status-maintenance: #93c5fd;
+  --status-maintenance-bg: color-mix(in srgb, #3b82f6 14%, var(--sp-panel-bg) 86%);
+  --status-partial-outage: #fdba74;
+  --status-partial-outage-bg: color-mix(in srgb, #f97316 14%, var(--sp-panel-bg) 86%);
+  --status-major-outage: #fda4af;
+  --status-major-outage-bg: color-mix(in srgb, #e11d48 14%, var(--sp-panel-bg) 86%);
+  --status-unknown: #cbd5e1;
+  --status-unknown-bg: color-mix(in srgb, #64748b 16%, var(--sp-panel-bg) 84%);
+}
+.status-page-container .status-topbar__chip--accent,
+.status-page-container .status-subscribe__button,
+.status-page-container .status-subscribe__check--on .status-subscribe__check-box {
+  color: var(--sp-theme-accent-contrast);
+}
+`
+      : '';
+
   return `
 /* OpsKnight Status Page Theme: ${selected.name} v${selected.version} */
 .status-page-container {
@@ -266,12 +334,14 @@ export function compileStatusPageThemeCss(
   --sp-panel-border: color-mix(in srgb, ${preview.text} 16%, ${preview.surface} 84%);
   --sp-panel-muted-border: color-mix(in srgb, ${preview.text} 13%, ${preview.surfaceAlt} 87%);
   --sp-theme-accent: ${preview.accent};
+  --sp-theme-accent-contrast: ${accentContrast};
   --sp-theme-radius: ${shape.radius};
   --sp-theme-shadow: ${shape.shadow};
   --sp-theme-card-padding: ${cardPadding};
   --sp-theme-service-gap: ${serviceGap};
   --sp-theme-section-gap: ${sectionGap};
 }
+${darkSurfaceLayer}
 .status-page-container .status-topbar,
 .status-page-container .status-page-header {
   background: color-mix(in srgb, var(--sp-panel-bg) 92%, var(--sp-theme-accent) 8%);
