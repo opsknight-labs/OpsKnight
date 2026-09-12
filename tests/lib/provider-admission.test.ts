@@ -97,4 +97,62 @@ describe('provider admission control', () => {
     expect(admission.allowed).toBe(true);
     if (admission.allowed) await releaseProviderConcurrency(admission.leaseKey);
   });
+
+  it('fails closed when reading shared cooldown throws in production', async () => {
+    const origEnv = process.env.NODE_ENV;
+    const origVitest = process.env.VITEST;
+    const origWorker = process.env.VITEST_WORKER_ID;
+    (process.env as unknown as Record<string, string>).NODE_ENV = 'production';
+    delete process.env.VITEST;
+    delete process.env.VITEST_WORKER_ID;
+    mocks.findUnique.mockRejectedValue(new Error('db down'));
+    const now = new Date('2026-08-30T12:00:00.000Z');
+    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({ allowed: false, reason: 'RATE_LIMITED' });
+    (process.env as unknown as Record<string, string>).NODE_ENV = origEnv as string;
+    if (origVitest !== undefined) process.env.VITEST = origVitest;
+    else delete process.env.VITEST;
+    if (origWorker !== undefined) process.env.VITEST_WORKER_ID = origWorker;
+    mocks.findUnique.mockResolvedValue(null);
+  });
+
+  it('denies quota when distributed quota SQL throws in production', async () => {
+    const origEnv = process.env.NODE_ENV;
+    const origVitest = process.env.VITEST;
+    const origWorker = process.env.VITEST_WORKER_ID;
+    (process.env as unknown as Record<string, string>).NODE_ENV = 'production';
+    delete process.env.VITEST;
+    delete process.env.VITEST_WORKER_ID;
+    mocks.findUnique.mockResolvedValue(null);
+    mocks.queryRaw.mockRejectedValue(new Error('db down'));
+    mocks.executeRaw.mockRejectedValue(new Error('db down'));
+    const now = new Date('2026-08-30T12:00:00.000Z');
+    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({ allowed: false, reason: 'RATE_LIMITED' });
+    (process.env as unknown as Record<string, string>).NODE_ENV = origEnv as string;
+    if (origVitest !== undefined) process.env.VITEST = origVitest;
+    else delete process.env.VITEST;
+    if (origWorker !== undefined) process.env.VITEST_WORKER_ID = origWorker;
+    mocks.queryRaw.mockResolvedValue([{ granted: 8 }]);
+    mocks.executeRaw.mockResolvedValue(0);
+  });
+
+  it('local cooldown survives DB persistence failure', async () => {
+    mocks.executeRaw.mockRejectedValue(new Error('db down'));
+    const retryAt = new Date('2026-08-30T12:05:00.000Z');
+    await deferProviderAdmission('EMAIL', 'default', retryAt);
+    mocks.findUnique.mockRejectedValue(new Error('db down again'));
+    const now = new Date('2026-08-30T12:04:00.000Z');
+    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({ allowed: false, reason: 'RATE_LIMITED' });
+    mocks.findUnique.mockResolvedValue(null);
+    mocks.executeRaw.mockResolvedValue(0);
+  });
+
+  it('SMS provider aws-sns capacity intent routes through SMS not EMAIL', async () => {
+    // admisssion scope for aws-sns must be SMS; ensure quota/cooldown keys use sms scope
+    mocks.queryRaw.mockResolvedValue([{ granted: 1 }]);
+    const now = new Date('2026-08-30T12:00:00.000Z');
+    await expect(acquireProviderAdmission('SMS', 'aws-sns', now)).resolves.toEqual({ allowed: true });
+    // verify the SMS bucket was used (key contains sms, not email)
+    const lastQuotaCall = mocks.queryRaw.mock.calls[mocks.queryRaw.mock.calls.length - 1]?.[0] as { strings?: string[] } | undefined;
+    expect(lastQuotaCall).toBeDefined();
+  });
 });

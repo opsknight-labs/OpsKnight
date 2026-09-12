@@ -18,6 +18,7 @@ export const PROVIDER_LEASE_MS = 30_000;
 const WORKER_ID = process.env.OPSKNIGHT_WORKER_ID?.trim() || crypto.randomUUID();
 const localQuota = new Map<string, { remaining: number; expiresAt: number }>();
 const localConcurrency = new Map<string, { reserved: number; active: number; expiresAt: number }>();
+const localCooldown = new Map<string, Date>();
 type ConcurrencyClaim = { poolKey: string; expiresAt: number };
 const concurrencyClaims = new Map<string, ConcurrencyClaim>();
 const CONCURRENCY_CLAIM_SWEEP_INTERVAL_MS = 5_000;
@@ -35,6 +36,7 @@ export function resetProviderAdmissionForTests() {
   localQuota.clear();
   localConcurrency.clear();
   concurrencyClaims.clear();
+  localCooldown.clear();
 }
 
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
@@ -65,14 +67,37 @@ export async function acquireProviderAdmission(
   const rateLimitModel = (prisma as unknown as Record<string, unknown>).rateLimit as
     | { findUnique: (args: unknown) => Promise<unknown> }
     | undefined;
+  const bucket = bucketKey(scope, providerKey);
+  // Process-local cooldown is authoritative if DB read fails; also fast-path
+  // when deferProviderAdmission persisted locally but DB not yet visible.
+  const localExpiry = localCooldown.get(bucket);
+  if (localExpiry && localExpiry > now) {
+    return { allowed: false, retryAt: localExpiry, reason: 'RATE_LIMITED' };
+  }
+  // Prune expired local entry opportunistically
+  if (localExpiry && localExpiry <= now) localCooldown.delete(bucket);
+
   let cooldown: { expiresAt: Date | null } | null = null;
   if (rateLimitModel?.findUnique) {
     try {
       cooldown = (await rateLimitModel.findUnique({
-        where: { key: bucketKey(scope, providerKey) },
+        where: { key: bucket },
         select: { expiresAt: true },
       })) as { expiresAt: Date | null } | null;
+      if (cooldown?.expiresAt && cooldown.expiresAt > now) {
+        // Cache durable cooldown locally so a subsequent read failure still fails closed
+        localCooldown.set(bucket, cooldown.expiresAt);
+      }
     } catch {
+      const fallback = localCooldown.get(bucket);
+      if (fallback && fallback > now) {
+        return { allowed: false, retryAt: fallback, reason: 'RATE_LIMITED' };
+      }
+      if (!isProviderAdmissionTestEnv()) {
+        const conservativeRetryAt = new Date(now.getTime() + 1_000);
+        localCooldown.set(bucket, conservativeRetryAt);
+        return { allowed: false, retryAt: conservativeRetryAt, reason: 'RATE_LIMITED' };
+      }
       cooldown = null;
     }
   }
@@ -84,9 +109,12 @@ export async function acquireProviderAdmission(
     provider: providerKey,
   });
   const bulk = usesBulkCapacity(trafficClass);
-  const cacheKey = `${bucketKey(scope, providerKey)}:${bulk ? 'bulk' : 'global'}`;
+  const cacheKey = `${bucket}:${bulk ? 'bulk' : 'global'}`;
   const cached = localQuota.get(cacheKey);
   if (cached && cached.expiresAt > now.getTime() && cached.remaining > 0) {
+    // Local quota is only trusted if local cooldown is also checked above.
+    // A DB read failure already returned conservative deny, so reaching here
+    // means no cooldown applies. Consuming local quota is safe.
     cached.remaining -= 1;
     return { allowed: true };
   }
@@ -158,6 +186,10 @@ export async function deferProviderAdmission(
     provider: providerKey,
   });
   const key = bucketKey(scope, providerKey);
+  // Always maintain process-local cooldown so a DB persistence failure still
+  // throttles this replica and fail-closed reads can honor it.
+  const existing = localCooldown.get(key);
+  if (!existing || retryAt > existing) localCooldown.set(key, retryAt);
   const deferRaw = (prisma as unknown as Record<string, unknown>).$executeRaw as
     | ((...args: unknown[]) => Promise<unknown>)
     | undefined;
@@ -171,7 +203,8 @@ export async function deferProviderAdmission(
       "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
   `);
     } catch {
-      // best-effort in tests
+      // Persistence is best-effort in tests; in production the local
+      // cooldown above still enforces the Retry-After on this replica.
     }
   }
   for (const localKey of localQuota.keys()) {
