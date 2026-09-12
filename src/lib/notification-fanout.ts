@@ -24,15 +24,83 @@ export async function getEffectiveFanoutWatermarks() {
   return resolverWatermarks();
 }
 
-export async function bulkQueueHasCapacity(): Promise<boolean> {
-  const { high } = await resolverWatermarks();
+const BULK_BACKPRESSURE_KEY = 'notification_bulk_backpressure';
+
+export type BulkBackpressureState = 'NORMAL' | 'PAUSED';
+
+export async function getBulkBackpressureState(): Promise<BulkBackpressureState> {
+  const record = await prisma.systemConfig.findUnique({ where: { key: BULK_BACKPRESSURE_KEY } });
+  const value =
+    record?.value && typeof record.value === 'object' && !Array.isArray(record.value)
+      ? (record.value as Record<string, unknown>)
+      : null;
+  return value?.state === 'PAUSED' ? 'PAUSED' : 'NORMAL';
+}
+
+export async function setBulkBackpressureState(state: BulkBackpressureState): Promise<void> {
+  const value = { state, updatedAt: new Date().toISOString() };
+  await prisma.systemConfig.upsert({
+    where: { key: BULK_BACKPRESSURE_KEY },
+    create: { key: BULK_BACKPRESSURE_KEY, value },
+    update: { value },
+  });
+}
+
+export function resetBulkBackpressureForTests() {
+  // No in-process cache — DB is the source of truth. Tests reset via prisma mock.
+}
+
+export async function getBulkQueueHealth(): Promise<{
+  depth: number;
+  low: number;
+  high: number;
+  source: string;
+  revision: number | null;
+  state: BulkBackpressureState;
+  hasCapacity: boolean;
+}> {
+  const watermarks = await resolverWatermarks();
   const depth = await prisma.notification.count({
     where: {
       trafficClass: { in: ['PUBLIC_INCIDENT', 'BULK'] },
       status: { in: ['PENDING', 'FAILED'] },
     },
   });
-  return depth < high;
+  const state = await getBulkBackpressureState();
+  // Hysteresis: PAUSED persists until depth drains below low.
+  const hasCapacity = state === 'PAUSED' ? depth < watermarks.low : depth < watermarks.high;
+  return {
+    depth,
+    low: watermarks.low,
+    high: watermarks.high,
+    source: watermarks.source,
+    revision: watermarks.revision,
+    state,
+    hasCapacity,
+  };
+}
+
+export async function bulkQueueHasCapacity(): Promise<boolean> {
+  const { low, high } = await resolverWatermarks();
+  const depth = await prisma.notification.count({
+    where: {
+      trafficClass: { in: ['PUBLIC_INCIDENT', 'BULK'] },
+      status: { in: ['PENDING', 'FAILED'] },
+    },
+  });
+  const state = await getBulkBackpressureState();
+  if (state === 'PAUSED') {
+    if (depth < low) {
+      await setBulkBackpressureState('NORMAL');
+      return true;
+    }
+    return false;
+  }
+  if (depth >= high) {
+    await setBulkBackpressureState('PAUSED');
+    return false;
+  }
+  return true;
 }
 
 export async function beginNotificationFanout(input: {

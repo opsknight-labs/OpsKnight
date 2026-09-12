@@ -36,6 +36,16 @@ type Runtime = {
 
 type Watermarks = { low: number; high: number; source: string; revision: number | null };
 
+type QueueHealth = {
+  depth: number;
+  low: number;
+  high: number;
+  source: string;
+  revision: number | null;
+  state: 'NORMAL' | 'PAUSED';
+  hasCapacity: boolean;
+} | null;
+
 export default function NotificationCapacityOverview({
   capacities,
   workerCount,
@@ -44,6 +54,7 @@ export default function NotificationCapacityOverview({
   canManage,
   watermarks,
   runtime,
+  queueHealth,
 }: {
   capacities: Capacity[];
   workerCount: number;
@@ -59,6 +70,7 @@ export default function NotificationCapacityOverview({
   canManage: boolean;
   watermarks?: Watermarks;
   runtime?: Runtime;
+  queueHealth?: QueueHealth;
 }) {
   const [paused, setPaused] = useState(initialPaused);
   const [saving, setSaving] = useState(false);
@@ -217,16 +229,32 @@ export default function NotificationCapacityOverview({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {queueHealth && (
+            <div className={`rounded-lg border p-2.5 text-xs flex items-center justify-between gap-2 ${queueHealth.state === 'PAUSED' ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30' : queueHealth.depth >= queueHealth.high * 0.8 ? 'border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20' : 'border-border/60 bg-muted/20'}`}>
+              <div>
+                <span className="font-bold">{queueHealth.depth.toLocaleString()}</span>
+                <span className="text-muted-foreground"> pending bulk</span>
+                <span className="text-muted-foreground"> · {queueHealth.low.toLocaleString()} low / {queueHealth.high.toLocaleString()} high</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Badge variant={queueHealth.state === 'PAUSED' ? 'destructive' : queueHealth.hasCapacity ? 'secondary' : 'outline'} className="text-[10px] font-bold uppercase">
+                  {queueHealth.state === 'PAUSED' ? 'Backpressure — paused' : queueHealth.hasCapacity ? 'Healthy' : 'Throttled'}
+                </Badge>
+                <span className="text-[11px] text-muted-foreground">{queueHealth.hasCapacity ? 'allow' : 'pause new bulk'} · {queueHealth.state === 'PAUSED' ? `resumes < ${queueHealth.low.toLocaleString()}` : `pauses ≥ ${queueHealth.high.toLocaleString()}`}</span>
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-3 sm:grid-cols-3 text-xs">
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
               <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">Low watermark</div>
               <div className="text-lg font-bold">{Number(low).toLocaleString()}</div>
-              <div className="text-[11px] text-muted-foreground">Pending bulk before healthy</div>
+              <div className="text-[11px] text-muted-foreground">Queue must drain below this to resume</div>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
               <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">High watermark</div>
               <div className="text-lg font-bold">{Number(high).toLocaleString()}</div>
-              <div className="text-[11px] text-muted-foreground">Pause new bulk fanout</div>
+              <div className="text-[11px] text-muted-foreground">Hit high → pause; hysteresis prevents flap</div>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
               <div className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">Source</div>

@@ -23,9 +23,26 @@ type SnapshotRow = {
   updatedAt: string;
 };
 
+type EffectiveRow = {
+  provider: string;
+  channel: string;
+  mode: string;
+  source: string;
+  configuredRatePerSecond: number;
+  effectiveRatePerSecond: number;
+  bulkRatePerSecond: number;
+  maxInFlight: number;
+  bulkMaxInFlight: number;
+  bulkShare: number;
+  adaptiveBackpressure: boolean;
+  revision: number | null;
+};
+
 type CapacitySnapshot = {
   bulkPaused: boolean;
   providerCapacities: SnapshotRow[];
+  effectiveCapacities?: EffectiveRow[];
+  effectiveWatermarks?: { low: number; high: number; source: string; revision: number | null };
   hardLimits: {
     ratePerSecond: { min: number; max: number };
     maxInFlight: { min: number; max: number };
@@ -54,6 +71,8 @@ function providerForCapacityKey(providerKey: string): string {
   // whatsapp UI shares the twilio persistence row but capacity rows are
   // split by channel so Twilio SMS and WhatsApp can differ.
   if (providerKey === 'whatsapp') return 'twilio';
+  // SLACK:default / WEBHOOK:default are logical profiles governing per-origin buckets.
+  if (providerKey === 'slack' || providerKey === 'webhook') return 'default';
   return providerKey.toLowerCase();
 }
 
@@ -75,6 +94,20 @@ export default function ProviderCapacitySettings({
     if (!snapshot) return null;
     return snapshot.providerCapacities.find(r => r.provider === provider && r.channel === channel) ?? null;
   }, [snapshot, provider, channel]);
+
+  const effective = useMemo(() => {
+    if (!snapshot?.effectiveCapacities) return null;
+    return snapshot.effectiveCapacities.find(r => r.provider === provider && r.channel === channel) ?? null;
+  }, [snapshot, provider, channel]);
+
+  const isEnvTakeover = !row && effective?.source === 'ENV';
+  const takeoverHint = isEnvTakeover
+    ? `Source: legacy environment — effective ${effective.configuredRatePerSecond}/sec · ${effective.maxInFlight} in-flight · ${Math.round(effective.bulkShare * 100)}% bulk`
+    : row
+      ? null
+      : effective?.source === 'DEFAULT'
+        ? 'Using safe defaults — save to take ownership'
+        : null;
 
   const [mode, setMode] = useState<Mode>('AUTO');
   const [ratePerSecond, setRatePerSecond] = useState<string>('');
@@ -117,6 +150,7 @@ export default function ProviderCapacitySettings({
   useEffect(() => {
     if (!snapshot) return;
     const current = snapshot.providerCapacities.find(r => r.provider === provider && r.channel === channel);
+    const eff = snapshot.effectiveCapacities?.find(r => r.provider === provider && r.channel === channel);
     if (current) {
       setMode(current.mode);
       setRatePerSecond(current.ratePerSecond != null ? String(current.ratePerSecond) : '');
@@ -124,6 +158,14 @@ export default function ProviderCapacitySettings({
       setBulkSharePercent(current.bulkSharePercent);
       setAdaptiveBackpressure(current.adaptiveBackpressure);
       setRevision(current.revision);
+    } else if (eff && eff.source === 'ENV') {
+      // Lossless takeover: prefill from effective so save persists current effective values.
+      setMode('CUSTOM');
+      setRatePerSecond(String(eff.configuredRatePerSecond));
+      setMaxInFlight(String(eff.maxInFlight));
+      setBulkSharePercent(Math.round(eff.bulkShare * 100));
+      setAdaptiveBackpressure(eff.adaptiveBackpressure);
+      setRevision(null);
     } else {
       setMode('AUTO');
       setRatePerSecond('');
@@ -136,7 +178,7 @@ export default function ProviderCapacitySettings({
 
   const limits = snapshot?.hardLimits;
 
-  const buildPayload = (): Record<string, unknown> => {
+  const buildPayload = (opts?: { acknowledgeRisk?: boolean }): Record<string, unknown> => {
     const base: Record<string, unknown> = {
       provider,
       channel,
@@ -145,6 +187,7 @@ export default function ProviderCapacitySettings({
       adaptiveBackpressure,
     };
     if (revision != null) base.revision = revision;
+    if (opts?.acknowledgeRisk) base.acknowledgeRisk = true;
     if (mode === 'CUSTOM') {
       base.ratePerSecond = ratePerSecond.trim() === '' ? null : Number(ratePerSecond);
       base.maxInFlight = maxInFlight.trim() === '' ? null : Number(maxInFlight);
@@ -157,8 +200,8 @@ export default function ProviderCapacitySettings({
 
   const isDirty = useMemo(() => {
     if (!snapshot) return false;
+    // Lossless takeover: any non-default value must be persistable even without a DB row.
     if (!row) {
-      // Not yet persisted — dirty if non-default
       if (mode !== 'AUTO') return true;
       if (bulkSharePercent !== 80) return true;
       if (!adaptiveBackpressure) return true;
@@ -200,14 +243,19 @@ export default function ProviderCapacitySettings({
   };
 
   const needsConfirmation = (): boolean => {
-    if (mode !== 'CUSTOM' || !row?.ratePerSecond) return false;
+    if (mode !== 'CUSTOM') return false;
     const nextRate = ratePerSecond.trim() === '' ? null : Number(ratePerSecond);
     if (nextRate == null || !Number.isFinite(nextRate)) return false;
-    const oldRate = row.ratePerSecond;
-    // Unusually large increase — confirm like the spec (e.g. 100 → 5000)
-    if (nextRate > 500 && nextRate >= oldRate * 3) return true;
-    if (nextRate >= 2000 && nextRate > oldRate * 2) return true;
-    return false;
+    // Persisted row: compare against stored rate. For lossless ENV takeover (no row yet)
+    // we still gate extreme absolute values so curl cannot bypass the UI acknowledgement.
+    const oldRate = row?.ratePerSecond ?? effective?.configuredRatePerSecond ?? null;
+    if (oldRate != null) {
+      if (nextRate > 500 && nextRate >= oldRate * 3) return true;
+      if (nextRate >= 2000 && nextRate > oldRate * 2) return true;
+      return false;
+    }
+    // No baseline — gate very large absolute custom rates
+    return nextRate >= 2000;
   };
 
   const executeSave = async (payload: Record<string, unknown>) => {
@@ -382,13 +430,27 @@ export default function ProviderCapacitySettings({
         </div>
       </div>
 
+      {(isEnvTakeover || takeoverHint) && (
+        <div className={`rounded-lg border p-2.5 text-xs ${isEnvTakeover ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100' : 'border-border/60 bg-muted/30 text-muted-foreground'}`}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold">{isEnvTakeover ? 'Legacy environment — take ownership' : takeoverHint}</span>
+            {isEnvTakeover && (
+              <Badge variant="outline" className="text-[10px] shrink-0">ENV → DB</Badge>
+            )}
+          </div>
+          {isEnvTakeover && (
+            <div className="mt-1 leading-snug">Saving will persist the current effective values to the database. Workers will use the DB on the next ~5s refresh.</div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
-        <Button type="button" size="sm" onClick={() => void onSave()} disabled={saving || !isDirty} className="h-8 text-xs font-semibold">
+        <Button type="button" size="sm" onClick={() => void onSave()} disabled={saving || (!isDirty && !isEnvTakeover)} className="h-8 text-xs font-semibold">
           {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-          {saving ? 'Saving…' : 'Save capacity'}
+          {saving ? 'Saving…' : isEnvTakeover ? 'Take ownership in OpsKnight' : 'Save capacity'}
         </Button>
         {saveSuccess && <span className="text-xs font-medium text-emerald-600">Saved — workers adapt within ~5s</span>}
-        {!isDirty && !saveSuccess && <span className="text-xs text-muted-foreground">No changes</span>}
+        {!isDirty && !isEnvTakeover && !saveSuccess && <span className="text-xs text-muted-foreground">No changes</span>}
       </div>
 
       {saveError && (
@@ -411,7 +473,7 @@ export default function ProviderCapacitySettings({
           </div>
           <div className="flex gap-2 justify-end">
             <Button type="button" variant="outline" size="sm" onClick={() => { setConfirmOpen(false); setPendingPayload(null); }} className="h-8 text-xs" disabled={saving}>Cancel</Button>
-            <Button type="button" size="sm" onClick={() => void executeSave(pendingPayload)} className="h-8 text-xs" disabled={saving}>
+            <Button type="button" size="sm" onClick={() => void executeSave({ ...(pendingPayload as Record<string, unknown>), acknowledgeRisk: true })} className="h-8 text-xs" disabled={saving}>
               {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
               Confirm
             </Button>

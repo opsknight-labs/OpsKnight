@@ -15,7 +15,7 @@ import { HARD_LIMITS } from '@/lib/notification-capacity/hard-limits';
 
 const bulkPausedSchema = z.object({ bulkPaused: z.boolean() }).strict();
 
-// GET: snapshot for Admin/Auditor — DB state + watermarks + limits (no secrets)
+// GET: snapshot for Admin/Auditor — DB state + effective resolved values + watermarks + limits (no secrets)
 export async function GET() {
   const permissions = await getUserPermissions();
   if (!permissions.authenticated) return jsonError('Authentication required', 401);
@@ -36,6 +36,72 @@ export async function GET() {
     control?.value && typeof control.value === 'object' && !Array.isArray(control.value)
       ? (control.value as Record<string, unknown>)
       : {};
+
+  // Effective resolved view (DB > ENV > DEFAULT) for lossless ENV→UI takeover.
+  // Lazy import to avoid circular deps; resolver uses prisma + env.
+  const { getEffectiveCapacity, getEffectiveWatermarks } = await import('@/lib/notification-capacity/resolver');
+  const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
+  const seen = new Set(providerCapacities.map(r => `${r.channel}:${r.provider}`));
+  const inventory: Array<{ channel: (typeof channels)[number]; provider: string }> = [
+    ...providerCapacities.map(r => ({ channel: r.channel as (typeof channels)[number], provider: r.provider })),
+  ];
+  // Include actually configured providers (e.g. ses without DB row + ENV override)
+  // before synthetic defaults so a channel already covered by a real provider
+  // (EMAIL:ses) does not get a redundant EMAIL:default shadowing it.
+  try {
+    const configuredProviders = await prisma.notificationProvider.findMany({ select: { provider: true, enabled: true } });
+    const providerToChannel: Record<string, (typeof channels)[number]> = {
+      resend: 'EMAIL',
+      sendgrid: 'EMAIL',
+      ses: 'EMAIL',
+      smtp: 'EMAIL',
+      twilio: 'SMS',
+      'aws-sns': 'SMS',
+      'web-push': 'PUSH',
+    };
+    for (const rec of configuredProviders) {
+      if (!rec.enabled) continue;
+      const channel = providerToChannel[rec.provider];
+      if (!channel) continue;
+      const key = `${channel}:${rec.provider}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        inventory.push({ channel, provider: rec.provider });
+      }
+      // Twilio also backs WHATSAPP — expose separate WHATSAPP:twilio entry
+      if (rec.provider === 'twilio') {
+        const wKey = `WHATSAPP:twilio`;
+        if (!seen.has(wKey)) {
+          seen.add(wKey);
+          inventory.push({ channel: 'WHATSAPP', provider: 'twilio' });
+        }
+      }
+    }
+  } catch {
+    // Inventory still truthful without configured-provider expansion.
+  }
+  for (const channel of channels) {
+    const hasChannel = inventory.some(r => r.channel === channel);
+    if (!hasChannel) {
+      const key = `${channel}:default`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        inventory.push({ channel, provider: 'default' });
+      }
+    }
+  }
+  for (const ch of ['SLACK', 'WEBHOOK'] as const) {
+    const key = `${ch}:default`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      inventory.push({ channel: ch, provider: 'default' });
+    }
+  }
+
+  const [effectiveCapacities, effectiveWatermarks] = await Promise.all([
+    Promise.all(inventory.map(({ channel, provider }) => getEffectiveCapacity({ channel: channel as never, provider }))),
+    getEffectiveWatermarks(),
+  ]);
 
   return jsonOk({
     bulkPaused: controlValue.bulkPaused === true,
@@ -60,6 +126,21 @@ export async function GET() {
       revision: row.revision,
       updatedAt: row.updatedAt.toISOString(),
     })),
+    effectiveCapacities: effectiveCapacities.map(c => ({
+      provider: c.provider,
+      channel: c.channel,
+      mode: c.mode,
+      source: c.source,
+      configuredRatePerSecond: c.configuredRatePerSecond,
+      effectiveRatePerSecond: c.effectiveRatePerSecond,
+      bulkRatePerSecond: c.bulkRatePerSecond,
+      maxInFlight: c.maxInFlight,
+      bulkMaxInFlight: c.bulkMaxInFlight,
+      bulkShare: c.bulkShare,
+      adaptiveBackpressure: c.adaptiveBackpressure,
+      revision: c.revision,
+    })),
+    effectiveWatermarks,
     hardLimits: HARD_LIMITS,
   });
 }
@@ -129,10 +210,25 @@ export async function PATCH(request: NextRequest) {
     const provider = data.provider.toLowerCase();
     const channel = data.channel;
 
-    // Large increase confirmation is UI-enforced; server still enforces hard ceiling via schema.
     const existing = await prisma.notificationProviderCapacity.findUnique({
       where: { provider_channel: { provider, channel } },
     });
+
+    // Server-enforce acknowledgement for extreme jumps so curl/direct callers cannot bypass the UI modal.
+    // Persisted row: 3× or ≥2× at ≥2k. No row yet (ENV takeover): absolute ≥2000 still gates.
+    if (data.mode === 'CUSTOM' && data.ratePerSecond != null) {
+      const nextRate = data.ratePerSecond as number;
+      if (existing?.ratePerSecond != null) {
+        const oldRate = existing.ratePerSecond;
+        const largeJump =
+          (nextRate > 500 && nextRate >= oldRate * 3) || (nextRate >= 2000 && nextRate > oldRate * 2);
+        if (largeJump && data.acknowledgeRisk !== true) {
+          return jsonError('Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.', 400);
+        }
+      } else if (nextRate >= 2000 && data.acknowledgeRisk !== true) {
+        return jsonError('Large capacity increase requires acknowledgeRisk: true — confirm the provider quota permits this rate.', 400);
+      }
+    }
 
     if (data.revision != null && existing && data.revision !== existing.revision) {
       return jsonError('Settings changed elsewhere. Reload before saving.', 409);

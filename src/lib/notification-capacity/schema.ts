@@ -29,6 +29,7 @@ export const providerCapacityInputSchema = z
       .max(HARD_LIMITS.bulkSharePercent.max),
     adaptiveBackpressure: z.boolean(),
     revision: z.number().int().min(1).optional(),
+    acknowledgeRisk: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, ctx) => {

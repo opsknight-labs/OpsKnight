@@ -7,9 +7,11 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import NotificationCapacityOverview from '@/components/settings/NotificationCapacityOverview';
+import ProviderCapacitySettings from '@/components/settings/ProviderCapacitySettings';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { getEffectiveCapacity, getEffectiveWatermarks } from '@/lib/notification-capacity/resolver';
+import { getBulkQueueHealth } from '@/lib/notification-fanout';
 
 export default async function NotificationOperationsPage() {
   let user: Awaited<ReturnType<typeof getCurrentUser>>;
@@ -23,7 +25,7 @@ export default async function NotificationOperationsPage() {
     redirect('/settings');
   }
   const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
-  const [leases, campaigns, control, subscriptionStates, feedbackTypes, runtime, storedProviderCapacities] = await Promise.all([
+  const [leases, campaigns, control, subscriptionStates, feedbackTypes, runtime, storedProviderCapacities, configuredProviders] = await Promise.all([
     prisma.providerWorkerLease.count({ where: { expiresAt: { gt: new Date() } } }),
     prisma.notificationFanout.findMany({
       orderBy: { createdAt: 'desc' },
@@ -47,16 +49,45 @@ export default async function NotificationOperationsPage() {
     `),
     prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } }),
     prisma.notificationProviderCapacity.findMany({ orderBy: [{ channel: 'asc' }, { provider: 'asc' }] }),
+    prisma.notificationProvider.findMany({ select: { provider: true, enabled: true } }),
   ]);
-  // Union inventory: never hide channels. Stored rows are authoritative, but missing
-  // channels get a synthetic `default` entry so operators always see all six lanes.
+  // Union inventory: configured providers + stored rows + synthetic channel defaults.
+  // Never hide channels. Stored rows authoritative; actual enabled providers (e.g. ses without
+  // DB row + ENV override) must still appear as EMAIL:ses, not collapsed to EMAIL:default.
   // WEBHOOK:default / SLACK:default are logical profiles governing per-origin buckets.
+  const providerToChannel: Record<string, (typeof channels)[number]> = {
+    resend: 'EMAIL',
+    sendgrid: 'EMAIL',
+    ses: 'EMAIL',
+    smtp: 'EMAIL',
+    twilio: 'SMS',
+    'aws-sns': 'SMS',
+    'web-push': 'PUSH',
+  };
   const seen = new Set(storedProviderCapacities.map(r => `${r.channel}:${r.provider}`));
   const inventory: Array<{ channel: (typeof channels)[number]; provider: string }> = [
     ...storedProviderCapacities.map(r => ({ channel: r.channel as (typeof channels)[number], provider: r.provider })),
   ];
+  // Expand from actually configured providers
+  for (const rec of configuredProviders) {
+    if (!rec.enabled) continue;
+    const ch = providerToChannel[rec.provider];
+    if (!ch) continue;
+    const key = `${ch}:${rec.provider}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      inventory.push({ channel: ch, provider: rec.provider });
+    }
+    if (rec.provider === 'twilio') {
+      const wKey = 'WHATSAPP:twilio';
+      if (!seen.has(wKey)) {
+        seen.add(wKey);
+        inventory.push({ channel: 'WHATSAPP', provider: 'twilio' });
+      }
+    }
+  }
   for (const channel of channels) {
-    const hasChannel = storedProviderCapacities.some(r => r.channel === channel);
+    const hasChannel = inventory.some(r => r.channel === channel);
     if (!hasChannel) {
       const key = `${channel}:default`;
       if (!seen.has(key)) {
@@ -66,7 +97,6 @@ export default async function NotificationOperationsPage() {
     }
   }
   // Ensure logical defaults exist even when channel already has a specific provider
-  // (e.g. EMAIL:resend present but EMAIL:default not — WEBHOOK/SLACK only use default).
   for (const ch of ['SLACK', 'WEBHOOK'] as const) {
     const key = `${ch}:default`;
     if (!seen.has(key)) {
@@ -74,10 +104,11 @@ export default async function NotificationOperationsPage() {
       inventory.push({ channel: ch, provider: 'default' });
     }
   }
-  const effectiveCapacities = await Promise.all(
-    inventory.map(({ channel, provider }) => getEffectiveCapacity({ channel: channel as never, provider }))
-  );
-  const watermarks = await getEffectiveWatermarks();
+  const [effectiveCapacities, watermarks, queueHealth] = await Promise.all([
+    Promise.all(inventory.map(({ channel, provider }) => getEffectiveCapacity({ channel: channel as never, provider }))),
+    getEffectiveWatermarks(),
+    getBulkQueueHealth(),
+  ]);
   const controlValue =
     control?.value && typeof control.value === 'object' && !Array.isArray(control.value)
       ? (control.value as Record<string, unknown>)
@@ -166,6 +197,7 @@ export default async function NotificationOperationsPage() {
         initialPaused={controlValue.bulkPaused === true}
         canManage={user.role === 'ADMIN'}
         watermarks={watermarks}
+        queueHealth={queueHealth}
         runtime={
           runtime
             ? {
@@ -179,6 +211,16 @@ export default async function NotificationOperationsPage() {
             : null
         }
       />
+      {user.role === 'ADMIN' ? (
+        <section aria-labelledby="channel-capacity-heading" className="space-y-3">
+          <h2 id="channel-capacity-heading" className="text-sm font-bold tracking-tight">Channel capacity &mdash; Slack &amp; Webhook</h2>
+          <p className="text-xs text-muted-foreground">Logical profiles governing per-origin buckets. No credential card required.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <ProviderCapacitySettings providerKey="slack" />
+            <ProviderCapacitySettings providerKey="webhook" />
+          </div>
+        </section>
+      ) : null}
       <section aria-labelledby="deliverability-heading" className="grid gap-3 md:grid-cols-3">
         <h2 id="deliverability-heading" className="sr-only">Subscriber deliverability</h2>
         {subscriptionStates.map(item => (
