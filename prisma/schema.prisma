@@ -866,8 +866,8 @@ model IncidentClassificationPolicyRule {
   matchValue   String
   priority     String?
   urgency      IncidentUrgency?
-  priorityMode String                       @default("SET")
-  urgencyMode  String                       @default("SET")
+  priorityMode String
+  urgencyMode  String
   label        String?
   policy       IncidentClassificationPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
 

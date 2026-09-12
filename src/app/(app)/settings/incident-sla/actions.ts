@@ -135,55 +135,42 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
   const parsed = schedulerModeSchema.safeParse(rawMode);
   if (!parsed.success) return { ok: false as const, message: 'Invalid scheduler mode.' };
   const mode = parsed.data;
-  const current = await prisma.systemConfig.findUnique({
-    where: { key: 'incident_sla_scheduler' },
-    select: { value: true },
-  });
-  const currentValue =
-    current?.value && typeof current.value === 'object' && !Array.isArray(current.value)
-      ? (current.value as Record<string, unknown>)
-      : {};
-  if (mode === 'INDEXED') {
-    if (currentValue.mode !== 'SHADOW')
-      return { ok: false as const, message: 'Run Shadow mode before enabling Indexed mode.' };
-    if (Number(currentValue.lastShadowMismatchCount ?? 1) !== 0)
-      return {
-        ok: false as const,
-        message: 'Resolve Shadow mismatches before enabling Indexed mode.',
-      };
-    if (Number(currentValue.consecutiveCleanChecks ?? 0) < MIN_CLEAN_SHADOW_CHECKS)
-      return {
-        ok: false as const,
-        message: `Wait for ${MIN_CLEAN_SHADOW_CHECKS} consecutive clean Shadow checks before enabling Indexed mode.`,
-      };
-    const rows = await prisma.$queryRaw<Array<{ ready: boolean; missing_hints: bigint }>>`
-      SELECT EXISTS (
-        SELECT 1 FROM pg_class c
-        JOIN pg_index i ON i.indexrelid = c.oid
-        WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
-      ) AS ready,
-      (SELECT COUNT(*) FROM "Incident" i
-        JOIN "Service" s ON s."id" = i."serviceId"
-        WHERE i."status" IN ('OPEN', 'ACKNOWLEDGED')
-          AND s."serviceNotifyOnSlaBreach" = true
-          AND i."nextSlaTransitionAt" IS NULL)::bigint AS missing_hints
-    `;
-    if (!rows[0]?.ready)
-      return {
-        ok: false as const,
-        message: 'Install the SLA scheduler index before enabling Indexed mode.',
-      };
-    if (Number(rows[0]?.missing_hints ?? 0) > 0)
-      return {
-        ok: false as const,
-        message: 'Run Shadow mode until all active incidents have scheduling hints.',
-      };
-  }
-  const nextValue =
-    mode === 'SHADOW'
-      ? { mode, consecutiveCleanChecks: 0, lastShadowMismatchCount: 0 }
-      : { ...currentValue, mode };
-  await prisma.$transaction(async tx => {
+  const rejection = await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(1762184301)`;
+    const current = await tx.systemConfig.findUnique({
+      where: { key: 'incident_sla_scheduler' },
+      select: { value: true },
+    });
+    const currentValue =
+      current?.value && typeof current.value === 'object' && !Array.isArray(current.value)
+        ? (current.value as Record<string, unknown>)
+        : {};
+    if (mode === 'INDEXED') {
+      if (currentValue.mode !== 'SHADOW') return 'Run Shadow mode before enabling Indexed mode.';
+      if (Number(currentValue.lastShadowMismatchCount ?? 1) !== 0)
+        return 'Resolve Shadow mismatches before enabling Indexed mode.';
+      if (Number(currentValue.consecutiveCleanChecks ?? 0) < MIN_CLEAN_SHADOW_CHECKS)
+        return `Wait for ${MIN_CLEAN_SHADOW_CHECKS} consecutive clean Shadow checks before enabling Indexed mode.`;
+      const rows = await tx.$queryRaw<Array<{ ready: boolean; missing_hints: bigint }>>`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_class c
+          JOIN pg_index i ON i.indexrelid = c.oid
+          WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
+        ) AS ready,
+        (SELECT COUNT(*) FROM "Incident" i
+          JOIN "Service" s ON s."id" = i."serviceId"
+          WHERE i."status" IN ('OPEN', 'ACKNOWLEDGED')
+            AND s."serviceNotifyOnSlaBreach" = true
+            AND i."nextSlaTransitionAt" IS NULL)::bigint AS missing_hints
+      `;
+      if (!rows[0]?.ready) return 'Install the SLA scheduler index before enabling Indexed mode.';
+      if (Number(rows[0]?.missing_hints ?? 0) > 0)
+        return 'Run Shadow mode until all active incidents have scheduling hints.';
+    }
+    const nextValue =
+      mode === 'SHADOW'
+        ? { mode, consecutiveCleanChecks: 0, lastShadowMismatchCount: 0 }
+        : { ...currentValue, mode };
     await tx.systemConfig.upsert({
       where: { key: 'incident_sla_scheduler' },
       create: { key: 'incident_sla_scheduler', value: nextValue, updatedBy: permissions.id },
@@ -199,7 +186,9 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
       },
       tx
     );
+    return null;
   });
+  if (rejection) return { ok: false as const, message: rejection };
   invalidateSlaSchedulerMode();
   revalidatePath('/settings/incident-sla');
   return { ok: true as const, mode };

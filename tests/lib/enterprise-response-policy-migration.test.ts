@@ -23,4 +23,11 @@ describe('enterprise response-policy migration', () => {
     expect(sql).toContain(`"field" IN ('PRIORITY','URGENCY','SUPPORT_HOURS_STATE')`);
     expect(sql).not.toMatch(/UPDATE "Incident" SET/);
   });
+
+  it('repairs an invalid concurrent scheduler index before recreating it', () => {
+    const installer = readFileSync('scripts/create-sla-scheduler-online-index.cjs', 'utf8');
+    expect(installer).toContain('!existing[0].valid');
+    expect(installer).toContain('DROP INDEX CONCURRENTLY IF EXISTS');
+    expect(installer).toContain('CREATE INDEX CONCURRENTLY IF NOT EXISTS');
+  });
 });

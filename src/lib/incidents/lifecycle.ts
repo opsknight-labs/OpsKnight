@@ -800,3 +800,12 @@ export async function executeIncidentLifecycleTargetBatch(
     return results;
   });
 }
+
+/** Lifecycle-owned repair used when an engagement gate is released. */
+export async function setIncidentNextEscalationAt(
+  tx: Prisma.TransactionClient,
+  incidentId: string,
+  nextEscalationAt: Date
+) {
+  await tx.incident.update({ where: { id: incidentId }, data: { nextEscalationAt } });
+}

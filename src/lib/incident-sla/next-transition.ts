@@ -38,12 +38,7 @@ export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<
     if (candidate && (!earliest || candidate < earliest)) earliest = candidate;
   }
   if (schedulerMode === 'SHADOW') {
-    const [indexed, nullHints, due] = await Promise.all([
-      prisma.incident.findFirst({
-        where: { ...eligible, nextSlaTransitionAt: { not: null } },
-        orderBy: { nextSlaTransitionAt: 'asc' },
-        select: { nextSlaTransitionAt: true },
-      }),
+    const [nullHints, due] = await Promise.all([
       prisma.incident.count({
         where: { ...eligible, nextSlaTransitionAt: null },
       }),
@@ -54,7 +49,9 @@ export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<
     setOperationalGauge('opsknight_sla_scheduler_null_hints', nullHints);
     setOperationalGauge('opsknight_sla_scheduler_due', due);
     let mismatches = 0;
-    for (const incident of incidents.slice(0, 500)) {
+    // Certification covers the complete eligible population. A clean counter
+    // must never be advanced from an arbitrary partial batch.
+    for (const incident of incidents) {
       const canonical = deriveNextSlaTransition(incident, now);
       const storedAt = incident.nextSlaTransitionAt;
       const reason = compareSlaTransitionHint(canonical, storedAt, incident.nextSlaTransitionKind);

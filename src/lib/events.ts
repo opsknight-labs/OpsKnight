@@ -10,6 +10,7 @@ import { resolveIncidentClassification } from './incidents/classification';
 import { deriveNewIncidentSlaTransition } from './incident-sla/next-transition';
 import { resolveSupportHours } from './incidents/support-hours';
 import { resolveIncidentEngagement } from './incidents/engagement';
+import { reconcileIncidentEngagementAfterUrgencyChange } from './incidents/engagement-reconciliation';
 import { addOperationalMetric } from './metrics/operational/registry';
 
 export type EventSeverity = 'critical' | 'error' | 'warning' | 'info';
@@ -170,11 +171,6 @@ export async function processEvent(
         id: true,
         name: true,
         defaultIncidentVisibility: true,
-        policy: {
-          select: {
-            steps: { orderBy: { stepOrder: 'asc' }, take: 1, select: { delayMinutes: true } },
-          },
-        },
       },
     });
 
@@ -282,61 +278,21 @@ export async function processEvent(
         const incomingUrgency = incomingClassification.urgency;
         const effectiveUrgency = maxUrgency(existingIncident.urgency, incomingUrgency);
         const urgencyRaised = effectiveUrgency !== existingIncident.urgency;
-        const now = new Date();
-        const firstStep = service.policy?.steps[0];
-        const policyDueAt = firstStep
-          ? new Date(existingIncident.createdAt.getTime() + firstStep.delayMinutes * 60_000)
-          : null;
-        const releaseSupportHoursDeferral =
-          urgencyRaised &&
-          existingIncident.urgency === 'LOW' &&
-          effectiveUrgency !== 'LOW' &&
-          policyDueAt !== null &&
-          existingIncident.currentEscalationStep === 0 &&
-          existingIncident.escalationStatus === 'ESCALATING' &&
-          existingIncident.nextEscalationAt !== null &&
-          existingIncident.nextEscalationAt > policyDueAt;
-        const restoredEscalationAt = releaseSupportHoursDeferral
-          ? new Date(Math.max(now.getTime(), policyDueAt!.getTime()))
-          : null;
+        let releaseSupportHoursDeferral = false;
         if (urgencyRaised) {
+          const previousUrgency = existingIncident.urgency;
           await tx.incident.update({
             where: { id: existingIncident.id },
-            data: {
-              urgency: effectiveUrgency,
-              ...(restoredEscalationAt ? { nextEscalationAt: restoredEscalationAt } : {}),
-            },
+            data: { urgency: effectiveUrgency },
           });
           existingIncident.urgency = effectiveUrgency;
-          if (restoredEscalationAt) {
-            existingIncident.nextEscalationAt = restoredEscalationAt;
-            await Promise.all([
-              tx.backgroundJob.updateMany({
-                where: {
-                  type: 'ESCALATION',
-                  status: 'PENDING',
-                  payload: { path: ['incidentId'], equals: existingIncident.id },
-                },
-                data: { scheduledAt: restoredEscalationAt },
-              }),
-              tx.backgroundJob.updateMany({
-                where: {
-                  type: 'SCHEDULED_TASK',
-                  status: 'PENDING',
-                  AND: [
-                    { payload: { path: ['incidentId'], equals: existingIncident.id } },
-                    {
-                      payload: {
-                        path: ['effect'],
-                        equals: 'TRIGGER_ESCALATION_NOTIFICATIONS',
-                      },
-                    },
-                  ],
-                },
-                data: { scheduledAt: now },
-              }),
-            ]);
-          }
+          releaseSupportHoursDeferral = (
+            await reconcileIncidentEngagementAfterUrgencyChange(tx, {
+              incidentId: existingIncident.id,
+              previousUrgency,
+              urgency: effectiveUrgency,
+            })
+          ).released;
         }
 
         // Log an event instead of note (no userId needed)

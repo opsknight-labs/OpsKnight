@@ -8,6 +8,16 @@ const LOCK_ID = 1762184301;
 async function main() {
   await prisma.$queryRawUnsafe(`SELECT pg_advisory_lock(${LOCK_ID})::text AS "lockResult"`);
   try {
+    const existing = await prisma.$queryRawUnsafe(`
+      SELECT i.indisvalid AS valid
+      FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+      WHERE c.relname = 'idx_incident_next_sla_transition'
+    `);
+    if (existing[0] && !existing[0].valid) {
+      await prisma.$executeRawUnsafe(`
+        DROP INDEX CONCURRENTLY IF EXISTS "idx_incident_next_sla_transition"
+      `);
+    }
     await prisma.$executeRawUnsafe(`
       CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_incident_next_sla_transition"
       ON "Incident" ("status", "nextSlaTransitionAt")

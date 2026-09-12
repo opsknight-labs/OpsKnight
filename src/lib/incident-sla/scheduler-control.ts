@@ -55,27 +55,33 @@ export async function recordSlaSchedulerShadowObservation(input: {
   mismatches: number;
 }) {
   try {
-    const row = await prisma.systemConfig.findUnique({
-      where: { key: 'incident_sla_scheduler' },
-      select: { value: true, updatedBy: true },
-    });
-    const value =
-      row?.value && typeof row.value === 'object' && !Array.isArray(row.value)
-        ? (row.value as Record<string, unknown>)
-        : {};
-    if (value.mode !== 'SHADOW') return;
-    const cleanChecks = input.mismatches === 0 ? Number(value.consecutiveCleanChecks ?? 0) + 1 : 0;
-    await prisma.systemConfig.update({
-      where: { key: 'incident_sla_scheduler' },
-      data: {
-        value: {
-          ...value,
-          lastShadowCheckAt: input.checkedAt.toISOString(),
-          ...(input.mismatches > 0 ? { lastShadowMismatchAt: input.checkedAt.toISOString() } : {}),
-          consecutiveCleanChecks: cleanChecks,
-          lastShadowMismatchCount: input.mismatches,
-        } as Prisma.InputJsonValue,
-      },
+    await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(1762184301)`;
+      const row = await tx.systemConfig.findUnique({
+        where: { key: 'incident_sla_scheduler' },
+        select: { value: true },
+      });
+      const value =
+        row?.value && typeof row.value === 'object' && !Array.isArray(row.value)
+          ? (row.value as Record<string, unknown>)
+          : {};
+      if (value.mode !== 'SHADOW') return;
+      const cleanChecks =
+        input.mismatches === 0 ? Number(value.consecutiveCleanChecks ?? 0) + 1 : 0;
+      await tx.systemConfig.update({
+        where: { key: 'incident_sla_scheduler' },
+        data: {
+          value: {
+            ...value,
+            lastShadowCheckAt: input.checkedAt.toISOString(),
+            ...(input.mismatches > 0
+              ? { lastShadowMismatchAt: input.checkedAt.toISOString() }
+              : {}),
+            consecutiveCleanChecks: cleanChecks,
+            lastShadowMismatchCount: input.mismatches,
+          } as Prisma.InputJsonValue,
+        },
+      });
     });
   } catch (error) {
     logger.warn('[SLA Scheduler] Unable to persist shadow observation', { error });
