@@ -33,9 +33,34 @@ const admin = { id: 'admin-1', authenticated: true, capabilities: ['admin.manage
 vi.mock('@/lib/rbac', () => ({ getUserPermissions: mocks.getUserPermissions }));
 vi.mock('@/lib/audit', () => ({ logAudit: mocks.logAudit }));
 vi.mock('@/lib/notification-capacity-control', () => ({ invalidateNotificationCapacityControl: vi.fn() }));
-vi.mock('@/lib/notification-capacity/cache', () => ({
-  invalidateCapacityCache: vi.fn(),
-  invalidateRuntimeCache: vi.fn(),
+vi.mock('@/lib/notification-capacity/cache', async importOriginal => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...(actual as object),
+    invalidateCapacityCache: vi.fn(),
+    invalidateRuntimeCache: vi.fn(),
+  };
+});
+vi.mock('@/lib/notification-capacity/resolver', () => ({
+  getEffectiveCapacity: vi.fn(async ({ channel, provider }: { channel: string; provider: string }) => ({
+    channel,
+    provider,
+    mode: 'CUSTOM' as const,
+    source: 'DATABASE' as const,
+    configuredRatePerSecond: 100,
+    effectiveRatePerSecond: 100,
+    bulkRatePerSecond: 80,
+    maxInFlight: 20,
+    bulkMaxInFlight: 16,
+    quotaBlockSize: 100,
+    bulkShare: 0.8,
+    adaptiveBackpressure: true,
+    revision: 1,
+  })),
+  getEffectiveWatermarks: vi.fn(async () => ({ low: 5000, high: 25000, source: 'DATABASE', revision: 1 })),
+  recordCapacityPressure: vi.fn(),
+  recordHealthyCapacity: vi.fn(),
+  resetCapacityResolverForTests: vi.fn(),
 }));
 vi.mock('@/lib/prisma', () => ({ __esModule: true, default: mocks.prisma }));
 
