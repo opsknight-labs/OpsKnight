@@ -209,6 +209,16 @@ export async function saveOidcConfig(
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';
       if (existing) {
+        const securityConfigChanged =
+          normalizeOidcIssuer(existing.issuer) !== normalizeOidcIssuer(issuer) ||
+          existing.clientId !== clientId ||
+          Boolean(encryptedSecret) ||
+          existing.enabled !== enabled ||
+          existing.providerType !== providerType ||
+          existing.organizationId !== organizationId ||
+          existing.tokenEndpointAuthMethod !== tokenEndpointAuthMethod ||
+          JSON.stringify(existing.allowedDomains ?? []) !== JSON.stringify(allowedDomains ?? []);
+
         const updated = await tx.oidcConfig.updateMany({
           where: { id: existing.id, updatedAt: expectedRevision! },
           data: {
@@ -229,7 +239,7 @@ export async function saveOidcConfig(
                 ? (profileMapping as Prisma.InputJsonObject)
                 : Prisma.JsonNull,
             updatedBy: actor.id,
-            configVersion: { increment: 1 },
+            ...(securityConfigChanged ? { configVersion: { increment: 1 } } : {}),
           },
         });
         if (updated.count !== 1) throw new SettingsChangedMutationError();

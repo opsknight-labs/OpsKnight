@@ -37,6 +37,24 @@ export function getLegacyOidcIssuerVariants(canonicalIssuer: string): string[] {
     variants.add(canonicalIssuer.trim());
   }
 
+  try {
+    const parsed = new URL(normalized);
+    // Host uppercase variant
+    if (parsed.host) {
+      const upperHostUrl = `${parsed.protocol}//${parsed.host.toUpperCase()}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+      variants.add(upperHostUrl);
+      variants.add(`${upperHostUrl}/`);
+    }
+    // Explicit port 443 variant for standard HTTPS
+    if (parsed.protocol === 'https:' && !parsed.port) {
+      const explicitPortUrl = `https://${parsed.hostname}:443${parsed.pathname === '/' ? '' : parsed.pathname}`;
+      variants.add(explicitPortUrl);
+      variants.add(`${explicitPortUrl}/`);
+    }
+  } catch {
+    // Ignore URL parse failure
+  }
+
   // Remove the canonical form itself so variants only include different legacy keys
   variants.delete(normalized);
   return Array.from(variants);

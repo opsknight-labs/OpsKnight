@@ -1,11 +1,8 @@
 import { logger } from '@/lib/logger';
 import { assertSafeOutboundUrl, safeOutboundFetch } from '@/lib/network-security';
-import {
-  getMicrosoftEntraTenantAuthority,
-  isMicrosoftEntraGenericAuthority,
-  isMicrosoftEntraHost,
-} from '@/lib/oidc-provider';
+import { getMicrosoftEntraTenantAuthority, isMicrosoftEntraGenericAuthority, isMicrosoftEntraHost } from '@/lib/oidc-provider';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
+import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
 
 export type OidcValidationResult = {
   isValid: boolean;
@@ -38,22 +35,90 @@ type JsonWebKeySet = {
   keys?: unknown;
 };
 
-const MAX_JWKS_BYTES = 1_048_576;
-const RUNTIME_METADATA_TTL_MS = 300_000;
+const MAX_DISCOVERY_BYTES = 262_144; // 256 KB
+const MAX_JWKS_BYTES = 1_048_576; // 1 MB
+const RUNTIME_METADATA_TTL_MS = 300_000; // 5 min
+const NEGATIVE_CACHE_TTL_MS = 30_000; // 30 sec negative cache
+const STALE_METADATA_MAX_MS = 3_600_000; // 1 hr stale-while-revalidate fallback
+
 let runtimeMetadataCache:
+  | { key: string; result: OidcValidationResult; expiresAt: number; staleUntil: number }
+  | undefined;
+let negativeMetadataCache:
   | { key: string; result: OidcValidationResult; expiresAt: number }
   | undefined;
+
+/**
+ * Reads a JSON response enforcing a strict maximum byte limit even on chunked
+ * or streaming responses where Content-Length is omitted.
+ */
+async function readBoundedJson<T>(response: Response, maxBytes: number): Promise<T> {
+  const contentLength = Number.parseInt(response.headers?.get?.('content-length') ?? '', 10);
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new Error(`Response size exceeds the maximum allowed limit of ${maxBytes} bytes.`);
+  }
+
+  // If response has body stream with getReader, use streaming bounded read
+  if (response.body && typeof response.body.getReader === 'function') {
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          totalBytes += value.byteLength;
+          if (totalBytes > maxBytes) {
+            throw new Error(`Response stream exceeded maximum allowed limit of ${maxBytes} bytes.`);
+          }
+          chunks.push(value);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    const merged = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+
+    const text = new TextDecoder('utf-8').decode(merged);
+    return JSON.parse(text) as T;
+  }
+
+  // Fallback if text() is available
+  if (typeof response.text === 'function') {
+    const text = await response.text();
+    if (Buffer.byteLength(text, 'utf-8') > maxBytes) {
+      throw new Error(`Response size exceeds the maximum allowed limit of ${maxBytes} bytes.`);
+    }
+    return JSON.parse(text) as T;
+  }
+
+  // Fallback for mock objects that only implement json()
+  if (typeof response.json === 'function') {
+    return (await response.json()) as T;
+  }
+
+  throw new Error('Unsupported response body format.');
+}
 
 function hasUsableSigningKey(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
   const key = value as Record<string, unknown>;
   if (typeof key.kid !== 'string' || !key.kid.trim()) return false;
   if (key.use !== undefined && key.use !== 'sig') return false;
-  if (key.kty === 'RSA') return typeof key.n === 'string' && typeof key.e === 'string';
-  if (key.kty === 'EC') {
-    return typeof key.crv === 'string' && typeof key.x === 'string' && typeof key.y === 'string';
-  }
-  return false;
+  if (key.key_ops && Array.isArray(key.key_ops) && !key.key_ops.includes('verify')) return false;
+  // OpsKnight NextAuth runtime pins RS256 for token verification.
+  // Reject EC keys or incompatible algorithms during connection validation.
+  if (key.alg !== undefined && key.alg !== 'RS256') return false;
+  if (key.kty !== 'RSA') return false;
+  return typeof key.n === 'string' && typeof key.e === 'string' && key.n.length > 0 && key.e.length > 0;
 }
 
 function hasQueryOrHash(urlObj: URL): boolean {
@@ -171,10 +236,10 @@ export async function validateOidcConnection(
     // Build the discovery URL only from validated primitives.
     const cleanPath = parsedUrl.pathname.replace(/\/+$/, '');
     const pathSegments = cleanPath.split('/').filter(Boolean);
-    if (pathSegments.some(seg => !/^[a-zA-Z0-9._-]+$/.test(seg))) {
+    if (pathSegments.some(seg => seg === '..' || seg === '.' || !/^[a-zA-Z0-9._~%-]+$/.test(seg))) {
       return {
         isValid: false,
-        error: 'Issuer URL path contains invalid characters.',
+        error: 'Issuer URL path contains invalid characters or path traversal.',
       };
     }
     const safePath = pathSegments.join('/');
@@ -214,7 +279,7 @@ export async function validateOidcConnection(
       };
     }
 
-    const config = (await response.json()) as OidcDiscoveryMetadata;
+    const config = await readBoundedJson<OidcDiscoveryMetadata>(response, MAX_DISCOVERY_BYTES);
 
     // OIDC Discovery requires metadata issuer equality with the configured
     // issuer. Preserve this check: it prevents discovery substitution.
@@ -268,7 +333,14 @@ export async function validateOidcConnection(
     // advertises the metadata. Providers that omit the optional advertisement
     // remain compatible; token verification still enforces the provider's OIDC
     // cryptographic checks at authentication time.
-    if (Array.isArray(config.id_token_signing_alg_values_supported)) {
+    if (config.id_token_signing_alg_values_supported !== undefined) {
+      if (!Array.isArray(config.id_token_signing_alg_values_supported)) {
+        return {
+          isValid: false,
+          error:
+            'Identity Provider metadata contains a malformed id_token_signing_alg_values_supported list.',
+        };
+      }
       const permittedAlgorithms = new Set(providerPolicy.acceptedIdTokenAlgorithms);
       if (
         !config.id_token_signing_alg_values_supported.some((alg: unknown) =>
@@ -333,11 +405,7 @@ export async function validateOidcConnection(
         error: `Could not fetch the OIDC signing-key set (Status: ${jwksResponse.status}).`,
       };
     }
-    const contentLength = Number.parseInt(jwksResponse.headers.get('content-length') ?? '', 10);
-    if (Number.isFinite(contentLength) && contentLength > MAX_JWKS_BYTES) {
-      return { isValid: false, error: 'OIDC signing-key set exceeds the maximum allowed size.' };
-    }
-    const jwks = (await jwksResponse.json()) as JsonWebKeySet;
+    const jwks = await readBoundedJson<JsonWebKeySet>(jwksResponse, MAX_JWKS_BYTES);
     if (!Array.isArray(jwks.keys) || !jwks.keys.some(hasUsableSigningKey)) {
       return {
         isValid: false,
@@ -376,8 +444,8 @@ export async function validateOidcConnection(
 /**
  * Resolve pinned metadata for the authentication runtime. Successful results
  * are cached independently from the short-lived Auth.js options cache so every
- * session evaluation does not contact the IdP. Actual token/JWKS sockets still
- * use the protected DNS lookup supplied to openid-client.
+ * session evaluation does not contact the IdP. Supports negative caching and
+ * stale-while-revalidate fallback during transient IdP network outages.
  */
 export async function getValidatedOidcRuntimeMetadata(
   issuer: string,
@@ -388,23 +456,137 @@ export async function getValidatedOidcRuntimeMetadata(
     ? `${normalizedIssuer}::${options.tokenEndpointAuthMethod}`
     : normalizedIssuer;
 
+  const now = Date.now();
   if (
     runtimeMetadataCache?.key === cacheKey &&
-    runtimeMetadataCache.expiresAt > Date.now()
+    runtimeMetadataCache.expiresAt > now
   ) {
     return runtimeMetadataCache.result;
   }
-  const result = await validateOidcConnection(normalizedIssuer, options);
-  if (result.isValid && result.metadata) {
-    runtimeMetadataCache = {
+
+  if (
+    negativeMetadataCache?.key === cacheKey &&
+    negativeMetadataCache.expiresAt > now
+  ) {
+    return negativeMetadataCache.result;
+  }
+
+  try {
+    const result = await validateOidcConnection(normalizedIssuer, options);
+    if (result.isValid && result.metadata) {
+      runtimeMetadataCache = {
+        key: cacheKey,
+        result,
+        expiresAt: now + RUNTIME_METADATA_TTL_MS,
+        staleUntil: now + STALE_METADATA_MAX_MS,
+      };
+      negativeMetadataCache = undefined;
+      return result;
+    }
+
+    // Validation returned failure. Check for stale-while-revalidate fallback.
+    if (
+      runtimeMetadataCache?.key === cacheKey &&
+      runtimeMetadataCache.result.isValid &&
+      runtimeMetadataCache.staleUntil > now
+    ) {
+      logger.warn('[OIDC] Using stale validated metadata during transient validation failure', {
+        error: result.error,
+      });
+      return runtimeMetadataCache.result;
+    }
+
+    negativeMetadataCache = {
       key: cacheKey,
       result,
-      expiresAt: Date.now() + RUNTIME_METADATA_TTL_MS,
+      expiresAt: now + NEGATIVE_CACHE_TTL_MS,
     };
+    return result;
+  } catch (error) {
+    if (
+      runtimeMetadataCache?.key === cacheKey &&
+      runtimeMetadataCache.result.isValid &&
+      runtimeMetadataCache.staleUntil > now
+    ) {
+      logger.warn('[OIDC] Using stale validated metadata during transient network exception', {
+        error,
+      });
+      return runtimeMetadataCache.result;
+    }
+    const failResult: OidcValidationResult = {
+      isValid: false,
+      error: error instanceof Error ? error.message : 'Validation failed due to unexpected error',
+    };
+    negativeMetadataCache = {
+      key: cacheKey,
+      result: failResult,
+      expiresAt: now + NEGATIVE_CACHE_TTL_MS,
+    };
+    return failResult;
   }
-  return result;
 }
 
 export function resetOidcRuntimeMetadataCache() {
   runtimeMetadataCache = undefined;
+  negativeMetadataCache = undefined;
+}
+
+export type OidcRuntimeCapability = {
+  configured: boolean;
+  enabled: boolean;
+  runtimeReady: boolean;
+  providerType?: string | null;
+  providerLabel?: string | null;
+  error?: string | null;
+};
+
+/**
+ * Shared runtime capability contract ensuring login UI surfaces SSO availability
+ * only when NextAuth runtime metadata validation has actually succeeded.
+ */
+export async function getOidcRuntimeCapability(): Promise<OidcRuntimeCapability> {
+  const [config, publicConfig] = await Promise.all([
+    getOidcConfig(),
+    getOidcPublicConfig(),
+  ]);
+
+  if (!publicConfig?.enabled) {
+    return {
+      configured: Boolean(config),
+      enabled: false,
+      runtimeReady: false,
+    };
+  }
+
+  if (!config) {
+    return {
+      configured: false,
+      enabled: true,
+      runtimeReady: false,
+      error: 'Single sign-on is enabled but not configured correctly. Contact your administrator.',
+    };
+  }
+
+  const validation = await getValidatedOidcRuntimeMetadata(config.issuer, {
+    tokenEndpointAuthMethod: config.tokenEndpointAuthMethod,
+  });
+
+  if (!validation.isValid || !validation.metadata) {
+    return {
+      configured: true,
+      enabled: true,
+      runtimeReady: false,
+      providerType: config.providerType,
+      providerLabel: config.providerLabel,
+      error: validation.error || 'Identity provider runtime metadata validation failed.',
+    };
+  }
+
+  return {
+    configured: true,
+    enabled: true,
+    runtimeReady: true,
+    providerType: config.providerType,
+    providerLabel: config.providerLabel,
+  };
 }

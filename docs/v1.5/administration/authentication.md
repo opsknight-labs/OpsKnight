@@ -215,7 +215,7 @@ See [SCIM Provisioning](../security/scim-provisioning.md).
 - Use a tenant-specific issuer.
 - Broad `common`, `organizations`, and `consumers` authorities are rejected.
 - Built-in Entra policy targets workforce tenants in commercial and sovereign clouds (External ID / CIAM is handled under generic OIDC).
-- Tenant boundaries are verified via the tenant-specific issuer; Allowed Domains acts as an additional email domain filter.
+- Tenant boundaries are cryptographically verified via the tenant-specific issuer; Allowed Domains is informational for Entra workforce tenants.
 - Missing standard `email_verified` is handled under the validated Entra policy; explicit false is rejected.
 - Prefer Entra App Roles for authoritative role mapping when possible.
 

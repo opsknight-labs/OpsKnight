@@ -12,7 +12,7 @@ import HelloGreeting from '@/components/auth/HelloGreeting';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, X, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
-import { sanitizeCallbackUrl } from '@/lib/callback-url';
+import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 
 type Props = {
   callbackUrl: string;
@@ -23,6 +23,7 @@ type Props = {
   ssoProviderType?: string | null;
   ssoProviderLabel?: string | null;
   localAuthEnabled: boolean;
+  breakGlassOnly?: boolean;
 };
 
 function formatError(message: string | null | undefined) {
@@ -48,6 +49,7 @@ export default function LoginClient({
   ssoProviderType,
   ssoProviderLabel,
   localAuthEnabled,
+  breakGlassOnly,
 }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,18 +101,17 @@ export default function LoginClient({
         redirect: false,
         email: email.trim(),
         password,
-        rememberMe: String(rememberMe),
+        rememberMe: rememberMe.toString(),
         callbackUrl,
       });
 
-      if (result?.error) {
-        setError(formatError(result.error));
+      if (!result?.ok) {
+        setError(formatError(result?.error));
         setIsSubmitting(false);
         // Trigger shake animation
         setIsShaking(true);
         setTimeout(() => setIsShaking(false), 500);
-      } else if (result?.ok) {
-        setIsSubmitting(false);
+      } else {
         setIsSuccess(true);
         // `result.url` from NextAuth's credentials provider (with
         // redirect:false) is unreliable — depending on the original
@@ -118,7 +119,7 @@ export default function LoginClient({
         // itself, breaking the post-login navigation. Use the
         // validated `callbackUrl` prop, guarded by the shared
         // same-origin sanitizer (blocks //evil.example, /login, signout).
-        const safeTarget = sanitizeCallbackUrl(callbackUrl);
+        const safeTarget = safeInternalCallbackUrl(callbackUrl, '/');
 
         // Purge any stale Service Worker dynamic/RSC caches immediately
         void purgeBrowserAuthCaches();
@@ -207,7 +208,7 @@ export default function LoginClient({
                   <div className="w-full border-t border-slate-200 dark:border-slate-800" />
                 </div>
                 <span className="relative px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 bg-background">
-                  or
+                  {breakGlassOnly ? 'or break-glass recovery' : 'or'}
                 </span>
               </div>
             )}
@@ -226,6 +227,20 @@ export default function LoginClient({
 
         {localAuthEnabled && (
           <form onSubmit={handleCredentials} className="space-y-4">
+            {breakGlassOnly && (
+              <div
+                role="alert"
+                className="rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Emergency Break-Glass Recovery</p>
+                  <p className="mt-0.5 text-amber-700 dark:text-amber-300">
+                    Standard local login is disabled. Only the designated break-glass administrator account is authorized.
+                  </p>
+                </div>
+              </div>
+            )}
             {/* Work Email */}
             <div>
               <label
