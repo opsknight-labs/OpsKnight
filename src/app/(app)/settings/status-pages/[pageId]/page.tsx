@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import { Globe, Layers, Users, Megaphone, Key, ExternalLink } from 'lucide-react';
 import StatusPageConfig from '@/components/StatusPageConfig';
+import { getStatusPageSnapshot, buildStatusPageSnapshot } from '@/lib/status-pages/snapshot';
 
 export default async function StatusPageWorkspace({
   params,
@@ -24,7 +25,7 @@ export default async function StatusPageWorkspace({
   }
 
   const { pageId } = await params;
-  const [statusPage, allServices] = await Promise.all([
+  const [statusPage, allServices, liveSnapshotResult] = await Promise.all([
     prisma.statusPage.findUnique({
       where: { id: pageId },
       include: {
@@ -39,8 +40,13 @@ export default async function StatusPageWorkspace({
       },
     }),
     prisma.service.findMany({ orderBy: { name: 'asc' } }),
+    getStatusPageSnapshot(pageId).catch(() => null),
   ]);
   if (!statusPage) notFound();
+
+  const liveSnapshot =
+    liveSnapshotResult?.snapshot ??
+    (await buildStatusPageSnapshot(pageId, 'preview').catch(() => null));
 
   const formattedStatusPage = {
     ...statusPage,
@@ -166,6 +172,7 @@ export default async function StatusPageWorkspace({
           key={statusPage.id}
           statusPage={formattedStatusPage}
           allServices={allServices}
+          liveSnapshot={liveSnapshot}
         />
       </div>
     </div>

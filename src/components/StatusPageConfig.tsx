@@ -174,6 +174,7 @@ type StatusPageConfigProps = {
     name: string;
     region?: string | null;
   }>;
+  liveSnapshot?: any;
 };
 
 const ANNOUNCEMENT_TYPES = [
@@ -731,7 +732,11 @@ const STATUS_PAGE_TEMPLATES: StatusPageTemplate[] = [
   },
 ];
 
-export default function StatusPageConfig({ statusPage, allServices }: StatusPageConfigProps) {
+export default function StatusPageConfig({
+  statusPage,
+  allServices,
+  liveSnapshot,
+}: StatusPageConfigProps) {
   const { browserTimeZone } = useTimezone();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -973,12 +978,22 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
   const previewServiceIds = selectedServiceIds;
   const previewServices = allServices
     .filter(service => previewServiceIds.includes(service.id))
-    .map(service => ({
-      id: service.id,
-      name: service.name,
-      status: 'OPERATIONAL',
-      _count: { incidents: 0 },
-    }));
+    .map(service => {
+      const liveService = liveSnapshot?.services?.find((s: any) => s.id === service.id);
+      return {
+        id: service.id,
+        name: service.name,
+        region: service.region ?? liveService?.regions?.[0] ?? null,
+        description: (service as any).description ?? liveService?.description ?? null,
+        slaTier: (service as any).slaTier ?? liveService?.slaTier ?? liveService?.sla?.tier ?? null,
+        team: (service as any).team ?? liveService?.team ?? null,
+        status: liveService?.status ?? 'OPERATIONAL',
+        _count: { incidents: liveService?.activeIncidentCount ?? 0 },
+        activeIncidentCount: liveService?.activeIncidentCount ?? 0,
+        uptime: liveService?.uptime,
+        history: liveService?.history,
+      };
+    });
 
   const previewStatusPageServices =
     selectedServiceIds.length > 0
@@ -1001,7 +1016,11 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
       : [];
 
   const previewUptime90 = previewServices.reduce<Record<string, number>>((acc, service) => {
-    acc[service.id] = 100;
+    const liveService = liveSnapshot?.services?.find((s: any) => s.id === service.id);
+    acc[service.id] =
+      typeof liveService?.uptime?.days90?.percentage === 'number'
+        ? liveService.uptime.days90.percentage
+        : 100;
     return acc;
   }, {});
 
@@ -1618,25 +1637,59 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     authProvider: privacySettings.authProvider || null,
   };
 
+  const previewDomain = useMemo(() => {
+    if (formData.customDomain && formData.customDomain.trim()) {
+      return formData.customDomain.trim();
+    }
+    if (formData.subdomain && formData.subdomain.trim()) {
+      return `${formData.subdomain.trim()}.opsknight.com`;
+    }
+    if (formData.slug && formData.slug.trim()) {
+      return `status-${formData.slug.trim()}.opsknight.com`;
+    }
+    return statusPage.slug ? `status-${statusPage.slug}.opsknight.com` : 'status.opsknight.com';
+  }, [formData.customDomain, formData.subdomain, formData.slug, statusPage.slug]);
+
   const previewData = useMemo(() => {
     if (!showPreview) return null;
     return {
       statusPage: {
         name: formData.name,
+        slug: formData.slug || statusPage.slug || null,
+        subdomain: formData.subdomain || statusPage.subdomain || null,
+        customDomain: formData.customDomain || statusPage.customDomain || null,
         contactEmail: formData.contactEmail || null,
         contactUrl: formData.contactUrl || null,
       },
       branding: previewBranding,
       services: previewServices,
       statusPageServices: previewStatusPageServices,
-      announcements: previewAnnouncements.map((a: any) => ({
-        ...a,
-        startDate: a.startDate.toISOString(),
-        endDate: a.endDate ? a.endDate.toISOString() : null,
-        affectedServices: buildAnnouncementAffectedServices(a.affectedServiceIds),
-      })),
+      announcements: previewAnnouncements.map((a: any) => {
+        let startStr = new Date().toISOString();
+        try {
+          if (a.startDate) {
+            const d = a.startDate instanceof Date ? a.startDate : new Date(a.startDate);
+            if (!isNaN(d.getTime())) startStr = d.toISOString();
+          }
+        } catch {}
+        let endStr: string | null = null;
+        try {
+          if (a.endDate) {
+            const d = a.endDate instanceof Date ? a.endDate : new Date(a.endDate);
+            if (!isNaN(d.getTime())) endStr = d.toISOString();
+          }
+        } catch {}
+        return {
+          ...a,
+          startDate: startStr,
+          endDate: endStr,
+          affectedServices: buildAnnouncementAffectedServices(a.affectedServiceIds),
+        };
+      }),
       uptime90: previewUptime90,
-      incidents: [],
+      incidents: liveSnapshot?.incidents ?? [],
+      regions: liveSnapshot?.regions,
+      maintenance: liveSnapshot?.maintenance,
       showServices: formData.showServices,
       showIncidents: formData.showIncidents,
       showMetrics: formData.showMetrics,
@@ -1654,6 +1707,9 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
       showApiLink: formData.showApiLink,
       layout: formData.layout,
       privacySettings: previewPrivacySettings,
+      enableUptimeExports: formData.enableUptimeExports,
+      uptimeExcellentThreshold: formData.uptimeExcellentThreshold,
+      uptimeGoodThreshold: formData.uptimeGoodThreshold,
     };
   }, [
     showPreview,
@@ -1664,6 +1720,10 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
     previewAnnouncements,
     previewUptime90,
     previewPrivacySettings,
+    statusPage.slug,
+    statusPage.subdomain,
+    statusPage.customDomain,
+    liveSnapshot,
   ]);
 
   return (
@@ -1767,7 +1827,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
           <div
             className="status-page-config-settings"
             style={{
-              flex: showPreview ? '0 0 58%' : '1',
+              flex: showPreview ? '0 0 52%' : '1',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -4304,22 +4364,20 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
             <div
               className="status-page-config-preview"
               style={{
-                flex: '0 0 42%',
+                flex: '0 0 48%',
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                minWidth: 0, // Allow flex item to shrink below content size
+                minWidth: 0,
+                borderLeft: '1px solid hsl(var(--border))',
+                background: 'hsl(var(--card))',
               }}
             >
-              <div className="status-page-preview-body">
-                <div className="status-page-preview-header">
-                  <span>Live Preview</span>
-                  <span className="status-page-preview-chip">Live</span>
-                </div>
-                <div className="status-page-preview-frame">
-                  <StatusPageLivePreview previewData={previewData} maxWidth={previewMaxWidth} />
-                </div>
-              </div>
+              <StatusPageLivePreview
+                previewData={previewData}
+                maxWidth={previewMaxWidth}
+                previewDomain={previewDomain}
+              />
             </div>
           )}
         </div>
