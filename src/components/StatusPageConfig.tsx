@@ -2613,7 +2613,7 @@ export default function StatusPageConfig({
                     statusPageId={statusPage.id}
                     announcements={announcements}
                     setAnnouncements={setAnnouncements}
-                    allServices={allServices}
+                    allServices={announcementServiceOptions}
                     browserTimeZone={browserTimeZone}
                   />
                 )}

@@ -121,6 +121,70 @@ describe('Status Page Uptime Report Generator', () => {
       expect(csv).toContain('API Gateway');
       expect(csv).toContain('# Powered by OpsKnight');
     });
+
+    it('hides individual services from CSV when showServices is false', () => {
+      const hiddenServicesData: StatusPageReportData = {
+        ...mockReportData,
+        visibility: {
+          ...mockReportData.visibility,
+          showServices: false,
+        },
+      };
+
+      const csv = buildEnhancedUptimeCsv(hiddenServicesData);
+
+      expect(csv).toContain('# Public Services: Hidden by Status Page Privacy Settings');
+      expect(csv).toContain('# SERVICE BREAKDOWN');
+      expect(csv).toContain(
+        '# Individual service breakdown is restricted by status page privacy policy.'
+      );
+      expect(csv).not.toContain('API Gateway');
+      expect(csv).not.toContain('Database Cluster');
+      expect(csv).not.toContain('Service Name');
+    });
+
+    it('omits incident timestamps and durations from CSV when showIncidentTimestamp is false', () => {
+      const hiddenTimestampsData: StatusPageReportData = {
+        ...mockReportData,
+        visibility: {
+          ...mockReportData.visibility,
+          showIncidentTimestamp: false,
+        },
+      };
+
+      const csv = buildEnhancedUptimeCsv(hiddenTimestampsData);
+
+      expect(csv).toContain('# PUBLIC INCIDENT LOG (REPORTING PERIOD)');
+      expect(csv).toContain('Database connection pool saturation');
+      expect(csv).toContain('Incident Title');
+      expect(csv).toContain('Status');
+      expect(csv).not.toContain('Started At (UTC)');
+      expect(csv).not.toContain('Resolved At (UTC)');
+      expect(csv).not.toContain('Duration (Minutes)');
+    });
+
+    it('sanitizes formula-injection characters in CSV rows', () => {
+      const injectionData: StatusPageReportData = {
+        ...mockReportData,
+        services: [
+          {
+            id: 'srv-inj',
+            name: '=CMD|calc!A0',
+            region: '+us-east',
+            description: '@admin-macro',
+            uptime: 99.9,
+            slaTarget: 99.9,
+            downtimeMinutes: 0,
+          },
+        ],
+      };
+
+      const csv = buildEnhancedUptimeCsv(injectionData);
+
+      expect(csv).toContain("'=CMD|calc!A0");
+      expect(csv).toContain("'+us-east");
+      expect(csv).toContain("'@admin-macro");
+    });
   });
 
   describe('buildEnhancedUptimePdf', () => {
@@ -174,6 +238,41 @@ describe('Status Page Uptime Report Generator', () => {
 
       expect(str).toContain('NO SERVICE-IMPACTING OUTAGES RECORDED');
       expect(str).toContain('nominal reliability parameters');
+    });
+
+    it('hides services breakdown and renders privacy notice in PDF when showServices is false', () => {
+      const privatePdfData: StatusPageReportData = {
+        ...mockReportData,
+        visibility: {
+          ...mockReportData.visibility,
+          showServices: false,
+        },
+      };
+
+      const pdf = buildEnhancedUptimePdf(privatePdfData);
+      const str = pdf.toString('utf8');
+
+      expect(str).toContain('PRIVACY MODE');
+      expect(str).toContain('RESTRICTED');
+      expect(str).toContain('INDIVIDUAL SERVICE BREAKDOWN RESTRICTED');
+      expect(str).not.toContain('API Gateway');
+    });
+
+    it('omits timestamp and duration columns from PDF when showIncidentTimestamp is false', () => {
+      const noTimestampPdfData: StatusPageReportData = {
+        ...mockReportData,
+        visibility: {
+          ...mockReportData.visibility,
+          showIncidentTimestamp: false,
+        },
+      };
+
+      const pdf = buildEnhancedUptimePdf(noTimestampPdfData);
+      const str = pdf.toString('utf8');
+
+      expect(str).toContain('(STATUS)');
+      expect(str).not.toContain('(DATE (UTC))');
+      expect(str).not.toContain('(DURATION)');
     });
   });
 });

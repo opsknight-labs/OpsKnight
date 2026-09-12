@@ -167,6 +167,24 @@ export async function DELETE(req: NextRequest) {
       pageId = req.nextUrl.searchParams.get('statusPageId');
     }
 
+    targetIds = Array.from(new Set(targetIds));
+
+    if (targetIds.length > 250) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Cannot process more than 250 subscribers in a single request.',
+          fields: [
+            {
+              field: 'ids',
+              code: 'too_big',
+              message: 'Maximum 250 subscriber IDs allowed per request',
+            },
+          ],
+        })
+      );
+    }
+
     if (targetIds.length === 0 || !pageId) {
       return jsonError(
         new AppError({

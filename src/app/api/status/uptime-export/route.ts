@@ -157,7 +157,8 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
         where: {
           serviceId: { in: serviceIds },
           visibility: 'PUBLIC',
-          createdAt: { gte: periodStart, lt: periodEnd },
+          createdAt: { lt: periodEnd },
+          OR: [{ resolvedAt: null }, { resolvedAt: { gte: periodStart } }],
         },
         orderBy: { createdAt: 'desc' },
         select: {
@@ -171,15 +172,23 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       });
 
       reportIncidents = incidents.map(inc => {
-        const resolved = inc.resolvedAt || (inc.status === 'RESOLVED' ? periodEnd : null);
-        const end = resolved ? Math.min(resolved.getTime(), periodEnd.getTime()) : now.getTime();
-        const durationMinutes = Math.max(1, (end - inc.createdAt.getTime()) / (1000 * 60));
+        const effectiveStart = new Date(Math.max(inc.createdAt.getTime(), periodStart.getTime()));
+        const resolvedTime = inc.resolvedAt
+          ? inc.resolvedAt.getTime()
+          : inc.status === 'RESOLVED'
+            ? periodEnd.getTime()
+            : now.getTime();
+        const effectiveEnd = new Date(Math.min(resolvedTime, periodEnd.getTime()));
+        const durationMinutes = Math.max(
+          0,
+          (effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60)
+        );
         return {
           id: inc.id,
           title: visibility.showIncidentTitle ? inc.title : 'Service Disruption',
           serviceName: visibility.showAffectedService ? inc.service?.name : null,
-          startedAt: inc.createdAt,
-          resolvedAt: inc.resolvedAt,
+          startedAt: effectiveStart,
+          resolvedAt: inc.resolvedAt ? effectiveEnd : null,
           durationMinutes,
           status: inc.status,
         };

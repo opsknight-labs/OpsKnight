@@ -106,14 +106,17 @@ function formatDowntimeDuration(minutes: number): string {
 export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
   const lines: string[] = [];
 
+  const safeComment = (str: string | null | undefined) =>
+    (str || '').replace(/[\r\n]+/g, ' ').trim();
+
   // 1. Executive Metadata Comment Block
   lines.push('# ==============================================================================');
   lines.push('# OPSKNIGHT STATUS PAGE AVAILABILITY & SLA AUDIT REPORT');
   lines.push('# ==============================================================================');
-  lines.push(`# Organization: ${data.organizationName || data.pageName}`);
-  lines.push(`# Status Page: ${data.pageName}`);
+  lines.push(`# Organization: ${safeComment(data.organizationName || data.pageName)}`);
+  lines.push(`# Status Page: ${safeComment(data.pageName)}`);
   if (data.url) {
-    lines.push(`# Status Page URL: ${data.url}`);
+    lines.push(`# Status Page URL: ${safeComment(data.url)}`);
   }
   lines.push(
     `# Reporting Period: ${data.periodStart.toISOString().slice(0, 10)} to ${data.periodEnd.toISOString().slice(0, 10)} (UTC)`
@@ -122,51 +125,63 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
   lines.push(`# Target SLA Threshold: ${data.uptimeExcellentThreshold.toFixed(3)}%`);
   lines.push(`# Overall System Availability: ${data.overallAvailability.toFixed(3)}%`);
   lines.push(`# SLA Compliance Rate: ${data.slaComplianceRate.toFixed(1)}%`);
-  lines.push(`# Total Public Services: ${data.services.length}`);
+  if (data.visibility.showServices) {
+    lines.push(`# Total Public Services: ${data.services.length}`);
+  } else {
+    lines.push('# Public Services: Hidden by Status Page Privacy Settings');
+  }
   lines.push('# Public Boundary: Strict (Verified Zero Internal Responder Data)');
   lines.push('# ==============================================================================');
   lines.push('');
 
-  // 2. Services Data Table
-  const serviceColumns: { key: string; header: string }[] = [
-    { key: 'serviceName', header: 'Service Name' },
-  ];
-  if (data.visibility.showServiceRegion) {
-    serviceColumns.push({ key: 'region', header: 'Region' });
-  }
-  if (data.visibility.showServiceDescription) {
-    serviceColumns.push({ key: 'description', header: 'Description' });
-  }
-  serviceColumns.push(
-    { key: 'slaTarget', header: 'SLA Target %' },
-    { key: 'uptimePercentage', header: 'Actual Availability %' },
-    { key: 'downtimeMinutes', header: 'Estimated Downtime (Minutes)' },
-    { key: 'downtimeFormatted', header: 'Downtime Duration' },
-    { key: 'complianceStatus', header: 'Compliance Status' }
-  );
-
-  const serviceRows = data.services.map(s => {
-    const isMet = s.uptime >= s.slaTarget;
-    const row: Record<string, string | number> = {
-      serviceName: s.name,
-      slaTarget: s.slaTarget.toFixed(3),
-      uptimePercentage: s.uptime.toFixed(3),
-      downtimeMinutes: Number(s.downtimeMinutes.toFixed(2)),
-      downtimeFormatted: formatDowntimeDuration(s.downtimeMinutes),
-      complianceStatus: isMet ? 'MET' : 'BELOW_TARGET',
-    };
+  // 2. Services Data Table (or privacy notice if services hidden)
+  if (data.visibility.showServices) {
+    const serviceColumns: { key: string; header: string }[] = [
+      { key: 'serviceName', header: 'Service Name' },
+    ];
     if (data.visibility.showServiceRegion) {
-      row.region = s.region || 'Global / Default';
+      serviceColumns.push({ key: 'region', header: 'Region' });
     }
     if (data.visibility.showServiceDescription) {
-      row.description = s.description || '';
+      serviceColumns.push({ key: 'description', header: 'Description' });
     }
-    return row;
-  });
+    serviceColumns.push(
+      { key: 'slaTarget', header: 'SLA Target %' },
+      { key: 'uptimePercentage', header: 'Actual Availability %' },
+      { key: 'downtimeMinutes', header: 'Estimated Downtime (Minutes)' },
+      { key: 'downtimeFormatted', header: 'Downtime Duration' },
+      { key: 'complianceStatus', header: 'Compliance Status' }
+    );
 
-  const servicesCsv = buildCsv(serviceRows, serviceColumns as any);
-  // Strip BOM if present since we append to our header
-  lines.push(servicesCsv.replace(/^\uFEFF/, ''));
+    const serviceRows = data.services.map(s => {
+      const isMet = s.uptime >= s.slaTarget;
+      const row: Record<string, string | number> = {
+        serviceName: s.name,
+        slaTarget: s.slaTarget.toFixed(3),
+        uptimePercentage: s.uptime.toFixed(3),
+        downtimeMinutes: Number(s.downtimeMinutes.toFixed(2)),
+        downtimeFormatted: formatDowntimeDuration(s.downtimeMinutes),
+        complianceStatus: isMet ? 'MET' : 'BELOW_TARGET',
+      };
+      if (data.visibility.showServiceRegion) {
+        row.region = s.region || 'Global / Default';
+      }
+      if (data.visibility.showServiceDescription) {
+        row.description = s.description || '';
+      }
+      return row;
+    });
+
+    const servicesCsv = buildCsv(serviceRows, serviceColumns as any);
+    // Strip BOM if present since we append to our header
+    lines.push(servicesCsv.replace(/^\uFEFF/, ''));
+  } else {
+    lines.push('# ==============================================================================');
+    lines.push('# SERVICE BREAKDOWN');
+    lines.push('# ==============================================================================');
+    lines.push('# Individual service breakdown is restricted by status page privacy policy.');
+    lines.push('# Overall system availability remains audited and verified above.');
+  }
 
   // 3. Public Incident Summary (if enabled)
   if (data.visibility.showIncidents) {
@@ -178,27 +193,35 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
     if (data.incidents.length === 0) {
       lines.push('# No service-impacting public incidents were recorded during this period.');
     } else {
-      const incidentColumns = [
+      const showAffectedService =
+        data.visibility.showServices && data.visibility.showAffectedService;
+      const incidentColumns: { key: string; header: string }[] = [
         { key: 'title', header: 'Incident Title' },
-        ...(data.visibility.showAffectedService
-          ? [{ key: 'service', header: 'Impacted Service' }]
-          : []),
-        { key: 'startedAt', header: 'Started At (UTC)' },
-        { key: 'resolvedAt', header: 'Resolved At (UTC)' },
-        { key: 'durationMinutes', header: 'Duration (Minutes)' },
-        { key: 'status', header: 'Status' },
       ];
+      if (showAffectedService) {
+        incidentColumns.push({ key: 'service', header: 'Impacted Service' });
+      }
+      if (data.visibility.showIncidentTimestamp) {
+        incidentColumns.push(
+          { key: 'startedAt', header: 'Started At (UTC)' },
+          { key: 'resolvedAt', header: 'Resolved At (UTC)' },
+          { key: 'durationMinutes', header: 'Duration (Minutes)' }
+        );
+      }
+      incidentColumns.push({ key: 'status', header: 'Status' });
 
       const incidentRows = data.incidents.map(inc => {
         const row: Record<string, string | number> = {
           title: data.visibility.showIncidentTitle ? inc.title : 'Service Disruption',
-          startedAt: inc.startedAt.toISOString(),
-          resolvedAt: inc.resolvedAt ? inc.resolvedAt.toISOString() : 'Ongoing',
-          durationMinutes: Math.round(inc.durationMinutes),
           status: inc.status,
         };
-        if (data.visibility.showAffectedService) {
+        if (showAffectedService) {
           row.service = inc.serviceName || 'All Services';
+        }
+        if (data.visibility.showIncidentTimestamp) {
+          row.startedAt = inc.startedAt.toISOString();
+          row.resolvedAt = inc.resolvedAt ? inc.resolvedAt.toISOString() : 'Ongoing';
+          row.durationMinutes = Math.round(inc.durationMinutes);
         }
         return row;
       });
@@ -325,28 +348,36 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
     {
       title: 'SLA COMPLIANCE',
       value: `${data.slaComplianceRate.toFixed(0)}%`,
-      sub: `${data.services.filter(s => s.uptime >= s.slaTarget).length} of ${data.services.length} Met`,
+      sub: data.visibility.showServices
+        ? `${data.services.filter(s => s.uptime >= s.slaTarget).length} of ${data.services.length} Met`
+        : 'Overall System Audit',
       valColor:
         data.slaComplianceRate >= 100
           ? [0.05, 0.6, 0.4]
           : ([0.15, 0.2, 0.3] as [number, number, number]),
     },
     {
-      title: 'PUBLIC SERVICES',
-      value: `${data.services.length}`,
-      sub: 'Monitored & Audited',
+      title: data.visibility.showServices ? 'PUBLIC SERVICES' : 'PRIVACY MODE',
+      value: data.visibility.showServices ? `${data.services.length}` : 'RESTRICTED',
+      sub: data.visibility.showServices ? 'Monitored & Audited' : 'Services Hidden',
       valColor: [0.15, 0.2, 0.3] as [number, number, number],
     },
     {
       title: 'PUBLIC INCIDENTS',
-      value: `${data.incidents.length}`,
-      sub:
-        data.incidents.length === 0
-          ? '0m Total Outage'
-          : `${Math.round(data.incidents.reduce((acc, i) => acc + i.durationMinutes, 0))}m Outage`,
-      valColor:
-        data.incidents.length === 0
-          ? [0.05, 0.6, 0.4]
+      value: !data.visibility.showIncidents ? 'RESTRICTED' : `${data.incidents.length}`,
+      sub: !data.visibility.showIncidents
+        ? 'Hidden by Policy'
+        : !data.visibility.showIncidentTimestamp
+          ? data.incidents.length === 0
+            ? '0 Recorded Outages'
+            : `${data.incidents.length} Recorded Outage(s)`
+          : data.incidents.length === 0
+            ? '0m Total Outage'
+            : `${Math.round(data.incidents.reduce((acc, i) => acc + i.durationMinutes, 0))}m Outage`,
+      valColor: !data.visibility.showIncidents
+        ? ([0.45, 0.5, 0.6] as [number, number, number])
+        : data.incidents.length === 0
+          ? ([0.05, 0.6, 0.4] as [number, number, number])
           : ([0.85, 0.35, 0.1] as [number, number, number]),
     },
   ];
@@ -373,124 +404,146 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
     curCommands += `BT /F1 7 Tf ${cx + 8} ${cardY + 10} Td (${escapePdf(card.sub)}) Tj ET\n`;
   });
 
-  // Services Table Section
+  // Services Table Section (or restricted callout if services hidden)
   let currentY = 598;
 
-  // Section Header
-  curCommands += '0.10 0.15 0.25 rg\n';
-  curCommands += `BT /F2 11 Tf ${MARGIN_X} ${currentY} Td (Service Availability & SLA Performance) Tj ET\n`;
-  currentY -= 16;
-
-  // Table Column Layout
-  // Total Content Width = 532 pt
-  const colNameW = 232;
-  const colTargetW = 70;
-  const colUptimeW = 80;
-  const colDownW = 75;
-  const colBadgeW = 75;
-
-  const colNameX = MARGIN_X;
-  const colTargetX = colNameX + colNameW;
-  const colUptimeX = colTargetX + colTargetW;
-  const colDownX = colUptimeX + colUptimeW;
-  const colBadgeX = colDownX + colDownW;
-
-  // Draw Table Header Bar (height 20)
-  curCommands += '0.12 0.16 0.24 rg\n';
-  curCommands += `${MARGIN_X} ${currentY - 14} ${CONTENT_WIDTH} 20 re f\n`;
-
-  curCommands += '1.0 1.0 1.0 rg\n';
-  curCommands += `BT /F2 8 Tf ${colNameX + 8} ${currentY - 9} Td (SERVICE) Tj ET\n`;
-  curCommands += `BT /F2 8 Tf ${colTargetX + 6} ${currentY - 9} Td (TARGET) Tj ET\n`;
-  curCommands += `BT /F2 8 Tf ${colUptimeX + 6} ${currentY - 9} Td (ACTUAL) Tj ET\n`;
-  curCommands += `BT /F2 8 Tf ${colDownX + 6} ${currentY - 9} Td (DOWNTIME) Tj ET\n`;
-  curCommands += `BT /F2 8 Tf ${colBadgeX + 6} ${currentY - 9} Td (SLA STATUS) Tj ET\n`;
-
-  currentY -= 20;
-
-  // Render Table Rows
-  const ROW_HEIGHT = 21;
-  let pageNum = 1;
-
-  for (let idx = 0; idx < data.services.length; idx++) {
-    const s = data.services[idx];
-
-    // Check if we need to paginate (keep at least 80pt for footer and potential incidents)
-    if (currentY - ROW_HEIGHT < 75) {
-      drawFooter(pageNum, '{{TOTAL_PAGES}}');
-      startNewPage();
-      pageNum++;
-      drawHeader(pageNum, '{{TOTAL_PAGES}}');
-      currentY = 670;
-
-      // Re-draw Table Header Bar on new page
-      curCommands += '0.12 0.16 0.24 rg\n';
-      curCommands += `${MARGIN_X} ${currentY - 14} ${CONTENT_WIDTH} 20 re f\n`;
-
-      curCommands += '1.0 1.0 1.0 rg\n';
-      curCommands += `BT /F2 8 Tf ${colNameX + 8} ${currentY - 9} Td (SERVICE (CONT.)) Tj ET\n`;
-      curCommands += `BT /F2 8 Tf ${colTargetX + 6} ${currentY - 9} Td (TARGET) Tj ET\n`;
-      curCommands += `BT /F2 8 Tf ${colUptimeX + 6} ${currentY - 9} Td (ACTUAL) Tj ET\n`;
-      curCommands += `BT /F2 8 Tf ${colDownX + 6} ${currentY - 9} Td (DOWNTIME) Tj ET\n`;
-      curCommands += `BT /F2 8 Tf ${colBadgeX + 6} ${currentY - 9} Td (SLA STATUS) Tj ET\n`;
-
-      currentY -= 20;
-    }
-
-    // Row Background (zebra striping)
-    if (idx % 2 === 1) {
-      curCommands += '0.97 0.98 0.99 rg\n';
-      curCommands += `${MARGIN_X} ${currentY - 15} ${CONTENT_WIDTH} ${ROW_HEIGHT} re f\n`;
-    }
-
-    // Row Bottom Border
-    curCommands += '0.90 0.92 0.95 RG 0.5 w\n';
-    curCommands += `${MARGIN_X} ${currentY - 15} m ${PAGE_WIDTH - MARGIN_X} ${currentY - 15} l S\n`;
-
-    // Service Name & Region
-    const displayName =
-      data.visibility.showServiceRegion && s.region ? `${s.name} (${s.region})` : s.name;
+  if (data.visibility.showServices) {
+    // Section Header
     curCommands += '0.10 0.15 0.25 rg\n';
-    curCommands += `BT /F2 8.5 Tf ${colNameX + 8} ${currentY - 10} Td (${escapePdf(displayName)}) Tj ET\n`;
+    curCommands += `BT /F2 11 Tf ${MARGIN_X} ${currentY} Td (Service Availability & SLA Performance) Tj ET\n`;
+    currentY -= 16;
 
-    // Target SLA
-    curCommands += '0.45 0.50 0.60 rg\n';
-    curCommands += `BT /F1 8.5 Tf ${colTargetX + 6} ${currentY - 10} Td (${s.slaTarget.toFixed(2)}%) Tj ET\n`;
+    // Table Column Layout
+    // Total Content Width = 532 pt
+    const colNameW = 232;
+    const colTargetW = 70;
+    const colUptimeW = 80;
+    const colDownW = 75;
+    const colBadgeW = 75;
 
-    // Actual Availability %
-    const isMet = s.uptime >= s.slaTarget;
-    if (isMet) {
-      curCommands += '0.05 0.55 0.35 rg\n'; // Green
-    } else {
-      curCommands += '0.85 0.30 0.10 rg\n'; // Amber / Red
+    const colNameX = MARGIN_X;
+    const colTargetX = colNameX + colNameW;
+    const colUptimeX = colTargetX + colTargetW;
+    const colDownX = colUptimeX + colUptimeW;
+    const colBadgeX = colDownX + colDownW;
+
+    // Draw Table Header Bar (height 20)
+    curCommands += '0.12 0.16 0.24 rg\n';
+    curCommands += `${MARGIN_X} ${currentY - 14} ${CONTENT_WIDTH} 20 re f\n`;
+
+    curCommands += '1.0 1.0 1.0 rg\n';
+    curCommands += `BT /F2 8 Tf ${colNameX + 8} ${currentY - 9} Td (SERVICE) Tj ET\n`;
+    curCommands += `BT /F2 8 Tf ${colTargetX + 6} ${currentY - 9} Td (TARGET) Tj ET\n`;
+    curCommands += `BT /F2 8 Tf ${colUptimeX + 6} ${currentY - 9} Td (ACTUAL) Tj ET\n`;
+    curCommands += `BT /F2 8 Tf ${colDownX + 6} ${currentY - 9} Td (DOWNTIME) Tj ET\n`;
+    curCommands += `BT /F2 8 Tf ${colBadgeX + 6} ${currentY - 9} Td (SLA STATUS) Tj ET\n`;
+
+    currentY -= 20;
+
+    // Render Table Rows
+    const ROW_HEIGHT = 21;
+    let pageNum = 1;
+
+    for (let idx = 0; idx < data.services.length; idx++) {
+      const s = data.services[idx];
+
+      // Check if we need to paginate (keep at least 80pt for footer and potential incidents)
+      if (currentY - ROW_HEIGHT < 75) {
+        drawFooter(pageNum, '{{TOTAL_PAGES}}');
+        startNewPage();
+        pageNum++;
+        drawHeader(pageNum, '{{TOTAL_PAGES}}');
+        currentY = 670;
+
+        // Re-draw Table Header Bar on new page
+        curCommands += '0.12 0.16 0.24 rg\n';
+        curCommands += `${MARGIN_X} ${currentY - 14} ${CONTENT_WIDTH} 20 re f\n`;
+
+        curCommands += '1.0 1.0 1.0 rg\n';
+        curCommands += `BT /F2 8 Tf ${colNameX + 8} ${currentY - 9} Td (SERVICE (CONT.)) Tj ET\n`;
+        curCommands += `BT /F2 8 Tf ${colTargetX + 6} ${currentY - 9} Td (TARGET) Tj ET\n`;
+        curCommands += `BT /F2 8 Tf ${colUptimeX + 6} ${currentY - 9} Td (ACTUAL) Tj ET\n`;
+        curCommands += `BT /F2 8 Tf ${colDownX + 6} ${currentY - 9} Td (DOWNTIME) Tj ET\n`;
+        curCommands += `BT /F2 8 Tf ${colBadgeX + 6} ${currentY - 9} Td (SLA STATUS) Tj ET\n`;
+
+        currentY -= 20;
+      }
+
+      // Row Background (zebra striping)
+      if (idx % 2 === 1) {
+        curCommands += '0.97 0.98 0.99 rg\n';
+        curCommands += `${MARGIN_X} ${currentY - 15} ${CONTENT_WIDTH} ${ROW_HEIGHT} re f\n`;
+      }
+
+      // Row Bottom Border
+      curCommands += '0.90 0.92 0.95 RG 0.5 w\n';
+      curCommands += `${MARGIN_X} ${currentY - 15} m ${PAGE_WIDTH - MARGIN_X} ${currentY - 15} l S\n`;
+
+      // Service Name & Region
+      const displayName =
+        data.visibility.showServiceRegion && s.region ? `${s.name} (${s.region})` : s.name;
+      curCommands += '0.10 0.15 0.25 rg\n';
+      curCommands += `BT /F2 8.5 Tf ${colNameX + 8} ${currentY - 10} Td (${escapePdf(displayName)}) Tj ET\n`;
+
+      // Target SLA
+      curCommands += '0.45 0.50 0.60 rg\n';
+      curCommands += `BT /F1 8.5 Tf ${colTargetX + 6} ${currentY - 10} Td (${s.slaTarget.toFixed(2)}%) Tj ET\n`;
+
+      // Actual Availability %
+      const isMet = s.uptime >= s.slaTarget;
+      if (isMet) {
+        curCommands += '0.05 0.55 0.35 rg\n'; // Green
+      } else {
+        curCommands += '0.85 0.30 0.10 rg\n'; // Amber / Red
+      }
+      curCommands += `BT /F2 8.5 Tf ${colUptimeX + 6} ${currentY - 10} Td (${s.uptime.toFixed(3)}%) Tj ET\n`;
+
+      // Downtime Duration
+      curCommands += '0.45 0.50 0.60 rg\n';
+      curCommands += `BT /F1 8 Tf ${colDownX + 6} ${currentY - 10} Td (${escapePdf(formatDowntimeDuration(s.downtimeMinutes))}) Tj ET\n`;
+
+      // Compliance Badge Pill
+      const badgeText = isMet ? 'COMPLIANT' : 'BELOW TARGET';
+      const badgeW = 68;
+      const badgeH = 13;
+      const badgeX = colBadgeX + 4;
+      const badgeY = currentY - 12;
+
+      if (isMet) {
+        curCommands += '0.88 0.97 0.92 rg\n'; // Light emerald pill
+        curCommands += `${badgeX} ${badgeY} ${badgeW} ${badgeH} re f\n`;
+        curCommands += '0.04 0.50 0.30 rg\n'; // Dark emerald text
+        curCommands += `BT /F2 6.5 Tf ${badgeX + 11} ${badgeY + 3.5} Td (${badgeText}) Tj ET\n`;
+      } else {
+        curCommands += '0.99 0.92 0.88 rg\n'; // Light amber/rose pill
+        curCommands += `${badgeX} ${badgeY} ${badgeW} ${badgeH} re f\n`;
+        curCommands += '0.80 0.25 0.10 rg\n'; // Dark amber text
+        curCommands += `BT /F2 6.5 Tf ${badgeX + 6} ${badgeY + 3.5} Td (${badgeText}) Tj ET\n`;
+      }
+
+      currentY -= ROW_HEIGHT;
     }
-    curCommands += `BT /F2 8.5 Tf ${colUptimeX + 6} ${currentY - 10} Td (${s.uptime.toFixed(3)}%) Tj ET\n`;
+  } else {
+    // Executive summary callout box when services breakdown is hidden
+    curCommands += '0.10 0.15 0.25 rg\n';
+    curCommands += `BT /F2 11 Tf ${MARGIN_X} ${currentY} Td (System Availability & SLA Performance) Tj ET\n`;
+    currentY -= 16;
 
-    // Downtime Duration
+    const panelH = 54;
+    curCommands += '0.97 0.98 0.99 rg\n';
+    curCommands += `${MARGIN_X} ${currentY - panelH} ${CONTENT_WIDTH} ${panelH} re f\n`;
+    curCommands += '0.88 0.90 0.94 RG 1 w\n';
+    curCommands += `${MARGIN_X} ${currentY - panelH} ${CONTENT_WIDTH} ${panelH} re S\n`;
+
+    curCommands += '0.15 0.20 0.30 rg\n';
+    curCommands += `BT /F2 9 Tf ${MARGIN_X + 14} ${currentY - 18} Td (INDIVIDUAL SERVICE BREAKDOWN RESTRICTED) Tj ET\n`;
     curCommands += '0.45 0.50 0.60 rg\n';
-    curCommands += `BT /F1 8 Tf ${colDownX + 6} ${currentY - 10} Td (${escapePdf(formatDowntimeDuration(s.downtimeMinutes))}) Tj ET\n`;
-
-    // Compliance Badge Pill
-    const badgeText = isMet ? 'COMPLIANT' : 'BELOW TARGET';
-    const badgeW = 68;
-    const badgeH = 13;
-    const badgeX = colBadgeX + 4;
-    const badgeY = currentY - 12;
-
-    if (isMet) {
-      curCommands += '0.88 0.97 0.92 rg\n'; // Light emerald pill
-      curCommands += `${badgeX} ${badgeY} ${badgeW} ${badgeH} re f\n`;
-      curCommands += '0.04 0.50 0.30 rg\n'; // Dark emerald text
-      curCommands += `BT /F2 6.5 Tf ${badgeX + 11} ${badgeY + 3.5} Td (${badgeText}) Tj ET\n`;
-    } else {
-      curCommands += '0.99 0.92 0.88 rg\n'; // Light amber/rose pill
-      curCommands += `${badgeX} ${badgeY} ${badgeW} ${badgeH} re f\n`;
-      curCommands += '0.80 0.25 0.10 rg\n'; // Dark amber text
-      curCommands += `BT /F2 6.5 Tf ${badgeX + 6} ${badgeY + 3.5} Td (${badgeText}) Tj ET\n`;
-    }
-
-    currentY -= ROW_HEIGHT;
+    curCommands += `BT /F1 8 Tf ${MARGIN_X + 14} ${currentY - 32} Td (Detailed individual service metrics are restricted by status page privacy policy.) Tj ET\n`;
+    curCommands += `BT /F1 8 Tf ${MARGIN_X + 14} ${currentY - 44} Td (Overall system availability for this period is audited at ${data.overallAvailability.toFixed(3)}% against target ${data.uptimeExcellentThreshold.toFixed(2)}%.) Tj ET\n`;
+    currentY -= panelH + 20;
   }
+
+  let pageNum = 1;
 
   // Optional Public Incidents Section (if enabled)
   if (data.visibility.showIncidents) {
@@ -528,21 +581,42 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
       curCommands += '0.20 0.25 0.35 rg\n';
       curCommands += `${MARGIN_X} ${currentY - 14} ${CONTENT_WIDTH} 18 re f\n`;
 
-      const incTitleW = 220;
-      const incServW = 120;
+      const showTimestamps = data.visibility.showIncidentTimestamp;
+      const showAffectedService =
+        data.visibility.showServices && data.visibility.showAffectedService;
+
+      let incTitleW = 220;
+      let incServW = 120;
       const incDateW = 110;
       const incDurW = 82;
+      const incStatusW = 90;
+
+      if (!showAffectedService && showTimestamps) {
+        incTitleW = 340;
+      } else if (showAffectedService && !showTimestamps) {
+        incTitleW = 260;
+        incServW = 182;
+      } else if (!showAffectedService && !showTimestamps) {
+        incTitleW = 442;
+      }
 
       const incTitleX = MARGIN_X;
       const incServX = incTitleX + incTitleW;
-      const incDateX = incServX + incServW;
+      const incDateX = showAffectedService ? incServX + incServW : incTitleX + incTitleW;
       const incDurX = incDateX + incDateW;
+      const incStatusX = showAffectedService ? incServX + incServW : incTitleX + incTitleW;
 
       curCommands += '1.0 1.0 1.0 rg\n';
       curCommands += `BT /F2 7.5 Tf ${incTitleX + 6} ${currentY - 10} Td (INCIDENT) Tj ET\n`;
-      curCommands += `BT /F2 7.5 Tf ${incServX + 6} ${currentY - 10} Td (IMPACTED SERVICE) Tj ET\n`;
-      curCommands += `BT /F2 7.5 Tf ${incDateX + 6} ${currentY - 10} Td (DATE (UTC)) Tj ET\n`;
-      curCommands += `BT /F2 7.5 Tf ${incDurX + 6} ${currentY - 10} Td (DURATION) Tj ET\n`;
+      if (showAffectedService) {
+        curCommands += `BT /F2 7.5 Tf ${incServX + 6} ${currentY - 10} Td (IMPACTED SERVICE) Tj ET\n`;
+      }
+      if (showTimestamps) {
+        curCommands += `BT /F2 7.5 Tf ${incDateX + 6} ${currentY - 10} Td (DATE (UTC)) Tj ET\n`;
+        curCommands += `BT /F2 7.5 Tf ${incDurX + 6} ${currentY - 10} Td (DURATION) Tj ET\n`;
+      } else {
+        curCommands += `BT /F2 7.5 Tf ${incStatusX + 6} ${currentY - 10} Td (STATUS) Tj ET\n`;
+      }
 
       currentY -= 18;
 
@@ -564,19 +638,24 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
 
         const incTitle = data.visibility.showIncidentTitle ? inc.title : 'Service Outage';
         curCommands += '0.15 0.20 0.30 rg\n';
-        curCommands += `BT /F2 7.5 Tf ${incTitleX + 6} ${currentY - 10} Td (${escapePdf(incTitle.slice(0, 42))}) Tj ET\n`;
+        curCommands += `BT /F2 7.5 Tf ${incTitleX + 6} ${currentY - 10} Td (${escapePdf(incTitle.slice(0, showAffectedService ? 42 : 65))}) Tj ET\n`;
 
-        const incServ = data.visibility.showAffectedService
-          ? inc.serviceName || 'Infrastructure'
-          : 'Core System';
-        curCommands += '0.40 0.45 0.55 rg\n';
-        curCommands += `BT /F1 7.5 Tf ${incServX + 6} ${currentY - 10} Td (${escapePdf(incServ.slice(0, 24))}) Tj ET\n`;
+        if (showAffectedService) {
+          const incServ = inc.serviceName || 'Infrastructure';
+          curCommands += '0.40 0.45 0.55 rg\n';
+          curCommands += `BT /F1 7.5 Tf ${incServX + 6} ${currentY - 10} Td (${escapePdf(incServ.slice(0, 24))}) Tj ET\n`;
+        }
 
-        const incDate = inc.startedAt.toISOString().slice(0, 10);
-        curCommands += `BT /F1 7.5 Tf ${incDateX + 6} ${currentY - 10} Td (${escapePdf(incDate)}) Tj ET\n`;
+        if (showTimestamps) {
+          const incDate = inc.startedAt.toISOString().slice(0, 10);
+          curCommands += `BT /F1 7.5 Tf ${incDateX + 6} ${currentY - 10} Td (${escapePdf(incDate)}) Tj ET\n`;
 
-        const incDur = `${Math.round(inc.durationMinutes)}m`;
-        curCommands += `BT /F2 7.5 Tf ${incDurX + 6} ${currentY - 10} Td (${escapePdf(incDur)}) Tj ET\n`;
+          const incDur = `${Math.round(inc.durationMinutes)}m`;
+          curCommands += `BT /F2 7.5 Tf ${incDurX + 6} ${currentY - 10} Td (${escapePdf(incDur)}) Tj ET\n`;
+        } else {
+          curCommands += '0.20 0.25 0.35 rg\n';
+          curCommands += `BT /F2 7.5 Tf ${incStatusX + 6} ${currentY - 10} Td (${escapePdf(inc.status)}) Tj ET\n`;
+        }
 
         currentY -= 18;
       });
