@@ -217,6 +217,8 @@ export interface PublicMaintenance {
   affectedRegions?: string[];
   createdAt?: string;
   updatedAt?: string;
+  allDay?: boolean;
+  timeMode?: 'EXACT' | 'ALL_DAY';
 }
 
 export interface PublicAnnouncement {
@@ -228,6 +230,8 @@ export interface PublicAnnouncement {
   endDate: string | null;
   affectedServices?: Array<{ id: string; name: string }>;
   affectedRegions?: string[];
+  allDay?: boolean;
+  timeMode?: 'EXACT' | 'ALL_DAY';
 }
 
 export interface PublicChangelogEntry {

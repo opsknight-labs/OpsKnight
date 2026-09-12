@@ -48,7 +48,7 @@ export function publicStatusVisibility(settings: StatusPagePublicSettings) {
     showIncidentId: settings.showIncidentDetails,
     showIncidentTitle: settings.showIncidentTitles,
     showIncidentDescription: settings.showIncidentDescriptions,
-    showAffectedService: settings.showServices && settings.showAffectedServices,
+    showAffectedService: settings.showAffectedServices,
     showIncidentTimestamp: settings.showIncidentTimestamps,
     showIncidentUrgency: settings.showIncidentUrgency,
     showPostIncidentReview: settings.showPostIncidentReview === true,

@@ -3,6 +3,9 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '.env.test') });
+if (!process.env.DATABASE_URL) {
+  dotenv.config({ path: path.resolve(__dirname, '.env') });
+}
 
 // Fallback if .env.test is missing (e.g. CI or local without file)
 process.env.DATABASE_URL =

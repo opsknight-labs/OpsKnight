@@ -323,6 +323,8 @@ export const publicStatusPageSnapshotSchema = z
             affectedRegions: z.array(z.string()).optional(),
             createdAt: dateTime.optional(),
             updatedAt: dateTime.optional(),
+            allDay: z.boolean().optional(),
+            timeMode: z.enum(['EXACT', 'ALL_DAY']).optional(),
           })
           .passthrough()
       )
@@ -338,6 +340,8 @@ export const publicStatusPageSnapshotSchema = z
           endDate: dateTime.nullable(),
           affectedServices: z.array(affectedServiceRef).optional(),
           affectedRegions: z.array(z.string()).optional(),
+          allDay: z.boolean().optional(),
+          timeMode: z.enum(['EXACT', 'ALL_DAY']).optional(),
         })
         .passthrough()
     ),

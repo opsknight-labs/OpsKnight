@@ -1563,6 +1563,8 @@ export default function StatusPageConfig({
           ...a,
           startDate: startStr,
           endDate: endStr,
+          allDay: a.allDay || a.timeMode === 'ALL_DAY',
+          timeMode: a.timeMode || (a.allDay ? 'ALL_DAY' : 'EXACT'),
           affectedServices: buildAnnouncementAffectedServices(a.affectedServiceIds),
         };
       }),

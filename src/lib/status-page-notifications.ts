@@ -24,6 +24,7 @@ import {
   bulkQueueHasCapacity,
   recordFanoutPage,
 } from '@/lib/notification-fanout';
+import { formatDateTime, isValidTimeZone } from '@/lib/timezone';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -579,17 +580,9 @@ export async function notifyStatusPageSubscribersAnnouncement(
                 </p>
                 <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid ${theme.borderColor}; display: flex; gap: 24px; color: #6b7280; font-size: 14px;">
                     <div>
-                        <span style="font-weight: 600; color: ${theme.color};">Start:</span> ${new Date(announcement.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        <span style="font-weight: 600; color: ${theme.color};">Start:</span> {{start_time}}
                     </div>
-                    ${
-                      announcement.endDate
-                        ? `
-                    <div>
-                        <span style="font-weight: 600; color: ${theme.color};">End:</span> ${new Date(announcement.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </div>
-                    `
-                        : ''
-                    }
+                    {{end_time_section}}
                 </div>
                 <p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">
                     Posted on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
@@ -649,7 +642,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
         orderBy: { id: 'asc' },
         take: PAGE_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        select: { id: true, email: true, token: true },
+        select: { id: true, email: true, token: true, timezone: true, preferences: true },
       });
       if (subscriptions.length === 0) {
         await recordFanoutPage(fanout.id, {
@@ -667,36 +660,73 @@ export async function notifyStatusPageSubscribersAnnouncement(
       let pageFailed = 0;
       let pageError: unknown;
 
+      const isAllDay = announcement.allDay || (announcement as any).timeMode === 'ALL_DAY';
+
       try {
         const result = await createCentralNotificationIntentsBatch(
-          subscriptions.map(sub => ({
-            category: 'STATUS_PAGE',
-            channel: 'EMAIL',
-            recipientType: 'SUBSCRIBER',
-            recipientId: sub.id,
-            recipientAddress: sub.email,
-            templateKey: 'status-page-announcement',
-            sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
-            sourceId: announcement.id,
-            eventKey: announcement.updatedAt.toISOString(),
-            displayMessage: subject,
-            trafficClass,
-            priority:
-              announcement.type === 'INCIDENT'
-                ? NOTIFICATION_PRIORITY.STATUS_INCIDENT_ANNOUNCEMENT
-                : NOTIFICATION_PRIORITY.STATUS_ANNOUNCEMENT,
-            contentId: fanout.contentId,
-            fanoutId: fanout.id,
-            payload: {
-              kind: 'EMAIL',
-              providerKey: emailConfig.provider || undefined,
-              to: sub.email,
-              subject,
+          subscriptions.map(sub => {
+            const rawTz = sub.timezone || (sub.preferences as any)?.timezone;
+            const subTz =
+              typeof rawTz === 'string' && isValidTimeZone(rawTz.trim()) ? rawTz.trim() : 'UTC';
+
+            let startTimeForSub: string;
+            let endTimeSectionForSub = '';
+
+            if (isAllDay) {
+              startTimeForSub = `All day · ${new Date(announcement.startDate).toLocaleDateString(
+                'en-US',
+                {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                  timeZone: 'UTC',
+                }
+              )}`;
+            } else {
+              startTimeForSub = formatDateTime(announcement.startDate, subTz, {
+                format: 'datetime',
+                includeTimeZone: true,
+              });
+              if (announcement.endDate) {
+                const endFormatted = formatDateTime(announcement.endDate, subTz, {
+                  format: 'datetime',
+                  includeTimeZone: true,
+                });
+                endTimeSectionForSub = `<div><span style="font-weight: 600; color: ${theme.color};">End:</span> ${endFormatted}</div>`;
+              }
+            }
+
+            return {
+              category: 'STATUS_PAGE',
+              channel: 'EMAIL',
+              recipientType: 'SUBSCRIBER',
+              recipientId: sub.id,
+              recipientAddress: sub.email,
+              templateKey: 'status-page-announcement',
+              sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+              sourceId: announcement.id,
+              eventKey: announcement.updatedAt.toISOString(),
+              displayMessage: subject,
+              trafficClass,
+              priority:
+                announcement.type === 'INCIDENT'
+                  ? NOTIFICATION_PRIORITY.STATUS_INCIDENT_ANNOUNCEMENT
+                  : NOTIFICATION_PRIORITY.STATUS_ANNOUNCEMENT,
               contentId: fanout.contentId,
-              unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
-              providerScope: { statusPageId: page.id, subscriptionId: sub.id },
-            },
-          }))
+              fanoutId: fanout.id,
+              payload: {
+                kind: 'EMAIL',
+                providerKey: emailConfig.provider || undefined,
+                to: sub.email,
+                subject,
+                contentId: fanout.contentId,
+                unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
+                startTime: startTimeForSub,
+                endTimeSection: endTimeSectionForSub,
+                providerScope: { statusPageId: page.id, subscriptionId: sub.id },
+              },
+            };
+          })
         );
         pageSent = result.created;
       } catch (error) {

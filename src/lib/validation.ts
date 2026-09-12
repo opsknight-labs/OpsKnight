@@ -302,6 +302,10 @@ export const StatusAnnouncementCreateSchema = z
     isActive: z.boolean().optional(),
     notifySubscribers: z.boolean().optional(),
     affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
+    timeMode: z.enum(['EXACT', 'ALL_DAY']).optional().default('EXACT'),
+    allDay: z.boolean().optional(),
+    publishOption: z.enum(['NOW', 'AT_START']).optional().default('NOW'),
+    notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional().default('ON_PUBLISH'),
   })
   .superRefine((data, ctx) => {
     if (data.endDate && new Date(data.endDate).getTime() <= new Date(data.startDate).getTime()) {
@@ -323,6 +327,8 @@ export const StatusAnnouncementPatchSchema = z.object({
   endDate: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
   affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
+  timeMode: z.enum(['EXACT', 'ALL_DAY']).optional(),
+  allDay: z.boolean().optional(),
 });
 
 export const StatusAnnouncementDeleteSchema = z.object({

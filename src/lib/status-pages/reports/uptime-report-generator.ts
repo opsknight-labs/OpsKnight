@@ -28,6 +28,9 @@ export interface StatusPageReportData {
   primaryColor?: string | null;
   periodStart: Date;
   periodEnd: Date;
+  periodLabel?: string;
+  isMonthToDate?: boolean;
+  isRetentionClipped?: boolean;
   generatedAt: Date;
   uptimeExcellentThreshold: number;
   uptimeGoodThreshold: number;
@@ -118,9 +121,17 @@ export function buildEnhancedUptimeCsv(data: StatusPageReportData): string {
   if (data.url) {
     lines.push(`# Status Page URL: ${safeComment(data.url)}`);
   }
-  lines.push(
-    `# Reporting Period: ${data.periodStart.toISOString().slice(0, 10)} to ${data.periodEnd.toISOString().slice(0, 10)} (UTC)`
-  );
+  let periodLine = `# Reporting Period: ${data.periodStart.toISOString().slice(0, 10)} to ${data.periodEnd.toISOString().slice(0, 10)} (UTC)`;
+  if (data.periodLabel) {
+    periodLine += ` [${data.periodLabel}]`;
+  }
+  lines.push(periodLine);
+  if (data.isMonthToDate) {
+    lines.push('# Note: Month-to-date reporting period (clamped to current time).');
+  }
+  if (data.isRetentionClipped) {
+    lines.push('# Note: Reporting period clamped to system data retention horizon.');
+  }
   lines.push(`# Generated At: ${data.generatedAt.toISOString()} (UTC)`);
   lines.push(`# Target SLA Threshold: ${data.uptimeExcellentThreshold.toFixed(3)}%`);
   lines.push(`# Overall System Availability: ${data.overallAvailability.toFixed(3)}%`);
@@ -289,7 +300,7 @@ export function buildEnhancedUptimePdf(data: StatusPageReportData): Buffer {
 
     // Metadata Sub-bar (y: 698 to 718)
     curCommands += '0.45 0.50 0.60 rg\n';
-    const periodText = `Period: ${data.periodStart.toISOString().slice(0, 10)} to ${data.periodEnd.toISOString().slice(0, 10)} (UTC)`;
+    const periodText = `Period: ${data.periodLabel || `${data.periodStart.toISOString().slice(0, 10)} to ${data.periodEnd.toISOString().slice(0, 10)}`} (UTC)${data.isMonthToDate ? ' [MTD]' : ''}`;
     const auditText = `Audit: Public Verified • Generated ${data.generatedAt.toISOString().slice(0, 16)} UTC`;
     curCommands += `BT /F1 8 Tf ${MARGIN_X} 704 Td (${escapePdf(periodText)}) Tj ET\n`;
     curCommands += `BT /F1 8 Tf ${PAGE_WIDTH - MARGIN_X - 250} 704 Td (${escapePdf(auditText)}) Tj ET\n`;

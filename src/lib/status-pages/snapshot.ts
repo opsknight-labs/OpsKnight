@@ -133,6 +133,8 @@ export async function buildStatusPageSnapshot(
     startDate: true,
     endDate: true,
     affectedServiceIds: true,
+    allDay: true,
+    timeMode: true,
     createdAt: true,
     updatedAt: true,
   } as const;
@@ -452,6 +454,8 @@ export async function buildStatusPageSnapshot(
       state: maintenanceState(item.startDate, item.endDate),
       startAt: item.startDate.toISOString(),
       endAt: item.endDate ? item.endDate.toISOString() : null,
+      allDay: item.allDay || item.timeMode === 'ALL_DAY',
+      timeMode: (item.timeMode === 'ALL_DAY' ? 'ALL_DAY' : 'EXACT') as 'ALL_DAY' | 'EXACT',
       ...(affected ? { affectedServices: affected } : {}),
       ...(affectedRegions ? { affectedRegions } : {}),
       createdAt: item.createdAt.toISOString(),
@@ -632,6 +636,8 @@ export async function buildStatusPageSnapshot(
         type: item.type,
         startDate: item.startDate.toISOString(),
         endDate: item.endDate?.toISOString() ?? null,
+        allDay: item.allDay || item.timeMode === 'ALL_DAY',
+        timeMode: (item.timeMode === 'ALL_DAY' ? 'ALL_DAY' : 'EXACT') as 'ALL_DAY' | 'EXACT',
         ...(affected ? { affectedServices: affected } : {}),
         ...(affectedRegions ? { affectedRegions } : {}),
       };

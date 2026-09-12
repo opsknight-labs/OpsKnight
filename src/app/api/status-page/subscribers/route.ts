@@ -20,7 +20,9 @@ export async function GET(req: NextRequest) {
   try {
     await assertAdmin();
 
-    const searchParams = req.nextUrl.searchParams;
+    const searchParams =
+      req.nextUrl?.searchParams ||
+      (req.url ? new URL(req.url).searchParams : new URLSearchParams());
     const page = Number.parseInt(searchParams.get('page') || '1', 10);
     const limit = Number.parseInt(searchParams.get('limit') || '10', 10);
     const statusPageId = searchParams.get('statusPageId');
@@ -139,8 +141,9 @@ export async function DELETE(req: NextRequest) {
     let pageId: string | null = null;
 
     // Check if request has JSON body (bulk) or query parameters (single)
-    const contentType = req.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
+    const contentType =
+      (typeof req.headers?.get === 'function' ? req.headers.get('content-type') : null) || '';
+    if (contentType.includes('application/json') && typeof req.json === 'function') {
       try {
         const body = (await req.json()) as { id?: string; ids?: string[]; statusPageId?: string };
         pageId = body.statusPageId || null;
@@ -156,15 +159,19 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
+    const searchParams =
+      req.nextUrl?.searchParams ||
+      (req.url ? new URL(req.url).searchParams : new URLSearchParams());
+
     if (targetIds.length === 0) {
-      const idParam = req.nextUrl.searchParams.get('id');
+      const idParam = searchParams.get('id');
       if (idParam) {
         targetIds = [idParam];
       }
     }
 
     if (!pageId) {
-      pageId = req.nextUrl.searchParams.get('statusPageId');
+      pageId = searchParams.get('statusPageId');
     }
 
     targetIds = Array.from(new Set(targetIds));

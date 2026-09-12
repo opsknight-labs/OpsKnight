@@ -31,7 +31,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
-import { formatDateTime } from '@/lib/timezone';
+import {
+  formatDateTime,
+  resolveLocalDateTimeInTimeZone,
+  isValidTimeZone,
+  formatDateForInput,
+} from '@/lib/timezone';
 import { notify } from '@/lib/toast';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
 
@@ -50,6 +55,8 @@ export interface AnnouncementItem {
   type: string;
   startDate: string | Date;
   endDate?: string | Date | null;
+  allDay?: boolean;
+  timeMode?: string;
   isActive: boolean;
   affectedServiceIds?: string[] | any;
   createdAt?: string | Date;
@@ -65,37 +72,92 @@ interface StatusPageAnnouncementManagerProps {
 
 type FilterTab = 'all' | 'active' | 'scheduled' | 'concluded' | 'draft';
 
-function getNext15MinuteTime(d: Date = new Date()): string {
+function getNext15MinuteTime(d: Date = new Date(), timeZone?: string): string {
   const coeff = 1000 * 60 * 15;
   const rounded = new Date(Math.ceil(d.getTime() / coeff) * coeff);
+  if (timeZone) {
+    const formatted = formatDateForInput(rounded, timeZone);
+    if (formatted.includes('T')) return formatted.split('T')[1];
+  }
   const hh = String(rounded.getHours()).padStart(2, '0');
   const mm = String(rounded.getMinutes()).padStart(2, '0');
   return `${hh}:${mm}`;
 }
 
-function getLocalDateString(d: Date = new Date()): string {
+function getLocalDateString(d: Date = new Date(), timeZone?: string): string {
+  if (timeZone) {
+    const formatted = formatDateForInput(d, timeZone);
+    if (formatted.includes('T')) return formatted.split('T')[0];
+  }
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
-function parseLocalInputsToDate(dateStr: string, timeStr?: string): Date | null {
-  if (!dateStr || !dateStr.trim()) return null;
+export function parseLocalInputsToDate(
+  dateStr: string,
+  timeStr: string | undefined,
+  timeZone: string,
+  isAllDay: boolean
+): { date: Date | null; error?: string } {
+  if (!dateStr || !dateStr.trim()) return { date: null, error: 'Start date is required.' };
   const parts = dateStr.trim().split('-').map(Number);
-  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  if (parts.length !== 3 || parts.some(isNaN)) return { date: null, error: 'Invalid date format.' };
   const [year, month, day] = parts;
 
+  if (isAllDay) {
+    // Preserve the calendar date meaning across global visitors using UTC 00:00
+    return { date: new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)) };
+  }
+
+  const effectiveTimeZone = isValidTimeZone(timeZone) ? timeZone : 'UTC';
+
+  let hours = 0;
+  let minutes = 0;
   if (timeStr && timeStr.trim()) {
     const timeParts = timeStr.trim().split(':').map(Number);
     if (timeParts.length >= 2 && !timeParts.slice(0, 2).some(isNaN)) {
-      const [hours, minutes] = timeParts;
-      return new Date(year, month - 1, day, hours, minutes, 0, 0);
+      [hours, minutes] = timeParts;
     }
   }
 
-  // Default to midnight local
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  const resolved = resolveLocalDateTimeInTimeZone(
+    { year, month, day, hour: hours, minute: minutes, second: 0, millisecond: 0 },
+    effectiveTimeZone,
+    'reject'
+  );
+
+  if (!resolved) {
+    const timeFormatted = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    return {
+      date: null,
+      error: `The entered time (${timeFormatted}) does not exist or is ambiguous due to a daylight saving time (DST) transition in ${effectiveTimeZone}. Please choose a different time.`,
+    };
+  }
+
+  return { date: resolved };
+}
+
+export function parseLocalInputsToEndDate(
+  startDateStr: string,
+  endDateStr: string,
+  endTimeStr: string | undefined,
+  timeZone: string,
+  isAllDay: boolean
+): { date: Date | null; error?: string } {
+  if (isAllDay) {
+    const targetDateStr = endDateStr?.trim() ? endDateStr.trim() : startDateStr?.trim();
+    if (!targetDateStr) return { date: null };
+    const parts = targetDateStr.split('-').map(Number);
+    if (parts.length !== 3 || parts.some(isNaN))
+      return { date: null, error: 'Invalid end date format.' };
+    const [year, month, day] = parts;
+    return { date: new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999)) };
+  }
+
+  if (!endDateStr || !endDateStr.trim()) return { date: null };
+  return parseLocalInputsToDate(endDateStr, endTimeStr || '23:59', timeZone, false);
 }
 
 function formatDuration(start: Date, end: Date): string {
@@ -132,14 +194,20 @@ export default function StatusPageAnnouncementManager({
   const [type, setType] = useState('INFO');
   const [specifyTime, setSpecifyTime] = useState(true);
 
-  const [startDate, setStartDate] = useState(getLocalDateString());
-  const [startTime, setStartTime] = useState(getNext15MinuteTime());
+  const [startDate, setStartDate] = useState(() => getLocalDateString(new Date(), browserTimeZone));
+  const [startTime, setStartTime] = useState(() =>
+    getNext15MinuteTime(new Date(), browserTimeZone)
+  );
 
   const [endDate, setEndDate] = useState('');
   const [endTime, setEndTime] = useState('');
 
   const [isActive, setIsActive] = useState(true);
   const [notifySubscribers, setNotifySubscribers] = useState(true);
+  const [publishOption, setPublishOption] = useState<'NOW' | 'AT_START'>('NOW');
+  const [notificationTiming, setNotificationTiming] = useState<'ON_PUBLISH' | 'AT_START' | 'NONE'>(
+    'ON_PUBLISH'
+  );
   const [affectedServiceIds, setAffectedServiceIds] = useState<string[]>([]);
 
   // Search & Filter Tabs
@@ -153,19 +221,39 @@ export default function StatusPageAnnouncementManager({
     return map;
   }, [allServices]);
 
-  // Validate start and end date/time
-  const parsedStartDate = useMemo(() => {
-    return parseLocalInputsToDate(startDate, specifyTime ? startTime : undefined);
-  }, [startDate, startTime, specifyTime]);
+  // Validate start and end date/time with DST safety
+  const parsedStartResult = useMemo(() => {
+    return parseLocalInputsToDate(
+      startDate,
+      specifyTime ? startTime : undefined,
+      browserTimeZone,
+      !specifyTime
+    );
+  }, [startDate, startTime, specifyTime, browserTimeZone]);
 
-  const parsedEndDate = useMemo(() => {
-    if (!endDate) return null;
-    return parseLocalInputsToDate(endDate, specifyTime ? endTime || '23:59' : undefined);
-  }, [endDate, endTime, specifyTime]);
+  const parsedStartDate = parsedStartResult.date;
+
+  const parsedEndResult = useMemo(() => {
+    return parseLocalInputsToEndDate(
+      startDate,
+      endDate,
+      specifyTime ? endTime || '23:59' : undefined,
+      browserTimeZone,
+      !specifyTime
+    );
+  }, [startDate, endDate, endTime, specifyTime, browserTimeZone]);
+
+  const parsedEndDate = parsedEndResult.date;
 
   const timeValidationError = useMemo(() => {
+    if (parsedStartResult.error) {
+      return parsedStartResult.error;
+    }
     if (!parsedStartDate) {
       return 'Start date is required.';
+    }
+    if (parsedEndResult.error) {
+      return parsedEndResult.error;
     }
     if (parsedEndDate && parsedStartDate) {
       if (parsedEndDate.getTime() <= parsedStartDate.getTime()) {
@@ -173,7 +261,7 @@ export default function StatusPageAnnouncementManager({
       }
     }
     return null;
-  }, [parsedStartDate, parsedEndDate]);
+  }, [parsedStartResult, parsedStartDate, parsedEndResult, parsedEndDate]);
 
   const calculatedDuration = useMemo(() => {
     if (parsedStartDate && parsedEndDate && parsedEndDate > parsedStartDate) {
@@ -242,19 +330,33 @@ export default function StatusPageAnnouncementManager({
   // Quick Time Adjusters
   const handleSetStartNow = () => {
     const now = new Date();
-    setStartDate(getLocalDateString(now));
-    setStartTime(
-      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    );
+    const formatted = formatDateForInput(now, browserTimeZone);
+    if (formatted.includes('T')) {
+      const [d, t] = formatted.split('T');
+      setStartDate(d);
+      setStartTime(t);
+    } else {
+      setStartDate(getLocalDateString(now, browserTimeZone));
+      setStartTime(
+        `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      );
+    }
   };
 
   const handleAddDuration = (hoursToAdd: number) => {
     const baseStart = parsedStartDate || new Date();
     const end = new Date(baseStart.getTime() + hoursToAdd * 60 * 60 * 1000);
-    setEndDate(getLocalDateString(end));
-    setEndTime(
-      `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
-    );
+    const formatted = formatDateForInput(end, browserTimeZone);
+    if (formatted.includes('T')) {
+      const [d, t] = formatted.split('T');
+      setEndDate(d);
+      setEndTime(t);
+    } else {
+      setEndDate(getLocalDateString(end, browserTimeZone));
+      setEndTime(
+        `${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}`
+      );
+    }
   };
 
   const handleClearEnd = () => {
@@ -280,13 +382,15 @@ export default function StatusPageAnnouncementManager({
     setTitle('');
     setMessage('');
     setType('INFO');
-    setStartDate(getLocalDateString());
-    setStartTime(getNext15MinuteTime());
+    setStartDate(getLocalDateString(new Date(), browserTimeZone));
+    setStartTime(getNext15MinuteTime(new Date(), browserTimeZone));
     setEndDate('');
     setEndTime('');
     setAffectedServiceIds([]);
     setIsActive(true);
     setNotifySubscribers(true);
+    setPublishOption('NOW');
+    setNotificationTiming('ON_PUBLISH');
     setAnnouncementError(null);
   };
 
@@ -333,8 +437,12 @@ export default function StatusPageAnnouncementManager({
             type,
             startDate: startIso,
             endDate: endIso,
-            isActive,
-            notifySubscribers,
+            timeMode: specifyTime ? 'EXACT' : 'ALL_DAY',
+            allDay: !specifyTime,
+            publishOption,
+            notificationTiming,
+            isActive: publishOption === 'NOW' ? isActive : true,
+            notifySubscribers: notificationTiming !== 'NONE',
             affectedServiceIds: affectedServiceIds.length > 0 ? affectedServiceIds : null,
           }),
         });
@@ -698,28 +806,45 @@ export default function StatusPageAnnouncementManager({
                 {/* Footer Metadata: Schedule Timestamps & Affected Services */}
                 <div className="pt-3 border-t border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <span>
-                        <strong className="text-foreground">Starts:</strong>{' '}
-                        {formatDateTime(announcement.startDate, browserTimeZone, {
-                          format: 'datetime',
-                          includeTimeZone: true,
-                        })}
-                      </span>
-                    </div>
-
-                    {announcement.endDate && (
+                    {announcement.allDay || (announcement as any).timeMode === 'ALL_DAY' ? (
                       <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
                         <span>
-                          <strong className="text-foreground">Ends:</strong>{' '}
-                          {formatDateTime(announcement.endDate, browserTimeZone, {
-                            format: 'datetime',
-                            includeTimeZone: true,
+                          <strong className="text-foreground">Schedule:</strong> All day ·{' '}
+                          {new Date(announcement.startDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            timeZone: 'UTC',
                           })}
                         </span>
                       </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
+                          <span>
+                            <strong className="text-foreground">Starts:</strong>{' '}
+                            {formatDateTime(announcement.startDate, browserTimeZone, {
+                              format: 'datetime',
+                              includeTimeZone: true,
+                            })}
+                          </span>
+                        </div>
+
+                        {announcement.endDate && (
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <span>
+                              <strong className="text-foreground">Ends:</strong>{' '}
+                              {formatDateTime(announcement.endDate, browserTimeZone, {
+                                format: 'datetime',
+                                includeTimeZone: true,
+                              })}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -1091,27 +1216,100 @@ export default function StatusPageAnnouncementManager({
                   </div>
                 )}
 
-                {/* Delivery & Active Checkboxes */}
-                <div className="flex items-center gap-6 pt-2 text-xs">
-                  <label className="flex items-center gap-2 cursor-pointer font-medium text-foreground select-none">
-                    <input
-                      type="checkbox"
-                      checked={isActive}
-                      onChange={e => setIsActive(e.target.checked)}
-                      className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
-                    />
-                    <span>Active (published immediately)</span>
-                  </label>
+                {/* Publication & Notification Timing Controls */}
+                <div className="space-y-3 pt-2 border-t border-border/60">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-primary" />
+                      Publish Timing
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setPublishOption('NOW')}
+                        className={cn(
+                          'p-2.5 rounded-lg border text-left transition-all',
+                          publishOption === 'NOW'
+                            ? 'border-primary bg-primary/10 text-foreground font-semibold shadow-2xs'
+                            : 'border-border text-muted-foreground hover:text-foreground bg-background'
+                        )}
+                      >
+                        <div className="font-medium text-foreground">Publish Now</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Live immediately upon creation
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPublishOption('AT_START')}
+                        className={cn(
+                          'p-2.5 rounded-lg border text-left transition-all',
+                          publishOption === 'AT_START'
+                            ? 'border-primary bg-primary/10 text-foreground font-semibold shadow-2xs'
+                            : 'border-border text-muted-foreground hover:text-foreground bg-background'
+                        )}
+                      >
+                        <div className="font-medium text-foreground">At Start Time</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          Publishes when window opens
+                        </p>
+                      </button>
+                    </div>
+                  </div>
 
-                  <label className="flex items-center gap-2 cursor-pointer font-medium text-foreground select-none">
-                    <input
-                      type="checkbox"
-                      checked={notifySubscribers}
-                      onChange={e => setNotifySubscribers(e.target.checked)}
-                      className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
-                    />
-                    <span>Notify Email Subscribers</span>
-                  </label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Bell className="w-3.5 h-3.5 text-primary" />
+                      Notify Subscribers
+                    </label>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotificationTiming('ON_PUBLISH');
+                          setNotifySubscribers(true);
+                        }}
+                        className={cn(
+                          'p-2 rounded-lg border text-center transition-all',
+                          notificationTiming === 'ON_PUBLISH'
+                            ? 'border-primary bg-primary/10 text-foreground font-semibold shadow-2xs'
+                            : 'border-border text-muted-foreground hover:text-foreground bg-background'
+                        )}
+                      >
+                        On Publish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotificationTiming('AT_START');
+                          setNotifySubscribers(true);
+                        }}
+                        className={cn(
+                          'p-2 rounded-lg border text-center transition-all',
+                          notificationTiming === 'AT_START'
+                            ? 'border-primary bg-primary/10 text-foreground font-semibold shadow-2xs'
+                            : 'border-border text-muted-foreground hover:text-foreground bg-background'
+                        )}
+                      >
+                        At Start Time
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotificationTiming('NONE');
+                          setNotifySubscribers(false);
+                        }}
+                        className={cn(
+                          'p-2 rounded-lg border text-center transition-all',
+                          notificationTiming === 'NONE'
+                            ? 'border-primary bg-primary/10 text-foreground font-semibold shadow-2xs'
+                            : 'border-border text-muted-foreground hover:text-foreground bg-background'
+                        )}
+                      >
+                        Don&apos;t Notify
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 

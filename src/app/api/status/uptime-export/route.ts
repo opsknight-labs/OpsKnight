@@ -73,8 +73,41 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       monthIndex = now.getUTCMonth();
     }
 
-    const periodStart = new Date(Date.UTC(year, monthIndex, 1));
-    const periodEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
+    const requestedStart = new Date(Date.UTC(year, monthIndex, 1));
+    const requestedEnd = new Date(Date.UTC(year, monthIndex + 1, 1));
+
+    // Reject future reporting periods
+    if (requestedStart >= now) {
+      return new NextResponse('Future reporting periods cannot be generated.', { status: 422 });
+    }
+
+    // Resolve retention horizon
+    const { getIncidentRetentionStartDate } = await import('@/lib/retention-policy');
+    const retentionHorizon = await getIncidentRetentionStartDate();
+
+    // Reject periods strictly before the retention horizon
+    if (requestedEnd <= retentionHorizon) {
+      return new NextResponse('Requested reporting period is outside data retention window.', {
+        status: 422,
+      });
+    }
+
+    const isRetentionClipped = requestedStart < retentionHorizon;
+    const isMonthToDate = requestedEnd > now;
+
+    const effectiveStart = isRetentionClipped ? retentionHorizon : requestedStart;
+    const effectiveEnd = isMonthToDate ? now : requestedEnd;
+
+    const monthName = requestedStart.toLocaleDateString('en-US', {
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
+    });
+    const periodLabel = isMonthToDate
+      ? `${monthName} (MTD through ${now.toISOString().slice(0, 10)})`
+      : isRetentionClipped
+        ? `${monthName} (Clipped from ${effectiveStart.toISOString().slice(0, 10)})`
+        : monthName;
 
     const statusPage = await prisma.statusPage.findUnique({
       where: { id: targetPage.id },
@@ -123,16 +156,19 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       incidentHistoryDetailDays: statusPage.incidentHistoryDetailDays,
     });
 
-    // Compute uptime in PUBLIC mode
+    // Compute uptime in PUBLIC mode using effective window
     const { calculateMultiServiceUptime } = await import('@/lib/sla-server');
     const uptimeMap = await calculateMultiServiceUptime(
       serviceIds,
-      periodStart,
-      periodEnd,
+      effectiveStart,
+      effectiveEnd,
       'PUBLIC'
     );
 
-    const totalPeriodMinutes = (periodEnd.getTime() - periodStart.getTime()) / (1000 * 60);
+    const totalPeriodMinutes = Math.max(
+      1,
+      (effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60)
+    );
     const excellentThreshold = statusPage.uptimeExcellentThreshold || 99.9;
     const goodThreshold = statusPage.uptimeGoodThreshold || 99.0;
 
@@ -157,8 +193,8 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
         where: {
           serviceId: { in: serviceIds },
           visibility: 'PUBLIC',
-          createdAt: { lt: periodEnd },
-          OR: [{ resolvedAt: null }, { resolvedAt: { gte: periodStart } }],
+          createdAt: { lt: effectiveEnd },
+          OR: [{ resolvedAt: null }, { resolvedAt: { gte: effectiveStart } }],
         },
         orderBy: { createdAt: 'desc' },
         select: {
@@ -172,25 +208,27 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       });
 
       reportIncidents = incidents.map(inc => {
-        const effectiveStart = new Date(Math.max(inc.createdAt.getTime(), periodStart.getTime()));
-        const resolvedTime = inc.resolvedAt
-          ? inc.resolvedAt.getTime()
-          : inc.status === 'RESOLVED'
-            ? periodEnd.getTime()
-            : now.getTime();
-        const effectiveEnd = new Date(Math.min(resolvedTime, periodEnd.getTime()));
+        const incidentStartInWindow = new Date(
+          Math.max(inc.createdAt.getTime(), effectiveStart.getTime())
+        );
+        const isResolvedDuringPeriod =
+          inc.resolvedAt && inc.resolvedAt.getTime() <= effectiveEnd.getTime();
+        const resolvedTime = isResolvedDuringPeriod
+          ? inc.resolvedAt!.getTime()
+          : effectiveEnd.getTime();
+        const incidentEndInWindow = new Date(resolvedTime);
         const durationMinutes = Math.max(
           0,
-          (effectiveEnd.getTime() - effectiveStart.getTime()) / (1000 * 60)
+          (incidentEndInWindow.getTime() - incidentStartInWindow.getTime()) / (1000 * 60)
         );
         return {
           id: inc.id,
           title: visibility.showIncidentTitle ? inc.title : 'Service Disruption',
           serviceName: visibility.showAffectedService ? inc.service?.name : null,
-          startedAt: effectiveStart,
-          resolvedAt: inc.resolvedAt ? effectiveEnd : null,
+          startedAt: incidentStartInWindow,
+          resolvedAt: isResolvedDuringPeriod ? inc.resolvedAt : null,
           durationMinutes,
-          status: inc.status,
+          status: isResolvedDuringPeriod ? inc.status : 'Ongoing at period end',
         };
       });
     }
@@ -223,8 +261,11 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       organizationName: statusPage.organizationName || statusPage.name,
       url: pageUrl,
       primaryColor,
-      periodStart,
-      periodEnd,
+      periodStart: effectiveStart,
+      periodEnd: effectiveEnd,
+      periodLabel,
+      isMonthToDate,
+      isRetentionClipped,
       generatedAt: now,
       uptimeExcellentThreshold: excellentThreshold,
       uptimeGoodThreshold: goodThreshold,

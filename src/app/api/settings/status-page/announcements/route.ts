@@ -68,12 +68,27 @@ export async function POST(req: NextRequest) {
       isActive,
       notifySubscribers,
       affectedServiceIds,
+      timeMode,
+      allDay,
+      publishOption,
+      notificationTiming,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
 
     if (!(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds))) {
       return jsonError('Affected services must belong to this status page.', 400);
     }
+
+    const parsedStartDate = parseDate(startDate, 'startDate');
+    const parsedEndDate = endDate ? parseDate(endDate, 'endDate') : null;
+    const isAllDay = allDay ?? timeMode === 'ALL_DAY';
+    const effectiveTimeMode = timeMode ?? (isAllDay ? 'ALL_DAY' : 'EXACT');
+
+    const shouldNotify = notificationTiming !== 'NONE' && notifySubscribers !== false;
+    const scheduledNotificationAt =
+      notificationTiming === 'AT_START' && parsedStartDate.getTime() > Date.now()
+        ? parsedStartDate
+        : new Date();
 
     const announcement = await prisma.$transaction(async tx => {
       const created = await tx.statusPageAnnouncement.create({
@@ -82,8 +97,10 @@ export async function POST(req: NextRequest) {
           title: title.trim(),
           message: message.trim(),
           type: type || 'INFO',
-          startDate: parseDate(startDate, 'startDate'),
-          endDate: endDate ? parseDate(endDate, 'endDate') : null,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          allDay: isAllDay,
+          timeMode: effectiveTimeMode,
           isActive: isActive !== false,
           affectedServiceIds:
             normalizedAffectedServiceIds === null
@@ -91,12 +108,12 @@ export async function POST(req: NextRequest) {
               : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
         },
       });
-      if (notifySubscribers) {
+      if (shouldNotify) {
         await tx.backgroundJob.create({
           data: {
             type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
             status: 'PENDING',
-            scheduledAt: new Date(),
+            scheduledAt: scheduledNotificationAt,
             maxAttempts: 5,
             payload: { announcementId: created.id, statusPageId },
           },
@@ -107,7 +124,9 @@ export async function POST(req: NextRequest) {
 
     logger.info('api.status_page.announcement.created', {
       announcementId: announcement.id,
-      notifySubscribers,
+      timeMode: effectiveTimeMode,
+      shouldNotify,
+      scheduledNotificationAt,
     });
     return jsonOk({ announcement }, 200);
   } catch (error: unknown) {
@@ -175,6 +194,8 @@ export async function PATCH(req: NextRequest) {
         ...(startDate ? { startDate: effectiveStart } : {}),
         ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
         ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
+        ...(parsed.data.timeMode !== undefined ? { timeMode: parsed.data.timeMode } : {}),
+        ...(parsed.data.allDay !== undefined ? { allDay: parsed.data.allDay } : {}),
         ...(affectedServiceIds !== undefined
           ? {
               affectedServiceIds:
