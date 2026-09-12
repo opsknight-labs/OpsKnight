@@ -9,6 +9,7 @@ import {
 } from '@/lib/incidents/lifecycle';
 import { enqueueIncidentUpdateSideEffects } from '@/lib/event-outbox';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
+import { reconcileIncidentEngagementAfterUrgencyChange } from './engagement-reconciliation';
 
 export type RestIncidentStatus = 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED' | 'SUPPRESSED';
 export type RestIncidentUrgency = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -95,6 +96,11 @@ export async function applyRestIncidentPatch(input: RestIncidentPatchInput) {
         }
 
         if (urgencyChanged) {
+          await reconcileIncidentEngagementAfterUrgencyChange(tx, {
+            incidentId: input.incidentId,
+            previousUrgency: current.urgency,
+            urgency: input.urgency!,
+          });
           await tx.incidentEvent.create({
             data: {
               incidentId: input.incidentId,

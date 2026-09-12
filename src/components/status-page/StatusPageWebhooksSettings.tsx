@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useTransition, useCallback } from 'react';
-import { Card, Button, FormField, Switch } from '@/components/ui';
+import { Button, FormField, Switch } from '@/components/ui';
+import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
+import { Webhook as WebhookIcon } from 'lucide-react';
 import { errorFromResponse } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 
@@ -144,36 +146,18 @@ export default function StatusPageWebhooksSettings({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}>
-      <Card>
-        <div style={{ padding: 'var(--spacing-6)' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 'var(--spacing-4)',
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  fontSize: 'var(--font-size-xl)',
-                  fontWeight: '700',
-                  marginBottom: 'var(--spacing-2)',
-                }}
-              >
-                Webhooks
-              </h2>
-              <p style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-muted)' }}>
-                Receive real-time notifications when incidents occur or status changes
-              </p>
-            </div>
-            <Button variant="primary" onClick={() => setShowForm(!showForm)}>
-              {showForm ? 'Cancel' : 'Add Webhook'}
-            </Button>
-          </div>
-
+    <div className="flex flex-col gap-6">
+      <StatusPageSectionCard
+        title="Webhooks"
+        description="Receive real-time notifications when incidents occur or status changes."
+        icon={<WebhookIcon className="h-4 w-4" />}
+        action={
+          <Button variant="primary" size="sm" onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : 'Add Webhook'}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
           {error && (
             <div
               style={{
@@ -189,193 +173,129 @@ export default function StatusPageWebhooksSettings({
           )}
 
           {showForm && (
-            <Card>
-              <div style={{ padding: 'var(--spacing-4)' }}>
-                <h3
-                  style={{
-                    fontSize: 'var(--font-size-lg)',
-                    fontWeight: '600',
-                    marginBottom: 'var(--spacing-4)',
-                  }}
-                >
-                  Create Webhook
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
-                  <FormField
-                    type="input"
-                    inputType="url"
-                    label="Webhook URL"
-                    value={formData.url}
-                    onChange={e => setFormData({ ...formData, url: e.target.value })}
-                    placeholder="https://your-api.com/webhooks/status"
-                    required
-                  />
-                  <p className="text-sm text-gray-500">
-                    Webhooks allow you to receive HTTP POST requests when incidents are created,
-                    updated, or resolved. The payload will include the event type and incident
-                    details. For security, you can verify the{' '}
-                    <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">
-                      X-Webhook-Signature
-                    </code>{' '}
-                    header using your webhook secret.
-                  </p>
-                  <div>
-                    <label
-                      style={{
-                        display: 'block',
-                        marginBottom: 'var(--spacing-2)',
-                        fontSize: 'var(--font-size-sm)',
-                        fontWeight: '500',
-                      }}
-                    >
-                      Events to Subscribe To
-                    </label>
-                    <div
-                      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-2)' }}
-                    >
-                      {WEBHOOK_EVENTS.map(event => (
-                        <label
-                          key={event.value}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: 'var(--spacing-2)',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={formData.events.includes(event.value)}
-                            onChange={() => toggleEvent(event.value)}
-                            style={{ marginRight: 'var(--spacing-2)' }}
-                          />
-                          <span>{event.label}</span>
-                        </label>
-                      ))}
-                    </div>
+            <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-muted/20 p-5 shadow-xs">
+              <h3 className="text-base font-semibold text-foreground mb-4">Create Webhook</h3>
+              <div className="flex flex-col gap-4">
+                <FormField
+                  type="input"
+                  inputType="url"
+                  label="Webhook URL"
+                  value={formData.url}
+                  onChange={e => setFormData({ ...formData, url: e.target.value })}
+                  placeholder="https://your-api.com/webhooks/status"
+                  required
+                />
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Webhooks allow you to receive HTTP POST requests when incidents are created,
+                  updated, or resolved. The payload will include the event type and incident
+                  details. For security, you can verify the{' '}
+                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                    X-Webhook-Signature
+                  </code>{' '}
+                  header using your webhook secret.
+                </p>
+                <div>
+                  <label className="block mb-2 text-xs font-semibold text-foreground">
+                    Events to Subscribe To
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {WEBHOOK_EVENTS.map(event => (
+                      <label
+                        key={event.value}
+                        className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border/70 bg-card hover:bg-muted/30 cursor-pointer transition-colors text-xs font-medium text-foreground"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.events.includes(event.value)}
+                          onChange={() => toggleEvent(event.value)}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                        />
+                        <span>{event.label}</span>
+                      </label>
+                    ))}
                   </div>
+                </div>
+                <div className="pt-2 flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => setShowForm(false)}>
+                    Cancel
+                  </Button>
                   <Button variant="primary" onClick={handleCreate} isLoading={isPending}>
                     Create Webhook
                   </Button>
                 </div>
               </div>
-            </Card>
+            </div>
           )}
 
           {webhooks.length === 0 && !showForm && (
-            <div
-              style={{
-                padding: 'var(--spacing-6)',
-                textAlign: 'center',
-                color: 'var(--text-muted)',
-              }}
-            >
+            <div className="p-8 text-center text-sm text-muted-foreground border border-dashed border-border rounded-xl">
               <p>No webhooks configured. Click &quot;Add Webhook&quot; to create one.</p>
             </div>
           )}
 
           {webhooks.length > 0 && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--spacing-3)',
-                marginTop: 'var(--spacing-4)',
-              }}
-            >
+            <div className="flex flex-col gap-3 mt-4">
               {webhooks.map(webhook => (
-                <Card key={webhook.id}>
-                  <div style={{ padding: 'var(--spacing-4)' }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'start',
-                        marginBottom: 'var(--spacing-3)',
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontSize: 'var(--font-size-sm)',
-                            fontWeight: '600',
-                            marginBottom: 'var(--spacing-1)',
-                          }}
-                        >
-                          {webhook.url}
-                        </div>
-                        <div
-                          style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}
-                        >
-                          Events:{' '}
-                          {Array.isArray(webhook.events) ? webhook.events.join(', ') : 'None'}
-                        </div>
-                        {webhook.lastTriggeredAt && (
-                          <div
-                            style={{
-                              fontSize: 'var(--font-size-xs)',
-                              color: 'var(--text-muted)',
-                              marginTop: 'var(--spacing-1)',
-                            }}
-                          >
-                            Last triggered: {new Date(webhook.lastTriggeredAt).toLocaleString()}
-                          </div>
-                        )}
+                <div
+                  key={webhook.id}
+                  className="rounded-xl border border-border bg-card p-4 sm:p-5 transition-all shadow-xs hover:border-border/80"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-foreground truncate">
+                        {webhook.url}
                       </div>
-                      <div
-                        style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}
-                      >
-                        <div
-                          style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}
-                        >
-                          <label
-                            style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-muted)' }}
-                          >
-                            Enabled
-                          </label>
-                          <Switch
-                            checked={webhook.enabled}
-                            onChange={async enabled => {
-                              try {
-                                const response = await fetch('/api/status-page/webhooks', {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    id: webhook.id,
-                                    statusPageId,
-                                    enabled,
-                                  }),
-                                });
-                                if (!response.ok) {
-                                  throw await errorFromResponse(
-                                    response,
-                                    'Failed to update webhook'
-                                  );
-                                }
-                                await loadWebhooks();
-                              } catch (err) {
-                                setError(displayError(err, 'Failed to update webhook'));
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Events: {Array.isArray(webhook.events) ? webhook.events.join(', ') : 'None'}
+                      </div>
+                      {webhook.lastTriggeredAt && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Last triggered: {new Date(webhook.lastTriggeredAt).toLocaleString()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-medium">Enabled</span>
+                        <Switch
+                          checked={webhook.enabled}
+                          onChange={async enabled => {
+                            try {
+                              const response = await fetch('/api/status-page/webhooks', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  id: webhook.id,
+                                  statusPageId,
+                                  enabled,
+                                }),
+                              });
+                              if (!response.ok) {
+                                throw await errorFromResponse(response, 'Failed to update webhook');
                               }
-                            }}
-                          />
-                        </div>
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={() => handleDelete(webhook.id)}
-                          isLoading={isPending}
-                        >
-                          {deleteCandidate === webhook.id ? 'Confirm delete' : 'Delete'}
-                        </Button>
+                              await loadWebhooks();
+                            } catch (err) {
+                              setError(displayError(err, 'Failed to update webhook'));
+                            }
+                          }}
+                        />
                       </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDelete(webhook.id)}
+                        isLoading={isPending}
+                      >
+                        {deleteCandidate === webhook.id ? 'Confirm delete' : 'Delete'}
+                      </Button>
                     </div>
                   </div>
-                </Card>
+                </div>
               ))}
             </div>
           )}
         </div>
-      </Card>
+      </StatusPageSectionCard>
     </div>
   );
 }

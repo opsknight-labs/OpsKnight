@@ -75,6 +75,8 @@ export interface LifecycleOutboxInput {
 export interface IncidentCreationOutboxInput {
   incidentId: string;
   source: 'WEB' | 'MOBILE' | 'REST_API';
+  /** Only responder engagement is deferred; status, service, webhook and integration effects remain immediate. */
+  responderNotBefore?: Date;
 }
 
 export function getEventSideEffects(action: EventOutboxAction): readonly EventSideEffect[] {
@@ -189,7 +191,8 @@ async function enqueueSideEffects(
   incidentId: string,
   effects: readonly EventSideEffect[],
   lifecycle?: LifecycleSideEffectContext,
-  warRoom?: EventSideEffectPayload['warRoom']
+  warRoom?: EventSideEffectPayload['warRoom'],
+  notBeforeByEffect?: ReadonlyMap<EventSideEffect, Date>
 ): Promise<void> {
   if (effects.length === 0) return;
   const [eventOrderAt, incidentSnapshot] = await Promise.all([
@@ -204,7 +207,10 @@ async function enqueueSideEffects(
     data: effects.map(effect => ({
       type: 'SCHEDULED_TASK',
       status: 'PENDING',
-      scheduledAt: eventOrderAt,
+      scheduledAt: (() => {
+        const notBefore = notBeforeByEffect?.get(effect);
+        return notBefore && notBefore > eventOrderAt ? notBefore : eventOrderAt;
+      })(),
       maxAttempts: 5,
       payload: {
         task: 'EVENT_SIDE_EFFECT',
@@ -274,9 +280,19 @@ async function enqueueEscalationResume(
 export async function enqueueEventSideEffects(
   tx: Prisma.TransactionClient,
   action: EventOutboxAction,
-  incidentId: string
+  incidentId: string,
+  responderNotBefore?: Date
 ): Promise<void> {
-  await enqueueSideEffects(tx, incidentId, getEventSideEffects(action));
+  await enqueueSideEffects(
+    tx,
+    incidentId,
+    getEventSideEffects(action),
+    undefined,
+    undefined,
+    responderNotBefore
+      ? new Map<EventSideEffect, Date>([['TRIGGER_ESCALATION_NOTIFICATIONS', responderNotBefore]])
+      : undefined
+  );
 }
 export async function enqueueIncidentUpdateSideEffects(
   tx: Prisma.TransactionClient,
@@ -296,7 +312,18 @@ export async function enqueueIncidentCreationSideEffects(
   tx: Prisma.TransactionClient,
   input: IncidentCreationOutboxInput
 ): Promise<void> {
-  await enqueueSideEffects(tx, input.incidentId, getIncidentCreationSideEffects(input));
+  await enqueueSideEffects(
+    tx,
+    input.incidentId,
+    getIncidentCreationSideEffects(input),
+    undefined,
+    undefined,
+    input.responderNotBefore
+      ? new Map<EventSideEffect, Date>([
+          ['TRIGGER_ESCALATION_NOTIFICATIONS', input.responderNotBefore],
+        ])
+      : undefined
+  );
 }
 export async function enqueueLifecycleSideEffects(
   tx: Prisma.TransactionClient,

@@ -53,7 +53,18 @@ describe('StatusPageSubscribe', () => {
         '/api/status-page/subscribe',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ statusPageId: 'sp-456', email: 'test@example.com' }),
+        })
+      );
+      const call = (mockFetch as any).mock.calls.find(
+        (c: any[]) => c[0] === '/api/status-page/subscribe'
+      );
+      expect(call).toBeDefined();
+      const body = JSON.parse(call![1].body);
+      expect(body).toEqual(
+        expect.objectContaining({
+          statusPageId: 'sp-456',
+          email: 'test@example.com',
+          timezone: expect.any(String),
         })
       );
     });
@@ -92,10 +103,21 @@ describe('StatusPageSubscribe', () => {
         '/api/status-page/subscribe',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({
-            statusPageId: 'sp-456',
-            email: 'test@example.com',
-            preferences: { selectedServiceIds: ['srv-1'] },
+        })
+      );
+      const call = (mockFetch as any).mock.calls.find(
+        (c: any[]) => c[0] === '/api/status-page/subscribe'
+      );
+      expect(call).toBeDefined();
+      const body = JSON.parse(call![1].body);
+      expect(body).toEqual(
+        expect.objectContaining({
+          statusPageId: 'sp-456',
+          email: 'test@example.com',
+          timezone: expect.any(String),
+          preferences: expect.objectContaining({
+            selectedServiceIds: ['srv-1'],
+            timezone: expect.any(String),
           }),
         })
       );

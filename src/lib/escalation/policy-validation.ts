@@ -11,6 +11,7 @@
  * that needs a transaction.
  */
 import type { EscalationTargetType, Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../notification-delivery';
 
 /** A week. Long enough for any real policy, short enough to catch a typo. */
@@ -40,6 +41,11 @@ export interface ValidatedEscalationStep {
   delayMinutes: number;
   notificationChannels: NotificationDeliveryChannel[];
   notifyOnlyTeamLead: boolean;
+  conditions?: Array<{
+    field: 'PRIORITY' | 'URGENCY' | 'SUPPORT_HOURS_STATE';
+    operator: 'IN' | 'NOT_IN' | 'EQUALS' | 'NOT_EQUALS';
+    values: string[];
+  }>;
 }
 
 export type EscalationStepValidation =
@@ -47,6 +53,58 @@ export type EscalationStepValidation =
   | { valid: false; issues: EscalationStepIssue[] };
 
 const TARGET_TYPES: readonly EscalationTargetType[] = ['USER', 'TEAM', 'SCHEDULE'];
+const conditionOperator = z.enum(['IN', 'NOT_IN', 'EQUALS', 'NOT_EQUALS']);
+const escalationConditionSchema = z
+  .discriminatedUnion('field', [
+    z
+      .object({
+        field: z.literal('PRIORITY'),
+        operator: conditionOperator,
+        values: z
+          .array(z.enum(['P1', 'P2', 'P3', 'P4', 'P5']))
+          .min(1)
+          .max(10),
+      })
+      .strict(),
+    z
+      .object({
+        field: z.literal('URGENCY'),
+        operator: conditionOperator,
+        values: z
+          .array(z.enum(['HIGH', 'MEDIUM', 'LOW']))
+          .min(1)
+          .max(10),
+      })
+      .strict(),
+    z
+      .object({
+        field: z.literal('SUPPORT_HOURS_STATE'),
+        operator: conditionOperator,
+        values: z
+          .array(z.enum(['INSIDE', 'OUTSIDE', 'UNCONFIGURED']))
+          .min(1)
+          .max(10),
+      })
+      .strict(),
+  ])
+  .superRefine((condition, context) => {
+    const unique = new Set(condition.values);
+    if (unique.size !== condition.values.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['values'],
+        message: 'Condition values must be unique.',
+      });
+    if (
+      (condition.operator === 'EQUALS' || condition.operator === 'NOT_EQUALS') &&
+      condition.values.length !== 1
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['values'],
+        message: 'Equals operators require exactly one value.',
+      });
+  });
 
 /**
  * Parses a delay from form input.
@@ -78,6 +136,7 @@ export interface EscalationStepInput {
   delayMinutes?: unknown;
   notificationChannels?: unknown;
   notifyOnlyTeamLead?: unknown;
+  conditions?: unknown;
 }
 
 function trimmedId(value: unknown): string | null {
@@ -144,6 +203,22 @@ export function validateEscalationStep(input: EscalationStepInput): EscalationSt
     if (!channels.includes(channel)) channels.push(channel);
   }
 
+  const rawConditions = Array.isArray(input.conditions) ? input.conditions : [];
+  const conditions: NonNullable<ValidatedEscalationStep['conditions']> = [];
+  if (rawConditions.length > 10)
+    issues.push({ field: 'conditions', message: 'A step can have at most 10 conditions.' });
+  for (const raw of rawConditions.slice(0, 10)) {
+    const parsed = escalationConditionSchema.safeParse(raw);
+    if (!parsed.success) {
+      issues.push({
+        field: 'conditions',
+        message: parsed.error.issues[0]?.message ?? 'Invalid escalation condition.',
+      });
+      continue;
+    }
+    conditions.push(parsed.data);
+  }
+
   if (issues.length > 0) return { valid: false, issues };
 
   return {
@@ -160,6 +235,7 @@ export function validateEscalationStep(input: EscalationStepInput): EscalationSt
       // Lead-only is a team concept; on any other target it is noise that
       // would confuse a later reader of the policy.
       notifyOnlyTeamLead: targetType === 'TEAM' && input.notifyOnlyTeamLead === true,
+      ...(input.conditions !== undefined ? { conditions } : {}),
     },
   };
 }

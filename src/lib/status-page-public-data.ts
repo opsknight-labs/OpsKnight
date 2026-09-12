@@ -41,10 +41,10 @@ export function publicStatusVisibility(settings: StatusPagePublicSettings) {
     showIncidents,
     showMetrics,
     showUptime: showMetrics && settings.showUptimeHistory,
-    showServiceRegion: settings.showServiceRegions,
-    showServiceSlaTier: settings.showServiceSlaTier,
+    showServiceRegion: settings.showServices && settings.showServiceRegions,
+    showServiceSlaTier: settings.showServices && settings.showServiceSlaTier,
     // Team identity is sensitive — both toggles must agree to disclose. OR would leak when either is off.
-    showTeam: settings.showTeamInformation && settings.showServiceOwners,
+    showTeam: settings.showServices && settings.showTeamInformation && settings.showServiceOwners,
     showIncidentId: settings.showIncidentDetails,
     showIncidentTitle: settings.showIncidentTitles,
     showIncidentDescription: settings.showIncidentDescriptions,

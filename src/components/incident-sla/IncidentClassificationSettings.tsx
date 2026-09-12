@@ -18,7 +18,10 @@ import {
   SelectValue,
 } from '@/components/ui/shadcn/select';
 import { notify } from '@/lib/toast';
-import { saveWorkspaceClassificationPolicyAction } from '@/app/(app)/settings/incident-sla/actions';
+import {
+  saveScopedClassificationPolicyAction,
+  saveWorkspaceClassificationPolicyAction,
+} from '@/app/(app)/settings/incident-sla/actions';
 import { INCIDENT_PRIORITIES, getIncidentPriorityDefinition } from '@/lib/incidents/priority';
 import {
   ALERT_SEVERITIES,
@@ -28,20 +31,45 @@ import {
 
 type Priority = (typeof INCIDENT_PRIORITIES)[number];
 type Urgency = 'HIGH' | 'MEDIUM' | 'LOW';
-type Rule = { matchValue: AlertSeverity; priority: Priority | null; urgency: Urgency };
+type Rule = {
+  matchValue: AlertSeverity;
+  priorityMode?: 'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR';
+  priority: Priority | null;
+  urgencyMode?: 'INHERIT' | 'SET' | 'DEFAULT';
+  urgency: Urgency | null;
+};
 
 function defaultRule(severity: AlertSeverity): Omit<Rule, 'matchValue'> {
   const classification = defaultAlertClassification(severity);
-  return { priority: classification.priority, urgency: classification.urgency };
+  return {
+    priorityMode: classification.priority ? 'SET' : 'CLEAR',
+    priority: classification.priority,
+    urgencyMode: 'SET',
+    urgency: classification.urgency,
+  };
 }
 
 export default function IncidentClassificationSettings({
   policy,
+  scopeKey = 'workspace',
 }: {
-  policy: { version: number; derivePriorityFromUrgency: boolean; rules: Rule[] } | null;
+  policy: {
+    version: number;
+    derivePriorityFromUrgency: boolean;
+    priorityFallbackMode?: 'INHERIT' | 'ENABLED' | 'DISABLED';
+    rules: Rule[];
+  } | null;
+  scopeKey?: string;
 }) {
   const [version, setVersion] = useState(policy?.version ?? 0);
-  const [derive, setDerive] = useState(policy?.derivePriorityFromUrgency ?? false);
+  const [fallbackMode, setFallbackMode] = useState<'INHERIT' | 'ENABLED' | 'DISABLED'>(
+    policy?.priorityFallbackMode ??
+      (policy?.derivePriorityFromUrgency
+        ? 'ENABLED'
+        : scopeKey === 'workspace'
+          ? 'DISABLED'
+          : 'INHERIT')
+  );
   const [rules, setRules] = useState<Rule[]>(() =>
     ALERT_SEVERITIES.map(matchValue => ({
       matchValue,
@@ -56,9 +84,15 @@ export default function IncidentClassificationSettings({
   const save = () =>
     startTransition(async () => {
       try {
-        const result = await saveWorkspaceClassificationPolicyAction({
+        const saveAction =
+          scopeKey === 'workspace'
+            ? saveWorkspaceClassificationPolicyAction
+            : saveScopedClassificationPolicyAction;
+        const result = await saveAction({
+          ...(scopeKey === 'workspace' ? {} : { scopeKey }),
           expectedVersion: version,
-          derivePriorityFromUrgency: derive,
+          derivePriorityFromUrgency: fallbackMode === 'ENABLED',
+          priorityFallbackMode: fallbackMode,
           rules,
         });
         if (!result.ok) {
@@ -100,11 +134,26 @@ export default function IncidentClassificationSettings({
           <div key={rule.matchValue} className="grid grid-cols-[1fr_1fr_1fr] items-center gap-2">
             <span className="capitalize text-sm font-medium">{rule.matchValue}</span>
             <Select
-              value={rule.priority ?? 'NONE'}
+              value={
+                (rule.priorityMode ?? (rule.priority ? 'SET' : 'CLEAR')) === 'SET'
+                  ? rule.priority!
+                  : (rule.priorityMode ?? 'CLEAR')
+              }
               disabled={pending}
               onValueChange={value =>
                 update(rule.matchValue, {
-                  priority: value === 'NONE' ? null : (value as Priority),
+                  priorityMode:
+                    value === 'INHERIT'
+                      ? 'INHERIT'
+                      : value === 'FALLBACK'
+                        ? 'FALLBACK'
+                        : value === 'CLEAR'
+                          ? 'CLEAR'
+                          : 'SET',
+                  priority:
+                    value === 'INHERIT' || value === 'FALLBACK' || value === 'CLEAR'
+                      ? null
+                      : (value as Priority),
                 })
               }
             >
@@ -112,7 +161,9 @@ export default function IncidentClassificationSettings({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="NONE">No automatic priority</SelectItem>
+                {scopeKey !== 'workspace' && <SelectItem value="INHERIT">Inherit</SelectItem>}
+                <SelectItem value="FALLBACK">Use urgency fallback</SelectItem>
+                <SelectItem value="CLEAR">No automatic priority</SelectItem>
                 {INCIDENT_PRIORITIES.map(priority => (
                   <SelectItem key={priority} value={priority}>
                     {priority} {getIncidentPriorityDefinition(priority).label}
@@ -121,14 +172,22 @@ export default function IncidentClassificationSettings({
               </SelectContent>
             </Select>
             <Select
-              value={rule.urgency}
+              value={(rule.urgencyMode ?? 'SET') === 'SET' ? rule.urgency! : rule.urgencyMode}
               disabled={pending}
-              onValueChange={value => update(rule.matchValue, { urgency: value as Urgency })}
+              onValueChange={value =>
+                update(rule.matchValue, {
+                  urgencyMode:
+                    value === 'INHERIT' ? 'INHERIT' : value === 'DEFAULT' ? 'DEFAULT' : 'SET',
+                  urgency: value === 'INHERIT' || value === 'DEFAULT' ? null : (value as Urgency),
+                })
+              }
             >
               <SelectTrigger aria-label={`Urgency for ${rule.matchValue} alerts`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                {scopeKey !== 'workspace' && <SelectItem value="INHERIT">Inherit</SelectItem>}
+                <SelectItem value="DEFAULT">Severity default</SelectItem>
                 {(['HIGH', 'MEDIUM', 'LOW'] as const).map(urgency => (
                   <SelectItem key={urgency} value={urgency}>
                     {urgency}
@@ -138,23 +197,36 @@ export default function IncidentClassificationSettings({
             </Select>
           </div>
         ))}
-        <label className="flex items-start gap-2 rounded-md border p-3 text-xs">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={derive}
+        <div className="space-y-2 rounded-md border p-3 text-xs">
+          <strong>Urgency fallback</strong>
+          <Select
+            value={fallbackMode}
             disabled={pending}
-            onChange={event => setDerive(event.target.checked)}
-          />
-          <span>
-            <strong>Derive priority from urgency when no severity rule assigns priority</strong>
-            <br />
-            <span className="text-muted-foreground">
-              HIGH → P1, MEDIUM → P3, LOW → P5. Disabled by default so paging intensity and response
-              obligation remain independent.
-            </span>
-          </span>
-        </label>
+            onValueChange={value => setFallbackMode(value as typeof fallbackMode)}
+          >
+            <SelectTrigger aria-label="Urgency fallback mode">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {scopeKey !== 'workspace' && (
+                <SelectItem value="INHERIT">Inherit workspace</SelectItem>
+              )}
+              <SelectItem value="ENABLED">Enabled · HIGH→P1, MEDIUM→P3, LOW→P5</SelectItem>
+              <SelectItem value="DISABLED">Disabled</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground">
+            A scoped Disabled selection overrides an enabled workspace fallback. Explicit “No
+            automatic priority” rules remain terminal.
+          </p>
+          {fallbackMode === 'ENABLED' &&
+            rules.some(rule => (rule.priorityMode ?? 'CLEAR') === 'CLEAR') && (
+              <p className="text-amber-600 dark:text-amber-400">
+                Rules set to “No automatic priority” override this fallback. Choose “Use urgency
+                fallback” on those severities to apply HIGH→P1, MEDIUM→P3, or LOW→P5.
+              </p>
+            )}
+        </div>
         <div className="flex justify-end">
           <Button size="sm" disabled={pending} onClick={save}>
             {pending ? 'Saving…' : 'Save classification policy'}

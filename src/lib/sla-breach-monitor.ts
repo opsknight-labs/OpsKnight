@@ -9,6 +9,11 @@ import { enqueueCentralNotification } from './notification-control-plane';
 import { formatWebhookPayloadByType } from './webhooks';
 import { getBaseUrl } from './env-validation';
 import { configuredSlackWebhookUrl } from './slack';
+import { deriveNextSlaTransition } from '@/lib/incident-sla/next-transition';
+import {
+  addOperationalMetric,
+  observeOperationalHistogram,
+} from '@/lib/metrics/operational/registry';
 
 /**
  * SLA Breach Monitor - Proactive Breach Detection
@@ -63,6 +68,7 @@ export async function checkSLABreaches(
   config: BreachMonitorConfig = { notifySlack: true, notifyEmail: true, notifyWebhook: true }
 ): Promise<BreachCheckResult> {
   const { default: prisma } = await import('./prisma');
+  const { getSlaSchedulerMode } = await import('./incident-sla/scheduler-control');
 
   const now = new Date();
   const warnings: BreachWarning[] = [];
@@ -77,10 +83,20 @@ export async function checkSLABreaches(
   const resolveWarningThreshold = warningPolicy.resolveCeilingMs;
 
   // Get all active incidents with their service SLA targets
+  const schedulerMode = await getSlaSchedulerMode();
+  const indexedScheduler = schedulerMode === 'INDEXED';
+  const maintainIndexedHints = schedulerMode !== 'LEGACY';
   const incidents = await prisma.incident.findMany({
     where: {
       status: { in: activeIncidentStatuses() },
+      service: { serviceNotifyOnSlaBreach: true },
+      ...(indexedScheduler
+        ? { OR: [{ nextSlaTransitionAt: { lte: now } }, { nextSlaTransitionAt: null }] }
+        : {}),
     },
+    ...(indexedScheduler
+      ? { orderBy: { nextSlaTransitionAt: { sort: 'asc', nulls: 'last' } }, take: 500 }
+      : {}),
     select: {
       id: true,
       title: true,
@@ -89,6 +105,7 @@ export async function checkSLABreaches(
       priority: true,
       status: true,
       createdAt: true,
+      updatedAt: true,
       acknowledgedAt: true,
       resolvedAt: true,
       slaAckTargetMs: true,
@@ -99,6 +116,8 @@ export async function checkSLABreaches(
       slaPauseStartedAt: true,
       slaAckElapsedMs: true,
       slaResolveElapsedMs: true,
+      nextSlaTransitionAt: true,
+      nextSlaTransitionKind: true,
       service: {
         select: {
           id: true,
@@ -164,14 +183,29 @@ export async function checkSLABreaches(
   }
 
   for (const incident of incidents) {
-    if (!incident.service.serviceNotifyOnSlaBreach) continue;
     const state = projectIncidentSlaState(incident, { now, warningPolicy });
     if (!state.valid) {
+      addOperationalMetric('opsknight_sla_projection_invalid_total', 1, {
+        reason_category: state.reason.toLowerCase().includes('target') ? 'target' : 'contract',
+      });
       logger.warn('[SLA Breach Monitor] Invalid captured incident SLA contract', {
         reason: state.reason,
       });
       continue;
     }
+    if (
+      indexedScheduler &&
+      incident.nextSlaTransitionAt &&
+      incident.nextSlaTransitionKind &&
+      incident.nextSlaTransitionAt <= now
+    ) {
+      observeOperationalHistogram(
+        'opsknight_sla_transition_lag_seconds',
+        (now.getTime() - incident.nextSlaTransitionAt.getTime()) / 1000,
+        { kind: incident.nextSlaTransitionKind }
+      );
+    }
+    const warningCountBeforeIncident = warnings.length;
     for (const [breachType, phase] of [
       ['ack', state.ack],
       ['resolve', state.resolve],
@@ -197,6 +231,25 @@ export async function checkSLABreaches(
         serviceNotificationChannels: incident.service.serviceNotificationChannels,
         webhookIntegrations: incident.service.webhookIntegrations,
       });
+    }
+    // Never advance past a newly-discovered warning before its durable intent
+    // is materialized below. A following tick advances only after its event is visible.
+    if (maintainIndexedHints && warnings.length === warningCountBeforeIncident) {
+      const next = deriveNextSlaTransition(incident, now);
+      if (
+        incident.nextSlaTransitionAt?.getTime() !== next?.at.getTime() ||
+        incident.nextSlaTransitionKind !== next?.kind
+      ) {
+        const repairReason = incident.nextSlaTransitionAt ? 'stale' : 'missing';
+        await prisma.incident.updateMany({
+          where: { id: incident.id, updatedAt: incident.updatedAt },
+          data: {
+            nextSlaTransitionAt: next?.at ?? null,
+            nextSlaTransitionKind: next?.kind ?? null,
+          },
+        });
+        addOperationalMetric('opsknight_sla_hint_repairs_total', 1, { reason: repairReason });
+      }
     }
   }
 

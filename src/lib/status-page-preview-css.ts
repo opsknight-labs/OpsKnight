@@ -98,4 +98,71 @@ button, input, select, textarea {
 }
 
 ${STATUS_PAGE_PUBLIC_CSS}
+
+/* ---- Preview Responsive Device & Container Adaptations ---- */
+.status-page-container[data-device-view="iphone"] .status-v3-hero {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1.25rem !important;
+  align-items: stretch !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-v3-hero__stats {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  width: 100% !important;
+  border-block-start: 1px solid var(--status-panel-border) !important;
+  padding-block-start: 0.75rem !important;
+  gap: 0.75rem !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-v3-hero__stats .status-stat {
+  flex: 1 1 0 !important;
+  min-inline-size: 0 !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-topbar__inner {
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+  justify-content: space-between !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-topbar__actions {
+  flex-wrap: wrap !important;
+  justify-content: flex-start !important;
+  gap: 0.35rem !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-subscribe__controls {
+  flex-direction: column !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-subscribe__button {
+  width: 100% !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-v3-services__list {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-v3-service__head {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 0.5rem !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+}
+
+.status-page-container[data-device-view="iphone"] .status-region-grid,
+.status-page-container[data-device-view="iphone"] .status-uptime-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.status-page-container[data-device-view="ipad"] .status-v3-services__list {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.status-page-container[data-device-view="ipad"] .status-v3-hero__stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
 `;

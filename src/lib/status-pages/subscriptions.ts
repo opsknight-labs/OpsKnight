@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
+import { isValidTimeZone } from '@/lib/timezone';
 import { hashSubscriptionToken } from './subscription-tokens';
 import { subscriptionRequestAction } from './subscription-policy';
 import {
@@ -46,9 +47,11 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       .object({
         statusPageId: z.string().min(1).max(200),
         email: z.string().trim().email().max(254),
+        timezone: z.string().max(100).optional(),
         preferences: z
           .object({
             selectedServiceIds: z.array(z.string().min(1).max(200)).max(100).optional(),
+            timezone: z.string().max(100).optional(),
           })
           .optional(),
       })
@@ -56,7 +59,15 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       .safeParse(body);
     if (!parsed.success)
       return jsonError('A valid status page and email address are required.', 400);
-    const { statusPageId, email, preferences: rawPreferences } = parsed.data;
+    const {
+      statusPageId,
+      email,
+      timezone: directTimezone,
+      preferences: rawPreferences,
+    } = parsed.data;
+    const rawTz = directTimezone || rawPreferences?.timezone;
+    const subscriberTimezone =
+      typeof rawTz === 'string' && isValidTimeZone(rawTz.trim()) ? rawTz.trim() : 'UTC';
 
     if (!statusPageId || !email || !email.includes('@')) {
       return jsonError(
@@ -201,8 +212,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           // Keep state=ACTIVE and current preferences untouched until verified.
           const pendingVerif = hashSubscriptionToken(verificationToken);
           const existingPrefs = (existing.preferences as Record<string, unknown> | null) ?? null;
-          const pendingValue =
-            normalizedPreferences !== null ? normalizedPreferences : null;
+          const pendingValue = normalizedPreferences !== null ? normalizedPreferences : null;
           const alreadyPending =
             existingPrefs !== null &&
             (existingPrefs as Record<string, unknown>)._pendingPreferences !== undefined;
@@ -252,6 +262,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             verificationToken: hashSubscriptionToken(verificationToken),
             verificationTokenExpiresAt: verificationExpiresAt,
             verified: false,
+            timezone: subscriberTimezone,
             ...(preferencesProvided
               ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
               : {}),
@@ -269,6 +280,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
             token: hashSubscriptionToken(token),
             verificationToken: hashSubscriptionToken(verificationToken),
             verificationTokenExpiresAt: verificationExpiresAt,
+            timezone: subscriberTimezone,
             ...(preferencesProvided
               ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
               : {}),
@@ -287,6 +299,7 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
           verificationTokenExpiresAt: verificationExpiresAt,
           verified: false,
           state: 'PENDING',
+          timezone: subscriberTimezone,
           ...(preferencesProvided
             ? { preferences: normalizedPreferences as unknown as Prisma.InputJsonValue }
             : {}),

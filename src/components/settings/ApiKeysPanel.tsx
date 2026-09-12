@@ -141,6 +141,22 @@ const SCOPES_CONFIG = [
     color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
     defaultChecked: false,
   },
+  {
+    value: 'response-policy:read',
+    title: 'Response Policy Read',
+    detail: 'Preview and inspect classification, SLA, support-hours, and policy history',
+    icon: ShieldAlert,
+    color: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+    defaultChecked: false,
+  },
+  {
+    value: 'response-policy:write',
+    title: 'Response Policy Write',
+    detail: 'Publish and restore response-policy versions',
+    icon: ShieldAlert,
+    color: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
+    defaultChecked: false,
+  },
 ];
 
 export default function ApiKeysPanel({

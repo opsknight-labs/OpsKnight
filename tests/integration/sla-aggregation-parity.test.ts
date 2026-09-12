@@ -197,6 +197,8 @@ describeIfRealDB('SLA aggregation threshold parity', { timeout: 60_000 }, () => 
                 matchValue: 'critical',
                 priority,
                 urgency: 'HIGH',
+                priorityMode: 'SET',
+                urgencyMode: 'SET',
               },
             ],
           },
