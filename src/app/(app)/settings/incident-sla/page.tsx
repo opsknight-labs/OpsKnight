@@ -66,8 +66,12 @@ export default async function IncidentSlaSettingsPage() {
         JOIN pg_index i ON i.indexrelid = c.oid
         WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
       ) AS ready,
-      (SELECT COUNT(*) FROM "Incident" WHERE "status" IN ('OPEN', 'ACKNOWLEDGED') AND "nextSlaTransitionAt" IS NULL)::bigint AS missing_hints,
-      (SELECT COUNT(*) FROM "Incident" WHERE "status" IN ('OPEN', 'ACKNOWLEDGED') AND "nextSlaTransitionAt" <= now())::bigint AS due
+      (SELECT COUNT(*) FROM "Incident" i JOIN "Service" s ON s."id" = i."serviceId"
+        WHERE i."status" IN ('OPEN', 'ACKNOWLEDGED') AND s."serviceNotifyOnSlaBreach" = true
+          AND i."nextSlaTransitionAt" IS NULL)::bigint AS missing_hints,
+      (SELECT COUNT(*) FROM "Incident" i JOIN "Service" s ON s."id" = i."serviceId"
+        WHERE i."status" IN ('OPEN', 'ACKNOWLEDGED') AND s."serviceNotifyOnSlaBreach" = true
+          AND i."nextSlaTransitionAt" <= now())::bigint AS due
     `,
   ]);
   const viewPolicy = policy

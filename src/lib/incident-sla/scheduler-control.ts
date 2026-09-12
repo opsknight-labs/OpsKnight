@@ -1,5 +1,6 @@
 import prisma from '@/lib/prisma';
 import { setOperationalGauge } from '@/lib/metrics/operational/registry';
+import { logger } from '@/lib/logger';
 
 export type SlaSchedulerMode = 'LEGACY' | 'SHADOW' | 'INDEXED';
 
@@ -9,10 +10,21 @@ export async function getSlaSchedulerMode(now = Date.now()): Promise<SlaSchedule
   if (cached && cached.expiresAt > now) return cached.mode;
   const store = prisma.systemConfig;
   if (!store || typeof store.findUnique !== 'function') return 'LEGACY';
-  const row = await store.findUnique({
-    where: { key: 'incident_sla_scheduler' },
-    select: { value: true },
-  });
+  let row: { value: unknown } | null = null;
+  try {
+    row = await store.findUnique({
+      where: { key: 'incident_sla_scheduler' },
+      select: { value: true },
+    });
+  } catch (error) {
+    // Scheduler configuration is an optimization control. A config-store outage
+    // must retain the established scanner rather than stopping SLA monitoring.
+    logger.warn('[SLA Scheduler] Unable to read runtime configuration; using legacy mode', {
+      error,
+    });
+    cached = { expiresAt: now + 10_000, mode: 'LEGACY' };
+    return 'LEGACY';
+  }
   const value =
     row?.value && typeof row.value === 'object' && !Array.isArray(row.value)
       ? (row.value as Record<string, unknown>)

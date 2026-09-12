@@ -12,7 +12,7 @@ Escalation conditions are a bounded typed language over `PRIORITY`, `URGENCY`, a
 
 ## Management API
 
-Use an administrator-owned API key with `response-policy:read` and, for mutations, `response-policy:write`. Writes require `If-Match: "<current-version>"`; stale writes return `409`.
+Use an administrator-owned API key with `response-policy:read` and, for mutations, `response-policy:write`. `PUT` mutations require `If-Match: "<current-version>"`; a missing or malformed header returns `428`, and stale writes return `409`. `POST /restore` instead accepts `expectedVersion` in its JSON body and returns `409` when that version is stale.
 
 - `GET|PUT /api/v1/response-policy/workspace`
 - `GET|PUT /api/v1/response-policy/classification?scopeKey=...`

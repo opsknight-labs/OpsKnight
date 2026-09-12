@@ -11,16 +11,20 @@ import { addOperationalMetric, setOperationalGauge } from '@/lib/metrics/operati
 /** Earliest transition for the scheduler; indexed hints are enabled independently during rollout. */
 export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<Date | null> {
   const schedulerMode = await getSlaSchedulerMode();
+  const eligible = {
+    status: { in: activeIncidentStatuses() },
+    service: { serviceNotifyOnSlaBreach: true },
+  };
   if (schedulerMode === 'INDEXED') {
     const row = await prisma.incident.findFirst({
-      where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: { not: null } },
+      where: { ...eligible, nextSlaTransitionAt: { not: null } },
       orderBy: { nextSlaTransitionAt: 'asc' },
       select: { nextSlaTransitionAt: true },
     });
     return row?.nextSlaTransitionAt ?? null;
   }
   const incidents = await prisma.incident.findMany({
-    where: { status: { in: activeIncidentStatuses() } },
+    where: eligible,
     select: incidentSlaSelect,
   });
   let earliest: Date | null = null;
@@ -31,15 +35,15 @@ export async function getNextIncidentSlaTransitionAt(now = new Date()): Promise<
   if (schedulerMode === 'SHADOW') {
     const [indexed, nullHints, due] = await Promise.all([
       prisma.incident.findFirst({
-        where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: { not: null } },
+        where: { ...eligible, nextSlaTransitionAt: { not: null } },
         orderBy: { nextSlaTransitionAt: 'asc' },
         select: { nextSlaTransitionAt: true },
       }),
       prisma.incident.count({
-        where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: null },
+        where: { ...eligible, nextSlaTransitionAt: null },
       }),
       prisma.incident.count({
-        where: { status: { in: activeIncidentStatuses() }, nextSlaTransitionAt: { lte: now } },
+        where: { ...eligible, nextSlaTransitionAt: { lte: now } },
       }),
     ]);
     setOperationalGauge('opsknight_sla_scheduler_null_hints', nullHints);

@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IncidentSlaProjectionInput } from '@/lib/incident-sla/types';
 
-const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
+const { findMany, findFirst, count } = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  findFirst: vi.fn(),
+  count: vi.fn(),
+}));
 
 vi.mock('@/lib/prisma', () => ({
-  default: { incident: { findMany } },
+  default: { incident: { findMany, findFirst, count } },
 }));
 
 import { getNextIncidentSlaTransitionAt } from '@/lib/incident-sla/next-transition';
@@ -63,5 +67,15 @@ describe('next incident SLA transition', () => {
     await expect(
       getNextIncidentSlaTransitionAt(new Date(createdAt.getTime() + 2 * minute))
     ).resolves.toBeNull();
+  });
+
+  it('uses the notification-enabled service predicate for scheduler work', async () => {
+    findMany.mockResolvedValue([]);
+    await getNextIncidentSlaTransitionAt();
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ service: { serviceNotifyOnSlaBreach: true } }),
+      })
+    );
   });
 });

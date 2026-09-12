@@ -59,20 +59,27 @@ export const classificationPolicyInput = z
     }
   });
 
+export function normalizeWorkspaceClassificationPolicyInput(rawInput: unknown) {
+  const legacy = rawInput as {
+    derivePriorityFromUrgency?: unknown;
+    rules?: Array<Record<string, unknown>>;
+  };
+  const derivesPriorityFromUrgency = legacy.derivePriorityFromUrgency === true;
+  return {
+    ...(rawInput as object),
+    scopeKey: 'workspace',
+    rules: legacy.rules?.map(rule => ({
+      ...rule,
+      priorityMode:
+        rule.priorityMode ??
+        (rule.priority == null ? (derivesPriorityFromUrgency ? 'FALLBACK' : 'CLEAR') : 'SET'),
+      urgencyMode: rule.urgencyMode ?? (rule.urgency == null ? 'DEFAULT' : 'SET'),
+    })),
+  };
+}
+
 export async function saveWorkspaceClassificationPolicy(rawInput: unknown) {
-  const legacy = rawInput as { rules?: Array<Record<string, unknown>> };
-  return saveClassificationPolicy(
-    {
-      ...(rawInput as object),
-      scopeKey: 'workspace',
-      rules: legacy.rules?.map(rule => ({
-        ...rule,
-        priorityMode: rule.priorityMode ?? (rule.priority == null ? 'CLEAR' : 'SET'),
-        urgencyMode: rule.urgencyMode ?? 'SET',
-      })),
-    },
-    'UI'
-  );
+  return saveClassificationPolicy(normalizeWorkspaceClassificationPolicyInput(rawInput), 'UI');
 }
 
 export async function saveClassificationPolicy(

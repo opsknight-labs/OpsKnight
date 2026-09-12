@@ -89,6 +89,7 @@ export async function checkSLABreaches(
   const incidents = await prisma.incident.findMany({
     where: {
       status: { in: activeIncidentStatuses() },
+      service: { serviceNotifyOnSlaBreach: true },
       ...(indexedScheduler
         ? { OR: [{ nextSlaTransitionAt: { lte: now } }, { nextSlaTransitionAt: null }] }
         : {}),
@@ -182,7 +183,6 @@ export async function checkSLABreaches(
   }
 
   for (const incident of incidents) {
-    if (!incident.service.serviceNotifyOnSlaBreach) continue;
     const state = projectIncidentSlaState(incident, { now, warningPolicy });
     if (!state.valid) {
       addOperationalMetric('opsknight_sla_projection_invalid_total', 1, {
