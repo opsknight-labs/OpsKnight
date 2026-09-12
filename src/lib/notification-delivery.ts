@@ -284,8 +284,7 @@ function shouldDefer(result: unknown): { retryAfterMs?: number } | null {
 
 async function handleProviderResultFailure(
   lease: ProviderAdmissionLease,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  raw: any
+  raw: unknown
 ): Promise<void> {
   const defer = shouldDefer(raw);
   if (!defer) return;

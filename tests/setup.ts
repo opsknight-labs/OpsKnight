@@ -92,6 +92,9 @@ const mockPrisma = {
   account: createMockModel(),
   session: createMockModel(),
 
+  notificationProviderCapacity: createMockModel(),
+  notificationRuntimeSettings: createMockModel(),
+  providerAdmission: createMockModel(),
   auditLog: createMockModel(),
   inAppNotification: createMockModel(),
   systemSettings: createMockModel(),

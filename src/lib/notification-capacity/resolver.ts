@@ -76,14 +76,28 @@ function recoverAdaptiveRate(key: string, hardRate: number, configured: number, 
   return recovered;
 }
 
-async function resolveRuntimeSettingsCached(nowMs: number) {
+type RuntimeSettingsRow = {
+  id: string;
+  bulkQueueLowWatermark: number;
+  bulkQueueHighWatermark: number;
+  defaultBulkSharePercent: number;
+  adaptiveBackpressure: boolean;
+  revision: number;
+  updatedAt: Date;
+} | null;
+
+async function resolveRuntimeSettingsCached(nowMs: number): Promise<RuntimeSettingsRow> {
   // runtimeCache distinguishes undefined (miss/expired) from null (cached absence)
-  const cached = runtimeCache.get('runtime', nowMs) as
-    | Awaited<ReturnType<typeof prisma.notificationRuntimeSettings.findUnique>>
-    | null
-    | undefined;
+  const cached = runtimeCache.get('runtime', nowMs) as RuntimeSettingsRow | undefined;
   if (cached !== undefined) return cached;
-  const record = await prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } });
+  const runtimeModel = (prisma as unknown as Record<string, unknown>).notificationRuntimeSettings as
+    | { findUnique: (args: unknown) => Promise<unknown> }
+    | undefined;
+  if (!runtimeModel?.findUnique) {
+    runtimeCache.set('runtime', null as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
+    return null;
+  }
+  const record = (await runtimeModel.findUnique({ where: { id: 'default' } })) as RuntimeSettingsRow;
   // Cache null (no row yet) as negative cache so fanout doesn't hammer Postgres before first admin save.
   runtimeCache.set('runtime', record as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
   return record;
@@ -154,13 +168,28 @@ export async function getEffectiveCapacity(input: {
   }
 
   const runtimePromise = resolveRuntimeSettingsCached(nowMs);
-  let stored = await prisma.notificationProviderCapacity.findUnique({ where: { provider_channel: { provider, channel } } });
+  type CapacityRow = {
+    provider: string;
+    channel: string;
+    mode: string;
+    ratePerSecond: number | null;
+    maxInFlight: number | null;
+    bulkSharePercent: number | null;
+    adaptiveBackpressure: boolean;
+    revision: number;
+  } | null;
+  const capacityModel = (prisma as unknown as Record<string, unknown>).notificationProviderCapacity as
+    | { findUnique: (args: unknown) => Promise<unknown> }
+    | undefined;
+  let stored: CapacityRow = capacityModel?.findUnique
+    ? ((await capacityModel.findUnique({ where: { provider_channel: { provider, channel } } })) as CapacityRow)
+    : null;
   // WEBHOOK/SLACK admission uses dynamic bucket keys (e.g. WEBHOOK:<origin>) but is
   // governed by a single logical profile WEBHOOK:default (similarly SLACK:default).
   // Without a fallback an admin saving WEBHOOK:default would see no effect on
   // actual webhook deliveries because each origin would resolve to DEFAULT.
-  if (!stored && (channel === 'WEBHOOK' || channel === 'SLACK') && provider !== 'default') {
-    stored = await prisma.notificationProviderCapacity.findUnique({ where: { provider_channel: { provider: 'default', channel } } });
+  if (!stored && (channel === 'WEBHOOK' || channel === 'SLACK') && provider !== 'default' && capacityModel?.findUnique) {
+    stored = (await capacityModel.findUnique({ where: { provider_channel: { provider: 'default', channel } } })) as CapacityRow;
   }
   const runtime = await runtimePromise;
 
@@ -245,7 +274,7 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
 }> {
   const env = input?.env ?? process.env;
   const nowMs = input?.nowMs ?? Date.now();
-  const runtime = (await resolveRuntimeSettingsCached(nowMs)) as Awaited<ReturnType<typeof prisma.notificationRuntimeSettings.findUnique>> | null;
+  const runtime: RuntimeSettingsRow = await resolveRuntimeSettingsCached(nowMs);
   if (runtime) {
     // Defense in depth: a bad manual DB edit or stale migration must not widen into an invalid fanout.
     const lowClamped = clampInt(runtime.bulkQueueLowWatermark, HARD_LIMITS.queueLowWatermark.min, HARD_LIMITS.queueLowWatermark.max);
