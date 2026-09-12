@@ -5,6 +5,9 @@ import { logger } from '@/lib/logger';
 import { AppError } from '@/lib/errors';
 import { acquireAdvisoryLock } from '@/lib/db-locks';
 import { getBaseUrl } from '@/lib/env-validation';
+import { CircuitBreakerError, CircuitBreakers } from '@/lib/circuit-breaker';
+import { acquireProviderAdmission, deferProviderAdmission } from '@/lib/provider-admission';
+import { emitAuditEvent } from '@/lib/audit';
 
 const TEAMS_PROVIDER: ExternalIssueProvider = ExternalIssueProvider.MICROSOFT_TEAMS;
 const LEASE_MS = 5 * 60_000;
@@ -71,12 +74,17 @@ function failureStatus(attempts: number): 'FAILED' | 'AMBIGUOUS' {
   return attempts >= MAX_TEAMS_OPERATION_ATTEMPTS ? 'FAILED' : 'AMBIGUOUS';
 }
 
+function jitteredDelayMs(baseMs: number): number {
+  const jitter = 0.8 + Math.random() * 0.4;
+  return Math.max(1_000, Math.round(baseMs * jitter));
+}
+
 function operationRetryDelayMs(error: unknown): number {
   if (error instanceof AppError && typeof error.details?.providerRetryAfterMs === 'number') {
-    return Math.max(1_000, Math.trunc(error.details.providerRetryAfterMs as number));
+    return jitteredDelayMs(Math.max(1_000, Math.trunc(error.details.providerRetryAfterMs as number)));
   }
-  if (error instanceof Error && /rate.?limit/i.test(error.message)) return 60_000;
-  return 30_000;
+  if (error instanceof Error && /rate.?limit/i.test(error.message)) return jitteredDelayMs(60_000);
+  return jitteredDelayMs(30_000);
 }
 
 function classifyTeamsError(error: unknown): { terminal: boolean; ambiguous: boolean; message: string } {
@@ -89,11 +97,18 @@ function classifyTeamsError(error: unknown): { terminal: boolean; ambiguous: boo
   const ambiguous =
     /timeout|timed out|ambiguous|econn|enotfound|socket|fetch failed|temporar|service unavailable|429|rate.?limit/i.test(
       lower
-    ) || (error instanceof AppError && (error.details?.providerStatus === 429 || (error.details?.providerStatus as number) >= 500));
+    ) ||
+    (error instanceof AppError &&
+      (error.details?.providerStatus === 429 || (error.details?.providerStatus as number) >= 500));
   return { terminal, ambiguous, message: msg.slice(0, 1000) };
 }
 
-async function releaseFailedOperation(id: string, leaseToken: string, attempts: number, error: unknown): Promise<void> {
+async function releaseFailedOperation(
+  id: string,
+  leaseToken: string,
+  attempts: number,
+  error: unknown
+): Promise<void> {
   const { ambiguous } = classifyTeamsError(error);
   const status = ambiguous ? failureStatus(attempts) : 'FAILED';
   await prisma.externalOperation.updateMany({
@@ -204,7 +219,12 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
   if (!incidentId || !destinationId) {
     await prisma.externalOperation.updateMany({
       where: { id, status: 'PROCESSING', leaseToken },
-      data: { status: 'FAILED', lastError: 'Teams operation payload is missing incidentId/destinationId', leaseToken: null, leaseExpiresAt: null },
+      data: {
+        status: 'FAILED',
+        lastError: 'Teams operation payload is missing incidentId/destinationId',
+        leaseToken: null,
+        leaseExpiresAt: null,
+      },
     });
     throw new Error('Teams operation payload is invalid');
   }
@@ -227,9 +247,13 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       });
       return null;
     }
-    const destination = await (prisma as unknown as { microsoftTeamsDestination: { findUnique: (a: unknown) => Promise<{ id: string; tenantId: string; teamId: string; channelId: string; enabled: boolean } | null> } }).microsoftTeamsDestination.findUnique(
-      { where: { id: destinationId } } as never
-    );
+    const destination = await (
+      prisma as unknown as {
+        microsoftTeamsDestination: {
+          findUnique: (a: unknown) => Promise<{ id: string; tenantId: string; teamId: string; channelId: string; enabled: boolean } | null>;
+        };
+      }
+    ).microsoftTeamsDestination.findUnique({ where: { id: destinationId } } as never);
     if (!destination || !destination.enabled) {
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
@@ -259,63 +283,181 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       select: { messageId: true, conversationId: true },
     });
 
-    // Use a transaction to hold the advisory lock while deciding create vs update.
-    // The actual Graph HTTP call happens outside the tx (no hold on pool), but
-    // the decision (insert vs update) is fenced so two concurrent processors
-    // cannot both POST a new card.
+    // Hold advisory lock while deciding create vs update (fence duplicate POSTs).
     await prisma.$transaction(async tx => {
       await acquireAdvisoryLock(tx, lockKey);
-      // Re-check ledger inside tx — winning processor may have inserted.
       const inside = await tx.microsoftTeamsIncidentMessage.findUnique({
         where: { incidentId_destinationId: { incidentId, destinationId } },
         select: { messageId: true },
       });
-      // No-op: just holding the lock to serialize. Real call is after tx.
       void inside;
     });
+
+    // Phase 11: distributed admission + tenant-scoped circuit breaker.
+    const tenantBreaker = CircuitBreakers.microsoftTeams(destination.tenantId);
+    const admission = await acquireProviderAdmission('MICROSOFT_TEAMS', 'default');
+    if (!admission.allowed) {
+      const retryAfterMs = Math.max(1_000, admission.retryAt.getTime() - Date.now());
+      const admittedErr = new AppError({
+        code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+        userMessage: 'Microsoft Teams delivery is rate-limited, retrying shortly.',
+        details: { provider: 'microsoftTeams', providerRetryAfterMs: retryAfterMs, failureCode: 'RATE_LIMITED' },
+      });
+      await prisma.externalOperation.updateMany({
+        where: { id, status: 'PROCESSING', leaseToken },
+        data: {
+          status: failureStatus(operation.attempts),
+          nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
+          lastError: `Teams admission rate-limited: retry at ${admission.retryAt.toISOString()}`,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      });
+      throw admittedErr;
+    }
 
     const { microsoftTeamsChatProvider } = await import('./provider');
     const { categorizeTeamsErrorCode } = await import('./capabilities');
 
+    const providerFailureAffectsCircuit = (r: {
+      success: boolean;
+      statusCode?: number;
+      errorCode?: string;
+      error?: string;
+    }): boolean => {
+      if (r.success || r.statusCode === 429) return false;
+      if (r.statusCode != null) return r.statusCode >= 500;
+      const code = (r.errorCode || '').toUpperCase();
+      if (
+        [
+          'ECONNRESET',
+          'ECONNREFUSED',
+          'ECONNABORTED',
+          'ETIMEDOUT',
+          'ESOCKETTIMEDOUT',
+          'EAI_AGAIN',
+          'ENOTFOUND',
+          'ENETUNREACH',
+          'EHOSTUNREACH',
+          'UND_ERR_CONNECT_TIMEOUT',
+          'UND_ERR_SOCKET',
+        ].includes(code)
+      )
+        return true;
+      const msg = (r.error || '').toLowerCase();
+      if (
+        !msg ||
+        /not configured|no enabled|channel_not_found|message_limit_exceeded|consent_required|app_not_installed|tenant_required/i.test(
+          msg
+        )
+      )
+        return false;
+      return /timeout|timed out|network|fetch failed|socket|connection reset|connection refused|temporar(?:y|ily) unavailable|service unavailable|econn|enotfound|eai_again/.test(
+        msg
+      );
+    };
+
     let result: Awaited<ReturnType<typeof microsoftTeamsChatProvider.sendIncidentCard>>;
-    if (previous?.messageId) {
-      result = await microsoftTeamsChatProvider.updateIncidentCard({
-        destinationId,
-        messageId: previous.messageId,
-        conversationId: previous.conversationId ?? undefined,
-        incident: incidentInput,
-        eventType: eventType as never,
-        disableActions: isResolved,
-      });
-      if (!result.success && (result.errorCode === 'MESSAGE_NOT_FOUND' || result.statusCode === 404)) {
-        result = await microsoftTeamsChatProvider.recoverIncidentCard({
-          destinationId,
-          incident: incidentInput,
-          eventType: eventType as never,
-        });
+    let circuitOpened = false;
+
+    const callWithBreaker = async <T extends { success: boolean; errorCode?: string; statusCode?: number; error?: string }>(
+      fn: () => Promise<T>
+    ): Promise<T> => {
+      try {
+        const r = await tenantBreaker.execute(fn, { shouldCountFailure: providerFailureAffectsCircuit as never });
+        return r;
+      } catch (e) {
+        if (e instanceof CircuitBreakerError) {
+          circuitOpened = true;
+          const retryAfterMs = 30_000;
+          const err = new AppError({
+            code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+            userMessage: 'Microsoft Teams delivery is temporarily unavailable (circuit open).',
+            details: { provider: 'microsoftTeams', providerStatus: 503, providerRetryAfterMs: retryAfterMs, failureCode: 'UNKNOWN' },
+          });
+          await prisma.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: failureStatus(operation.attempts),
+              nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
+              lastError: `Teams circuit open: ${String(e.message).slice(0, 400)}`,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          throw err;
+        }
+        throw e;
       }
-      if (!result.success && result.errorCode === 'PATCH_NOT_SUPPORTED') {
-        // Preserve single-activity invariant: do not silently duplicate.
-        // Record as FAILED with DEGRADED marker so health surfaces it.
-        await prisma.externalOperation.updateMany({
-          where: { id, status: 'PROCESSING', leaseToken },
-          data: {
-            status: 'FAILED',
-            lastError: `Teams update requires delegated permissions (PATCH_NOT_SUPPORTED): ${result.error.slice(0, 400)}`,
-            leaseToken: null,
-            leaseExpiresAt: null,
-            resultPayload: { degraded: true, errorCode: 'PATCH_NOT_SUPPORTED' } as Prisma.InputJsonObject,
-          },
-        });
-        logger.warn('[MicrosoftTeams] Canonical update not supported — DEGRADED', { incidentId, destinationId });
-        return null;
+    };
+
+    try {
+      if (previous?.messageId) {
+        const updateResult = await callWithBreaker(() =>
+          microsoftTeamsChatProvider.updateIncidentCard({
+            destinationId,
+            messageId: previous.messageId!,
+            conversationId: previous.conversationId ?? undefined,
+            incident: incidentInput,
+            eventType: eventType as never,
+            disableActions: isResolved,
+          })
+        );
+        if (!updateResult.success && (updateResult.errorCode === 'MESSAGE_NOT_FOUND' || updateResult.statusCode === 404)) {
+          result = await callWithBreaker(() =>
+            microsoftTeamsChatProvider.recoverIncidentCard({
+              destinationId,
+              incident: incidentInput,
+              eventType: eventType as never,
+            })
+          );
+        } else if (!updateResult.success && updateResult.errorCode === 'PATCH_NOT_SUPPORTED') {
+          await prisma.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'FAILED',
+              lastError: `Teams update requires delegated permissions (PATCH_NOT_SUPPORTED): ${updateResult.error.slice(0, 400)}`,
+              leaseToken: null,
+              leaseExpiresAt: null,
+              resultPayload: { degraded: true, errorCode: 'PATCH_NOT_SUPPORTED' } as Prisma.InputJsonObject,
+            },
+          });
+          logger.warn('[MicrosoftTeams] Canonical update not supported — DEGRADED', { incidentId, destinationId });
+          try {
+            await emitAuditEvent({
+              action: 'microsoftTeams.delivery.degraded',
+              source: 'INTEGRATION',
+              target: { type: 'SERVICE', id: incident.serviceId ?? incidentId },
+              actor: { type: 'SYSTEM' },
+              metadata: {
+                provider: 'MICROSOFT_TEAMS',
+                incidentId,
+                destinationId,
+                tenantId: destination.tenantId,
+                teamId: destination.teamId,
+                channelId: destination.channelId,
+                eventType,
+                errorCode: 'PATCH_NOT_SUPPORTED',
+                operationId: id,
+              },
+            });
+          } catch {}
+          return null;
+        } else {
+          result = updateResult;
+        }
+      } else {
+        result = await callWithBreaker(() =>
+          microsoftTeamsChatProvider.sendIncidentCard({
+            destinationId,
+            incident: incidentInput,
+            eventType: eventType as never,
+          })
+        );
       }
-    } else {
-      result = await microsoftTeamsChatProvider.sendIncidentCard({
-        destinationId,
-        incident: incidentInput,
-        eventType: eventType as never,
-      });
+    } catch (e) {
+      if (circuitOpened) throw e;
+      throw e;
     }
 
     if (!result.success) {
@@ -327,18 +469,41 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         userMessage: result.error,
         details: { provider: 'microsoftTeams', providerStatus: statusCode, providerRetryAfterMs: retryAfterMs, failureCode: code },
       });
-      // RATE_LIMITED is handled as AMBIGUOUS retry with Retry-After
       if (result.errorCode === 'RATE_LIMITED' || statusCode === 429) {
+        const providerRetryAt = new Date(Date.now() + Math.max(retryAfterMs ?? 60_000, 1_000));
+        try {
+          await deferProviderAdmission('MICROSOFT_TEAMS', 'default', providerRetryAt);
+        } catch {}
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
             status: failureStatus(operation.attempts),
-            nextAttemptAt: new Date(Date.now() + Math.max(retryAfterMs ?? 60_000, 1_000)),
+            nextAttemptAt: new Date(Date.now() + jitteredDelayMs(Math.max(retryAfterMs ?? 60_000, 1_000))),
             lastError: `Teams rate limited: ${result.error.slice(0, 400)}`,
             leaseToken: null,
             leaseExpiresAt: null,
           },
         });
+        try {
+          await emitAuditEvent({
+            action: 'microsoftTeams.delivery.rate_limited',
+            source: 'INTEGRATION',
+            target: { type: 'SERVICE', id: incident.serviceId ?? incidentId },
+            actor: { type: 'SYSTEM' },
+            metadata: {
+              provider: 'MICROSOFT_TEAMS',
+              incidentId,
+              destinationId,
+              tenantId: destination.tenantId,
+              teamId: destination.teamId,
+              channelId: destination.channelId,
+              eventType,
+              statusCode,
+              retryAfterMs,
+              operationId: id,
+            },
+          });
+        } catch {}
         throw err;
       }
       const { terminal } = classifyTeamsError(err);
@@ -347,9 +512,26 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           where: { id, status: 'PROCESSING', leaseToken },
           data: { status: 'FAILED', lastError: err.message.slice(0, 1000), leaseToken: null, leaseExpiresAt: null },
         });
+        try {
+          await emitAuditEvent({
+            action: 'microsoftTeams.delivery.failed',
+            source: 'INTEGRATION',
+            target: { type: 'SERVICE', id: incident.serviceId ?? incidentId },
+            actor: { type: 'SYSTEM' },
+            metadata: {
+              provider: 'MICROSOFT_TEAMS',
+              incidentId,
+              destinationId,
+              tenantId: destination.tenantId,
+              eventType,
+              terminal: true,
+              errorCode: code,
+              operationId: id,
+            },
+          });
+        } catch {}
         throw err;
       }
-      // Transient/ambiguous → AMBIGUOUS so processor knows it may have succeeded provider-side
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
@@ -369,12 +551,34 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         status: 'COMPLETED',
         externalId: result.providerMessageId ?? null,
         externalKey: result.providerMessageId ?? null,
-        resultPayload: { providerMessageId: result.providerMessageId ?? null, conversationId: result.conversationId ?? null } as Prisma.InputJsonObject,
+        resultPayload: {
+          providerMessageId: result.providerMessageId ?? null,
+          conversationId: result.conversationId ?? null,
+        } as Prisma.InputJsonObject,
         leaseToken: null,
         leaseExpiresAt: null,
       },
     });
     logger.info('[MicrosoftTeams] Delivery completed', { incidentId, destinationId, messageId: result.providerMessageId });
+    try {
+      await emitAuditEvent({
+        action: 'microsoftTeams.delivery.completed',
+        source: 'INTEGRATION',
+        target: { type: 'SERVICE', id: incident.serviceId ?? incidentId },
+        actor: { type: 'SYSTEM' },
+        metadata: {
+          provider: 'MICROSOFT_TEAMS',
+          incidentId,
+          destinationId,
+          tenantId: destination.tenantId,
+          teamId: destination.teamId,
+          channelId: destination.channelId,
+          eventType,
+          providerMessageId: result.providerMessageId ?? null,
+          operationId: id,
+        },
+      });
+    } catch {}
     return result;
   } catch (error) {
     // If we already transitioned to FAILED/AMBIGUOUS via explicit updateMany above, don't overwrite.
