@@ -740,9 +740,9 @@
 }
 
 .status-page-config-card {
-  background: var(--gradient-glass);
-  border: 1px solid rgba(148, 163, 184, 0.15);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
+  background: var(--card-bg, #ffffff);
+  border: 1px solid var(--card-border, rgba(148, 163, 184, 0.2));
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 .status-page-config-card .ui-card-body {
@@ -760,11 +760,6 @@
   font-size: clamp(0.85rem, 1.1vw, 0.95rem);
   margin: 0 0 var(--spacing-4) 0;
   line-height: 1.6;
-}
-
-.status-page-config-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
 .status-page-config-actions {
