@@ -486,12 +486,27 @@
 }
 
 /* Ensure toast close button icon is always visible with crisp stroke and contrast */
+[data-sonner-toast] [data-close-button] {
+  border: none !important;
+  background: transparent !important;
+  color: var(--toast-muted) !important;
+  opacity: 0.85 !important;
+}
+
+[data-sonner-toast] [data-close-button]:hover {
+  background: rgba(128, 128, 128, 0.15) !important;
+  color: var(--toast-fg) !important;
+  opacity: 1 !important;
+}
+
 [data-sonner-toast] [data-close-button] svg {
-  display: block;
-  stroke: currentColor;
-  stroke-width: 2.25px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  display: block !important;
+  width: 14px !important;
+  height: 14px !important;
+  stroke: currentColor !important;
+  stroke-width: 2.25px !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
 }
 
 
