@@ -355,6 +355,145 @@
   --toast-info-fg: var(--toast-fg);
 }
 
+/* Explicit Sonner toast theme scopes — guarantees full support for browser dark and light mode */
+[data-sonner-toaster][data-sonner-theme='light'],
+[data-sonner-toaster][data-sonner-theme='light'] [data-sonner-toast] {
+  --toast-bg: #ffffff;
+  --toast-border: #e2e8f0;
+  --toast-fg: #0f172a;
+  --toast-muted: #64748b;
+  --toast-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 6px 18px rgba(0, 0, 0, 0.08), 0 16px 40px rgba(0, 0, 0, 0.06);
+
+  --toast-success-accent: #059669;
+  --toast-success-icon-bg: #f0fdf4;
+  --toast-success-icon-border: #a7f3d0;
+  --toast-success-icon-fg: #059669;
+
+  --toast-error-accent: #e11d48;
+  --toast-error-icon-bg: #fef2f2;
+  --toast-error-icon-border: #fecdd3;
+  --toast-error-icon-fg: #e11d48;
+
+  --toast-warning-accent: #d97706;
+  --toast-warning-icon-bg: #fffbeb;
+  --toast-warning-icon-border: #fde68a;
+  --toast-warning-icon-fg: #d97706;
+
+  --toast-info-accent: #2563eb;
+  --toast-info-icon-bg: #eff6ff;
+  --toast-info-icon-border: #bfdbfe;
+  --toast-info-icon-fg: #2563eb;
+
+  --toast-success-bg: var(--toast-bg);
+  --toast-success-border: var(--toast-border);
+  --toast-success-fg: var(--toast-fg);
+  --toast-error-bg: var(--toast-bg);
+  --toast-error-border: var(--toast-border);
+  --toast-error-fg: var(--toast-fg);
+  --toast-warning-bg: var(--toast-bg);
+  --toast-warning-border: var(--toast-border);
+  --toast-warning-fg: var(--toast-fg);
+  --toast-info-bg: var(--toast-bg);
+  --toast-info-border: var(--toast-border);
+  --toast-info-fg: var(--toast-fg);
+}
+
+[data-theme='dark'],
+[data-sonner-toaster][data-sonner-theme='dark'],
+[data-sonner-toaster][data-sonner-theme='dark'] [data-sonner-toast] {
+  --toast-bg: #111827;
+  --toast-border: #1f2937;
+  --toast-fg: #f9fafb;
+  --toast-muted: #9ca3af;
+  --toast-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5), 0 20px 48px rgba(0, 0, 0, 0.6);
+
+  --toast-success-accent: #059669;
+  --toast-success-icon-bg: #064e3b;
+  --toast-success-icon-border: #047857;
+  --toast-success-icon-fg: #6ee7b7;
+
+  --toast-error-accent: #e11d48;
+  --toast-error-icon-bg: #4c0519;
+  --toast-error-icon-border: #9f1239;
+  --toast-error-icon-fg: #fda4af;
+
+  --toast-warning-accent: #d97706;
+  --toast-warning-icon-bg: #451a03;
+  --toast-warning-icon-border: #92400e;
+  --toast-warning-icon-fg: #fcd34d;
+
+  --toast-info-accent: #2563eb;
+  --toast-info-icon-bg: #1e3a8a33;
+  --toast-info-icon-border: #1d4ed8;
+  --toast-info-icon-fg: #93c5fd;
+
+  --toast-success-bg: var(--toast-bg);
+  --toast-success-border: var(--toast-border);
+  --toast-success-fg: var(--toast-fg);
+  --toast-error-bg: var(--toast-bg);
+  --toast-error-border: var(--toast-border);
+  --toast-error-fg: var(--toast-fg);
+  --toast-warning-bg: var(--toast-bg);
+  --toast-warning-border: var(--toast-border);
+  --toast-warning-fg: var(--toast-fg);
+  --toast-info-bg: var(--toast-bg);
+  --toast-info-border: var(--toast-border);
+  --toast-info-fg: var(--toast-fg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) [data-sonner-toaster]:not([data-sonner-theme='light']),
+  :root:not([data-theme='light']) [data-sonner-toaster]:not([data-sonner-theme='light']) [data-sonner-toast] {
+    --toast-bg: #111827;
+    --toast-border: #1f2937;
+    --toast-fg: #f9fafb;
+    --toast-muted: #9ca3af;
+    --toast-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5), 0 20px 48px rgba(0, 0, 0, 0.6);
+
+    --toast-success-accent: #059669;
+    --toast-success-icon-bg: #064e3b;
+    --toast-success-icon-border: #047857;
+    --toast-success-icon-fg: #6ee7b7;
+
+    --toast-error-accent: #e11d48;
+    --toast-error-icon-bg: #4c0519;
+    --toast-error-icon-border: #9f1239;
+    --toast-error-icon-fg: #fda4af;
+
+    --toast-warning-accent: #d97706;
+    --toast-warning-icon-bg: #451a03;
+    --toast-warning-icon-border: #92400e;
+    --toast-warning-icon-fg: #fcd34d;
+
+    --toast-info-accent: #2563eb;
+    --toast-info-icon-bg: #1e3a8a33;
+    --toast-info-icon-border: #1d4ed8;
+    --toast-info-icon-fg: #93c5fd;
+
+    --toast-success-bg: var(--toast-bg);
+    --toast-success-border: var(--toast-border);
+    --toast-success-fg: var(--toast-fg);
+    --toast-error-bg: var(--toast-bg);
+    --toast-error-border: var(--toast-border);
+    --toast-error-fg: var(--toast-fg);
+    --toast-warning-bg: var(--toast-bg);
+    --toast-warning-border: var(--toast-border);
+    --toast-warning-fg: var(--toast-fg);
+    --toast-info-bg: var(--toast-bg);
+    --toast-info-border: var(--toast-border);
+    --toast-info-fg: var(--toast-fg);
+  }
+}
+
+/* Ensure toast close button icon is always visible with crisp stroke and contrast */
+[data-sonner-toast] [data-close-button] svg {
+  display: block;
+  stroke: currentColor;
+  stroke-width: 2.25px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 
 .focus-border:focus,
 .focus-border:focus-visible {

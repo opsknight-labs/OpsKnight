@@ -1,17 +1,25 @@
 'use client';
 
-import { CircleCheck, Info, LoaderCircle, OctagonX, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Info, LoaderCircle, OctagonX, TriangleAlert, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Toaster as Sonner } from 'sonner';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = 'system' } = useTheme();
+const Toaster = ({ theme: propTheme, ...props }: ToasterProps) => {
+  const { theme: contextTheme } = useTheme();
+
+  // Support browser dark and light mode dynamically:
+  // - If propTheme is explicitly provided, respect it.
+  // - If contextTheme is 'dark', respect the explicit dark context.
+  // - Otherwise default to 'system' so Sonner queries window.matchMedia('(prefers-color-scheme: dark)')
+  //   and dynamically adapts to browser dark or light mode.
+  const resolvedTheme: ToasterProps['theme'] =
+    propTheme ?? (contextTheme === 'dark' ? 'dark' : 'system');
 
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
+      theme={resolvedTheme}
       className="toaster group"
       position="top-right"
       visibleToasts={3}
@@ -20,6 +28,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
       mobileOffset="12px"
       closeButton
       icons={{
+        close: (
+          <X
+            data-testid="toast-close-icon"
+            className="h-3.5 w-3.5 stroke-[2.25] text-current"
+            aria-hidden="true"
+          />
+        ),
         success: (
           <div
             data-testid="toast-icon-badge"
@@ -83,11 +98,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
           icon: '!self-start !mt-0',
           closeButton:
             '!right-2.5 !top-2.5 !left-auto !translate-x-0 !translate-y-0 ' +
-            '!h-7 !w-7 !rounded-md !border-0 !bg-transparent ' +
-            '!text-[var(--toast-muted)] !opacity-60 hover:!opacity-100 hover:!bg-muted/70 hover:!text-[var(--toast-fg)] ' +
+            '!h-7 !w-7 !rounded-lg !border !border-slate-200/80 dark:!border-slate-700/80 ' +
+            '!bg-slate-100/80 dark:!bg-slate-800/80 ' +
+            '!text-slate-600 dark:!text-slate-300 ' +
+            'hover:!bg-slate-200 dark:hover:!bg-slate-700 ' +
+            'hover:!text-slate-950 dark:hover:!text-white ' +
+            '!opacity-90 hover:!opacity-100 ' +
             '!pointer-events-auto flex items-center justify-center cursor-pointer ' +
             'after:absolute after:-inset-1.5 after:content-[\'\'] after:pointer-events-auto ' +
-            'transition-opacity transition-colors motion-reduce:transition-none',
+            'transition-all duration-150 motion-reduce:transition-none focus-visible:!ring-2 focus-visible:!ring-ring focus-visible:!ring-offset-1',
           actionButton:
             '!rounded-md !text-xs !font-medium !h-7 !px-2.5 !bg-primary !text-primary-foreground hover:!bg-primary/90',
           cancelButton:
