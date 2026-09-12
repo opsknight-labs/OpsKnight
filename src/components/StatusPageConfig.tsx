@@ -1760,7 +1760,7 @@ export default function StatusPageConfig({ statusPage, allServices }: StatusPage
                             onChange={e =>
                               setFormData({ ...formData, organizationName: e.target.value })
                             }
-                            helperText="Used in email headers (e.g., 'OpsKnight'). Overrides Status Page Name if set."
+                            helperText="Used in subscriber emails, email branding, and footer copyright."
                             placeholder="e.g. OpsKnight"
                           />
                         </div>

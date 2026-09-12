@@ -383,19 +383,21 @@ export default function StatusPagePrivacySettings({
               label="Show Incident History Details"
               helperText="When off, older resolved incidents show limited detail (title only). Active incidents are never redacted."
             />
-            <FormField
-              type="input"
-              label="Incident History Detail Window (days)"
-              inputType="number"
-              value={settings.incidentHistoryDetailDays?.toString() ?? ''}
-              onChange={e =>
-                updateSetting(
-                  'incidentHistoryDetailDays' as never,
-                  (e.target.value ? parseInt(e.target.value) : null) as never
-                )
-              }
-              helperText="Resolved incidents older than this are redacted (1–365). Active incidents are never redacted."
-            />
+            {settings.showIncidentHistoryDetails === false && (
+              <FormField
+                type="input"
+                label="Incident History Detail Window (days)"
+                inputType="number"
+                value={settings.incidentHistoryDetailDays?.toString() ?? ''}
+                onChange={e =>
+                  updateSetting(
+                    'incidentHistoryDetailDays' as never,
+                    (e.target.value ? parseInt(e.target.value) : null) as never
+                  )
+                }
+                helperText="Resolved incidents older than this are redacted (1–365). Active incidents are never redacted."
+              />
+            )}
             <FormField
               type="input"
               label="Maximum Incidents to Show"
