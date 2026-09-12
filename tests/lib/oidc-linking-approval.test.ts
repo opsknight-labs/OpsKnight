@@ -297,9 +297,9 @@ describe('OIDC linking approval management', () => {
     vi.mocked(prisma.oidcIdentity.findFirst).mockImplementation((async (args?: {
       where?: { issuer?: { in?: string[] } };
     }) => {
+      const targetIssuer = 'https://new-idp.example.com';
       const issuerFilter = args?.where?.issuer?.in ?? [];
-      // If querying for new issuer, user has no identity
-      if (issuerFilter.includes('https://new-idp.example.com')) {
+      if (issuerFilter.some((iss) => iss === targetIssuer)) {
         return null;
       }
       // If querying without issuer or for old issuer, returns old identity
