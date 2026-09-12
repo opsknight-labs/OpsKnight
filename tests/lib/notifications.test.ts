@@ -18,6 +18,10 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     notification: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
+    notificationProvider: { findMany: vi.fn().mockResolvedValue([]) },
+    notificationProviderCapacity: { findUnique: vi.fn().mockResolvedValue(null) },
+    notificationRuntimeSettings: { findUnique: vi.fn().mockResolvedValue(null) },
+    providerWorkerLease: { count: vi.fn() },
     incident: { findUnique: vi.fn() },
     user: { findUnique: vi.fn() },
     incidentEvent: { create: vi.fn() },
@@ -31,6 +35,9 @@ vi.mock('@/lib/webhooks', () => ({ sendIncidentWebhook: vi.fn() }));
 vi.mock('@/lib/incident-push-delivery', () => ({ sendNotificationIntentPush: vi.fn() }));
 vi.mock('@/lib/provider-admission', () => ({
   acquireProviderAdmission: vi.fn().mockResolvedValue({ allowed: true }),
+  acquireProviderConcurrency: vi.fn().mockResolvedValue({ allowed: true, leaseKey: 'lease-1' }),
+  releaseProviderConcurrency: vi.fn().mockResolvedValue(undefined),
+  deferProviderAdmission: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock('@/lib/notification-control-plane', () => ({
   enqueueCentralNotification: centralMocks.enqueue,

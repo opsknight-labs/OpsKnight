@@ -10,7 +10,13 @@ import {
   notificationIntentEventAt,
   notificationIntentTriggerGeneration,
 } from './notification-identity';
-import { acquireProviderAdmission, type ProviderAdmissionScope } from './provider-admission';
+import {
+  acquireProviderAdmission,
+  acquireProviderConcurrency,
+  deferProviderAdmission,
+  releaseProviderConcurrency,
+  type ProviderAdmissionScope,
+} from './provider-admission';
 
 export const NOTIFICATION_CHANNELS = [
   'EMAIL',
@@ -69,11 +75,17 @@ function providerFailureResult(result: {
   success: boolean;
   error?: string;
   retryable?: boolean;
+  statusCode?: number;
+  retryAfterMs?: number;
+  errorCode?: string;
 }): NotificationAttemptResult {
   return {
     success: false,
     outcome: result.retryable === false ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
     error: result.error || 'Notification delivery failed',
+    statusCode: result.statusCode,
+    retryAfterMs: result.retryAfterMs,
+    errorCode: result.errorCode,
   };
 }
 export interface NotificationRetryPolicy {
@@ -94,6 +106,9 @@ export interface NotificationAttemptResult {
   error?: string;
   providerMessageId?: string;
   skipped?: boolean;
+  statusCode?: number;
+  retryAfterMs?: number;
+  errorCode?: string;
 }
 interface IncidentDeliveryContext {
   id?: string;
@@ -180,27 +195,105 @@ function staleIntentReason(
   return null;
 }
 
+async function resolveProviderKey(
+  channel: NotificationDeliveryChannel,
+  incident: IncidentDeliveryContext
+): Promise<string> {
+  if (channel === 'WEBHOOK') {
+    const url = incident.service?.webhookUrl;
+    if (!url) return 'service-webhook';
+    try {
+      return new URL(url).origin;
+    } catch {
+      return 'service-webhook';
+    }
+  }
+  if (channel === 'SLACK') return 'default';
+  // EMAIL / SMS / PUSH / WHATSAPP — resolve the actual configured provider so
+  // capacity (EMAIL:ses vs EMAIL:default) matches the central control plane.
+  try {
+    if (channel === 'EMAIL') {
+      const { getAllConfiguredEmailProviders } = await import('./notification-providers');
+      const configs = await getAllConfiguredEmailProviders();
+      const provider = configs.find(c => c.enabled && c.provider)?.provider;
+      return provider || 'default';
+    }
+    if (channel === 'SMS') {
+      const { getSMSConfig } = await import('./notification-providers');
+      const cfg = await getSMSConfig();
+      return cfg.provider || 'default';
+    }
+    if (channel === 'WHATSAPP') {
+      const { getWhatsAppConfig } = await import('./notification-providers');
+      const cfg = await getWhatsAppConfig();
+      return cfg.provider || 'default';
+    }
+    if (channel === 'PUSH') {
+      const { getPushConfig } = await import('./notification-providers');
+      const cfg = await getPushConfig();
+      return cfg.provider || 'default';
+    }
+  } catch {
+    // Provider resolution must not block delivery; fall back to default bucket.
+  }
+  return 'default';
+}
+
+type ProviderAdmissionLease = { leaseKey: string; providerKey: string; scope: ProviderAdmissionScope };
+
 async function providerAdmission(
   input: NotificationAttemptInput,
   incident: IncidentDeliveryContext
-): Promise<NotificationAttemptResult | null> {
+): Promise<NotificationAttemptResult | ProviderAdmissionLease | null> {
   if (input.channel === 'SLACK') return null;
   const scope = input.channel as ProviderAdmissionScope;
-  let providerKey = 'default';
-  if (input.channel === 'WEBHOOK' && incident.service?.webhookUrl) {
-    try {
-      providerKey = new URL(incident.service.webhookUrl).origin;
-    } catch {
-      providerKey = 'service-webhook';
-    }
+  const providerKey = await resolveProviderKey(input.channel, incident);
+  // Acquire concurrency first so rate-reject can release the held slot instead
+  // of leaking it. Rate is strictly cheaper to evaluate than the DB slot lease,
+  // but the ordering here forces explicit release handling and avoids
+  // duplicate admission accounting paths.
+  const concurrency = await acquireProviderConcurrency(scope, providerKey);
+  if (!concurrency.allowed) {
+    return {
+      success: true,
+      outcome: 'QUEUED',
+      error: `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`,
+    };
   }
   const admission = await acquireProviderAdmission(scope, providerKey);
-  if (admission.allowed) return null;
-  return {
-    success: true,
-    outcome: 'QUEUED',
-    error: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
-  };
+  if (!admission.allowed) {
+    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    return {
+      success: true,
+      outcome: 'QUEUED',
+      error: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
+    };
+  }
+  return { leaseKey: concurrency.leaseKey, providerKey, scope };
+}
+
+function shouldDefer(result: unknown): { retryAfterMs?: number } | null {
+  if (!result || typeof result !== 'object') return null;
+  const r = result as Record<string, unknown>;
+  if (r.statusCode === 429) return { retryAfterMs: typeof r.retryAfterMs === 'number' ? r.retryAfterMs : 60_000 };
+  // Some providers surface 429 via error string
+  const msg = typeof r.error === 'string' ? r.error : '';
+  if (/too many requests|rate.?limit|429/i.test(msg)) return { retryAfterMs: 60_000 };
+  return null;
+}
+
+async function handleProviderResultFailure(
+  lease: ProviderAdmissionLease,
+  raw: unknown
+): Promise<void> {
+  const defer = shouldDefer(raw);
+  if (!defer) return;
+  const retryAt = new Date(Date.now() + Math.max(defer.retryAfterMs ?? 60_000, 1_000));
+  try {
+    await deferProviderAdmission(lease.scope, lease.providerKey, retryAt);
+  } catch {
+    // Backpressure must not fail delivery accounting; admission already defers via RateLimit.
+  }
 }
 
 export async function dispatchNotificationAttempt(
@@ -230,14 +323,23 @@ export async function dispatchNotificationAttempt(
     return { success: false, outcome: 'PERMANENT_FAILURE', error: 'Incident not found' };
   const staleReason = staleIntentReason(input, incident);
   if (staleReason) return { success: true, outcome: 'SKIPPED', skipped: true, error: staleReason };
-  const deferred = await providerAdmission(input, incident);
-  if (deferred) return deferred;
+  const admission = await providerAdmission(input, incident);
+  if (admission && 'outcome' in admission) return admission;
+  const lease = admission as ProviderAdmissionLease | null;
 
+  let outcome: NotificationAttemptResult | null = null;
+  let releasedLease = false;
+  async function releaseLeaseOnce(): Promise<void> {
+    if (lease && !releasedLease) {
+      releasedLease = true;
+      await releaseProviderConcurrency(lease.leaseKey).catch(() => undefined);
+    }
+  }
   try {
     switch (input.channel) {
       case 'EMAIL': {
         const { sendIncidentEmail } = await import('./email');
-        return await CircuitBreakers.email().execute(async () => {
+        outcome = await CircuitBreakers.email().execute(async () => {
           const result = await sendIncidentEmail(
             input.userId,
             input.incidentId,
@@ -246,12 +348,13 @@ export async function dispatchNotificationAttempt(
             input.message ?? undefined
           );
           if (!result.success) return providerFailureResult(result);
-          return { ...result, success: true, outcome: 'DELIVERED' };
+          return { ...result, success: true, outcome: 'DELIVERED' as const };
         });
+        break;
       }
       case 'SMS': {
         const { sendIncidentSMS } = await import('./sms');
-        return await CircuitBreakers.sms().execute(async () => {
+        outcome = await CircuitBreakers.sms().execute(async () => {
           const result = await sendIncidentSMS(
             input.userId,
             input.incidentId,
@@ -263,14 +366,15 @@ export async function dispatchNotificationAttempt(
           return {
             ...result,
             success: true,
-            outcome: 'DELIVERED',
+            outcome: 'DELIVERED' as const,
             providerMessageId: result.messageSid,
           };
         });
+        break;
       }
       case 'PUSH': {
         const { sendNotificationIntentPush } = await import('./incident-push-delivery');
-        return await CircuitBreakers.push().execute(async () => {
+        outcome = await CircuitBreakers.push().execute(async () => {
           const result = await sendNotificationIntentPush(
             input.userId,
             input.incidentId,
@@ -278,30 +382,34 @@ export async function dispatchNotificationAttempt(
             input.message,
             input.notificationId
           );
-          if (result.success) return { ...result, success: true, outcome: 'DELIVERED' };
+          if (result.success) return { ...result, success: true, outcome: 'DELIVERED' as const };
           if (result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS')
-            return { ...result, outcome: 'SKIPPED', skipped: true };
+            return { ...result, outcome: 'SKIPPED' as const, skipped: true };
           return providerFailureResult(result);
         });
+        break;
       }
       case 'WEBHOOK': {
         const webhookUrl = incident.service?.webhookUrl;
-        if (!webhookUrl)
-          return {
+        if (!webhookUrl) {
+          outcome = {
             success: false,
             outcome: 'PERMANENT_FAILURE',
             error: 'No webhook URL configured for service',
           };
+          break;
+        }
         const { sendIncidentWebhook } = await import('./webhooks');
-        return await CircuitBreakers.webhook(webhookUrl).execute(async () => {
+        outcome = await CircuitBreakers.webhook(webhookUrl).execute(async () => {
           const result = await sendIncidentWebhook(webhookUrl, input.incidentId, type);
           if (!result.success) return providerFailureResult(result);
-          return { ...result, success: true, outcome: 'DELIVERED' };
+          return { ...result, success: true, outcome: 'DELIVERED' as const };
         });
+        break;
       }
       case 'WHATSAPP': {
         const { sendIncidentWhatsApp } = await import('./whatsapp');
-        return await CircuitBreakers.whatsapp().execute(async () => {
+        outcome = await CircuitBreakers.whatsapp().execute(async () => {
           const result = await sendIncidentWhatsApp(
             input.userId,
             input.incidentId,
@@ -313,33 +421,53 @@ export async function dispatchNotificationAttempt(
           return {
             ...result,
             success: true,
-            outcome: 'DELIVERED',
+            outcome: 'DELIVERED' as const,
             providerMessageId: result.messageSid,
           };
         });
+        break;
       }
       case 'SLACK':
-        return { success: true, outcome: 'SKIPPED', skipped: true };
+        outcome = { success: true, outcome: 'SKIPPED', skipped: true };
+        break;
     }
+    if (outcome && !outcome.success && lease) {
+      await handleProviderResultFailure(lease, outcome as unknown as Record<string, unknown>);
+    }
+    return outcome ?? { success: true, outcome: 'SKIPPED', skipped: true };
   } catch (error) {
-    if (error instanceof CircuitBreakerTimeoutError)
-      return {
+    if (error instanceof CircuitBreakerTimeoutError) {
+      // AMBIGUOUS: provider may still be processing — keep distributed slot until lease expires.
+      outcome = {
         success: false,
         outcome: 'AMBIGUOUS',
         error: `Provider outcome is ambiguous after timeout: ${error.serviceName}`,
       };
-    if (error instanceof CircuitBreakerError)
-      return {
+      return outcome;
+    }
+    if (error instanceof CircuitBreakerError) {
+      outcome = {
         success: false,
         outcome: 'CIRCUIT_OPEN',
         error: `Service unavailable (circuit open): ${error.serviceName}`,
       };
-    if (error instanceof Error && 'retryable' in error && error.retryable === false)
-      return { success: false, outcome: 'PERMANENT_FAILURE', error: error.message };
-    return {
+      return outcome;
+    }
+    if (error instanceof Error && 'retryable' in error && error.retryable === false) {
+      outcome = { success: false, outcome: 'PERMANENT_FAILURE', error: error.message };
+      return outcome;
+    }
+    outcome = {
       success: false,
       outcome: 'RETRYABLE_FAILURE',
       error: error instanceof Error ? error.message : String(error),
     };
+    return outcome;
+  } finally {
+    // AMBIGUOUS keeps the distributed lease; every other path releases exactly once.
+    // `outcome` is set for every error path above so the timeout branch survives the `finally`.
+    if (lease && outcome?.outcome !== 'AMBIGUOUS') {
+      await releaseLeaseOnce();
+    }
   }
 }

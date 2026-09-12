@@ -82,7 +82,6 @@ export function isDarkHex(colorHex?: string | null): boolean {
   const r = (num >> 16) & 255;
   const g = (num >> 8) & 255;
   const b = num & 255;
-  // Perceived luminance formula (HSP / Rec. 601)
   const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
   return luminance < 145;
 }
@@ -96,7 +95,25 @@ export interface StatusPageColorPreset {
   text: string;
 }
 
+/**
+ * Canonical native colors for an uncustomized Status Page.
+ *
+ * Keep these separate from presets. A preset is an opinionated choice; these values define what
+ * "Reset to default" means in the UI and what missing branding values mean in the renderer.
+ */
+export const DEFAULT_STATUS_PAGE_COLORS = {
+  primary: '#667eea',
+  background: '#ffffff',
+  text: '#111827',
+} as const;
+
 export const STATUS_PAGE_COLOR_PRESETS: StatusPageColorPreset[] = [
+  {
+    id: 'native-default',
+    name: 'OpsKnight Default',
+    description: 'The original Status Page colors with no preset color treatment',
+    ...DEFAULT_STATUS_PAGE_COLORS,
+  },
   {
     id: 'modern-light',
     name: 'Modern Light',
@@ -154,30 +171,23 @@ export function computeStatusPageTheme(params: {
   textColor?: string | null;
   fontFamily?: string | null;
 }): StatusPageComputedTheme {
-  const primary = params.primaryColor || '#667eea';
-  const bg = params.backgroundColor || '#ffffff';
+  const primary = params.primaryColor || DEFAULT_STATUS_PAGE_COLORS.primary;
+  const bg = params.backgroundColor || DEFAULT_STATUS_PAGE_COLORS.background;
   const isDark = isDarkHex(bg);
 
-  // Safeguard against contrast collisions:
-  // If background is dark and text is left as default dark, switch to readable light text.
-  // If background is light and text is left as white, switch to readable dark text.
-  let text = params.textColor || (isDark ? '#f8fafc' : '#111827');
+  let text = params.textColor || (isDark ? '#f8fafc' : DEFAULT_STATUS_PAGE_COLORS.text);
   if (isDark && isDarkHex(text)) {
     text = '#f8fafc';
   } else if (!isDark && !isDarkHex(text)) {
-    text = '#111827';
+    text = DEFAULT_STATUS_PAGE_COLORS.text;
   }
 
   const font = resolveStatusPageFontFamily(params.fontFamily);
 
   const panelBg = isDark ? `color-mix(in srgb, ${bg} 84%, #ffffff 16%)` : '#ffffff';
-
   const panelBorder = isDark ? `color-mix(in srgb, ${bg} 60%, #ffffff 40%)` : '#e2e8f0';
-
   const panelMutedBg = isDark ? `color-mix(in srgb, ${bg} 90%, #ffffff 10%)` : '#f8fafc';
-
   const panelMutedBorder = isDark ? `color-mix(in srgb, ${bg} 75%, #ffffff 25%)` : '#e2e8f0';
-
   const textMuted = isDark ? '#94a3b8' : '#64748b';
   const textSubtle = isDark ? '#64748b' : '#94a3b8';
   const cardShadow = isDark
