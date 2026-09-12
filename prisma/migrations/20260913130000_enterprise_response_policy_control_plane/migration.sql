@@ -89,7 +89,7 @@ ALTER TABLE "IncidentClassificationPolicyRule"
 ALTER TABLE "IncidentClassificationPolicyRule"
   ADD CONSTRAINT "classification_priority_mode_valid" CHECK (
     ("priorityMode" = 'SET' AND "priority" IS NOT NULL) OR
-    ("priorityMode" IN ('INHERIT', 'CLEAR') AND "priority" IS NULL)
+    ("priorityMode" IN ('INHERIT', 'FALLBACK', 'CLEAR') AND "priority" IS NULL)
   ),
   ADD CONSTRAINT "classification_urgency_mode_valid" CHECK (
     ("urgencyMode" = 'SET' AND "urgency" IS NOT NULL) OR
@@ -166,6 +166,25 @@ CREATE TABLE "ResponseSupportWindow" (
 );
 CREATE INDEX "ResponseSupportWindow_policyId_dayOfWeek_idx"
   ON "ResponseSupportWindow" ("policyId", "dayOfWeek");
+
+CREATE FUNCTION opsknight_reject_overlapping_support_windows() RETURNS TRIGGER AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "ResponseSupportWindow" existing
+    WHERE existing."policyId" = NEW."policyId"
+      AND existing."dayOfWeek" = NEW."dayOfWeek"
+      AND existing."id" <> NEW."id"
+      AND int4range(existing."startMinute", existing."endMinute", '[)') &&
+          int4range(NEW."startMinute", NEW."endMinute", '[)')
+  ) THEN
+    RAISE EXCEPTION 'support-hour windows cannot overlap' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER response_support_window_no_overlap
+  BEFORE INSERT OR UPDATE ON "ResponseSupportWindow"
+  FOR EACH ROW EXECUTE FUNCTION opsknight_reject_overlapping_support_windows();
 
 CREATE TABLE "ResponseSupportException" (
   "id" TEXT PRIMARY KEY,

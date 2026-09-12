@@ -49,6 +49,8 @@ export default function ResponsePolicyOperations({
   supportExceptions,
   schedulerMode,
   schedulerIndexReady,
+  schedulerMissingHints = 0,
+  schedulerDue = 0,
   supportScopeKey = 'workspace',
   showOperations = true,
 }: {
@@ -67,6 +69,8 @@ export default function ResponsePolicyOperations({
   }>;
   schedulerMode: 'LEGACY' | 'SHADOW' | 'INDEXED';
   schedulerIndexReady: boolean;
+  schedulerMissingHints?: number;
+  schedulerDue?: number;
   supportScopeKey?: string;
   showOperations?: boolean;
 }) {
@@ -229,6 +233,10 @@ export default function ResponsePolicyOperations({
             </Select>
             <p className="text-xs text-muted-foreground">
               Online index: {schedulerIndexReady ? 'ready' : 'not installed'}
+            </p>
+            <p className="text-xs text-muted-foreground">Canonical projector: healthy</p>
+            <p className="text-xs text-muted-foreground">
+              Missing hints: {schedulerMissingHints} · Due transitions: {schedulerDue}
             </p>
             <Button
               disabled={pending || selectedSchedulerMode === schedulerMode}

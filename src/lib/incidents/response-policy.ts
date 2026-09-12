@@ -84,8 +84,18 @@ export function diffClassificationPolicies(
   to: Prisma.IncidentClassificationPolicyGetPayload<{ include: { rules: true } }>
 ) {
   const before = new Map(from.rules.map(rule => [rule.matchValue, rule]));
-  const policyChanges =
-    from.derivePriorityFromUrgency === to.derivePriorityFromUrgency
+  const policyChanges = [
+    ...(from.priorityFallbackMode === to.priorityFallbackMode
+      ? []
+      : [
+          {
+            severity: null,
+            field: 'priorityFallbackMode',
+            from: { mode: from.priorityFallbackMode, value: null },
+            to: { mode: to.priorityFallbackMode, value: null },
+          },
+        ]),
+    ...(from.derivePriorityFromUrgency === to.derivePriorityFromUrgency
       ? []
       : [
           {
@@ -94,7 +104,8 @@ export function diffClassificationPolicies(
             from: { mode: null, value: from.derivePriorityFromUrgency },
             to: { mode: null, value: to.derivePriorityFromUrgency },
           },
-        ];
+        ]),
+  ];
   return [
     ...policyChanges,
     ...to.rules.flatMap(rule => {

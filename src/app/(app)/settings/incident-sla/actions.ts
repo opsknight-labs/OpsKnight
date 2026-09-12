@@ -133,17 +133,23 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
   if (!parsed.success) return { ok: false as const, message: 'Invalid scheduler mode.' };
   const mode = parsed.data;
   if (mode === 'INDEXED') {
-    const rows = await prisma.$queryRaw<Array<{ ready: boolean }>>`
+    const rows = await prisma.$queryRaw<Array<{ ready: boolean; missing_hints: bigint }>>`
       SELECT EXISTS (
         SELECT 1 FROM pg_class c
         JOIN pg_index i ON i.indexrelid = c.oid
         WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
-      ) AS ready
+      ) AS ready,
+      (SELECT COUNT(*) FROM "Incident" WHERE "status" IN ('OPEN', 'ACKNOWLEDGED') AND "nextSlaTransitionAt" IS NULL)::bigint AS missing_hints
     `;
     if (!rows[0]?.ready)
       return {
         ok: false as const,
         message: 'Install the SLA scheduler index before enabling Indexed mode.',
+      };
+    if (Number(rows[0]?.missing_hints ?? 0) > 0)
+      return {
+        ok: false as const,
+        message: 'Run Shadow mode until all active incidents have scheduling hints.',
       };
   }
   await prisma.$transaction(async tx => {

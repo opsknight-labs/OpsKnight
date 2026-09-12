@@ -78,8 +78,13 @@ function provenance(policy: LoadedPolicy, severity: AlertSeverity): Classificati
   };
 }
 
-function priorityMode(rule: LoadedRule): 'INHERIT' | 'SET' | 'CLEAR' {
-  if (rule.priorityMode === 'INHERIT' || rule.priorityMode === 'CLEAR') return rule.priorityMode;
+function priorityMode(rule: LoadedRule): 'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR' {
+  if (
+    rule.priorityMode === 'INHERIT' ||
+    rule.priorityMode === 'FALLBACK' ||
+    rule.priorityMode === 'CLEAR'
+  )
+    return rule.priorityMode;
   return rule.priority == null ? 'CLEAR' : 'SET';
 }
 
@@ -105,6 +110,7 @@ export async function resolveIncidentClassification(
   const fallback = severity ? defaultAlertClassification(severity) : null;
   let priority = explicitPriority;
   let priorityCleared = false;
+  let ruleFallbackPolicy: LoadedPolicy | null = null;
   let priorityProvenance: ClassificationProvenance = explicitPriority
     ? { source: 'EXPLICIT', policyId: null, policyVersion: null, rule: null, scope: null }
     : { source: 'NONE', policyId: null, policyVersion: null, rule: null, scope: null };
@@ -126,6 +132,10 @@ export async function resolveIncidentClassification(
           priorityProvenance = provenance(policy, severity);
         } else if (mode === 'CLEAR') {
           priorityCleared = true;
+          priorityProvenance = provenance(policy, severity);
+        } else if (mode === 'FALLBACK') {
+          priorityCleared = true;
+          ruleFallbackPolicy = policy;
           priorityProvenance = provenance(policy, severity);
         }
       }
@@ -160,7 +170,16 @@ export async function resolveIncidentClassification(
   const fallbackEnabled =
     fallbackPolicy?.priorityFallbackMode === 'ENABLED' ||
     (fallbackPolicy?.priorityFallbackMode == null && fallbackPolicy?.derivePriorityFromUrgency);
-  if (priority === null && !priorityCleared && fallbackPolicy && fallbackEnabled) {
+  if (priority === null && ruleFallbackPolicy) {
+    priority = priorityFromUrgency(urgency);
+    priorityProvenance = {
+      source: 'URGENCY_FALLBACK',
+      policyId: ruleFallbackPolicy.id,
+      policyVersion: ruleFallbackPolicy.version,
+      rule: `ALERT_SEVERITY:${severity}`,
+      scope: ruleFallbackPolicy.scopeKey,
+    };
+  } else if (priority === null && !priorityCleared && fallbackPolicy && fallbackEnabled) {
     priority = priorityFromUrgency(urgency);
     priorityProvenance = {
       source: 'URGENCY_FALLBACK',

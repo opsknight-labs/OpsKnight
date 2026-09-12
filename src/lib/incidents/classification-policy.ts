@@ -23,7 +23,7 @@ export const classificationPolicyInput = z
         z
           .object({
             matchValue: z.enum(['critical', 'error', 'warning', 'info']),
-            priorityMode: z.enum(['INHERIT', 'SET', 'CLEAR']).default('SET'),
+            priorityMode: z.enum(['INHERIT', 'FALLBACK', 'SET', 'CLEAR']).default('SET'),
             priority: z.enum(['P1', 'P2', 'P3', 'P4', 'P5']).nullable(),
             urgencyMode: z.enum(['INHERIT', 'SET', 'DEFAULT']).default('SET'),
             urgency: z.enum(['HIGH', 'MEDIUM', 'LOW']).nullable(),
@@ -48,7 +48,7 @@ export const classificationPolicyInput = z
         context.addIssue({
           code: 'custom',
           path: ['rules', index, 'priority'],
-          message: 'SET requires a priority; INHERIT/CLEAR require null.',
+          message: 'SET requires a priority; INHERIT/FALLBACK/CLEAR require null.',
         });
       if ((rule.urgencyMode === 'SET') !== (rule.urgency !== null))
         context.addIssue({

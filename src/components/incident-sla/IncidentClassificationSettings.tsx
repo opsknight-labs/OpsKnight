@@ -33,7 +33,7 @@ type Priority = (typeof INCIDENT_PRIORITIES)[number];
 type Urgency = 'HIGH' | 'MEDIUM' | 'LOW';
 type Rule = {
   matchValue: AlertSeverity;
-  priorityMode?: 'INHERIT' | 'SET' | 'CLEAR';
+  priorityMode?: 'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR';
   priority: Priority | null;
   urgencyMode?: 'INHERIT' | 'SET' | 'DEFAULT';
   urgency: Urgency | null;
@@ -143,8 +143,17 @@ export default function IncidentClassificationSettings({
               onValueChange={value =>
                 update(rule.matchValue, {
                   priorityMode:
-                    value === 'INHERIT' ? 'INHERIT' : value === 'CLEAR' ? 'CLEAR' : 'SET',
-                  priority: value === 'INHERIT' || value === 'CLEAR' ? null : (value as Priority),
+                    value === 'INHERIT'
+                      ? 'INHERIT'
+                      : value === 'FALLBACK'
+                        ? 'FALLBACK'
+                        : value === 'CLEAR'
+                          ? 'CLEAR'
+                          : 'SET',
+                  priority:
+                    value === 'INHERIT' || value === 'FALLBACK' || value === 'CLEAR'
+                      ? null
+                      : (value as Priority),
                 })
               }
             >
@@ -153,6 +162,7 @@ export default function IncidentClassificationSettings({
               </SelectTrigger>
               <SelectContent>
                 {scopeKey !== 'workspace' && <SelectItem value="INHERIT">Inherit</SelectItem>}
+                <SelectItem value="FALLBACK">Use urgency fallback</SelectItem>
                 <SelectItem value="CLEAR">No automatic priority</SelectItem>
                 {INCIDENT_PRIORITIES.map(priority => (
                   <SelectItem key={priority} value={priority}>

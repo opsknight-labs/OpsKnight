@@ -83,7 +83,9 @@ export async function checkSLABreaches(
   const resolveWarningThreshold = warningPolicy.resolveCeilingMs;
 
   // Get all active incidents with their service SLA targets
-  const indexedScheduler = (await getSlaSchedulerMode()) === 'INDEXED';
+  const schedulerMode = await getSlaSchedulerMode();
+  const indexedScheduler = schedulerMode === 'INDEXED';
+  const maintainIndexedHints = schedulerMode !== 'LEGACY';
   const incidents = await prisma.incident.findMany({
     where: {
       status: { in: activeIncidentStatuses() },
@@ -232,7 +234,7 @@ export async function checkSLABreaches(
     }
     // Never advance past a newly-discovered warning before its durable intent
     // is materialized below. A following tick advances only after its event is visible.
-    if (indexedScheduler && warnings.length === warningCountBeforeIncident) {
+    if (maintainIndexedHints && warnings.length === warningCountBeforeIncident) {
       const next = deriveNextSlaTransition(incident, now);
       if (
         incident.nextSlaTransitionAt?.getTime() !== next?.at.getTime() ||

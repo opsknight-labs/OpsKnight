@@ -709,6 +709,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                                           | 'info',
                                         priorityMode: rule.priorityMode as
                                           | 'INHERIT'
+                                          | 'FALLBACK'
                                           | 'SET'
                                           | 'CLEAR',
                                         priority: rule.priority as
@@ -937,7 +938,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                         | 'DISABLED',
                       rules: incidentClassificationPolicy.rules.map(rule => ({
                         matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
-                        priorityMode: rule.priorityMode as 'INHERIT' | 'SET' | 'CLEAR',
+                        priorityMode: rule.priorityMode as 'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR',
                         priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
                         urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
                         urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,

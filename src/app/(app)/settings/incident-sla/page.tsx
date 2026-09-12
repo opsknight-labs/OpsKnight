@@ -24,7 +24,7 @@ export default async function IncidentSlaSettingsPage() {
     integrations,
     supportHoursPolicy,
     schedulerMode,
-    schedulerIndexRows,
+    schedulerReadinessRows,
   ] = await Promise.all([
     prisma.incidentSlaPolicy.findFirst({
       where: { scopeKey: 'workspace', sealedAt: { not: null } },
@@ -60,12 +60,14 @@ export default async function IncidentSlaSettingsPage() {
       include: { windows: true, exceptions: true },
     }),
     getSlaSchedulerMode(),
-    prisma.$queryRaw<Array<{ ready: boolean }>>`
+    prisma.$queryRaw<Array<{ ready: boolean; missing_hints: bigint; due: bigint }>>`
       SELECT EXISTS (
         SELECT 1 FROM pg_class c
         JOIN pg_index i ON i.indexrelid = c.oid
         WHERE c.relname = 'idx_incident_next_sla_transition' AND i.indisvalid
-      ) AS ready
+      ) AS ready,
+      (SELECT COUNT(*) FROM "Incident" WHERE "status" IN ('OPEN', 'ACKNOWLEDGED') AND "nextSlaTransitionAt" IS NULL)::bigint AS missing_hints,
+      (SELECT COUNT(*) FROM "Incident" WHERE "status" IN ('OPEN', 'ACKNOWLEDGED') AND "nextSlaTransitionAt" <= now())::bigint AS due
     `,
   ]);
   const viewPolicy = policy
@@ -146,7 +148,7 @@ export default async function IncidentSlaSettingsPage() {
                   | 'DISABLED',
                 rules: classificationPolicy.rules.map(rule => ({
                   matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
-                  priorityMode: rule.priorityMode as 'INHERIT' | 'SET' | 'CLEAR',
+                  priorityMode: rule.priorityMode as 'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR',
                   priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
                   urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
                   urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
@@ -178,7 +180,9 @@ export default async function IncidentSlaSettingsPage() {
           })) ?? []
         }
         schedulerMode={schedulerMode}
-        schedulerIndexReady={schedulerIndexRows[0]?.ready ?? false}
+        schedulerIndexReady={schedulerReadinessRows[0]?.ready ?? false}
+        schedulerMissingHints={Number(schedulerReadinessRows[0]?.missing_hints ?? 0)}
+        schedulerDue={Number(schedulerReadinessRows[0]?.due ?? 0)}
       />
       <div className="rounded-lg border p-5 text-sm">
         <h2 className="font-semibold">SLA semantics</h2>
