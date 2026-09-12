@@ -207,11 +207,13 @@ export function isLegacyStatusPageTemplateCss(value: unknown): boolean {
 }
 
 /**
- * Compile a built-in theme into a small deterministic override layer for the current V3 renderer.
+ * Compile a built-in theme into the single deterministic override layer used by both the public
+ * Status Page and the admin live preview.
  *
- * The compiler intentionally does not redefine operational/degraded/outage colors. Status meaning
- * stays owned by the base renderer. Brand color also remains `--status-primary`; themes control
- * composition, density, shape, and surrounding surfaces rather than hijacking brand semantics.
+ * Operational/degraded/outage colors deliberately remain owned by the base renderer. Built-in
+ * themes control page/panel surfaces, readable ink, decorative accent, geometry, spacing, and
+ * composition. Customer Advanced CSS is applied after this layer and therefore remains the final
+ * override. Default is the native renderer and returns an empty string by contract.
  */
 export function compileStatusPageThemeCss(
   themeId: unknown,
@@ -225,7 +227,7 @@ export function compileStatusPageThemeCss(
   const serviceGap = compact ? '0.55rem' : '0.85rem';
   const sectionGap = compact ? '1rem' : '1.5rem';
   const cardPadding = compact ? '0.75rem' : '1rem';
-  const { shape } = selected;
+  const { shape, preview } = selected;
 
   const serviceLayout =
     shape.services === 'cards'
@@ -253,6 +255,17 @@ export function compileStatusPageThemeCss(
   return `
 /* OpsKnight Status Page Theme: ${selected.name} v${selected.version} */
 .status-page-container {
+  --sp-page-bg: ${preview.surfaceAlt};
+  --sp-page-text: ${preview.text};
+  --sp-panel-bg: ${preview.surface};
+  --sp-panel-muted-bg: ${preview.surfaceAlt};
+  --sp-ink: ${preview.text};
+  --sp-ink-strong: ${preview.text};
+  --sp-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);
+  --sp-muted-2: color-mix(in srgb, ${preview.text} 56%, ${preview.surface} 44%);
+  --sp-panel-border: color-mix(in srgb, ${preview.text} 16%, ${preview.surface} 84%);
+  --sp-panel-muted-border: color-mix(in srgb, ${preview.text} 13%, ${preview.surfaceAlt} 87%);
+  --sp-theme-accent: ${preview.accent};
   --sp-theme-radius: ${shape.radius};
   --sp-theme-shadow: ${shape.shadow};
   --sp-theme-card-padding: ${cardPadding};
@@ -261,12 +274,13 @@ export function compileStatusPageThemeCss(
 }
 .status-page-container .status-topbar,
 .status-page-container .status-page-header {
-  background: color-mix(in srgb, var(--status-panel-bg) 94%, var(--status-primary) 6%);
-  border-bottom-color: color-mix(in srgb, var(--status-panel-border) 82%, var(--status-primary) 18%);
+  background: color-mix(in srgb, var(--sp-panel-bg) 92%, var(--sp-theme-accent) 8%);
+  border-bottom-color: color-mix(in srgb, var(--sp-panel-border) 72%, var(--sp-theme-accent) 28%);
 }
 .status-page-container .status-v3-service,
 .status-page-container details.status-v3-incident-pill {
   border-radius: var(--sp-theme-radius);
+  border-color: color-mix(in srgb, var(--sp-panel-border) 86%, var(--sp-theme-accent) 14%);
   box-shadow: var(--sp-theme-shadow);
 }
 .status-page-container .status-v3-service {
