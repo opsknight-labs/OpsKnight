@@ -203,7 +203,7 @@ export default function ServiceHealthV3({
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [sortMode, setSortMode] = useState<SortMode>('issues');
+  const [sortMode, setSortMode] = useState<SortMode>('configured');
   const [groupRegions, setGroupRegions] = useState(groupByRegion);
 
   useEffect(() => {
@@ -315,8 +315,8 @@ export default function ServiceHealthV3({
             value={sortMode}
             onChange={event => setSortMode(event.target.value as SortMode)}
           >
-            <option value="issues">Issues first (default)</option>
-            <option value="configured">Configured order</option>
+            <option value="configured">Configured order (default)</option>
+            <option value="issues">Issues first</option>
             <option value="alphabetical">Alphabetical</option>
           </select>
 
