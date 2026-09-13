@@ -34,8 +34,6 @@ import { z } from 'zod';
 
 const MAX_ENCRYPTED_PAYLOAD_BYTES = 768 * 1024;
 const MAX_ERROR_LENGTH = 1_000;
-// This lease exceeds every adapter timeout. Reclaiming an active provider call can
-// produce a duplicate on channels that do not support provider-side idempotency.
 const CLAIM_TIMEOUT_MS = 10 * 60_000;
 const SYSTEM_NOTIFICATION_BATCH_SIZE = 100;
 const SYSTEM_NOTIFICATION_CONCURRENCY = 10;
@@ -177,7 +175,6 @@ export type CentralNotificationInput = {
   category: NotificationCategory;
   channel: NotificationChannel;
   recipientType: NotificationRecipientType;
-  // Phase 1 Teams uses serviceId as stable recipientAddress since Graph channel ids are not emails/phones.
   recipientId?: string;
   recipientAddress: string;
   userId?: string;
@@ -480,7 +477,6 @@ export async function createCentralNotificationIntent(
   }
 }
 
-/** Materialize a fanout page with one INSERT statement and stable-key deduplication. */
 export async function createCentralNotificationIntentsBatch(
   inputs: CentralNotificationInput[]
 ): Promise<{ created: number; skipped: number }> {
@@ -546,14 +542,6 @@ export async function createCentralNotificationIntentsBatch(
   return { created: result.count, skipped: rows.length - result.count };
 }
 
-/**
- * Resolves the provider each channel would currently deliver through.
- *
- * Callers that persist intents inside their own transaction need this *before*
- * the transaction opens: provider configuration lives in the database, and
- * reading it from inside a serializable transaction that is about to commit
- * escalation state only widens the window for a conflict.
- */
 export async function pinNotificationProviderKeys(
   channels: readonly NotificationChannel[]
 ): Promise<Map<NotificationChannel, string | undefined>> {
@@ -645,12 +633,9 @@ function payloadProviderKey(payload: CentralNotificationPayload): string {
     }
   }
   if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL' && payload.lifecyclePolicy?.serviceId) {
-    // Will be resolved to tenant-scoped key by async helper below; fallthrough keeps sync callers safe
     return 'default';
   }
   if ('providerKey' in payload && payload.providerKey) return payload.providerKey;
-  // Provider budgets are account-wide. A conservative shared key prevents
-  // tenant/page/channel partitions from multiplying the upstream allowance.
   return 'default';
 }
 
@@ -666,7 +651,7 @@ async function payloadProviderKeyAsync(payload: CentralNotificationPayload): Pro
       } as never);
       if (dest?.tenantId) return `tenant:${dest.tenantId}`;
     } catch {
-      // best-effort — fall through to default
+      // best-effort
     }
   }
   return payloadProviderKey(payload);
@@ -770,9 +755,7 @@ async function dispatchPayload(
     case 'INCIDENT_SMS': {
       const { sendIncidentSMS } = await import('./sms');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module =>
-          module.getSMSConfig()
-        );
+        const current = await import('./notification-providers').then(module => module.getSMSConfig());
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -795,9 +778,7 @@ async function dispatchPayload(
     case 'INCIDENT_PUSH': {
       const { sendNotificationIntentPush } = await import('./incident-push-delivery');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module =>
-          module.getPushConfig()
-        );
+        const current = await import('./notification-providers').then(module => module.getPushConfig());
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -822,9 +803,7 @@ async function dispatchPayload(
     case 'INCIDENT_WHATSAPP': {
       const { sendIncidentWhatsApp } = await import('./whatsapp');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module =>
-          module.getWhatsAppConfig()
-        );
+        const current = await import('./notification-providers').then(module => module.getWhatsAppConfig());
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -852,9 +831,7 @@ async function dispatchPayload(
           where: { id: payload.contentId },
           select: { encryptedTemplate: true },
         });
-        if (!content) {
-          return { success: false, statusCode: 410, error: 'Notification content expired' };
-        }
+        if (!content) return { success: false, statusCode: 410, error: 'Notification content expired' };
         html = (await decrypt(content.encryptedTemplate))
           .replaceAll('{{unsubscribe_url}}', payload.unsubscribeUrl ?? '')
           .replaceAll('{{start_time}}', payload.startTime ?? '')
@@ -890,9 +867,7 @@ async function dispatchPayload(
     case 'SMS': {
       const { sendSMS } = await import('./sms');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module =>
-          module.getSMSConfig()
-        );
+        const current = await import('./notification-providers').then(module => module.getSMSConfig());
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -913,9 +888,7 @@ async function dispatchPayload(
     case 'WHATSAPP': {
       const { sendWhatsApp } = await import('./whatsapp');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module =>
-          module.getWhatsAppConfig()
-        );
+        const current = await import('./notification-providers').then(module => module.getWhatsAppConfig());
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -925,21 +898,14 @@ async function dispatchPayload(
           };
       }
       return executeProvider(CircuitBreakers.whatsapp(), async () => {
-        const result = await sendWhatsApp(
-          payload.to,
-          payload.message,
-          payload.from,
-          notificationId
-        );
+        const result = await sendWhatsApp(payload.to, payload.message, payload.from, notificationId);
         return { ...result, providerMessageId: result.messageSid };
       });
     }
     case 'PUSH': {
       const { sendPush } = await import('./push');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module =>
-          module.getPushConfig()
-        );
+        const current = await import('./notification-providers').then(module => module.getPushConfig());
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -1019,16 +985,6 @@ async function dispatchPayload(
           };
     }
     case 'MICROSOFT_TEAMS_CHANNEL': {
-      // Single outbox: real incident delivery is exclusively via ExternalOperation
-      // claim-first path (`src/lib/microsoft-teams/delivery.ts` → Bot Framework
-      // `POST /v3/conversations` + `PUT .../activities`). The central Notification
-      // `MICROSOFT_TEAMS_CHANNEL` dispatch is RETIRED to eliminate the competing
-      // outbox that raced the ledger (`__reserved__` / advisory lock) and produced
-      // duplicate cards when both pipelines were enqueued. The Notification channel
-      // enum + health fallback remain for backwards-compat rows, but new Teams
-      // intents must not be created via `enqueueCentralNotification` — see
-      // `src/lib/service-notifications.ts` and `src/app/api/microsoft-teams/test`.
-      // Returning a permanent failure keeps old rows from retrying indefinitely.
       return {
         success: false,
         statusCode: 410,
@@ -1138,8 +1094,6 @@ async function incidentPayloadSuperseded(
       ? 'Resolution generation was superseded'
       : null;
   }
-  // The durable event key identifies an update. ORM updatedAt also changes for
-  // internal bookkeeping and must never invalidate that committed event.
   return incident.status === 'RESOLVED' ? 'Incident update was superseded by resolution' : null;
 }
 
@@ -1207,7 +1161,6 @@ async function serviceTargetDeliveryRevoked(
     if (policy.targetAddress && dest.channelId !== policy.targetAddress) {
       return 'Microsoft Teams channel was retargeted';
     }
-    // Also verify the service still has MICROSOFT_TEAMS in its channels
     const service = await prisma.service.findUnique({
       where: { id: policy.serviceId },
       select: { serviceNotificationChannels: true, serviceNotifyOnTriggered: true, serviceNotifyOnAck: true, serviceNotifyOnResolved: true },
@@ -1305,8 +1258,6 @@ async function serviceSlackDeliveryRevoked(
             payload.kind === 'SLACK_CHANNEL' ? ('CHANNEL' as const) : ('WEBHOOK' as const),
         }
       : null;
-  // New rows use lifecyclePolicy and are handled by serviceTargetDeliveryRevoked.
-  // This fallback fences service Slack rows written before that metadata existed.
   const policy = inferredLegacyPolicy;
   if (!policy?.serviceId) return null;
   try {
@@ -1356,9 +1307,6 @@ async function statusSubscriberDeliveryRevoked(
   });
   if (!subscription) return 'Status-page subscription or page was revoked';
 
-  // Announcement fanout has no incident scope. The active subscription/page
-  // check above is still required at claim time so an unsubscribe racing with
-  // batch materialization cannot result in a later provider send.
   if (!scope.incidentId) return null;
 
   const incident = await prisma.incident.findUnique({
@@ -1557,19 +1505,6 @@ export async function deliverCentralNotification(
     if (claim.count === 0) return { success: false, claimed: false };
   }
 
-  if (!candidate.payloadEncrypted) {
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'FAILED',
-        attempts: candidate.maxAttempts,
-        failedAt: new Date(),
-        errorMsg: 'Encrypted delivery payload is missing.',
-      },
-    });
-    return { success: false, claimed: true, error: 'Encrypted delivery payload is missing' };
-  }
-
   let payload: CentralNotificationPayload;
   try {
     const decoded: unknown = JSON.parse(await decrypt(candidate.payloadEncrypted));
@@ -1733,8 +1668,6 @@ export async function deliverCentralNotification(
     try {
       result = await dispatchPayload(payload, candidate.id);
     } catch (dispatchError) {
-      // A timed-out mutation is still running from the provider client's point
-      // of view. Retain the distributed slot until its lease expires.
       if (dispatchError instanceof CircuitBreakerTimeoutError) {
         releaseConcurrencyLease = false;
       }
@@ -1775,8 +1708,6 @@ export async function deliverCentralNotification(
           }),
         ]);
       } catch (persistenceError) {
-        // Provider acceptance is delivery truth. A telemetry-row failure must
-        // never turn it into a retry or trigger another channel fallback.
         committed = await prisma.notification.updateMany({
           where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
           data: acceptedState,
@@ -1793,13 +1724,55 @@ export async function deliverCentralNotification(
     }
 
     const errorMessage = safeError(result.error || 'Provider delivery failed');
+
+    // A current announcement generation can be valid but claimed slightly before
+    // its canonical send instant (for example from DB/app clock skew). This is a
+    // notification-local scheduling condition, not provider throttling or a
+    // delivery failure. Restore the pre-attempt budget and defer precisely to
+    // retryAfterMs without touching provider admission/circuit state.
+    if (
+      result.errorCode === 'ANNOUNCEMENT_NOT_DUE' &&
+      typeof result.retryAfterMs === 'number' &&
+      Number.isFinite(result.retryAfterMs) &&
+      result.retryAfterMs > 0
+    ) {
+      const retryAt = new Date(Date.now() + Math.max(result.retryAfterMs, 1_000));
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'PENDING',
+          attempts: candidate.attempts,
+          failedAt: null,
+          lastAttemptAt: null,
+          claimToken: null,
+          claimedBy: null,
+          nextAttemptAt: retryAt,
+          errorMsg: `Announcement delivery deferred until ${retryAt.toISOString()}`,
+        },
+      });
+      await finishAttempt({
+        notificationId: candidate.id,
+        ordinal,
+        outcome: 'DEFERRED_NOT_DUE',
+        startedAt,
+        provider: identity.providerKey,
+        errorCode: result.errorCode,
+        errorMessage,
+      });
+      return { success: false, claimed: true, error: errorMessage };
+    }
+
     const providerRateLimited = result.statusCode === 429;
     const providerRetryAt = providerRateLimited
       ? new Date(Date.now() + Math.max(result.retryAfterMs ?? 60_000, 1_000))
       : null;
     if (providerRetryAt) {
-      const identity = providerAdmissionIdentity(payload);
-      await deferProviderAdmission(identity.scope, identity.providerKey, providerRetryAt);
+      const admissionIdentity = providerAdmissionIdentity(payload);
+      await deferProviderAdmission(
+        admissionIdentity.scope,
+        admissionIdentity.providerKey,
+        providerRetryAt
+      );
       await prisma.notification.updateMany({
         where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
         data: {
@@ -1816,7 +1789,7 @@ export async function deliverCentralNotification(
         ordinal,
         outcome: 'RATE_LIMITED',
         startedAt,
-        provider: identity.providerKey,
+        provider: admissionIdentity.providerKey,
         errorCode: result.errorCode ?? (result.statusCode ? String(result.statusCode) : undefined),
         errorMessage,
       });
@@ -1831,10 +1804,9 @@ export async function deliverCentralNotification(
         failedAt: new Date(),
         errorMsg: errorMessage,
         nextAttemptAt:
-          providerRetryAt ??
-          (permanent || exhausted
+          permanent || exhausted
             ? candidate.nextAttemptAt
-            : new Date(Date.now() + notificationRetryDelayMs(deliveryAttempt))),
+            : new Date(Date.now() + notificationRetryDelayMs(deliveryAttempt)),
         attempts: permanent ? candidate.maxAttempts : deliveryAttempt,
         lastAttemptAt: null,
         ...(permanent || exhausted ? terminalPayload(candidate.category) : {}),
@@ -1895,8 +1867,6 @@ export async function deliverCentralNotification(
           error: safeError(persistenceError),
         });
       }
-      // Suppress synchronous channel fallback: the provider may still accept
-      // the mutation after our client-side timeout.
       return { success: true, claimed: true, error: errorMessage };
     }
     if (circuitOpen) {
@@ -2003,9 +1973,6 @@ export async function processCentralNotificationQueue(
       SELECT notification."id"
       FROM "Notification" notification
       JOIN ranked ON ranked."id" = notification."id"
-    -- Prefer each tenant's initial share, then redistribute unused slots so
-    -- small tenant sets can still fill the worker batch. Traffic-class floors
-    -- keep aged customer broadcasts behind responder notifications.
     ORDER BY CASE WHEN ranked.tenant_rank <= ${Math.max(1, Math.ceil(batchSize / 10))} THEN 0 ELSE 1 END,
     GREATEST(
       CASE ranked."trafficClass"
@@ -2049,7 +2016,6 @@ export async function processCentralNotificationQueue(
   return { processed: succeeded + failed, succeeded, failed };
 }
 
-/** Earliest durable control-plane deadline used by the adaptive scheduler. */
 export async function getNextCentralNotificationAt(now: Date = new Date()): Promise<Date | null> {
   const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   const expiredNotification = await prisma.notification.findFirst({
