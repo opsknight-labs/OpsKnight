@@ -74,7 +74,7 @@ describe('V2 announcement fanout queue semantics', () => {
       },
     });
     expect(
-      mocks.update.mock.calls.some(([, call]) => call?.data?.status === 'CANCELLED')
+      mocks.update.mock.calls.some(([call]) => call?.data?.status === 'CANCELLED')
     ).toBe(false);
   });
 
