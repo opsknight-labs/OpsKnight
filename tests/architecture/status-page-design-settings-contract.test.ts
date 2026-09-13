@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 
-const read = (path: string) => readFileSync(path, 'utf8');
+const workspace = readFileSync('src/components/status-page/StatusPageWorkspace.tsx', 'utf8');
+const config = readFileSync('src/components/StatusPageConfig.tsx', 'utf8');
+const sections = readFileSync('src/lib/status-pages/settings-sections.ts', 'utf8');
+const page = readFileSync('src/components/status-page/StatusPageV3.tsx', 'utf8');
+const publicShell = readFileSync('src/components/status-page/StatusPageSnapshotView.tsx', 'utf8');
+const preview = readFileSync('src/components/status-page/StatusPageLivePreview.tsx', 'utf8');
+const contract = readFileSync('src/lib/status-pages/theme-contract.ts', 'utf8');
 
 describe('status page Design settings architecture', () => {
   it('keeps Design inside the existing settings workspace', () => {
-    const workspace = read('src/components/status-page/StatusPageWorkspace.tsx');
-    const config = read('src/components/StatusPageConfig.tsx');
-
     expect(workspace).toContain('<StatusPageConfig {...props} />');
     expect(workspace).not.toContain("type Workspace = 'settings' | 'design'");
     expect(workspace).not.toContain('StatusPageDesignSettings');
@@ -23,9 +26,6 @@ describe('status page Design settings architecture', () => {
   });
 
   it('uses one draft for Design, preview, and publication', () => {
-    const config = read('src/components/StatusPageConfig.tsx');
-    const sections = read('src/lib/status-pages/settings-sections.ts');
-
     expect(config).toContain('themeId: formData.themeId');
     expect(config).toContain('themeVersion: STATUS_PAGE_THEME_VERSION');
     expect(config).toContain('themeDensity: formData.themeDensity');
@@ -35,10 +35,6 @@ describe('status page Design settings architecture', () => {
   });
 
   it('keeps the shared V3 renderer authoritative for curated themes', () => {
-    const page = read('src/components/status-page/StatusPageV3.tsx');
-    const publicShell = read('src/components/status-page/StatusPageSnapshotView.tsx');
-    const preview = read('src/components/status-page/StatusPageLivePreviewBase.tsx');
-
     expect(page).toContain('compileStatusPageThemeCss');
     expect(page).toContain('data-status-page-theme-runtime');
     expect(publicShell).toContain('<StatusPageV3');
@@ -48,8 +44,6 @@ describe('status page Design settings architecture', () => {
   });
 
   it('keeps Default native and the curated token bridge cascade-safe', () => {
-    const contract = read('src/lib/status-pages/theme-contract.ts');
-
     expect(contract).toContain("if (selected.id === DEFAULT_STATUS_PAGE_THEME_ID) return '';");
     expect(contract).toContain("const surface = ':where(.status-page-surface)';");
     expect(contract).toContain('--status-panel-bg: ${preview.surface}');
