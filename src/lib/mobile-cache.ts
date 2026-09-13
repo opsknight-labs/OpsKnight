@@ -1,12 +1,19 @@
 'use client';
 
+const CACHE_SCHEMA_VERSION = 2;
+const DEFAULT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 type CacheEnvelope<T> = {
+  schemaVersion: number;
   savedAt: string;
+  expiresAt: string;
   data: T;
 };
 
 type EncryptedEnvelope = {
+  schemaVersion: number;
   savedAt: string;
+  expiresAt: string;
   iv: string;
   ciphertext: string;
 };
@@ -34,9 +41,7 @@ const base64Decode = (value: string): ArrayBuffer => {
   if (typeof window === 'undefined') return new ArrayBuffer(0);
   const binary = window.atob(value);
   const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
   return bytes.buffer;
 };
 
@@ -96,36 +101,35 @@ const getCryptoKey = async (): Promise<CryptoKey | null> => {
 const encryptEnvelope = async <T>(
   envelope: CacheEnvelope<T>
 ): Promise<EncryptedEnvelope | null> => {
-  if (typeof window === 'undefined' || !window.crypto?.subtle || !textEncoder) {
-    return null;
-  }
+  if (typeof window === 'undefined' || !window.crypto?.subtle || !textEncoder) return null;
   const key = await getCryptoKey();
   if (!key) return null;
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const plaintext = textEncoder.encode(JSON.stringify(envelope));
-  const ciphertextBuffer = await window.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    plaintext
-  );
+  const ciphertextBuffer = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
   return {
+    schemaVersion: envelope.schemaVersion,
     savedAt: envelope.savedAt,
+    expiresAt: envelope.expiresAt,
     iv: base64Encode(iv.buffer),
     ciphertext: base64Encode(ciphertextBuffer),
   };
 };
 
 const decryptEnvelope = async <T>(value: string | null): Promise<CacheEnvelope<T> | null> => {
-  if (!value || typeof window === 'undefined' || !window.crypto?.subtle || !textDecoder) {
-    return null;
-  }
+  if (!value || typeof window === 'undefined' || !window.crypto?.subtle || !textDecoder) return null;
   let stored: EncryptedEnvelope;
   try {
     stored = JSON.parse(value) as EncryptedEnvelope;
   } catch {
     return null;
   }
-  if (!stored.iv || !stored.ciphertext) {
+  if (
+    stored.schemaVersion !== CACHE_SCHEMA_VERSION ||
+    !stored.iv ||
+    !stored.ciphertext ||
+    !stored.expiresAt
+  ) {
     return null;
   }
   const key = await getCryptoKey();
@@ -139,7 +143,8 @@ const decryptEnvelope = async <T>(value: string | null): Promise<CacheEnvelope<T
       ciphertextBuffer
     );
     const json = textDecoder.decode(plaintextBuffer);
-    return JSON.parse(json) as CacheEnvelope<T>;
+    const envelope = JSON.parse(json) as CacheEnvelope<T>;
+    return envelope.schemaVersion === CACHE_SCHEMA_VERSION ? envelope : null;
   } catch {
     return null;
   }
@@ -147,57 +152,71 @@ const decryptEnvelope = async <T>(value: string | null): Promise<CacheEnvelope<T
 
 export const readCache = async <T>(key: string, maxAgeMs?: number): Promise<T | null> => {
   if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem(`${CACHE_PREFIX}${key}`);
+  const storageKey = `${CACHE_PREFIX}${key}`;
+  const raw = window.localStorage.getItem(storageKey);
   const envelope = await decryptEnvelope<T>(raw);
-  if (!envelope) return null;
-  if (maxAgeMs) {
-    const savedAt = Date.parse(envelope.savedAt);
-    if (!Number.isNaN(savedAt) && Date.now() - savedAt > maxAgeMs) {
-      return null;
-    }
+  if (!envelope) {
+    if (raw) window.localStorage.removeItem(storageKey);
+    return null;
+  }
+
+  const savedAt = Date.parse(envelope.savedAt);
+  const expiresAt = Date.parse(envelope.expiresAt);
+  const expiredByContract = Number.isNaN(expiresAt) || Date.now() >= expiresAt;
+  const expiredByCaller =
+    maxAgeMs !== undefined &&
+    (Number.isNaN(savedAt) || Date.now() - savedAt > Math.max(0, maxAgeMs));
+
+  if (expiredByContract || expiredByCaller) {
+    window.localStorage.removeItem(storageKey);
+    return null;
   }
   return envelope.data;
 };
 
-export const writeCache = async <T>(key: string, data: T): Promise<void> => {
+export const writeCache = async <T>(
+  key: string,
+  data: T,
+  options: { maxAgeMs?: number } = {}
+): Promise<void> => {
   if (typeof window === 'undefined') return;
+  const now = Date.now();
+  const maxAgeMs = Math.max(1_000, options.maxAgeMs ?? DEFAULT_CACHE_MAX_AGE_MS);
   const payload: CacheEnvelope<T> = {
-    savedAt: new Date().toISOString(),
+    schemaVersion: CACHE_SCHEMA_VERSION,
+    savedAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + maxAgeMs).toISOString(),
     data,
   };
+
   try {
     const encrypted = await encryptEnvelope(payload);
-    if (!encrypted) {
-      return;
-    }
+    if (!encrypted) return;
     window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(encrypted));
-  } catch (error: any) {
-    if (error?.name === 'QuotaExceededError') {
+  } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       try {
         const keys = Object.keys(window.localStorage).filter(k => k.startsWith(CACHE_PREFIX));
         const entries: { key: string; savedAt: number }[] = [];
-        for (const k of keys) {
+        for (const storageKey of keys) {
           try {
-            const raw = window.localStorage.getItem(k);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (parsed && typeof parsed === 'object' && 'savedAt' in parsed) {
-                entries.push({ key: k, savedAt: Date.parse(parsed.savedAt) });
-              }
+            const raw = window.localStorage.getItem(storageKey);
+            if (!raw) continue;
+            const parsed = JSON.parse(raw) as Partial<EncryptedEnvelope>;
+            if (typeof parsed.savedAt === 'string') {
+              entries.push({ key: storageKey, savedAt: Date.parse(parsed.savedAt) });
             }
           } catch {}
         }
         entries.sort((a, b) => a.savedAt - b.savedAt);
         const toDelete = Math.max(1, Math.ceil(entries.length * 0.25));
-        for (let i = 0; i < toDelete; i++) {
-          window.localStorage.removeItem(entries[i].key);
-        }
-        // Retry the write once
+        for (let i = 0; i < toDelete; i += 1) window.localStorage.removeItem(entries[i].key);
+
         const encrypted = await encryptEnvelope(payload);
         if (encrypted) {
           window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(encrypted));
         }
-      } catch (_retryError) {
+      } catch {
         console.warn('Mobile cache is full and eviction failed');
       }
     }
