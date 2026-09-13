@@ -14,10 +14,15 @@ import {
   type AnnouncementNotificationTiming,
 } from '@/lib/status-pages/announcement-notification-plan';
 import {
-  announcementGenerationEventKey,
   incrementAnnouncementNotificationGeneration,
   readAnnouncementNotificationGeneration,
 } from '@/lib/status-pages/announcement-notification-generation';
+import {
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1,
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
+  type AnnouncementFanoutDeliveryMode,
+} from '@/lib/status-pages/announcement-fanout-contract';
 
 class InvalidDateError extends Error {
   constructor(public readonly fieldName: string) {
@@ -96,10 +101,13 @@ async function cancelPendingAnnouncementJobs(
 ) {
   await tx.$executeRaw`
     DELETE FROM "BackgroundJob"
-    WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+    WHERE (
+        ("type" = ${STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1}::"JobType" AND "status" = 'PENDING'::"JobStatus")
+        OR
+        ("type" = ${STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2}::"JobType" AND "status" = ${STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING}::"JobStatus")
+      )
       AND ("payload"->>'announcementId') = ${announcementId}
       AND ("payload"->>'statusPageId') = ${statusPageId}
-      AND "status" = 'PENDING'
   `;
 }
 
@@ -118,29 +126,11 @@ async function suppressUndeliveredAnnouncementIntents(
       status: 'SKIPPED',
       payloadEncrypted: null,
       lastAttemptAt: null,
+      claimToken: null,
+      claimedBy: null,
       errorMsg: reason,
     },
   });
-}
-
-async function currentGenerationReachedProvider(
-  tx: Prisma.TransactionClient,
-  statusPageId: string,
-  announcementId: string,
-  generation: number
-): Promise<boolean> {
-  const fanout = await tx.notificationFanout.findUnique({
-    where: {
-      statusPageId_sourceType_sourceId_eventKey: {
-        statusPageId,
-        sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
-        sourceId: announcementId,
-        eventKey: announcementGenerationEventKey(generation),
-      },
-    },
-    select: { completedTargets: true },
-  });
-  return (fanout?.completedTargets ?? 0) > 0;
 }
 
 async function createAnnouncementFanoutJob(
@@ -150,18 +140,20 @@ async function createAnnouncementFanoutJob(
     statusPageId: string;
     scheduledAt: Date;
     generation: number;
+    deliveryMode: AnnouncementFanoutDeliveryMode;
   }
 ) {
   return tx.backgroundJob.create({
     data: {
-      type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
-      status: 'PENDING',
+      type: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
+      status: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
       scheduledAt: input.scheduledAt,
       maxAttempts: 5,
       payload: {
         announcementId: input.announcementId,
         statusPageId: input.statusPageId,
         notificationGeneration: input.generation,
+        deliveryMode: input.deliveryMode,
       },
     },
   });
@@ -257,6 +249,7 @@ export async function POST(req: NextRequest) {
           statusPageId,
           scheduledAt: plan.scheduledAt,
           generation,
+          deliveryMode: 'ALL_ELIGIBLE',
         });
       }
       return { announcement, generation };
@@ -451,12 +444,6 @@ export async function PATCH(req: NextRequest) {
       }
 
       if (generationMutation) {
-        const priorGenerationReachedProvider = await currentGenerationReachedProvider(
-          tx,
-          statusPageId,
-          id,
-          generation
-        );
         generation = await incrementAnnouncementNotificationGeneration(id, statusPageId, tx);
         await cancelPendingAnnouncementJobs(tx, id, statusPageId);
         await suppressUndeliveredAnnouncementIntents(
@@ -467,19 +454,21 @@ export async function PATCH(req: NextRequest) {
 
         if (nextPlan.shouldNotify && nextPlan.scheduledAt) {
           const now = new Date();
-          const explicitSendNow = publishOption === 'NOW' && timing === 'ON_PUBLISH';
-          const canonicalTimeIsFuture = nextPlan.scheduledAt.getTime() > now.getTime();
-          const replaceUndeliveredDueContent =
-            !canonicalTimeIsFuture && !priorGenerationReachedProvider;
+          const scheduledAt =
+            nextPlan.scheduledAt.getTime() > now.getTime() ? nextPlan.scheduledAt : now;
 
-          if (canonicalTimeIsFuture || explicitSendNow || replaceUndeliveredDueContent) {
-            await createAnnouncementFanoutJob(tx, {
-              announcementId: id,
-              statusPageId,
-              scheduledAt: canonicalTimeIsFuture ? nextPlan.scheduledAt : now,
-              generation,
-            });
-          }
+          // A replacement generation always continues the campaign for recipients
+          // who have not successfully received any prior generation. This removes
+          // the coarse "someone was delivered" decision that could create a hole
+          // after partial provider acceptance, while preserving accepted mail as
+          // historical truth and preventing duplicate blasts.
+          await createAnnouncementFanoutJob(tx, {
+            announcementId: id,
+            statusPageId,
+            scheduledAt,
+            generation,
+            deliveryMode: 'UNDELIVERED_ONLY',
+          });
         }
       }
 
