@@ -25,7 +25,7 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
     const [config, chatOpsConfig, destination] = await Promise.all([
       tx.microsoftTeamsConfig.findFirst({ where: { enabled: true }, orderBy: { updatedAt: 'desc' } }),
       tx.chatOpsConfig.findUnique({ where: { id: 'default' } }),
-      tx.microsoftTeamsDestination.findFirst({ where: { serviceId: incident.serviceId, enabled: true, warRoomEnabled: true }, orderBy: { createdAt: 'asc' } }),
+      tx.microsoftTeamsDestination.findFirst({ where: { serviceId: incident.serviceId, enabled: true, warRoomEnabled: true, installation: { is: { enabled: true } } }, orderBy: { createdAt: 'asc' } }),
     ]);
     const decision = evaluateWarRoomPolicy({
       incident: { urgency: incident.urgency, priority: incident.priority, visibility: incident.visibility },
@@ -34,7 +34,7 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
       config: { enabled: Boolean(chatOpsConfig?.enabled), warRoomsEnabled: Boolean(config?.warRoomsEnabled), autoCreateOnUrgency: chatOpsConfig?.autoCreateOnUrgency ?? [], autoCreateOnPriority: chatOpsConfig?.autoCreateOnPriority ?? [], defaultMembershipType: config?.defaultWarRoomMembershipType ?? 'STANDARD' },
       manual,
     });
-    if (!decision.allowed || !destination) return { accepted: false, code: decision.allowed ? 'DESTINATION_UNAVAILABLE' : decision.code };
+    if (!decision.allowed || !destination || !destination.installationId) return { accepted: false, code: decision.allowed ? 'DESTINATION_UNAVAILABLE' : decision.code };
     // Private Teams channels need an explicit owner and initial membership.
     // Until that capability is implemented, fail closed rather than creating a
     // channel that may be inaccessible or have incorrect ownership.
