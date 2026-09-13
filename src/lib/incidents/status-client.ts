@@ -57,13 +57,18 @@ async function parseError(response: Response) {
     return {
       message: typeof payload.error === 'string' ? payload.error : `HTTP ${response.status}`,
       code: typeof payload.code === 'string' ? payload.code : `HTTP_${response.status}`,
-      retryable: payload.retryable === true || response.status === 408 || response.status === 429 || response.status >= 500,
+      retryable:
+        payload.retryable === true ||
+        response.status === 408 ||
+        response.status === 429 ||
+        response.status >= 500,
     };
   } catch {
     return {
       message: `HTTP ${response.status}`,
       code: `HTTP_${response.status}`,
-      retryable: response.status === 408 || response.status === 429 || response.status >= 500,
+      retryable:
+        response.status === 408 || response.status === 429 || response.status >= 500,
     };
   }
 }
@@ -128,6 +133,7 @@ export async function mutateIncidentStatus(input: {
       },
       body,
       credentials: 'include',
+      cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -151,17 +157,20 @@ export async function mutateIncidentStatus(input: {
   } catch (error) {
     if (error instanceof IncidentStatusMutationError) throw error;
 
-    // A transport error is ambiguous: the server may have committed before the
-    // connection disappeared. Replay with the SAME key, never a fresh key.
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      return queueStatusMutation({ ...input, idempotencyKey });
+    // Fetch transport failures are ambiguous even when navigator.onLine remains
+    // true (radio handoff, proxy reset, captive portal, tab suspension). The
+    // server may already have committed, so persist the SAME idempotency key and
+    // replay it instead of asking the user to issue a fresh mutation.
+    try {
+      return await queueStatusMutation({ ...input, idempotencyKey });
+    } catch (queueError) {
+      if (queueError instanceof IncidentStatusMutationError) throw queueError;
+      throw new IncidentStatusMutationError(
+        'OpsKnight could not confirm the change and offline storage is unavailable. Refresh the incident before retrying.',
+        null,
+        'NETWORK_QUEUE_FAILED',
+        true
+      );
     }
-
-    throw new IncidentStatusMutationError(
-      'OpsKnight could not confirm the change. Check your connection and retry.',
-      null,
-      'NETWORK_ERROR',
-      true
-    );
   }
 }
