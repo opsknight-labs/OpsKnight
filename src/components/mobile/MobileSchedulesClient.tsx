@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { CalendarClock, ChevronRight, UsersRound } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
+import { Card } from '@/components/ui/shadcn/card';
 import { readCache, writeCache } from '@/lib/mobile-cache';
 import { haptics } from '@/lib/haptics';
 
@@ -33,9 +35,7 @@ export default function MobileSchedulesClient({
     const handleOnlineStatus = async () => {
       if (!navigator.onLine) {
         const cached = await readCache<Schedule[]>('mobile-schedules');
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-          setSchedules(cached);
-        }
+        if (cached && Array.isArray(cached) && cached.length > 0) setSchedules(cached);
       } else {
         setSchedules(initialSchedules);
       }
@@ -43,8 +43,6 @@ export default function MobileSchedulesClient({
 
     window.addEventListener('online', handleOnlineStatus);
     window.addEventListener('offline', handleOnlineStatus);
-
-    // Initial check
     void handleOnlineStatus();
 
     return () => {
@@ -55,72 +53,68 @@ export default function MobileSchedulesClient({
 
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.onLine) {
-      writeCache('mobile-schedules', schedules);
+      void writeCache('mobile-schedules', schedules);
     }
   }, [schedules]);
 
-  return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">
-          On-Call Schedules
-        </h1>
-        <p className="mt-1 text-xs font-medium text-[color:var(--text-muted)]">
-          {schedules.length} schedule{schedules.length !== 1 ? 's' : ''}
-        </p>
-      </div>
+  const totalLayers = schedules.reduce((sum, schedule) => sum + schedule.layers.length, 0);
 
-      {/* Schedule List */}
-      <div className="flex flex-col gap-3">
-        {schedules.length === 0 ? (
-          <EmptyState />
-        ) : (
-          schedules.map(schedule => {
+  return (
+    <div className="responsive-page space-y-4">
+      <section className="flex items-center justify-between gap-3 px-0.5 text-[11px] text-muted-foreground">
+        <span>{schedules.length} {schedules.length === 1 ? 'schedule' : 'schedules'}</span>
+        <span>{totalLayers} escalation {totalLayers === 1 ? 'layer' : 'layers'}</span>
+      </section>
+
+      {schedules.length === 0 ? (
+        <EmptyState
+          icon={<CalendarClock aria-hidden="true" />}
+          title="No on-call schedules"
+          description="Schedules you can access will appear here."
+          size="sm"
+        />
+      ) : (
+        <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
+          {schedules.map((schedule, index) => {
             const totalParticipants = schedule.layers.reduce(
-              (acc, layer) => acc + layer.users.length,
+              (count, layer) => count + layer.users.length,
               0
             );
+            const firstResponder = schedule.layers[0]?.users[0]?.user;
 
             return (
               <Link
                 key={schedule.id}
                 href={`/m/schedules/${schedule.id}`}
                 onClick={() => haptics.soft()}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] p-4 text-[color:var(--text-primary)] shadow-sm transition hover:bg-[color:var(--bg-secondary)]"
+                className={`flex min-h-[72px] min-w-0 items-center gap-3 px-3.5 py-3 text-card-foreground transition-colors hover:bg-accent/40 ${
+                  index > 0 ? 'border-t border-border/70' : ''
+                }`}
               >
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <div className="truncate text-sm font-semibold">{schedule.name}</div>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--text-muted)]">
-                    <span>
-                      {'\u{1F4C5}'} {schedule.layers.length} layer
-                      {schedule.layers.length !== 1 ? 's' : ''}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700 dark:bg-violet-950/35 dark:text-violet-300">
+                  <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold text-foreground">{schedule.name}</span>
+                  <span className="mt-1 flex min-w-0 items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+                    <UsersRound className="h-3 w-3 shrink-0" aria-hidden="true" />
+                    <span className="truncate">
+                      {firstResponder?.name || firstResponder?.email || 'No responder assigned'}
+                      {totalParticipants > 1 ? ` · ${totalParticipants} responders` : ''}
                     </span>
-                    <span>{'\u2022'}</span>
-                    <span>
-                      {'\u{1F465}'} {totalParticipants} participant
-                      {totalParticipants !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-[color:var(--text-muted)]" />
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-[10px] font-semibold text-muted-foreground">
+                    {schedule.layers.length} {schedule.layers.length === 1 ? 'layer' : 'layers'}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </Link>
             );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--bg-secondary)] px-6 py-10 text-center">
-      <div className="text-3xl">{'\u{1F4C5}'}</div>
-      <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">No schedules</h3>
-      <p className="text-xs text-[color:var(--text-muted)]">
-        Use desktop to create on-call schedules
-      </p>
+          })}
+        </Card>
+      )}
     </div>
   );
 }
