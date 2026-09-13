@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   flushQueuedRequests,
   listQueuedRequests,
@@ -8,18 +9,68 @@ import {
   type OfflineQueueState,
 } from '@/lib/offline-queue';
 
-type QueueSummary = Partial<Record<OfflineQueueState, number>>;
+type QueueSummary = Record<OfflineQueueState, number>;
 
 function summarize(states: OfflineQueueState[]): QueueSummary {
-  return states.reduce<QueueSummary>((acc, state) => {
-    acc[state] = (acc[state] ?? 0) + 1;
-    return acc;
-  }, {});
+  let pending = 0;
+  let sending = 0;
+  let succeeded = 0;
+  let failed = 0;
+  let forbidden = 0;
+  let conflict = 0;
+  let authRequired = 0;
+
+  for (const state of states) {
+    switch (state) {
+      case 'PENDING':
+        pending += 1;
+        break;
+      case 'SENDING':
+        sending += 1;
+        break;
+      case 'SUCCEEDED':
+        succeeded += 1;
+        break;
+      case 'FAILED':
+        failed += 1;
+        break;
+      case 'FORBIDDEN':
+        forbidden += 1;
+        break;
+      case 'CONFLICT':
+        conflict += 1;
+        break;
+      case 'AUTH_REQUIRED':
+        authRequired += 1;
+        break;
+    }
+  }
+
+  return {
+    PENDING: pending,
+    SENDING: sending,
+    SUCCEEDED: succeeded,
+    FAILED: failed,
+    FORBIDDEN: forbidden,
+    CONFLICT: conflict,
+    AUTH_REQUIRED: authRequired,
+  };
 }
 
+const EMPTY_QUEUE: QueueSummary = {
+  PENDING: 0,
+  SENDING: 0,
+  SUCCEEDED: 0,
+  FAILED: 0,
+  FORBIDDEN: 0,
+  CONFLICT: 0,
+  AUTH_REQUIRED: 0,
+};
+
 export default function MobilePwaCoordinator() {
+  const router = useRouter();
   const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null);
-  const [queue, setQueue] = useState<QueueSummary>({});
+  const [queue, setQueue] = useState<QueueSummary>(EMPTY_QUEUE);
   const [syncing, setSyncing] = useState(false);
 
   const refreshQueue = useCallback(async () => {
@@ -119,11 +170,11 @@ export default function MobilePwaCoordinator() {
     };
   }, [refreshQueue, requestSync]);
 
-  const pending = (queue.PENDING ?? 0) + (queue.SENDING ?? 0);
-  const conflicts = queue.CONFLICT ?? 0;
-  const authRequired = queue.AUTH_REQUIRED ?? 0;
-  const forbidden = queue.FORBIDDEN ?? 0;
-  const failed = queue.FAILED ?? 0;
+  const pending = queue.PENDING + queue.SENDING;
+  const conflicts = queue.CONFLICT;
+  const authRequired = queue.AUTH_REQUIRED;
+  const forbidden = queue.FORBIDDEN;
+  const failed = queue.FAILED;
   const hasQueueNotice = pending + conflicts + authRequired + forbidden + failed > 0;
 
   const applyUpdate = () => {
@@ -131,6 +182,11 @@ export default function MobilePwaCoordinator() {
     if (!worker) return;
     setWaitingWorker(null);
     worker.postMessage({ type: 'SKIP_WAITING' });
+  };
+
+  const signInForQueuedActions = () => {
+    const callbackUrl = `${window.location.pathname}${window.location.search}`;
+    router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   };
 
   return (
@@ -169,14 +225,7 @@ export default function MobilePwaCoordinator() {
             </button>
           )}
           {authRequired > 0 && (
-            <button
-              type="button"
-              onClick={() =>
-                window.location.assign(
-                  `/login?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`
-                )
-              }
-            >
+            <button type="button" onClick={signInForQueuedActions}>
               Sign in
             </button>
           )}
