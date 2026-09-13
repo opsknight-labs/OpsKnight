@@ -14,6 +14,7 @@ let state: IntentState;
 
 const chatOpsIntent = {
   findUnique: vi.fn(async () => ({ ...state })),
+  create: vi.fn(),
   updateMany: vi.fn(async (args: { where: { status?: string; leaseToken?: string; OR?: Array<{ status?: string | { in: string[] } }> }; data: { status: string; leaseToken?: string | null; responsePayload?: unknown } }) => {
     const statuses = args.where.OR?.flatMap(condition => {
       if (typeof condition.status === 'string') return [condition.status];
@@ -32,7 +33,7 @@ const chatOpsIntent = {
   }),
 };
 
-vi.mock('@/lib/prisma', () => ({ default: { chatOpsIntent } }));
+vi.mock('@/lib/prisma', () => ({ default: { chatOpsIntent, $transaction: vi.fn() } }));
 vi.mock('@/lib/encryption', () => ({ decrypt: vi.fn(async (value: string) => value), encrypt: vi.fn(async (value: string) => value) }));
 
 describe('inline ChatOps intent durability', () => {
@@ -66,5 +67,17 @@ describe('inline ChatOps intent durability', () => {
     await expect(processInlineChatOpsIntent('intent-1', execute)).resolves.toEqual(state.responsePayload);
     expect(execute).not.toHaveBeenCalled();
     expect(state.status).toBe('COMPLETED');
+  });
+
+  it('deduplicates a legacy Slack hash before attempting a new-format insert', async () => {
+    chatOpsIntent.findUnique.mockResolvedValueOnce({ id: 'legacy-intent', payloadDigest: null } as never);
+    const { enqueueChatOpsIntent } = await import('@/lib/chatops/intents');
+
+    await expect(enqueueChatOpsIntent({
+      provider: 'SLACK', kind: 'INTERACTIVE_ACTION', signature: 'signed-retry', workspaceId: 'workspace-1',
+      payload: { action: 'note' }, responseMode: 'INLINE',
+    })).resolves.toEqual({ id: 'legacy-intent', duplicate: true });
+
+    expect(chatOpsIntent.create).not.toHaveBeenCalled();
   });
 });

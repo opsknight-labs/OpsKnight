@@ -86,7 +86,12 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     }
 
     const signature = `${tenantId}:${activityId}`;
-    const payload = { action, tenantId, teamId, channelId, providerUserId, userId: linked.userId };
+    // Intent payload is the retry contract. Convert relative user input to an
+    // absolute deadline once, before it is encrypted and durably replayed.
+    const snoozedUntil = action.action.verb === TEAMS_CHATOPS_VERBS.SNOOZE
+      ? new Date(Date.now() + (action.data as unknown as { minutes: number }).minutes * 60_000).toISOString()
+      : undefined;
+    const payload = { action, tenantId, teamId, channelId, providerUserId, userId: linked.userId, ...(snoozedUntil ? { snoozedUntil } : {}) };
     const intent = await enqueueChatOpsIntent({
       provider: 'MICROSOFT_TEAMS', kind: 'INTERACTIVE_ACTION', signature,
       workspaceId: tenantId, channelId, providerUserId, payload, responseMode: 'INLINE',
@@ -96,7 +101,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     });
     if (intent.duplicate) addOperationalMetric('opsknight_chatops_duplicate_total', 1, { provider: 'MICROSOFT_TEAMS', verb: action.action.verb });
 
-    const response = await processInlineChatOpsIntent(intent.id, async ({ intentId }) => {
+    const response = await processInlineChatOpsIntent(intent.id, async ({ intentId, payload: persistedPayload }) => {
       const idempotency = { key: intentId, principalId: `chatops:microsoft-teams:${tenantId}:${providerUserId}` };
       const actionData = action.data as typeof action.data & { resolutionNote?: string; note?: string; priority?: string; minutes?: number; reason?: string };
       let result: TeamsInvokeResponse;
@@ -132,7 +137,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           await executeChatOpsCommand({ provider: 'MICROSOFT_TEAMS', actor: { id: linked.userId, name: linked.displayName }, command: { kind: 'SET_PRIORITY', incidentId, priority: actionData.priority! }, idempotency });
           result = teamsActionSuccess(`Priority changed to ${actionData.priority}.`); break;
         case TEAMS_CHATOPS_VERBS.SNOOZE:
-          await executeChatOpsCommand({ provider: 'MICROSOFT_TEAMS', actor: { id: linked.userId, name: linked.displayName }, command: { kind: 'SNOOZE', incidentId, snoozedUntil: new Date(Date.now() + actionData.minutes! * 60_000), snoozeReason: actionData.reason }, idempotency });
+          await executeChatOpsCommand({ provider: 'MICROSOFT_TEAMS', actor: { id: linked.userId, name: linked.displayName }, command: { kind: 'SNOOZE', incidentId, snoozedUntil: new Date(String(persistedPayload.snoozedUntil)), snoozeReason: actionData.reason }, idempotency });
           result = teamsActionSuccess(`Incident snoozed for ${actionData.minutes} minutes.`); break;
         case TEAMS_CHATOPS_VERBS.ESCALATE:
           await executeChatOpsCommand({ provider: 'MICROSOFT_TEAMS', actor: { id: linked.userId, name: linked.displayName }, command: { kind: 'ESCALATE', incidentId }, idempotency });

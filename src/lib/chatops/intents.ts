@@ -53,6 +53,52 @@ function resolveProviderUserId(input: ChatOpsIntentInput): string | null {
   return null;
 }
 
+type ExistingIntent = { id: string; payloadDigest: string | null };
+
+async function returnDuplicateIntent(
+  existing: ExistingIntent,
+  payloadDigest: string,
+  responseMode: 'INLINE' | 'DEFERRED',
+): Promise<{ id: string; duplicate: true }> {
+  if (existing.payloadDigest && existing.payloadDigest !== payloadDigest) {
+    throw new Error('ChatOps delivery identity was reused with a different payload');
+  }
+  // A prior crash or an old partially-deployed release could leave an intent
+  // without a runnable executor. Repair that invariant without duplicating a
+  // leased executor.
+  if (responseMode === 'DEFERRED') await prisma.$transaction(async tx => {
+    const runnable = await tx.backgroundJob.findFirst({
+      where: { type: 'CHATOPS_INTENT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['intentId'], equals: existing.id } },
+      select: { id: true },
+    });
+    const intent = await tx.chatOpsIntent.findUnique({ where: { id: existing.id }, select: { status: true } });
+    if (!runnable && intent && ['PENDING', 'FAILED', 'EFFECT_COMPLETED', 'RESPONSE_PENDING'].includes(intent.status)) {
+      await tx.backgroundJob.create({
+        data: { type: 'CHATOPS_INTENT', status: 'PENDING', scheduledAt: new Date(), payload: { intentId: existing.id }, maxAttempts: 8 },
+      });
+    }
+  });
+  return { id: existing.id, duplicate: true };
+}
+
+async function findLegacySlackIntent(kind: ChatOpsIntentInput['kind'], signature: string): Promise<ExistingIntent | null> {
+  const legacyHash = legacyDeliveryHash(kind, signature);
+  let existing = await prisma.chatOpsIntent.findUnique({
+    where: { provider_kind_deliveryHash: { provider: 'SLACK', kind, deliveryHash: legacyHash } } as unknown as Prisma.ChatOpsIntentWhereUniqueInput,
+    select: { id: true, payloadDigest: true },
+  }) as ExistingIntent | null;
+  if (!existing) {
+    try {
+      existing = await (prisma.chatOpsIntent.findUnique as unknown as (args: unknown) => Promise<ExistingIntent | null>)({
+        where: { kind_deliveryHash: { kind, deliveryHash: legacyHash } }, select: { id: true, payloadDigest: true },
+      });
+    } catch {
+      // A migrated client no longer exposes the legacy compound key.
+    }
+  }
+  return existing;
+}
+
 /**
  * Persist a signed provider request before acknowledging it. The signature
  * is deterministic for a provider retry, while the payload itself remains
@@ -65,6 +111,13 @@ export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{
   const payloadDigest = input.payloadDigest ?? payloadDigestFromPayload(input.payload);
   const hash = deliveryHash(provider, input.kind, input.signature);
   const providerUserId = resolveProviderUserId(input);
+  // Migration changes the unique hash format but intentionally leaves historical
+  // encrypted payload rows intact. Check Slack's old hash *before* attempting
+  // the new insert; otherwise no P2002 is raised and a retry can mutate twice.
+  if (provider === 'SLACK') {
+    const legacy = await findLegacySlackIntent(input.kind, input.signature);
+    if (legacy) return returnDuplicateIntent(legacy, payloadDigest, responseMode);
+  }
   try {
     const encryptedPayload = await encrypt(JSON.stringify(input.payload));
     const intent = await prisma.$transaction(async tx => {
@@ -107,61 +160,14 @@ export async function enqueueChatOpsIntent(input: ChatOpsIntentInput): Promise<{
     let existing = await prisma.chatOpsIntent.findUnique({
       where: { provider_kind_deliveryHash: { provider, kind: input.kind, deliveryHash: hash } } as unknown as Prisma.ChatOpsIntentWhereUniqueInput,
       select: { id: true, payloadDigest: true },
-    });
+    }) as ExistingIntent | null;
     // Rolling-deploy compat: pre-generic Slack rows have deliveryHash = sha256(kind:signature) without provider prefix.
     // A retry arriving with new code would otherwise miss the dedup row and duplicate the mutation.
     if (!existing && provider === 'SLACK') {
-      const legacyHash = legacyDeliveryHash(input.kind, input.signature);
-      existing = await prisma.chatOpsIntent.findUnique({
-        where: { provider_kind_deliveryHash: { provider: 'SLACK', kind: input.kind, deliveryHash: legacyHash } } as unknown as Prisma.ChatOpsIntentWhereUniqueInput,
-        select: { id: true, payloadDigest: true },
-      });
-      // Also try the old single-column unique name if the migration hasn't been applied in this environment
-      if (!existing) {
-        try {
-          existing = await (prisma.chatOpsIntent.findUnique as unknown as (args: unknown) => Promise<{ id: string; payloadDigest: string | null } | null>)({
-            where: { kind_deliveryHash: { kind: input.kind, deliveryHash: legacyHash } },
-            select: { id: true, payloadDigest: true },
-          });
-        } catch {
-          // ignore — client may not have the legacy unique
-        }
-      }
+      existing = await findLegacySlackIntent(input.kind, input.signature);
     }
     if (!existing) throw error;
-    if (existing.payloadDigest && existing.payloadDigest !== payloadDigest) {
-      throw new Error('ChatOps delivery identity was reused with a different payload');
-    }
-    // A prior crash or an old partially-deployed release could leave an
-    // intent without a runnable executor. Repair that invariant transactionally
-    // on the duplicate path without creating a second job when one is leased.
-    if (responseMode === 'DEFERRED') await prisma.$transaction(async tx => {
-      const runnable = await tx.backgroundJob.findFirst({
-        where: {
-          type: 'CHATOPS_INTENT',
-          status: { in: ['PENDING', 'PROCESSING'] },
-          payload: { path: ['intentId'], equals: existing!.id },
-        },
-        select: { id: true },
-      });
-      const intent = await tx.chatOpsIntent.findUnique({
-        where: { id: existing!.id },
-        select: { status: true },
-      });
-      if (
-        !runnable &&
-        intent &&
-        ['PENDING', 'FAILED', 'EFFECT_COMPLETED', 'RESPONSE_PENDING'].includes(intent.status)
-      ) {
-        await tx.backgroundJob.create({
-          data: {
-            type: 'CHATOPS_INTENT', status: 'PENDING', scheduledAt: new Date(),
-            payload: { intentId: existing!.id }, maxAttempts: 8,
-          },
-        });
-      }
-    });
-    return { id: existing.id, duplicate: true };
+    return returnDuplicateIntent(existing, payloadDigest, responseMode);
   }
 }
 

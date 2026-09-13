@@ -51,4 +51,11 @@ describe('Microsoft Teams Phase 2 architecture', () => {
     expect(escalation).toContain('generation: cursor.generation');
     expect(escalation).toContain('stepIndex: cursor.stepIndex');
   });
+
+  it('persists relative snooze input as an absolute intent deadline', () => {
+    const invoke = fs.readFileSync('src/lib/microsoft-teams/invoke.ts', 'utf8');
+    expect(invoke).toContain('const snoozedUntil = action.action.verb === TEAMS_CHATOPS_VERBS.SNOOZE');
+    expect(invoke).toContain('persistedPayload.snoozedUntil');
+    expect(invoke).not.toContain('snoozedUntil: new Date(Date.now() + actionData.minutes');
+  });
 });

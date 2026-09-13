@@ -3,8 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const executeChatOpsCommand = vi.fn(async () => ({ changed: true }));
 const resolveMicrosoftTeamsUser = vi.fn<() => Promise<{ linkId: string; userId: string; displayName: string } | null>>(async () => ({ linkId: 'link-1', userId: 'user-1', displayName: 'Alice' }));
 const createMicrosoftTeamsIdentityChallenge = vi.fn(async () => 'challenge-token');
-const enqueueChatOpsIntent = vi.fn(async () => ({ id: 'intent-1', duplicate: false }));
-const processInlineChatOpsIntent = vi.fn(async (_id: string, execute: (input: { intentId: string; payload: Record<string, unknown> }) => Promise<unknown>) => execute({ intentId: 'intent-1', payload: {} }));
+let persistedIntentPayload: Record<string, unknown> = {};
+const enqueueChatOpsIntent = vi.fn(async (input: { payload: Record<string, unknown> }) => {
+  persistedIntentPayload = input.payload;
+  return { id: 'intent-1', duplicate: false };
+});
+const processInlineChatOpsIntent = vi.fn(async (_id: string, execute: (input: { intentId: string; payload: Record<string, unknown> }) => Promise<unknown>) => execute({ intentId: 'intent-1', payload: persistedIntentPayload }));
 
 const destination = { id: 'dest-1', tenantId: 'tenant-1', teamId: 'team-1', channelId: 'channel-1', serviceId: 'svc-1', enabled: true, interactiveEnabled: true, installation: { enabled: true } };
 const incident = { id: 'inc-1', serviceId: 'svc-1', title: 'Incident', description: null, status: 'OPEN', urgency: 'HIGH', priority: 'P1', createdAt: new Date(), acknowledgedAt: null, resolvedAt: null, service: { name: 'API' }, assignee: null };
@@ -36,7 +40,10 @@ function activity(overrides: Record<string, unknown> = {}) {
 }
 
 describe('Microsoft Teams invoke adapter', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    persistedIntentPayload = {};
+  });
 
   it('binds a valid click and dispatches through the provider-neutral command', async () => {
     const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
@@ -92,5 +99,19 @@ describe('Microsoft Teams invoke adapter', () => {
     const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
     await expect(handleMicrosoftTeamsAdaptiveCardAction({ activity: activity(), verifiedTenantId: 'tenant-1' })).resolves.toMatchObject({ statusCode: 403 });
     expect(executeChatOpsCommand).not.toHaveBeenCalled();
+  });
+
+  it('persists a fixed snooze deadline and reuses it during intent execution', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-13T10:00:00.000Z'));
+    const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
+    const snooze = activity({ value: { action: { type: 'Action.Execute', verb: 'opsknight.incident.snooze', data: { v: 2, incidentId: 'inc-1', destinationId: 'dest-1', messageGeneration: 1, minutes: 30 } } } });
+    await expect(handleMicrosoftTeamsAdaptiveCardAction({ activity: snooze, verifiedTenantId: 'tenant-1' })).resolves.toMatchObject({ statusCode: 200 });
+
+    expect(persistedIntentPayload.snoozedUntil).toBe('2026-09-13T10:30:00.000Z');
+    expect(executeChatOpsCommand).toHaveBeenCalledWith(expect.objectContaining({
+      command: expect.objectContaining({ kind: 'SNOOZE', snoozedUntil: new Date('2026-09-13T10:30:00.000Z') }),
+    }));
+    vi.useRealTimers();
   });
 });

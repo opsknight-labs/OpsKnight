@@ -49,7 +49,9 @@ export async function POST(request: NextRequest) {
     };
     let dest: { id: string; serviceId: string; tenantId: string; teamId: string; channelId: string } | null = null;
     if (destinationId) {
-      dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { id: destinationId, enabled: true, installation: { enabled: true } } });
+      dest = await prismaAny.microsoftTeamsDestination.findFirst({
+        where: { id: destinationId, ...(serviceId ? { serviceId } : {}), enabled: true, installation: { enabled: true } },
+      });
     } else if (serviceId) {
       dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { serviceId, enabled: true, installation: { enabled: true } } });
     }
