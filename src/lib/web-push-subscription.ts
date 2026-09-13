@@ -42,7 +42,9 @@ export function webPushDeviceKey(endpoint: string): string {
 }
 
 /** Encrypt capability-bearing subscription data before persistence. */
-export function encodeWebPushSubscription(subscription: StoredWebPushSubscription): string {
+export async function encodeWebPushSubscription(
+  subscription: StoredWebPushSubscription
+): Promise<string> {
   return encrypt(JSON.stringify(subscription));
 }
 
@@ -50,10 +52,12 @@ export function encodeWebPushSubscription(subscription: StoredWebPushSubscriptio
  * Reads the current encrypted format and the previous plaintext JSON format so
  * existing installations migrate on the next registration without losing push.
  */
-export function decodeWebPushSubscription(token: string): StoredWebPushSubscription {
+export async function decodeWebPushSubscription(
+  token: string
+): Promise<StoredWebPushSubscription> {
   const candidates: string[] = [];
   try {
-    candidates.push(decrypt(token));
+    candidates.push(await decrypt(token));
   } catch {
     // Legacy v1 records stored JSON directly.
   }

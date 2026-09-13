@@ -62,7 +62,7 @@ async function postSubscription(req: NextRequest) {
     }
 
     const deviceId = webPushDeviceKey(subscription.endpoint);
-    const token = encodeWebPushSubscription(subscription);
+    const token = await encodeWebPushSubscription(subscription);
     const userAgent = req.headers.get('user-agent')?.slice(0, 512) || undefined;
 
     await prisma.$transaction(async tx => {

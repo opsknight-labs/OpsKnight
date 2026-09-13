@@ -169,7 +169,9 @@ export async function setOfflineQueuePrincipal(context: MobilePrincipalContext):
       const store = tx.objectStore(STORE_NAME);
       const read = store.getAll();
       read.onsuccess = () => {
-        for (const raw of read.result as Array<Partial<QueuedRequest> & { id?: string; kind?: string }>) {
+        for (const raw of read.result as Array<
+          Omit<Partial<QueuedRequest>, 'kind'> & { id?: string; kind?: string }
+        >) {
           if (!raw.id || raw.id === MARKER_ID || raw.kind === 'PRINCIPAL') continue;
           if (
             raw.principalId !== context.principalId ||
@@ -257,10 +259,16 @@ export const listQueuedRequests = async (): Promise<QueuedRequest[]> => {
   if (!principal) return [];
   const db = await openDb();
   try {
-    const raw = await requestToPromise(db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll());
+    const raw = await requestToPromise(
+      db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll()
+    );
     return (raw as Array<Record<string, unknown>>)
       .filter(value => value.id !== MARKER_ID && value.kind !== 'PRINCIPAL')
-      .map(value => normalizeStoredRequest(value as Partial<QueuedRequest> & { id: string; url: string; method: string }))
+      .map(value =>
+        normalizeStoredRequest(
+          value as Partial<QueuedRequest> & { id: string; url: string; method: string }
+        )
+      )
       .filter(
         item =>
           item.principalId === principal.principalId &&
@@ -294,7 +302,10 @@ export const removeQueuedRequest = async (id: string) => {
 async function cleanupTerminalRequests(now = Date.now()) {
   const items = await listQueuedRequests();
   const expired = items.filter(
-    item => item.completedAt && now - item.completedAt > TERMINAL_RETENTION_MS && TERMINAL_STATES.has(item.state)
+    item =>
+      item.completedAt &&
+      now - item.completedAt > TERMINAL_RETENTION_MS &&
+      TERMINAL_STATES.has(item.state)
   );
   await Promise.all(expired.map(item => removeQueuedRequest(item.id)));
 }
@@ -409,10 +420,12 @@ async function claimRequest(
         if (
           current.principalId !== principal.principalId ||
           current.authGeneration !== principal.authGeneration
-        ) return;
+        )
+          return;
         const staleLease = current.state === 'SENDING' && (current.leaseUntil ?? 0) <= now;
         const pendingAndDue =
-          current.state === 'PENDING' && (current.nextAttemptAt == null || current.nextAttemptAt <= now);
+          current.state === 'PENDING' &&
+          (current.nextAttemptAt == null || current.nextAttemptAt <= now);
         if (!pendingAndDue && !staleLease) return;
         claimed = {
           ...current,
@@ -544,7 +557,10 @@ export const flushQueuedRequests = async () => {
     const candidates = firstPerLane(queue).filter(item => {
       if (item.state === 'AUTH_REQUIRED' || item.state === 'CONFLICT') return false;
       if (item.state === 'SENDING') return (item.leaseUntil ?? 0) <= now;
-      return item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now);
+      return (
+        item.state === 'PENDING' &&
+        (item.nextAttemptAt == null || item.nextAttemptAt <= now)
+      );
     });
     if (candidates.length === 0) break;
 

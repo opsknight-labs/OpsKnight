@@ -112,7 +112,11 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         }
       }
     }
-    if (vapidDetailsList.length === 0 && process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    if (
+      vapidDetailsList.length === 0 &&
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY &&
+      process.env.VAPID_PRIVATE_KEY
+    ) {
       const publicKey = normalizeVapidKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
       const privateKey = normalizeVapidKey(process.env.VAPID_PRIVATE_KEY);
       if (publicKey && privateKey) {
@@ -175,7 +179,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
 
       let subscription;
       try {
-        subscription = decodeWebPushSubscription(device.token);
+        subscription = await decodeWebPushSubscription(device.token);
       } catch {
         await removeDevice(device.id);
         terminalCount += 1;
@@ -193,7 +197,10 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
           parsedActions = undefined;
         }
       }
-      const badge = typeof options.data?.badge === 'string' ? options.data.badge : '/icons/app-icon-192.png';
+      const badge =
+        typeof options.data?.badge === 'string'
+          ? options.data.badge
+          : '/icons/app-icon-192.png';
       const url = typeof options.data?.url === 'string' ? options.data.url : '/m';
       const urgency = options.data?.urgency === 'HIGH' ? 'HIGH' : 'NORMAL';
       const payload = JSON.stringify({
@@ -248,7 +255,9 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
             await removeDevice(device.id);
             terminalCount += 1;
             errors.push(
-              `Device ${safeDeviceRef}: ${restrictedDestination ? 'unsafe destination rejected' : 'subscription expired and removed'}`
+              `Device ${safeDeviceRef}: ${
+                restrictedDestination ? 'unsafe destination rejected' : 'subscription expired and removed'
+              }`
             );
             return;
           }
@@ -259,7 +268,9 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
             /vapid|authorization/i.test(errorMessage(error));
           if (!tryHistoricalVapid) {
             retryableFailureCount += 1;
-            errors.push(`Device ${safeDeviceRef}: delivery failed${code ? ` (HTTP ${code})` : ''}`);
+            errors.push(
+              `Device ${safeDeviceRef}: delivery failed${code ? ` (HTTP ${code})` : ''}`
+            );
             return;
           }
         }
@@ -323,7 +334,11 @@ export async function sendIncidentPush(
       }),
     ]);
     if (!user || !incident) {
-      return { success: false, code: 'RECIPIENT_NOT_FOUND', error: 'User or incident not found' };
+      return {
+        success: false,
+        code: 'RECIPIENT_NOT_FOUND',
+        error: 'User or incident not found',
+      };
     }
 
     const baseUrl = getBaseUrl();
@@ -332,8 +347,10 @@ export async function sendIncidentPush(
     let titleEmoji = '';
     let badge = '/icons/app-icon-192.png';
     if (eventType === 'triggered') {
-      titleEmoji = incident.urgency === 'HIGH' ? '🔴' : incident.urgency === 'MEDIUM' ? '🟡' : '🔵';
-      badge = incident.urgency === 'HIGH' ? '/icons/badge-critical.png' : '/icons/badge-info.png';
+      titleEmoji =
+        incident.urgency === 'HIGH' ? '🔴' : incident.urgency === 'MEDIUM' ? '🟡' : '🔵';
+      badge =
+        incident.urgency === 'HIGH' ? '/icons/badge-critical.png' : '/icons/badge-info.png';
     } else if (eventType === 'acknowledged') titleEmoji = '✅';
     else titleEmoji = '✓';
 
@@ -347,7 +364,9 @@ export async function sendIncidentPush(
             : 'Updated';
     const title =
       eventType === 'triggered'
-        ? `${titleEmoji} ${incident.urgency === 'HIGH' ? 'CRITICAL' : 'Incident'} • ${incident.service?.name}`
+        ? `${titleEmoji} ${
+            incident.urgency === 'HIGH' ? 'CRITICAL' : 'Incident'
+          } • ${incident.service?.name}`
         : `${titleEmoji} ${eventLabel} • ${incident.service?.name}`;
     const eventTime =
       eventType === 'acknowledged'
@@ -361,13 +380,21 @@ export async function sendIncidentPush(
     let body = `${incident.title}\n${eventLabel} • ${ownerLabel} • ${timeLabel}`;
     if (incident.urgency === 'HIGH') body += '\n🚨 Urgent Action Required';
     if (incident.description) {
-      body += `\n${incident.description.length > 60 ? `${incident.description.substring(0, 60)}...` : incident.description}`;
+      body += `\n${
+        incident.description.length > 60
+          ? `${incident.description.substring(0, 60)}...`
+          : incident.description
+      }`;
     }
     const actions =
       eventType === 'triggered'
         ? [
             { action: 'view', title: '👁️ View', icon: '/icons/app-icon-192.png' },
-            { action: 'acknowledge', title: '✓ Acknowledge', icon: '/icons/app-icon-192.png' },
+            {
+              action: 'acknowledge',
+              title: '✓ Acknowledge',
+              icon: '/icons/app-icon-192.png',
+            },
           ]
         : [{ action: 'view', title: '👁️ View', icon: '/icons/app-icon-192.png' }];
 
