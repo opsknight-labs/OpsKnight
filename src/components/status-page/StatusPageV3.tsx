@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { formatDateTime } from '@/lib/timezone';
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
+import { resolveStatusPageTheme } from '@/lib/status-pages/theme-contract';
+import { resolveStatusPageThemeRuntimeVariables } from '@/lib/status-pages/theme-runtime';
 import StatusPageHeader from './StatusPageHeader';
 import StatusPageFooter from './StatusPageFooter';
 import StatusPageSubscribe from './StatusPageSubscribe';
@@ -19,7 +21,9 @@ import AnnouncementsV3, { ChangelogV3 } from './v3/AnnouncementsV3';
 /**
  * Public status page: branding chrome around the V3-native presentation tree.
  *
- * Health, uptime, and region status are never recomputed here.
+ * Health, uptime, and region status are never recomputed here. Curated theme core tokens are
+ * applied directly at this shared V3 surface boundary so preview and public rendering cannot drift
+ * because of stylesheet order or inherited legacy branding variables.
  */
 export default function StatusPageV3({
   snapshot,
@@ -43,6 +47,9 @@ export default function StatusPageV3({
   const vis = page.visibility;
   const [timeZone, setTimeZone] = useState('UTC');
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const themeId = (branding as typeof branding & { themeId?: unknown }).themeId;
+  const selectedTheme = resolveStatusPageTheme(themeId);
+  const runtimeThemeVariables = resolveStatusPageThemeRuntimeVariables(selectedTheme.id);
 
   useEffect(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -132,7 +139,12 @@ export default function StatusPageV3({
   const rssHref = showRss ? `${apiPath}/rss` : null;
 
   return (
-    <div className={STATUS_PAGE_SURFACE_CLASS}>
+    <div
+      className={STATUS_PAGE_SURFACE_CLASS}
+      data-sp-theme={selectedTheme.id}
+      data-sp-theme-version={selectedTheme.version}
+      style={runtimeThemeVariables as CSSProperties}
+    >
       {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
 
       {showHeader && (
