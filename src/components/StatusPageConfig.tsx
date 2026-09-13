@@ -1020,15 +1020,74 @@ export default function StatusPageConfig({
               }}
             >
               <StatusPageSectionErrorBoundary key={activeSection} sectionName={activeSection}>
-                <form
-                  id="status-page-section-form"
-                  onSubmit={handleSubmit}
-                  style={{ display: 'contents' }}
-                >
+                {['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(
+                  activeSection
+                ) ? (
                   <div
                     className="status-page-config-settings-inner"
                     style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
                   >
+{/* Announcements */}
+                {activeSection === 'announcements' && (
+                  <StatusPageAnnouncementManager
+                    statusPageId={statusPage.id}
+                    announcements={announcements}
+                    setAnnouncements={setAnnouncements}
+                    allServices={announcementServiceOptions}
+                    browserTimeZone={browserTimeZone}
+                  />
+                )}
+
+                {/* Integrations */}
+                {activeSection === 'integrations' && (
+                  <StatusPageWebhooksSettings statusPageId={statusPage.id} />
+                )}
+
+                {/* Subscribers */}
+                {activeSection === 'subscribers' && (
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                  >
+                    <StatusPageSectionCard
+                      title="Subscribers"
+                      description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription."
+                      icon={<Users className="w-5 h-5 text-primary" />}
+                    >
+                      <StatusPageSubscribers statusPageId={statusPage.id} />
+                    </StatusPageSectionCard>
+                  </div>
+                )}
+
+                {/* Email Delivery */}
+                {activeSection === 'email-delivery' && (
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                  >
+                    <StatusPageSectionCard
+                      title="Email Delivery"
+                      description="Configure which email provider to use for subscription verification and status page notification alerts."
+                      icon={<Mail className="w-5 h-5 text-primary" />}
+                    >
+                      <StatusPageEmailConfig
+                        statusPageId={statusPage.id}
+                        currentProvider={statusPage.emailProvider}
+                      />
+                    </StatusPageSectionCard>
+                  </div>
+                )}
+
+                                  </div>
+                ) : (
+                  <form
+                    id="status-page-section-form"
+                    onSubmit={handleSubmit}
+                    style={{ display: 'contents' }}
+                  >
+                    <div
+                      className="status-page-config-settings-inner"
+                      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
+                    >
+
                 {/* General Settings */}
                 {activeSection === 'general' && (
                   <div
@@ -1943,55 +2002,6 @@ export default function StatusPageConfig({
                   </div>
                 )}
 
-                {/* Announcements */}
-                {activeSection === 'announcements' && (
-                  <StatusPageAnnouncementManager
-                    statusPageId={statusPage.id}
-                    announcements={announcements}
-                    setAnnouncements={setAnnouncements}
-                    allServices={announcementServiceOptions}
-                    browserTimeZone={browserTimeZone}
-                  />
-                )}
-
-                {/* Integrations */}
-                {activeSection === 'integrations' && (
-                  <StatusPageWebhooksSettings statusPageId={statusPage.id} />
-                )}
-
-                {/* Subscribers */}
-                {activeSection === 'subscribers' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Subscribers"
-                      description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription."
-                      icon={<Users className="w-5 h-5 text-primary" />}
-                    >
-                      <StatusPageSubscribers statusPageId={statusPage.id} />
-                    </StatusPageSectionCard>
-                  </div>
-                )}
-
-                {/* Email Delivery */}
-                {activeSection === 'email-delivery' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Email Delivery"
-                      description="Configure which email provider to use for subscription verification and status page notification alerts."
-                      icon={<Mail className="w-5 h-5 text-primary" />}
-                    >
-                      <StatusPageEmailConfig
-                        statusPageId={statusPage.id}
-                        currentProvider={statusPage.emailProvider}
-                      />
-                    </StatusPageSectionCard>
-                  </div>
-                )}
-
                 {/* Advanced Settings */}
                 {activeSection === 'advanced' && (
                   <div
@@ -2463,8 +2473,9 @@ export default function StatusPageConfig({
                     {error}
                   </InlineNotice>
                 )}
-                  </div>
-                </form>
+                    </div>
+                  </form>
+                )}
               </StatusPageSectionErrorBoundary>
             </div>
             {/* Sections with independent controls persist through their own APIs. */}

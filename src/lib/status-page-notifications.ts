@@ -491,9 +491,9 @@ export async function notifyStatusPageSubscribersAnnouncement(
   statusPageId: string
 ): Promise<{ sent: number; failed: number; skipped?: boolean }> {
   try {
-    // 1. Get announcement details
-    const announcement = await prisma.statusPageAnnouncement.findUnique({
-      where: { id: announcementId },
+    // 1. Get announcement details with status page ownership check
+    const announcement = await prisma.statusPageAnnouncement.findFirst({
+      where: { id: announcementId, statusPageId },
     });
 
     if (!announcement) {
@@ -642,6 +642,29 @@ export async function notifyStatusPageSubscribersAnnouncement(
     while (true) {
       if (!(await bulkQueueHasCapacity())) {
         throw new BulkQueueBackpressureError();
+      }
+
+      // Worker fence: check if announcement was deactivated, deleted, rescheduled, or modified
+      const currentAnn = await prisma.statusPageAnnouncement.findUnique({
+        where: { id: announcement.id },
+        select: { isActive: true, updatedAt: true, publishAt: true },
+      });
+      if (
+        !currentAnn ||
+        !currentAnn.isActive ||
+        (currentAnn.publishAt && currentAnn.publishAt.getTime() > Date.now()) ||
+        currentAnn.updatedAt.toISOString() !== fanout.eventKey
+      ) {
+        logger.info(
+          `Announcement ${announcement.id} was deactivated, updated, or deleted during fan-out; terminating pagination.`
+        );
+        await recordFanoutPage(fanout.id, {
+          cursor,
+          materialized: 0,
+          failed: 0,
+          complete: true,
+        });
+        break;
       }
       const subscriptions = await prisma.statusPageSubscription.findMany({
         where: hasScopedServices

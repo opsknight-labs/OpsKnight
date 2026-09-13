@@ -300,7 +300,13 @@ export const STATUS_ANNOUNCEMENT_TYPES = [
 ] as const;
 export type StatusAnnouncementType = (typeof STATUS_ANNOUNCEMENT_TYPES)[number];
 
-const isValidDateTimeString = (val: string) => !Number.isNaN(new Date(val).getTime());
+const ISO_DATE_TIME_REGEX =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+export const isValidDateTimeString = (val: string) =>
+  typeof val === 'string' &&
+  ISO_DATE_TIME_REGEX.test(val) &&
+  !Number.isNaN(new Date(val).getTime());
 
 export const StatusAnnouncementCreateSchema = z
   .object({
