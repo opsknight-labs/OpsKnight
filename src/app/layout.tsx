@@ -3,7 +3,6 @@ import { Manrope, Playfair_Display } from 'next/font/google';
 import '@/styles/index.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
-import LegalSourceNotice from '@/components/LegalSourceNotice';
 
 // Initialize fonts with explicit weights for better control
 const manrope = Manrope({
@@ -61,7 +60,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <VersionCheck />
           {children}
-          <LegalSourceNotice />
         </Providers>
       </body>
     </html>
