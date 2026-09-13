@@ -94,7 +94,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     void recordSessionHeartbeat({ userId: activeShell.user.id, userAgent, ip }).catch(() => {});
   } catch {}
 
-  const userName = activeShell.user.name || requestContext.session.user.name || null;
+  const userName = activeShell.user.name;
   const userEmail = activeShell.user.email;
   const userRole = activeShell.user.role;
   const userAvatar = activeShell.user.avatarUrl;
