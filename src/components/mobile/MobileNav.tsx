@@ -4,31 +4,38 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { MOBILE_NAV_ITEMS, MOBILE_MORE_ROUTES } from '@/components/mobile/mobileNavItems';
+import { isFocusedMobileWorkflow } from '@/lib/mobile-chrome';
 import { haptics } from '@/lib/haptics';
 import { useNotificationStream } from '@/hooks/useNotificationStream';
 
-const FOCUSED_WORKFLOW_ROOTS = new Set([
-  'incidents',
-  'services',
-  'schedules',
-  'teams',
-  'users',
-  'policies',
-  'postmortems',
-]);
-
 export default function MobileNav() {
-  const pathname = usePathname();
+  const pathname = usePathname() || '/m';
   const [unreadCount, setUnreadCount] = useState(0);
   const [usePolling, setUsePolling] = useState(false);
   const moreIndex = MOBILE_NAV_ITEMS.findIndex(item => item.href === '/m/more');
+
+  const focusedWorkflow = isFocusedMobileWorkflow(pathname);
+
+  // Synchronize shell geometry state and reset scroll position on page transition
+  useEffect(() => {
+    const appElement = document.querySelector<HTMLElement>('.mobile-app');
+    if (appElement) {
+      appElement.dataset.bottomNav = focusedWorkflow ? 'absent' : 'present';
+    }
+    const scrollContainer = document.querySelector<HTMLElement>('.mobile-content');
+    if (scrollContainer) {
+      scrollContainer.scrollTop = 0;
+    }
+  }, [pathname, focusedWorkflow]);
 
   const fetchCount = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications?limit=1');
       if (!res.ok) return;
       const data = await res.json();
-      const unread = (data.notifications || []).filter((item: { unread: boolean }) => item.unread).length;
+      const unread = (data.notifications || []).filter(
+        (item: { unread: boolean }) => item.unread
+      ).length;
       setUnreadCount(data.unreadCount || unread);
     } catch {
       // Navigation must remain usable if alert count refresh fails.
@@ -71,10 +78,6 @@ export default function MobileNav() {
     };
   }, [fetchCount, usePolling]);
 
-  const segments = pathname.split('/').filter(Boolean);
-  const focusedWorkflow =
-    segments.length >= 3 && segments[0] === 'm' && FOCUSED_WORKFLOW_ROOTS.has(segments[1]);
-
   const directIndex = MOBILE_NAV_ITEMS.findIndex(item => {
     if (item.href === '/m') return pathname === '/m';
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -89,8 +92,18 @@ export default function MobileNav() {
 
   if (focusedWorkflow) return null;
 
+  const handleTabClick = (active: boolean) => {
+    haptics.selection();
+    if (active) {
+      const scrollContainer = document.querySelector<HTMLElement>('.mobile-content');
+      if (scrollContainer && scrollContainer.scrollTop > 5) {
+        scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  };
+
   return (
-    <nav className="mobile-nav" aria-label="Primary mobile navigation">
+    <nav className="mobile-nav" data-swipe-ignore="true" aria-label="Primary mobile navigation">
       {MOBILE_NAV_ITEMS.map((item, index) => {
         const active = index === activeIndex;
         const hasBadge = 'hasBadge' in item && item.hasBadge && unreadCount > 0;
@@ -99,7 +112,7 @@ export default function MobileNav() {
             key={item.href}
             href={item.href}
             className={`mobile-nav-item ${active ? 'active' : ''}`}
-            onClick={() => haptics.selection()}
+            onClick={() => handleTabClick(active)}
             aria-label={`${item.label}${hasBadge ? `, ${unreadCount} unread notifications` : ''}`}
             aria-current={active ? 'page' : undefined}
           >

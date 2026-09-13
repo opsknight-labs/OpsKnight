@@ -21,6 +21,7 @@ export const MOBILE_MORE_ROUTES = [
   '/m/analytics',
   '/m/postmortems',
   '/m/status',
+  '/m/help',
 ];
 
 export const MOBILE_NAV_ITEMS: MobileNavItem[] = [

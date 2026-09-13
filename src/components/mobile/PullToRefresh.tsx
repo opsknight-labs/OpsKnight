@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { haptics } from '@/lib/haptics';
+import { isInteractiveMobileTarget } from '@/lib/mobile-interactive';
 
 export default function PullToRefresh({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -15,14 +16,6 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
 
   const pullThreshold = 70;
   const maxPull = 100;
-
-  const isInteractiveTarget = (target: EventTarget | null) => {
-    if (!(target instanceof Element)) return false;
-    const closest = target.closest(
-      'input, textarea, select, button, [contenteditable="true"], [role="textbox"], [data-disable-pull]'
-    );
-    return closest instanceof Element;
-  };
 
   useEffect(() => {
     return () => {
@@ -44,7 +37,7 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (isInteractiveTarget(e.target)) {
+    if (isInteractiveMobileTarget(e.target)) {
       startXRef.current = null;
       startYRef.current = null;
       return;
@@ -62,7 +55,7 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (isInteractiveTarget(e.target)) {
+    if (isInteractiveMobileTarget(e.target)) {
       if (pullChange !== 0) setPullChange(0);
       startXRef.current = null;
       startYRef.current = null;
@@ -139,8 +132,20 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
           }}
         >
           <div style={{ position: 'relative', width: '40px', height: '40px' }}>
-            <svg width="40" height="40" viewBox="0 0 40 40" style={{ position: 'absolute', top: 0, left: 0 }}>
-              <circle cx="20" cy="20" r="16" fill="none" stroke="hsl(var(--ui-border))" strokeWidth="3" />
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 40 40"
+              style={{ position: 'absolute', top: 0, left: 0 }}
+            >
+              <circle
+                cx="20"
+                cy="20"
+                r="16"
+                fill="none"
+                stroke="hsl(var(--ui-border))"
+                strokeWidth="3"
+              />
             </svg>
 
             <svg
@@ -181,7 +186,9 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
               }}
             >
               {refreshing ? (
-                <span aria-hidden="true" style={{ fontSize: '16px', color: accent }}>•</span>
+                <span aria-hidden="true" style={{ fontSize: '16px', color: accent }}>
+                  •
+                </span>
               ) : (
                 <svg
                   width="16"
@@ -217,8 +224,12 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
 
       <style jsx>{`
         @keyframes spin {
-          from { transform: rotate(-90deg); }
-          to { transform: rotate(270deg); }
+          from {
+            transform: rotate(-90deg);
+          }
+          to {
+            transform: rotate(270deg);
+          }
         }
       `}</style>
     </div>

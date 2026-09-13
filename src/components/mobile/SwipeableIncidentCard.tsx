@@ -1,14 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRef } from 'react';
+import Link from 'next/link';
 import { Check, Clock3 } from 'lucide-react';
 import { motion, useAnimation, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatRelativeShort } from '@/lib/mobile-time';
 import { haptics } from '@/lib/haptics';
-import { IncidentStatusBadge, IncidentUrgencyBadge } from '@/components/incident/IncidentSemanticBadge';
+import {
+  IncidentStatusBadge,
+  IncidentUrgencyBadge,
+} from '@/components/incident/IncidentSemanticBadge';
 
 interface SwipeableIncidentCardProps {
   incident: {
@@ -30,11 +33,12 @@ export default function SwipeableIncidentCard({
   onSnooze,
   isUpdating = false,
 }: SwipeableIncidentCardProps) {
-  const router = useRouter();
   const { userTimeZone } = useTimezone();
-  const [gestureActive, setGestureActive] = useState(false);
   const controls = useAnimation();
   const x = useMotionValue(0);
+  const isDraggingRef = useRef(false);
+  const dragDistanceRef = useRef(0);
+
   const statusKey = incident.status.toUpperCase();
   const timeAgo = formatRelativeShort(new Date(incident.createdAt), userTimeZone);
 
@@ -43,8 +47,19 @@ export default function SwipeableIncidentCard({
   const background = useTransform(
     x,
     [-120, 0, 120],
-    [snoozeAction ? 'rgba(59,130,246,.12)' : 'transparent', 'transparent', acknowledgeAction ? 'rgba(245,158,11,.12)' : 'transparent']
+    [
+      snoozeAction ? 'rgba(59,130,246,.12)' : 'transparent',
+      'transparent',
+      acknowledgeAction ? 'rgba(245,158,11,.12)' : 'transparent',
+    ]
   );
+
+  const handleDrag = (_: unknown, info: PanInfo) => {
+    dragDistanceRef.current = Math.abs(info.offset.x);
+    if (Math.abs(info.offset.x) > 15) {
+      isDraggingRef.current = true;
+    }
+  };
 
   const handleDragEnd = async (_: unknown, info: PanInfo) => {
     const threshold = 80;
@@ -58,14 +73,19 @@ export default function SwipeableIncidentCard({
       }
     } finally {
       await controls.start({ x: 0 });
-      setGestureActive(false);
+      setTimeout(() => {
+        isDraggingRef.current = false;
+        dragDistanceRef.current = 0;
+      }, 50);
     }
   };
 
-  const openDetails = () => {
-    if (isUpdating || gestureActive) return;
+  const handleLinkClick = (e: React.MouseEvent) => {
+    if (isUpdating || isDraggingRef.current || dragDistanceRef.current > 15) {
+      e.preventDefault();
+      return;
+    }
     haptics.soft();
-    router.push(`/m/incidents/${incident.id}`);
   };
 
   return (
@@ -75,15 +95,19 @@ export default function SwipeableIncidentCard({
         className="pointer-events-none absolute inset-0 flex items-center justify-between px-4 text-[11px] font-bold"
         style={{ background }}
       >
-        <span className={acknowledgeAction ? 'text-amber-700 dark:text-amber-300' : 'opacity-0'}>ACK</span>
-        <span className={snoozeAction ? 'text-blue-700 dark:text-blue-300' : 'opacity-0'}>SNOOZE</span>
+        <span className={acknowledgeAction ? 'text-amber-700 dark:text-amber-300' : 'opacity-0'}>
+          ACK
+        </span>
+        <span className={snoozeAction ? 'text-blue-700 dark:text-blue-300' : 'opacity-0'}>
+          SNOOZE
+        </span>
       </motion.div>
 
       <motion.article
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.55}
-        onDragStart={() => setGestureActive(true)}
+        onDrag={handleDrag}
         onDragEnd={handleDragEnd}
         animate={controls}
         style={{ x }}
@@ -92,12 +116,12 @@ export default function SwipeableIncidentCard({
           isUpdating && 'opacity-60'
         )}
       >
-        <button
-          type="button"
-          onClick={openDetails}
-          disabled={isUpdating}
+        <Link
+          href={`/m/incidents/${incident.id}`}
+          onClick={handleLinkClick}
+          aria-disabled={isUpdating}
           className="block w-full min-w-0 px-3.5 pb-2.5 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          aria-label={`Open incident ${incident.title}`}
+          aria-label={`Incident: ${incident.title}`}
         >
           <div className="flex min-w-0 items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -113,7 +137,7 @@ export default function SwipeableIncidentCard({
           <h3 className="mt-2 line-clamp-2 break-words text-[13px] font-semibold leading-[1.35] text-foreground sm:text-sm">
             {incident.title}
           </h3>
-        </button>
+        </Link>
 
         <div className="flex min-h-11 items-center justify-between gap-3 border-t border-border/70 px-3.5 py-2">
           <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
@@ -128,25 +152,28 @@ export default function SwipeableIncidentCard({
               }}
               disabled={isUpdating}
               className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-[11px] font-bold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              aria-label={`Acknowledge incident ${incident.title}`}
             >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
-              ACK
+              <span>Acknowledge</span>
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={openDetails}
-              disabled={isUpdating}
-              className="inline-flex min-h-9 shrink-0 items-center rounded-lg px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            <Link
+              href={`/m/incidents/${incident.id}`}
+              onClick={handleLinkClick}
+              className="inline-flex min-h-9 shrink-0 items-center rounded-lg px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`View details for ${incident.title}`}
             >
-              Open
-            </button>
+              View details
+            </Link>
           )}
         </div>
 
         {isUpdating && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-background/55 backdrop-blur-[1px]">
-            <span className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm">Updating…</span>
+            <span className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-sm">
+              Updating…
+            </span>
           </div>
         )}
       </motion.article>

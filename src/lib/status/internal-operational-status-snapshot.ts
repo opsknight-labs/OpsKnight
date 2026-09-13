@@ -1,7 +1,12 @@
 import 'server-only';
 
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-import { actorMetricReadScope, incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
+import type { Prisma } from '@prisma/client';
+import {
+  actorMetricReadScope,
+  incidentReadWhere,
+  serviceReadWhere,
+} from '@/lib/authorization-filters';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { getRealtimeChangeGeneration } from '@/lib/realtime-change-control-plane';
 import { getServiceDynamicStatus } from '@/lib/service-status';
@@ -93,9 +98,9 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
   try {
     const now = new Date();
     const incidentScope = incidentReadWhere(actor);
-    const activeWhere = {
+    const activeWhere: Prisma.IncidentWhereInput = {
       AND: [incidentScope, { status: { in: activeIncidentStatuses() } }],
-    } as const;
+    };
 
     const [statusPage, services, activeGroups, activeIncidents, recentHistory, sourceGeneration] =
       await Promise.all([
@@ -129,7 +134,7 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
         prisma.incident.groupBy({
           by: ['serviceId', 'urgency'],
           where: activeWhere,
-          _count: { id: true },
+          _count: { _all: true },
         }),
         prisma.incident.findMany({
           where: activeWhere,
@@ -161,9 +166,10 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
 
     const countsByService = new Map<string, { active: number; critical: number }>();
     for (const group of activeGroups) {
+      const groupCount = group._count?._all ?? 0;
       const counts = countsByService.get(group.serviceId) ?? { active: 0, critical: 0 };
-      counts.active += group._count.id;
-      if (group.urgency === 'HIGH') counts.critical += group._count.id;
+      counts.active += groupCount;
+      if (group.urgency === 'HIGH') counts.critical += groupCount;
       countsByService.set(group.serviceId, counts);
     }
 
@@ -185,10 +191,13 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
     const operational = serviceStatuses.filter(service => service.status === 'OPERATIONAL').length;
     const degraded = serviceStatuses.filter(service => service.status === 'PARTIAL_OUTAGE').length;
     const major = serviceStatuses.filter(service => service.status === 'MAJOR_OUTAGE').length;
-    const activeIncidentCount = activeGroups.reduce((sum, group) => sum + group._count.id, 0);
+    const activeIncidentCount = activeGroups.reduce(
+      (sum, group) => sum + (group._count?._all ?? 0),
+      0
+    );
     const criticalIncidentCount = activeGroups
       .filter(group => group.urgency === 'HIGH')
-      .reduce((sum, group) => sum + group._count.id, 0);
+      .reduce((sum, group) => sum + (group._count?._all ?? 0), 0);
     const overallStatus = getExternalStatusLabel(
       getServiceDynamicStatus({
         activeIncidentCount,
@@ -218,7 +227,9 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
       })),
       announcements: statusPage?.announcements ?? [],
       recentHistory: recentHistory
-        .filter((incident): incident is typeof incident & { resolvedAt: Date } => Boolean(incident.resolvedAt))
+        .filter((incident): incident is typeof incident & { resolvedAt: Date } =>
+          Boolean(incident.resolvedAt)
+        )
         .map(incident => ({
           id: incident.id,
           title: incident.title,
@@ -257,7 +268,10 @@ function startCalculation(key: string, actor: AuthorizationActor) {
   return request;
 }
 
-function project(entry: CacheEntry, freshness: 'fresh' | 'stale'): InternalOperationalStatusSnapshot {
+function project(
+  entry: CacheEntry,
+  freshness: 'fresh' | 'stale'
+): InternalOperationalStatusSnapshot {
   return {
     name: entry.name,
     overallStatus: entry.overallStatus,

@@ -37,6 +37,10 @@
   font-family: var(--font-manrope), Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.mobile-app[data-bottom-nav='absent'] {
+  --mobile-nav-height: 0px;
+}
+
 .dark .mobile-app,
 [data-theme='dark'] .mobile-app {
   --bg-primary: #09090b;
@@ -181,20 +185,21 @@
   min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  padding: 0.25rem max(0.4rem, env(safe-area-inset-right, 0px))
-    max(0.25rem, env(safe-area-inset-bottom, 0px)) max(0.4rem, env(safe-area-inset-left, 0px));
+  padding-inline: max(0.35rem, env(safe-area-inset-left, 0px)) max(0.35rem, env(safe-area-inset-right, 0px));
+  padding-top: 0.25rem;
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid hsl(var(--ui-border) / 0.9);
   background: hsl(var(--ui-card) / 0.99);
   box-shadow: 0 -4px 16px hsl(var(--ui-foreground) / 0.025);
   backdrop-filter: blur(14px) saturate(110%);
   -webkit-backdrop-filter: blur(14px) saturate(110%);
-  contain: layout paint;
 }
 
 .mobile-nav-item {
   position: relative;
   min-width: 0;
-  min-height: 54px;
+  min-height: 52px;
+  height: 100%;
   border-radius: 0.7rem;
   display: flex;
   flex-direction: column;
@@ -203,6 +208,10 @@
   gap: 0.18rem;
   color: hsl(var(--ui-muted-foreground));
   text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
   transition: color 140ms ease, background-color 140ms ease, transform 100ms ease;
 }
 
@@ -237,11 +246,11 @@
 
 .mobile-nav-badge {
   position: absolute;
-  top: -7px;
-  right: -9px;
+  top: -6px;
+  right: -8px;
   display: inline-flex;
-  min-width: 17px;
-  height: 17px;
+  min-width: 16px;
+  height: 16px;
   align-items: center;
   justify-content: center;
   border: 2px solid hsl(var(--ui-card));
@@ -251,6 +260,7 @@
   color: #fff;
   font-size: 0.56rem;
   font-weight: 800;
+  pointer-events: none;
 }
 
 /* Network and PWA state */
@@ -310,6 +320,7 @@
   display: grid;
   gap: 0.5rem;
   pointer-events: none;
+  transition: bottom 160ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .mobile-pwa-notice {

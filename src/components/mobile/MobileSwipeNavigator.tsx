@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { MOBILE_NAV_ITEMS, MOBILE_MORE_ROUTES } from '@/components/mobile/mobileNavItems';
+import { isInteractiveMobileTarget } from '@/lib/mobile-interactive';
+import { isFocusedMobileWorkflow } from '@/lib/mobile-chrome';
 import { cn } from '@/lib/utils';
 
 type MobileSwipeNavigatorProps = {
@@ -14,15 +16,9 @@ const VERTICAL_TOLERANCE = 1.2;
 const SWIPE_NAV_DELAY_MS = 120;
 const SWIPE_HINT_MS = 2200;
 const SWIPE_HINT_KEY = 'mobileSwipeHintSeen';
-const INTERACTIVE_SELECTOR =
-  'a,button,input,textarea,select,[data-swipe-ignore],[role="button"],[role="slider"],[role="tab"]';
-
-const isInteractiveTarget = (target: EventTarget | null) => {
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest(INTERACTIVE_SELECTOR));
-};
 
 const resolveActiveIndex = (pathname: string) => {
+  if (isFocusedMobileWorkflow(pathname)) return -1;
   const directIndex = MOBILE_NAV_ITEMS.findIndex(item => {
     if (item.href === '/m') return pathname === '/m';
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -40,8 +36,9 @@ const resolveActiveIndex = (pathname: string) => {
 
 export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorProps) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '/m';
   const activeIndex = useMemo(() => resolveActiveIndex(pathname), [pathname]);
+  const isFocused = isFocusedMobileWorkflow(pathname);
 
   const [snapDirection, setSnapDirection] = useState<'left' | 'right' | null>(null);
   const [showHint, setShowHint] = useState(() => {
@@ -85,7 +82,8 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse') return;
-    if (isInteractiveTarget(event.target)) return;
+    if (isFocused || activeIndex === -1) return;
+    if (isInteractiveMobileTarget(event.target)) return;
     tracking.current = true;
     cancelled.current = false;
     startX.current = event.clientX;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Filter, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
@@ -59,18 +59,24 @@ export default function MobileIncidentFilters(props: Props) {
     sort: props.currentSort,
   });
 
-  useEffect(() => setQuery(props.currentQuery), [props.currentQuery]);
+  const [prevPropsQuery, setPrevPropsQuery] = useState(props.currentQuery);
+  if (props.currentQuery !== prevPropsQuery) {
+    setPrevPropsQuery(props.currentQuery);
+    setQuery(props.currentQuery);
+  }
 
-  useEffect(() => {
-    if (!open) return;
-    setDraft({
-      filter: props.currentFilter,
-      urgency: props.currentUrgency || 'all',
-      assignee: props.currentAssignee || 'all',
-      serviceId: props.currentServiceId || 'all',
-      sort: props.currentSort,
-    });
-  }, [open, props.currentAssignee, props.currentFilter, props.currentServiceId, props.currentSort, props.currentUrgency]);
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setDraft({
+        filter: props.currentFilter,
+        urgency: props.currentUrgency || 'all',
+        assignee: props.currentAssignee || 'all',
+        serviceId: props.currentServiceId || 'all',
+        sort: props.currentSort,
+      });
+    }
+    setOpen(nextOpen);
+  };
 
   const count = activeFilterCount(props);
   const summary = useMemo(() => {
@@ -118,7 +124,13 @@ export default function MobileIncidentFilters(props: Props) {
   };
 
   const reset = () => {
-    setDraft({ filter: 'all', urgency: 'all', assignee: 'all', serviceId: 'all', sort: 'created_desc' });
+    setDraft({
+      filter: 'all',
+      urgency: 'all',
+      assignee: 'all',
+      serviceId: 'all',
+      sort: 'created_desc',
+    });
   };
 
   return (
@@ -131,7 +143,10 @@ export default function MobileIncidentFilters(props: Props) {
             submitSearch(query);
           }}
         >
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
           <Input
             value={query}
             onChange={event => setQuery(event.target.value)}
@@ -160,7 +175,7 @@ export default function MobileIncidentFilters(props: Props) {
           variant={count > 0 ? 'default' : 'outline'}
           size="icon"
           className="relative h-11 w-11 shrink-0 rounded-xl"
-          onClick={() => setOpen(true)}
+          onClick={() => handleOpenChange(true)}
           aria-label={count > 0 ? `Filters, ${count} active` : 'Filters'}
         >
           <Filter className="h-4 w-4" aria-hidden="true" />
@@ -173,24 +188,41 @@ export default function MobileIncidentFilters(props: Props) {
       </div>
 
       <div className="flex min-w-0 items-center justify-between gap-3 px-0.5 text-[11px] text-muted-foreground">
-        <span>{props.totalCount} {props.totalCount === 1 ? 'incident' : 'incidents'}</span>
+        <span>
+          {props.totalCount} {props.totalCount === 1 ? 'incident' : 'incidents'}
+        </span>
         <span className="min-w-0 truncate text-right">
-          {summary.length > 0 ? summary.join(' · ') : props.currentSort === 'created_desc' ? 'Newest first' : props.currentSort === 'created_asc' ? 'Oldest first' : 'Urgency first'}
+          {summary.length > 0
+            ? summary.join(' · ')
+            : props.currentSort === 'created_desc'
+              ? 'Newest first'
+              : props.currentSort === 'created_asc'
+                ? 'Oldest first'
+                : 'Urgency first'}
         </span>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Filter incidents</DialogTitle>
-            <DialogDescription>Keep the list focused on the incidents you can act on now.</DialogDescription>
+            <DialogDescription>
+              Keep the list focused on the incidents you can act on now.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-1">
             <label className="grid gap-1.5 text-xs font-semibold text-foreground">
               Status
-              <Select value={draft.filter} onValueChange={value => setDraft(current => ({ ...current, filter: value as FilterValue }))}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <Select
+                value={draft.filter}
+                onValueChange={value =>
+                  setDraft(current => ({ ...current, filter: value as FilterValue }))
+                }
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All incidents</SelectItem>
                   <SelectItem value="all_open">Active</SelectItem>
@@ -204,8 +236,13 @@ export default function MobileIncidentFilters(props: Props) {
 
             <label className="grid gap-1.5 text-xs font-semibold text-foreground">
               Urgency
-              <Select value={draft.urgency} onValueChange={value => setDraft(current => ({ ...current, urgency: value }))}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <Select
+                value={draft.urgency}
+                onValueChange={value => setDraft(current => ({ ...current, urgency: value }))}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All urgency</SelectItem>
                   <SelectItem value="HIGH">High</SelectItem>
@@ -217,8 +254,13 @@ export default function MobileIncidentFilters(props: Props) {
 
             <label className="grid gap-1.5 text-xs font-semibold text-foreground">
               Assignment
-              <Select value={draft.assignee} onValueChange={value => setDraft(current => ({ ...current, assignee: value }))}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <Select
+                value={draft.assignee}
+                onValueChange={value => setDraft(current => ({ ...current, assignee: value }))}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Anyone</SelectItem>
                   <SelectItem value={props.currentUserId}>Assigned to me</SelectItem>
@@ -230,12 +272,19 @@ export default function MobileIncidentFilters(props: Props) {
             {props.services.length > 0 && (
               <label className="grid gap-1.5 text-xs font-semibold text-foreground">
                 Service
-                <Select value={draft.serviceId} onValueChange={value => setDraft(current => ({ ...current, serviceId: value }))}>
-                  <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <Select
+                  value={draft.serviceId}
+                  onValueChange={value => setDraft(current => ({ ...current, serviceId: value }))}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All services</SelectItem>
                     {props.services.map(service => (
-                      <SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>
+                      <SelectItem key={service.id} value={service.id}>
+                        {service.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -244,8 +293,15 @@ export default function MobileIncidentFilters(props: Props) {
 
             <label className="grid gap-1.5 text-xs font-semibold text-foreground">
               Sort
-              <Select value={draft.sort} onValueChange={value => setDraft(current => ({ ...current, sort: value as SortValue }))}>
-                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+              <Select
+                value={draft.sort}
+                onValueChange={value =>
+                  setDraft(current => ({ ...current, sort: value as SortValue }))
+                }
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="created_desc">Newest first</SelectItem>
                   <SelectItem value="created_asc">Oldest first</SelectItem>
@@ -256,8 +312,12 @@ export default function MobileIncidentFilters(props: Props) {
           </div>
 
           <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
-            <Button type="button" variant="outline" className="h-11" onClick={reset}>Reset</Button>
-            <Button type="button" className="h-11" onClick={apply}>Show {props.totalCount}</Button>
+            <Button type="button" variant="outline" className="h-11" onClick={reset}>
+              Reset
+            </Button>
+            <Button type="button" className="h-11" onClick={apply}>
+              Apply filters
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
