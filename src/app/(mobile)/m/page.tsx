@@ -52,6 +52,10 @@ export default async function MobileDashboard() {
     );
   }
 
+  const currentScheduleId =
+    snapshot.currentOnCallShift?.scheduleId || snapshot.currentOnCallShift?.schedule.id;
+  const currentScheduleHref = currentScheduleId ? `/m/schedules/${currentScheduleId}` : '/m/schedules';
+
   return (
     <div className="responsive-page space-y-5 px-3 py-4 sm:px-4">
       <section className="flex min-w-0 items-start justify-between gap-3">
@@ -68,7 +72,7 @@ export default async function MobileDashboard() {
       </section>
 
       {snapshot.currentOnCallShift ? (
-        <Link href={`/m/schedules/${snapshot.currentOnCallShift.scheduleId || snapshot.currentOnCallShift.schedule.id || ''}`}>
+        <Link href={currentScheduleHref}>
           <Card className="rounded-2xl border-emerald-500/20 bg-emerald-500/5 p-4 shadow-sm transition hover:bg-emerald-500/10">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
@@ -126,7 +130,7 @@ export default async function MobileDashboard() {
           </Link>
           <Link href="/m/incidents?filter=acknowledged" className="min-w-0">
             <Card className="h-full rounded-2xl border-border bg-card p-4 shadow-sm">
-              <span className="text-2xl font-bold tabular-nums text-foreground">{Math.max(0, snapshot.totalActive - snapshot.openIncidents)}</span>
+              <span className="text-2xl font-bold tabular-nums text-foreground">{snapshot.acknowledgedIncidents}</span>
               <p className="mt-2 text-xs font-semibold text-foreground">Acknowledged</p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">Being worked</p>
             </Card>
