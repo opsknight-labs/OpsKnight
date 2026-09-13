@@ -23,6 +23,7 @@ export type QueuedRequest = {
   state: OfflineQueueState;
   retryCount: number;
   lastAttemptAt?: number | null;
+  nextAttemptAt?: number | null;
   lastError?: string | null;
   expectedState?: string | null;
   completedAt?: number | null;
@@ -43,6 +44,8 @@ const DB_NAME = 'opsknight-offline';
 const STORE_NAME = 'request-queue';
 const DB_VERSION = 2;
 const TERMINAL_RETENTION_MS = 24 * 60 * 60 * 1000;
+const SENDING_LEASE_MS = 60 * 1000;
+const MAX_BACKOFF_MS = 5 * 60 * 1000;
 const hasIndexedDb = () => typeof indexedDB !== 'undefined';
 
 const generateId = () => {
@@ -71,6 +74,7 @@ function normalizeStoredRequest(value: Partial<QueuedRequest> & { id: string; ur
     state: value.state ?? 'PENDING',
     retryCount: value.retryCount ?? 0,
     lastAttemptAt: value.lastAttemptAt ?? null,
+    nextAttemptAt: value.nextAttemptAt ?? null,
     lastError: value.lastError ?? null,
     expectedState: value.expectedState ?? null,
     completedAt: value.completedAt ?? null,
@@ -159,6 +163,7 @@ export const enqueueRequest = async (request: EnqueueRequestInput) => {
     state: 'PENDING',
     retryCount: 0,
     lastAttemptAt: null,
+    nextAttemptAt: null,
     lastError: null,
     expectedState: request.expectedState ?? null,
     completedAt: null,
@@ -219,6 +224,25 @@ async function cleanupTerminalRequests(now = Date.now()) {
   await Promise.all(expired.map(item => removeQueuedRequest(item.id)));
 }
 
+async function recoverInterruptedRequests(now = Date.now()) {
+  const items = await listQueuedRequests();
+  const stranded = items.filter(
+    item =>
+      item.state === 'SENDING' &&
+      (item.lastAttemptAt == null || now - item.lastAttemptAt >= SENDING_LEASE_MS)
+  );
+
+  for (const item of stranded) {
+    await putQueuedRequest({
+      ...item,
+      state: 'PENDING',
+      updatedAt: now,
+      nextAttemptAt: now,
+      lastError: item.lastError || 'Previous sync was interrupted; retrying safely.',
+    });
+  }
+}
+
 function retryAfterMs(response: Response): number | null {
   const header = response.headers.get('retry-after');
   if (!header) return null;
@@ -226,6 +250,11 @@ function retryAfterMs(response: Response): number | null {
   if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
   const date = Date.parse(header);
   return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
+}
+
+function exponentialBackoffMs(retryCount: number) {
+  const exponent = Math.max(0, Math.min(retryCount - 1, 8));
+  return Math.min(MAX_BACKOFF_MS, 1000 * 2 ** exponent);
 }
 
 async function responseError(response: Response) {
@@ -263,8 +292,12 @@ export const flushQueuedRequests = async () => {
     };
   }
 
-  await cleanupTerminalRequests();
-  const queue = (await listQueuedRequests()).filter(item => item.state === 'PENDING');
+  const now = Date.now();
+  await cleanupTerminalRequests(now);
+  await recoverInterruptedRequests(now);
+  const queue = (await listQueuedRequests()).filter(
+    item => item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now)
+  );
   let flushed = 0;
 
   // FIFO is deliberate: responder actions can have state dependencies (ACK -> RESOLVE).
@@ -274,6 +307,7 @@ export const flushQueuedRequests = async () => {
       state: 'SENDING',
       retryCount: original.retryCount + 1,
       lastAttemptAt: Date.now(),
+      nextAttemptAt: null,
       lastError: null,
       updatedAt: Date.now(),
     };
@@ -285,12 +319,14 @@ export const flushQueuedRequests = async () => {
         headers: sending.headers,
         body: sending.body ?? undefined,
         credentials: 'include',
+        cache: 'no-store',
       });
 
       if (response.ok) {
         await transition(sending, {
           state: 'SUCCEEDED',
           completedAt: Date.now(),
+          nextAttemptAt: null,
           lastError: null,
         });
         flushed += 1;
@@ -303,23 +339,27 @@ export const flushQueuedRequests = async () => {
         await transition(sending, {
           state: terminal,
           completedAt: terminal === 'FAILED' ? Date.now() : null,
+          nextAttemptAt: null,
           lastError: error,
         });
         // Preserve order: a later operation may rely on the state this one failed to establish.
         break;
       }
 
+      const delay =
+        response.status === 429
+          ? retryAfterMs(response) ?? exponentialBackoffMs(sending.retryCount)
+          : exponentialBackoffMs(sending.retryCount);
       await transition(sending, {
         state: 'PENDING',
-        lastError:
-          response.status === 429 && retryAfterMs(response)
-            ? `${error}; retry later`
-            : error,
+        nextAttemptAt: Date.now() + delay,
+        lastError: error,
       });
       break;
     } catch (error) {
       await transition(sending, {
         state: 'PENDING',
+        nextAttemptAt: Date.now() + exponentialBackoffMs(sending.retryCount),
         lastError: error instanceof Error ? error.message : 'Network unavailable',
       });
       break;
