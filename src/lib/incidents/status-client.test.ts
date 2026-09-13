@@ -8,7 +8,7 @@ vi.mock('@/lib/offline-queue', () => ({
   enqueueRequest: mocks.enqueueRequest,
 }));
 
-import { IncidentStatusMutationError, mutateIncidentStatus } from './status-client';
+import { mutateIncidentStatus } from './status-client';
 
 describe('incident status browser transport', () => {
   beforeEach(() => {
@@ -70,7 +70,7 @@ describe('incident status browser transport', () => {
 
     await expect(
       mutateIncidentStatus({ incidentId: 'inc-1', status: 'RESOLVED', expectedStatus: 'OPEN' })
-    ).rejects.toMatchObject<Partial<IncidentStatusMutationError>>({
+    ).rejects.toMatchObject({
       status: 409,
       code: 'STATE_CONFLICT',
     });
@@ -83,7 +83,7 @@ describe('incident status browser transport', () => {
 
     await expect(
       mutateIncidentStatus({ incidentId: 'inc-1', status: 'ACKNOWLEDGED' })
-    ).rejects.toMatchObject<Partial<IncidentStatusMutationError>>({
+    ).rejects.toMatchObject({
       code: 'OFFLINE_QUEUE_UNAVAILABLE',
       retryable: true,
     });
