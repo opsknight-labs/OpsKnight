@@ -21,7 +21,7 @@ function ThemeAttributeBridge() {
 
     // Keep browser/PWA chrome aligned with an explicit in-app theme override,
     // not only with the OS media query used during the initial HTML response.
-    const themeColor = effectiveTheme === 'dark' ? '#020617' : '#f8fafc';
+    const themeColor = effectiveTheme === 'dark' ? '#09090b' : '#f8fafc';
     let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (!meta) {
       meta = document.createElement('meta');
