@@ -78,7 +78,8 @@ describe('microsoft teams transport contract', () => {
     // healthy must be defined (was missing `healthy` reference in prior diff)
     expect(caps).toMatch(/const healthy\s*=\s*canPost/);
     const client = readFileSync('src/lib/microsoft-teams/client.ts', 'utf8');
-    expect(client).toContain('.filter(grant => grant.clientAppId === resolved.config.clientId)');
+    expect(client).toContain('/channels?$top=1&$select=id');
+    expect(client).not.toContain('/permissionGrants');
     expect(client).toContain('installations: installationStates');
   });
 

@@ -262,7 +262,10 @@ async function updateBotActivity(args: {
   if (!token) return { success: false, error: 'Failed to acquire Bot Framework token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
 
   const card = JSON.parse(args.cardJson) as unknown;
-  const conversationId = (args.conversationId ?? args.channelId).trim() || args.channelId;
+  const conversationId = args.conversationId?.trim();
+  if (!conversationId) {
+    return { success: false, error: 'Stored Teams message reference is missing its conversation ID', errorCode: 'MESSAGE_REFERENCE_INVALID' };
+  }
 
   // Bot Framework update: PUT {serviceUrl}/v3/conversations/{conversationId}/activities/{activityId}
   const endpoint = `${serviceUrl}/v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(args.messageId)}`;
@@ -445,9 +448,9 @@ export async function getTeamsGrantedRscPermissions(options?: {
     return { granted: null, missing: required, unknown: true, error: 'GRAPH_TOKEN_FAILED', installations: [] };
   }
 
-  // Try to list teams and aggregate permissionGrants per team. RSC grants are
-  // per-team resource-specific consent — `GET /teams/{id}/permissionGrants`.
-  // If the tenant has no installed teams, we cannot verify → unknown (not "granted").
+  // Probe the exact capability OpsKnight needs. The permissionGrants endpoint
+  // itself requires a broader Graph permission, so using it to verify minimal
+  // RSC creates a circular and misleading health check.
   try {
     const prismaForTeams = (await import('@/lib/prisma')).default as unknown as {
       microsoftTeamsInstallation: { findMany: (a: unknown) => Promise<Array<{ teamId: string; teamName: string | null }>> };
@@ -467,13 +470,13 @@ export async function getTeamsGrantedRscPermissions(options?: {
 
     for (const inst of installations) {
       const res = await retryFetch(
-        `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(inst.teamId)}/permissionGrants`,
+        `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(inst.teamId)}/channels?$top=1&$select=id`,
         { headers: { Authorization: `Bearer ${token}` } },
         { maxAttempts: 2, initialDelayMs: 500 },
       );
       if (!res.ok) {
         const error = res.status === 401 || res.status === 403
-          ? 'CONSENT_REQUIRED'
+          ? 'CHANNEL_DISCOVERY_PERMISSION_DENIED'
           : res.status === 404 ? 'TEAM_NOT_FOUND' : `http_${res.status}`;
         installationStates.push({
           teamId: inst.teamId,
@@ -486,18 +489,15 @@ export async function getTeamsGrantedRscPermissions(options?: {
         continue;
       }
       try {
-        // Graph `GET /teams/{id}/permissionGrants` returns `permission` (resource-specific
-        // consent string like `ChannelMessage.Send.Group`), NOT `resourceSpecificPermission`.
-        const data = (await res.json()) as { value?: Array<{ clientAppId?: string; permission?: string; resourceSpecificPermission?: string }> };
-        const perms = (data.value ?? [])
-          .filter(grant => grant.clientAppId === resolved.config.clientId)
-          .map(v => v.permission ?? v.resourceSpecificPermission)
-          .filter((p): p is string => typeof p === 'string' && p.length > 0);
+        const data = (await res.json()) as { value?: unknown[] };
+        if (!Array.isArray(data.value)) throw new Error('Invalid channels response');
         installationStates.push({
           teamId: inst.teamId,
           teamName: inst.teamName,
-          granted: perms,
-          missing: required.filter(permission => !perms.includes(permission)),
+          // A successful channel list proves the required discovery capability.
+          // This is capability evidence, not an enumeration of every RSC grant.
+          granted: required,
+          missing: [],
           unknown: false,
         });
       } catch {
@@ -604,20 +604,39 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
   if (!hasInstallation) return { channels: [], error: 'APP_NOT_INSTALLED' };
   const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
   if (!token) return { channels: [], error: 'GRAPH_TOKEN_FAILED' };
-  const res = await retryFetch(
-    `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(tid)}/channels?$top=100`,
-    { headers: { Authorization: `Bearer ${token}` } },
-    { maxAttempts: 2, initialDelayMs: 600 },
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    return { channels: [], error: text.slice(0, 400) || `HTTP ${res.status}` };
+  const channels: Array<{ id: string; displayName: string; description?: string | null }> = [];
+  const seen = new Set<string>();
+  let nextUrl: string | null = `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(tid)}/channels?$top=100&$select=id,displayName,description`;
+  // Bound traversal so a malformed or cyclic provider response cannot monopolize a worker.
+  for (let page = 0; nextUrl && page < 10 && channels.length < 1_000; page += 1) {
+    const parsedUrl = new URL(nextUrl);
+    if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname !== 'graph.microsoft.com') {
+      return { channels: [], error: 'Graph returned an untrusted pagination URL' };
+    }
+    const res = await retryFetch(
+      nextUrl,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { maxAttempts: 2, initialDelayMs: 600 },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      return { channels: [], error: body.slice(0, 400) || `HTTP ${res.status}` };
+    }
+    try {
+      const data = (await res.json()) as {
+        value?: Array<{ id: string; displayName: string; description?: string | null }>;
+        '@odata.nextLink'?: string;
+      };
+      if (!Array.isArray(data.value)) return { channels: [], error: 'Failed to parse channels list' };
+      for (const channel of data.value) {
+        if (!channel.id || !channel.displayName || seen.has(channel.id)) continue;
+        seen.add(channel.id);
+        channels.push({ id: channel.id, displayName: channel.displayName, description: channel.description ?? null });
+      }
+      nextUrl = typeof data['@odata.nextLink'] === 'string' ? data['@odata.nextLink'] : null;
+    } catch {
+      return { channels: [], error: 'Failed to parse channels list' };
+    }
   }
-  try {
-    const data = (await res.json()) as { value?: Array<{ id: string; displayName: string; description?: string | null }> };
-    const channels = (data.value ?? []).map(c => ({ id: c.id, displayName: c.displayName, description: c.description ?? null }));
-    return { channels };
-  } catch {
-    return { channels: [], error: 'Failed to parse channels list' };
-  }
+  return { channels };
 }

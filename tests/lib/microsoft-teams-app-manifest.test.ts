@@ -22,8 +22,7 @@ describe('Microsoft Teams app manifest', () => {
     expect(getMicrosoftTeamsBotMessagingEndpoint(`${BASE}/`)).toBe(`${BASE}/api/microsoft-teams/messages`);
     const m = buildMicrosoftTeamsAppManifest({ appUrl: `${BASE}/`, botId: BOT_ID });
     expect(m.validDomains).toEqual([new URL(BASE).hostname]);
-    // webApplicationInfo is only emitted when applicationIdUri is provided — no fabricated api://host/botId
-    expect((m as Record<string, unknown>).webApplicationInfo).toBeUndefined();
+    expect(m.webApplicationInfo.resource).toBe(`api://${new URL(BASE).hostname}/${BOT_ID}`);
     const mWithUri = buildMicrosoftTeamsAppManifest({ appUrl: `${BASE}/`, botId: BOT_ID, applicationIdUri: `api://${new URL(BASE).hostname}/${BOT_ID}` });
     expect((mWithUri as Record<string, unknown>).webApplicationInfo).toBeDefined();
     expect((mWithUri.webApplicationInfo as { resource: string }).resource).toContain(new URL(BASE).hostname);
@@ -60,9 +59,9 @@ describe('Microsoft Teams app manifest', () => {
     }
   });
 
-  it('only emits webApplicationInfo when applicationIdUri is provided', () => {
+  it('always emits webApplicationInfo and permits an Entra Application ID URI override', () => {
     const mDefault = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID });
-    expect((mDefault as Record<string, unknown>).webApplicationInfo).toBeUndefined();
+    expect(mDefault.webApplicationInfo).toEqual({ id: BOT_ID, resource: `api://${new URL(BASE).hostname}/${BOT_ID}` });
     const uri = `api://${new URL(BASE).hostname}/${BOT_ID}`;
     const mWithUri = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, applicationIdUri: uri });
     expect((mWithUri.webApplicationInfo as { id: string; resource: string }).id).toBe(BOT_ID);
@@ -87,7 +86,7 @@ describe('Microsoft Teams app manifest', () => {
     expect(m.bots[0].scopes).toEqual(['team']);
     expect(m.bots[0].isNotificationOnly).toBe(true);
     expect(m.bots[0].botId).toBe(BOT_ID);
-    expect((m as Record<string, unknown>).webApplicationInfo).toBeUndefined();
+    expect(m.webApplicationInfo.id).toBe(BOT_ID);
     expect(m.id).toBe(BOT_ID);
     expect((m as unknown as Record<string, unknown>).botsEndpoint).toBeUndefined();
   });

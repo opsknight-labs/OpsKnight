@@ -38,9 +38,8 @@ export interface MicrosoftTeamsManifestOptions {
   appName?: string;
   appDescription?: string;
   manifestId?: string; // GUID for manifest `id`; defaults to the stable Bot app ID
-  /** Entra Application ID URI for SSO (e.g. `api://opsknight.example.com/<appId>`).
-   * When omitted, `webApplicationInfo` is excluded — Teams validates it strictly
-   * and a fabricated `api://host/botId` will fail submission. */
+  /** Entra Application ID URI (e.g. `api://opsknight.example.com/<appId>`).
+   * Defaults to the conventional, stable URI derived from the public app host. */
   applicationIdUri?: string;
   /** When true, include optional RSC permissions (TeamSettings.Read.Group).
    * Defaults to false — Phase 1 minimal surface; enable only when the
@@ -72,7 +71,7 @@ export type MicrosoftTeamsAppManifest = {
       resourceSpecific: Array<{ name: string; type: 'Application' }>;
     };
   };
-  webApplicationInfo?: { id: string; resource: string };
+  webApplicationInfo: { id: string; resource: string };
 };
 
 export function buildMicrosoftTeamsAppManifest({
@@ -118,12 +117,13 @@ export function buildMicrosoftTeamsAppManifest({
         resourceSpecific: rscPermissions.map(name => ({ name, type: 'Application' as const })),
       },
     },
+    // Required for resource-specific consent manifests. Operators can override
+    // this when their Entra registration uses a different Application ID URI.
+    webApplicationInfo: {
+      id: botId,
+      resource: applicationIdUri?.trim() || `api://${new URL(origin).hostname}/${botId}`,
+    },
   };
-  // Only emit webApplicationInfo when a real Entra Application ID URI is configured.
-  // A fabricated api://host/botId fails Teams app validation.
-  if (applicationIdUri?.trim()) {
-    (manifest as MicrosoftTeamsAppManifest & { webApplicationInfo: { id: string; resource: string } }).webApplicationInfo = { id: botId, resource: applicationIdUri.trim() };
-  }
   return manifest;
 }
 

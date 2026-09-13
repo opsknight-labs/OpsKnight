@@ -66,7 +66,7 @@ async function claimOperation(id: string) {
       id,
       nextAttemptAt: { lte: now },
       OR: [
-        { status: { in: ['PENDING', 'FAILED', 'AMBIGUOUS'] } },
+        { status: 'PENDING' },
         { status: 'PROCESSING', leaseExpiresAt: { lt: now } },
       ],
     },
@@ -83,8 +83,8 @@ async function claimOperation(id: string) {
   return operation ? { operation, leaseToken } : null;
 }
 
-function failureStatus(attempts: number): 'FAILED' | 'AMBIGUOUS' {
-  return attempts >= MAX_TEAMS_OPERATION_ATTEMPTS ? 'FAILED' : 'AMBIGUOUS';
+function retryStatus(attempts: number): 'PENDING' | 'FAILED' {
+  return attempts >= MAX_TEAMS_OPERATION_ATTEMPTS ? 'FAILED' : 'PENDING';
 }
 
 function jitteredDelayMs(baseMs: number): number {
@@ -122,8 +122,8 @@ async function releaseFailedOperation(
   attempts: number,
   error: unknown
 ): Promise<void> {
-  const { ambiguous } = classifyTeamsError(error);
-  const status = ambiguous ? failureStatus(attempts) : 'FAILED';
+  const { terminal } = classifyTeamsError(error);
+  const status = terminal || attempts >= MAX_TEAMS_OPERATION_ATTEMPTS ? 'FAILED' : 'PENDING';
   await prisma.externalOperation.updateMany({
     where: { id, status: 'PROCESSING', leaseToken },
     data: {
@@ -574,7 +574,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
-          status: failureStatus(operation.attempts),
+          status: retryStatus(operation.attempts),
           nextAttemptAt: new Date(Date.now() + jitteredDelayMs(1500)),
           lastError: 'Teams delivery reserved by concurrent operation — retrying',
           leaseToken: null,
@@ -598,7 +598,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
-          status: failureStatus(operation.attempts),
+          status: retryStatus(operation.attempts),
           nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
           lastError: `Teams admission rate-limited: retry at ${admission.retryAt.toISOString()}`,
           leaseToken: null,
@@ -619,7 +619,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
-            status: failureStatus(operation.attempts),
+            status: retryStatus(operation.attempts),
             nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
             lastError: `Teams concurrency at capacity: retry at ${concurrency.retryAt.toISOString()}`,
             leaseToken: null,
@@ -697,7 +697,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           await prisma.externalOperation.updateMany({
             where: { id, status: 'PROCESSING', leaseToken },
             data: {
-              status: failureStatus(operation.attempts),
+              status: retryStatus(operation.attempts),
               nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
               lastError: `Teams circuit open: ${String(e.message).slice(0, 400)}`,
               leaseToken: null,
@@ -835,7 +835,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
-            status: failureStatus(operation.attempts),
+            status: retryStatus(operation.attempts),
             nextAttemptAt: new Date(Date.now() + jitteredDelayMs(Math.max(retryAfterMs ?? 60_000, 1_000))),
             lastError: `Teams rate limited: ${result.error.slice(0, 400)}`,
             leaseToken: null,
@@ -900,7 +900,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
-          status: failureStatus(operation.attempts),
+          status: retryStatus(operation.attempts),
           nextAttemptAt: new Date(Date.now() + operationRetryDelayMs(err)),
           lastError: err.message.slice(0, 1000),
           leaseToken: null,
@@ -956,21 +956,26 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           } as never);
         });
       } catch (txErr) {
-        // Transaction failed — keep operation retryable (AMBIGUOUS) so the next retry
-        // reconciles via probe + ledger upsert. Do not mark COMPLETED without ledger.
+        // The provider accepted the side effect but the local ledger commit failed.
+        // Re-sending could duplicate the card, so stop for explicit reconciliation.
         const msg = txErr instanceof Error ? txErr.message : String(txErr);
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
-            status: failureStatus(operation.attempts),
-            nextAttemptAt: new Date(Date.now() + jitteredDelayMs(5_000)),
-            lastError: `Teams ledger transaction failed — retrying: ${msg.slice(0, 400)}`,
+            status: 'AMBIGUOUS',
+            nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+            lastError: `Teams provider succeeded but ledger commit failed; manual reconciliation required: ${msg.slice(0, 400)}`,
             leaseToken: null,
             leaseExpiresAt: null,
+            resultPayload: {
+              requiresManualReconciliation: true,
+              providerMessageId: result.providerMessageId,
+              conversationId: result.conversationId ?? null,
+            } as Prisma.InputJsonObject,
           },
         });
         await releaseTeamsConcurrency();
-        logger.warn('[MicrosoftTeams] Ledger transaction failed — downgraded to retryable', { incidentId, destinationId, error: msg.slice(0, 400) });
+        logger.warn('[MicrosoftTeams] Ledger transaction failed — manual reconciliation required', { incidentId, destinationId, error: msg.slice(0, 400) });
         throw txErr;
       }
     } else {

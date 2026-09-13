@@ -9,6 +9,7 @@ export type MicrosoftTeamsFailureCode =
   | 'APP_NOT_INSTALLED'
   | 'CHANNEL_NOT_FOUND'
   | 'MESSAGE_NOT_FOUND'
+  | 'MESSAGE_REFERENCE_INVALID'
   | 'DESTINATION_NOT_FOUND'
   | 'GRAPH_TOKEN_FAILED'
   | 'RATE_LIMITED'
@@ -133,6 +134,7 @@ export function categorizeTeamsErrorCode(raw: string | undefined): MicrosoftTeam
   if (v === 'RATE_LIMITED') return 'RATE_LIMITED';
   if (v === 'CHANNEL_NOT_FOUND') return 'CHANNEL_NOT_FOUND';
   if (v === 'MESSAGE_NOT_FOUND') return 'MESSAGE_NOT_FOUND';
+  if (v === 'MESSAGE_REFERENCE_INVALID') return 'MESSAGE_REFERENCE_INVALID';
   if (v === 'DESTINATION_NOT_FOUND') return 'DESTINATION_NOT_FOUND';
   if (v === 'PATCH_NOT_SUPPORTED') return 'UNKNOWN';
   if (v === 'CONSENT_REQUIRED' || /CONSENT|PERMISSION/i.test(raw)) return 'CONSENT_REQUIRED';

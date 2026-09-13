@@ -62,7 +62,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const manifestJson = buildMicrosoftTeamsAppManifestJson({
     appUrl: getBaseUrl(),
     botId: config?.clientId ?? '11111111-1111-1111-1111-111111111111',
-    // Only emit webApplicationInfo when an Entra Application ID URI is configured
+    // Override the stable host-derived default when Entra uses a custom Application ID URI.
     applicationIdUri: process.env.MICROSOFT_TEAMS_APPLICATION_ID_URI?.trim() || undefined,
     // Optional RSC surface — disabled by default (minimal Phase-1 manifest)
     includeOptionalPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
@@ -70,7 +70,6 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;
   const rscMissingCount = rscState?.missing.length ?? 0;
-  const rscGrantedCount = rscState?.granted?.length ?? 0;
   const health = isConnected ? await getMicrosoftTeamsHealth({ tenantId: config?.tenantId ?? undefined }).catch(() => null) : null;
   const installationPermissions = [...(rscState?.installations ?? [])];
   for (const installation of health?.installations ?? []) {
@@ -152,18 +151,20 @@ export default async function MicrosoftTeamsIntegrationRoute() {
             subtext: 'Teams channel routing',
           },
           {
-            label: 'Permissions',
+            label: 'Discovery',
             value: !isConnected
               ? 'Not configured'
               : rscUnknown
-                ? 'Unknown (install/inspect)'
-                : rscMissingCount === 0 ? `${rscGrantedCount} granted` : `${rscMissingCount} missing`,
+                ? 'Not verified'
+                : rscMissingCount === 0 ? 'Available' : 'Blocked',
             icon: <RefreshCw className="h-4 w-4" />,
             valueClassName: !rscUnknown && rscMissingCount === 0
               ? 'text-emerald-300 font-semibold text-sm sm:text-base'
               : rscUnknown ? 'text-primary-foreground/70 font-semibold text-sm sm:text-base'
               : 'text-amber-300 font-semibold text-sm sm:text-base',
-            subtext: rscUnknown && isConnected ? `Graph check: ${rscState?.error ?? 'pending install'}` : 'RSC permissions',
+            subtext: rscUnknown && isConnected
+              ? `Graph probe: ${rscState?.error ?? 'pending install'}`
+              : rscMissingCount === 0 ? 'Channel listing verified' : 'Channel listing denied',
           },
         ]}
       />

@@ -13,7 +13,7 @@ export async function GET() {
   if (!(await requireAdmin())) return jsonError('Forbidden', 403);
   const [external, chatOps, jobs] = await Promise.all([
     prisma.externalOperation.findMany({
-      where: { status: 'FAILED' },
+      where: { status: { in: ['FAILED', 'AMBIGUOUS'] } },
       orderBy: { updatedAt: 'desc' },
       take: 100,
       select: {
@@ -23,6 +23,8 @@ export async function GET() {
         incidentId: true,
         externalKey: true,
         attempts: true,
+        status: true,
+        resultPayload: true,
         lastError: true,
         updatedAt: true,
       },
@@ -60,11 +62,47 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   if (!(await requireAdmin())) return jsonError('Forbidden', 403);
-  const body = (await request.json().catch(() => null)) as { kind?: string; id?: string } | null;
+  const body = (await request.json().catch(() => null)) as {
+    kind?: string;
+    id?: string;
+    resolution?: 'retry' | 'mark_failed' | 'mark_delivered';
+    providerMessageId?: string;
+    conversationId?: string;
+  } | null;
   if (!body?.id || !['external', 'chatops'].includes(body.kind ?? ''))
     return jsonError('Invalid retry request', 400);
   await prisma.$transaction(async tx => {
     if (body.kind === 'external') {
+      const existing = await tx.externalOperation.findUnique({ where: { id: body.id } });
+      if (!existing) throw new Error('External operation not found');
+      if (existing.status === 'AMBIGUOUS') {
+        if (body.resolution === 'mark_delivered') {
+          const payload = existing.requestPayload as Record<string, unknown> | null;
+          const destinationId = typeof payload?.destinationId === 'string' ? payload.destinationId : '';
+          if ((existing.provider as string) !== 'MICROSOFT_TEAMS' || !existing.incidentId || !destinationId || !body.providerMessageId?.trim() || !body.conversationId?.trim()) {
+            throw new Error('Ambiguous Teams delivery requires providerMessageId and conversationId');
+          }
+          const destination = await tx.microsoftTeamsDestination.findUnique({ where: { id: destinationId } });
+          if (!destination) throw new Error('Teams destination no longer exists');
+          await tx.microsoftTeamsIncidentMessage.upsert({
+            where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
+            create: { incidentId: existing.incidentId, destinationId, messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId },
+            update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId },
+          });
+          await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'COMPLETED', externalId: body.providerMessageId.trim(), externalKey: body.providerMessageId.trim(), resultPayload: { providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), reconciledManually: true }, lastError: null } });
+          return;
+        }
+        if (body.resolution === 'mark_failed') {
+          const payload = existing.requestPayload as Record<string, unknown> | null;
+          const destinationId = typeof payload?.destinationId === 'string' ? payload.destinationId : '';
+          if (existing.incidentId && destinationId) {
+            await tx.microsoftTeamsIncidentMessage.deleteMany({ where: { incidentId: existing.incidentId, destinationId, messageId: `__reserved__:${existing.id}` } });
+          }
+          await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'FAILED', lastError: 'Operator confirmed the ambiguous Teams delivery was not delivered.' } });
+          return;
+        }
+        throw new Error('Ambiguous deliveries cannot be retried; reconcile as mark_delivered or mark_failed');
+      }
       const operation = await tx.externalOperation.update({
         where: { id: body.id },
         data: {
