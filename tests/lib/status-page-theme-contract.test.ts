@@ -48,8 +48,6 @@ describe('status page design contract', () => {
       text: '#111827',
     });
 
-    // StatusPageConfig uses the first preset for its Reset button. Keep that target explicitly
-    // native so "Reset to default" can never mean "Modern Light" again.
     expect(STATUS_PAGE_COLOR_PRESETS[0]).toMatchObject({
       id: 'native-default',
       ...DEFAULT_STATUS_PAGE_COLORS,
@@ -116,8 +114,6 @@ describe('status page design contract', () => {
     expect(css).toContain('background: var(--status-panel-bg);');
     expect(css).toContain('.status-page-surface .status-v3-inspector');
 
-    // The shared renderer must keep every service-card text/detail layer on semantic tokens so the
-    // dark bridge above reaches names, descriptions, metadata chips, uptime labels and history.
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('.status-v3-service__name');
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('color: var(--status-text-strong)');
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('.status-v3-service__desc');
@@ -161,17 +157,10 @@ describe('status page design contract', () => {
         ? '#ffffff'
         : '#0b1020';
 
-      expect(contrastRatio(text, surface), `${theme.id} primary text`).toBeGreaterThanOrEqual(
-        4.5
-      );
-      expect(contrastRatio(muted, surface), `${theme.id} muted text`).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(subtle, surfaceAlt), `${theme.id} subtle text`).toBeGreaterThanOrEqual(
-        4.5
-      );
-      expect(
-        contrastRatio(accentText, accent),
-        `${theme.id} accent foreground`
-      ).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(text, surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(muted, surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(subtle, surfaceAlt)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(accentText, accent)).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -188,7 +177,7 @@ describe('status page design contract', () => {
     ];
 
     for (const endpoint of endpoints) {
-      expect(contrastRatio('#ffffff', endpoint), endpoint).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio('#ffffff', endpoint)).toBeGreaterThanOrEqual(4.5);
     }
   });
 
