@@ -1,0 +1,47 @@
+name: Microsoft Teams Live Tenant Smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/microsoft-teams/**'
+      - 'src/app/api/microsoft-teams/**'
+      - 'scripts/ci/microsoft-teams-live-smoke.mjs'
+      - '.github/workflows/microsoft-teams-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: microsoft-teams-live-tenant
+  cancel-in-progress: false
+
+jobs:
+  live-tenant-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: microsoft-teams-e2e
+    env:
+      TEAMS_E2E_TENANT_ID: ${{ secrets.TEAMS_E2E_TENANT_ID }}
+      TEAMS_E2E_CLIENT_ID: ${{ secrets.TEAMS_E2E_CLIENT_ID }}
+      TEAMS_E2E_CLIENT_SECRET: ${{ secrets.TEAMS_E2E_CLIENT_SECRET }}
+      TEAMS_E2E_TEAM_ID: ${{ secrets.TEAMS_E2E_TEAM_ID }}
+      TEAMS_E2E_CHANNEL_ID: ${{ secrets.TEAMS_E2E_CHANNEL_ID }}
+      TEAMS_E2E_SERVICE_URL: ${{ secrets.TEAMS_E2E_SERVICE_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-node@v7
+        with: { node-version: 20 }
+      - name: Require live-tenant configuration
+        run: |
+          test -n "$TEAMS_E2E_TENANT_ID"
+          test -n "$TEAMS_E2E_CLIENT_ID"
+          test -n "$TEAMS_E2E_CLIENT_SECRET"
+          test -n "$TEAMS_E2E_TEAM_ID"
+          test -n "$TEAMS_E2E_CHANNEL_ID"
+          test -n "$TEAMS_E2E_SERVICE_URL"
+      - name: Discover channel, create card, and update the same activity
+        run: node scripts/ci/microsoft-teams-live-smoke.mjs

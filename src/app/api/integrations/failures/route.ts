@@ -3,17 +3,18 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import prisma from '@/lib/prisma';
+import { emitAuditEvent } from '@/lib/audit';
 
 async function requireAdmin() {
   const session = await getServerSession(await getAuthOptions());
-  return session?.user?.role === 'ADMIN';
+  return session?.user?.role === 'ADMIN' ? session : null;
 }
 
 export async function GET() {
   if (!(await requireAdmin())) return jsonError('Forbidden', 403);
   const [external, chatOps, jobs] = await Promise.all([
     prisma.externalOperation.findMany({
-      where: { status: 'FAILED' },
+      where: { status: { in: ['FAILED', 'AMBIGUOUS'] } },
       orderBy: { updatedAt: 'desc' },
       take: 100,
       select: {
@@ -23,6 +24,8 @@ export async function GET() {
         incidentId: true,
         externalKey: true,
         attempts: true,
+        status: true,
+        resultPayload: true,
         lastError: true,
         updatedAt: true,
       },
@@ -59,12 +62,77 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireAdmin())) return jsonError('Forbidden', 403);
-  const body = (await request.json().catch(() => null)) as { kind?: string; id?: string } | null;
+  const admin = await requireAdmin();
+  if (!admin) return jsonError('Forbidden', 403);
+  const body = (await request.json().catch(() => null)) as {
+    kind?: string;
+    id?: string;
+    resolution?: 'retry' | 'mark_failed' | 'mark_delivered';
+    providerMessageId?: string;
+    conversationId?: string;
+  } | null;
   if (!body?.id || !['external', 'chatops'].includes(body.kind ?? ''))
     return jsonError('Invalid retry request', 400);
   await prisma.$transaction(async tx => {
     if (body.kind === 'external') {
+      const existing = await tx.externalOperation.findUnique({ where: { id: body.id } });
+      if (!existing) throw new Error('External operation not found');
+      if (existing.status === 'AMBIGUOUS') {
+        if (body.resolution === 'mark_delivered') {
+          const payload = existing.requestPayload as Record<string, unknown> | null;
+          const destinationId = typeof payload?.destinationId === 'string' ? payload.destinationId : '';
+          if ((existing.provider as string) !== 'MICROSOFT_TEAMS' || !existing.incidentId || !destinationId || !body.providerMessageId?.trim() || !body.conversationId?.trim()) {
+            throw new Error('Ambiguous Teams delivery requires providerMessageId and conversationId');
+          }
+          const destination = await tx.microsoftTeamsDestination.findUnique({ where: { id: destinationId } });
+          if (!destination) throw new Error('Teams destination no longer exists');
+          const snapshot = payload?.destinationSnapshot as Record<string, unknown> | undefined;
+          if (snapshot && (snapshot.tenantId !== destination.tenantId || snapshot.teamId !== destination.teamId || snapshot.channelId !== destination.channelId)) {
+            throw new Error('Teams destination changed after this delivery; it cannot be reconciled against the new target');
+          }
+          const installation = await tx.microsoftTeamsInstallation.findFirst({
+            where: { tenantId: destination.tenantId, teamId: destination.teamId },
+            select: { id: true },
+          });
+          if (!installation) throw new Error('Teams installation no longer corresponds to this destination');
+          await tx.microsoftTeamsIncidentMessage.upsert({
+            where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
+            create: { incidentId: existing.incidentId, destinationId, messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null },
+            update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null },
+          });
+          await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'COMPLETED', externalId: body.providerMessageId.trim(), externalKey: body.providerMessageId.trim(), resultPayload: { providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), reconciledManually: true }, lastError: null } });
+          await emitAuditEvent({
+            action: 'microsoftTeams.delivery.reconciled_delivered', source: 'UI',
+            target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
+            oldValue: { status: 'AMBIGUOUS' }, newValue: { status: 'COMPLETED' },
+            metadata: { operationId: existing.id, destinationId, tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim() },
+          }, tx);
+          return;
+        }
+        if (body.resolution === 'mark_failed') {
+          const payload = existing.requestPayload as Record<string, unknown> | null;
+          const destinationId = typeof payload?.destinationId === 'string' ? payload.destinationId : '';
+          if (existing.incidentId && destinationId) {
+            await tx.microsoftTeamsIncidentMessage.deleteMany({ where: { incidentId: existing.incidentId, destinationId, messageId: `__reserved__:${existing.id}` } });
+            await tx.microsoftTeamsIncidentMessage.updateMany({
+              where: { incidentId: existing.incidentId, destinationId, createState: 'AMBIGUOUS', createOperationId: existing.id },
+              data: { createState: 'NONE', createOperationId: null },
+            });
+          }
+          await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'FAILED', lastError: 'Operator confirmed the ambiguous Teams delivery was not delivered.' } });
+          await emitAuditEvent({
+            action: 'microsoftTeams.delivery.reconciled_failed', source: 'UI',
+            target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
+            oldValue: { status: 'AMBIGUOUS' }, newValue: { status: 'FAILED' },
+            metadata: { operationId: existing.id, destinationId },
+          }, tx);
+          return;
+        }
+        throw new Error('Ambiguous deliveries cannot be retried; reconcile as mark_delivered or mark_failed');
+      }
+      if (existing.status !== 'FAILED') {
+        throw new Error(`Only FAILED external operations can be retried (current state: ${existing.status})`);
+      }
       const operation = await tx.externalOperation.update({
         where: { id: body.id },
         data: {
@@ -85,6 +153,11 @@ export async function POST(request: NextRequest) {
           payload: { operationId: operation.id },
         },
       });
+      await emitAuditEvent({
+        action: existing.provider === 'MICROSOFT_TEAMS' ? 'microsoftTeams.delivery.manual_retry' : 'externalOperation.manual_retry', source: 'UI',
+        target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
+        oldValue: { status: 'FAILED' }, newValue: { status: 'PENDING' }, metadata: { operationId: existing.id, provider: existing.provider },
+      }, tx);
     } else {
       const intent = await tx.chatOpsIntent.update({
         where: { id: body.id },

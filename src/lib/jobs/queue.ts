@@ -375,10 +375,36 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
       case 'EXTERNAL_OPERATION': {
         if (typeof payloadValue(job.payload, 'operationId') !== 'string')
           throw new Error('External operation job is missing operationId');
+        const operationId = requiredPayloadString(job.payload, 'operationId');
         const { processExternalOperation } = await import('../external-operations');
-        await processExternalOperation(requiredPayloadString(job.payload, 'operationId'));
+        let processingError: unknown;
+        try {
+          await processExternalOperation(operationId);
+        } catch (error) {
+          processingError = error;
+        }
+        // ExternalOperation owns retry policy and timing. The BackgroundJob is
+        // only its wake-up mechanism and must mirror that authoritative state.
+        const operation = await prisma.externalOperation.findUnique({
+          where: { id: operationId },
+          select: { status: true, nextAttemptAt: true, leaseExpiresAt: true, lastError: true },
+        });
+        if (!operation) throw processingError ?? new Error('External operation no longer exists');
+        if (operation.status === 'PENDING' || operation.status === 'PROCESSING') {
+          const scheduledAt = operation.status === 'PENDING'
+            ? operation.nextAttemptAt
+            : operation.leaseExpiresAt ?? new Date(Date.now() + 30_000);
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: { status: 'PENDING', scheduledAt, startedAt: null, attempts: 0, error: null },
+          });
+          return false;
+        }
+        // COMPLETED, FAILED and AMBIGUOUS are all settled operation states.
+        // AMBIGUOUS deliberately requires reconciliation and must never be
+        // converted into an automatic retry by the generic job backoff.
         await markJobCompleted(job.id);
-        return true;
+        return operation.status === 'COMPLETED';
       }
       case 'STATUS_PAGE_NOTIFICATION': {
         const { notifyStatusPageSubscribers } = await import('../status-page-notifications');

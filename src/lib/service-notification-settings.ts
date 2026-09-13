@@ -7,6 +7,7 @@ const SERVICE_NOTIFICATION_CHANNELS = new Set<NotificationChannel>([
   'SMS',
   'PUSH',
   'WHATSAPP',
+  'MICROSOFT_TEAMS',
 ]);
 
 export function parseServiceNotificationChannels(formData: FormData): NotificationChannel[] {

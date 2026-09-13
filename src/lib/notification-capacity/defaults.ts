@@ -20,6 +20,8 @@ export function defaultRate(channel: NotificationChannel): number {
       return 1;
     case 'WEBHOOK':
       return 20;
+    case 'MICROSOFT_TEAMS':
+      return 2;
     default:
       return 10;
   }
@@ -39,6 +41,8 @@ export function defaultInFlight(channel: NotificationChannel): number {
       return 2;
     case 'WEBHOOK':
       return 10;
+    case 'MICROSOFT_TEAMS':
+      return 2;
     default:
       return 5;
   }
