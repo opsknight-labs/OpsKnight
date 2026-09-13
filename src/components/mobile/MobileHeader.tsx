@@ -52,6 +52,7 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
       : systemStatus === 'warning'
         ? { label: 'Degraded performance', Icon: TriangleAlert }
         : { label: 'All systems operational', Icon: CircleCheck };
+  const StatusIcon = status.Icon;
 
   return (
     <header className="mobile-header">
@@ -63,7 +64,11 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
           </Link>
         ) : route.backHref ? (
           <>
-            <Link href={route.backHref} className="mobile-header-icon-button" aria-label={`Back to ${route.backHref.split('/').pop() || 'previous page'}`}>
+            <Link
+              href={route.backHref}
+              className="mobile-header-icon-button"
+              aria-label={`Back to ${route.backHref.split('/').pop() || 'previous page'}`}
+            >
               <ArrowLeft aria-hidden="true" />
             </Link>
             <span className="mobile-header-page-title">{route.title}</span>
@@ -87,7 +92,7 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
           aria-label={`System status: ${status.label}`}
           title={status.label}
         >
-          <status.Icon aria-hidden="true" />
+          <StatusIcon aria-hidden="true" />
         </Link>
       </div>
     </header>
