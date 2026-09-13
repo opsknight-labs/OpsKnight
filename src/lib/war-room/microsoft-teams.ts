@@ -1,6 +1,7 @@
 import 'server-only';
 
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { evaluateWarRoomPolicy } from './policy';
@@ -43,7 +44,6 @@ export async function requestMicrosoftTeamsWarRoom(
     if (!incident) return { accepted: false, code: 'INCIDENT_NOT_FOUND' };
     if (!['OPEN', 'ACKNOWLEDGED'].includes(incident.status))
       return { accepted: false, code: 'INCIDENT_NOT_ACTIVE' };
-
     const [config, chatOpsConfig, destination] = await Promise.all([
       tx.microsoftTeamsConfig.findFirst({ where: { enabled: true }, orderBy: { updatedAt: 'desc' } }),
       tx.chatOpsConfig.findUnique({ where: { id: 'default' } }),
@@ -145,61 +145,90 @@ export async function closeMicrosoftTeamsWarRoom(
 export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
   incidentId: string
 ): Promise<void> {
-  await prisma.$transaction(async tx => {
-    const rooms = await tx.incidentWarRoom.findMany({
+  await runSerializableTransaction(async tx => {
+    // This read is deliberately used only to preserve an existing
+    // reconciliation lease. State classification happens in the conditional
+    // updates below, so a create worker cannot be failed from stale data.
+    const before = await tx.incidentWarRoom.findMany({
       where: {
         incidentId,
         provider: 'MICROSOFT_TEAMS',
-        state: { in: ['READY', 'PROVISIONING', 'AMBIGUOUS'] },
+        state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
       },
       select: {
         id: true,
-        state: true,
-        createAttemptedAt: true,
         provisioningToken: true,
         lastErrorCode: true,
       },
     });
-    if (rooms.length === 0) return;
-
     const now = new Date();
-    const ready = rooms.filter(room => room.state === 'READY').map(room => room.id);
-    const safe = rooms
-      .filter(room => room.state !== 'READY' && !room.createAttemptedAt)
-      .map(room => room.id);
-    const attempted = rooms.filter(room => room.state !== 'READY' && room.createAttemptedAt);
+    const unsettled: Prisma.IncidentWarRoomWhereInput = {
+      incidentId,
+      provider: 'MICROSOFT_TEAMS',
+      state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
+    };
 
-    if (ready.length > 0)
-      await tx.incidentWarRoom.updateMany({
-        where: { id: { in: ready }, state: 'READY' },
-        data: { state: 'CLOSED', closedAt: now, provisioningToken: null },
-      });
+    // Predicate-bearing updates fence the create boundary without a TOCTOU
+    // read. Repeat the attempted pass to catch a worker that records its
+    // durable attempt between the first pass and the pre-create failure pass.
+    await tx.incidentWarRoom.updateMany({
+      where: { ...unsettled, createAttemptedAt: { not: null } },
+      data: {
+        state: 'AMBIGUOUS',
+        lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE',
+        lastError: 'Incident resolved while channel creation may have completed; reconciling by marker only.',
+      },
+    });
+    await tx.incidentWarRoom.updateMany({
+      where: { ...unsettled, createAttemptedAt: null },
+      data: {
+        state: 'FAILED',
+        provisioningToken: null,
+        lastErrorCode: 'INCIDENT_RESOLVED',
+        lastError: 'Incident resolved before Teams channel creation began.',
+      },
+    });
+    await tx.incidentWarRoom.updateMany({
+      where: { ...unsettled, createAttemptedAt: { not: null } },
+      data: {
+        state: 'AMBIGUOUS',
+        lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE',
+        lastError: 'Incident resolved while channel creation may have completed; reconciling by marker only.',
+      },
+    });
+    await tx.incidentWarRoom.updateMany({
+      where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
+      data: { state: 'CLOSED', closedAt: now, provisioningToken: null },
+    });
 
-    if (safe.length > 0)
-      await tx.incidentWarRoom.updateMany({
-        where: { id: { in: safe }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
-        data: {
-          state: 'FAILED',
-          provisioningToken: null,
-          lastErrorCode: 'INCIDENT_RESOLVED',
-          lastError: 'Incident resolved before Teams channel creation began.',
-        },
-      });
-
+    const rooms = await tx.incidentWarRoom.findMany({
+      where: {
+        incidentId,
+        provider: 'MICROSOFT_TEAMS',
+        state: { in: ['FAILED', 'CLOSED', 'AMBIGUOUS'] },
+      },
+      select: { id: true, state: true, createAttemptedAt: true, provisioningToken: true },
+    });
+    if (rooms.length === 0) return;
+    const beforeById = new Map(before.map(room => [room.id, room]));
     const reconciliationClaims: Array<{ roomId: string; token: string }> = [];
-    for (const room of attempted) {
+    for (const room of rooms) {
+      if (room.state !== 'AMBIGUOUS' || !room.createAttemptedAt) continue;
+      const prior = beforeById.get(room.id);
       const alreadyReconciliationOnly =
-        room.lastErrorCode === 'INCIDENT_RESOLVED_DURING_CREATE' && Boolean(room.provisioningToken);
-      const token = alreadyReconciliationOnly ? room.provisioningToken! : crypto.randomUUID();
+        prior?.lastErrorCode === 'INCIDENT_RESOLVED_DURING_CREATE' &&
+        Boolean(prior.provisioningToken);
+      const token = alreadyReconciliationOnly ? prior.provisioningToken! : crypto.randomUUID();
       const changed = await tx.incidentWarRoom.updateMany({
-        where: { id: room.id, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
-        data: {
+        where: {
+          id: room.id,
           state: 'AMBIGUOUS',
+          createAttemptedAt: { not: null },
+          provisioningToken: room.provisioningToken,
+        },
+        data: {
           provisioningToken: token,
           provisioningStartedAt: alreadyReconciliationOnly ? undefined : now,
-          lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE',
-          lastError:
-            'Incident resolved while channel creation may have completed; reconciling by marker only.',
         },
       });
       if (changed.count === 1) reconciliationClaims.push({ roomId: room.id, token });
@@ -337,7 +366,7 @@ export async function provisionMicrosoftTeamsWarRoom(
   if (room.createAttemptedAt) {
     const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
     const remaining = deadline - Date.now();
-    await prisma.incidentWarRoom.updateMany({
+    const reconciled = await prisma.incidentWarRoom.updateMany({
       where: {
         id: room.id,
         provisioningToken: expectedProvisioningToken,
@@ -358,6 +387,23 @@ export async function provisionMicrosoftTeamsWarRoom(
         Math.min(60_000, remaining),
         true
       );
+    // A complete bounded marker scan found no room after the provider's
+    // consistency window. Only now is the unknown create terminally failed.
+    if (reconciled.count === 1)
+      await prisma.incidentWarRoom.updateMany({
+        where: {
+          id: room.id,
+          provisioningToken: expectedProvisioningToken,
+          state: 'AMBIGUOUS',
+          createAttemptedAt: { not: null },
+        },
+        data: {
+          state: 'FAILED',
+          provisioningToken: null,
+          lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED',
+          lastError: 'No Teams channel was found by marker during the reconciliation window.',
+        },
+      });
     return;
   }
 
@@ -427,7 +473,6 @@ export async function provisionMicrosoftTeamsWarRoom(
     await markFailed(room.id, expectedProvisioningToken, created.code, created.message);
     return;
   }
-
   const adoption = await adoptProviderChannel(room, expectedProvisioningToken, created.value);
   if (adoption === 'READY') {
     const { projectMicrosoftTeamsWarRoomParticipants } = await import('./participants');

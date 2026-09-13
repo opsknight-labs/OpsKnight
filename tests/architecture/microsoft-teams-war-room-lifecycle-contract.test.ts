@@ -24,13 +24,21 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
     expect(teams).toContain('currentIncident = await prisma.incident.findUnique');
   });
 
-  it('fences resolve races into marker-only reconciliation with a fresh lease', () => {
+  it('fences resolve races with predicate updates and preserves reconciliation', () => {
     const teams = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
     expect(teams).toContain("lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE'");
-    expect(teams).toContain('const token = alreadyReconciliationOnly ? room.provisioningToken! : crypto.randomUUID()');
+    expect(teams).toContain('const token = alreadyReconciliationOnly ? prior.provisioningToken! : crypto.randomUUID()');
     expect(teams).toContain('reconciliationOnly: true');
+    expect(teams).toContain('createAttemptedAt: { not: null }');
+    expect(teams).toContain('createAttemptedAt: null');
     expect(teams).toContain('if (room.createAttemptedAt)');
     expect(teams).toContain('A prior Teams channel-create may have succeeded; reconciling by marker only.');
+    const firstAttempted = teams.indexOf('createAttemptedAt: { not: null }');
+    const safeFailure = teams.indexOf('createAttemptedAt: null');
+    const secondAttempted = teams.indexOf('createAttemptedAt: { not: null }', firstAttempted + 1);
+    expect(firstAttempted).toBeGreaterThan(-1);
+    expect(safeFailure).toBeGreaterThan(firstAttempted);
+    expect(secondAttempted).toBeGreaterThan(safeFailure);
   });
 
   it('makes final external-channel adoption incident-state aware', () => {
