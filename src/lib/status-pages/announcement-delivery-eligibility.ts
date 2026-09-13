@@ -70,7 +70,17 @@ export async function announcementEmailDeliveryRevoked(
     publishAt: announcement.publishAt,
     startDate: announcement.startDate,
   });
-  if (!plan.shouldNotify) return 'Announcement notification was disabled or withdrawn';
+  if (!plan.shouldNotify || !plan.scheduledAt) {
+    return 'Announcement notification was disabled or withdrawn';
+  }
+
+  const now = Date.now();
+  if (announcement.publishAt.getTime() > now + 1_000) {
+    return 'Announcement is not published yet';
+  }
+  if (plan.scheduledAt.getTime() > now + 1_000) {
+    return 'Announcement notification time has not arrived yet';
+  }
 
   return null;
 }
