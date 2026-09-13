@@ -1,8 +1,9 @@
 'use client';
 /* eslint-disable react-hooks/set-state-in-effect -- existing prop-to-alert synchronization */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { signIn } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import Spinner from '@/components/ui/Spinner';
@@ -41,6 +42,15 @@ function formatError(message: string | null | undefined) {
   return 'Authentication failed. Please try again.';
 }
 
+const subscribeResponderSessionPolicy = (onStoreChange: () => void) => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+  const media = window.matchMedia('(display-mode: standalone)');
+  media.addEventListener?.('change', onStoreChange);
+  return () => media.removeEventListener?.('change', onStoreChange);
+};
+
+const standardResponderSessionPolicy = () => 'STANDARD' as const;
+
 export default function LoginClient({
   callbackUrl,
   errorCode,
@@ -52,10 +62,17 @@ export default function LoginClient({
   localAuthEnabled,
   breakGlassOnly,
 }: Props) {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
-  const [trustedPwa, setTrustedPwa] = useState(false);
+  const sessionPolicy = useSyncExternalStore(
+    subscribeResponderSessionPolicy,
+    detectResponderSessionPolicy,
+    standardResponderSessionPolicy
+  );
+  const trustedPwa = sessionPolicy === 'TRUSTED_PWA';
+  const [rememberMeOverride, setRememberMeOverride] = useState<boolean | null>(null);
+  const rememberMe = rememberMeOverride ?? trustedPwa;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(() => formatError(errorCode) || ssoError || '');
   const [showPassword, setShowPassword] = useState(false);
@@ -76,15 +93,6 @@ export default function LoginClient({
   useEffect(() => {
     if (ssoError) setError(ssoError);
   }, [ssoError]);
-
-  useEffect(() => {
-    if (detectResponderSessionPolicy() !== 'TRUSTED_PWA') return;
-    // An installed PWA is an explicit responder-device context. Default the
-    // existing bounded extended session on, but leave the control visible so a
-    // user can opt out on a shared device. Ordinary mobile browsers stay STANDARD.
-    setTrustedPwa(true);
-    setRememberMe(true);
-  }, []);
 
   const handleSSO = async () => {
     setIsSSOLoading(true);
@@ -124,24 +132,14 @@ export default function LoginClient({
         setTimeout(() => setIsShaking(false), 500);
       } else {
         setIsSuccess(true);
-        // `result.url` from NextAuth's credentials provider (with
-        // redirect:false) is unreliable — depending on the original
-        // callbackUrl it can come back pointing at the signin page
-        // itself, breaking the post-login navigation. Use the
-        // validated `callbackUrl` prop, guarded by the shared
-        // same-origin sanitizer (blocks //evil.example, /login, signout).
+        // `result.url` from NextAuth's credentials provider (with redirect:false)
+        // is not authoritative for our validated callback. Use the shared
+        // same-origin sanitizer and refresh the App Router after the session
+        // cookie has been issued so authenticated RSC data is fetched anew.
         const safeTarget = safeInternalCallbackUrl(callbackUrl, '/');
-
-        // Purge any stale Service Worker dynamic/RSC caches immediately
-        void purgeBrowserAuthCaches();
-
-        // Standard enterprise practice for post-authentication transition:
-        // A hard navigation via window.location.assign() completely blows away
-        // the client-side RSC router cache and forces a full server document
-        // request with the newly issued session cookie.
-        setTimeout(() => {
-          window.location.assign(safeTarget);
-        }, 200);
+        await purgeBrowserAuthCaches();
+        router.replace(safeTarget);
+        router.refresh();
       }
     } catch {
       setError('Unexpected error');
@@ -334,7 +332,9 @@ export default function LoginClient({
                     type="button"
                     role="checkbox"
                     aria-checked={rememberMe}
-                    onClick={() => !isSubmitting && !isSuccess && setRememberMe(!rememberMe)}
+                    onClick={() =>
+                      !isSubmitting && !isSuccess && setRememberMeOverride(!rememberMe)
+                    }
                     disabled={isSubmitting || isSuccess}
                     className="flex items-center gap-2.5 cursor-pointer select-none group focus:outline-none disabled:opacity-50"
                   >
@@ -441,7 +441,7 @@ export default function LoginClient({
             href="https://opsknight.com/docs"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-semibold inline-flex items-center gap-0.5 hover:underline transition-colors ml-0.5"
+            className="text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white font-semibold inline-flex items-center gap-0.5 hover:underline transition-colors ml-0.5"
           >
             Installation guide →
           </a>
