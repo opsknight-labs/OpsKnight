@@ -1,7 +1,8 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import MobileCard from '@/components/mobile/MobileCard';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, FileText } from 'lucide-react';
+import EmptyState from '@/components/ui/EmptyState';
+import { Card } from '@/components/ui/shadcn/card';
 import MobileTime from '@/components/mobile/MobileTime';
 
 export const dynamic = 'force-dynamic';
@@ -22,60 +23,56 @@ export default async function MobilePostmortemsPage() {
   });
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">
-          Postmortems
-        </h1>
-        <p className="mt-1 text-xs font-medium text-[color:var(--text-muted)]">
-          {postmortems.length} total
-        </p>
+    <div className="responsive-page space-y-4">
+      <div className="px-0.5 text-[11px] text-muted-foreground">
+        {postmortems.length} {postmortems.length === 1 ? 'postmortem' : 'postmortems'}
       </div>
 
       {postmortems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--bg-secondary)] px-6 py-10 text-center">
-          <div className="text-3xl">📝</div>
-          <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">No postmortems</h3>
-          <p className="text-xs text-[color:var(--text-muted)]">
-            Postmortems are created from resolved incidents
-          </p>
-        </div>
+        <EmptyState
+          icon={<FileText aria-hidden="true" />}
+          title="No postmortems"
+          description="Postmortems appear here after incidents are resolved and reviewed."
+          size="sm"
+        />
       ) : (
-        <div className="flex flex-col gap-3">
-          {postmortems.map(pm => (
-            <Link key={pm.id} href={`/m/postmortems/${pm.id}`} className="no-underline">
-              <MobileCard className="flex items-center gap-3">
-                <div className="flex flex-1 flex-col gap-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                        pm.status === 'PUBLISHED'
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                          : 'bg-[color:var(--bg-secondary)] text-[color:var(--text-secondary)]'
-                      }`}
-                    >
-                      {pm.status}
-                    </span>
-                    <span className="text-[11px] text-[color:var(--text-muted)]">
-                      <MobileTime value={pm.createdAt} format="date" />
-                    </span>
-                  </div>
-
-                  <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-                    {pm.incident.title}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--text-muted)]">
-                    <span>{pm.incident.service.name}</span>
-                    <span>•</span>
-                    <span>By {pm.createdBy?.name || pm.createdBy?.email || 'Deleted user'}</span>
-                  </div>
+        <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
+          {postmortems.map((postmortem, index) => (
+            <Link
+              key={postmortem.id}
+              href={`/m/postmortems/${postmortem.id}`}
+              className={`block min-w-0 px-3.5 py-3 text-card-foreground transition-colors hover:bg-accent/40 ${
+                index > 0 ? 'border-t border-border/70' : ''
+              }`}
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                    postmortem.status === 'PUBLISHED'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300'
+                      : 'border-border bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {postmortem.status}
+                </span>
+                <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                  <MobileTime value={postmortem.createdAt} format="date" />
+                </span>
+              </div>
+              <div className="mt-1.5 flex min-w-0 items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">
+                    {postmortem.incident.title}
+                  </h2>
+                  <p className="mt-1 truncate text-[10px] text-muted-foreground">
+                    {postmortem.incident.service.name} · {postmortem.createdBy?.name || postmortem.createdBy?.email || 'Deleted user'}
+                  </p>
                 </div>
-                <ChevronRight className="h-4 w-4 text-[color:var(--text-muted)]" />
-              </MobileCard>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </div>
             </Link>
           ))}
-        </div>
+        </Card>
       )}
     </div>
   );
