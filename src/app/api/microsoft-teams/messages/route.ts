@@ -6,6 +6,7 @@ import { AppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import { assertMicrosoftTeamsActivityAuth, getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
 import { normalizeTrustedMicrosoftTeamsServiceUrl } from '@/lib/microsoft-teams/service-url';
+import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
 
 /**
  * Bot Framework / Teams activity endpoint.
@@ -219,74 +220,19 @@ export async function POST(request: NextRequest) {
             });
           } catch {}
         } else if (botRemoved) {
-          const prismaAny = prisma as unknown as {
-            microsoftTeamsInstallation: { updateMany: (a: unknown) => Promise<unknown> };
-            microsoftTeamsDestination: { updateMany: (a: unknown) => Promise<unknown> };
-          };
-          await prismaAny.microsoftTeamsInstallation.updateMany({
-            where: { tenantId, teamId },
-            data: { enabled: false },
-          } as unknown as never);
-          await prismaAny.microsoftTeamsDestination.updateMany({
-            where: { tenantId, teamId },
-            data: { enabled: false },
-          } as unknown as never);
-          // Phase 13: clean lifecycle — revoke queued/pending ExternalOperation + BackgroundJob for this team.
-          // Destinations are disabled above; queued deliveries must not silently deliver after revocation.
-          try {
-            const destRows = await (prisma as unknown as { microsoftTeamsDestination: { findMany: (a: unknown) => Promise<Array<{ id: string }>> } }).microsoftTeamsDestination.findMany({
+          const revoked = await prisma.$transaction(async tx => {
+            const destRows = await tx.microsoftTeamsDestination.findMany({
               where: { tenantId, teamId },
               select: { id: true },
-            } as never);
-            const destIds = new Set(destRows.map(r => r.id));
-            if (destIds.size > 0) {
-              const pendingOps = await prisma.externalOperation.findMany({
-                where: { provider: 'MICROSOFT_TEAMS' as never, status: { in: ['PENDING', 'AMBIGUOUS'] } },
-                select: { id: true, requestPayload: true, status: true },
-              });
-              const revokeIds: string[] = [];
-              for (const op of pendingOps) {
-                const payload = op.requestPayload as Record<string, unknown> | null;
-                const dId = typeof payload?.destinationId === 'string' ? (payload.destinationId as string) : '';
-                if (dId && destIds.has(dId)) revokeIds.push(op.id);
-              }
-              // Also consider in-flight PROCESSING with expired lease — same revocation treatment as queued.
-              const processingOps = await prisma.externalOperation.findMany({
-                where: { provider: 'MICROSOFT_TEAMS' as never, status: 'PROCESSING', leaseExpiresAt: { lt: new Date() } },
-                select: { id: true, requestPayload: true },
-              });
-              for (const op of processingOps) {
-                const payload = op.requestPayload as Record<string, unknown> | null;
-                const dId = typeof payload?.destinationId === 'string' ? (payload.destinationId as string) : '';
-                if (dId && destIds.has(dId) && !revokeIds.includes(op.id)) revokeIds.push(op.id);
-              }
-              if (revokeIds.length > 0) {
-                await prisma.externalOperation.updateMany({
-                  where: { id: { in: revokeIds } },
-                  data: { status: 'FAILED', lastError: 'Microsoft Teams app was removed from this Team — delivery revoked.', leaseToken: null, leaseExpiresAt: null, nextAttemptAt: new Date() },
-                });
-                // Cancel corresponding durable jobs so workers do not re-claim.
-                const jobs = await prisma.backgroundJob.findMany({
-                  where: { type: 'EXTERNAL_OPERATION', status: { in: ['PENDING', 'PROCESSING'] } },
-                  select: { id: true, payload: true },
-                });
-                const jobIdsToCancel: string[] = [];
-                for (const job of jobs) {
-                  const opId = (job.payload as Record<string, unknown> | null)?.operationId;
-                  if (typeof opId === 'string' && revokeIds.includes(opId)) jobIdsToCancel.push(job.id);
-                }
-                if (jobIdsToCancel.length > 0) {
-                  await prisma.backgroundJob.updateMany({
-                    where: { id: { in: jobIdsToCancel } },
-                    data: { status: 'CANCELLED', error: 'Teams installation revoked' },
-                  });
-                }
-                logger.info('[MicrosoftTeams] Queued Teams operations revoked after bot removal', { tenantId, teamId, revokedCount: revokeIds.length });
-              }
-            }
-          } catch (e) {
-            logger.warn('[MicrosoftTeams] Failed to revoke queued operations on botRemoved', { error: (e as Error).message });
-          }
+            });
+            await tx.microsoftTeamsInstallation.updateMany({ where: { tenantId, teamId }, data: { enabled: false } });
+            await tx.microsoftTeamsDestination.updateMany({ where: { tenantId, teamId }, data: { enabled: false } });
+            return revokeMicrosoftTeamsOperations(tx, {
+              destinationIds: destRows.map(row => row.id),
+              reason: 'Microsoft Teams app was removed from this Team',
+            });
+          });
+          logger.info('[MicrosoftTeams] Teams operations settled after bot removal', { tenantId, teamId, revokedCount: revoked.operationIds.length });
           logger.info('[MicrosoftTeams] Installation revoked — destinations disabled', { tenantId, teamId });
           try {
             await emitAuditEvent({

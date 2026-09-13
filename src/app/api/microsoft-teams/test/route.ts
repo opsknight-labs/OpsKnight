@@ -43,15 +43,14 @@ export async function POST(request: NextRequest) {
 
     const prismaAny = prisma as unknown as {
       microsoftTeamsDestination: {
-        findUnique: (a: unknown) => Promise<{ id: string; serviceId: string; tenantId: string; teamId: string; channelId: string } | null>;
         findFirst: (a: unknown) => Promise<{ id: string; serviceId: string; tenantId: string; teamId: string; channelId: string } | null>;
       };
     };
     let dest: { id: string; serviceId: string; tenantId: string; teamId: string; channelId: string } | null = null;
     if (destinationId) {
-      dest = await prismaAny.microsoftTeamsDestination.findUnique({ where: { id: destinationId } });
+      dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { id: destinationId, enabled: true, installation: { enabled: true } } });
     } else if (serviceId) {
-      dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { serviceId } });
+      dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { serviceId, enabled: true, installation: { enabled: true } } });
     }
     if (!dest) {
       return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Teams destination not found. Map a Service → Teams channel first.' }));

@@ -37,6 +37,7 @@ export type MicrosoftTeamsCapability = {
  */
 export async function getMicrosoftTeamsCapabilities(options?: {
   tenantId?: string;
+  rscState?: TeamsRscGrantState | null;
 }): Promise<MicrosoftTeamsCapability> {
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved || !resolved.config.enabled) {
@@ -71,12 +72,14 @@ export async function getMicrosoftTeamsCapabilities(options?: {
   }
 
   // RSC truth — fail-closed: unknown => DENY
-  let rsc: TeamsRscGrantState | null = null;
-  try {
-    const { getTeamsGrantedRscPermissions } = await import('./client');
-    rsc = await getTeamsGrantedRscPermissions({ explicitTenantId: tenantId || undefined });
-  } catch {
-    rsc = { granted: null, missing: [], unknown: true, error: 'RSC_UNAVAILABLE', installations: [] };
+  let rsc: TeamsRscGrantState | null = options && 'rscState' in options ? options.rscState ?? null : null;
+  if (!options || !('rscState' in options)) {
+    try {
+      const { getTeamsGrantedRscPermissions } = await import('./client');
+      rsc = await getTeamsGrantedRscPermissions({ explicitTenantId: tenantId || undefined });
+    } catch {
+      rsc = { granted: null, missing: [], unknown: true, error: 'RSC_UNAVAILABLE', installations: [] };
+    }
   }
 
   // Bot Connector is the delivery transport — `ChannelMessage.Send.Group` is optional.

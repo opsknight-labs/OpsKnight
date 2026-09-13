@@ -568,7 +568,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             return;
           }
           const ownerResult = owner?.resultPayload as Record<string, unknown> | null;
-          if (ownerResult?.createAttempted !== true) {
+          if (owner && ownerResult?.createAttempted !== true) {
             // The owner died before the pre-POST durability hook completed, so
             // no external side effect can have occurred. Reclaim without
             // manufacturing an operator-visible ambiguous delivery.

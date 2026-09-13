@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { encrypt, decrypt } from '@/lib/encryption';
+import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
 
 /**
  * Console-UI only Teams app credentials. No .env secret.
@@ -114,48 +115,15 @@ export async function saveMicrosoftTeamsConfig(
     // Config identity change invalidates prior installations/destinations + queued deliveries.
     // A stale destinations row with an old tenantId/Graph token would silently fail or mis-deliver.
     if ((clientIdChanged || tenantChanged) && existing) {
-      try {
-        const allInsts = await txAny.microsoftTeamsInstallation.findMany({ select: { id: true } } as never);
-        const instIds = allInsts.map(r => r.id);
-        if (instIds.length > 0) {
-          await txAny.microsoftTeamsInstallation.updateMany({ where: { id: { in: instIds } }, data: { enabled: false } });
-        }
-        await (tx as unknown as { microsoftTeamsDestination: { updateMany: (a: unknown) => Promise<unknown> } }).microsoftTeamsDestination.updateMany({
-          where: {},
-          data: { enabled: false },
-        });
-        const pendingOps = await (tx as unknown as { externalOperation: { findMany: (a: unknown) => Promise<Array<{ id: string }>> } }).externalOperation.findMany({
-          where: { provider: 'MICROSOFT_TEAMS' as never, status: { in: ['PENDING', 'AMBIGUOUS', 'PROCESSING'] } },
-          select: { id: true },
-        } as never);
-        if (pendingOps.length > 0) {
-          const opIds = pendingOps.map(o => o.id);
-          await (tx as unknown as { externalOperation: { updateMany: (a: unknown) => Promise<unknown> } }).externalOperation.updateMany({
-            where: { id: { in: opIds } },
-            data: { status: 'FAILED', lastError: 'Microsoft Teams configuration changed — delivery revoked.', leaseToken: null, leaseExpiresAt: null, nextAttemptAt: new Date() },
-          });
-        }
-        const jobs = await (tx as unknown as { backgroundJob: { findMany: (a: unknown) => Promise<Array<{ id: string; payload: unknown }>> } }).backgroundJob.findMany({
-          where: { type: 'EXTERNAL_OPERATION', status: { in: ['PENDING', 'PROCESSING'] } },
-          select: { id: true, payload: true },
-        } as never);
-        const pendingOpIds = new Set(pendingOps.map(o => o.id));
-        const jobIdsToCancel: string[] = [];
-        for (const job of jobs) {
-          const opId = (job.payload as Record<string, unknown> | null)?.operationId;
-          if (typeof opId === 'string' && pendingOpIds.has(opId)) jobIdsToCancel.push(job.id);
-        }
-        if (jobIdsToCancel.length > 0) {
-          await (tx as unknown as { backgroundJob: { updateMany: (a: unknown) => Promise<unknown> } }).backgroundJob.updateMany({
-            where: { id: { in: jobIdsToCancel } },
-            data: { status: 'CANCELLED', error: 'Teams config changed' },
-          });
-        }
-      } catch (e) {
-        // Revocation is best-effort inside the transaction — do not roll back the config save.
-        const { logger } = await import('@/lib/logger');
-        logger.warn('[MicrosoftTeams] Config-change revocation failed', { error: (e as Error).message });
+      const allInsts = await txAny.microsoftTeamsInstallation.findMany({ select: { id: true } } as never);
+      const instIds = allInsts.map(r => r.id);
+      if (instIds.length > 0) {
+        await txAny.microsoftTeamsInstallation.updateMany({ where: { id: { in: instIds } }, data: { enabled: false } });
       }
+      await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false } });
+      await revokeMicrosoftTeamsOperations(tx, {
+        reason: 'Microsoft Teams credential identity changed',
+      });
     }
   });
 

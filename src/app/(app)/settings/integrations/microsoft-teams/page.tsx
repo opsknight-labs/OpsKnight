@@ -70,7 +70,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;
   const rscMissingCount = rscState?.missing.length ?? 0;
-  const health = isConnected ? await getMicrosoftTeamsHealth({ tenantId: config?.tenantId ?? undefined }).catch(() => null) : null;
+  const health = isConnected ? await getMicrosoftTeamsHealth({ tenantId: config?.tenantId ?? undefined, rscState }).catch(() => null) : null;
   const installationPermissions = [...(rscState?.installations ?? [])];
   for (const installation of health?.installations ?? []) {
     if (installationPermissions.some(state => state.teamId === installation.teamId)) continue;

@@ -68,5 +68,6 @@ jobs:
           tests/lib/microsoft-teams-cards.test.ts
           tests/lib/microsoft-teams-delivery.test.ts
           tests/lib/microsoft-teams-delivery-processor.test.ts
+          tests/lib/microsoft-teams-lifecycle.test.ts
           tests/lib/microsoft-teams-service-url.test.ts
           tests/architecture/microsoft-teams-transport-contract.test.ts

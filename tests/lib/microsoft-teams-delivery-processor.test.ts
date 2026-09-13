@@ -12,7 +12,7 @@ let ownerOperation: {
   status: string;
   leaseExpiresAt: Date | null;
   resultPayload: Record<string, unknown> | null;
-} = { id: 'op-create', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
+} | null = { id: 'op-create', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
 
 const incident = {
   id: 'inc-1', title: 'Incident', description: null, status: 'RESOLVED', urgency: 'HIGH', priority: null,
@@ -117,5 +117,16 @@ describe('processMicrosoftTeamsOperation create fence', () => {
       resultPayload: expect.objectContaining({ createAttempted: true }),
     }));
     expect(operationUpdates).not.toContainEqual(expect.objectContaining({ status: 'AMBIGUOUS' }));
+  });
+
+  it('fails closed when a CREATING fence has lost its owning operation', async () => {
+    Object.assign(ledger, { createState: 'CREATING', createOperationId: 'missing-op' });
+    ownerOperation = null;
+
+    const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+    await expect(processMicrosoftTeamsOperation('op-late')).rejects.toThrow('requires create reconciliation');
+
+    expect(createIncidentCard).not.toHaveBeenCalled();
+    expect(operationUpdates).toContainEqual(expect.objectContaining({ status: 'FAILED' }));
   });
 });

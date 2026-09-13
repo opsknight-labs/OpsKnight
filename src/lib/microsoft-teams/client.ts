@@ -173,9 +173,12 @@ async function sendBotActivity(args: {
     channelData: { tenant: { id: args.tenantId } },
   };
 
-  // Bot address for ConversationParameters.bot. Installation's botRecipientId (28:<guid>) is the
-  // most accurate; fallback to clientId (Azure AD appId) which the Connector also accepts.
-  const botAddressId = (args.botRecipientId ?? '').trim() || args.clientId.trim();
+  // The channel-account identity comes from Microsoft's verified installation
+  // activity. Do not guess it from the Entra application id.
+  const botAddressId = (args.botRecipientId ?? '').trim();
+  if (!botAddressId) {
+    return { success: false, error: 'Teams installation is missing its bot recipient identity — reinstall the app', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
+  }
 
   const createEndpoint = `${normalizedServiceUrl}/v3/conversations`;
   const createBody: Record<string, unknown> = {

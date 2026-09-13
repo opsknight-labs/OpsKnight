@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
 import { getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
+import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
 
 const upsertSchema = z.object({
   serviceId: z.string().trim().min(1).max(191),
@@ -25,7 +26,7 @@ const deleteSchema = z.object({
 /**
  * GET  /api/microsoft-teams/destinations?serviceId=... → current mapping
  * POST { serviceId, tenantId, teamId, channelId, channelName?, teamName? } → upsert destination
- * DELETE ?serviceId=...[&destinationId=...] → remove mapping (soft-delete via deleteMany)
+ * DELETE ?serviceId=...[&destinationId=...] → disable mapping while preserving delivery history
  */
 export async function GET(request: NextRequest) {
   try {
@@ -205,12 +206,13 @@ export async function DELETE(request: NextRequest) {
     const sid = parsed.data.serviceId;
     await assertCanModifyService(sid);
 
-    // Atomic: delete destination(s) and prune MICROSOFT_TEAMS from service channels when no destinations remain.
-    // Prevents half-configured state where service claims Teams channel but has no destination rows.
+    // Atomic tombstone: preserve destination/message identity and any AMBIGUOUS
+    // delivery truth while disabling routing and cancelling safe future work.
     await prisma.$transaction(async tx => {
       const txAny = tx as unknown as {
         microsoftTeamsDestination: {
-          deleteMany: (a: unknown) => Promise<{ count: number }>;
+          findMany: (a: unknown) => Promise<Array<{ id: string }>>;
+          updateMany: (a: unknown) => Promise<{ count: number }>;
           count: (a: unknown) => Promise<number>;
         };
         service: {
@@ -218,12 +220,17 @@ export async function DELETE(request: NextRequest) {
           update: (a: unknown) => Promise<unknown>;
         };
       };
-      if (parsed.data.destinationId) {
-        await txAny.microsoftTeamsDestination.deleteMany({ where: { id: parsed.data.destinationId, serviceId: sid } } as never);
-      } else {
-        await txAny.microsoftTeamsDestination.deleteMany({ where: { serviceId: sid } } as never);
-      }
-      const remaining = await txAny.microsoftTeamsDestination.count({ where: { serviceId: sid } } as never);
+      const where = parsed.data.destinationId
+        ? { id: parsed.data.destinationId, serviceId: sid }
+        : { serviceId: sid };
+      const destinations = await txAny.microsoftTeamsDestination.findMany({ where, select: { id: true } } as never);
+      const destinationIds = destinations.map(destination => destination.id);
+      await txAny.microsoftTeamsDestination.updateMany({ where, data: { enabled: false } } as never);
+      await revokeMicrosoftTeamsOperations(tx, {
+        destinationIds,
+        reason: 'Microsoft Teams destination unlinked',
+      });
+      const remaining = await txAny.microsoftTeamsDestination.count({ where: { serviceId: sid, enabled: true } } as never);
       if (remaining === 0) {
         const svc = await txAny.service.findUnique({ where: { id: sid }, select: { serviceNotificationChannels: true } });
         const channels = (svc?.serviceNotificationChannels ?? []) as string[];
@@ -236,7 +243,7 @@ export async function DELETE(request: NextRequest) {
 
     const user = await (await import('@/lib/rbac')).getCurrentUser().catch(() => null);
     await logAudit({
-      action: 'microsoftTeams.destination.deleted',
+      action: 'microsoftTeams.destination.disabled',
       entityType: 'SERVICE',
       entityId: sid,
       actorId: user?.id ?? sid,

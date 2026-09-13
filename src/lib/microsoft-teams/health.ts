@@ -1,4 +1,5 @@
 import type { MicrosoftTeamsFailureCode } from './capabilities';
+import type { TeamsRscGrantState } from './client';
 
 export type MicrosoftTeamsHealth = {
   lastSuccessAt: string | null;
@@ -30,6 +31,7 @@ export type MicrosoftTeamsInstallationHealth = {
  */
 export async function getMicrosoftTeamsHealth(options?: {
   tenantId?: string;
+  rscState?: TeamsRscGrantState | null;
 }): Promise<MicrosoftTeamsHealth> {
   let lastSuccessAt: string | null = null;
   let lastErrorAt: string | null = null;
