@@ -743,16 +743,18 @@ model MicrosoftTeamsDestination {
 }
 
 model MicrosoftTeamsIncidentMessage {
-  id             String   @id @default(cuid())
-  incidentId     String
-  destinationId  String
-  conversationId String? // Bot Framework conversation id for updateActivity
-  messageId      String? // Teams activity/message id (activityId)
-  channelId      String?
-  tenantId       String?
-  teamId         String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                     String    @id @default(cuid())
+  incidentId             String
+  destinationId          String
+  conversationId         String? // Bot Framework conversation id for updateActivity
+  messageId              String? // Teams activity/message id (activityId)
+  channelId              String?
+  tenantId               String?
+  teamId                 String?
+  mutationLeaseToken     String?
+  mutationLeaseExpiresAt DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   incident    Incident                  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   destination MicrosoftTeamsDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
@@ -762,6 +764,7 @@ model MicrosoftTeamsIncidentMessage {
   @@index([destinationId])
   @@index([conversationId])
   @@index([messageId])
+  @@index([mutationLeaseExpiresAt])
 }
 
 model Alert {

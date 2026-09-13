@@ -396,7 +396,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
             : operation.leaseExpiresAt ?? new Date(Date.now() + 30_000);
           await prisma.backgroundJob.update({
             where: { id: job.id },
-            data: { status: 'PENDING', scheduledAt, startedAt: null, error: null },
+            data: { status: 'PENDING', scheduledAt, startedAt: null, attempts: 0, error: null },
           });
           return false;
         }

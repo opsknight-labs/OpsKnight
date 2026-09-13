@@ -1,0 +1,72 @@
+name: Microsoft Teams E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/lib/microsoft-teams/**'
+      - 'src/app/api/microsoft-teams/**'
+      - 'src/app/(app)/settings/integrations/microsoft-teams/**'
+      - 'src/components/settings/microsoft-teams/**'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**teams**/**'
+      - 'tests/**/*microsoft-teams*'
+      - '.github/workflows/microsoft-teams-e2e.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/lib/microsoft-teams/**'
+      - 'src/app/api/microsoft-teams/**'
+      - 'src/app/(app)/settings/integrations/microsoft-teams/**'
+      - 'src/components/settings/microsoft-teams/**'
+      - 'prisma/schema.prisma'
+      - 'prisma/migrations/**teams**/**'
+      - 'tests/**/*microsoft-teams*'
+      - '.github/workflows/microsoft-teams-e2e.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: microsoft-teams-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  teams-contract-and-delivery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_teams_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_teams_e2e?schema=public
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --legacy-peer-deps
+      - name: Apply production migrations
+        run: npx prisma migrate deploy && npx prisma generate
+      - name: Teams transport, delivery, lifecycle, and manifest contracts
+        run: >-
+          npx vitest run --no-file-parallelism
+          tests/lib/microsoft-teams-app-manifest.test.ts
+          tests/lib/microsoft-teams-auth.test.ts
+          tests/lib/microsoft-teams-capabilities.test.ts
+          tests/lib/microsoft-teams-cards.test.ts
+          tests/lib/microsoft-teams-delivery.test.ts
+          tests/lib/microsoft-teams-service-url.test.ts
+          tests/architecture/microsoft-teams-transport-contract.test.ts
+

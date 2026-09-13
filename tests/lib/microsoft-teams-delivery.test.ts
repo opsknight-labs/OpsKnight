@@ -1,8 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import {
+  deriveMicrosoftTeamsCardState,
   microsoftTeamsDeliveryLockKey,
   teamsDeliveryIdempotencyKey,
 } from '@/lib/microsoft-teams/delivery';
+
+describe('deriveMicrosoftTeamsCardState', () => {
+  it('converges a stale acknowledgement onto the current resolved state', () => {
+    expect(deriveMicrosoftTeamsCardState({
+      status: 'RESOLVED',
+      acknowledgedAt: new Date('2026-09-12T10:01:00Z'),
+      resolvedAt: new Date('2026-09-12T10:02:00Z'),
+    })).toEqual({ eventType: 'resolved', disableActions: true });
+  });
+
+  it('derives acknowledged and triggered state from current incident truth', () => {
+    expect(deriveMicrosoftTeamsCardState({ status: 'OPEN', acknowledgedAt: new Date() }))
+      .toEqual({ eventType: 'acknowledged', disableActions: false });
+    expect(deriveMicrosoftTeamsCardState({ status: 'OPEN' }))
+      .toEqual({ eventType: 'triggered', disableActions: false });
+  });
+});
 
 describe('teamsDeliveryIdempotencyKey', () => {
   const base = {

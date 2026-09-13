@@ -84,6 +84,15 @@ export async function POST(request: NextRequest) {
           }
           const destination = await tx.microsoftTeamsDestination.findUnique({ where: { id: destinationId } });
           if (!destination) throw new Error('Teams destination no longer exists');
+          const snapshot = payload?.destinationSnapshot as Record<string, unknown> | undefined;
+          if (snapshot && (snapshot.tenantId !== destination.tenantId || snapshot.teamId !== destination.teamId || snapshot.channelId !== destination.channelId)) {
+            throw new Error('Teams destination changed after this delivery; it cannot be reconciled against the new target');
+          }
+          const installation = await tx.microsoftTeamsInstallation.findFirst({
+            where: { tenantId: destination.tenantId, teamId: destination.teamId, enabled: true },
+            select: { id: true },
+          });
+          if (!installation) throw new Error('Teams installation no longer corresponds to this destination');
           await tx.microsoftTeamsIncidentMessage.upsert({
             where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
             create: { incidentId: existing.incidentId, destinationId, messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId },
@@ -102,6 +111,9 @@ export async function POST(request: NextRequest) {
           return;
         }
         throw new Error('Ambiguous deliveries cannot be retried; reconcile as mark_delivered or mark_failed');
+      }
+      if (existing.status !== 'FAILED') {
+        throw new Error(`Only FAILED external operations can be retried (current state: ${existing.status})`);
       }
       const operation = await tx.externalOperation.update({
         where: { id: body.id },
