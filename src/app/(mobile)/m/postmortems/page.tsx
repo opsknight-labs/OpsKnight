@@ -1,14 +1,28 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ChevronRight, FileText } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileTime from '@/components/mobile/MobileTime';
+import { getRequestActorContext } from '@/lib/request-actor-context';
+import { postmortemReadWhere } from '@/lib/authorization-filters';
+import { getUserPermissions } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobilePostmortemsPage() {
+  const [context, permissions] = await Promise.all([
+    getRequestActorContext(),
+    getUserPermissions(),
+  ]);
+  if (!context) redirect('/login?callbackUrl=/m/postmortems');
+
+  const postmortemAccess = postmortemReadWhere(context.actor);
   const postmortems = await prisma.postmortem.findMany({
+    where: permissions.isResponderOrAbove
+      ? postmortemAccess
+      : { AND: [postmortemAccess, { status: 'PUBLISHED' }] },
     orderBy: { createdAt: 'desc' },
     include: {
       incident: {
