@@ -1,7 +1,6 @@
 import type { IncidentChatProvider, ChatDeliveryResult } from '@/lib/chatops/provider';
 import prisma from '@/lib/prisma';
 import { getBaseUrl } from '@/lib/env-validation';
-import { logger } from '@/lib/logger';
 import { sendMicrosoftTeamsIncidentCard, updateMicrosoftTeamsIncidentCard, testMicrosoftTeamsConnection } from './client';
 
 function incidentUrl(incidentId: string): string {
@@ -37,7 +36,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     return this.createIncidentCard(args);
   }
 
-  /** Canonical create: POST /teams/{team}/channels/{channel}/messages with Adaptive Card. Persists conversation+activity ledger. */
+  /** Transport-only create. The delivery state machine exclusively owns ledger persistence. */
   async createIncidentCard(args: {
     destinationId: string;
     incident: {
@@ -70,39 +69,10 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
     });
-    if (res.success && res.providerMessageId) {
-      try {
-        await prisma.microsoftTeamsIncidentMessage.upsert({
-          where: { incidentId_destinationId: { incidentId: args.incident.id, destinationId: args.destinationId } },
-          create: {
-            incidentId: args.incident.id,
-            destinationId: args.destinationId,
-            messageId: res.providerMessageId,
-            channelId: dest.channelId,
-            tenantId: dest.tenantId,
-            teamId: dest.teamId,
-            conversationId: res.conversationId ?? null,
-          },
-          update: { messageId: res.providerMessageId, channelId: dest.channelId, tenantId: dest.tenantId, teamId: dest.teamId, conversationId: res.conversationId ?? undefined },
-        });
-      } catch (error) {
-        // Delivery succeeded at provider — ledger failure must not flip to retry. Log and return success.
-        logger.warn('[MicrosoftTeams] Incident message ledger upsert failed after successful send', {
-          destinationId: args.destinationId,
-          incidentId: args.incident.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
     return res;
   }
 
-  /**
-   * Canonical update: PATCH /teams/{team}/channels/{channel}/messages/{message}
-   * Returns PATCH_NOT_SUPPORTED when app-only PATCH is restricted (policyViolation
-   * only) — caller must NOT silently duplicate the card; surface DEGRADED instead.
-   * Supports `disableActions` for terminal resolved state (Phase 2 seam).
-   */
+  /** Canonical Bot activity update. Supports disabling actions at resolution. */
   async updateIncidentCard(args: {
     destinationId: string;
     messageId: string;

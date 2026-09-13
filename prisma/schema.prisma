@@ -735,7 +735,7 @@ model MicrosoftTeamsDestination {
   updater      User?                           @relation("MicrosoftTeamsDestinationUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
   messages     MicrosoftTeamsIncidentMessage[]
 
-  @@unique([tenantId, teamId, channelId])
+  @@unique([serviceId, tenantId, teamId, channelId])
   @@index([tenantId, teamId])
   @@index([channelId])
   @@index([installationId])

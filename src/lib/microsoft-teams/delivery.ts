@@ -769,89 +769,23 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           result = updateResult;
         }
       } else {
-        // AMBIGUOUS retry reconcile: if we previously reserved and the POST may
-        // have committed server-side before the connection died, try to probe
-        // Graph for an existing card before re-POSTing. The probe requires
-        // `ChannelMessage.Read.Group` which Phase-1 does NOT request, so a
-        // missing-permission/consent failure must NOT block delivery — fall
-        // through to POST with bounded duplicate risk rather than infinite
-        // AMBIGUOUS backoff. Only transient probe failures (5xx/network)
-        // back off.
+        // Never retry a create whose outcome may be unknown. Graph message
+        // search cannot reliably identify Bot-created activities and a false
+        // negative here would produce a duplicate incident card.
         const isAmbiguousRetry = reservedByUs && operation.attempts > 1;
         if (isAmbiguousRetry) {
-          try {
-            const { probeMicrosoftTeamsForIncidentMessage } = await import('./client');
-            const probe = await probeMicrosoftTeamsForIncidentMessage({
-              tenantId: destination.tenantId,
-              teamId: destination.teamId,
-              channelId: destination.channelId,
-              incidentId: incident.id,
-            });
-            if (probe.messageId) {
-              // Reconciled: provider already has the card — ledger-upsert and complete without re-POST.
-              try {
-                await prisma.microsoftTeamsIncidentMessage.upsert({
-                  where: { incidentId_destinationId: { incidentId, destinationId } },
-                  create: {
-                    incidentId,
-                    destinationId,
-                    messageId: probe.messageId,
-                    channelId: destination.channelId,
-                    tenantId: destination.tenantId,
-                    teamId: destination.teamId,
-                    conversationId: null,
-                  },
-                  update: { messageId: probe.messageId, channelId: destination.channelId, tenantId: destination.tenantId, teamId: destination.teamId },
-                });
-              } catch {}
-              await prisma.externalOperation.updateMany({
-                where: { id, status: 'PROCESSING', leaseToken },
-                data: {
-                  status: 'COMPLETED',
-                  externalId: probe.messageId,
-                  externalKey: probe.messageId,
-                  resultPayload: { providerMessageId: probe.messageId, conversationId: null, reconciled: true } as Prisma.InputJsonObject,
-                  leaseToken: null,
-                  leaseExpiresAt: null,
-                },
-              });
-              await releaseTeamsConcurrency();
-              logger.info('[MicrosoftTeams] Delivery reconciled after AMBIGUOUS — existing card found', { incidentId, destinationId, messageId: probe.messageId });
-              return { success: true, providerMessageId: probe.messageId } as never;
-            }
-            if (probe.error) {
-              const lowerErr = probe.error.toLowerCase();
-              const isPermissionError =
-                /not_configured|tenant_required|graph_token_failed|permission|consent|authorization|forbidden|unauthorized|channelmessage\.read/i.test(lowerErr) ||
-                /http\s*40[13]/i.test(probe.error);
-              if (isPermissionError) {
-                logger.info('[MicrosoftTeams] Reconcile probe unavailable (permission not granted) — proceeding to POST', { incidentId, destinationId, error: probe.error.slice(0, 200) });
-                // Fall through to POST — duplicate risk is bounded and preferable to stuck AMBIGUOUS loop
-              } else {
-                // Transient probe failure (Graph 5xx/network) — back off and retry probe next attempt
-                await prisma.externalOperation.updateMany({
-                  where: { id, status: 'PROCESSING', leaseToken },
-                  data: {
-                    status: failureStatus(operation.attempts),
-                    nextAttemptAt: new Date(Date.now() + jitteredDelayMs(8_000)),
-                    lastError: `Teams reconcile probe failed — backing off: ${probe.error.slice(0, 300)}`,
-                    leaseToken: null,
-                    leaseExpiresAt: null,
-                  },
-                });
-                await releaseTeamsConcurrency();
-                throw new AppError({
-                  code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
-                  userMessage: 'Teams reconcile probe failed, retrying shortly.',
-                  details: { provider: 'microsoftTeams', providerStatus: 503, providerRetryAfterMs: 8_000, failureCode: 'UNKNOWN' },
-                });
-              }
-            }
-            // No existing card found and probe succeeded (or permission missing) — safe to POST.
-          } catch (e) {
-            if (e instanceof AppError && e.details?.provider === 'microsoftTeams') throw e;
-            logger.warn('[MicrosoftTeams] Reconcile probe exception — proceeding to POST', { error: (e as Error).message });
-          }
+          await prisma.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'AMBIGUOUS',
+              nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+              lastError: 'Teams create outcome requires manual reconciliation; automatic re-create is disabled',
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          await releaseTeamsConcurrency();
+          throw new Error('Teams create outcome is ambiguous; manual reconciliation required');
         }
         result = await callWithBreaker(() =>
           microsoftTeamsChatProvider.sendIncidentCard({
@@ -871,6 +805,20 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
 
     if (!result.success) {
       await releaseTeamsConcurrency();
+      if (result.errorCode === 'AMBIGUOUS_SIDE_EFFECT') {
+        await prisma.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'AMBIGUOUS',
+            nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+            lastError: result.error.slice(0, 1000),
+            leaseToken: null,
+            leaseExpiresAt: null,
+            resultPayload: { requiresManualReconciliation: true } as Prisma.InputJsonObject,
+          },
+        });
+        throw new Error(result.error);
+      }
       const code = categorizeTeamsErrorCode(result.errorCode);
       const statusCode = result.statusCode;
       const retryAfterMs = result.retryAfterMs;
@@ -968,6 +916,23 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     if (result.providerMessageId) {
       try {
         await prisma.$transaction(async tx => {
+          const completed = await tx.externalOperation.updateMany({
+            where: { id, status: 'PROCESSING', leaseToken },
+            data: {
+              status: 'COMPLETED',
+              externalId: result.providerMessageId,
+              externalKey: result.providerMessageId,
+              resultPayload: {
+                providerMessageId: result.providerMessageId,
+                conversationId: result.conversationId ?? null,
+              } as Prisma.InputJsonObject,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+          if (completed.count !== 1) {
+            throw new Error('Teams delivery lease was lost before ledger commit');
+          }
           await (tx as unknown as {
             microsoftTeamsIncidentMessage: { upsert: (a: unknown) => Promise<unknown> };
           }).microsoftTeamsIncidentMessage.upsert({
@@ -989,20 +954,6 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               conversationId: result.conversationId ?? undefined,
             },
           } as never);
-          await tx.externalOperation.updateMany({
-            where: { id, status: 'PROCESSING', leaseToken },
-            data: {
-              status: 'COMPLETED',
-              externalId: result.providerMessageId,
-              externalKey: result.providerMessageId,
-              resultPayload: {
-                providerMessageId: result.providerMessageId,
-                conversationId: result.conversationId ?? null,
-              } as Prisma.InputJsonObject,
-              leaseToken: null,
-              leaseExpiresAt: null,
-            },
-          });
         });
       } catch (txErr) {
         // Transaction failed — keep operation retryable (AMBIGUOUS) so the next retry

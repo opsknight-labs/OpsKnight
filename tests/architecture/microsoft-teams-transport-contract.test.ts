@@ -32,6 +32,32 @@ describe('microsoft teams transport contract', () => {
     expect(client).toContain("resolveServiceUrlForDestination");
     // Update uses PUT .../{conversationId}/activities/{activityId}
     expect(client).toContain("/v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(args.messageId)}");
+    // Create is non-idempotent: it must bypass retryFetch and require both IDs.
+    const createStart = client.indexOf('const createEndpoint');
+    const updateStart = client.indexOf('async function updateBotActivity');
+    const createRegion = client.slice(createStart, updateStart);
+    expect(createRegion).toContain('createRes = await fetch(createEndpoint');
+    expect(createRegion).not.toContain('retryFetch(');
+    expect(createRegion).toContain('if (!conversationId || !providerMessageId)');
+    expect(createRegion).toContain("errorCode: 'AMBIGUOUS_SIDE_EFFECT'");
+  });
+
+  it('never automatically recreates an ambiguous card and fences ledger writes by lease', () => {
+    const delivery = readFileSync('src/lib/microsoft-teams/delivery.ts', 'utf8');
+    expect(delivery).not.toContain('probeMicrosoftTeamsForIncidentMessage');
+    expect(delivery).toContain("new Date('9999-12-31T23:59:59.999Z')");
+    expect(delivery).toContain('requiresManualReconciliation: true');
+    const transactionStart = delivery.indexOf('await prisma.$transaction(async tx => {', delivery.indexOf('Durable atomic ledger'));
+    const completionCheck = delivery.indexOf('if (completed.count !== 1)', transactionStart);
+    const ledgerUpsert = delivery.indexOf('microsoftTeamsIncidentMessage.upsert', transactionStart);
+    expect(completionCheck).toBeGreaterThan(transactionStart);
+    expect(ledgerUpsert).toBeGreaterThan(completionCheck);
+  });
+
+  it('keeps the provider transport-only with delivery as the sole ledger owner', () => {
+    const provider = readFileSync('src/lib/microsoft-teams/provider.ts', 'utf8');
+    expect(provider).not.toContain('microsoftTeamsIncidentMessage');
+    expect(provider).not.toContain('.upsert(');
   });
 
   it('RSC required set is Bot-primary minimal (ChannelSettings.Read.Group only)', () => {

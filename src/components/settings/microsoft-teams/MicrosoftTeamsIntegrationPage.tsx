@@ -39,12 +39,14 @@ export default function MicrosoftTeamsIntegrationPage({
   appManifestJson,
   isAdmin,
   health,
+  installationCount,
 }: {
   config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean } | null;
   destinations: DestinationRow[];
   appManifestJson: string;
   isAdmin: boolean;
   health?: TeamsHealth;
+  installationCount: number;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -52,7 +54,8 @@ export default function MicrosoftTeamsIntegrationPage({
   const [copied, setCopied] = useState<string | null>(null);
 
   const isConfigured = Boolean(config?.clientId);
-  const isInstalled = destinations.length > 0;
+  const isInstalled = installationCount > 0;
+  const isReady = isInstalled && destinations.some(destination => destination.enabled);
 
   const onSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,12 +107,12 @@ export default function MicrosoftTeamsIntegrationPage({
     <div className="space-y-6">
       {/* State banner */}
       <div
-        className={`rounded-xl border p-4 text-xs ${!isConfigured ? 'border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200' : !isInstalled ? 'border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'}`}
+        className={`rounded-xl border p-4 text-xs ${!isConfigured ? 'border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200' : !isInstalled || !isReady ? 'border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200'}`}
       >
         <div className="flex items-center gap-2 font-semibold">
-          {!isConfigured ? <AlertTriangle className="h-4 w-4" /> : !isInstalled ? <Hash className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
+          {!isConfigured ? <AlertTriangle className="h-4 w-4" /> : !isReady ? <Hash className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
           <span>
-            {!isConfigured ? 'Not configured — enter your Azure AD app credentials below.' : !isInstalled ? 'Credentials configured — install the app to a Team/Channel, then map a Service → Teams destination.' : 'Installed — incident Adaptive Cards will post to your Teams channels on Triggered / Acknowledged / Resolved.'}
+            {!isConfigured ? 'Not configured — enter your Azure AD app credentials below.' : !isInstalled ? 'Credentials configured — awaiting a verified Teams installation.' : !isReady ? 'Bot installed — map and enable a Service → Teams destination.' : 'Ready — incident Adaptive Cards will post and update through the Bot Connector.'}
           </span>
         </div>
         <p className="mt-1 opacity-80">Phase 1 is one-way broadcast only. Acknowledge / Resolve / Assign from Teams is prepared for Phase 2 and is intentionally not exposed.</p>
@@ -137,15 +140,15 @@ export default function MicrosoftTeamsIntegrationPage({
             <p className="text-[11px] text-muted-foreground">Value is encrypted at rest and never returned.</p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="mt-tenantId">Tenant ID (optional for MULTI)</Label>
-            <Input id="mt-tenantId" name="tenantId" placeholder="Entra tenant GUID (SINGLE mode)" defaultValue={config?.tenantId ?? ''} disabled={!isAdmin} />
+            <Label htmlFor="mt-tenantId">Tenant ID</Label>
+            <Input id="mt-tenantId" name="tenantId" placeholder="Entra tenant GUID" defaultValue={config?.tenantId ?? ''} disabled={!isAdmin} required />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="mt-tenantMode">Tenant Mode</Label>
             <select id="mt-tenantMode" name="tenantMode" defaultValue={config?.tenantMode ?? 'SINGLE'} disabled={!isAdmin} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
               <option value="SINGLE">SINGLE</option>
-              <option value="MULTI">MULTI</option>
             </select>
+            <p className="text-[11px] text-muted-foreground">Phase 1 uses a verified single-tenant Bot authority.</p>
           </div>
         </div>
         {isAdmin && (
@@ -164,7 +167,7 @@ export default function MicrosoftTeamsIntegrationPage({
             <span className="ml-1">Bot endpoint</span>
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">App manifest is the single source of truth for RSC permissions (`ChannelSettings.Read.Group` + `ChannelMessage.Send.Group` in Phase 1).</p>
+        <p className="text-xs text-muted-foreground">The Phase 1 package requests only the required `ChannelSettings.Read.Group` RSC permission; card delivery uses Bot Connector credentials.</p>
         <pre className="max-h-64 overflow-auto rounded-lg border bg-muted/30 p-3 text-[11px] font-mono">{appManifestJson}</pre>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => copy(appManifestJson, 'manifest')}>
@@ -204,7 +207,7 @@ export default function MicrosoftTeamsIntegrationPage({
             ))}
           </div>
         )}
-        <p className="text-[11px] text-muted-foreground">Send Test posts an Adaptive Card to the mapped channel via Graph and exercises the durable notification control plane, provider admission, and rate limiting.</p>
+        <p className="text-[11px] text-muted-foreground">Send Test posts an Adaptive Card through the same Bot Connector transport used by incident delivery.</p>
       </div>
 
       {/* Health: last delivery + bot/permissions pills (server-provided, not polling) */}
@@ -236,12 +239,6 @@ export default function MicrosoftTeamsIntegrationPage({
           )}
           {!health.lastErrorAt && !health.lastSuccessAt && (
             <p className="text-xs text-muted-foreground">No delivery history yet — send a test or trigger an incident to exercise the durable queue.</p>
-          )}
-          {health.lastErrorCode === 'UNKNOWN' && health.permissionsHealthy === false && (
-            <p className="text-xs text-muted-foreground">
-              Updates via Graph app-only PATCH are limited to <code className="rounded bg-muted px-1">policyViolation</code> edits — normal channel messages are publish-only until delegated auth ships.
-              No duplicate cards will be created when PATCH is unsupported.
-            </p>
           )}
         </div>
       )}

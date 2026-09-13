@@ -182,15 +182,24 @@ async function sendBotActivity(args: {
     bot: { id: botAddressId },
     activity: activityPayload,
   };
-  const createRes = await retryFetch(
-    createEndpoint,
-    {
+  let createRes: Response;
+  try {
+    // Creating a conversation/activity is not idempotent. A retry after a lost
+    // response can create a second incident card, so this call is deliberately
+    // single-attempt. Unknown outcomes are reconciled by an operator, never by
+    // issuing another POST.
+    createRes = await fetch(createEndpoint, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(createBody),
-    },
-    { maxAttempts: 2, initialDelayMs: 800 }
-  );
+    });
+  } catch (error) {
+    return {
+      success: false,
+      error: `Teams create outcome is ambiguous: ${error instanceof Error ? error.message : String(error)}`,
+      errorCode: 'AMBIGUOUS_SIDE_EFFECT',
+    };
+  }
 
   if (!createRes.ok) {
     const text = await createRes.text().catch(() => '');
@@ -206,11 +215,24 @@ async function sendBotActivity(args: {
   try {
     const data = (await createRes.json()) as { id?: string; activityId?: string; conversation?: { id?: string }; serviceUrl?: string };
     // Connector: `id` = conversationId, `activityId` = activity/messageId. Some SDKs nest under `conversation`.
-    const conversationId = typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : typeof data?.conversation?.id === 'string' ? data.conversation.id.trim() : args.channelId;
+    const conversationId = typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : typeof data?.conversation?.id === 'string' ? data.conversation.id.trim() : undefined;
     const providerMessageId = typeof data?.activityId === 'string' && data.activityId.trim() ? data.activityId.trim() : undefined;
+    if (!conversationId || !providerMessageId) {
+      return {
+        success: false,
+        error: 'Teams accepted the create request but did not return both conversationId and activityId',
+        errorCode: 'AMBIGUOUS_SIDE_EFFECT',
+        statusCode: createRes.status,
+      };
+    }
     return { success: true, providerMessageId, conversationId };
   } catch {
-    return { success: true, providerMessageId: undefined, conversationId: args.channelId };
+    return {
+      success: false,
+      error: 'Teams accepted the create request but returned an unreadable response',
+      errorCode: 'AMBIGUOUS_SIDE_EFFECT',
+      statusCode: createRes.status,
+    };
   }
 }
 

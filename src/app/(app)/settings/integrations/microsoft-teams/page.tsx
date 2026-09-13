@@ -47,6 +47,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         service?: { name: string } | null;
       }>>;
     };
+    microsoftTeamsInstallation: { count: (a: unknown) => Promise<number> };
   };
 
   const config = await prismaAny.microsoftTeamsConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
@@ -54,6 +55,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
     orderBy: { updatedAt: 'desc' },
     include: { service: { select: { name: true } } },
   });
+  const installationCount = await prismaAny.microsoftTeamsInstallation.count({ where: { enabled: true } });
 
   const isConnected = Boolean(config?.enabled && config?.clientId);
 
@@ -160,6 +162,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         appManifestJson={manifestJson}
         isAdmin={permissions.isAdmin}
         health={health as unknown as { lastSuccessAt: string | null; lastErrorAt: string | null; lastErrorCode: string | null; lastErrorMessage: string | null; botHealthy: boolean | null; permissionsHealthy: boolean | null } | null}
+        installationCount={installationCount}
       />
     </div>
   );

@@ -23,14 +23,13 @@ export async function saveMicrosoftTeamsConfig(
   const clientIdRaw = (formData.get('clientId') as string | null)?.trim() ?? '';
   const clientSecretRaw = (formData.get('clientSecret') as string | null) ?? '';
   const tenantIdRaw = (formData.get('tenantId') as string | null)?.trim() || null;
-  const tenantModeRaw = (formData.get('tenantMode') as string | null)?.trim() ?? 'SINGLE';
   const enabledValue = formData.get('enabled');
 
   // Strict validation — Zod is required by AGENTS.md §4 for every Server Action.
   const microsoftTeamsConfigSchema = z.object({
     clientId: z.string().trim().uuid('Client ID must be a valid Azure Application (client) ID (GUID).'),
     tenantId: z.string().trim().uuid('Tenant ID must be a valid Azure tenant GUID.').nullable(),
-    tenantMode: z.enum(['SINGLE', 'MULTI']),
+    tenantMode: z.literal('SINGLE'),
     enabledValue: z.string().nullable().optional(),
   });
   const existingEarly = await (prisma as unknown as Record<string, unknown> & { microsoftTeamsConfig: { findFirst: (a: unknown) => Promise<{ id: string; clientSecret: string; tenantId: string | null; clientId: string } | null> } }).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never) as
@@ -42,13 +41,17 @@ export async function saveMicrosoftTeamsConfig(
   const parsed = microsoftTeamsConfigSchema.safeParse({
     clientId: resolvedClientId,
     tenantId: tenantIdRaw,
-    tenantMode: tenantModeRaw === 'MULTI' ? 'MULTI' : 'SINGLE',
+    // Phase 1 intentionally supports single-tenant Bot credentials only. The
+    // schema remains future-ready, but MULTI must not be exposed until its Bot
+    // authority model has been validated end-to-end.
+    tenantMode: 'SINGLE',
     enabledValue: enabledValue as string | null,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Invalid Teams configuration.' };
   }
   const { tenantId } = parsed.data;
+  if (!tenantId) return { error: 'Tenant ID is required for the Phase 1 single-tenant integration.' };
   const tenantMode = parsed.data.tenantMode;
   const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === null;
   const effectiveClientId = parsed.data.clientId;
