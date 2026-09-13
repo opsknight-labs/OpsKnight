@@ -11,7 +11,7 @@ vi.mock('@/app/(app)/settings/security/actions', () => ({
 }));
 
 describe('ActiveSessionsSection', () => {
-  it('renders multiple active sessions properly with This Device and Connected Device badges', () => {
+  it('renders current and recently observed device activity without implying per-device revocation', () => {
     const mockSessions = [
       {
         id: 'sess-1',
@@ -37,18 +37,16 @@ describe('ActiveSessionsSection', () => {
 
     render(<ActiveSessionsSection tokenVersion={1} sessions={mockSessions} />);
 
-    // Both sessions should be rendered
     expect(screen.getByText('Google Chrome on macOS')).toBeInTheDocument();
     expect(screen.getByText('Microsoft Edge on Windows')).toBeInTheDocument();
 
-    // Badges
     expect(screen.getByText('This Device')).toBeInTheDocument();
-    expect(screen.getByText('Connected Device')).toBeInTheDocument();
-
-    // Edge session relative time
+    expect(screen.getByText('Recent Device')).toBeInTheDocument();
     expect(screen.getByText('Active 10m ago')).toBeInTheDocument();
+    expect(
+      screen.getByText(/not individual revocation handles/i)
+    ).toBeInTheDocument();
 
-    // Revoke button
     expect(screen.getByRole('button', { name: /Revoke All Sessions/i })).toBeInTheDocument();
   });
 });

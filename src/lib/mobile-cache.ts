@@ -1,24 +1,41 @@
 'use client';
 
+import {
+  principalStorageSegment,
+  readMobilePrincipalContext,
+  type MobilePrincipalContext,
+} from '@/lib/mobile-principal';
+
+const CACHE_SCHEMA_VERSION = 3;
+const DEFAULT_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export const MOBILE_CACHE_PREFIX = 'opsknight:mobile-cache:';
+export const MOBILE_CACHE_KEY_DATABASE = 'opsknight-secure-cache';
+const KEY_STORE = 'keys';
+const KEY_PREFIX = 'mobile-cache-aes-gcm:';
+
 type CacheEnvelope<T> = {
+  schemaVersion: number;
+  principalId: string;
+  authGeneration: string;
   savedAt: string;
+  expiresAt: string;
   data: T;
 };
 
 type EncryptedEnvelope = {
+  schemaVersion: number;
+  principalId: string;
+  authGeneration: string;
   savedAt: string;
+  expiresAt: string;
   iv: string;
   ciphertext: string;
 };
 
 const textEncoder = typeof window !== 'undefined' ? new TextEncoder() : null;
 const textDecoder = typeof window !== 'undefined' ? new TextDecoder() : null;
-
-const CACHE_PREFIX = 'opsknight:mobile-cache:';
-const KEY_DATABASE = 'opsknight-secure-cache';
-const KEY_STORE = 'keys';
-const KEY_ID = 'mobile-cache-aes-gcm';
-let cryptoKeyPromise: Promise<CryptoKey | null> | null = null;
+const cryptoKeyPromises = new Map<string, Promise<CryptoKey | null>>();
 
 const base64Encode = (bytes: ArrayBuffer): string => {
   if (typeof window === 'undefined') return '';
@@ -33,19 +50,25 @@ const base64Encode = (bytes: ArrayBuffer): string => {
 const base64Decode = (value: string): ArrayBuffer => {
   if (typeof window === 'undefined') return new ArrayBuffer(0);
   const binary = window.atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
+  return Uint8Array.from(binary, character => character.charCodeAt(0)).buffer;
 };
 
-const getCryptoKey = async (): Promise<CryptoKey | null> => {
-  if (typeof window === 'undefined' || !window.crypto?.subtle || !window.indexedDB) return null;
-  if (cryptoKeyPromise) return cryptoKeyPromise;
+function storageKey(context: MobilePrincipalContext, key: string) {
+  return `${MOBILE_CACHE_PREFIX}${principalStorageSegment(context)}:${key}`;
+}
 
-  cryptoKeyPromise = new Promise(resolve => {
-    const request = window.indexedDB.open(KEY_DATABASE, 1);
+function keyId(context: MobilePrincipalContext) {
+  return `${KEY_PREFIX}${principalStorageSegment(context)}`;
+}
+
+const getCryptoKey = async (context: MobilePrincipalContext): Promise<CryptoKey | null> => {
+  if (typeof window === 'undefined' || !window.crypto?.subtle || !window.indexedDB) return null;
+  const id = keyId(context);
+  const existing = cryptoKeyPromises.get(id);
+  if (existing) return existing;
+
+  const promise = new Promise<CryptoKey | null>(resolve => {
+    const request = window.indexedDB.open(MOBILE_CACHE_KEY_DATABASE, 1);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(KEY_STORE)) {
         request.result.createObjectStore(KEY_STORE);
@@ -54,7 +77,7 @@ const getCryptoKey = async (): Promise<CryptoKey | null> => {
     request.onerror = () => resolve(null);
     request.onsuccess = () => {
       const database = request.result;
-      const read = database.transaction(KEY_STORE, 'readonly').objectStore(KEY_STORE).get(KEY_ID);
+      const read = database.transaction(KEY_STORE, 'readonly').objectStore(KEY_STORE).get(id);
       read.onerror = () => {
         database.close();
         resolve(null);
@@ -74,7 +97,7 @@ const getCryptoKey = async (): Promise<CryptoKey | null> => {
           const write = database
             .transaction(KEY_STORE, 'readwrite')
             .objectStore(KEY_STORE)
-            .put(key, KEY_ID);
+            .put(key, id);
           write.onerror = () => {
             database.close();
             resolve(null);
@@ -90,56 +113,71 @@ const getCryptoKey = async (): Promise<CryptoKey | null> => {
       };
     };
   });
-  return cryptoKeyPromise;
+
+  cryptoKeyPromises.set(id, promise);
+  return promise;
 };
 
 const encryptEnvelope = async <T>(
-  envelope: CacheEnvelope<T>
+  envelope: CacheEnvelope<T>,
+  context: MobilePrincipalContext
 ): Promise<EncryptedEnvelope | null> => {
-  if (typeof window === 'undefined' || !window.crypto?.subtle || !textEncoder) {
-    return null;
-  }
-  const key = await getCryptoKey();
+  if (typeof window === 'undefined' || !window.crypto?.subtle || !textEncoder) return null;
+  const key = await getCryptoKey(context);
   if (!key) return null;
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const plaintext = textEncoder.encode(JSON.stringify(envelope));
-  const ciphertextBuffer = await window.crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    plaintext
-  );
+  const ciphertextBuffer = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext);
   return {
+    schemaVersion: envelope.schemaVersion,
+    principalId: envelope.principalId,
+    authGeneration: envelope.authGeneration,
     savedAt: envelope.savedAt,
+    expiresAt: envelope.expiresAt,
     iv: base64Encode(iv.buffer),
     ciphertext: base64Encode(ciphertextBuffer),
   };
 };
 
-const decryptEnvelope = async <T>(value: string | null): Promise<CacheEnvelope<T> | null> => {
-  if (!value || typeof window === 'undefined' || !window.crypto?.subtle || !textDecoder) {
-    return null;
-  }
+const decryptEnvelope = async <T>(
+  value: string | null,
+  context: MobilePrincipalContext
+): Promise<CacheEnvelope<T> | null> => {
+  if (!value || typeof window === 'undefined' || !window.crypto?.subtle || !textDecoder) return null;
   let stored: EncryptedEnvelope;
   try {
     stored = JSON.parse(value) as EncryptedEnvelope;
   } catch {
     return null;
   }
-  if (!stored.iv || !stored.ciphertext) {
+  if (
+    stored.schemaVersion !== CACHE_SCHEMA_VERSION ||
+    stored.principalId !== context.principalId ||
+    stored.authGeneration !== context.authGeneration ||
+    !stored.iv ||
+    !stored.ciphertext ||
+    !stored.expiresAt
+  ) {
     return null;
   }
-  const key = await getCryptoKey();
+
+  const key = await getCryptoKey(context);
   if (!key) return null;
   try {
-    const ivBuffer = base64Decode(stored.iv);
-    const ciphertextBuffer = base64Decode(stored.ciphertext);
     const plaintextBuffer = await window.crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: new Uint8Array(ivBuffer) },
+      { name: 'AES-GCM', iv: new Uint8Array(base64Decode(stored.iv)) },
       key,
-      ciphertextBuffer
+      base64Decode(stored.ciphertext)
     );
-    const json = textDecoder.decode(plaintextBuffer);
-    return JSON.parse(json) as CacheEnvelope<T>;
+    const envelope = JSON.parse(textDecoder.decode(plaintextBuffer)) as CacheEnvelope<T>;
+    if (
+      envelope.schemaVersion !== CACHE_SCHEMA_VERSION ||
+      envelope.principalId !== context.principalId ||
+      envelope.authGeneration !== context.authGeneration
+    ) {
+      return null;
+    }
+    return envelope;
   } catch {
     return null;
   }
@@ -147,59 +185,95 @@ const decryptEnvelope = async <T>(value: string | null): Promise<CacheEnvelope<T
 
 export const readCache = async <T>(key: string, maxAgeMs?: number): Promise<T | null> => {
   if (typeof window === 'undefined') return null;
-  const raw = window.localStorage.getItem(`${CACHE_PREFIX}${key}`);
-  const envelope = await decryptEnvelope<T>(raw);
-  if (!envelope) return null;
-  if (maxAgeMs) {
-    const savedAt = Date.parse(envelope.savedAt);
-    if (!Number.isNaN(savedAt) && Date.now() - savedAt > maxAgeMs) {
-      return null;
-    }
+  const context = readMobilePrincipalContext();
+  if (!context) return null;
+  const scopedKey = storageKey(context, key);
+  const raw = window.localStorage.getItem(scopedKey);
+  const envelope = await decryptEnvelope<T>(raw, context);
+  if (!envelope) {
+    if (raw) window.localStorage.removeItem(scopedKey);
+    return null;
+  }
+
+  const savedAt = Date.parse(envelope.savedAt);
+  const expiresAt = Date.parse(envelope.expiresAt);
+  const expiredByContract = Number.isNaN(expiresAt) || Date.now() >= expiresAt;
+  const expiredByCaller =
+    maxAgeMs !== undefined &&
+    (Number.isNaN(savedAt) || Date.now() - savedAt > Math.max(0, maxAgeMs));
+  if (expiredByContract || expiredByCaller) {
+    window.localStorage.removeItem(scopedKey);
+    return null;
   }
   return envelope.data;
 };
 
-export const writeCache = async <T>(key: string, data: T): Promise<void> => {
+export const writeCache = async <T>(
+  key: string,
+  data: T,
+  options: { maxAgeMs?: number } = {}
+): Promise<void> => {
   if (typeof window === 'undefined') return;
+  const context = readMobilePrincipalContext();
+  if (!context) return;
+  const now = Date.now();
+  const maxAgeMs = Math.max(1_000, options.maxAgeMs ?? DEFAULT_CACHE_MAX_AGE_MS);
   const payload: CacheEnvelope<T> = {
-    savedAt: new Date().toISOString(),
+    schemaVersion: CACHE_SCHEMA_VERSION,
+    principalId: context.principalId,
+    authGeneration: context.authGeneration,
+    savedAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + maxAgeMs).toISOString(),
     data,
   };
+
   try {
-    const encrypted = await encryptEnvelope(payload);
-    if (!encrypted) {
-      return;
-    }
-    window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(encrypted));
-  } catch (error: any) {
-    if (error?.name === 'QuotaExceededError') {
-      try {
-        const keys = Object.keys(window.localStorage).filter(k => k.startsWith(CACHE_PREFIX));
-        const entries: { key: string; savedAt: number }[] = [];
-        for (const k of keys) {
-          try {
-            const raw = window.localStorage.getItem(k);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              if (parsed && typeof parsed === 'object' && 'savedAt' in parsed) {
-                entries.push({ key: k, savedAt: Date.parse(parsed.savedAt) });
-              }
-            }
-          } catch {}
-        }
-        entries.sort((a, b) => a.savedAt - b.savedAt);
-        const toDelete = Math.max(1, Math.ceil(entries.length * 0.25));
-        for (let i = 0; i < toDelete; i++) {
-          window.localStorage.removeItem(entries[i].key);
-        }
-        // Retry the write once
-        const encrypted = await encryptEnvelope(payload);
-        if (encrypted) {
-          window.localStorage.setItem(`${CACHE_PREFIX}${key}`, JSON.stringify(encrypted));
-        }
-      } catch (_retryError) {
-        console.warn('Mobile cache is full and eviction failed');
+    const encrypted = await encryptEnvelope(payload, context);
+    if (!encrypted) return;
+    window.localStorage.setItem(storageKey(context, key), JSON.stringify(encrypted));
+  } catch (error: unknown) {
+    if (!(error instanceof DOMException) || error.name !== 'QuotaExceededError') return;
+    try {
+      const namespace = `${MOBILE_CACHE_PREFIX}${principalStorageSegment(context)}:`;
+      const entries: { key: string; savedAt: number }[] = [];
+      for (const localStorageKey of Object.keys(window.localStorage)) {
+        if (!localStorageKey.startsWith(namespace)) continue;
+        try {
+          const raw = window.localStorage.getItem(localStorageKey);
+          const parsed = raw ? (JSON.parse(raw) as Partial<EncryptedEnvelope>) : null;
+          if (typeof parsed?.savedAt === 'string') {
+            entries.push({ key: localStorageKey, savedAt: Date.parse(parsed.savedAt) });
+          }
+        } catch {}
       }
+      entries.sort((a, b) => a.savedAt - b.savedAt);
+      for (const entry of entries.slice(0, Math.max(1, Math.ceil(entries.length * 0.25)))) {
+        window.localStorage.removeItem(entry.key);
+      }
+      const retry = await encryptEnvelope(payload, context);
+      if (retry) window.localStorage.setItem(storageKey(context, key), JSON.stringify(retry));
+    } catch {
+      console.warn('Mobile cache is full and scoped eviction failed');
     }
   }
 };
+
+function deleteIndexedDb(name: string): Promise<void> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve();
+  return new Promise(resolve => {
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}
+
+/** Removes encrypted responder values and their origin-persisted key material. */
+export async function purgeMobileCacheStorage(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  for (const key of Object.keys(window.localStorage)) {
+    if (key.startsWith(MOBILE_CACHE_PREFIX)) window.localStorage.removeItem(key);
+  }
+  cryptoKeyPromises.clear();
+  await deleteIndexedDb(MOBILE_CACHE_KEY_DATABASE);
+}

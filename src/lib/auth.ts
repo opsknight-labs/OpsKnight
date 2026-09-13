@@ -45,7 +45,7 @@ type AugmentedJWT = JWT & {
   avatarUrl?: string | null;
   gender?: string | null;
   role?: string;
-  /** True when user opted into "Remember Me" at login. Used to pick the JWT exp cap. */
+  /** True only when the user explicitly opted into an extended credential session. */
   rememberMe?: boolean;
   /** Last authenticated request seen for an OIDC session, in epoch milliseconds. */
   lastActivityAt?: number;
@@ -157,15 +157,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     const activeOidcConfig =
       oidcConfig && oidcValidation?.isValid && oidcValidation.metadata ? oidcConfig : null;
     // Enterprise OIDC sessions have independent absolute, idle, renewal,
-    // and server-side revocation boundaries. Credentials retain remember-me
-    // behavior, while OIDC never extends the original IdP authentication time.
+    // and server-side revocation boundaries. Credential sessions use a short
+    // default and an explicit, bounded responder-device opt-in.
     const enterpriseSession = getEnterpriseSessionPolicy();
     const oidcSessionMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
-    // Preserve the established credential policy from main. Auth.js needs the
-    // outer JWT/cookie ceiling to accommodate Remember Me; the jwt callback
-    // applies the shorter per-authentication-method expiration below.
     const credentialSessionMaxAgeSeconds = 60 * 60 * 24 * 7;
-    const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 365;
+    const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 90;
     const sessionUpdateAgeSeconds = enterpriseSession.updateAgeSeconds;
     const sessionIdleTimeoutMs = enterpriseSession.idleTimeoutSeconds * 1000;
     const oidcReauthenticateAfterMs = enterpriseSession.reauthenticateAfterSeconds * 1000;
@@ -298,11 +295,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   const email = credentials?.email?.toLowerCase().trim() || '';
                   const password = credentials?.password || '';
                   const userAgentHeader = (req?.headers?.['user-agent'] as string) || '';
-                  const isMobileClient =
-                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(
-                      userAgentHeader
-                    );
-                  const rememberMe = credentials?.rememberMe === 'true' || isMobileClient;
+                  // Session trust is an explicit user choice. Form factor/user-agent
+                  // must never silently turn a browser into a long-lived trusted device.
+                  const rememberMe = credentials?.rememberMe === 'true';
                   const { getClientIp } = await import('@/lib/client-ip');
                   const ip = getClientIp(req?.headers);
                   const userAgent = userAgentHeader || 'Unknown';
@@ -415,7 +410,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   await logLoginSuccess(email, user.id, ip, userAgent, 'credentials');
 
                   if (rememberMe) {
-                    logger.debug('[Auth] User requested "Remember Me"', { email });
+                    logger.debug('[Auth] User requested extended session', { userId: user.id });
                   }
 
                   if (user.status !== 'ACTIVE') {
@@ -557,7 +552,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           const augmentedToken = token as AugmentedJWT;
 
-          // Check absolute session maximum age independently from outer cookie maxAge
           if (
             typeof augmentedToken.sessionExpiresAt === 'number' &&
             Date.now() >= augmentedToken.sessionExpiresAt * 1000
@@ -740,9 +734,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               : null;
           const emailVerifiedClaim = coerceBooleanClaim(claims.email_verified);
 
-          // An explicit negative verification assertion is always a hard fail.
-          // Missing claims are handled by provider policy only when creating a
-          // new binding; established issuer+subject identities remain usable.
           if (emailVerifiedClaim === false) {
             logger.warn('[Auth] OIDC sign-in rejected: IdP explicitly reports unverified email', {
               component: 'auth:signIn',
@@ -850,8 +841,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             });
           }
 
-          // When OIDC owns the user's role, sync the evaluated role from IdP claims.
-          // If all role mappings were deleted or no rule matches, evaluateOidcRoleClaims returns USER (the safe default).
           if (targetUser.roleSource === 'OIDC') {
             const desiredRole = roleEvaluation.role;
             if (targetUser.role !== desiredRole) {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sendPush } from '@/lib/push';
 import prisma from '@/lib/prisma';
 import { getPushConfig } from '@/lib/notification-providers';
-import webpush from 'web-push';
+import { sendWebPushSafely, WebPushProviderError } from '@/lib/web-push-subscription';
 
 const { isDeliveryComplete, markDeliveryComplete } = vi.hoisted(() => ({
   isDeliveryComplete: vi.fn(),
@@ -12,11 +12,19 @@ const { isDeliveryComplete, markDeliveryComplete } = vi.hoisted(() => ({
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
+    user: {
+      update: vi.fn(),
+    },
     userDevice: {
       findMany: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      deleteMany: vi.fn(),
+      count: vi.fn(),
       updateMany: vi.fn(),
+    },
+    systemSettings: {
+      findUnique: vi.fn().mockResolvedValue(null),
     },
   },
 }));
@@ -34,11 +42,30 @@ vi.mock('@/lib/delivery-idempotency', () => ({
   markDeliveryComplete,
 }));
 
-vi.mock('web-push', () => ({
-  default: {
-    sendNotification: vi.fn(),
-  },
-}));
+vi.mock('@/lib/web-push-subscription', () => {
+  class WebPushProviderError extends Error {
+    constructor(
+      message: string,
+      readonly statusCode: number,
+      readonly retryAfter: string | null = null
+    ) {
+      super(message);
+      this.name = 'WebPushProviderError';
+    }
+  }
+
+  return {
+    decodeWebPushSubscription: vi.fn(async (token: string) => {
+      try {
+        return JSON.parse(token);
+      } catch {
+        throw new Error('Malformed Web Push subscription');
+      }
+    }),
+    sendWebPushSafely: vi.fn(),
+    WebPushProviderError,
+  };
+});
 
 describe('sendPush', () => {
   beforeEach(() => {
@@ -79,9 +106,9 @@ describe('sendPush', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
-    expect(webpush.sendNotification).toHaveBeenCalledWith(
-      expect.any(Object),
+    expect(sendWebPushSafely).toHaveBeenCalledTimes(1);
+    expect(sendWebPushSafely).toHaveBeenCalledWith(
+      expect.objectContaining({ endpoint: 'https://example.com' }),
       expect.any(String),
       expect.objectContaining({
         vapidDetails: {
@@ -122,7 +149,7 @@ describe('sendPush', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('No web push subscriptions found for user');
-    expect(webpush.sendNotification).not.toHaveBeenCalled();
+    expect(sendWebPushSafely).not.toHaveBeenCalled();
   });
 
   it('safely handles actions passed as array without throwing JSON parse error', async () => {
@@ -156,8 +183,8 @@ describe('sendPush', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
-    const payload = JSON.parse(vi.mocked(webpush.sendNotification).mock.calls[0][1] as string);
+    expect(sendWebPushSafely).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse(vi.mocked(sendWebPushSafely).mock.calls[0][1] as string);
     expect(payload.actions).toEqual([{ action: 'ack', title: 'Acknowledge' }]);
   });
 
@@ -180,11 +207,9 @@ describe('sendPush', () => {
         platform: 'web',
       })) as unknown as Awaited<ReturnType<typeof prisma.userDevice.findMany>>
     );
-    vi.mocked(webpush.sendNotification)
-      .mockResolvedValueOnce({} as never)
-      .mockRejectedValueOnce(
-        Object.assign(new Error('push service unavailable'), { statusCode: 503 })
-      );
+    vi.mocked(sendWebPushSafely)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new WebPushProviderError('push service unavailable', 503));
 
     const first = await sendPush({
       userId: 'user-1',
@@ -203,9 +228,7 @@ describe('sendPush', () => {
       expect.objectContaining({ targetId: 'device-1', deliveryKey: 'intent-1' })
     );
 
-    vi.mocked(webpush.sendNotification)
-      .mockClear()
-      .mockResolvedValue({} as never);
+    vi.mocked(sendWebPushSafely).mockClear().mockResolvedValue(undefined);
     isDeliveryComplete.mockImplementation(async markerId => markerId.endsWith(':device-1'));
 
     const retry = await sendPush({
@@ -221,7 +244,7 @@ describe('sendPush', () => {
       checkpointedCount: 1,
       failedCount: 0,
     });
-    expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
+    expect(sendWebPushSafely).toHaveBeenCalledTimes(1);
     expect(markDeliveryComplete).toHaveBeenCalledWith(
       expect.objectContaining({ targetId: 'device-2', deliveryKey: 'intent-1' })
     );

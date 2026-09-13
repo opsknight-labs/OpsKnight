@@ -62,4 +62,27 @@ describe('operational metric registry', () => {
       'opsknight_http_request_duration_seconds_count{method="GET",route="api.health"} 2'
     );
   });
+
+  it('renders responder dashboard metrics from the canonical typed registry', () => {
+    setOperationalGauge('opsknight_responder_dashboard_inflight', 2);
+    setOperationalGauge('opsknight_responder_dashboard_inflight', 1);
+    addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'fresh' });
+    addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'miss' });
+    addOperationalMetric('opsknight_responder_dashboard_failures_total', 1);
+    observeOperationalHistogram('opsknight_responder_dashboard_duration_seconds', 0.2);
+
+    const rendered = new OperationalMetricSnapshot().render();
+    expect(rendered).toContain('# TYPE opsknight_responder_dashboard_inflight gauge');
+    expect(rendered).toContain('opsknight_responder_dashboard_inflight 1');
+    expect(rendered).toContain(
+      '# TYPE opsknight_responder_dashboard_cache_hits_total counter'
+    );
+    expect(rendered).toContain(
+      'opsknight_responder_dashboard_cache_hits_total{state="fresh"} 1'
+    );
+    expect(rendered).toContain(
+      '# TYPE opsknight_responder_dashboard_duration_seconds histogram'
+    );
+    expect(rendered).toContain('# TYPE opsknight_responder_dashboard_failures_total counter');
+  });
 });

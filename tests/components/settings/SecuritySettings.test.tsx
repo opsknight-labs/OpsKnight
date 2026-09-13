@@ -86,12 +86,13 @@ describe('Security Components', () => {
   });
 
   describe('ActiveSessionsSection', () => {
-    it('renders active session information and revocation action', () => {
+    it('renders current browser activity and the account-wide revocation action', () => {
       render(<ActiveSessionsSection tokenVersion={2} />);
 
-      expect(screen.getByText(/Current authenticated session/i)).toBeInTheDocument();
+      expect(screen.getByText(/Current browser activity/i)).toBeInTheDocument();
       expect(screen.getByText(/This Device/i)).toBeInTheDocument();
       expect(screen.getByText(/Active Now/i)).toBeInTheDocument();
+      expect(screen.getByText(/not individual revocation handles/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Revoke All Sessions/i })).toBeInTheDocument();
     });
   });

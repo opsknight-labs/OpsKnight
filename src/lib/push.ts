@@ -1,9 +1,4 @@
-/**
- * Push Notification Service
- * Sends push notifications for incidents
- *
- * Push notification providers are configured via the UI at Settings -> System -> Notification Providers
- */
+/** Web Push delivery for OpsKnight incident notifications. */
 
 import prisma from './prisma';
 import { getPushConfig } from './notification-providers';
@@ -11,11 +6,12 @@ import { getBaseUrl } from './env-validation';
 import { logger } from './logger';
 import { getUserTimeZone } from './timezone';
 import { formatPushTimestamp } from './mobile-time';
-import webpush from 'web-push';
 import { deliveryMarkerId, isDeliveryComplete, markDeliveryComplete } from './delivery-idempotency';
-
-// Configure Web Push if keys are present
-// We will configure VAPID details per-request based on DB config or Env variables
+import {
+  WebPushProviderError,
+  decodeWebPushSubscription,
+  sendWebPushSafely,
+} from './web-push-subscription';
 
 function normalizeVapidKey(rawKey?: string | null) {
   if (!rawKey) return undefined;
@@ -29,9 +25,8 @@ export type PushOptions = {
   userId: string;
   title: string;
   body: string;
-  data?: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  data?: Record<string, unknown>;
   badge?: number;
-  /** Stable logical intent used to checkpoint delivery independently per device. */
   deliveryKey?: string;
 };
 
@@ -54,38 +49,33 @@ export type PushResult = {
   retryAfterMs?: number;
 };
 
-/**
- * Send push notification
- * Uses logger output for development mode
- */
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
+function statusCode(error: unknown) {
+  return error instanceof WebPushProviderError ? error.statusCode : undefined;
+}
+
+function isRestrictedDestinationError(error: unknown) {
+  return /restricted network|HTTPS is required|credentials are not allowed/i.test(errorMessage(error));
+}
+
 export async function sendPush(options: PushOptions): Promise<PushResult> {
   try {
-    // Get push configuration
     const pushConfig = await getPushConfig();
-
-    // Get user's device tokens
     const devices = await prisma.userDevice.findMany({
       where: { userId: options.userId },
       orderBy: { lastUsed: 'desc' },
     });
-
     if (devices.length === 0) {
-      return {
-        success: false,
-        code: 'NO_DEVICE_TOKENS',
-        error: 'No device tokens found for user',
-      };
+      return { success: false, code: 'NO_DEVICE_TOKENS', error: 'No device tokens found for user' };
     }
-
-    // If provider is not enabled, log and return failure
     if (!pushConfig.enabled) {
       logger.warn('Push notification skipped - provider not configured', {
         userId: options.userId,
-        title: options.title,
-        body: options.body,
         provider: pushConfig.provider,
       });
-
       return {
         success: false,
         code: 'PROVIDER_NOT_CONFIGURED',
@@ -93,262 +83,50 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
       };
     }
 
-    // Production: Use configured provider
-    let successCount = 0;
-    let checkpointedCount = 0;
-    let terminalCount = 0;
-    let retryableFailureCount = 0;
-    let rateLimited = false;
-    const errorMessages: string[] = [];
-    const resolveVapidDetailsList = () => {
-      const details: { subject: string; publicKey: string; privateKey: string }[] = [];
-
-      if (
-        pushConfig.provider === 'web-push' &&
-        pushConfig.vapidPublicKey &&
-        pushConfig.vapidPrivateKey
-      ) {
-        const publicKey = normalizeVapidKey(pushConfig.vapidPublicKey);
-        const privateKey = normalizeVapidKey(pushConfig.vapidPrivateKey);
-        if (publicKey && privateKey) {
-          details.push({
-            subject: pushConfig.vapidSubject || 'mailto:admin@localhost',
-            publicKey,
-            privateKey,
-          });
-        }
-
-        if (Array.isArray(pushConfig.vapidKeyHistory)) {
-          for (const entry of pushConfig.vapidKeyHistory) {
-            const legacyPublic = normalizeVapidKey(entry.publicKey);
-            const legacyPrivate = normalizeVapidKey(entry.privateKey);
-            if (legacyPublic && legacyPrivate) {
-              details.push({
-                subject: pushConfig.vapidSubject || 'mailto:admin@localhost',
-                publicKey: legacyPublic,
-                privateKey: legacyPrivate,
-              });
-            }
-          }
-        }
-      }
-
-      if (details.length > 0) {
-        return details;
-      }
-
-      if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-        const publicKey = normalizeVapidKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
-        const privateKey = normalizeVapidKey(process.env.VAPID_PRIVATE_KEY);
-        if (!publicKey || !privateKey) {
-          return [];
-        }
-        return [
-          {
-            subject: process.env.VAPID_SUBJECT || 'mailto:admin@localhost',
-            publicKey,
-            privateKey,
-          },
-        ];
-      }
-
-      return [];
-    };
-
-    const vapidDetailsList = resolveVapidDetailsList();
-
-    const sendWebPush = async (device: (typeof devices)[number]) => {
-      const markerId = options.deliveryKey
-        ? deliveryMarkerId('push-device', options.deliveryKey, device.id)
-        : null;
-      if (markerId && (await isDeliveryComplete(markerId))) {
-        checkpointedCount++;
-        return;
-      }
-
-      if (vapidDetailsList.length === 0) {
-        errorMessages.push(`Device ${device.deviceId}: VAPID keys not configured`);
-        retryableFailureCount++;
-        return;
-      }
-
-      let subscription: any;
-      try {
-        subscription = JSON.parse(device.token);
-        if (!subscription?.endpoint) {
-          throw new Error('Malformed subscription object');
-        }
-      } catch {
-        await prisma.userDevice.deleteMany({ where: { id: device.id } });
-        const remaining = await prisma.userDevice.count({
-          where: { userId: options.userId },
+    const vapidDetailsList: { subject: string; publicKey: string; privateKey: string }[] = [];
+    if (
+      pushConfig.provider === 'web-push' &&
+      pushConfig.vapidPublicKey &&
+      pushConfig.vapidPrivateKey
+    ) {
+      const publicKey = normalizeVapidKey(pushConfig.vapidPublicKey);
+      const privateKey = normalizeVapidKey(pushConfig.vapidPrivateKey);
+      if (publicKey && privateKey) {
+        vapidDetailsList.push({
+          subject: pushConfig.vapidSubject || 'mailto:admin@localhost',
+          publicKey,
+          privateKey,
         });
-        if (remaining === 0) {
-          await prisma.user.update({
-            where: { id: options.userId },
-            data: { pushNotificationsEnabled: false },
-          });
-        }
-        errorMessages.push(`Device ${device.deviceId}: Corrupted token purged`);
-        terminalCount++;
-        return;
       }
-
-      try {
-        let parsedActions: unknown = undefined;
-        if (options.data?.actions) {
-          if (Array.isArray(options.data.actions)) {
-            parsedActions = options.data.actions;
-          } else if (typeof options.data.actions === 'string') {
-            try {
-              parsedActions = JSON.parse(options.data.actions);
-            } catch {
-              parsedActions = undefined;
-            }
-          }
-        }
-
-        const payload = JSON.stringify({
-          title: options.title,
-          body: options.body,
-          data: options.data,
-          icon: '/icons/app-icon-192.png',
-          badge: options.data?.badge || '/icons/app-icon-192.png',
-          url: options.data?.url || '/m',
-          actions: parsedActions,
-        });
-        let sent = false;
-        let lastErrorMessage = 'Unknown error';
-
-        const isHighUrgency = options.data?.urgency === 'HIGH';
-        for (const vapidDetails of vapidDetailsList) {
-          try {
-            await webpush.sendNotification(subscription, payload, {
-              vapidDetails,
-              TTL: isHighUrgency ? 3600 * 4 : 86400,
-              urgency: isHighUrgency ? 'high' : 'normal',
-              headers: {
-                Urgency: isHighUrgency ? 'high' : 'normal',
-              },
-            });
-            successCount++;
-            sent = true;
-            // Provider acceptance is already irreversible. Persistence errors
-            // must not cause another VAPID-key attempt and duplicate the push.
-            try {
-              await prisma.userDevice.update({
-                where: { id: device.id },
-                data: { lastUsed: new Date() },
-              });
-              if (markerId && options.deliveryKey) {
-                await markDeliveryComplete({
-                  markerId,
-                  namespace: 'push-device',
-                  deliveryKey: options.deliveryKey,
-                  targetId: device.id,
-                });
-              }
-            } catch (checkpointError) {
-              logger.error('push.device_checkpoint_failed_after_acceptance', {
-                userId: options.userId,
-                deviceId: device.deviceId,
-                error:
-                  checkpointError instanceof Error
-                    ? checkpointError.message
-                    : String(checkpointError),
-              });
-            }
-            break;
-          } catch (error: unknown) {
-            const statusCode =
-              typeof error === 'object' && error !== null && 'statusCode' in error
-                ? (error as { statusCode?: number }).statusCode
-                : undefined;
-            const errorMessage =
-              typeof error === 'object' && error !== null && 'message' in error
-                ? String((error as { message?: unknown }).message ?? '')
-                : 'Unknown error';
-            lastErrorMessage = errorMessage;
-            if (statusCode === 429) rateLimited = true;
-
-            const isExpiredOrRevoked =
-              statusCode === 410 ||
-              statusCode === 404 ||
-              (statusCode === 400 &&
-                /baddevicetoken|notregistered|invalidregistration|unregistered|devicetokennotfortopic/i.test(
-                  errorMessage
-                ));
-
-            if (isExpiredOrRevoked) {
-              await prisma.userDevice.deleteMany({ where: { id: device.id } });
-              const remaining = await prisma.userDevice.count({
-                where: { userId: options.userId },
-              });
-              if (remaining === 0) {
-                await prisma.user.update({
-                  where: { id: options.userId },
-                  data: { pushNotificationsEnabled: false },
-                });
-              }
-              errorMessages.push(`Device ${device.deviceId}: Subscription expired (removed)`);
-              terminalCount++;
-              return;
-            }
-
-            const shouldRetry =
-              statusCode === 401 ||
-              statusCode === 403 ||
-              errorMessage.toLowerCase().includes('vapid') ||
-              errorMessage.toLowerCase().includes('authorization');
-
-            if (!shouldRetry) {
-              errorMessages.push(`Device ${device.deviceId}: ${errorMessage}`);
-              retryableFailureCount++;
-              return;
-            }
-          }
-        }
-
-        if (!sent) {
-          errorMessages.push(`Device ${device.deviceId}: ${lastErrorMessage}`);
-          retryableFailureCount++;
-        }
-      } catch (error: unknown) {
-        const statusCode =
-          typeof error === 'object' && error !== null && 'statusCode' in error
-            ? (error as { statusCode?: number }).statusCode
-            : undefined;
-        const errorMessage =
-          typeof error === 'object' && error !== null && 'message' in error
-            ? String((error as { message?: unknown }).message ?? '')
-            : 'Unknown error';
-        if (statusCode === 429) rateLimited = true;
-
-        const isExpiredOrRevoked =
-          statusCode === 410 ||
-          statusCode === 404 ||
-          (statusCode === 400 &&
-            /baddevicetoken|notregistered|invalidregistration|unregistered|devicetokennotfortopic/i.test(
-              errorMessage
-            ));
-
-        if (isExpiredOrRevoked) {
-          await prisma.userDevice.deleteMany({ where: { id: device.id } });
-          const remaining = await prisma.userDevice.count({ where: { userId: options.userId } });
-          if (remaining === 0) {
-            await prisma.user.update({
-              where: { id: options.userId },
-              data: { pushNotificationsEnabled: false },
+      if (Array.isArray(pushConfig.vapidKeyHistory)) {
+        for (const entry of pushConfig.vapidKeyHistory) {
+          const legacyPublic = normalizeVapidKey(entry.publicKey);
+          const legacyPrivate = normalizeVapidKey(entry.privateKey);
+          if (legacyPublic && legacyPrivate) {
+            vapidDetailsList.push({
+              subject: pushConfig.vapidSubject || 'mailto:admin@localhost',
+              publicKey: legacyPublic,
+              privateKey: legacyPrivate,
             });
           }
-          errorMessages.push(`Device ${device.deviceId}: Subscription expired (removed)`);
-          terminalCount++;
-        } else {
-          errorMessages.push(`Device ${device.deviceId}: ${errorMessage}`);
-          retryableFailureCount++;
         }
       }
-    };
+    }
+    if (
+      vapidDetailsList.length === 0 &&
+      process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY &&
+      process.env.VAPID_PRIVATE_KEY
+    ) {
+      const publicKey = normalizeVapidKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+      const privateKey = normalizeVapidKey(process.env.VAPID_PRIVATE_KEY);
+      if (publicKey && privateKey) {
+        vapidDetailsList.push({
+          subject: process.env.VAPID_SUBJECT || 'mailto:admin@localhost',
+          publicKey,
+          privateKey,
+        });
+      }
+    }
 
     if (pushConfig.provider !== 'web-push') {
       return {
@@ -357,7 +135,6 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         error: 'No push notification provider configured',
       };
     }
-
     const webDevices = devices.filter(device => device.platform === 'web');
     if (webDevices.length === 0) {
       return {
@@ -366,22 +143,150 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         error: 'No web push subscriptions found for user',
       };
     }
-
     if (vapidDetailsList.length === 0) {
-      return {
-        success: false,
-        code: 'VAPID_NOT_CONFIGURED',
-        error: 'VAPID keys not configured',
-      };
+      return { success: false, code: 'VAPID_NOT_CONFIGURED', error: 'VAPID keys not configured' };
     }
 
-    await Promise.allSettled(webDevices.map(device => sendWebPush(device)));
+    let successCount = 0;
+    let checkpointedCount = 0;
+    let terminalCount = 0;
+    let retryableFailureCount = 0;
+    let rateLimited = false;
+    const errors: string[] = [];
+
+    const removeDevice = async (deviceId: string) => {
+      await prisma.userDevice.deleteMany({ where: { id: deviceId } });
+      const remaining = await prisma.userDevice.count({
+        where: { userId: options.userId, platform: 'web' },
+      });
+      if (remaining === 0) {
+        await prisma.user.update({
+          where: { id: options.userId },
+          data: { pushNotificationsEnabled: false },
+        });
+      }
+    };
+
+    const sendToDevice = async (device: (typeof webDevices)[number]) => {
+      const safeDeviceRef = device.id;
+      const markerId = options.deliveryKey
+        ? deliveryMarkerId('push-device', options.deliveryKey, device.id)
+        : null;
+      if (markerId && (await isDeliveryComplete(markerId))) {
+        checkpointedCount += 1;
+        return;
+      }
+
+      let subscription;
+      try {
+        subscription = await decodeWebPushSubscription(device.token);
+      } catch {
+        await removeDevice(device.id);
+        terminalCount += 1;
+        errors.push(`Device ${safeDeviceRef}: corrupted subscription removed`);
+        return;
+      }
+
+      let parsedActions: unknown;
+      const rawActions = options.data?.actions;
+      if (Array.isArray(rawActions)) parsedActions = rawActions;
+      else if (typeof rawActions === 'string') {
+        try {
+          parsedActions = JSON.parse(rawActions);
+        } catch {
+          parsedActions = undefined;
+        }
+      }
+      const badge =
+        typeof options.data?.badge === 'string'
+          ? options.data.badge
+          : '/icons/app-icon-192.png';
+      const url = typeof options.data?.url === 'string' ? options.data.url : '/m';
+      const urgency = options.data?.urgency === 'HIGH' ? 'HIGH' : 'NORMAL';
+      const payload = JSON.stringify({
+        title: options.title,
+        body: options.body,
+        data: options.data,
+        icon: '/icons/app-icon-192.png',
+        badge,
+        url,
+        actions: parsedActions,
+      });
+
+      let lastProviderError = 'delivery failed';
+      for (const vapidDetails of vapidDetailsList) {
+        try {
+          await sendWebPushSafely(subscription, payload, {
+            vapidDetails,
+            TTL: urgency === 'HIGH' ? 3600 * 4 : 86400,
+            urgency: urgency === 'HIGH' ? 'high' : 'normal',
+            headers: { Urgency: urgency === 'HIGH' ? 'high' : 'normal' },
+          });
+          successCount += 1;
+          try {
+            await prisma.userDevice.update({
+              where: { id: device.id },
+              data: { lastUsed: new Date() },
+            });
+            if (markerId && options.deliveryKey) {
+              await markDeliveryComplete({
+                markerId,
+                namespace: 'push-device',
+                deliveryKey: options.deliveryKey,
+                targetId: device.id,
+              });
+            }
+          } catch (checkpointError) {
+            logger.error('push.device_checkpoint_failed_after_acceptance', {
+              userId: options.userId,
+              deviceRecordId: safeDeviceRef,
+              error: errorMessage(checkpointError),
+            });
+          }
+          return;
+        } catch (error) {
+          const code = statusCode(error);
+          lastProviderError = code ? `HTTP ${code}` : errorMessage(error);
+          if (code === 429) rateLimited = true;
+
+          const expired = code === 404 || code === 410;
+          const restrictedDestination = isRestrictedDestinationError(error);
+          if (expired || restrictedDestination) {
+            await removeDevice(device.id);
+            terminalCount += 1;
+            errors.push(
+              `Device ${safeDeviceRef}: ${
+                restrictedDestination ? 'unsafe destination rejected' : 'subscription expired and removed'
+              }`
+            );
+            return;
+          }
+
+          const tryHistoricalVapid =
+            code === 401 ||
+            code === 403 ||
+            /vapid|authorization/i.test(errorMessage(error));
+          if (!tryHistoricalVapid) {
+            retryableFailureCount += 1;
+            errors.push(
+              `Device ${safeDeviceRef}: delivery failed${code ? ` (HTTP ${code})` : ''}`
+            );
+            return;
+          }
+        }
+      }
+
+      retryableFailureCount += 1;
+      errors.push(`Device ${safeDeviceRef}: ${lastProviderError}`);
+    };
+
+    await Promise.allSettled(webDevices.map(sendToDevice));
 
     if (retryableFailureCount > 0) {
       return {
         success: false,
         code: 'DELIVERY_FAILED',
-        error: errorMessages.join('; ') || 'Failed to send to one or more devices',
+        error: errors.join('; ') || 'Failed to send to one or more devices',
         deliveredCount: successCount,
         checkpointedCount,
         failedCount: retryableFailureCount,
@@ -400,20 +305,21 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
     return {
       success: false,
       code: terminalCount > 0 ? 'NO_WEB_SUBSCRIPTIONS' : 'DELIVERY_FAILED',
-      error: errorMessages.join('; ') || 'No active web push subscriptions remain',
+      error: errors.join('; ') || 'No active web push subscriptions remain',
       deliveredCount: 0,
       checkpointedCount: 0,
       failedCount: 0,
     };
-  } catch (error: any) {
-    logger.error('Push send error', { component: 'push', error, userId: options.userId });
-    return { success: false, code: 'DELIVERY_FAILED', error: error.message };
+  } catch (error) {
+    logger.error('push.send_failed', {
+      component: 'push',
+      userId: options.userId,
+      error: errorMessage(error),
+    });
+    return { success: false, code: 'DELIVERY_FAILED', error: 'Push delivery failed' };
   }
 }
 
-/**
- * Send incident notification push
- */
 export async function sendIncidentPush(
   userId: string,
   incidentId: string,
@@ -424,14 +330,9 @@ export async function sendIncidentPush(
       prisma.user.findUnique({ where: { id: userId } }),
       prisma.incident.findUnique({
         where: { id: incidentId },
-        include: {
-          service: true,
-          assignee: true,
-          team: true,
-        },
+        include: { service: true, assignee: true, team: true },
       }),
     ]);
-
     if (!user || !incident) {
       return {
         success: false,
@@ -442,24 +343,16 @@ export async function sendIncidentPush(
 
     const baseUrl = getBaseUrl();
     const incidentUrl = `${baseUrl}/incidents/${incidentId}`;
-
     const userTimeZone = getUserTimeZone(user ?? undefined);
-
-    // Enhanced emoji logic based on urgency and event
     let titleEmoji = '';
     let badge = '/icons/app-icon-192.png';
-
     if (eventType === 'triggered') {
-      titleEmoji = incident.urgency === 'HIGH' ? '🔴' : incident.urgency === 'MEDIUM' ? '🟡' : '🔵';
-      badge = incident.urgency === 'HIGH' ? '/icons/badge-critical.png' : '/icons/badge-info.png';
-    } else if (eventType === 'acknowledged') {
-      titleEmoji = '✅';
-    } else {
-      titleEmoji = '✓';
-    }
-
-    const urgencyLabel =
-      incident.urgency === 'HIGH' ? 'CRITICAL' : incident.urgency === 'MEDIUM' ? 'MEDIUM' : 'LOW';
+      titleEmoji =
+        incident.urgency === 'HIGH' ? '🔴' : incident.urgency === 'MEDIUM' ? '🟡' : '🔵';
+      badge =
+        incident.urgency === 'HIGH' ? '/icons/badge-critical.png' : '/icons/badge-info.png';
+    } else if (eventType === 'acknowledged') titleEmoji = '✅';
+    else titleEmoji = '✓';
 
     const eventLabel =
       eventType === 'triggered'
@@ -469,43 +362,30 @@ export async function sendIncidentPush(
           : eventType === 'resolved'
             ? 'Resolved'
             : 'Updated';
-
     const title =
       eventType === 'triggered'
-        ? `${titleEmoji} ${incident.urgency === 'HIGH' ? 'CRITICAL' : 'Incident'} • ${incident.service?.name}`
+        ? `${titleEmoji} ${
+            incident.urgency === 'HIGH' ? 'CRITICAL' : 'Incident'
+          } • ${incident.service?.name}`
         : `${titleEmoji} ${eventLabel} • ${incident.service?.name}`;
-
     const eventTime =
       eventType === 'acknowledged'
         ? incident.acknowledgedAt || incident.updatedAt || incident.createdAt
         : eventType === 'resolved'
           ? incident.resolvedAt || incident.updatedAt || incident.createdAt
           : incident.updatedAt || incident.createdAt;
-
     const timeLabel = formatPushTimestamp(eventTime, userTimeZone);
     const ownerLabel =
       incident.assignee?.name || incident.assignee?.email || incident.team?.name || 'Unassigned';
-
-    // Premium Concise Body:
-    // "Title of the incident..."
-    // "Status • Owner • Time"
-
-    let body = `${incident.title}`;
-    body += `\n${eventLabel} • ${ownerLabel} • ${timeLabel}`;
-
-    if (incident.urgency === 'HIGH') {
-      body += `\n🚨 Urgent Action Required`;
-    }
-
+    let body = `${incident.title}\n${eventLabel} • ${ownerLabel} • ${timeLabel}`;
+    if (incident.urgency === 'HIGH') body += '\n🚨 Urgent Action Required';
     if (incident.description) {
-      const shortDesc =
+      body += `\n${
         incident.description.length > 60
-          ? incident.description.substring(0, 60) + '...'
-          : incident.description;
-      body += `\n${shortDesc}`;
+          ? `${incident.description.substring(0, 60)}...`
+          : incident.description
+      }`;
     }
-
-    // Action buttons for triggered incidents
     const actions =
       eventType === 'triggered'
         ? [
@@ -535,14 +415,14 @@ export async function sendIncidentPush(
       },
       badge: 1,
     });
-  } catch (error: any) {
-    logger.error('Send incident push error', {
+  } catch (error) {
+    logger.error('push.incident_send_failed', {
       component: 'push',
-      error,
       incidentId,
       userId,
       eventType,
+      error: errorMessage(error),
     });
-    return { success: false, code: 'DELIVERY_FAILED', error: error.message };
+    return { success: false, code: 'DELIVERY_FAILED', error: 'Incident push delivery failed' };
   }
 }

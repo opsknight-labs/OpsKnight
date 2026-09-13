@@ -6,15 +6,18 @@ const databaseUrl =
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // The generated service-worker contract has its own production-build config.
+  // Never run it against `next dev`, where next-pwa intentionally does not emit /sw.js.
+  testIgnore: /mobile-pwa-production\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   timeout: 45_000,
   expect: {
-    // CI exercises the real Next.js dev server. The first invocation of a
-    // Server Action may include on-demand compilation, so keep assertions
-    // strict but avoid treating that one-time compile as an auth failure.
-    timeout: 15_000,
+    // CI exercises the real Next.js dev server. A successful auth callback can
+    // precede the first on-demand compilation of the destination route, so allow
+    // that compile to finish without weakening any application timeout itself.
+    timeout: 30_000,
   },
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
   use: {
@@ -25,7 +28,18 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testMatch: /auth-recovery\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-chromium',
+      testMatch: /mobile-pwa\.spec\.ts/,
+      use: { ...devices['Pixel 5'] },
+    },
+    {
+      name: 'mobile-webkit',
+      testMatch: /mobile-pwa\.spec\.ts/,
+      use: { ...devices['iPhone 13'] },
     },
   ],
   webServer: {

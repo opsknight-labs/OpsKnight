@@ -5,6 +5,8 @@ import { getUserTimeZone } from './timezone';
 import { formatPushTimestamp } from './mobile-time';
 import type { NotificationEventType } from './notification-delivery';
 
+const PUSH_CONTRACT_VERSION = 2;
+
 /** Render a push from the immutable Notification payload instead of current incident state. */
 export async function sendNotificationIntentPush(
   userId: string,
@@ -59,18 +61,24 @@ export async function sendNotificationIntentPush(
   else if (snapshot.description)
     body += `\n${snapshot.description.length > 80 ? `${snapshot.description.slice(0, 77)}...` : snapshot.description}`;
 
+  const canonicalIncidentUrl = `/incidents/${encodeURIComponent(incidentId)}`;
+
   return sendPush({
     userId,
     title,
     body,
     data: {
+      version: PUSH_CONTRACT_VERSION,
+      eventId: notificationId,
+      deliveryId: `web-push:${notificationId}`,
+      notificationId,
       incidentId,
-      incidentUrl: `/incidents/${incidentId}`,
+      incidentUrl: canonicalIncidentUrl,
       eventType,
       urgency: snapshot.urgency,
       status: snapshot.status,
       tag: `incident-${incidentId}-${notificationId.slice(-16)}`,
-      url: `/m/incidents/${incidentId}`,
+      url: canonicalIncidentUrl,
       actions: JSON.stringify(
         eventType === 'triggered'
           ? [

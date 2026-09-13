@@ -96,7 +96,7 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions }: Pr
     });
   };
 
-  // Fallback if no server sessions provided
+  // Fallback if no server-observed device activity is available yet.
   const displaySessions: ActiveSession[] =
     sessions && sessions.length > 0
       ? sessions
@@ -115,7 +115,6 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions }: Pr
 
   return (
     <div className="space-y-4">
-      {/* Session Cards List */}
       <div className="space-y-3">
         {displaySessions.map(session => {
           const timeInfo = formatRelativeTime(session.lastActive);
@@ -163,13 +162,13 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions }: Pr
                         variant="outline"
                         className="text-[10px] bg-muted text-muted-foreground border-border/80 font-medium"
                       >
-                        Connected Device
+                        Recent Device
                       </Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {session.isCurrent ? 'Current authenticated session' : `IP: ${session.ip}`} ·
-                    Security token v{session.tokenVersion || tokenVersion}
+                    {session.isCurrent ? 'Current browser activity' : `Last observed IP: ${session.ip}`}{' '}
+                    · Security token v{session.tokenVersion || tokenVersion}
                   </p>
                 </div>
               </div>
@@ -196,6 +195,11 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions }: Pr
         })}
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Device cards are inferred from recent sign-in and heartbeat audit events. They may group
+        multiple sessions from the same browser/OS profile and are not individual revocation handles.
+      </p>
+
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -212,7 +216,6 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions }: Pr
         </Alert>
       )}
 
-      {/* Revocation Trigger & Confirmation Modal */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
@@ -235,8 +238,8 @@ export default function ActiveSessionsSection({ tokenVersion = 1, sessions }: Pr
             <AlertDialogHeader>
               <AlertDialogTitle>Revoke All Active Sessions?</AlertDialogTitle>
               <AlertDialogDescription>
-                This action will instantly invalidate your cryptographic session token across all
-                browsers, mobile apps, and devices. You will be logged out everywhere immediately
+                This action increments your account security token version and invalidates every
+                existing OpsKnight browser session. You will be logged out everywhere immediately
                 and must sign in again.
               </AlertDialogDescription>
             </AlertDialogHeader>
