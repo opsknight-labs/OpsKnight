@@ -4,7 +4,10 @@
 const OFFLINE_DB = 'opsknight-offline';
 const OFFLINE_STORE = 'request-queue';
 const OFFLINE_DB_VERSION = 2;
-const PUSH_CONTRACT_VERSION = 1;
+const PUSH_CONTRACT_VERSION = 2;
+const SUPPORTED_PUSH_CONTRACT_VERSIONS = new Set([1, 2]);
+const SENDING_LEASE_MS = 60 * 1000;
+const MAX_BACKOFF_MS = 5 * 60 * 1000;
 
 const randomId = () => {
   if (self.crypto && typeof self.crypto.randomUUID === 'function') return self.crypto.randomUUID();
@@ -54,6 +57,7 @@ const normalizeQueuedRequest = value => {
     state: value.state || 'PENDING',
     retryCount: value.retryCount || 0,
     lastAttemptAt: value.lastAttemptAt || null,
+    nextAttemptAt: value.nextAttemptAt || null,
     lastError: value.lastError || null,
     expectedState: value.expectedState || null,
     completedAt: value.completedAt || null,
@@ -113,14 +117,50 @@ const updateQueueState = async (item, patch) => {
   return next;
 };
 
+const retryAfterMs = response => {
+  const header = response.headers.get('retry-after');
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? null : Math.max(0, date - Date.now());
+};
+
+const exponentialBackoffMs = retryCount => {
+  const exponent = Math.max(0, Math.min(retryCount - 1, 8));
+  return Math.min(MAX_BACKOFF_MS, 1000 * 2 ** exponent);
+};
+
+const recoverInterruptedRequests = async now => {
+  const items = await listQueuedRequests();
+  for (const item of items) {
+    if (
+      item.state === 'SENDING' &&
+      (item.lastAttemptAt == null || now - item.lastAttemptAt >= SENDING_LEASE_MS)
+    ) {
+      await updateQueueState(item, {
+        state: 'PENDING',
+        nextAttemptAt: now,
+        lastError: item.lastError || 'Previous sync was interrupted; retrying safely.',
+      });
+    }
+  }
+};
+
 const flushQueuedRequests = async () => {
   try {
-    const queue = (await listQueuedRequests()).filter(item => item.state === 'PENDING');
+    const now = Date.now();
+    await recoverInterruptedRequests(now);
+    const queue = (await listQueuedRequests()).filter(
+      item => item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now)
+    );
+
     for (const original of queue) {
       const sending = await updateQueueState(original, {
         state: 'SENDING',
         retryCount: original.retryCount + 1,
         lastAttemptAt: Date.now(),
+        nextAttemptAt: null,
         lastError: null,
       });
 
@@ -130,12 +170,14 @@ const flushQueuedRequests = async () => {
           headers: sending.headers,
           body: sending.body || undefined,
           credentials: 'include',
+          cache: 'no-store',
         });
 
         if (response.ok) {
           await updateQueueState(sending, {
             state: 'SUCCEEDED',
             completedAt: Date.now(),
+            nextAttemptAt: null,
             lastError: null,
           });
           continue;
@@ -147,17 +189,27 @@ const flushQueuedRequests = async () => {
           await updateQueueState(sending, {
             state: terminal,
             completedAt: terminal === 'FAILED' ? Date.now() : null,
+            nextAttemptAt: null,
             lastError: error,
           });
           // Preserve FIFO semantics; later state transitions may depend on this one.
           break;
         }
 
-        await updateQueueState(sending, { state: 'PENDING', lastError: error });
+        const delay =
+          response.status === 429
+            ? retryAfterMs(response) ?? exponentialBackoffMs(sending.retryCount)
+            : exponentialBackoffMs(sending.retryCount);
+        await updateQueueState(sending, {
+          state: 'PENDING',
+          nextAttemptAt: Date.now() + delay,
+          lastError: error,
+        });
         break;
       } catch (error) {
         await updateQueueState(sending, {
           state: 'PENDING',
+          nextAttemptAt: Date.now() + exponentialBackoffMs(sending.retryCount),
           lastError: error instanceof Error ? error.message : 'Network unavailable',
         });
         break;
@@ -194,10 +246,13 @@ const normalizePushPayload = raw => {
   const data = raw && typeof raw === 'object' ? raw : {};
   const nested = data.data && typeof data.data === 'object' ? data.data : {};
   const incidentId = data.incidentId || nested.incidentId || null;
-  const version = Number(data.version || nested.version || PUSH_CONTRACT_VERSION);
+  const versionCandidate = Number(data.version || nested.version || 1);
+  const version = Number.isFinite(versionCandidate) ? versionCandidate : 1;
+  const supportedVersion = SUPPORTED_PUSH_CONTRACT_VERSIONS.has(version);
   const fallbackUrl = incidentId ? `/incidents/${encodeURIComponent(incidentId)}` : '/m/notifications';
   return {
-    version: Number.isFinite(version) ? version : PUSH_CONTRACT_VERSION,
+    version,
+    supportedVersion,
     eventId: data.eventId || nested.eventId || null,
     deliveryId: data.deliveryId || nested.deliveryId || null,
     eventType: data.eventType || nested.eventType || null,
@@ -209,7 +264,9 @@ const normalizePushPayload = raw => {
     icon: data.icon || '/icons/app-icon-192.png',
     badge: data.badge || nested.badge || '/icons/app-icon-192.png',
     url: safeAppPath(data.url || nested.url, fallbackUrl),
-    actions: parseActions(data.actions || nested.actions),
+    // Unknown future payload versions are display-only. Never execute an action
+    // whose semantics this worker does not understand.
+    actions: supportedVersion ? parseActions(data.actions || nested.actions) : undefined,
     tag:
       data.tag ||
       nested.tag ||
@@ -243,7 +300,10 @@ const showFeedback = (title, body, incidentId, suffix) =>
 const queueAcknowledgement = async ({ incidentId, expectedStatus, idempotencyKey }) => {
   const id = randomId();
   const now = Date.now();
-  const url = new URL(`/api/incidents/${encodeURIComponent(incidentId)}/status`, self.location.origin).toString();
+  const url = new URL(
+    `/api/incidents/${encodeURIComponent(incidentId)}/status`,
+    self.location.origin
+  ).toString();
   await putQueuedRequest({
     id,
     operation: 'INCIDENT_STATUS',
@@ -263,6 +323,7 @@ const queueAcknowledgement = async ({ incidentId, expectedStatus, idempotencyKey
     state: 'PENDING',
     retryCount: 0,
     lastAttemptAt: null,
+    nextAttemptAt: null,
     lastError: 'Waiting for network',
     expectedState: expectedStatus || null,
     completedAt: null,
@@ -274,6 +335,16 @@ const handleAcknowledgeAction = async notification => {
   const data = notification.data || {};
   const incidentId = data.incidentId;
   if (!incidentId) return focusOrOpen(data.url || '/m/notifications');
+
+  if (!SUPPORTED_PUSH_CONTRACT_VERSIONS.has(Number(data.version || 1))) {
+    await showFeedback(
+      'OpsKnight update required',
+      'Open the incident to use responder actions from this notification.',
+      incidentId,
+      'version'
+    );
+    return focusOrOpen(`/incidents/${encodeURIComponent(incidentId)}`);
+  }
 
   const incidentPath = `/incidents/${encodeURIComponent(incidentId)}`;
   const expectedStatus = data.status === 'OPEN' ? 'OPEN' : undefined;
@@ -292,38 +363,79 @@ const handleAcknowledgeAction = async notification => {
         ...(expectedStatus ? { expectedStatus } : {}),
       }),
       credentials: 'include',
+      cache: 'no-store',
     });
 
     if (response.ok) {
-      await showFeedback('Incident acknowledged', `Incident #${incidentId} is acknowledged.`, incidentId, 'ack');
+      await showFeedback(
+        'Incident acknowledged',
+        `Incident #${incidentId} is acknowledged.`,
+        incidentId,
+        'ack'
+      );
       return;
     }
 
     if (response.status === 401) {
-      await showFeedback('Sign in required', 'Open OpsKnight to authenticate before acknowledging.', incidentId, 'auth');
+      await showFeedback(
+        'Sign in required',
+        'Open OpsKnight to authenticate before acknowledging.',
+        incidentId,
+        'auth'
+      );
       return focusOrOpen(`/login?callbackUrl=${encodeURIComponent(incidentPath)}`);
     }
     if (response.status === 403) {
-      await showFeedback('Acknowledgement not authorized', 'Your account cannot acknowledge this incident.', incidentId, 'forbidden');
+      await showFeedback(
+        'Acknowledgement not authorized',
+        'Your account cannot acknowledge this incident.',
+        incidentId,
+        'forbidden'
+      );
       return focusOrOpen(incidentPath);
     }
     if (response.status === 409) {
-      await showFeedback('Incident changed', 'Another responder changed this incident. Open it for the latest state.', incidentId, 'conflict');
+      await showFeedback(
+        'Incident changed',
+        'Another responder changed this incident. Open it for the latest state.',
+        incidentId,
+        'conflict'
+      );
       return focusOrOpen(incidentPath);
     }
     if (response.status === 429 || response.status >= 500) {
-      await showFeedback('Acknowledgement not confirmed', 'OpsKnight could not confirm the action. Open the incident and retry.', incidentId, 'retry');
+      await showFeedback(
+        'Acknowledgement not confirmed',
+        'OpsKnight could not confirm the action. Open the incident and retry.',
+        incidentId,
+        'retry'
+      );
       return focusOrOpen(incidentPath);
     }
 
-    await showFeedback('Acknowledgement failed', 'The incident was not acknowledged. Open it for details.', incidentId, 'failed');
+    await showFeedback(
+      'Acknowledgement failed',
+      'The incident was not acknowledged. Open it for details.',
+      incidentId,
+      'failed'
+    );
     return focusOrOpen(incidentPath);
   } catch {
     try {
       await queueAcknowledgement({ incidentId, expectedStatus, idempotencyKey });
-      await showFeedback('Acknowledgement queued', 'Offline: the action is queued and is not confirmed yet.', incidentId, 'queued');
+      await showFeedback(
+        'Acknowledgement queued',
+        'Offline: the action is queued and is not confirmed yet.',
+        incidentId,
+        'queued'
+      );
     } catch {
-      await showFeedback('Acknowledgement not saved', 'Offline storage was unavailable. Open OpsKnight and retry.', incidentId, 'queue-failed');
+      await showFeedback(
+        'Acknowledgement not saved',
+        'Offline storage was unavailable. Open OpsKnight and retry.',
+        incidentId,
+        'queue-failed'
+      );
     }
   }
 };
