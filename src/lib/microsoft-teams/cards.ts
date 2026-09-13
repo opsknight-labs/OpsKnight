@@ -195,5 +195,3 @@ export function buildMicrosoftTeamsIncidentCard(
     _opsknightMeta: { accent: statusAccent(eventType), eventType },
   };
 }
-
-
