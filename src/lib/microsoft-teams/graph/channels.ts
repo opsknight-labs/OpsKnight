@@ -3,11 +3,12 @@ import type { WarRoomGraphResult } from '@/lib/war-room/types';
 
 type Channel = { id: string; displayName: string; description?: string | null; webUrl?: string | null };
 
-function failure(status: number, body: string, retryAfter: string | null): WarRoomGraphResult<never> {
+function failure(status: number, body: string, retryAfter: string | null, operation: 'READ' | 'CREATE' | 'UPDATE'): WarRoomGraphResult<never> {
   if (status === 429) return { ok: false, code: 'RATE_LIMITED', message: 'Microsoft Teams rate limited the request.', retryAfterMs: Number(retryAfter) > 0 ? Number(retryAfter) * 1000 : undefined };
-  if (status === 401 || status === 403) return { ok: false, code: 'MISSING_PERMISSION', message: 'Microsoft Teams has not granted the required Team-scoped permission.' };
+  if (status === 401) return { ok: false, code: 'GRAPH_TOKEN_FAILED', message: 'Microsoft Graph rejected the access token.' };
+  if (status === 403) return { ok: false, code: 'MISSING_PERMISSION', message: 'Microsoft Teams has not granted the required Team-scoped permission.' };
   if (status === 404) return { ok: false, code: 'TEAM_NOT_FOUND', message: 'The configured Microsoft Team no longer exists or the app is not installed.' };
-  if (status >= 500) return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph is temporarily unavailable.' };
+  if (status >= 500) return { ok: false, code: operation === 'CREATE' ? 'AMBIGUOUS_CREATE' : 'TRANSIENT_READ', message: 'Microsoft Graph is temporarily unavailable.' };
   return { ok: false, code: 'UNKNOWN', message: body.slice(0, 500) || `Microsoft Graph returned HTTP ${status}.` };
 }
 
@@ -20,7 +21,7 @@ async function graph(tenantId: string, path: string, init: RequestInit, operatio
     if (parsed.protocol !== 'https:' || parsed.hostname !== 'graph.microsoft.com') return { ok: false, code: 'UNKNOWN', message: 'Microsoft Graph returned an untrusted pagination URL.' };
     const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers }, signal: AbortSignal.timeout(30_000) });
     if (response.ok) return { ok: true, value: response };
-    return failure(response.status, await response.text().catch(() => ''), response.headers.get('Retry-After'));
+    return failure(response.status, await response.text().catch(() => ''), response.headers.get('Retry-After'), operation);
   } catch (error) {
     return { ok: false, code: operation === 'CREATE' ? 'AMBIGUOUS_CREATE' : 'TRANSIENT_READ', message: `Microsoft Graph request failed: ${error instanceof Error ? error.message : String(error)}` };
   }
