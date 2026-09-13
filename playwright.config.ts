@@ -30,12 +30,12 @@ export default defineConfig({
     {
       name: 'mobile-chromium',
       testMatch: /mobile-pwa\.spec\.ts/,
-      use: { ...devices['Pixel 7'] },
+      use: { ...devices['Pixel 5'] },
     },
     {
       name: 'mobile-webkit',
       testMatch: /mobile-pwa\.spec\.ts/,
-      use: { ...devices['iPhone 15'] },
+      use: { ...devices['iPhone 13'] },
     },
   ],
   webServer: {
