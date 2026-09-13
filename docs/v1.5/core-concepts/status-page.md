@@ -42,7 +42,7 @@ The status page is an external communication surface. Review it with operations,
 
 ## Configure the page
 
-Open **Settings → Status Page**. The editor is organized into General, Appearance, Services, Privacy & Data, Content, Announcements, Integrations, Subscribers, Custom CSS, and Advanced sections.
+Open **Settings → Status Page**. The editor is organized into General, Appearance, Design, Services, Privacy & Data, Content, Announcements, Integrations, Subscribers, and Advanced sections.
 
 ### General
 
@@ -58,9 +58,17 @@ Saving a subdomain or custom domain does not provision DNS, TLS, a load balancer
 
 ### Appearance
 
-Choose a built-in theme, logo/favicon, colors, typography, default/compact/wide layout, header style, and supported display effects. Use the live preview, then check real desktop and mobile rendering.
+Configure organization branding, logo and favicon upload, custom header styles, and display effects. Use the live preview to verify desktop and mobile rendering.
 
-Custom CSS can override generated presentation and can break readability or accessibility. Keep a copy outside the form, test focus/contrast/responsive behavior, and remove the CSS first when diagnosing visual defects.
+### Design and themes
+
+OpsKnight v1.5 features a versioned theme system under **Settings → Status Page → Design**:
+
+- **Curated Themes**: 24 deterministic, accessible themes spanning Light and Dark modes across 7 families (`Universal`, `Enterprise`, `SaaS`, `Developer`, `Gaming`, `Regulated`, `Consumer`). The suite provides dedicated Light and Dark themes for game studios, telemetry dashboards, developer platforms, and enterprise financial institutions.
+- **Layout Density**: Instant switching between **Comfortable** (roomier cards with generous whitespace) and **Compact** (higher information density for enterprise operations) without leaving the theme selector.
+- **Immediate Live Preview**: Theme selection and density changes synchronize instantly with the status page preview workspace.
+- **Advanced CSS Overrides**: Write scoped custom CSS overrides in the collapsible code drawer. Advanced CSS is compiled as the final layer on top of your selected theme.
+- **Legacy Template Deprecation**: The retired template gallery from earlier versions has been completely removed in v1.5. Legacy template CSS snippets (`/* Template: ... */`) are automatically purged in favor of the curated native themes. Custom CSS is reserved solely for customer-written overrides.
 
 ### Services
 

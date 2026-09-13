@@ -14,6 +14,7 @@ const sectionFields = new Map<string, readonly string[]>([
     ],
   ],
   ['appearance', ['branding']],
+  ['design', ['branding']],
   ['customization', ['branding']],
   [
     'services',

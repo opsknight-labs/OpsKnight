@@ -13,6 +13,7 @@ type IconProps = {
     | 'slack'
     | 'custom-fields';
   className?: string;
+  // Teams shares the same icon registry key as slack/jira
 };
 
 export default function SettingsIcon({ name, className = '' }: IconProps) {

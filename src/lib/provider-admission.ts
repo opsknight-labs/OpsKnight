@@ -4,7 +4,7 @@ import prisma from './prisma';
 import { getEffectiveCapacity, recordCapacityPressure } from './notification-capacity/resolver';
 import { usesBulkCapacity } from './provider-capacity';
 
-export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK';
+export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK' | 'MICROSOFT_TEAMS';
 
 export type ProviderAdmissionResult =
   | { allowed: true }

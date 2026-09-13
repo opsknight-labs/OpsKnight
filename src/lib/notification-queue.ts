@@ -34,6 +34,7 @@ const CHANNEL_RATE_LIMITS: Record<NotificationChannel, number> = {
   SLACK: 100,
   WEBHOOK: 100,
   WHATSAPP: 30,
+  MICROSOFT_TEAMS: 30,
 };
 
 interface QueuedNotification {

@@ -4,6 +4,11 @@ import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/timezone';
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
+import {
+  compileStatusPageThemeCss,
+  resolveStatusPageTheme,
+  resolveStatusPageThemeDensity,
+} from '@/lib/status-pages/theme-contract';
 import StatusPageHeader from './StatusPageHeader';
 import StatusPageFooter from './StatusPageFooter';
 import StatusPageSubscribe from './StatusPageSubscribe';
@@ -19,7 +24,9 @@ import AnnouncementsV3, { ChangelogV3 } from './v3/AnnouncementsV3';
 /**
  * Public status page: branding chrome around the V3-native presentation tree.
  *
- * Health, uptime, and region status are never recomputed here.
+ * Health, uptime, and region status are never recomputed here. The curated built-in theme is also
+ * resolved here from snapshot branding, so preview and public rendering cannot drift into separate
+ * theme implementations.
  */
 export default function StatusPageV3({
   snapshot,
@@ -43,6 +50,13 @@ export default function StatusPageV3({
   const vis = page.visibility;
   const [timeZone, setTimeZone] = useState('UTC');
   const [subscribeOpen, setSubscribeOpen] = useState(false);
+  const themeBranding = branding as typeof branding & {
+    themeId?: unknown;
+    themeDensity?: unknown;
+  };
+  const selectedTheme = resolveStatusPageTheme(themeBranding.themeId);
+  const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
+  const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
 
   useEffect(() => {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -132,8 +146,14 @@ export default function StatusPageV3({
   const rssHref = showRss ? `${apiPath}/rss` : null;
 
   return (
-    <div className={STATUS_PAGE_SURFACE_CLASS}>
+    <div
+      className={STATUS_PAGE_SURFACE_CLASS}
+      data-sp-theme={selectedTheme.id}
+      data-sp-theme-version={selectedTheme.version}
+      data-sp-density={themeDensity}
+    >
       {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
+      {builtInThemeCss && <style data-status-page-theme-runtime>{builtInThemeCss}</style>}
 
       {showHeader && (
         <StatusPageHeader

@@ -25,6 +25,7 @@ export const NOTIFICATION_CHANNELS = [
   'SLACK',
   'WEBHOOK',
   'WHATSAPP',
+  'MICROSOFT_TEAMS',
 ] as const;
 export type NotificationDeliveryChannel = (typeof NOTIFICATION_CHANNELS)[number];
 export const NOTIFICATION_DELIVERY_STATUSES = [
@@ -429,6 +430,11 @@ export async function dispatchNotificationAttempt(
       }
       case 'SLACK':
         outcome = { success: true, outcome: 'SKIPPED', skipped: true };
+        break;
+      case 'MICROSOFT_TEAMS':
+        // Teams lifecycle delivery is through the durable central control plane
+        // (notification-control-plane.ts); legacy per-user retry queue skips.
+        outcome = { success: true, outcome: 'SKIPPED', skipped: true, error: 'Microsoft Teams via central control plane' };
         break;
     }
     if (outcome && !outcome.success && lease) {
