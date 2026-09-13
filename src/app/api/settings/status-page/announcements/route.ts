@@ -10,10 +10,17 @@ import {
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 
+class InvalidDateError extends Error {
+  constructor(public readonly fieldName: string) {
+    super(`Invalid ${fieldName}`);
+    this.name = 'InvalidDateError';
+  }
+}
+
 function parseDate(value: string, fieldName: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`Invalid ${fieldName}`);
+    throw new InvalidDateError(fieldName);
   }
   return parsed;
 }
@@ -125,7 +132,7 @@ export async function POST(req: NextRequest) {
               : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
         },
       });
-      if (shouldNotify) {
+      if (shouldNotify && (isActive !== false)) {
         await tx.backgroundJob.create({
           data: {
             type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
@@ -148,6 +155,9 @@ export async function POST(req: NextRequest) {
     });
     return jsonOk({ announcement }, 200);
   } catch (error: unknown) {
+    if (error instanceof InvalidDateError) {
+      return jsonError(error.message, 400);
+    }
     logger.error('api.status_page.announcement.create_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -185,11 +195,12 @@ export async function PATCH(req: NextRequest) {
       affectedServiceIds,
       publishOption,
       publishAt,
+      notificationTiming,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
     const existing = await prisma.statusPageAnnouncement.findFirst({
       where: { id, statusPageId },
-      select: { startDate: true, endDate: true, publishAt: true },
+      select: { startDate: true, endDate: true, publishAt: true, isActive: true },
     });
     if (!existing) return jsonError('Announcement not found.', 404);
     if (
@@ -229,32 +240,94 @@ export async function PATCH(req: NextRequest) {
             : 'EXACT'
           : undefined;
 
-    const updated = await prisma.statusPageAnnouncement.update({
-      where: { id },
-      data: {
-        ...(title !== undefined ? { title: title.trim() } : {}),
-        ...(message !== undefined ? { message: message.trim() } : {}),
-        ...(type !== undefined ? { type } : {}),
-        ...(startDate ? { startDate: effectiveStart } : {}),
-        ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
-        ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
-        ...(nextPublishAt !== undefined ? { publishAt: nextPublishAt } : {}),
-        ...(nextTimeMode !== undefined ? { timeMode: nextTimeMode } : {}),
-        ...(nextAllDay !== undefined ? { allDay: nextAllDay } : {}),
-        ...(affectedServiceIds !== undefined
-          ? {
-              affectedServiceIds:
-                normalizedAffectedServiceIds === null
-                  ? Prisma.JsonNull
-                  : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
-            }
-          : {}),
-      },
+    const nextIsActive = isActive !== undefined ? Boolean(isActive) : existing.isActive;
+
+    const updated = await prisma.$transaction(async tx => {
+      // Background fan-out job lifecycle synchronization
+      if (isActive === false) {
+        // Explicitly deactivated -> cancel pending notifications
+        await tx.$executeRaw`
+          DELETE FROM "BackgroundJob"
+          WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+            AND ("payload"->>'announcementId') = ${id}
+            AND "status" = 'PENDING'
+        `;
+      } else if (
+        notificationTiming !== undefined ||
+        startDate !== undefined ||
+        publishAt !== undefined ||
+        publishOption !== undefined
+      ) {
+        // Timing or notification configuration modified
+        if (notificationTiming === 'NONE') {
+          await tx.$executeRaw`
+            DELETE FROM "BackgroundJob"
+            WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+              AND ("payload"->>'announcementId') = ${id}
+              AND "status" = 'PENDING'
+          `;
+        } else if (nextIsActive) {
+          // Determine if notification was previously scheduled or requested
+          const effectivePub = nextPublishAt ?? existing.publishAt;
+          let newScheduledAt: Date | null = null;
+
+          if (notificationTiming === 'AT_START') {
+            newScheduledAt = effectiveStart;
+          } else if (notificationTiming === 'ON_PUBLISH') {
+            newScheduledAt = effectivePub;
+          }
+
+          if (newScheduledAt) {
+            // Cancel existing pending job and insert updated schedule
+            await tx.$executeRaw`
+              DELETE FROM "BackgroundJob"
+              WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+                AND ("payload"->>'announcementId') = ${id}
+                AND "status" = 'PENDING'
+            `;
+            await tx.backgroundJob.create({
+              data: {
+                type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
+                status: 'PENDING',
+                scheduledAt: newScheduledAt,
+                maxAttempts: 5,
+                payload: { announcementId: id, statusPageId },
+              },
+            });
+          }
+        }
+      }
+
+      return tx.statusPageAnnouncement.update({
+        where: { id },
+        data: {
+          ...(title !== undefined ? { title: title.trim() } : {}),
+          ...(message !== undefined ? { message: message.trim() } : {}),
+          ...(type !== undefined ? { type } : {}),
+          ...(startDate ? { startDate: effectiveStart } : {}),
+          ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
+          ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
+          ...(nextPublishAt !== undefined ? { publishAt: nextPublishAt } : {}),
+          ...(nextTimeMode !== undefined ? { timeMode: nextTimeMode } : {}),
+          ...(nextAllDay !== undefined ? { allDay: nextAllDay } : {}),
+          ...(affectedServiceIds !== undefined
+            ? {
+                affectedServiceIds:
+                  normalizedAffectedServiceIds === null
+                    ? Prisma.JsonNull
+                    : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
+              }
+            : {}),
+        },
+      });
     });
 
     logger.info('api.status_page.announcement.updated', { announcementId: updated.id });
     return jsonOk({ announcement: updated }, 200);
   } catch (error: unknown) {
+    if (error instanceof InvalidDateError) {
+      return jsonError(error.message, 400);
+    }
     logger.error('api.status_page.announcement.update_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -282,7 +355,17 @@ export async function DELETE(req: NextRequest) {
     }
     const { id, statusPageId } = parsed.data;
 
-    const deleted = await prisma.statusPageAnnouncement.deleteMany({ where: { id, statusPageId } });
+    const deleted = await prisma.$transaction(async tx => {
+      // Cancel pending notifications for deleted announcement
+      await tx.$executeRaw`
+        DELETE FROM "BackgroundJob"
+        WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+          AND ("payload"->>'announcementId') = ${id}
+          AND "status" = 'PENDING'
+      `;
+      return tx.statusPageAnnouncement.deleteMany({ where: { id, statusPageId } });
+    });
+
     if (deleted.count === 0) return jsonError('Announcement not found.', 404);
 
     logger.info('api.status_page.announcement.deleted', { announcementId: id });

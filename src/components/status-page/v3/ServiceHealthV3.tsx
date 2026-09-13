@@ -16,6 +16,8 @@ type FilterKey =
   | 'MAINTENANCE'
   | PublicServiceStatus;
 
+type SortMode = 'configured' | 'issues' | 'alphabetical';
+
 const STATUS_FILTERS: { key: FilterKey; label: string; dotClass?: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'OPERATIONAL', label: 'Operational', dotClass: 'status-v3-legend-indicator--operational' },
@@ -36,6 +38,25 @@ const IMPACT_ORDER: Record<PublicServiceStatus, number> = {
 function sortByImpact(left: PublicStatusService, right: PublicStatusService) {
   const delta = IMPACT_ORDER[right.status] - IMPACT_ORDER[left.status];
   return delta !== 0 ? delta : left.name.localeCompare(right.name);
+}
+
+function sortServices(
+  items: PublicStatusService[],
+  mode: SortMode,
+  originalOrder: Map<string, number>
+): PublicStatusService[] {
+  if (mode === 'alphabetical') {
+    return [...items].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  if (mode === 'issues') {
+    return [...items].sort(sortByImpact);
+  }
+  // 'configured' preserves admin snapshot order
+  return [...items].sort((a, b) => {
+    const idxA = originalOrder.get(a.id) ?? 0;
+    const idxB = originalOrder.get(b.id) ?? 0;
+    return idxA - idxB;
+  });
 }
 
 function serviceMatches(service: PublicStatusService, filter: FilterKey) {
@@ -182,11 +203,18 @@ export default function ServiceHealthV3({
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('configured');
   const [groupRegions, setGroupRegions] = useState(groupByRegion);
 
   useEffect(() => {
     setGroupRegions(groupByRegion);
   }, [groupByRegion]);
+
+  const originalOrder = useMemo(() => {
+    const map = new Map<string, number>();
+    services.forEach((s, idx) => map.set(s.id, idx));
+    return map;
+  }, [services]);
 
   const searched = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -197,8 +225,9 @@ export default function ServiceHealthV3({
   const canGroup = services.some(service => (service.regions?.length ?? 0) > 0);
 
   const filtered = useMemo(() => {
-    return [...searched.filter(service => serviceMatches(service, filter))].sort(sortByImpact);
-  }, [searched, filter]);
+    const matched = searched.filter(service => serviceMatches(service, filter));
+    return sortServices(matched, sortMode, originalOrder);
+  }, [searched, filter, sortMode, originalOrder]);
 
   if (services.length === 0) return null;
 
@@ -216,16 +245,19 @@ export default function ServiceHealthV3({
         return [...buckets.entries()]
           .map(([region, members]) => ({
             region,
-            services: [...members].sort(sortByImpact),
+            services: sortServices(members, sortMode, originalOrder),
           }))
           .sort((left, right) => {
-            const leftRank = Math.max(
-              ...left.services.map(service => IMPACT_ORDER[service.status])
-            );
-            const rightRank = Math.max(
-              ...right.services.map(service => IMPACT_ORDER[service.status])
-            );
-            return rightRank - leftRank || left.region.localeCompare(right.region);
+            if (sortMode === 'issues') {
+              const leftRank = Math.max(
+                ...left.services.map(service => IMPACT_ORDER[service.status])
+              );
+              const rightRank = Math.max(
+                ...right.services.map(service => IMPACT_ORDER[service.status])
+              );
+              if (rightRank !== leftRank) return rightRank - leftRank;
+            }
+            return left.region.localeCompare(right.region);
           });
       })()
     : null;
@@ -234,7 +266,7 @@ export default function ServiceHealthV3({
     <section className="status-v3-services" aria-labelledby="status-v3-services-heading">
       <div className="status-v3-services__top-row">
         <div className="status-v3-services__title-group">
-          <h2 id="status-v3-services-heading" className="status-v3-services__title">
+          <h2 id="status-v3-services-heading" className="status-section-title status-v3-services__title">
             Services
           </h2>
           <span
@@ -272,6 +304,21 @@ export default function ServiceHealthV3({
               onChange={event => setQuery(event.target.value)}
             />
           </div>
+
+          <label htmlFor="status-v3-sort-select" className="sr-only">
+            Sort services
+          </label>
+          <select
+            id="status-v3-sort-select"
+            className="status-v3-services__sort-select"
+            aria-label="Sort services"
+            value={sortMode}
+            onChange={event => setSortMode(event.target.value as SortMode)}
+          >
+            <option value="configured">Default order</option>
+            <option value="issues">Issues first</option>
+            <option value="alphabetical">Alphabetical</option>
+          </select>
 
           {canGroup && (
             <button

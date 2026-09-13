@@ -21,6 +21,7 @@ import StatusPageServicesManager from '@/components/status-page/StatusPageServic
 import StatusPageAnnouncementManager from '@/components/status-page/StatusPageAnnouncementManager';
 import { Badge } from '@/components/ui/shadcn/badge';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
+import StatusPageSectionErrorBoundary from '@/components/status-page/StatusPageSectionErrorBoundary';
 import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import { cn } from '@/lib/utils';
 import {
@@ -514,6 +515,9 @@ export default function StatusPageConfig({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(activeSection)) {
+      return;
+    }
     setError(null);
 
     startTransition(async () => {
@@ -919,7 +923,7 @@ export default function StatusPageConfig({
   ]);
 
   return (
-    <form onSubmit={handleSubmit}>
+    <div className="status-page-config-root w-full">
       <div
         className="status-page-config"
         style={{
@@ -1015,10 +1019,16 @@ export default function StatusPageConfig({
                 padding: 'var(--spacing-4)',
               }}
             >
-              <div
-                className="status-page-config-settings-inner"
-                style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
-              >
+              <StatusPageSectionErrorBoundary key={activeSection} sectionName={activeSection}>
+                <form
+                  id="status-page-section-form"
+                  onSubmit={handleSubmit}
+                  style={{ display: 'contents' }}
+                >
+                  <div
+                    className="status-page-config-settings-inner"
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
+                  >
                 {/* General Settings */}
                 {activeSection === 'general' && (
                   <div
@@ -2453,7 +2463,9 @@ export default function StatusPageConfig({
                     {error}
                   </InlineNotice>
                 )}
-              </div>
+                  </div>
+                </form>
+              </StatusPageSectionErrorBoundary>
             </div>
             {/* Sections with independent controls persist through their own APIs. */}
             {!['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(
@@ -2497,6 +2509,7 @@ export default function StatusPageConfig({
                   </Button>
                   <Button
                     type="submit"
+                    form="status-page-section-form"
                     variant="primary"
                     size="sm"
                     isLoading={isPending}
@@ -2533,6 +2546,6 @@ export default function StatusPageConfig({
           )}
         </div>
       </div>
-    </form>
+    </div>
   );
 }

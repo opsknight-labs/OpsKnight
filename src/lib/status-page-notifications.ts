@@ -501,6 +501,16 @@ export async function notifyStatusPageSubscribersAnnouncement(
       return { sent: 0, failed: 0, skipped: true };
     }
 
+    if (!announcement.isActive) {
+      logger.info(`Announcement ${announcementId} is inactive/withdrawn; skipping notification fan-out`);
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
+    if (announcement.publishAt && announcement.publishAt.getTime() > Date.now()) {
+      logger.info(`Announcement ${announcementId} publishAt is in the future; skipping notification fan-out`);
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
     // 2. Load page configuration only. Subscribers are keyset-paginated below.
     const page = await prisma.statusPage.findUnique({
       where: { id: statusPageId },
