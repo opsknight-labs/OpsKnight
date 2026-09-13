@@ -1,11 +1,25 @@
 // @vitest-environment node
-/* eslint-disable security/detect-non-literal-fs-filename -- Paths come from the checked-in catalogue, never user input. */
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { complianceControls } from '@/lib/compliance/controls';
 import { complianceEvidence, evidenceSourceUrl } from '@/lib/compliance/evidence';
 import { frameworks } from '@/lib/compliance/frameworks';
 import { getReadiness } from '@/lib/compliance/readiness';
+
+const repositoryFiles = new Set(
+  execFileSync('git', ['ls-files'], { encoding: 'utf8' }).trim().split('\n')
+);
+
+const frameworkDocuments = {
+  CCPA: readFileSync('docs/compliance/frameworks/ccpa.md', 'utf8'),
+  CRA: readFileSync('docs/compliance/frameworks/cra.md', 'utf8'),
+  DPDP: readFileSync('docs/compliance/frameworks/dpdp.md', 'utf8'),
+  GDPR: readFileSync('docs/compliance/frameworks/gdpr.md', 'utf8'),
+  ISO27001: readFileSync('docs/compliance/frameworks/iso27001.md', 'utf8'),
+  ISO27701: readFileSync('docs/compliance/frameworks/iso27701.md', 'utf8'),
+  SOC2: readFileSync('docs/compliance/frameworks/soc2.md', 'utf8'),
+} satisfies Record<(typeof frameworks)[number]['id'], string>;
 
 describe('compliance catalogue', () => {
   it('requires unique IDs, valid mappings, owners and reviewable evidence', () => {
@@ -20,7 +34,7 @@ describe('compliance catalogue', () => {
       for (const f of c.frameworks) expect(frameworks.map(v => v.id)).toContain(f);
       for (const p of c.evidence) {
         expect(p).not.toMatch(/(^\/|\.\.|https?:)/);
-        expect(existsSync(p), `${c.id}: ${p}`).toBe(true);
+        expect(repositoryFiles.has(p), `${c.id}: ${p}`).toBe(true);
       }
       if (c.status !== 'IMPLEMENTED') expect(c.gaps.length).toBeGreaterThan(0);
     }
@@ -41,7 +55,7 @@ describe('compliance catalogue', () => {
 
   it('keeps framework pages linked to the mapped controls', () => {
     for (const f of frameworks) {
-      const doc = readFileSync(`docs/compliance/frameworks/${f.id.toLowerCase()}.md`, 'utf8');
+      const doc = frameworkDocuments[f.id];
       for (const c of complianceControls.filter(c => c.frameworks.some(id => id === f.id))) {
         expect(doc).toContain(c.id);
       }
