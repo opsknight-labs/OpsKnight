@@ -23,9 +23,74 @@ function looksLikeLegacyStatusPageTemplateCss(value: string): boolean {
     value.includes('.status-page-header') ||
     value.includes('#incidents .status-incident-card') ||
     value.includes('form button[type="submit"]') ||
-    value.includes("form button[type='submit']");
+    value.includes("form button[type='submit']") ||
+    value.includes('Template text overrides');
 
   return hasServiceCard && hasContainer && hasLegacyChrome;
+}
+
+function parseHexLightness(value: string): boolean | null {
+  const match = value.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!match) return null;
+
+  const raw = match[1];
+  const hex =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map(part => part + part)
+          .join('')
+      : raw;
+  const parsed = Number.parseInt(hex, 16);
+  if (Number.isNaN(parsed)) return null;
+
+  const red = (parsed >> 16) & 255;
+  const green = (parsed >> 8) & 255;
+  const blue = parsed & 255;
+  const luminance = 0.299 * red + 0.587 * green + 0.114 * blue;
+  return luminance >= 185;
+}
+
+function isHardCodedLightBackground(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'white') return true;
+
+  const hexLight = parseHexLightness(normalized);
+  if (hexLight !== null) return hexLight;
+
+  const rgb = normalized.match(
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+)?\s*\)$/
+  );
+  if (!rgb) return false;
+
+  const red = Math.min(255, Number(rgb[1]));
+  const green = Math.min(255, Number(rgb[2]));
+  const blue = Math.min(255, Number(rgb[3]));
+  return 0.299 * red + 0.587 * green + 0.114 * blue >= 185;
+}
+
+/**
+ * Some installations contain a partially edited legacy template rather than the complete template
+ * payload. In that case the broad template fingerprint above cannot safely classify the entire CSS
+ * string, but the old compatibility aliases can still force a white card with `!important`.
+ *
+ * For dark curated themes only, drop those specific legacy-alias rules when they hard-code a light
+ * important background. Modern `.status-v3-*` Advanced CSS remains untouched and therefore keeps
+ * the documented final-override behavior.
+ */
+function stripConflictingLegacyLightSurfaceRules(value: string): string {
+  return value.replace(
+    /([^{}]*(?:\.status-service-card|\.status-incident-card)[^{}]*)\{([^{}]*)\}/gi,
+    (rule, selector: string, declarations: string) => {
+      const backgrounds = [
+        ...declarations.matchAll(
+          /(?:^|;)\s*background(?:-color)?\s*:\s*([^;!]+?)\s*!important\b/gi
+        ),
+      ];
+      const forcesLightSurface = backgrounds.some(match => isHardCodedLightBackground(match[1]));
+      return forcesLightSurface ? '' : rule;
+    }
+  );
 }
 
 /**
@@ -43,11 +108,14 @@ export function resolveStatusPageCustomCss(themeId: unknown, value: unknown): st
   if (typeof value !== 'string') return '';
 
   const selectedTheme = resolveStatusPageTheme(themeId);
-  if (
-    selectedTheme.id !== DEFAULT_STATUS_PAGE_THEME_ID &&
-    (isLegacyStatusPageTemplateCss(value) || looksLikeLegacyStatusPageTemplateCss(value))
-  ) {
+  if (selectedTheme.id === DEFAULT_STATUS_PAGE_THEME_ID) return value;
+
+  if (isLegacyStatusPageTemplateCss(value) || looksLikeLegacyStatusPageTemplateCss(value)) {
     return '';
+  }
+
+  if (selectedTheme.mode === 'dark') {
+    return stripConflictingLegacyLightSurfaceRules(value);
   }
 
   return value;
