@@ -16,7 +16,7 @@ describe('deriveAnnouncementNotificationPlan', () => {
     ).toEqual({ shouldNotify: true, scheduledAt: publishAt });
   });
 
-  it('schedules AT_START at startDate', () => {
+  it('schedules AT_START at startDate once publication is already eligible', () => {
     expect(
       deriveAnnouncementNotificationPlan({
         isActive: true,
@@ -25,6 +25,18 @@ describe('deriveAnnouncementNotificationPlan', () => {
         startDate,
       })
     ).toEqual({ shouldNotify: true, scheduledAt: startDate });
+  });
+
+  it('never schedules AT_START before publication eligibility', () => {
+    const laterPublishAt = new Date('2026-09-15T14:00:00.000Z');
+    expect(
+      deriveAnnouncementNotificationPlan({
+        isActive: true,
+        notificationTiming: 'AT_START',
+        publishAt: laterPublishAt,
+        startDate,
+      })
+    ).toEqual({ shouldNotify: true, scheduledAt: laterPublishAt });
   });
 
   it('does not schedule NONE', () => {
