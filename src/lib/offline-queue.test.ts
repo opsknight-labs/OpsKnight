@@ -5,76 +5,67 @@ import {
   removeQueuedRequest,
   flushQueuedRequests,
   resumeAuthRequiredOperations,
+  type QueuedRequest,
 } from './offline-queue';
 
-// Manual Mock of IndexedDB
-const requestStore = new Map<string, any>();
+type EventHandler = ((event: Event) => void) | null;
+type MockRequest<T> = {
+  result: T;
+  onsuccess: EventHandler;
+  onerror: EventHandler;
+  error: DOMException | null;
+};
+
+const requestStore = new Map<string, QueuedRequest>();
 
 const mockTransaction = {
   objectStore: vi.fn(),
-  oncomplete: null as any,
-  onerror: null as any,
-  onabort: null as any,
-  error: null as any,
+  oncomplete: null as EventHandler,
+  onerror: null as EventHandler,
+  onabort: null as EventHandler,
+  error: null as DOMException | null,
   abort: vi.fn(),
 };
 
 const mockStore = {
-  put: vi.fn((item: any) => {
+  put: vi.fn((item: QueuedRequest) => {
     requestStore.set(item.id, item);
-    const req = { onsuccess: null as any, onerror: null as any, result: item.id };
+    const request: MockRequest<string> = {
+      onsuccess: null,
+      onerror: null,
+      error: null,
+      result: item.id,
+    };
     queueMicrotask(() => {
-      req.onsuccess && req.onsuccess({} as any);
-      mockTransaction.oncomplete && mockTransaction.oncomplete({} as any);
+      request.onsuccess?.(new Event('success'));
+      mockTransaction.oncomplete?.(new Event('complete'));
     });
-    return req;
+    return request;
   }),
   delete: vi.fn((id: string) => {
     requestStore.delete(id);
-    const req = { onsuccess: null as any, onerror: null as any, result: undefined };
+    const request: MockRequest<undefined> = {
+      onsuccess: null,
+      onerror: null,
+      error: null,
+      result: undefined,
+    };
     queueMicrotask(() => {
-      req.onsuccess && req.onsuccess({} as any);
-      mockTransaction.oncomplete && mockTransaction.oncomplete({} as any);
+      request.onsuccess?.(new Event('success'));
+      mockTransaction.oncomplete?.(new Event('complete'));
     });
-    return req;
+    return request;
   }),
   getAll: vi.fn(() => {
-    const req = {
+    const request: MockRequest<QueuedRequest[]> = {
       result: Array.from(requestStore.values()),
-      onsuccess: null as any,
-      onerror: null as any,
-      error: null as any,
+      onsuccess: null,
+      onerror: null,
+      error: null,
     };
-    queueMicrotask(() => req.onsuccess && req.onsuccess({} as any));
-    return req;
+    queueMicrotask(() => request.onsuccess?.(new Event('success')));
+    return request;
   }),
-  index: vi.fn(() => ({
-    openCursor: vi.fn(() => {
-      const values = Array.from(requestStore.values()).sort((a, b) => a.createdAt - b.createdAt);
-      let index = 0;
-      const request = { result: null as any, onsuccess: null as any };
-
-      const advance = () => {
-        if (index < values.length) {
-          request.result = {
-            value: values[index],
-            continue: () => {
-              index++;
-              advance();
-            },
-          };
-          request.onsuccess && request.onsuccess({} as any);
-        } else {
-          request.result = null;
-          request.onsuccess && request.onsuccess({} as any);
-          mockTransaction.oncomplete && mockTransaction.oncomplete({} as any);
-        }
-      };
-
-      queueMicrotask(advance);
-      return request;
-    }),
-  })),
   indexNames: { contains: vi.fn(() => true) },
   createIndex: vi.fn(),
 };
@@ -91,10 +82,10 @@ const mockDb = {
 const mockOpenRequest = {
   result: mockDb,
   transaction: mockTransaction,
-  onupgradeneeded: null as any,
-  onsuccess: null as any,
-  onerror: null as any,
-  error: null as any,
+  onupgradeneeded: null as EventHandler,
+  onsuccess: null as EventHandler,
+  onerror: null as EventHandler,
+  error: null as DOMException | null,
 };
 
 const originalIndexedDB = global.indexedDB;
@@ -145,12 +136,12 @@ describe('offline-queue', () => {
 
     global.indexedDB = {
       open: vi.fn(() => {
-        setTimeout(() => mockOpenRequest.onsuccess && mockOpenRequest.onsuccess({} as any), 0);
+        setTimeout(() => mockOpenRequest.onsuccess?.(new Event('success')), 0);
         return mockOpenRequest;
       }),
-    } as any;
+    } as unknown as IDBFactory;
 
-    global.fetch = vi.fn();
+    global.fetch = vi.fn() as unknown as typeof fetch;
   });
 
   afterEach(() => {
@@ -169,9 +160,9 @@ describe('offline-queue', () => {
     expect(id).toBeDefined();
     expect(typeof id).toBe('string');
     expect(requestStore.size).toBe(1);
-    expect(requestStore.get(id).url).toBe('/api/test');
-    expect(requestStore.get(id).state).toBe('PENDING');
-    expect(requestStore.get(id).headers['Idempotency-Key']).toBeTruthy();
+    expect(requestStore.get(id)?.url).toBe('/api/test');
+    expect(requestStore.get(id)?.state).toBe('PENDING');
+    expect(requestStore.get(id)?.headers['Idempotency-Key']).toBeTruthy();
   });
 
   it('should list queued requests', async () => {
