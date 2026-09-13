@@ -14,6 +14,7 @@ import {
   type AnnouncementNotificationTiming,
 } from '@/lib/status-pages/announcement-notification-plan';
 import {
+  announcementGenerationEventKey,
   incrementAnnouncementNotificationGeneration,
   readAnnouncementNotificationGeneration,
 } from '@/lib/status-pages/announcement-notification-generation';
@@ -120,6 +121,26 @@ async function suppressUndeliveredAnnouncementIntents(
       errorMsg: reason,
     },
   });
+}
+
+async function currentGenerationReachedProvider(
+  tx: Prisma.TransactionClient,
+  statusPageId: string,
+  announcementId: string,
+  generation: number
+): Promise<boolean> {
+  const fanout = await tx.notificationFanout.findUnique({
+    where: {
+      statusPageId_sourceType_sourceId_eventKey: {
+        statusPageId,
+        sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+        sourceId: announcementId,
+        eventKey: announcementGenerationEventKey(generation),
+      },
+    },
+    select: { completedTargets: true },
+  });
+  return (fanout?.completedTargets ?? 0) > 0;
 }
 
 async function createAnnouncementFanoutJob(
@@ -372,9 +393,17 @@ export async function PATCH(req: NextRequest) {
       const publishAffectsNotification =
         (publishAt !== undefined || publishOption !== undefined) && timing === 'ON_PUBLISH';
       const eligibilityChanged = affectedServiceIds !== undefined;
+      const contentMutation =
+        title !== undefined ||
+        message !== undefined ||
+        type !== undefined ||
+        startDate !== undefined ||
+        endDate !== undefined ||
+        parsed.data.timeMode !== undefined ||
+        parsed.data.allDay !== undefined;
       const schedulingMutation =
         timingChanged || activeChanged || startAffectsNotification || publishAffectsNotification;
-      const generationMutation = schedulingMutation || eligibilityChanged;
+      const generationMutation = schedulingMutation || eligibilityChanged || contentMutation;
 
       const reactivating = existing.isActive === false && nextIsActive === true;
       const enablingNotifications =
@@ -422,27 +451,35 @@ export async function PATCH(req: NextRequest) {
       }
 
       if (generationMutation) {
+        const priorGenerationReachedProvider = await currentGenerationReachedProvider(
+          tx,
+          statusPageId,
+          id,
+          generation
+        );
         generation = await incrementAnnouncementNotificationGeneration(id, statusPageId, tx);
         await cancelPendingAnnouncementJobs(tx, id, statusPageId);
         await suppressUndeliveredAnnouncementIntents(
           tx,
           id,
-          'Announcement notification policy was superseded by a newer generation.'
+          'Announcement content or notification policy was superseded by a newer generation.'
         );
 
-        // Eligibility-only edits after the canonical send time invalidate stale
-        // work but do not unexpectedly re-email subscribers. Explicit scheduling
-        // edits into the past are rejected above and require an intentional NOW.
-        const mayCreateReplacement =
-          nextPlan.scheduledAt != null &&
-          (nextPlan.scheduledAt.getTime() >= Date.now() - 30_000 || publishOption === 'NOW');
-        if (nextPlan.shouldNotify && nextPlan.scheduledAt && mayCreateReplacement) {
-          await createAnnouncementFanoutJob(tx, {
-            announcementId: id,
-            statusPageId,
-            scheduledAt: nextPlan.scheduledAt,
-            generation,
-          });
+        if (nextPlan.shouldNotify && nextPlan.scheduledAt) {
+          const now = new Date();
+          const explicitSendNow = publishOption === 'NOW' && timing === 'ON_PUBLISH';
+          const canonicalTimeIsFuture = nextPlan.scheduledAt.getTime() > now.getTime();
+          const replaceUndeliveredDueContent =
+            !canonicalTimeIsFuture && !priorGenerationReachedProvider;
+
+          if (canonicalTimeIsFuture || explicitSendNow || replaceUndeliveredDueContent) {
+            await createAnnouncementFanoutJob(tx, {
+              announcementId: id,
+              statusPageId,
+              scheduledAt: canonicalTimeIsFuture ? nextPlan.scheduledAt : now,
+              generation,
+            });
+          }
         }
       }
 
