@@ -100,6 +100,39 @@ const mockOpenRequest = {
 const originalIndexedDB = global.indexedDB;
 const originalFetch = global.fetch;
 
+function response(status: number, payload: Record<string, unknown> = {}, headers = new Headers()) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers,
+    clone() {
+      return this;
+    },
+    async json() {
+      return payload;
+    },
+  } as Response;
+}
+
+async function enqueueAckThenResolve() {
+  await enqueueRequest({
+    operation: 'INCIDENT_STATUS',
+    url: '/api/incidents/inc-fifo/status',
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+    idempotencyKey: 'ack-fifo',
+    expectedState: 'OPEN',
+  });
+  await enqueueRequest({
+    operation: 'INCIDENT_STATUS',
+    url: '/api/incidents/inc-fifo/status',
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'RESOLVED' }),
+    idempotencyKey: 'resolve-fifo',
+    expectedState: 'ACKNOWLEDGED',
+  });
+}
+
 describe('offline-queue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -171,17 +204,9 @@ describe('offline-queue', () => {
       expectedState: 'OPEN',
     });
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      headers: new Headers(),
-      clone() {
-        return this;
-      },
-      async json() {
-        return { error: 'Session expired', code: 'AUTH_REQUIRED' };
-      },
-    } as Response);
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      response(401, { error: 'Session expired', code: 'AUTH_REQUIRED' })
+    );
 
     await flushQueuedRequests();
     let queued = await listQueuedRequests();
@@ -198,11 +223,7 @@ describe('offline-queue', () => {
     expect(queued[0].idempotencyKey).toBe('ack-inc-1');
     expect(queued[0].expectedState).toBe('OPEN');
 
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      headers: new Headers(),
-    } as Response);
+    vi.mocked(global.fetch).mockResolvedValueOnce(response(200));
 
     await flushQueuedRequests();
     queued = await listQueuedRequests();
@@ -214,5 +235,88 @@ describe('offline-queue', () => {
         credentials: 'include',
       })
     );
+  });
+
+  it('does not let RESOLVE leapfrog an ACK backing off after 429', async () => {
+    await enqueueAckThenResolve();
+    vi.mocked(global.fetch).mockResolvedValueOnce(
+      response(429, { error: 'Rate limited' }, new Headers({ 'retry-after': '30' }))
+    );
+
+    await flushQueuedRequests();
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+
+    await flushQueuedRequests();
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+
+    const queue = await listQueuedRequests();
+    expect(queue[0].state).toBe('PENDING');
+    expect(queue[0].nextAttemptAt).toBeGreaterThan(Date.now());
+    expect(queue[1].state).toBe('PENDING');
+    expect(queue[1].retryCount).toBe(0);
+  });
+
+  it('does not let RESOLVE leapfrog an ACK after an ambiguous network failure', async () => {
+    await enqueueAckThenResolve();
+    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('radio changed network'));
+
+    await flushQueuedRequests();
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+
+    await flushQueuedRequests();
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+
+    const queue = await listQueuedRequests();
+    expect(queue[0].state).toBe('PENDING');
+    expect(queue[0].nextAttemptAt).toBeGreaterThan(Date.now());
+    expect(queue[1].state).toBe('PENDING');
+    expect(queue[1].retryCount).toBe(0);
+  });
+
+  it('does not let RESOLVE leapfrog an AUTH_REQUIRED ACK', async () => {
+    await enqueueAckThenResolve();
+    vi.mocked(global.fetch).mockResolvedValueOnce(response(401, { error: 'Sign in required' }));
+
+    await flushQueuedRequests();
+    await flushQueuedRequests();
+
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+    const queue = await listQueuedRequests();
+    expect(queue[0].state).toBe('AUTH_REQUIRED');
+    expect(queue[1].state).toBe('PENDING');
+    expect(queue[1].retryCount).toBe(0);
+  });
+
+  it('does not let RESOLVE leapfrog a conflicting ACK', async () => {
+    await enqueueAckThenResolve();
+    vi.mocked(global.fetch).mockResolvedValueOnce(response(409, { error: 'Incident changed' }));
+
+    await flushQueuedRequests();
+    await flushQueuedRequests();
+
+    expect(vi.mocked(global.fetch)).toHaveBeenCalledTimes(1);
+    const queue = await listQueuedRequests();
+    expect(queue[0].state).toBe('CONFLICT');
+    expect(queue[1].state).toBe('PENDING');
+    expect(queue[1].retryCount).toBe(0);
+  });
+
+  it('classifies 403 as terminal FORBIDDEN and never revives it after login', async () => {
+    await enqueueRequest({
+      operation: 'INCIDENT_STATUS',
+      url: '/api/incidents/inc-forbidden/status',
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+      idempotencyKey: 'ack-forbidden',
+    });
+    vi.mocked(global.fetch).mockResolvedValueOnce(response(403, { error: 'Not authorized' }));
+
+    await flushQueuedRequests();
+    let queue = await listQueuedRequests();
+    expect(queue[0].state).toBe('FORBIDDEN');
+
+    expect(await resumeAuthRequiredOperations()).toBe(0);
+    queue = await listQueuedRequests();
+    expect(queue[0].state).toBe('FORBIDDEN');
   });
 });
