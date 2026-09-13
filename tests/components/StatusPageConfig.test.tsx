@@ -84,7 +84,8 @@ describe('StatusPageConfig Component', () => {
 
     expect(screen.getByText(/General/)).toBeDefined();
     expect(screen.getByText(/Appearance/)).toBeDefined();
-    expect(screen.getByText(/Custom CSS/)).toBeDefined();
+    expect(screen.getByText(/Design/)).toBeDefined();
+    expect(screen.getByText(/Advanced/)).toBeDefined();
   });
 
   it('renders the sticky save bar', () => {
@@ -94,30 +95,20 @@ describe('StatusPageConfig Component', () => {
     expect(screen.getByText('Cancel')).toBeDefined();
   });
 
-  it('switches sections when sidebar items are clicked and allows color reset', () => {
+  it('switches sections when sidebar items are clicked', () => {
     render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
 
     const appearanceTab = screen.getByText('Appearance');
     fireEvent.click(appearanceTab);
 
     expect(screen.getByText('Branding & Logo')).toBeDefined();
-    expect(screen.getByText('Color theme')).toBeDefined();
-    expect(screen.getByText('Theme presets')).toBeDefined();
-    expect(screen.getByText('Custom colors')).toBeDefined();
-    expect(screen.getByText('Reset to default')).toBeDefined();
+    expect(screen.getByText('Typography & Font Family')).toBeDefined();
+    expect(screen.getByText('Layout Options')).toBeDefined();
 
-    // Click Reset to default
-    fireEvent.click(screen.getByText('Reset to default'));
-    expect(screen.getByText('Modern Light')).toBeDefined();
-    expect(screen.getByText('Midnight Dark')).toBeDefined();
-    expect(screen.queryByText('Light theme defaults')).toBeNull();
-    expect(screen.queryByText('Dark theme defaults')).toBeNull();
-    expect(screen.queryByText('Auto-pair text contrast')).toBeNull();
-    expect(
-      screen.getByText(
-        'Contrast check passed. These colors will render unchanged on the public page.'
-      )
-    ).toBeDefined();
+    const designTab = screen.getByText('Design');
+    fireEvent.click(designTab);
+
+    expect(screen.getByText('Design theme')).toBeDefined();
   });
 
   it('toggles live preview panel', () => {

@@ -46,18 +46,13 @@ import {
   Users,
   Code,
   RefreshCw,
-  RotateCcw,
   Rss,
   Key,
   FileText,
   AlertTriangle,
   Info,
 } from 'lucide-react';
-import {
-  STATUS_PAGE_FONTS,
-  STATUS_PAGE_COLOR_PRESETS,
-  computeStatusPageTheme,
-} from '@/lib/status-page-theme';
+import { STATUS_PAGE_FONTS } from '@/lib/status-page-theme';
 import {
   STATUS_PAGE_THEME_VERSION,
   resolveStatusPageTheme,
@@ -411,7 +406,8 @@ export default function StatusPageConfig({
     authProvider: statusPage.authProvider || null,
   });
 
-  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(getInitialPrivacySettings);
+  const [privacySettings, setPrivacySettings] =
+    useState<PrivacySettings>(getInitialPrivacySettings);
 
   const handleDiscardChanges = () => {
     setFormData(getInitialFormData());
@@ -426,7 +422,9 @@ export default function StatusPageConfig({
   };
 
   const selectedServiceIds = Array.from(selectedServices);
-  const announcementServiceOptions = allServices.filter(service => selectedServices.has(service.id));
+  const announcementServiceOptions = allServices.filter(service =>
+    selectedServices.has(service.id)
+  );
   const hasSelectedRegions = allServices.some(
     service => selectedServices.has(service.id) && Boolean(service.region && service.region.trim())
   );
@@ -493,12 +491,24 @@ export default function StatusPageConfig({
       return announcement.endDate >= today;
     });
 
+  const selectedTheme = resolveStatusPageTheme(formData.themeId);
+  const themePrimary =
+    selectedTheme.id !== 'default'
+      ? selectedTheme.preview.accent
+      : formData.primaryColor || '#667eea';
+  const themeBg =
+    selectedTheme.id !== 'default'
+      ? selectedTheme.preview.surfaceAlt
+      : formData.backgroundColor || '#ffffff';
+  const themeText =
+    selectedTheme.id !== 'default' ? selectedTheme.preview.text : formData.textColor || '#111827';
+
   const previewBranding = {
     logoUrl: formData.logoUrl,
     faviconUrl: formData.faviconUrl,
-    primaryColor: formData.primaryColor,
-    backgroundColor: formData.backgroundColor,
-    textColor: formData.textColor,
+    primaryColor: themePrimary,
+    backgroundColor: themeBg,
+    textColor: themeText,
     fontFamily: formData.fontFamily,
     themeId: formData.themeId,
     themeVersion: STATUS_PAGE_THEME_VERSION,
@@ -512,13 +522,6 @@ export default function StatusPageConfig({
     uptimeExcellentThreshold: formData.uptimeExcellentThreshold,
     uptimeGoodThreshold: formData.uptimeGoodThreshold,
   };
-  const effectiveColorTheme = computeStatusPageTheme({
-    primaryColor: formData.primaryColor,
-    backgroundColor: formData.backgroundColor,
-    textColor: formData.textColor,
-  });
-  const textContrastAdjusted =
-    effectiveColorTheme.textColor.toLowerCase() !== formData.textColor.toLowerCase();
   const previewMaxWidth =
     formData.layout === 'wide' ? '1600px' : formData.layout === 'compact' ? '900px' : '1280px';
 
@@ -532,9 +535,9 @@ export default function StatusPageConfig({
           version: 1 as const,
           logoUrl: formData.logoUrl,
           faviconUrl: formData.faviconUrl,
-          primaryColor: formData.primaryColor,
-          backgroundColor: formData.backgroundColor,
-          textColor: formData.textColor,
+          primaryColor: themePrimary,
+          backgroundColor: themeBg,
+          textColor: themeText,
           fontFamily: formData.fontFamily,
           themeId: formData.themeId,
           themeVersion: STATUS_PAGE_THEME_VERSION,
@@ -813,7 +816,9 @@ export default function StatusPageConfig({
     setTemplateError(null);
     setTemplateLoadingId(template.id);
     try {
-      const response = await fetch(`/status-page-templates/${template.file}`, { cache: 'no-store' });
+      const response = await fetch(`/status-page-templates/${template.file}`, {
+        cache: 'no-store',
+      });
       if (!response.ok) throw new Error('Failed to load template');
       const css = await response.text();
       setFormData(prev => ({ ...prev, customCss: css }));
@@ -836,7 +841,9 @@ export default function StatusPageConfig({
         if (templateCssMap[template.id] || templateFetchRef.current.has(template.id)) continue;
         templateFetchRef.current.add(template.id);
         try {
-          const response = await fetch(`/status-page-templates/${template.file}`, { cache: 'no-store' });
+          const response = await fetch(`/status-page-templates/${template.file}`, {
+            cache: 'no-store',
+          });
           if (!response.ok) throw new Error('Template preview fetch failed');
           const css = await response.text();
           if (!cancelled) setTemplateCssMap(prev => ({ ...prev, [template.id]: css }));
@@ -1024,7 +1031,9 @@ export default function StatusPageConfig({
                   : 'bg-background hover:bg-muted text-foreground border-border shadow-xs'
               )}
               aria-pressed={showPreview}
-              title={showPreview ? 'Hide live status page preview' : 'Show live status page preview'}
+              title={
+                showPreview ? 'Hide live status page preview' : 'Show live status page preview'
+              }
             >
               {showPreview ? (
                 <EyeOff className="w-3.5 h-3.5 shrink-0" />
@@ -1060,7 +1069,9 @@ export default function StatusPageConfig({
                 style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
               >
                 {activeSection === 'general' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}>
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
+                  >
                     <StatusPageSectionCard
                       title="Basic Settings"
                       description="Define the identity and presentation name displayed on your public status page."
@@ -1074,7 +1085,12 @@ export default function StatusPageConfig({
                               : 'This page is independent. Make it the default only to route legacy /status requests here.'}
                           </div>
                           {!statusPage.isDefault && (
-                            <Button type="button" variant="secondary" size="sm" onClick={handleMakeDefault}>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={handleMakeDefault}
+                            >
                               Make default
                             </Button>
                           )}
@@ -1094,7 +1110,9 @@ export default function StatusPageConfig({
                           type="input"
                           label="Organization Name"
                           value={formData.organizationName}
-                          onChange={e => setFormData({ ...formData, organizationName: e.target.value })}
+                          onChange={e =>
+                            setFormData({ ...formData, organizationName: e.target.value })
+                          }
                           helperText="Used in subscriber emails, email branding, and footer copyright."
                           placeholder="e.g. OpsKnight"
                         />
@@ -1123,7 +1141,9 @@ export default function StatusPageConfig({
                         <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
                           <Switch
                             checked={formData.enabled}
-                            onChange={checked => setFormData(prev => ({ ...prev, enabled: checked }))}
+                            onChange={checked =>
+                              setFormData(prev => ({ ...prev, enabled: checked }))
+                            }
                             label="Enable Status Page"
                             helperText="Make the status page accessible to users."
                           />
@@ -1198,7 +1218,9 @@ export default function StatusPageConfig({
                 )}
 
                 {activeSection === 'appearance' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}>
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                  >
                     <StatusPageSectionCard
                       title="Branding & Logo"
                       description="Upload your company logo and set the browser favicon for your status page."
@@ -1247,7 +1269,9 @@ export default function StatusPageConfig({
                           </div>
                           {formData.logoUrl && (
                             <div className="p-3 rounded-lg bg-muted/40 border border-border">
-                              <div className="text-xs font-semibold text-foreground mb-2">Logo Preview:</div>
+                              <div className="text-xs font-semibold text-foreground mb-2">
+                                Logo Preview:
+                              </div>
                               <div className="p-2.5 bg-background border border-border/80 rounded-md inline-block">
                                 <img
                                   src={formData.logoUrl}
@@ -1256,7 +1280,9 @@ export default function StatusPageConfig({
                                   onError={e => {
                                     (e.target as HTMLImageElement).style.display = 'none';
                                     const parent = (e.target as HTMLImageElement).parentElement;
-                                    if (parent) parent.innerHTML = '<div class="p-2 text-destructive text-xs">Failed to load image.</div>';
+                                    if (parent)
+                                      parent.innerHTML =
+                                        '<div class="p-2 text-destructive text-xs">Failed to load image.</div>';
                                   }}
                                 />
                               </div>
@@ -1275,7 +1301,9 @@ export default function StatusPageConfig({
                           />
                           {formData.faviconUrl && (
                             <div className="p-3 rounded-lg bg-muted/40 border border-border">
-                              <div className="text-xs font-semibold text-foreground mb-2">Favicon Preview:</div>
+                              <div className="text-xs font-semibold text-foreground mb-2">
+                                Favicon Preview:
+                              </div>
                               <div className="p-2 bg-background border border-border/80 rounded-md inline-block">
                                 <img
                                   src={formData.faviconUrl}
@@ -1299,84 +1327,12 @@ export default function StatusPageConfig({
                         label="Primary Font Family"
                         value={formData.fontFamily || 'default'}
                         onChange={e => setFormData({ ...formData, fontFamily: e.target.value })}
-                        options={STATUS_PAGE_FONTS.map(f => ({ value: f.id, label: `${f.name} (${f.category})` }))}
+                        options={STATUS_PAGE_FONTS.map(f => ({
+                          value: f.id,
+                          label: `${f.name} (${f.category})`,
+                        }))}
                         helperText="Applies clean typography to the header, incident reports, service metrics, and subscriber forms."
                       />
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Color theme"
-                      description="Start with an accessible preset, then adjust individual brand colors if needed. The preview uses the same color engine as the public page."
-                      icon={<Palette className="w-5 h-5 text-primary" />}
-                      action={
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            setFormData({
-                              ...formData,
-                              primaryColor: STATUS_PAGE_COLOR_PRESETS[0].primary,
-                              backgroundColor: STATUS_PAGE_COLOR_PRESETS[0].background,
-                              textColor: STATUS_PAGE_COLOR_PRESETS[0].text,
-                            })
-                          }
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" /> Reset to default
-                        </Button>
-                      }
-                    >
-                      <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                        {STATUS_PAGE_COLOR_PRESETS.map(preset => {
-                          const isActive =
-                            formData.primaryColor === preset.primary &&
-                            formData.backgroundColor === preset.background &&
-                            formData.textColor === preset.text;
-                          return (
-                            <button
-                              key={preset.id}
-                              type="button"
-                              onClick={() =>
-                                setFormData({
-                                  ...formData,
-                                  primaryColor: preset.primary,
-                                  backgroundColor: preset.background,
-                                  textColor: preset.text,
-                                })
-                              }
-                              className={cn(
-                                'flex items-center gap-2 rounded-md border px-3 py-2 text-left text-xs',
-                                isActive ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card'
-                              )}
-                            >
-                              <span className="flex gap-1">
-                                {[preset.primary, preset.background, preset.text].map(color => (
-                                  <span key={color} className="h-3 w-3 rounded-full border border-border" style={{ background: color }} />
-                                ))}
-                              </span>
-                              <span className="font-semibold">{preset.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormField type="input" label="Primary Color" value={formData.primaryColor} onChange={e => setFormData({ ...formData, primaryColor: e.target.value })} />
-                        <FormField type="input" label="Background Color" value={formData.backgroundColor} onChange={e => setFormData({ ...formData, backgroundColor: e.target.value })} />
-                        <FormField type="input" label="Text Color" value={formData.textColor} onChange={e => setFormData({ ...formData, textColor: e.target.value })} />
-                      </div>
-                      <div
-                        role="status"
-                        className={cn(
-                          'mt-4 p-3 rounded-lg text-xs leading-relaxed border',
-                          textContrastAdjusted
-                            ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
-                            : 'bg-primary/5 border-primary/20 text-foreground'
-                        )}
-                      >
-                        {textContrastAdjusted
-                          ? `Readable contrast applied: public text will render as ${effectiveColorTheme.textColor}.`
-                          : 'Contrast check passed. These colors will render unchanged on the public page.'}
-                      </div>
                     </StatusPageSectionCard>
 
                     <StatusPageSectionCard
@@ -1397,8 +1353,18 @@ export default function StatusPageConfig({
                           ]}
                           helperText="Controls maximum page width on large displays."
                         />
-                        <Switch checked={formData.showHeader} onChange={checked => setFormData({ ...formData, showHeader: checked })} label="Show Header" helperText="Display the top navigation bar with logo and page title." />
-                        <Switch checked={formData.showFooter} onChange={checked => setFormData({ ...formData, showFooter: checked })} label="Show Footer" helperText="Display the footer with support links, API links, and copyright." />
+                        <Switch
+                          checked={formData.showHeader}
+                          onChange={checked => setFormData({ ...formData, showHeader: checked })}
+                          label="Show Header"
+                          helperText="Display the top navigation bar with logo and page title."
+                        />
+                        <Switch
+                          checked={formData.showFooter}
+                          onChange={checked => setFormData({ ...formData, showFooter: checked })}
+                          label="Show Footer"
+                          helperText="Display the footer with support links, API links, and copyright."
+                        />
                       </div>
                     </StatusPageSectionCard>
                   </div>
@@ -1413,9 +1379,7 @@ export default function StatusPageConfig({
                     onDensityChange={themeDensity =>
                       setFormData(prev => ({ ...prev, themeDensity }))
                     }
-                    onCustomCssChange={customCss =>
-                      setFormData(prev => ({ ...prev, customCss }))
-                    }
+                    onCustomCssChange={customCss => setFormData(prev => ({ ...prev, customCss }))}
                   />
                 )}
 
@@ -1434,39 +1398,152 @@ export default function StatusPageConfig({
                 )}
 
                 {activeSection === 'privacy' && (
-                  <StatusPagePrivacySettings settings={privacySettings} onChange={settings => setPrivacySettings(settings)} />
+                  <StatusPagePrivacySettings
+                    settings={privacySettings}
+                    onChange={settings => setPrivacySettings(settings)}
+                  />
                 )}
 
                 {activeSection === 'content' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}>
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                  >
                     <StatusPageSectionCard
                       title="Display Options"
                       description="Toggle which sections and metrics are shown to visitors on your status page."
                       icon={<Sliders className="w-5 h-5 text-primary" />}
                     >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="p-3 rounded-lg border border-border/70 bg-card"><Switch checked={formData.showServices} onChange={checked => setFormData({ ...formData, showServices: checked })} label="Show Services" helperText="Display service status list" /></div>
-                        <div className="p-3 rounded-lg border border-border/70 bg-card"><Switch checked={formData.showIncidents} onChange={checked => setFormData({ ...formData, showIncidents: checked })} label="Show Incidents" helperText="Display incidents section and timeline" /></div>
-                        <div className="p-3 rounded-lg border border-border/70 bg-card"><Switch checked={formData.showMetrics} onChange={checked => setFormData({ ...formData, showMetrics: checked })} label="Show Uptime & Availability" helperText="Display service uptime metrics and history" /></div>
-                        <div className="p-3 rounded-lg border border-border/70 bg-card"><Switch checked={formData.showSubscribe} onChange={checked => setFormData({ ...formData, showSubscribe: checked })} label="Show Subscribe to Updates" helperText="Display email subscription section" /></div>
-                        <div className="p-3 rounded-lg border border-border/70 bg-card"><Switch checked={formData.showChangelog} onChange={checked => setFormData({ ...formData, showChangelog: checked })} label="Show Changelog" helperText="Display recent update announcements" /></div>
-                        <div className="p-3 rounded-lg border border-border/70 bg-card"><Switch checked={formData.showRegionHeatmap} onChange={checked => setFormData({ ...formData, showRegionHeatmap: checked })} label="Show Region Heatmap" helperText="Display a compact region impact grid" disabled={privacySettings.showServiceRegions === false} /></div>
-                        <div className="p-3 rounded-lg border border-border/70 bg-card md:col-span-2"><Switch checked={formData.showPostIncidentReview} onChange={checked => setFormData({ ...formData, showPostIncidentReview: checked })} label="Show Post-Incident Reviews" helperText="Show links to published postmortems on resolved incidents" /></div>
+                        <div className="p-3 rounded-lg border border-border/70 bg-card">
+                          <Switch
+                            checked={formData.showServices}
+                            onChange={checked =>
+                              setFormData({ ...formData, showServices: checked })
+                            }
+                            label="Show Services"
+                            helperText="Display service status list"
+                          />
+                        </div>
+                        <div className="p-3 rounded-lg border border-border/70 bg-card">
+                          <Switch
+                            checked={formData.showIncidents}
+                            onChange={checked =>
+                              setFormData({ ...formData, showIncidents: checked })
+                            }
+                            label="Show Incidents"
+                            helperText="Display incidents section and timeline"
+                          />
+                        </div>
+                        <div className="p-3 rounded-lg border border-border/70 bg-card">
+                          <Switch
+                            checked={formData.showMetrics}
+                            onChange={checked => setFormData({ ...formData, showMetrics: checked })}
+                            label="Show Uptime & Availability"
+                            helperText="Display service uptime metrics and history"
+                          />
+                        </div>
+                        <div className="p-3 rounded-lg border border-border/70 bg-card">
+                          <Switch
+                            checked={formData.showSubscribe}
+                            onChange={checked =>
+                              setFormData({ ...formData, showSubscribe: checked })
+                            }
+                            label="Show Subscribe to Updates"
+                            helperText="Display email subscription section"
+                          />
+                        </div>
+                        <div className="p-3 rounded-lg border border-border/70 bg-card">
+                          <Switch
+                            checked={formData.showChangelog}
+                            onChange={checked =>
+                              setFormData({ ...formData, showChangelog: checked })
+                            }
+                            label="Show Changelog"
+                            helperText="Display recent update announcements"
+                          />
+                        </div>
+                        <div className="p-3 rounded-lg border border-border/70 bg-card">
+                          <Switch
+                            checked={formData.showRegionHeatmap}
+                            onChange={checked =>
+                              setFormData({ ...formData, showRegionHeatmap: checked })
+                            }
+                            label="Show Region Heatmap"
+                            helperText="Display a compact region impact grid"
+                            disabled={privacySettings.showServiceRegions === false}
+                          />
+                        </div>
+                        <div className="p-3 rounded-lg border border-border/70 bg-card md:col-span-2">
+                          <Switch
+                            checked={formData.showPostIncidentReview}
+                            onChange={checked =>
+                              setFormData({ ...formData, showPostIncidentReview: checked })
+                            }
+                            label="Show Post-Incident Reviews"
+                            helperText="Show links to published postmortems on resolved incidents"
+                          />
+                        </div>
                       </div>
                       {formData.showMetrics && (
                         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <FormField type="input" label="Excellent Threshold (%)" value={String(formData.uptimeExcellentThreshold)} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { const val = parseFloat(e.target.value); if (!isNaN(val) && val >= 0 && val <= 100) setFormData({ ...formData, uptimeExcellentThreshold: val }); }} />
-                          <FormField type="input" label="Good Threshold (%)" value={String(formData.uptimeGoodThreshold)} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { const val = parseFloat(e.target.value); if (!isNaN(val) && val >= 0 && val <= 100) setFormData({ ...formData, uptimeGoodThreshold: val }); }} />
+                          <FormField
+                            type="input"
+                            label="Excellent Threshold (%)"
+                            value={String(formData.uptimeExcellentThreshold)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val >= 0 && val <= 100)
+                                setFormData({ ...formData, uptimeExcellentThreshold: val });
+                            }}
+                          />
+                          <FormField
+                            type="input"
+                            label="Good Threshold (%)"
+                            value={String(formData.uptimeGoodThreshold)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val) && val >= 0 && val <= 100)
+                                setFormData({ ...formData, uptimeGoodThreshold: val });
+                            }}
+                          />
                         </div>
                       )}
                     </StatusPageSectionCard>
-                    <StatusPageSectionCard title="Footer" description="Set custom footer text and copyright notices for your status page." icon={<FileText className="w-5 h-5 text-primary" />}>
-                      <FormField type="textarea" label="Footer Text" rows={3} value={formData.footerText} onChange={e => setFormData({ ...formData, footerText: e.target.value })} placeholder="(c) 2024 Your Company. All rights reserved." />
+                    <StatusPageSectionCard
+                      title="Footer"
+                      description="Set custom footer text and copyright notices for your status page."
+                      icon={<FileText className="w-5 h-5 text-primary" />}
+                    >
+                      <FormField
+                        type="textarea"
+                        label="Footer Text"
+                        rows={3}
+                        value={formData.footerText}
+                        onChange={e => setFormData({ ...formData, footerText: e.target.value })}
+                        placeholder="(c) 2024 Your Company. All rights reserved."
+                      />
                     </StatusPageSectionCard>
-                    <StatusPageSectionCard title="SEO Settings" description="Search engine metadata and previews for public sharing." icon={<Globe className="w-5 h-5 text-primary" />}>
+                    <StatusPageSectionCard
+                      title="SEO Settings"
+                      description="Search engine metadata and previews for public sharing."
+                      icon={<Globe className="w-5 h-5 text-primary" />}
+                    >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField type="input" label="Meta Title" value={formData.metaTitle} onChange={e => setFormData({ ...formData, metaTitle: e.target.value })} />
-                        <FormField type="textarea" label="Meta Description" rows={2} value={formData.metaDescription} onChange={e => setFormData({ ...formData, metaDescription: e.target.value })} />
+                        <FormField
+                          type="input"
+                          label="Meta Title"
+                          value={formData.metaTitle}
+                          onChange={e => setFormData({ ...formData, metaTitle: e.target.value })}
+                        />
+                        <FormField
+                          type="textarea"
+                          label="Meta Description"
+                          rows={2}
+                          value={formData.metaDescription}
+                          onChange={e =>
+                            setFormData({ ...formData, metaDescription: e.target.value })
+                          }
+                        />
                       </div>
                     </StatusPageSectionCard>
                   </div>
@@ -1482,56 +1559,174 @@ export default function StatusPageConfig({
                   />
                 )}
 
-                {activeSection === 'integrations' && <StatusPageWebhooksSettings statusPageId={statusPage.id} />}
+                {activeSection === 'integrations' && (
+                  <StatusPageWebhooksSettings statusPageId={statusPage.id} />
+                )}
 
                 {activeSection === 'subscribers' && (
-                  <StatusPageSectionCard title="Subscribers" description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription." icon={<Users className="w-5 h-5 text-primary" />}>
+                  <StatusPageSectionCard
+                    title="Subscribers"
+                    description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription."
+                    icon={<Users className="w-5 h-5 text-primary" />}
+                  >
                     <StatusPageSubscribers statusPageId={statusPage.id} />
                   </StatusPageSectionCard>
                 )}
 
                 {activeSection === 'email-delivery' && (
-                  <StatusPageSectionCard title="Email Delivery" description="Configure which email provider to use for subscription verification and status page notification alerts." icon={<Mail className="w-5 h-5 text-primary" />}>
-                    <StatusPageEmailConfig statusPageId={statusPage.id} currentProvider={statusPage.emailProvider} />
+                  <StatusPageSectionCard
+                    title="Email Delivery"
+                    description="Configure which email provider to use for subscription verification and status page notification alerts."
+                    icon={<Mail className="w-5 h-5 text-primary" />}
+                  >
+                    <StatusPageEmailConfig
+                      statusPageId={statusPage.id}
+                      currentProvider={statusPage.emailProvider}
+                    />
                   </StatusPageSectionCard>
                 )}
 
                 {activeSection === 'advanced' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}>
-                    <StatusPageSectionCard title="Live Updates & Feeds" description="Configure client-side polling intervals and public RSS/JSON feed discovery." icon={<RefreshCw className="w-5 h-5 text-primary" />}>
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
+                  >
+                    <StatusPageSectionCard
+                      title="Live Updates & Feeds"
+                      description="Configure client-side polling intervals and public RSS/JSON feed discovery."
+                      icon={<RefreshCw className="w-5 h-5 text-primary" />}
+                    >
                       <div className="flex flex-col gap-4">
-                        <Switch checked={formData.autoRefresh} onChange={checked => setFormData({ ...formData, autoRefresh: checked })} label="Enable Auto-Refresh" helperText="Automatically refresh the status page at regular intervals" />
-                        {formData.autoRefresh && <FormField type="input" label="Refresh Interval (seconds)" value={formData.refreshInterval.toString()} onChange={e => setFormData({ ...formData, refreshInterval: parseInt(e.target.value) || 60 })} />}
-                        <Switch checked={formData.showRssLink} onChange={checked => setFormData({ ...formData, showRssLink: checked })} label="Show RSS Feed Link" helperText="Display link to RSS feed in footer" />
-                        <Switch checked={formData.showApiLink} onChange={checked => setFormData({ ...formData, showApiLink: checked })} label="Show JSON API Link" helperText="Display link to JSON API in footer" />
+                        <Switch
+                          checked={formData.autoRefresh}
+                          onChange={checked => setFormData({ ...formData, autoRefresh: checked })}
+                          label="Enable Auto-Refresh"
+                          helperText="Automatically refresh the status page at regular intervals"
+                        />
+                        {formData.autoRefresh && (
+                          <FormField
+                            type="input"
+                            label="Refresh Interval (seconds)"
+                            value={formData.refreshInterval.toString()}
+                            onChange={e =>
+                              setFormData({
+                                ...formData,
+                                refreshInterval: parseInt(e.target.value) || 60,
+                              })
+                            }
+                          />
+                        )}
+                        <Switch
+                          checked={formData.showRssLink}
+                          onChange={checked => setFormData({ ...formData, showRssLink: checked })}
+                          label="Show RSS Feed Link"
+                          helperText="Display link to RSS feed in footer"
+                        />
+                        <Switch
+                          checked={formData.showApiLink}
+                          onChange={checked => setFormData({ ...formData, showApiLink: checked })}
+                          label="Show JSON API Link"
+                          helperText="Display link to JSON API in footer"
+                        />
                       </div>
                     </StatusPageSectionCard>
 
-                    <StatusPageSectionCard title="Status API Access & Security" description="Token authentication and rate limiting for JSON and RSS endpoints." icon={<Key className="w-5 h-5 text-primary" />}>
+                    <StatusPageSectionCard
+                      title="Status API Access & Security"
+                      description="Token authentication and rate limiting for JSON and RSS endpoints."
+                      icon={<Key className="w-5 h-5 text-primary" />}
+                    >
                       <div className="flex flex-col gap-4">
-                        <Switch checked={formData.statusApiRequireToken} onChange={checked => setFormData({ ...formData, statusApiRequireToken: checked })} label="Require API token" helperText="Require a token for JSON and RSS endpoints." />
-                        <Switch checked={formData.statusApiRateLimitEnabled} onChange={checked => setFormData({ ...formData, statusApiRateLimitEnabled: checked })} label="Enable rate limiting" helperText="Throttle API access to protect the status page." />
+                        <Switch
+                          checked={formData.statusApiRequireToken}
+                          onChange={checked =>
+                            setFormData({ ...formData, statusApiRequireToken: checked })
+                          }
+                          label="Require API token"
+                          helperText="Require a token for JSON and RSS endpoints."
+                        />
+                        <Switch
+                          checked={formData.statusApiRateLimitEnabled}
+                          onChange={checked =>
+                            setFormData({ ...formData, statusApiRateLimitEnabled: checked })
+                          }
+                          label="Enable rate limiting"
+                          helperText="Throttle API access to protect the status page."
+                        />
                         {formData.statusApiRateLimitEnabled && (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <FormField type="input" label="Max requests" value={String(formData.statusApiRateLimitMax)} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { const val = parseInt(e.target.value, 10); if (!Number.isNaN(val)) setFormData({ ...formData, statusApiRateLimitMax: val }); }} />
-                            <FormField type="input" label="Window (seconds)" value={String(formData.statusApiRateLimitWindowSec)} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { const val = parseInt(e.target.value, 10); if (!Number.isNaN(val)) setFormData({ ...formData, statusApiRateLimitWindowSec: val }); }} />
+                            <FormField
+                              type="input"
+                              label="Max requests"
+                              value={String(formData.statusApiRateLimitMax)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!Number.isNaN(val))
+                                  setFormData({ ...formData, statusApiRateLimitMax: val });
+                              }}
+                            />
+                            <FormField
+                              type="input"
+                              label="Window (seconds)"
+                              value={String(formData.statusApiRateLimitWindowSec)}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                const val = parseInt(e.target.value, 10);
+                                if (!Number.isNaN(val))
+                                  setFormData({ ...formData, statusApiRateLimitWindowSec: val });
+                              }}
+                            />
                           </div>
                         )}
                         <div className="border-t border-border pt-4">
                           <div className="flex flex-wrap items-end gap-3">
-                            <FormField type="input" label="Token name" value={apiTokenName} onChange={e => setApiTokenName(e.target.value)} placeholder="e.g. External status monitor" />
-                            <Button type="button" variant="primary" isLoading={apiTokenPending} onClick={handleCreateApiToken}>Create token</Button>
+                            <FormField
+                              type="input"
+                              label="Token name"
+                              value={apiTokenName}
+                              onChange={e => setApiTokenName(e.target.value)}
+                              placeholder="e.g. External status monitor"
+                            />
+                            <Button
+                              type="button"
+                              variant="primary"
+                              isLoading={apiTokenPending}
+                              onClick={handleCreateApiToken}
+                            >
+                              Create token
+                            </Button>
                           </div>
-                          {apiTokenError && <InlineNotice tone="error" className="mt-3">{apiTokenError}</InlineNotice>}
-                          {apiTokenValue && <InlineNotice tone="neutral" className="mt-3">Copy this token now: <code>{apiTokenValue}</code></InlineNotice>}
+                          {apiTokenError && (
+                            <InlineNotice tone="error" className="mt-3">
+                              {apiTokenError}
+                            </InlineNotice>
+                          )}
+                          {apiTokenValue && (
+                            <InlineNotice tone="neutral" className="mt-3">
+                              Copy this token now: <code>{apiTokenValue}</code>
+                            </InlineNotice>
+                          )}
                           <div className="mt-4 flex flex-col gap-2">
                             {apiTokens.map(token => (
-                              <div key={token.id} className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                              <div
+                                key={token.id}
+                                className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
+                              >
                                 <div>
                                   <div className="font-semibold">{token.name}</div>
-                                  <div className="text-xs text-muted-foreground">Prefix: {token.prefix} · Created {formatDateTime(token.createdAt, browserTimeZone, { format: 'date' })}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Prefix: {token.prefix} · Created{' '}
+                                    {formatDateTime(token.createdAt, browserTimeZone, {
+                                      format: 'date',
+                                    })}
+                                  </div>
                                 </div>
-                                <Button type="button" variant="secondary" onClick={() => handleRevokeApiToken(token.id)} disabled={Boolean(token.revokedAt)}>{token.revokedAt ? 'Revoked' : 'Revoke'}</Button>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={() => handleRevokeApiToken(token.id)}
+                                  disabled={Boolean(token.revokedAt)}
+                                >
+                                  {token.revokedAt ? 'Revoked' : 'Revoke'}
+                                </Button>
                               </div>
                             ))}
                           </div>
@@ -1539,11 +1734,25 @@ export default function StatusPageConfig({
                       </div>
                     </StatusPageSectionCard>
 
-                    <StatusPageSectionCard title="Uptime Reports & Endpoints" description="Public uptime report downloads and external feed endpoints." icon={<Rss className="w-5 h-5 text-primary" />}>
-                      <Switch checked={formData.enableUptimeExports} onChange={checked => setFormData({ ...formData, enableUptimeExports: checked })} label="Enable public uptime exports" helperText="Allow visitors and admins to download monthly uptime reports (CSV/PDF) directly from the Status Page." />
+                    <StatusPageSectionCard
+                      title="Uptime Reports & Endpoints"
+                      description="Public uptime report downloads and external feed endpoints."
+                      icon={<Rss className="w-5 h-5 text-primary" />}
+                    >
+                      <Switch
+                        checked={formData.enableUptimeExports}
+                        onChange={checked =>
+                          setFormData({ ...formData, enableUptimeExports: checked })
+                        }
+                        label="Enable public uptime exports"
+                        helperText="Allow visitors and admins to download monthly uptime reports (CSV/PDF) directly from the Status Page."
+                      />
                     </StatusPageSectionCard>
 
-                    <DangerZoneCard title="Danger Zone" description="Irreversible actions for this status page." />
+                    <DangerZoneCard
+                      title="Danger Zone"
+                      description="Irreversible actions for this status page."
+                    />
                   </div>
                 )}
 
@@ -1577,18 +1786,28 @@ export default function StatusPageConfig({
                       </span>
                     </div>
                     {publication.status === 'FAILED' && (
-                      <Button variant="secondary" onClick={handleRetryPublication} disabled={retryingPublication}>
+                      <Button
+                        variant="secondary"
+                        onClick={handleRetryPublication}
+                        disabled={retryingPublication}
+                      >
                         {retryingPublication ? 'Retrying…' : 'Retry publication'}
                       </Button>
                     )}
                   </div>
                 )}
 
-                {error && <InlineNotice tone="error" className="mb-4">{error}</InlineNotice>}
+                {error && (
+                  <InlineNotice tone="error" className="mb-4">
+                    {error}
+                  </InlineNotice>
+                )}
               </div>
             </div>
 
-            {!['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(activeSection) && (
+            {!['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(
+              activeSection
+            ) && (
               <div className="status-page-config-sticky-bar flex items-center justify-between gap-3 px-5 py-3.5 border-t border-border bg-card/95 backdrop-blur-md shadow-lg">
                 <div className="flex items-center gap-3">
                   <DeleteConfirmDialog
@@ -1598,17 +1817,40 @@ export default function StatusPageConfig({
                     confirmText="Delete status page"
                     onConfirm={handleDeletePage}
                     trigger={
-                      <Button type="button" variant="danger" size="sm" disabled={isPending} className="text-xs font-semibold gap-1.5 shadow-xs">
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        disabled={isPending}
+                        className="text-xs font-semibold gap-1.5 shadow-xs"
+                      >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Delete status page</span>
                       </Button>
                     }
                   />
-                  <div className="text-xs text-muted-foreground hidden md:block">Unsaved modifications apply to this status page configuration.</div>
+                  <div className="text-xs text-muted-foreground hidden md:block">
+                    Unsaved modifications apply to this status page configuration.
+                  </div>
                 </div>
                 <div className="flex items-center gap-2.5 ml-auto">
-                  <Button type="button" variant="secondary" size="sm" onClick={handleDiscardChanges} disabled={isPending} className="text-xs font-semibold shadow-xs">Cancel</Button>
-                  <Button type="submit" variant="primary" size="sm" isLoading={isPending} className="text-xs font-semibold gap-1.5 shadow-sm">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDiscardChanges}
+                    disabled={isPending}
+                    className="text-xs font-semibold shadow-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    isLoading={isPending}
+                    className="text-xs font-semibold gap-1.5 shadow-sm"
+                  >
                     <Save className="w-3.5 h-3.5" />
                     <span>Save Settings</span>
                   </Button>
@@ -1630,7 +1872,11 @@ export default function StatusPageConfig({
                 background: 'hsl(var(--card))',
               }}
             >
-              <StatusPageLivePreview previewData={previewData} maxWidth={previewMaxWidth} previewDomain={previewDomain} />
+              <StatusPageLivePreview
+                previewData={previewData}
+                maxWidth={previewMaxWidth}
+                previewDomain={previewDomain}
+              />
             </div>
           )}
         </div>
