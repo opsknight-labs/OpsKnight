@@ -5,6 +5,7 @@ export type OfflineQueueState =
   | 'SENDING'
   | 'SUCCEEDED'
   | 'FAILED'
+  | 'FORBIDDEN'
   | 'CONFLICT'
   | 'AUTH_REQUIRED';
 
@@ -46,6 +47,7 @@ const DB_VERSION = 2;
 const TERMINAL_RETENTION_MS = 24 * 60 * 60 * 1000;
 const SENDING_LEASE_MS = 60 * 1000;
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
+const TERMINAL_STATES = new Set<OfflineQueueState>(['SUCCEEDED', 'FAILED', 'FORBIDDEN']);
 const hasIndexedDb = () => typeof indexedDB !== 'undefined';
 
 const generateId = () => {
@@ -219,7 +221,7 @@ async function cleanupTerminalRequests(now = Date.now()) {
     item =>
       item.completedAt &&
       now - item.completedAt > TERMINAL_RETENTION_MS &&
-      ['SUCCEEDED', 'FAILED'].includes(item.state)
+      TERMINAL_STATES.has(item.state)
   );
   await Promise.all(expired.map(item => removeQueuedRequest(item.id)));
 }
@@ -246,8 +248,8 @@ async function recoverInterruptedRequests(now = Date.now()) {
 /**
  * Auth failures are deliberately parked instead of retried. Once an authenticated
  * mobile shell has been re-established, only those parked operations are made
- * eligible for the normal FIFO/idempotent replay loop again. Conflict and FAILED
- * records are never revived here.
+ * eligible for the normal FIFO/idempotent replay loop again. Conflict, FORBIDDEN,
+ * and FAILED records are never revived here.
  */
 export const resumeAuthRequiredOperations = async () => {
   if (!hasIndexedDb()) return 0;
@@ -299,8 +301,9 @@ async function responseError(response: Response) {
   }
 }
 
-function terminalStateForStatus(status: number): OfflineQueueState | null {
-  if (status === 401 || status === 403) return 'AUTH_REQUIRED';
+function stateForStatus(status: number): OfflineQueueState | null {
+  if (status === 401) return 'AUTH_REQUIRED';
+  if (status === 403) return 'FORBIDDEN';
   if (status === 409) return 'CONFLICT';
   if (status >= 400 && status < 500 && status !== 408 && status !== 429) return 'FAILED';
   return null;
@@ -313,26 +316,32 @@ async function transition(item: QueuedRequest, patch: Partial<QueuedRequest>) {
   }
 }
 
+function remainingNonTerminal(items: QueuedRequest[]) {
+  return items.filter(item => !TERMINAL_STATES.has(item.state)).length;
+}
+
 export const flushQueuedRequests = async () => {
   if (!hasIndexedDb()) return { flushed: 0, remaining: 0 };
   if (typeof window !== 'undefined' && !navigator.onLine) {
     const queue = await listQueuedRequests();
-    return {
-      flushed: 0,
-      remaining: queue.filter(item => ['PENDING', 'SENDING'].includes(item.state)).length,
-    };
+    return { flushed: 0, remaining: remainingNonTerminal(queue) };
   }
 
   const now = Date.now();
   await cleanupTerminalRequests(now);
   await recoverInterruptedRequests(now);
-  const queue = (await listQueuedRequests()).filter(
-    item => item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now)
-  );
+  const queue = await listQueuedRequests();
   let flushed = 0;
 
-  // FIFO is deliberate: responder actions can have state dependencies (ACK -> RESOLVE).
+  // Strict FIFO invariant: never filter blockers out before evaluating order.
+  // The first non-terminal operation owns the queue. If it is backing off,
+  // actively sending, waiting for auth, or in conflict, later operations must
+  // not leapfrog it (for example RESOLVE must never pass a delayed ACK).
   for (const original of queue) {
+    if (TERMINAL_STATES.has(original.state)) continue;
+    if (original.state !== 'PENDING') break;
+    if (original.nextAttemptAt != null && original.nextAttemptAt > Date.now()) break;
+
     const sending: QueuedRequest = {
       ...original,
       state: 'SENDING',
@@ -365,16 +374,17 @@ export const flushQueuedRequests = async () => {
       }
 
       const error = await responseError(response);
-      const terminal = terminalStateForStatus(response.status);
-      if (terminal) {
+      const nextState = stateForStatus(response.status);
+      if (nextState) {
+        const terminal = TERMINAL_STATES.has(nextState);
         await transition(sending, {
-          state: terminal,
-          completedAt: terminal === 'FAILED' ? Date.now() : null,
+          state: nextState,
+          completedAt: terminal ? Date.now() : null,
           nextAttemptAt: null,
           lastError: error,
         });
-        // Preserve order: a later operation may rely on the state this one failed to establish.
-        break;
+        if (!terminal) break;
+        continue;
       }
 
       const delay =
@@ -400,6 +410,6 @@ export const flushQueuedRequests = async () => {
   const remainingQueue = await listQueuedRequests();
   return {
     flushed,
-    remaining: remainingQueue.filter(item => ['PENDING', 'SENDING'].includes(item.state)).length,
+    remaining: remainingNonTerminal(remainingQueue),
   };
 };
