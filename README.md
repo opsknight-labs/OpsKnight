@@ -27,13 +27,24 @@ _From alert ingestion and on-call routing through response, customer communicati
 
 > [!IMPORTANT]
 >
-> ### 🚀 OpsKnight 2.0 is coming soon!
+> ### 🚀 Major Milestone: OpsKnight 2.0 is Coming Soon!
 >
-> We have merged over **220+ PRs** since our last release (`v1.4.0`). While we initially planned a minor `v1.5`, the massive improvements across the board—a completely redesigned modern UI, real-time push streaming, rock-solid availability, and deep engine upgrades—mean our next milestone will be **OpsKnight 2.0**!
+> **Target Release Window: Late this month / First week of next month**
 >
-> We're putting the finishing touches on a faster, more reliable, and beautiful incident response platform.
+> Over **260+ PRs** have been merged since our last release (`v1.4.0`). While we initially planned a minor `v1.5`, the massive improvements across the board—a completely redesigned modern UI, rock-solid availability, scalable architecture, and deep engine upgrades—mean our next milestone will be **OpsKnight 2.0**!
 >
-> ⭐ **Star and watch this repository to stay tuned for the 2.0 release!**
+> 💡 **Planning a new deployment?** If you are evaluating or planning to install OpsKnight, **we strongly recommend waiting for the 2.0 release** (or following the active development branch) to take advantage of the new infrastructure and streamlined configuration:
+>
+> - 🌐 **Cloud-Native & Kubernetes-Ready**: Highly available, horizontally scalable architecture engineered for automatic scaling in Kubernetes and distributed container environments.
+> - ✨ **Modern UI & Intuitive Configuration**: Completely revamped user interface and configuration flows that make setting up services, channels, and team workflows simple and effortless.
+> - ⏱️ **Per-Service SLA Management**: First-class SLA policies per service—define schedule, acknowledge, and resolve SLA targets with real-time breach tracking and business hours.
+> - 💬 **Interactive Microsoft Teams ChatOps**: Full two-way incident triage directly from Teams channels—acknowledge, assign, snooze, set priority, and resolve incidents in real time.
+> - 👥 **Next-Gen Team, Schedule & Escalation Engine**: Re-engineered schedule management, multi-tier escalation policies, and flexible team routing designed for complex on-call rotations.
+> - 📢 **Upgraded Status Pages & Settings**: Redesigned public/private status pages, customizable incident banners, and unified administration controls.
+> - 🔐 **Enterprise Security & Mature OIDC**: Upgraded OpenID Connect (OIDC) integration, redesigned login experience, strict RBAC authorization, and hardened session security.
+> - 📊 **Actionable Reliability Metrics**: Rich operational analytics, SLA compliance reports, MTTR/MTTA breakdowns, and actionable service health dashboards.
+>
+> ⭐ **Star and watch this repository to be notified the moment OpsKnight 2.0 is officially released!**
 
 ---
 
