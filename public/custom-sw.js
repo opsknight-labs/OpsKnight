@@ -8,6 +8,7 @@ const PUSH_CONTRACT_VERSION = 2;
 const SUPPORTED_PUSH_CONTRACT_VERSIONS = new Set([1, 2]);
 const SENDING_LEASE_MS = 60 * 1000;
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
+const TERMINAL_QUEUE_STATES = new Set(['SUCCEEDED', 'FAILED', 'FORBIDDEN']);
 
 const randomId = () => {
   if (self.crypto && typeof self.crypto.randomUUID === 'function') return self.crypto.randomUUID();
@@ -103,8 +104,9 @@ const responseError = async response => {
   return `HTTP ${response.status}`;
 };
 
-const terminalStateForStatus = status => {
-  if (status === 401 || status === 403) return 'AUTH_REQUIRED';
+const stateForStatus = status => {
+  if (status === 401) return 'AUTH_REQUIRED';
+  if (status === 403) return 'FORBIDDEN';
   if (status === 409) return 'CONFLICT';
   if (status >= 400 && status < 500 && status !== 408 && status !== 429) return 'FAILED';
   return null;
@@ -151,11 +153,17 @@ const flushQueuedRequests = async () => {
   try {
     const now = Date.now();
     await recoverInterruptedRequests(now);
-    const queue = (await listQueuedRequests()).filter(
-      item => item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now)
-    );
+    const queue = await listQueuedRequests();
 
+    // Keep the worker algorithm identical to the foreground queue: inspect the
+    // full creation-ordered queue and let the first non-terminal item own replay.
+    // A delayed ACK, active send, auth block, or conflict must stop a later
+    // RESOLVE from leapfrogging it.
     for (const original of queue) {
+      if (TERMINAL_QUEUE_STATES.has(original.state)) continue;
+      if (original.state !== 'PENDING') break;
+      if (original.nextAttemptAt != null && original.nextAttemptAt > Date.now()) break;
+
       const sending = await updateQueueState(original, {
         state: 'SENDING',
         retryCount: original.retryCount + 1,
@@ -184,16 +192,17 @@ const flushQueuedRequests = async () => {
         }
 
         const error = await responseError(response);
-        const terminal = terminalStateForStatus(response.status);
-        if (terminal) {
+        const nextState = stateForStatus(response.status);
+        if (nextState) {
+          const terminal = TERMINAL_QUEUE_STATES.has(nextState);
           await updateQueueState(sending, {
-            state: terminal,
-            completedAt: terminal === 'FAILED' ? Date.now() : null,
+            state: nextState,
+            completedAt: terminal ? Date.now() : null,
             nextAttemptAt: null,
             lastError: error,
           });
-          // Preserve FIFO semantics; later state transitions may depend on this one.
-          break;
+          if (!terminal) break;
+          continue;
         }
 
         const delay =
