@@ -274,11 +274,10 @@ export function compileStatusPageThemeCss(
         ? `.status-page-container details.status-v3-incident-pill { border-radius: calc(${shape.radius} + 2px); }`
         : '';
 
-  // SnapshotView currently carries branding variables inline on the outer container. Inline custom
-  // properties outrank built-in theme CSS on that same element, which is mostly invisible on light
-  // themes because their ink is similar to the native palette but can make dark themes inherit dark
-  // branding text. Re-declaring the selected dark palette on the child surface wins by normal
-  // inheritance without using !important and keeps Advanced CSS free to override it afterwards.
+  // SnapshotView carries legacy branding variables inline on the outer container. The shared V3
+  // stylesheet consumes the newer --status-* token namespace on cards and inspectors, so a dark
+  // curated theme must bridge both namespaces on the child surface. Keeping that bridge here makes
+  // the theme layer authoritative without !important and still lets Advanced CSS override it later.
   const darkSurfaceLayer =
     selected.mode === 'dark'
       ? `
@@ -295,22 +294,38 @@ export function compileStatusPageThemeCss(
   --sp-panel-muted-bg: ${preview.surfaceAlt};
   --sp-panel-border: color-mix(in srgb, ${preview.text} 16%, ${preview.surface} 84%);
   --sp-panel-muted-border: color-mix(in srgb, ${preview.text} 13%, ${preview.surfaceAlt} 87%);
+  --status-text: ${preview.text};
+  --status-text-strong: ${preview.text};
+  --status-text-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);
+  --status-text-subtle: color-mix(in srgb, ${preview.text} 56%, ${preview.surface} 44%);
+  --status-panel-bg: ${preview.surface};
+  --status-panel-muted-bg: ${preview.surfaceAlt};
+  --status-panel-border: color-mix(in srgb, ${preview.text} 16%, ${preview.surface} 84%);
+  --status-panel-muted-border: color-mix(in srgb, ${preview.text} 13%, ${preview.surfaceAlt} 87%);
   --status-primary: var(--sp-theme-accent);
   --status-primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
   --primary: var(--sp-theme-accent);
   --primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
   --status-operational: #6ee7b7;
-  --status-operational-bg: color-mix(in srgb, #10b981 14%, var(--sp-panel-bg) 86%);
+  --status-operational-bg: color-mix(in srgb, #10b981 14%, var(--status-panel-bg) 86%);
   --status-degraded: #fcd34d;
-  --status-degraded-bg: color-mix(in srgb, #f59e0b 14%, var(--sp-panel-bg) 86%);
+  --status-degraded-bg: color-mix(in srgb, #f59e0b 14%, var(--status-panel-bg) 86%);
   --status-maintenance: #93c5fd;
-  --status-maintenance-bg: color-mix(in srgb, #3b82f6 14%, var(--sp-panel-bg) 86%);
+  --status-maintenance-bg: color-mix(in srgb, #3b82f6 14%, var(--status-panel-bg) 86%);
   --status-partial-outage: #fdba74;
-  --status-partial-outage-bg: color-mix(in srgb, #f97316 14%, var(--sp-panel-bg) 86%);
+  --status-partial-outage-bg: color-mix(in srgb, #f97316 14%, var(--status-panel-bg) 86%);
   --status-major-outage: #fda4af;
-  --status-major-outage-bg: color-mix(in srgb, #e11d48 14%, var(--sp-panel-bg) 86%);
+  --status-major-outage-bg: color-mix(in srgb, #e11d48 14%, var(--status-panel-bg) 86%);
   --status-unknown: #cbd5e1;
-  --status-unknown-bg: color-mix(in srgb, #64748b 16%, var(--sp-panel-bg) 84%);
+  --status-unknown-bg: color-mix(in srgb, #64748b 16%, var(--status-panel-bg) 84%);
+}
+.status-page-container .status-page-surface .status-v3-service {
+  background: var(--status-panel-bg);
+  color: var(--status-text);
+}
+.status-page-container .status-page-surface .status-v3-inspector {
+  background: color-mix(in srgb, var(--status-panel-bg) 92%, var(--status-panel-muted-bg) 8%);
+  border-color: var(--status-panel-border);
 }
 .status-page-container .status-topbar__chip--accent,
 .status-page-container .status-subscribe__button,
