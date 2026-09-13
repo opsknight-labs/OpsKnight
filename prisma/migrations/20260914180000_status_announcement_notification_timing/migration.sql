@@ -60,3 +60,13 @@ WHERE j."id" = r."id"
 ALTER TABLE "StatusPageAnnouncement"
   ADD CONSTRAINT "StatusPageAnnouncement_notificationTiming_check"
   CHECK ("notificationTiming" IN ('NONE', 'ON_PUBLISH', 'AT_START'));
+
+-- Reconciliation and cancellation target announcement/page inside JSON payload.
+-- Keep this partial expression index small and limited to live fan-out jobs.
+CREATE INDEX "BackgroundJob_announcement_fanout_live_idx"
+ON "BackgroundJob" (
+  ("payload"->>'announcementId'),
+  ("payload"->>'statusPageId')
+)
+WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+  AND "status" IN ('PENDING', 'PROCESSING');
