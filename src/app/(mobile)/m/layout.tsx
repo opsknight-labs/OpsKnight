@@ -1,5 +1,3 @@
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import MobileNav from '@/components/mobile/MobileNav';
 import MobileHeader from '@/components/mobile/MobileHeader';
@@ -17,24 +15,19 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
 import { getAppShellContext } from '@/lib/app-shell-context';
 import { RealtimeProvider } from '@/hooks/useRealtime';
+import { getRequestActorContext } from '@/lib/request-actor-context';
+import { MOBILE_PRINCIPAL_MARKER_ID } from '@/lib/mobile-principal';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(await getAuthOptions());
+  const requestContext = await getRequestActorContext();
+  if (!requestContext) redirect('/login?callbackUrl=/m');
 
-  if (!session?.user?.email) {
-    redirect('/login?callbackUrl=/m');
-  }
+  const shell = await getAppShellContext(requestContext);
+  if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
 
-  const shell = await getAppShellContext(session.user.email);
-  if (!shell) {
-    redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
-  }
-
-  // Keep the same debounced session/device activity signal used by desktop.
-  // It is observability only and never grants authorization or extends trust.
   try {
     const { headers } = await import('next/headers');
     const headerList = await headers();
@@ -45,10 +38,9 @@ export default async function MobileLayout({ children }: { children: React.React
       '127.0.0.1';
     const { recordSessionHeartbeat } = await import('@/lib/active-sessions');
     void recordSessionHeartbeat({ userId: shell.user.id, userAgent, ip }).catch(() => {});
-  } catch {
-    // A heartbeat must never block incident response.
-  }
+  } catch {}
 
+  const authGeneration = String(shell.user.tokenVersion);
   return (
     <TimezoneProvider initialTimeZone={shell.user.timeZone || 'UTC'}>
       <UserAvatarProvider
@@ -60,6 +52,13 @@ export default async function MobileLayout({ children }: { children: React.React
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
           <RealtimeProvider>
             <MobileBiometricGuard>
+              <div
+                id={MOBILE_PRINCIPAL_MARKER_ID}
+                data-principal-id={shell.user.id}
+                data-auth-generation={authGeneration}
+                hidden
+                aria-hidden="true"
+              />
               <MobileHeader systemStatus={shell.systemStatus} />
               <div className="mobile-shell" data-status={shell.systemStatus}>
                 <main id="main-content" className="mobile-content">
@@ -70,7 +69,10 @@ export default async function MobileLayout({ children }: { children: React.React
                 </main>
               </div>
               <MobileNav />
-              <MobilePwaCoordinator />
+              <MobilePwaCoordinator
+                principalId={shell.user.id}
+                authGeneration={authGeneration}
+              />
             </MobileBiometricGuard>
           </RealtimeProvider>
         </ThemeProvider>

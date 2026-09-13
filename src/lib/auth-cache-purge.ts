@@ -1,10 +1,5 @@
-/**
- * Auth Cache Purge Utility
- *
- * Safely purges any Service Worker dynamic page and RSC caches from browser
- * CacheStorage during authentication lifecycle events (login, logout, session expiration).
- * This prevents stale redirect loops and orphaned unauthenticated shells.
- */
+import { purgeMobileCacheStorage } from '@/lib/mobile-cache';
+import { purgeOfflineQueueStorage } from '@/lib/offline-queue';
 
 export const DYNAMIC_AUTH_CACHE_PATTERNS = [
   'pages',
@@ -17,32 +12,34 @@ export const DYNAMIC_AUTH_CACHE_PATTERNS = [
 ];
 
 /**
- * Purges dynamic/auth-related caches from the browser's CacheStorage.
- * Safe to call in any browser context (handles missing caches API gracefully).
+ * Purges every browser-resident authenticated authority boundary. In addition to
+ * CacheStorage this destroys principal-scoped responder ciphertext, its AES key
+ * material, and queued mutations so an account switch can never inherit another
+ * responder's offline state.
  */
 export async function purgeBrowserAuthCaches(): Promise<void> {
-  if (typeof window === 'undefined' || !('caches' in window)) {
-    return;
+  if (typeof window === 'undefined') return;
+
+  await Promise.allSettled([purgeMobileCacheStorage(), purgeOfflineQueueStorage()]);
+
+  if ('caches' in window) {
+    try {
+      const cacheNames = await window.caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter(name => DYNAMIC_AUTH_CACHE_PATTERNS.some(pattern => name.includes(pattern)))
+          .map(name => window.caches.delete(name))
+      );
+    } catch (error) {
+      console.warn('[AuthCache] Failed to purge browser auth caches:', error);
+    }
   }
 
-  try {
-    const cacheNames = await window.caches.keys();
-    const purgePromises = cacheNames
-      .filter(name => DYNAMIC_AUTH_CACHE_PATTERNS.some(pattern => name.includes(pattern)))
-      .map(name => window.caches.delete(name));
-
-    await Promise.all(purgePromises);
-  } catch (error) {
-    // Non-critical cache cleanup failure should never block UI navigation
-    console.warn('[AuthCache] Failed to purge browser auth caches:', error);
-  }
-
-  // Also post message to Service Worker if active
   try {
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       navigator.serviceWorker.controller.postMessage({ type: 'PURGE_AUTH_CACHES' });
     }
   } catch {
-    // Non-critical
+    // Cleanup remains best-effort; login/logout navigation must not deadlock.
   }
 }

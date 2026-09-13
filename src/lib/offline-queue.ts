@@ -1,5 +1,11 @@
 'use client';
 
+import {
+  deriveOfflineLaneKey,
+  readMobilePrincipalContext,
+  type MobilePrincipalContext,
+} from '@/lib/mobile-principal';
+
 export type OfflineQueueState =
   | 'PENDING'
   | 'SENDING'
@@ -13,6 +19,10 @@ export type OfflineOperation = 'INCIDENT_STATUS' | 'NOTIFICATION_STATE' | 'GENER
 
 export type QueuedRequest = {
   id: string;
+  kind: 'REQUEST';
+  principalId: string;
+  authGeneration: string;
+  laneKey: string;
   operation: OfflineOperation;
   url: string;
   method: string;
@@ -28,44 +38,65 @@ export type QueuedRequest = {
   lastError?: string | null;
   expectedState?: string | null;
   completedAt?: number | null;
+  leaseOwner?: string | null;
+  leaseUntil?: number | null;
+};
+
+type PrincipalMarker = {
+  id: '__opsknight_active_principal__';
+  kind: 'PRINCIPAL';
+  principalId: string;
+  authGeneration: string;
+  updatedAt: number;
 };
 
 export type EnqueueRequestInput = {
   operation?: OfflineOperation;
+  laneKey?: string;
   url: string;
   method: string;
   headers?: Record<string, string>;
   body?: string | null;
-  /** Reuse the key from an ambiguous online attempt so replay is side-effect safe. */
   idempotencyKey?: string;
   expectedState?: string | null;
 };
 
-const DB_NAME = 'opsknight-offline';
+export const OFFLINE_QUEUE_DB_NAME = 'opsknight-offline';
 const STORE_NAME = 'request-queue';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
+const MARKER_ID = '__opsknight_active_principal__';
 const TERMINAL_RETENTION_MS = 24 * 60 * 60 * 1000;
 const SENDING_LEASE_MS = 60 * 1000;
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
+const MAX_PARALLEL_LANES = 4;
+const MAX_OPERATIONS_PER_FLUSH = 32;
 const TERMINAL_STATES = new Set<OfflineQueueState>(['SUCCEEDED', 'FAILED', 'FORBIDDEN']);
+const EXECUTOR_ID = `window:${generateId()}`;
+
 const hasIndexedDb = () => typeof indexedDB !== 'undefined';
 
-const generateId = () => {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
+function generateId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `req_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-};
+}
 
-function normalizeStoredRequest(value: Partial<QueuedRequest> & { id: string; url: string; method: string }) {
+function normalizeStoredRequest(
+  value: Partial<QueuedRequest> & { id: string; url: string; method: string }
+): QueuedRequest {
   const now = Date.now();
   const headers = value.headers ?? {};
+  const principalId = value.principalId ?? '';
+  const authGeneration = value.authGeneration ?? '';
+  const operation = value.operation ?? 'GENERIC';
   const idempotencyKey =
     value.idempotencyKey || headers['Idempotency-Key'] || headers['idempotency-key'] || value.id;
-
   return {
     id: value.id,
-    operation: value.operation ?? 'GENERIC',
+    kind: 'REQUEST',
+    principalId,
+    authGeneration,
+    laneKey: value.laneKey ?? deriveOfflineLaneKey(operation, value.url, principalId),
+    operation,
     url: value.url,
     method: value.method,
     headers: { ...headers, 'Idempotency-Key': idempotencyKey },
@@ -80,56 +111,33 @@ function normalizeStoredRequest(value: Partial<QueuedRequest> & { id: string; ur
     lastError: value.lastError ?? null,
     expectedState: value.expectedState ?? null,
     completedAt: value.completedAt ?? null,
-  } satisfies QueuedRequest;
+    leaseOwner: value.leaseOwner ?? null,
+    leaseUntil: value.leaseUntil ?? null,
+  };
 }
 
 const openDb = () =>
   new Promise<IDBDatabase>((resolve, reject) => {
-    if (!hasIndexedDb()) {
-      reject(new Error('IndexedDB not available'));
-      return;
-    }
-
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    if (!hasIndexedDb()) return reject(new Error('IndexedDB not available'));
+    const request = indexedDB.open(OFFLINE_QUEUE_DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
       const store = db.objectStoreNames.contains(STORE_NAME)
         ? request.transaction?.objectStore(STORE_NAME)
         : db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-
       if (store && !store.indexNames.contains('createdAt')) {
         store.createIndex('createdAt', 'createdAt', { unique: false });
       }
       if (store && !store.indexNames.contains('state')) {
         store.createIndex('state', 'state', { unique: false });
       }
+      if (store && !store.indexNames.contains('laneKey')) {
+        store.createIndex('laneKey', 'laneKey', { unique: false });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
-
-const withStore = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => T) => {
-  if (!hasIndexedDb()) throw new Error('IndexedDB not available');
-  const db = await openDb();
-
-  return new Promise<T>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, mode);
-    const store = tx.objectStore(STORE_NAME);
-    const result = fn(store);
-    tx.oncomplete = () => {
-      db.close();
-      resolve(result);
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
-    tx.onabort = () => {
-      db.close();
-      reject(tx.error);
-    };
-  });
-};
 
 const requestToPromise = <T>(request: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
@@ -138,26 +146,78 @@ const requestToPromise = <T>(request: IDBRequest<T>) =>
   });
 
 async function putQueuedRequest(item: QueuedRequest) {
-  await withStore('readwrite', store => {
-    store.put(item);
-  });
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).put(item);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+export async function setOfflineQueuePrincipal(context: MobilePrincipalContext): Promise<void> {
+  if (!hasIndexedDb()) return;
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const read = store.getAll();
+      read.onsuccess = () => {
+        for (const raw of read.result as Array<Partial<QueuedRequest> & { id?: string; kind?: string }>) {
+          if (!raw.id || raw.id === MARKER_ID || raw.kind === 'PRINCIPAL') continue;
+          if (
+            raw.principalId !== context.principalId ||
+            raw.authGeneration !== context.authGeneration
+          ) {
+            store.delete(raw.id);
+          }
+        }
+        const marker: PrincipalMarker = {
+          id: MARKER_ID,
+          kind: 'PRINCIPAL',
+          principalId: context.principalId,
+          authGeneration: context.authGeneration,
+          updatedAt: Date.now(),
+        };
+        store.put(marker);
+      };
+      read.onerror = () => tx.abort();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 }
 
 export const enqueueRequest = async (request: EnqueueRequestInput) => {
   if (!hasIndexedDb()) return '';
+  const principal = readMobilePrincipalContext();
+  if (!principal) return '';
+  await setOfflineQueuePrincipal(principal);
 
   const id = generateId();
   const idempotencyKey = request.idempotencyKey?.trim() || id;
+  const operation = request.operation ?? 'GENERIC';
   const now = Date.now();
   const payload: QueuedRequest = {
     id,
-    operation: request.operation ?? 'GENERIC',
+    kind: 'REQUEST',
+    principalId: principal.principalId,
+    authGeneration: principal.authGeneration,
+    laneKey:
+      request.laneKey ?? deriveOfflineLaneKey(operation, request.url, principal.principalId),
+    operation,
     url: request.url,
     method: request.method,
-    headers: {
-      ...request.headers,
-      'Idempotency-Key': idempotencyKey,
-    },
+    headers: { ...request.headers, 'Idempotency-Key': idempotencyKey },
     body: request.body ?? null,
     createdAt: now,
     updatedAt: now,
@@ -169,37 +229,44 @@ export const enqueueRequest = async (request: EnqueueRequestInput) => {
     lastError: null,
     expectedState: request.expectedState ?? null,
     completedAt: null,
+    leaseOwner: null,
+    leaseUntil: null,
   };
-
   await putQueuedRequest(payload);
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('opsknight:offline-queue-changed'));
     try {
-      if ('serviceWorker' in navigator && 'SyncManager' in window) {
+      if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.ready;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (registration as any).sync.register('opsknight-sync');
+        const syncRegistration = registration as ServiceWorkerRegistration & {
+          sync?: { register(tag: string): Promise<void> };
+        };
+        await syncRegistration.sync?.register('opsknight-sync');
       }
     } catch {
-      // Background Sync is not universally available; foreground/online replay remains authoritative.
+      // Background Sync is enhancement-only; foreground replay remains authoritative.
     }
   }
-
   return payload.id;
 };
 
 export const listQueuedRequests = async (): Promise<QueuedRequest[]> => {
   if (!hasIndexedDb()) return [];
+  const principal = readMobilePrincipalContext();
+  if (!principal) return [];
   const db = await openDb();
-
   try {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    const raw = (await requestToPromise(store.getAll())) as Array<
-      Partial<QueuedRequest> & { id: string; url: string; method: string }
-    >;
-    return raw.map(normalizeStoredRequest).sort((a, b) => a.createdAt - b.createdAt);
+    const raw = await requestToPromise(db.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).getAll());
+    return (raw as Array<Record<string, unknown>>)
+      .filter(value => value.id !== MARKER_ID && value.kind !== 'PRINCIPAL')
+      .map(value => normalizeStoredRequest(value as Partial<QueuedRequest> & { id: string; url: string; method: string }))
+      .filter(
+        item =>
+          item.principalId === principal.principalId &&
+          item.authGeneration === principal.authGeneration
+      )
+      .sort((a, b) => a.createdAt - b.createdAt);
   } finally {
     db.close();
   }
@@ -207,9 +274,18 @@ export const listQueuedRequests = async (): Promise<QueuedRequest[]> => {
 
 export const removeQueuedRequest = async (id: string) => {
   if (!hasIndexedDb()) return;
-  await withStore('readwrite', store => {
-    store.delete(id);
-  });
+  const db = await openDb();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      tx.objectStore(STORE_NAME).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('opsknight:offline-queue-changed'));
   }
@@ -218,62 +294,58 @@ export const removeQueuedRequest = async (id: string) => {
 async function cleanupTerminalRequests(now = Date.now()) {
   const items = await listQueuedRequests();
   const expired = items.filter(
-    item =>
-      item.completedAt &&
-      now - item.completedAt > TERMINAL_RETENTION_MS &&
-      TERMINAL_STATES.has(item.state)
+    item => item.completedAt && now - item.completedAt > TERMINAL_RETENTION_MS && TERMINAL_STATES.has(item.state)
   );
   await Promise.all(expired.map(item => removeQueuedRequest(item.id)));
 }
 
-async function recoverInterruptedRequests(now = Date.now()) {
-  const items = await listQueuedRequests();
-  const stranded = items.filter(
-    item =>
-      item.state === 'SENDING' &&
-      (item.lastAttemptAt == null || now - item.lastAttemptAt >= SENDING_LEASE_MS)
-  );
-
-  for (const item of stranded) {
-    await putQueuedRequest({
-      ...item,
-      state: 'PENDING',
-      updatedAt: now,
-      nextAttemptAt: now,
-      lastError: item.lastError || 'Previous sync was interrupted; retrying safely.',
-    });
-  }
-}
-
-/**
- * Auth failures are deliberately parked instead of retried. Once an authenticated
- * mobile shell has been re-established, only those parked operations are made
- * eligible for the normal FIFO/idempotent replay loop again. Conflict, FORBIDDEN,
- * and FAILED records are never revived here.
- */
 export const resumeAuthRequiredOperations = async () => {
   if (!hasIndexedDb()) return 0;
-
+  const principal = readMobilePrincipalContext();
+  if (!principal) return 0;
   const now = Date.now();
-  const items = await listQueuedRequests();
-  const resumable = items.filter(item => item.state === 'AUTH_REQUIRED');
-
-  for (const item of resumable) {
-    await putQueuedRequest({
-      ...item,
-      state: 'PENDING',
-      updatedAt: now,
-      nextAttemptAt: now,
-      completedAt: null,
-      lastError: 'Authentication restored; queued for safe replay.',
-    });
+  const items = (await listQueuedRequests()).filter(item => item.state === 'AUTH_REQUIRED');
+  let resumed = 0;
+  for (const item of items) {
+    const db = await openDb();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const read = store.get(item.id);
+        read.onsuccess = () => {
+          const current = read.result as QueuedRequest | undefined;
+          if (
+            current?.state === 'AUTH_REQUIRED' &&
+            current.principalId === principal.principalId &&
+            current.authGeneration === principal.authGeneration
+          ) {
+            store.put({
+              ...normalizeStoredRequest(current),
+              state: 'PENDING',
+              updatedAt: now,
+              nextAttemptAt: now,
+              completedAt: null,
+              leaseOwner: null,
+              leaseUntil: null,
+              lastError: 'Authentication restored; queued for safe replay.',
+            });
+            resumed += 1;
+          }
+        };
+        read.onerror = () => tx.abort();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } finally {
+      db.close();
+    }
   }
-
-  if (resumable.length > 0 && typeof window !== 'undefined') {
+  if (resumed > 0 && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('opsknight:offline-queue-changed'));
   }
-
-  return resumable.length;
+  return resumed;
 };
 
 function retryAfterMs(response: Response): number | null {
@@ -309,10 +381,143 @@ function stateForStatus(status: number): OfflineQueueState | null {
   return null;
 }
 
-async function transition(item: QueuedRequest, patch: Partial<QueuedRequest>) {
-  await putQueuedRequest({ ...item, ...patch, updatedAt: Date.now() });
-  if (typeof window !== 'undefined') {
+function firstPerLane(items: QueuedRequest[]) {
+  const lanes = new Map<string, QueuedRequest>();
+  for (const item of items) {
+    if (TERMINAL_STATES.has(item.state)) continue;
+    if (!lanes.has(item.laneKey)) lanes.set(item.laneKey, item);
+  }
+  return [...lanes.values()].sort((a, b) => a.createdAt - b.createdAt);
+}
+
+async function claimRequest(
+  candidate: QueuedRequest,
+  principal: MobilePrincipalContext,
+  now: number
+): Promise<QueuedRequest | null> {
+  const db = await openDb();
+  try {
+    return await new Promise<QueuedRequest | null>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const read = store.get(candidate.id);
+      let claimed: QueuedRequest | null = null;
+      read.onsuccess = () => {
+        const raw = read.result as QueuedRequest | undefined;
+        if (!raw) return;
+        const current = normalizeStoredRequest(raw);
+        if (
+          current.principalId !== principal.principalId ||
+          current.authGeneration !== principal.authGeneration
+        ) return;
+        const staleLease = current.state === 'SENDING' && (current.leaseUntil ?? 0) <= now;
+        const pendingAndDue =
+          current.state === 'PENDING' && (current.nextAttemptAt == null || current.nextAttemptAt <= now);
+        if (!pendingAndDue && !staleLease) return;
+        claimed = {
+          ...current,
+          state: 'SENDING',
+          retryCount: current.retryCount + 1,
+          lastAttemptAt: now,
+          nextAttemptAt: null,
+          lastError: staleLease ? 'Recovered expired replay lease.' : null,
+          leaseOwner: EXECUTOR_ID,
+          leaseUntil: now + SENDING_LEASE_MS,
+          updatedAt: now,
+        };
+        store.put(claimed);
+      };
+      read.onerror = () => tx.abort();
+      tx.oncomplete = () => resolve(claimed);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function transitionClaimed(item: QueuedRequest, patch: Partial<QueuedRequest>) {
+  const db = await openDb();
+  let changed = false;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readwrite');
+      const store = tx.objectStore(STORE_NAME);
+      const read = store.get(item.id);
+      read.onsuccess = () => {
+        const current = read.result as QueuedRequest | undefined;
+        if (!current || current.leaseOwner !== EXECUTOR_ID) return;
+        store.put({
+          ...normalizeStoredRequest(current),
+          ...patch,
+          updatedAt: Date.now(),
+          leaseOwner: null,
+          leaseUntil: null,
+        });
+        changed = true;
+      };
+      read.onerror = () => tx.abort();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+  if (changed && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('opsknight:offline-queue-changed'));
+  }
+}
+
+async function processClaimed(item: QueuedRequest) {
+  try {
+    const response = await fetch(item.url, {
+      method: item.method,
+      headers: item.headers,
+      body: item.body ?? undefined,
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (response.ok) {
+      await transitionClaimed(item, {
+        state: 'SUCCEEDED',
+        completedAt: Date.now(),
+        nextAttemptAt: null,
+        lastError: null,
+      });
+      return true;
+    }
+
+    const error = await responseError(response);
+    const nextState = stateForStatus(response.status);
+    if (nextState) {
+      await transitionClaimed(item, {
+        state: nextState,
+        completedAt: TERMINAL_STATES.has(nextState) ? Date.now() : null,
+        nextAttemptAt: null,
+        lastError: error,
+      });
+      return true;
+    }
+
+    const delay =
+      response.status === 429
+        ? retryAfterMs(response) ?? exponentialBackoffMs(item.retryCount)
+        : exponentialBackoffMs(item.retryCount);
+    await transitionClaimed(item, {
+      state: 'PENDING',
+      nextAttemptAt: Date.now() + delay,
+      lastError: error,
+    });
+    return false;
+  } catch (error) {
+    await transitionClaimed(item, {
+      state: 'PENDING',
+      nextAttemptAt: Date.now() + exponentialBackoffMs(item.retryCount),
+      lastError: error instanceof Error ? error.message : 'Network unavailable',
+    });
+    return false;
   }
 }
 
@@ -322,94 +527,50 @@ function remainingNonTerminal(items: QueuedRequest[]) {
 
 export const flushQueuedRequests = async () => {
   if (!hasIndexedDb()) return { flushed: 0, remaining: 0 };
+  const principal = readMobilePrincipalContext();
+  if (!principal) return { flushed: 0, remaining: 0 };
   if (typeof window !== 'undefined' && !navigator.onLine) {
-    const queue = await listQueuedRequests();
-    return { flushed: 0, remaining: remainingNonTerminal(queue) };
+    return { flushed: 0, remaining: remainingNonTerminal(await listQueuedRequests()) };
   }
 
-  const now = Date.now();
-  await cleanupTerminalRequests(now);
-  await recoverInterruptedRequests(now);
-  const queue = await listQueuedRequests();
+  await setOfflineQueuePrincipal(principal);
+  await cleanupTerminalRequests();
   let flushed = 0;
+  let processed = 0;
 
-  // Strict FIFO invariant: never filter blockers out before evaluating order.
-  // The first non-terminal operation owns the queue. If it is backing off,
-  // actively sending, waiting for auth, or in conflict, later operations must
-  // not leapfrog it (for example RESOLVE must never pass a delayed ACK).
-  for (const original of queue) {
-    if (TERMINAL_STATES.has(original.state)) continue;
-    if (original.state !== 'PENDING') break;
-    if (original.nextAttemptAt != null && original.nextAttemptAt > Date.now()) break;
+  while (processed < MAX_OPERATIONS_PER_FLUSH) {
+    const queue = await listQueuedRequests();
+    const now = Date.now();
+    const candidates = firstPerLane(queue).filter(item => {
+      if (item.state === 'AUTH_REQUIRED' || item.state === 'CONFLICT') return false;
+      if (item.state === 'SENDING') return (item.leaseUntil ?? 0) <= now;
+      return item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now);
+    });
+    if (candidates.length === 0) break;
 
-    const sending: QueuedRequest = {
-      ...original,
-      state: 'SENDING',
-      retryCount: original.retryCount + 1,
-      lastAttemptAt: Date.now(),
-      nextAttemptAt: null,
-      lastError: null,
-      updatedAt: Date.now(),
-    };
-    await putQueuedRequest(sending);
+    const claimed = (
+      await Promise.all(
+        candidates
+          .slice(0, MAX_PARALLEL_LANES)
+          .map(candidate => claimRequest(candidate, principal, now))
+      )
+    ).filter((item): item is QueuedRequest => Boolean(item));
+    if (claimed.length === 0) break;
 
-    try {
-      const response = await fetch(sending.url, {
-        method: sending.method,
-        headers: sending.headers,
-        body: sending.body ?? undefined,
-        credentials: 'include',
-        cache: 'no-store',
-      });
-
-      if (response.ok) {
-        await transition(sending, {
-          state: 'SUCCEEDED',
-          completedAt: Date.now(),
-          nextAttemptAt: null,
-          lastError: null,
-        });
-        flushed += 1;
-        continue;
-      }
-
-      const error = await responseError(response);
-      const nextState = stateForStatus(response.status);
-      if (nextState) {
-        const terminal = TERMINAL_STATES.has(nextState);
-        await transition(sending, {
-          state: nextState,
-          completedAt: terminal ? Date.now() : null,
-          nextAttemptAt: null,
-          lastError: error,
-        });
-        if (!terminal) break;
-        continue;
-      }
-
-      const delay =
-        response.status === 429
-          ? retryAfterMs(response) ?? exponentialBackoffMs(sending.retryCount)
-          : exponentialBackoffMs(sending.retryCount);
-      await transition(sending, {
-        state: 'PENDING',
-        nextAttemptAt: Date.now() + delay,
-        lastError: error,
-      });
-      break;
-    } catch (error) {
-      await transition(sending, {
-        state: 'PENDING',
-        nextAttemptAt: Date.now() + exponentialBackoffMs(sending.retryCount),
-        lastError: error instanceof Error ? error.message : 'Network unavailable',
-      });
-      break;
-    }
+    const results = await Promise.all(claimed.map(item => processClaimed(item)));
+    flushed += results.filter(Boolean).length;
+    processed += claimed.length;
   }
 
-  const remainingQueue = await listQueuedRequests();
-  return {
-    flushed,
-    remaining: remainingNonTerminal(remainingQueue),
-  };
+  return { flushed, remaining: remainingNonTerminal(await listQueuedRequests()) };
 };
+
+export async function purgeOfflineQueueStorage(): Promise<void> {
+  if (!hasIndexedDb()) return;
+  await new Promise<void>(resolve => {
+    const request = indexedDB.deleteDatabase(OFFLINE_QUEUE_DB_NAME);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}

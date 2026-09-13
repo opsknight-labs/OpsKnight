@@ -58,17 +58,13 @@ async function parseError(response: Response) {
       message: typeof payload.error === 'string' ? payload.error : `HTTP ${response.status}`,
       code: typeof payload.code === 'string' ? payload.code : `HTTP_${response.status}`,
       retryable:
-        payload.retryable === true ||
-        response.status === 408 ||
-        response.status === 429 ||
-        response.status >= 500,
+        payload.retryable === true || response.status === 408 || response.status === 429 || response.status >= 500,
     };
   } catch {
     return {
       message: `HTTP ${response.status}`,
       code: `HTTP_${response.status}`,
-      retryable:
-        response.status === 408 || response.status === 429 || response.status >= 500,
+      retryable: response.status === 408 || response.status === 429 || response.status >= 500,
     };
   }
 }
@@ -85,6 +81,7 @@ async function queueStatusMutation(input: {
   });
   const queueId = await enqueueRequest({
     operation: 'INCIDENT_STATUS',
+    laneKey: `incident:${input.incidentId}`,
     url: mutationUrl(input.incidentId),
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -103,18 +100,12 @@ async function queueStatusMutation(input: {
   return { state: 'QUEUED' as const, queueId };
 }
 
-/**
- * Executes a responder status mutation with one idempotency key across the
- * immediate request and any ambiguous/offline replay. Queued never means
- * committed; callers must render those states differently.
- */
 export async function mutateIncidentStatus(input: {
   incidentId: string;
   status: BrowserIncidentStatus;
   expectedStatus?: BrowserIncidentStatus;
 }): Promise<IncidentStatusMutationResult> {
   const idempotencyKey = newIdempotencyKey(input.incidentId);
-
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return queueStatusMutation({ ...input, idempotencyKey });
   }
@@ -123,19 +114,14 @@ export async function mutateIncidentStatus(input: {
     status: input.status,
     ...(input.expectedStatus ? { expectedStatus: input.expectedStatus } : {}),
   });
-
   try {
     const response = await fetch(mutationUrl(input.incidentId), {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey,
-      },
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
       body,
       credentials: 'include',
       cache: 'no-store',
     });
-
     if (!response.ok) {
       const error = await parseError(response);
       throw new IncidentStatusMutationError(
@@ -145,22 +131,14 @@ export async function mutateIncidentStatus(input: {
         error.retryable
       );
     }
-
     let duplicate = response.headers.get('Idempotency-Replayed') === 'true';
     try {
       const payload = (await response.clone().json()) as { duplicate?: unknown };
       duplicate = duplicate || payload.duplicate === true;
-    } catch {
-      // A 2xx response is authoritative even if a legacy server omitted JSON.
-    }
+    } catch {}
     return { state: 'COMMITTED', duplicate };
   } catch (error) {
     if (error instanceof IncidentStatusMutationError) throw error;
-
-    // Fetch transport failures are ambiguous even when navigator.onLine remains
-    // true (radio handoff, proxy reset, captive portal, tab suspension). The
-    // server may already have committed, so persist the SAME idempotency key and
-    // replay it instead of asking the user to issue a fresh mutation.
     try {
       return await queueStatusMutation({ ...input, idempotencyKey });
     } catch (queueError) {
