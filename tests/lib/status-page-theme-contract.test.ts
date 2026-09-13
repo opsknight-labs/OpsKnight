@@ -58,7 +58,7 @@ describe('status page design contract', () => {
     expect(css).toContain('.status-v3-incident-pill__summary');
   });
 
-  it('hardens dark themes against inherited light branding tokens', () => {
+  it('hardens dark themes against inherited light branding tokens while preserving status semantics', () => {
     const css = compileStatusPageThemeCss('command-center');
 
     expect(resolveStatusPageTheme('command-center').mode).toBe('dark');
@@ -67,9 +67,8 @@ describe('status page design contract', () => {
     expect(css).toContain('--sp-ink: #f8fafc');
     expect(css).toContain('--status-primary: var(--sp-theme-accent)');
     expect(css).toContain('--primary: var(--sp-theme-accent)');
-    expect(css).toContain('--status-operational: #6ee7b7');
-    expect(css).toContain('--status-operational-bg: color-mix');
-    expect(css).toContain('--status-major-outage: #fda4af');
+    expect(css).not.toContain('--status-operational: #6ee7b7');
+    expect(css).not.toContain('--status-major-outage: #fda4af');
     expect(css).toContain('.status-topbar__chip--accent');
     expect(css).toContain('.status-subscribe__button');
   });
@@ -88,12 +87,7 @@ describe('status page design contract', () => {
       theme => theme.id
     );
 
-    expect(darkThemes).toEqual([
-      'global-operations',
-      'terminal',
-      'arena-neon',
-      'command-center',
-    ]);
+    expect(darkThemes).toEqual(['global-operations', 'terminal', 'arena-neon', 'command-center']);
   });
 
   it('keeps the curated gallery intentionally small and versioned', () => {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition, useMemo } from 'react';
 import { statusPageSectionPatch } from '@/lib/status-pages/settings-sections';
 import { Card, Button, FormField, Switch, Checkbox } from '@/components/ui';
 import StatusPageLivePreview from '@/components/status-page/StatusPageLivePreview';
+import StatusPageDesignSection from '@/components/status-page/StatusPageDesignSection';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { notify } from '@/lib/toast';
 import { useRouter } from 'next/navigation';
@@ -35,6 +36,7 @@ import {
   Link2,
   Mail,
   Palette,
+  Sparkles,
   Type,
   Layout,
   Image as ImageIcon,
@@ -57,6 +59,12 @@ import {
   STATUS_PAGE_COLOR_PRESETS,
   computeStatusPageTheme,
 } from '@/lib/status-page-theme';
+import {
+  STATUS_PAGE_THEME_VERSION,
+  resolveStatusPageTheme,
+  resolveStatusPageThemeDensity,
+  type StatusPageThemeDensity,
+} from '@/lib/status-pages/theme-contract';
 
 type StatusPageBranding = {
   logoUrl?: string;
@@ -79,6 +87,9 @@ type StatusPageBranding = {
   refreshInterval?: number;
   showRssLink?: boolean;
   showApiLink?: boolean;
+  themeId?: string;
+  themeVersion?: number;
+  themeDensity?: StatusPageThemeDensity;
 };
 
 function isStatusPageBranding(value: unknown): value is StatusPageBranding {
@@ -799,6 +810,10 @@ export default function StatusPageConfig({
     fontFamily: branding.fontFamily || 'default',
     // Custom CSS
     customCss: branding.customCss || '',
+    // Curated theme
+    themeId: resolveStatusPageTheme(branding.themeId).id,
+    themeVersion: STATUS_PAGE_THEME_VERSION,
+    themeDensity: resolveStatusPageThemeDensity(branding.themeDensity),
     // Layout
     layout: branding.layout || 'default', // default, compact, wide
     showHeader: branding.showHeader !== false,
@@ -843,6 +858,7 @@ export default function StatusPageConfig({
   const sidebarItems: SidebarItem[] = [
     { id: 'general', label: 'General', icon: <Settings className="w-3.5 h-3.5" /> },
     { id: 'appearance', label: 'Appearance', icon: <Palette className="w-3.5 h-3.5" /> },
+    { id: 'design', label: 'Design', icon: <Sparkles className="w-3.5 h-3.5" /> },
     { id: 'services', label: 'Services', icon: <Wrench className="w-3.5 h-3.5" /> },
     { id: 'privacy', label: 'Privacy & Data', icon: <Shield className="w-3.5 h-3.5" /> },
     { id: 'content', label: 'Content', icon: <FileText className="w-3.5 h-3.5" /> },
@@ -855,7 +871,6 @@ export default function StatusPageConfig({
     { id: 'integrations', label: 'Integrations', icon: <Link2 className="w-3.5 h-3.5" /> },
     { id: 'subscribers', label: 'Subscribers', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'email-delivery', label: 'Email Delivery', icon: <Mail className="w-3.5 h-3.5" /> },
-    { id: 'customization', label: 'Custom CSS', icon: <Code className="w-3.5 h-3.5" /> },
     { id: 'advanced', label: 'Advanced', icon: <Sliders className="w-3.5 h-3.5" /> },
   ];
 
@@ -1048,6 +1063,9 @@ export default function StatusPageConfig({
     showApiLink: formData.showApiLink,
     uptimeExcellentThreshold: formData.uptimeExcellentThreshold,
     uptimeGoodThreshold: formData.uptimeGoodThreshold,
+    themeId: formData.themeId,
+    themeVersion: formData.themeVersion,
+    themeDensity: formData.themeDensity,
   };
   const effectiveColorTheme = computeStatusPageTheme({
     primaryColor: formData.primaryColor,
@@ -1083,6 +1101,9 @@ export default function StatusPageConfig({
           refreshInterval: formData.refreshInterval,
           showRssLink: formData.showRssLink,
           showApiLink: formData.showApiLink,
+          themeId: formData.themeId,
+          themeVersion: formData.themeVersion,
+          themeDensity: formData.themeDensity,
         };
 
         const response = await fetch(
@@ -2360,6 +2381,20 @@ export default function StatusPageConfig({
                       </div>
                     </StatusPageSectionCard>
                   </div>
+                )}
+
+                {/* Design Settings */}
+                {activeSection === 'design' && (
+                  <StatusPageDesignSection
+                    themeId={formData.themeId}
+                    density={formData.themeDensity}
+                    customCss={formData.customCss}
+                    onThemeChange={themeId => setFormData(prev => ({ ...prev, themeId }))}
+                    onDensityChange={themeDensity =>
+                      setFormData(prev => ({ ...prev, themeDensity }))
+                    }
+                    onCustomCssChange={customCss => setFormData(prev => ({ ...prev, customCss }))}
+                  />
                 )}
 
                 {/* Services Configuration */}
