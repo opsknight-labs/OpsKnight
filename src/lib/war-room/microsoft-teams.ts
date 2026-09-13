@@ -55,7 +55,11 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
   const marker = warRoomMarker(room.incident.id, room.generation);
   const existing = await findWarRoomChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, marker });
   if (existing.ok && existing.value) {
-    await runSerializableTransaction(tx => markWarRoomReady(tx, { warRoomId: room.id, provisioningToken: room.provisioningToken!, tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: existing.value!.id, channelName: existing.value!.displayName, channelUrl: existing.value!.webUrl }));
+    const adopted = await runSerializableTransaction(tx => markWarRoomReady(tx, { warRoomId: room.id, provisioningToken: room.provisioningToken!, tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: existing.value!.id, channelName: existing.value!.displayName, channelUrl: existing.value!.webUrl }));
+    if (adopted) {
+      const { projectMicrosoftTeamsWarRoomParticipants } = await import('./participants');
+      await projectMicrosoftTeamsWarRoomParticipants(room.id);
+    }
     return;
   }
   // A failed or incomplete read is never evidence that a room is absent.
