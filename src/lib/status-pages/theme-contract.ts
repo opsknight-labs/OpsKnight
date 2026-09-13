@@ -227,6 +227,118 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     }
   ),
   theme(
+    'cyber-arcade',
+    'Cyber Arcade',
+    'gaming',
+    'Electric arcade light styling with vibrant purple accents for game portals and studios.',
+    { surface: '#faf8ff', surfaceAlt: '#f3e8ff', accent: '#9333ea', text: '#1e1b4b' },
+    {
+      radius: '10px',
+      shadow: '0 8px 24px rgb(147 51 234 / 0.08)',
+      header: 'split',
+      services: 'cards',
+      incidents: 'cards',
+    }
+  ),
+  theme(
+    'pixel-quest',
+    'Pixel Quest',
+    'gaming',
+    'Playful and clear game launcher layout with lush emerald status highlights.',
+    { surface: '#f8fafc', surfaceAlt: '#f1f5f9', accent: '#059669', text: '#0f172a' },
+    {
+      radius: '12px',
+      shadow: '0 8px 20px rgb(15 23 42 / 0.06)',
+      header: 'classic',
+      services: 'cards',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'respawn-dark',
+    'Respawn Dark',
+    'gaming',
+    'Deep obsidian game server telemetry with high-visibility amber alerts.',
+    { surface: '#0d0d12', surfaceAlt: '#161622', accent: '#f59e0b', text: '#f8fafc' },
+    {
+      radius: '8px',
+      shadow: '0 10px 28px rgb(0 0 0 / 0.35)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'stealth-val',
+    'Stealth Tactical',
+    'gaming',
+    'Tactical shooter-inspired dark cockpit with striking crimson focus states.',
+    { surface: '#0f111a', surfaceAlt: '#181b26', accent: '#ef4444', text: '#f8fafc' },
+    {
+      radius: '4px',
+      shadow: '0 0 20px rgb(239 68 68 / 0.12)',
+      header: 'command',
+      services: 'cards',
+      incidents: 'cards',
+    }
+  ),
+  theme(
+    'horizon-corporate',
+    'Horizon Corporate',
+    'enterprise',
+    'Polished corporate blue styling tailored for enterprise and institutional trust.',
+    { surface: '#ffffff', surfaceAlt: '#eff6ff', accent: '#1e40af', text: '#1e293b' },
+    {
+      radius: '8px',
+      shadow: '0 8px 24px rgb(30 64 175 / 0.06)',
+      header: 'split',
+      services: 'cards',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'nordic-frost',
+    'Nordic Frost',
+    'universal',
+    'Minimalist Scandinavian layout with clean icy surfaces and cobalt accents.',
+    { surface: '#ffffff', surfaceAlt: '#f0f4f8', accent: '#0284c7', text: '#0f172a' },
+    {
+      radius: '10px',
+      shadow: '0 6px 20px rgb(15 23 42 / 0.05)',
+      header: 'classic',
+      services: 'rows',
+      incidents: 'timeline',
+    }
+  ),
+  theme(
+    'monochrome-pro',
+    'Monochrome Pro',
+    'developer',
+    'Pure obsidian stealth minimalism with high-contrast monochrome cues.',
+    { surface: '#050505', surfaceAlt: '#121212', accent: '#f4f4f5', text: '#ededed' },
+    {
+      radius: '6px',
+      shadow: '0 10px 30px rgb(0 0 0 / 0.4)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'slate-observability',
+    'Slate Observability',
+    'developer',
+    'Telemetry-inspired dark dashboard with crisp cyan monitoring accents.',
+    { surface: '#111827', surfaceAlt: '#1f2937', accent: '#06b6d4', text: '#f9fafb' },
+    {
+      radius: '8px',
+      shadow: '0 12px 28px rgb(0 0 0 / 0.28)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
+  ),
+  theme(
     'finance-ledger',
     'Finance Ledger',
     'regulated',

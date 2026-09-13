@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -13,7 +13,6 @@ import {
   Moon,
 } from 'lucide-react';
 import { Button } from '@/components/ui';
-import { InlineNotice } from '@/components/ui/InlineNotice';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
 import { cn } from '@/lib/utils';
 import {
@@ -53,12 +52,17 @@ export default function StatusPageDesignSection({
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
   const [familyFilter, setFamilyFilter] = useState<string>('all');
   const [cssExpanded, setCssExpanded] = useState(() =>
-    Boolean(customCss && customCss.trim().length > 0)
+    Boolean(customCss && !isLegacyStatusPageTemplateCss(customCss) && customCss.trim().length > 0)
   );
 
+  // Auto-cleanup retired legacy custom CSS templates
+  useEffect(() => {
+    if (customCss && isLegacyStatusPageTemplateCss(customCss)) {
+      onCustomCssChange('');
+    }
+  }, [customCss, onCustomCssChange]);
+
   const selectedTheme = resolveStatusPageTheme(themeId);
-  const legacyCssIgnored =
-    selectedTheme.id !== DEFAULT_STATUS_PAGE_THEME_ID && isLegacyStatusPageTemplateCss(customCss);
 
   // Extract unique families for filtering
   const families = useMemo(() => {
@@ -363,13 +367,6 @@ export default function StatusPageDesignSection({
           </div>
         }
       >
-        {legacyCssIgnored && (
-          <InlineNotice tone="warning" title="Legacy template CSS is ignored" className="mb-3">
-            This CSS came from the retired template gallery and is ignored while{' '}
-            {selectedTheme.name} is selected.
-          </InlineNotice>
-        )}
-
         {cssExpanded ? (
           <div>
             <textarea
