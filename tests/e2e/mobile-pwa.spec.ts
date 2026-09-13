@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+const FIXTURE_EMAIL = 'mobile-pwa-fixture@example.invalid';
+const FIXTURE_PASSWORD = 'Mobile-pwa-harbor-472!';
 
 async function assertNoHorizontalOverflow(page: import('@playwright/test').Page) {
   const dimensions = await page.evaluate(() => ({
@@ -11,17 +14,29 @@ async function assertNoHorizontalOverflow(page: import('@playwright/test').Page)
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1);
 }
 
+async function loginToMobile(page: import('@playwright/test').Page) {
+  await page.goto('/login?callbackUrl=%2Fm');
+  await page.locator('input[type="email"]').fill(FIXTURE_EMAIL);
+  await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
+  await page.locator('form button[type="submit"]').click();
+  await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
+  await expect(page.locator('.mobile-nav')).toBeVisible();
+}
+
 test.describe('mobile PWA browser contract', () => {
   test.beforeAll(async () => {
-    // The login page intentionally redirects a truly empty installation to setup.
-    // This fixture establishes only the post-bootstrap state; no reusable browser
-    // credential is created by this responsive/PWA suite.
+    // Establish a post-bootstrap active account that can exercise the real
+    // authenticated shell in both Chromium/Android and WebKit/iPhone projects.
     await prisma.user.upsert({
-      where: { email: 'mobile-pwa-fixture@example.invalid' },
-      update: { status: 'ACTIVE' },
+      where: { email: FIXTURE_EMAIL },
+      update: {
+        status: 'ACTIVE',
+        passwordHash: await bcrypt.hash(FIXTURE_PASSWORD, 12),
+      },
       create: {
-        email: 'mobile-pwa-fixture@example.invalid',
+        email: FIXTURE_EMAIL,
         name: 'Mobile PWA Fixture',
+        passwordHash: await bcrypt.hash(FIXTURE_PASSWORD, 12),
         role: 'USER',
         status: 'ACTIVE',
       },
@@ -53,7 +68,37 @@ test.describe('mobile PWA browser contract', () => {
     await assertNoHorizontalOverflow(page);
   });
 
+  test('authenticated shell stays distortion-free from narrow phone through landscape', async ({
+    page,
+  }) => {
+    await loginToMobile(page);
+
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 844, height: 390 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.reload();
+      await expect(page.locator('.mobile-nav')).toBeVisible();
+      await assertNoHorizontalOverflow(page);
+
+      const navTargets = await page.locator('.mobile-nav a').evaluateAll(nodes =>
+        nodes.map(node => {
+          const rect = node.getBoundingClientRect();
+          return { width: rect.width, height: rect.height };
+        })
+      );
+      expect(navTargets.length).toBeGreaterThan(0);
+      for (const target of navTargets) {
+        expect(target.height).toBeGreaterThanOrEqual(44);
+        expect(target.width).toBeGreaterThan(0);
+      }
+    }
+  });
+
   test('protected mobile navigation preserves a safe same-origin callback', async ({ page }) => {
+    await page.context().clearCookies();
     await page.goto('/m/incidents');
     await expect(page).toHaveURL(/\/login\?/);
     const current = new URL(page.url());
