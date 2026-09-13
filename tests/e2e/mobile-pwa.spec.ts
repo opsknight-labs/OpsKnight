@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 async function assertNoHorizontalOverflow(page: import('@playwright/test').Page) {
   const dimensions = await page.evaluate(() => ({
@@ -9,6 +12,26 @@ async function assertNoHorizontalOverflow(page: import('@playwright/test').Page)
 }
 
 test.describe('mobile PWA browser contract', () => {
+  test.beforeAll(async () => {
+    // The login page intentionally redirects a truly empty installation to setup.
+    // This fixture establishes only the post-bootstrap state; no reusable browser
+    // credential is created by this responsive/PWA suite.
+    await prisma.user.upsert({
+      where: { email: 'mobile-pwa-fixture@example.invalid' },
+      update: { status: 'ACTIVE' },
+      create: {
+        email: 'mobile-pwa-fixture@example.invalid',
+        name: 'Mobile PWA Fixture',
+        role: 'USER',
+        status: 'ACTIVE',
+      },
+    });
+  });
+
+  test.afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
   test('mobile compatibility login renders the canonical auth surface without clipping', async ({
     page,
   }) => {
