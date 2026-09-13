@@ -1,0 +1,88 @@
+name: Mobile PWA Browser E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/app/(mobile)/**'
+      - 'src/app/(public)/m/**'
+      - 'src/components/mobile/**'
+      - 'src/components/DashboardNotifications.tsx'
+      - 'src/lib/offline-queue.ts'
+      - 'src/lib/incidents/status-client.ts'
+      - 'src/lib/incidents/status-http.ts'
+      - 'src/lib/incident-push-delivery.ts'
+      - 'public/custom-sw.js'
+      - 'next.config.ts'
+      - 'playwright.config.ts'
+      - 'tests/e2e/mobile-pwa.spec.ts'
+      - '.github/workflows/mobile-pwa-e2e.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-pwa-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: opsknight_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public
+      HUSKY: '0'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Prepare browser-test database
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
+          npm run prisma:indexes:status-platform
+
+      - name: Install mobile browser engines
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run Android and iPhone PWA browser contracts
+        run: >-
+          npx playwright test tests/e2e/mobile-pwa.spec.ts
+          --project=mobile-chromium
+          --project=mobile-webkit
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-pwa-playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
