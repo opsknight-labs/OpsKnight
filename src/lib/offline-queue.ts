@@ -243,6 +243,37 @@ async function recoverInterruptedRequests(now = Date.now()) {
   }
 }
 
+/**
+ * Auth failures are deliberately parked instead of retried. Once an authenticated
+ * mobile shell has been re-established, only those parked operations are made
+ * eligible for the normal FIFO/idempotent replay loop again. Conflict and FAILED
+ * records are never revived here.
+ */
+export const resumeAuthRequiredOperations = async () => {
+  if (!hasIndexedDb()) return 0;
+
+  const now = Date.now();
+  const items = await listQueuedRequests();
+  const resumable = items.filter(item => item.state === 'AUTH_REQUIRED');
+
+  for (const item of resumable) {
+    await putQueuedRequest({
+      ...item,
+      state: 'PENDING',
+      updatedAt: now,
+      nextAttemptAt: now,
+      completedAt: null,
+      lastError: 'Authentication restored; queued for safe replay.',
+    });
+  }
+
+  if (resumable.length > 0 && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('opsknight:offline-queue-changed'));
+  }
+
+  return resumable.length;
+};
+
 function retryAfterMs(response: Response): number | null {
   const header = response.headers.get('retry-after');
   if (!header) return null;
