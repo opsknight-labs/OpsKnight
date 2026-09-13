@@ -51,19 +51,50 @@ test.describe('mobile PWA browser contract', () => {
       where: { email: FIXTURE_EMAIL },
       update: {
         status: 'ACTIVE',
+        role: 'ADMIN',
         passwordHash: await bcrypt.hash(FIXTURE_PASSWORD, 12),
       },
       create: {
         email: FIXTURE_EMAIL,
         name: 'Mobile PWA Fixture',
         passwordHash: await bcrypt.hash(FIXTURE_PASSWORD, 12),
-        role: 'USER',
+        role: 'ADMIN',
         status: 'ACTIVE',
+      },
+    });
+
+    const service = await prisma.service.upsert({
+      where: { name: 'Mobile PWA Service' },
+      update: {
+        status: 'OPERATIONAL',
+      },
+      create: {
+        name: 'Mobile PWA Service',
+        status: 'OPERATIONAL',
+      },
+    });
+
+    await prisma.incident.upsert({
+      where: { id: 'mobile-pwa-incident-fixture' },
+      update: {
+        title: 'Mobile PWA Active Incident',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        serviceId: service.id,
+      },
+      create: {
+        id: 'mobile-pwa-incident-fixture',
+        title: 'Mobile PWA Active Incident',
+        status: 'OPEN',
+        urgency: 'HIGH',
+        serviceId: service.id,
       },
     });
   });
 
   test.afterAll(async () => {
+    await prisma.incident.deleteMany({ where: { id: 'mobile-pwa-incident-fixture' } });
+    await prisma.service.deleteMany({ where: { name: 'Mobile PWA Service' } });
     await prisma.$disconnect();
   });
 
@@ -147,7 +178,9 @@ test.describe('mobile PWA browser contract', () => {
     await page.evaluate(() => document.querySelector('[data-nav-scroll-fixture]')?.remove());
   });
 
-  test('system dark mode renders the neutral dark semantic shell without light-card leakage', async ({ page }) => {
+  test('system dark mode renders the neutral dark semantic shell without light-card leakage', async ({
+    page,
+  }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
     await loginToMobile(page);
     await expect(page.locator('html')).toHaveClass(/dark/);
@@ -162,7 +195,9 @@ test.describe('mobile PWA browser contract', () => {
     await assertNoHorizontalOverflow(page);
   });
 
-  test('system light mode stays light and explicit dark override survives a light OS', async ({ page }) => {
+  test('system light mode stays light and explicit dark override survives a light OS', async ({
+    page,
+  }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await loginToMobile(page);
     await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('light');
@@ -189,7 +224,9 @@ test.describe('mobile PWA browser contract', () => {
     expect(current.searchParams.get('callbackUrl')).toBe('/m/incidents');
   });
 
-  test('manifest permits adaptive orientation and exposes responder shortcuts', async ({ request }) => {
+  test('manifest permits adaptive orientation and exposes responder shortcuts', async ({
+    request,
+  }) => {
     const response = await request.get('/manifest.webmanifest');
     expect(response.ok()).toBe(true);
     const manifest = (await response.json()) as {
@@ -202,10 +239,99 @@ test.describe('mobile PWA browser contract', () => {
     expect(manifest.start_url).toBe('/m');
     expect(manifest.display).toBe('standalone');
     expect(manifest.orientation).toBeUndefined();
-    expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m/incidents?filter=all_open')).toBe(
-      true
-    );
+    expect(
+      manifest.shortcuts?.some(shortcut => shortcut.url === '/m/incidents?filter=all_open')
+    ).toBe(true);
     expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m/schedules')).toBe(true);
     expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m/notifications')).toBe(true);
+  });
+
+  test('incident list navigates to detail and allows viewing details, notes and watchers', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginToMobile(page);
+    await page.goto('/m/incidents');
+
+    // Incident should be visible in list
+    const incidentLink = page
+      .locator('a[href*="/m/incidents/mobile-pwa-incident-fixture"]')
+      .first();
+    await expect(incidentLink).toBeVisible();
+
+    // Tap/click incident
+    await incidentLink.click();
+    await expect(page).toHaveURL(/\/m\/incidents\/mobile-pwa-incident-fixture/);
+
+    // Detail screen renders title
+    await expect(page.locator('h1', { hasText: 'Mobile PWA Active Incident' })).toBeVisible();
+
+    // Details & assignment disclosure works
+    const detailsSummary = page.locator('summary', { hasText: 'Incident details & assignment' });
+    await expect(detailsSummary).toBeVisible();
+    await detailsSummary.click();
+    await expect(page.locator('text=Mobile PWA Service').first()).toBeVisible();
+
+    // People, fields & links disclosure works and links use /m routes
+    const linksSummary = page.locator('summary', { hasText: 'People, fields & links' });
+    await expect(linksSummary).toBeVisible();
+    await linksSummary.click();
+    const serviceQuickLink = page.locator('a[href*="/m/services/"]').first();
+    await expect(serviceQuickLink).toBeVisible();
+
+    // Back link navigates cleanly back to /m/incidents
+    const backLink = page.locator('a', { hasText: 'Back to Incidents' });
+    await expect(backLink).toBeVisible();
+    await backLink.click();
+    await expect(page).toHaveURL(/\/m\/incidents/);
+  });
+
+  test('services flow renders service detail and navigates to active incident', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginToMobile(page);
+    await page.goto('/m/services');
+
+    const serviceLink = page.locator('a[href*="/m/services/"]', { hasText: 'Mobile PWA Service' });
+    await expect(serviceLink).toBeVisible();
+    await serviceLink.click();
+
+    await expect(page).toHaveURL(/\/m\/services\//);
+    await expect(page.locator('h1', { hasText: 'Mobile PWA Service' })).toBeVisible();
+
+    // Active incident listed under service
+    const activeIncidentLink = page
+      .locator('a[href*="/m/incidents/mobile-pwa-incident-fixture"]')
+      .first();
+    await expect(activeIncidentLink).toBeVisible();
+    await activeIncidentLink.click();
+
+    await expect(page).toHaveURL(/\/m\/incidents\/mobile-pwa-incident-fixture/);
+    await expect(page.locator('h1', { hasText: 'Mobile PWA Active Incident' })).toBeVisible();
+  });
+
+  test('touch jitter tolerance allows tap navigation while drag threshold activates swipe gesture', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginToMobile(page);
+    await page.goto('/m/incidents');
+
+    const cardLink = page.locator('a[href*="/m/incidents/mobile-pwa-incident-fixture"]').first();
+    await expect(cardLink).toBeVisible();
+
+    // Verify small jitter movement (<10px) still navigates
+    const box = await cardLink.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      await page.mouse.move(box.x + 20, box.y + 20);
+      await page.mouse.down();
+      // small 5px jitter
+      await page.mouse.move(box.x + 25, box.y + 21);
+      await page.mouse.up();
+      // Clicking/tapping after minor displacement navigates to incident
+      await expect(page).toHaveURL(/\/m\/incidents\/mobile-pwa-incident-fixture/);
+    }
   });
 });

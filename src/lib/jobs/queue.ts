@@ -75,7 +75,8 @@ export type JobType =
   | 'STATUS_PAGE_NOTIFICATION'
   | 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
   | 'CHATOPS_INTENT'
-  | 'EXTERNAL_OPERATION';
+  | 'EXTERNAL_OPERATION'
+  | 'WAR_ROOM_PROVISION';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload {
   incidentId?: string;
@@ -116,6 +117,10 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.stepIndex;
     case 'task':
       return values.task;
+    case 'warRoomId':
+      return values.warRoomId;
+    case 'provisioningToken':
+      return values.provisioningToken;
     default:
       return undefined;
   }
@@ -267,6 +272,34 @@ export async function markJobCompleted(jobId: string): Promise<void> {
     data: { status: 'COMPLETED', completedAt: new Date() },
   });
 }
+
+/**
+ * A revoked war-room job must never be resurrected after an in-flight Graph
+ * request returns.  Unlike ordinary jobs, its completion is therefore fenced
+ * on the worker lease still being active.
+ */
+async function markWarRoomJobCompleted(jobId: string): Promise<boolean> {
+  const result = await prisma.backgroundJob.updateMany({
+    where: { id: jobId, status: 'PROCESSING' },
+    data: { status: 'COMPLETED', completedAt: new Date() },
+  });
+  return result.count === 1;
+}
+
+async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void> {
+  const shouldRetry = job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
+  await prisma.backgroundJob.updateMany({
+    where: { id: job.id, status: 'PROCESSING' },
+    data: {
+      status: shouldRetry ? 'PENDING' : 'FAILED',
+      failedAt: shouldRetry ? null : new Date(),
+      error,
+      scheduledAt: shouldRetry
+        ? new Date(Date.now() + Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS))
+        : undefined,
+    },
+  });
+}
 export async function markJobFailed(jobId: string, error: string): Promise<void> {
   const job = await prisma.backgroundJob.findUnique({ where: { id: jobId } });
   if (!job) return;
@@ -371,6 +404,13 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         await processChatOpsIntent(requiredPayloadString(job.payload, 'intentId'));
         await markJobCompleted(job.id);
         return true;
+      }
+      case 'WAR_ROOM_PROVISION': {
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string' || typeof payloadValue(job.payload, 'provisioningToken') !== 'string')
+          throw new Error('War-room provision job is missing warRoomId or provisioningToken');
+        const { provisionMicrosoftTeamsWarRoom } = await import('../war-room/microsoft-teams');
+        await provisionMicrosoftTeamsWarRoom(requiredPayloadString(job.payload, 'warRoomId'), requiredPayloadString(job.payload, 'provisioningToken'));
+        return markWarRoomJobCompleted(job.id);
       }
       case 'EXTERNAL_OPERATION': {
         if (typeof payloadValue(job.payload, 'operationId') !== 'string')
@@ -533,6 +573,31 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
     }
   } catch (error) {
+    if (job.type === 'WAR_ROOM_PROVISION' && error instanceof Error && error.name === 'WarRoomRetryableError') {
+      const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
+      const retryBudgetNeutral = (error as Error & { retryBudgetNeutral?: unknown }).retryBudgetNeutral === true;
+      const delay = typeof retryAfterMs === 'number' && retryAfterMs > 0
+        ? retryAfterMs
+        : Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS);
+      const current = await prisma.backgroundJob.findUnique({ where: { id: job.id }, select: { attempts: true, maxAttempts: true } });
+      if (current && (retryBudgetNeutral || current.attempts < current.maxAttempts)) {
+        await prisma.backgroundJob.updateMany({
+          where: { id: job.id, status: 'PROCESSING' },
+          data: {
+            status: 'PENDING', scheduledAt: new Date(Date.now() + delay), startedAt: null, error: null,
+            // Marker-only reconciliation has no new side effect and must be
+            // allowed to cover its bounded consistency window. Provider/crash
+            // failures continue to consume the normal retry budget.
+            ...(retryBudgetNeutral ? { attempts: { decrement: 1 } } : {}),
+          },
+        });
+        return false;
+      }
+    }
+    if (job.type === 'WAR_ROOM_PROVISION') {
+      await markWarRoomJobFailed(job, error instanceof Error ? error.message : 'Unknown error');
+      return false;
+    }
     // Backpressure never consumes maxAttempts — reschedule until queue drains.
     if (isBulkNotificationJob(job.type as JobType) && isBulkQueueBackpressureError(error)) {
       try {

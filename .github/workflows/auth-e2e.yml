@@ -35,6 +35,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public
       HUSKY: '0'
+      PLAYWRIGHT_PRODUCTION_SERVER: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -56,6 +57,9 @@ jobs:
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+
+      - name: Build auth browser application
+        run: npm run build
 
       - name: Run authentication browser contracts
         run: npx playwright test --project=chromium

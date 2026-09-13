@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const databaseUrl =
   process.env.DATABASE_URL ||
   'postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public';
+const useProductionServer = process.env.PLAYWRIGHT_PRODUCTION_SERVER === 'true';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -14,9 +15,8 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   timeout: 45_000,
   expect: {
-    // CI exercises the real Next.js dev server. A successful auth callback can
-    // precede the first on-demand compilation of the destination route, so allow
-    // that compile to finish without weakening any application timeout itself.
+    // Development runs compile routes lazily. Keep the extra allowance locally;
+    // CI runs the production server below so browser contracts are deterministic.
     timeout: 30_000,
   },
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
@@ -43,7 +43,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev -- --hostname 127.0.0.1 --port 3100',
+    command: useProductionServer
+      ? 'npm run start:dev'
+      : 'npm run dev -- --hostname 127.0.0.1 --port 3100',
     url: 'http://127.0.0.1:3100/setup',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
@@ -54,6 +56,8 @@ export default defineConfig({
       NEXTAUTH_SECRET: 'opsknight-e2e-nextauth-secret-change-me',
       ENCRYPTION_KEY: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       AUTH_TRUST_HOST: 'true',
+      PORT: '3100',
+      HOSTNAME: '127.0.0.1',
     },
   },
 });

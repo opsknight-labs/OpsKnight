@@ -82,6 +82,63 @@ export async function revokeMicrosoftTeamsOperations(
   return { operationIds, jobsCancelled: jobIds.length };
 }
 
+/**
+ * Revoke every unsettled Teams war-room provisioning lease in the same
+ * transaction that removes its authority.  A create that has crossed the
+ * network boundary is deliberately retained as AMBIGUOUS: treating it as a
+ * failure would permit a later worker to duplicate a channel.
+ */
+export async function revokeMicrosoftTeamsWarRoomProvisioning(
+  tx: Prisma.TransactionClient,
+  scope: TeamsRevocationScope,
+): Promise<{ warRoomIds: string[]; jobsCancelled: number }> {
+  const destinationSet = scope.destinationIds ? new Set(scope.destinationIds) : null;
+  const rooms = await tx.incidentWarRoom.findMany({
+    where: { provider: 'MICROSOFT_TEAMS', state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+    select: { id: true, destinationId: true, createAttemptedAt: true },
+  });
+  const candidates = rooms.filter(room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId)));
+  const attemptedIds = candidates.filter(room => room.createAttemptedAt).map(room => room.id);
+  const safeIds = candidates.filter(room => !room.createAttemptedAt).map(room => room.id);
+  const now = new Date();
+
+  if (attemptedIds.length > 0) {
+    await tx.incidentWarRoom.updateMany({
+      where: { id: { in: attemptedIds }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+      data: {
+        state: 'AMBIGUOUS', provisioningToken: null,
+        lastErrorCode: 'WAR_ROOM_AUTHORITY_REVOKED',
+        lastError: `${scope.reason}; channel creation may have completed and requires marker reconciliation.`,
+      },
+    });
+  }
+  if (safeIds.length > 0) {
+    await tx.incidentWarRoom.updateMany({
+      where: { id: { in: safeIds }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+      data: { state: 'FAILED', provisioningToken: null, lastErrorCode: 'WAR_ROOM_AUTHORITY_REVOKED', lastError: scope.reason },
+    });
+  }
+
+  const roomIds = candidates.map(room => room.id);
+  if (roomIds.length === 0) return { warRoomIds: [], jobsCancelled: 0 };
+  const jobs = await tx.backgroundJob.findMany({
+    where: { type: 'WAR_ROOM_PROVISION', status: { in: ['PENDING', 'PROCESSING'] } },
+    select: { id: true, payload: true },
+  });
+  const roomSet = new Set(roomIds);
+  const jobIds = jobs.filter(job => {
+    const warRoomId = (job.payload as Record<string, unknown> | null)?.warRoomId;
+    return typeof warRoomId === 'string' && roomSet.has(warRoomId);
+  }).map(job => job.id);
+  if (jobIds.length > 0) {
+    await tx.backgroundJob.updateMany({
+      where: { id: { in: jobIds }, status: { in: ['PENDING', 'PROCESSING'] } },
+      data: { status: 'CANCELLED', completedAt: now, error: scope.reason },
+    });
+  }
+  return { warRoomIds: roomIds, jobsCancelled: jobIds.length };
+}
+
 export async function disconnectMicrosoftTeamsIntegration(actorId: string): Promise<void> {
   await prisma.$transaction(async tx => {
     const destinations = await tx.microsoftTeamsDestination.findMany({ select: { id: true, serviceId: true } });
@@ -103,10 +160,13 @@ export async function disconnectMicrosoftTeamsIntegration(actorId: string): Prom
     const revoked = await revokeMicrosoftTeamsOperations(tx, {
       reason: 'Microsoft Teams integration disconnected',
     });
+    const revokedWarRooms = await revokeMicrosoftTeamsWarRoomProvisioning(tx, {
+      reason: 'Microsoft Teams integration disconnected',
+    });
     await emitAuditEvent({
       action: 'microsoftTeams.integration.disconnected', source: 'UI',
       target: { type: 'SYSTEM_CONFIG', id: 'microsoft-teams' }, actor: { type: 'USER', id: actorId },
-      metadata: { destinationsDisabled: destinations.length, servicesUpdated: routedServices.length, operationsRevoked: revoked.operationIds.length, jobsCancelled: revoked.jobsCancelled },
+      metadata: { destinationsDisabled: destinations.length, servicesUpdated: routedServices.length, operationsRevoked: revoked.operationIds.length, jobsCancelled: revoked.jobsCancelled, warRoomsRevoked: revokedWarRooms.warRoomIds.length, warRoomJobsCancelled: revokedWarRooms.jobsCancelled },
     }, tx);
   });
   clearMicrosoftTeamsTokenCaches();

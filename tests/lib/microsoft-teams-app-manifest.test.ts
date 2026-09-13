@@ -28,13 +28,21 @@ describe('Microsoft Teams app manifest', () => {
     expect((mWithUri.webApplicationInfo as { resource: string }).resource).toContain(new URL(BASE).hostname);
   });
 
-  it('uses the minimal required RSC permissions for Phase 1', () => {
+  it('keeps destination delivery minimal and makes war-room RSC opt-in', () => {
     // Bot Framework Connector owns message delivery; Graph is only used for discovery.
     expect([...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS]).toEqual([
       'ChannelSettings.Read.Group',
     ]);
     expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('TeamSettings.Read.Group');
-    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(2);
+    expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toEqual(expect.arrayContaining([
+      'Channel.Create.Group',
+      'TeamsAppInstallation.Read.Group',
+      'ChannelSettings.ReadWrite.Group',
+      'TeamMember.Read.Group',
+      'ChannelMember.Read.Group',
+      'ChannelMember.ReadWrite.Group',
+    ]));
+    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(8);
   });
 
   it('declares RSC permissions as Application-scoped in the manifest', () => {
@@ -51,11 +59,21 @@ describe('Microsoft Teams app manifest', () => {
     for (const opt of MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS) {
       expect(names).not.toContain(opt);
     }
-    // With includeOptionalPermissions, all perms are emitted
+    // Legacy optional flag grants only the historical TeamSettings permission.
     const mFull = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeOptionalPermissions: true });
     const fullNames = (mFull.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
-    for (const perm of MICROSOFT_TEAMS_RSC_PERMISSIONS) {
-      expect(fullNames).toContain(perm);
+    expect(fullNames).toContain('TeamSettings.Read.Group');
+    expect(fullNames).not.toContain('Channel.Create.Group');
+    const warRoom = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeWarRoomPermissions: true });
+    const warRoomNames = (warRoom.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
+    expect(warRoomNames).toContain('Channel.Create.Group');
+    expect(warRoomNames).toContain('TeamsAppInstallation.Read.Group');
+    expect(warRoomNames).not.toContain('ChannelMember.ReadWrite.Group');
+    expect(warRoomNames).not.toContain('TeamSettings.Read.Group');
+    const all = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeTeamSettingsPermissions: true, includeWarRoomPermissions: true });
+    const allNames = (all.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
+    for (const perm of [...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS, 'TeamSettings.Read.Group', 'Channel.Create.Group']) {
+      expect(allNames).toContain(perm);
     }
   });
 

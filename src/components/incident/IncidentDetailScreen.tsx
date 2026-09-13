@@ -35,6 +35,8 @@ import { getAppUrl } from '@/lib/app-url';
 import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Pause, Volume2 } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import MicrosoftTeamsWarRoomsPanel from '@/components/incident/detail/MicrosoftTeamsWarRoomsPanel';
+import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
 
 export type IncidentDetailScreenProps = {
   id: string;
@@ -81,18 +83,24 @@ export default async function IncidentDetailScreen({
   if (!incident) notFound();
 
   const incidentSla = projectIncidentSlaState(incident, { now: new Date() });
-  const [users, teams, customFields] = await Promise.all([
-    prisma.user.findMany({
-      select: { id: true, name: true, email: true, avatarUrl: true, gender: true, role: true },
-    }),
-    prisma.team.findMany(),
-    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
-  ]);
 
   const permissions = await getUserPermissions();
   const canManageIncident = permissions.isResponderOrAbove;
   const canAcknowledgeIncident = permissions.capabilities.includes('incident.acknowledge.scoped');
   const canAddIncidentNote = permissions.capabilities.includes('incident.note.scoped');
+
+  const [users, teams, customFields] = await Promise.all([
+    canManageIncident
+      ? prisma.user.findMany({
+          where: { status: 'ACTIVE' },
+          select: { id: true, name: true, email: true, avatarUrl: true, gender: true, role: true },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+    canManageIncident ? prisma.team.findMany({ orderBy: { name: 'asc' } }) : Promise.resolve([]),
+    prisma.customField.findMany({ orderBy: { order: 'asc' } }),
+  ]);
+
   const incidentJiraCapability = await getJiraCapabilities({
     serviceId: incident.serviceId,
     canManage: canManageIncident,
@@ -101,20 +109,66 @@ export default async function IncidentDetailScreen({
 
   // Rendering an incident must not perform hidden Jira network I/O. Persisted
   // state is refreshed by authenticated webhooks or explicit sync actions.
-  const [jiraLinks, chatOpsConfig, globalSlackIntegration] = await Promise.all([
-    prisma.externalIssueLink.findMany({
-      where: { incidentId: id, provider: 'JIRA' },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.chatOpsConfig.findUnique({
-      where: { id: 'default' },
-      select: { enabled: true },
-    }),
-    prisma.slackIntegration.findFirst({
-      where: { enabled: true, services: { none: {} } },
-      select: { workspaceId: true },
-    }),
-  ]);
+  const [jiraLinks, chatOpsConfig, globalSlackIntegration, teamsWarRooms, teamsWarRoomDestination] =
+    await Promise.all([
+      prisma.externalIssueLink.findMany({
+        where: { incidentId: id, provider: 'JIRA' },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.chatOpsConfig.findUnique({
+        where: { id: 'default' },
+        select: { enabled: true },
+      }),
+      prisma.slackIntegration.findFirst({
+        where: { enabled: true, services: { none: {} } },
+        select: { workspaceId: true },
+      }),
+      prisma.incidentWarRoom.findMany({
+        where: { incidentId: id, provider: 'MICROSOFT_TEAMS' },
+        orderBy: { generation: 'desc' },
+        select: {
+          id: true,
+          generation: true,
+          state: true,
+          providerChannelName: true,
+          providerChannelUrl: true,
+          membershipType: true,
+          lastError: true,
+          participants: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              source: true,
+              state: true,
+              lastError: true,
+              user: { select: { name: true } },
+            },
+          },
+        },
+      }),
+      prisma.microsoftTeamsDestination.findFirst({
+        where: {
+          serviceId: incident.serviceId,
+          enabled: true,
+          warRoomEnabled: true,
+          installation: { is: { enabled: true } },
+        },
+        select: { tenantId: true, teamId: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+
+  const teamsWarRoomCapability = teamsWarRoomDestination
+    ? await getMicrosoftTeamsCapabilities({
+        tenantId: teamsWarRoomDestination.tenantId,
+        teamId: teamsWarRoomDestination.teamId,
+      }).catch(() => null)
+    : null;
+  const teamsWarRoomEnabled = Boolean(teamsWarRoomCapability?.canCreateWarRooms);
+  const teamsWarRoomUnavailableReason = teamsWarRoomDestination
+    ? (teamsWarRoomCapability?.failureReason ??
+      'Teams war-room capability could not be verified for the configured Team.')
+    : 'Map this service to an installed Teams destination with war rooms enabled.';
 
   const incidentJiraIssues = jiraLinks.map(serializeJiraIssueReference);
   const hasSlackWorkspace = Boolean(
@@ -226,6 +280,8 @@ export default async function IncidentDetailScreen({
     />
   );
 
+  const routePrefix = presentation === 'mobile' ? '/m' : '';
+
   const quickLinksContent = (
     <IncidentQuickLinksCard
       incidentId={incident.id}
@@ -241,6 +297,7 @@ export default async function IncidentDetailScreen({
       team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
       warRoomUrl={incident.warRoomUrl}
       slackChannelName={incident.slackChannelName}
+      routePrefix={routePrefix}
     />
   );
 
@@ -386,7 +443,13 @@ export default async function IncidentDetailScreen({
           title: incident.title,
           service: { name: incident.service.name },
         }}
-        postmortemHref={presentation === 'mobile' ? `/m/postmortems/${id}` : `/postmortems/${id}`}
+        postmortemHref={
+          presentation === 'mobile'
+            ? postmortem
+              ? `/m/postmortems/${postmortem.id}`
+              : `/m/postmortems`
+            : `/postmortems/${id}`
+        }
         postmortemExists={Boolean(postmortem)}
         warRoom={{
           slackChannelId: incident.slackChannelId,
@@ -424,6 +487,7 @@ export default async function IncidentDetailScreen({
               users={users}
               teams={teams}
               canManage={canManageIncident}
+              routePrefix={routePrefix}
             />
           </div>
         </details>
@@ -433,6 +497,7 @@ export default async function IncidentDetailScreen({
           users={users}
           teams={teams}
           canManage={canManageIncident}
+          routePrefix={routePrefix}
         />
       )}
 
@@ -441,6 +506,14 @@ export default async function IncidentDetailScreen({
         description={incident.description}
         canManage={canManageIncident}
         onUpdateDescription={handleUpdateDescription}
+      />
+
+      <MicrosoftTeamsWarRoomsPanel
+        incidentId={incident.id}
+        rooms={teamsWarRooms}
+        canManage={canManageIncident}
+        enabled={teamsWarRoomEnabled}
+        unavailableReason={teamsWarRoomUnavailableReason}
       />
 
       {incident.status === 'RESOLVED' && (

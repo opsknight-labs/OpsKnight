@@ -116,9 +116,11 @@ export default function PushNotificationToggle() {
       }
 
       // Reconcile with server UserDevice and account preference
-      const checkRes = await fetch(
-        `/api/user/push-subscription?endpoint=${encodeURIComponent(subscription.endpoint)}`
-      );
+      const checkRes = await fetch('/api/user/push-subscription/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      });
       if (checkRes.ok) {
         const data = await checkRes.json();
         if (data.deviceRegistered && data.accountEnabled) {
@@ -126,11 +128,13 @@ export default function PushNotificationToggle() {
         } else {
           setPushState('REPAIR_REQUIRED');
         }
+      } else if (checkRes.status === 401 || checkRes.status === 403) {
+        setPushState('PERMISSION_REQUIRED');
       } else {
-        setPushState('REGISTERED');
+        setPushState('REPAIR_REQUIRED');
       }
     } catch {
-      setPushState('PERMISSION_REQUIRED');
+      setPushState('REPAIR_REQUIRED');
     }
   }, []);
 

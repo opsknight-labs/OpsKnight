@@ -5,5 +5,5 @@ export const revalidate = 0;
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <IncidentDetailScreen id={id} backHref="/incidents" />;
+  return <IncidentDetailScreen id={id} backHref="/incidents" presentation="desktop" />;
 }

@@ -33,6 +33,7 @@ export type IncidentQuickLinksCardProps = {
   warRoomUrl?: string | null;
   slackChannelName?: string | null;
   className?: string;
+  routePrefix?: string;
 };
 
 export default function IncidentQuickLinksCard({
@@ -41,6 +42,7 @@ export default function IncidentQuickLinksCard({
   team,
   warRoomUrl,
   className,
+  routePrefix = '',
 }: IncidentQuickLinksCardProps) {
   return (
     <div
@@ -68,7 +70,7 @@ export default function IncidentQuickLinksCard({
       <div className="p-3 space-y-2">
         {/* Service Catalog */}
         <Link
-          href={`/services/${service.id}`}
+          href={`${routePrefix}/services/${service.id}`}
           className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -90,7 +92,7 @@ export default function IncidentQuickLinksCard({
         {/* Escalation Policy */}
         {service.policy && (
           <Link
-            href="/policies"
+            href={`${routePrefix}/policies/${service.policy.id}`}
             className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
           >
             <div className="flex items-center gap-2.5 min-w-0">
@@ -112,7 +114,7 @@ export default function IncidentQuickLinksCard({
 
         {/* Analytics */}
         <Link
-          href={`/analytics?incident=${incidentId}`}
+          href={`${routePrefix}/analytics?incident=${incidentId}`}
           className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
         >
           <div className="flex items-center gap-2.5 min-w-0">
@@ -134,7 +136,7 @@ export default function IncidentQuickLinksCard({
         {/* Assigned Team */}
         {team && (
           <Link
-            href={`/teams/${team.id}`}
+            href={`${routePrefix}/teams/${team.id}`}
             className="group flex items-center justify-between p-2.5 rounded-lg border border-slate-100 dark:border-slate-800/80 bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 hover:border-slate-200 dark:hover:border-slate-700 transition-all text-left"
           >
             <div className="flex items-center gap-2.5 min-w-0">

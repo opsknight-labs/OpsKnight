@@ -118,4 +118,26 @@ describe('PushNotificationToggle', () => {
       expect(window.Notification.requestPermission).toHaveBeenCalled();
     });
   });
+
+  it('fails closed when push subscription reconciliation endpoint returns an error', async () => {
+    mockFetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription/status')) {
+        expect(init?.method).toBe('POST');
+        expect(JSON.parse(String(init?.body))).toEqual({
+          endpoint: 'https://push.example.com/test-endpoint',
+        });
+        return {
+          ok: false,
+          status: 500,
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+
+    // Should fail closed to REPAIR_REQUIRED instead of REGISTERED
+    const repairButton = await screen.findByRole('button', { name: /Repair/i });
+    expect(repairButton).toBeInTheDocument();
+  });
 });
