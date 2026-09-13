@@ -90,38 +90,3 @@
    color: var(--text-secondary);
    line-height: 1.5;
 }
-
-/* ========================================
-   Modal Dark Mode Protection
-   Prevents browser dark mode from affecting modal colors
-   ======================================== */
-
-@media (prefers-color-scheme: dark) {
-   .modal-content,
-   [role="dialog"],
-   [role="alertdialog"],
-   [class*="dialog"] {
-      background-color: var(--bg-secondary) !important;
-      color: var(--text-primary) !important;
-      filter: none !important;
-      -webkit-filter: none !important;
-   }
-
-   .modal-title {
-      color: var(--text-primary) !important;
-   }
-
-   .modal-header,
-   .modal-footer {
-      border-color: var(--border) !important;
-   }
-
-   .confirm-dialog-message {
-      color: var(--text-secondary) !important;
-   }
-
-   .confirm-dialog-icon {
-      background: rgba(239, 68, 68, 0.1) !important;
-      color: var(--color-error) !important;
-   }
-}
