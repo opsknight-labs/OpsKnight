@@ -9,5 +9,5 @@ export default async function MobileIncidentDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <IncidentDetailScreen id={id} backHref="/m/incidents" />;
+  return <IncidentDetailScreen id={id} backHref="/m/incidents" presentation="mobile" />;
 }
