@@ -8,7 +8,8 @@ const read = (relativePath: string) => fs.readFileSync(path.join(ROOT, relativeP
 describe('mobile/PWA enterprise architecture contract', () => {
   it('keeps mobile login on the canonical login implementation', () => {
     const mobileLogin = read('src/app/(public)/m/login/page.tsx');
-    expect(mobileLogin).toContain("redirect(`/login");
+    expect(mobileLogin).toContain("import LoginPage from '@/app/login/page'");
+    expect(mobileLogin).toContain('export default LoginPage');
     expect(fs.existsSync(path.join(ROOT, 'src/app/(public)/m/login/MobileLoginClient.tsx'))).toBe(false);
   });
 
@@ -31,7 +32,9 @@ describe('mobile/PWA enterprise architecture contract', () => {
     const auth = read('src/lib/auth.ts');
 
     expect(dashboardNotifications).toContain('onClick={() => void requestPermission()}');
-    expect(dashboardNotifications).not.toMatch(/useEffect\([\s\S]{0,500}Notification\.requestPermission\(/);
+    expect(dashboardNotifications).not.toMatch(
+      /useEffect\([\s\S]{0,500}Notification\.requestPermission\(/
+    );
     expect(auth).toContain("const rememberMe = credentials?.rememberMe === 'true';");
     expect(auth).not.toContain("credentials?.rememberMe === 'true' || isMobileClient");
   });
@@ -53,14 +56,23 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(config).toContain('skipWaiting: false');
     expect(coordinator).toContain("worker.postMessage({ type: 'SKIP_WAITING' })");
     expect(worker).toContain("event.data.type === 'SKIP_WAITING'");
-    expect(worker).not.toContain("self.addEventListener('install', event => event.waitUntil(self.skipWaiting()))");
+    expect(worker).not.toContain(
+      "self.addEventListener('install', event => event.waitUntil(self.skipWaiting()))"
+    );
   });
 
   it('treats queued responder actions as a durable state machine', () => {
     const queue = read('src/lib/offline-queue.ts');
     const worker = read('public/custom-sw.js');
 
-    for (const state of ['PENDING', 'SENDING', 'SUCCEEDED', 'FAILED', 'CONFLICT', 'AUTH_REQUIRED']) {
+    for (const state of [
+      'PENDING',
+      'SENDING',
+      'SUCCEEDED',
+      'FAILED',
+      'CONFLICT',
+      'AUTH_REQUIRED',
+    ]) {
       expect(queue).toContain(`'${state}'`);
     }
     expect(queue).toContain('SENDING_LEASE_MS');
