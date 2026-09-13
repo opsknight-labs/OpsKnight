@@ -2072,6 +2072,7 @@ model StatusPageAnnouncement {
   allDay             Boolean   @default(false)
   timeMode           String    @default("EXACT") // EXACT, ALL_DAY
   publishAt          DateTime  @default(now())
+  notificationTiming String    @default("ON_PUBLISH") // ON_PUBLISH, AT_START, NONE
   isActive           Boolean   @default(true)
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

@@ -236,7 +236,6 @@ describe('Status Page Validation Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    // New tests for uptime thresholds
     describe('uptime thresholds', () => {
       it('should validate uptimeExcellentThreshold within range', () => {
         const validData = {
@@ -279,7 +278,6 @@ describe('Status Page Validation Schemas', () => {
       });
     });
 
-    // Tests for empty string handling (contact info fix)
     describe('empty string handling', () => {
       it('should transform empty contactEmail to undefined', () => {
         const data = {
@@ -337,7 +335,6 @@ describe('Status Page Validation Schemas', () => {
       });
     });
 
-    // Tests for boolean fields
     describe('boolean fields', () => {
       it('should accept explicit false for enabled', () => {
         const data = { enabled: false };
@@ -385,7 +382,6 @@ describe('Status Page Validation Schemas', () => {
       });
     });
 
-    // Tests for Status API settings
     describe('Status API settings', () => {
       it('should validate statusApiRateLimitMax range', () => {
         const validData = { statusApiRateLimitMax: 500 };
@@ -437,16 +433,40 @@ describe('Status Page Validation Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should validate minimal announcement', () => {
+    it('should validate minimal announcement with an absolute instant', () => {
       const minimalData = {
         statusPageId: 'page-123',
         title: 'Announcement',
         message: 'Message',
-        startDate: '2024-01-01',
+        startDate: '2024-01-01T00:00:00Z',
       };
 
       const result = StatusAnnouncementCreateSchema.safeParse(minimalData);
       expect(result.success).toBe(true);
+    });
+
+    it('should reject timezone-less announcement dates', () => {
+      const result = StatusAnnouncementCreateSchema.safeParse({
+        statusPageId: 'page-123',
+        title: 'Announcement',
+        message: 'Message',
+        startDate: '2024-01-01T12:00:00',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('should reject contradictory subscriber notification fields', () => {
+      const result = StatusAnnouncementCreateSchema.safeParse({
+        statusPageId: 'page-123',
+        title: 'Announcement',
+        message: 'Message',
+        startDate: '2024-01-01T00:00:00Z',
+        notifySubscribers: false,
+        notificationTiming: 'AT_START',
+      });
+
+      expect(result.success).toBe(false);
     });
 
     it('should reject empty statusPageId', () => {
@@ -454,7 +474,7 @@ describe('Status Page Validation Schemas', () => {
         statusPageId: '',
         title: 'Title',
         message: 'Message',
-        startDate: '2024-01-01',
+        startDate: '2024-01-01T00:00:00Z',
       };
 
       const result = StatusAnnouncementCreateSchema.safeParse(invalidData);
@@ -466,7 +486,7 @@ describe('Status Page Validation Schemas', () => {
         statusPageId: 'page-123',
         title: '',
         message: 'Message',
-        startDate: '2024-01-01',
+        startDate: '2024-01-01T00:00:00Z',
       };
 
       const result = StatusAnnouncementCreateSchema.safeParse(invalidData);
@@ -478,7 +498,7 @@ describe('Status Page Validation Schemas', () => {
         statusPageId: 'page-123',
         title: 'a'.repeat(201),
         message: 'Message',
-        startDate: '2024-01-01',
+        startDate: '2024-01-01T00:00:00Z',
       };
 
       const result = StatusAnnouncementCreateSchema.safeParse(tooLong);
@@ -490,7 +510,7 @@ describe('Status Page Validation Schemas', () => {
         statusPageId: 'page-123',
         title: 'Title',
         message: 'a'.repeat(5001),
-        startDate: '2024-01-01',
+        startDate: '2024-01-01T00:00:00Z',
       };
 
       const result = StatusAnnouncementCreateSchema.safeParse(tooLong);
@@ -502,7 +522,7 @@ describe('Status Page Validation Schemas', () => {
         statusPageId: 'page-123',
         title: 'Title',
         message: 'Message',
-        startDate: '2024-01-01',
+        startDate: '2024-01-01T00:00:00Z',
         endDate: null,
       };
 
@@ -548,6 +568,7 @@ describe('Status Page Validation Schemas', () => {
 
     it('should validate title max length in patch', () => {
       const tooLong = {
+        statusPageId: 'page-123',
         id: 'announcement-123',
         title: 'a'.repeat(201),
       };
@@ -558,6 +579,7 @@ describe('Status Page Validation Schemas', () => {
 
     it('should validate message max length in patch', () => {
       const tooLong = {
+        statusPageId: 'page-123',
         id: 'announcement-123',
         message: 'a'.repeat(5001),
       };

@@ -26,6 +26,10 @@ import {
   recordFanoutPage,
 } from '@/lib/notification-fanout';
 import { formatDateTime, isValidTimeZone } from '@/lib/timezone';
+import {
+  announcementGenerationEventKey,
+  readAnnouncementNotificationGeneration,
+} from '@/lib/status-pages/announcement-notification-generation';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -108,7 +112,7 @@ export async function notifyStatusPageSubscribers(
         continue;
       }
 
-      const displayName = (page as any).organizationName || page.name; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const displayName = page.organizationName || page.name;
       const branding =
         page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
           ? (page.branding as Record<string, unknown>)
@@ -488,12 +492,12 @@ function formatEmailBody(
 
 export async function notifyStatusPageSubscribersAnnouncement(
   announcementId: string,
-  statusPageId: string
+  statusPageId: string,
+  notificationGeneration: number
 ): Promise<{ sent: number; failed: number; skipped?: boolean }> {
   try {
-    // 1. Get announcement details
-    const announcement = await prisma.statusPageAnnouncement.findUnique({
-      where: { id: announcementId },
+    const announcement = await prisma.statusPageAnnouncement.findFirst({
+      where: { id: announcementId, statusPageId },
     });
 
     if (!announcement) {
@@ -501,7 +505,30 @@ export async function notifyStatusPageSubscribersAnnouncement(
       return { sent: 0, failed: 0, skipped: true };
     }
 
-    // 2. Load page configuration only. Subscribers are keyset-paginated below.
+    const currentGeneration = await readAnnouncementNotificationGeneration(
+      announcementId,
+      statusPageId
+    );
+    if (currentGeneration !== notificationGeneration) {
+      logger.info('status_page.announcement_fanout_stale_generation', {
+        announcementId,
+        statusPageId,
+        expectedGeneration: notificationGeneration,
+        currentGeneration,
+      });
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
+    if (!announcement.isActive || announcement.notificationTiming === 'NONE') {
+      logger.info(`Announcement ${announcementId} is inactive/withdrawn; skipping notification fan-out`);
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
+    if (announcement.publishAt && announcement.publishAt.getTime() > Date.now()) {
+      logger.info(`Announcement ${announcementId} publishAt is in the future; skipping notification fan-out`);
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
     const page = await prisma.statusPage.findUnique({
       where: { id: statusPageId },
     });
@@ -512,16 +539,13 @@ export async function notifyStatusPageSubscribersAnnouncement(
     }
 
     const appBaseUrl = getBaseUrl();
-
-    // 3. Get email config
     const emailConfig = await getStatusPageEmailConfig(page.id);
     if (!emailConfig.enabled) {
       logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
       return { sent: 0, failed: 1 };
     }
 
-    // 4. Prepare email content
-    const displayName = (page as any).organizationName || page.name; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const displayName = page.organizationName || page.name;
     const branding =
       page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
         ? (page.branding as Record<string, unknown>)
@@ -556,8 +580,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     const theme = themes[announcement.type as string] || themes['INFO'];
     const subject = `[${displayName}] ${theme.label}: ${announcement.title}`;
-
-    let html = '';
 
     const announcementHeader = SubscriberEmailHeader(
       safeDisplayName,
@@ -602,16 +624,16 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     const body = EmailContent(contentBody);
     const footer = SubscriberEmailFooter('{{unsubscribe_url}}', safeDisplayName);
-
-    html = EmailContainer(announcementHeader + body + footer);
+    const html = EmailContainer(announcementHeader + body + footer);
 
     const PAGE_SIZE = 500;
     const trafficClass = 'BULK' as const;
+    const eventKey = announcementGenerationEventKey(notificationGeneration);
     const fanout = await beginNotificationFanout({
       statusPageId,
       sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
       sourceId: announcement.id,
-      eventKey: announcement.updatedAt.toISOString(),
+      eventKey,
       trafficClass,
       providerKey: emailConfig.provider || undefined,
       subject,
@@ -633,6 +655,37 @@ export async function notifyStatusPageSubscribersAnnouncement(
       if (!(await bulkQueueHasCapacity())) {
         throw new BulkQueueBackpressureError();
       }
+
+      // Fence every page so a mid-flight admin edit stops further materialization.
+      const [currentAnn, liveGeneration] = await Promise.all([
+        prisma.statusPageAnnouncement.findFirst({
+          where: { id: announcement.id, statusPageId },
+          select: { isActive: true, publishAt: true, notificationTiming: true },
+        }),
+        readAnnouncementNotificationGeneration(announcement.id, statusPageId),
+      ]);
+      if (
+        !currentAnn ||
+        !currentAnn.isActive ||
+        currentAnn.notificationTiming === 'NONE' ||
+        (currentAnn.publishAt && currentAnn.publishAt.getTime() > Date.now()) ||
+        liveGeneration !== notificationGeneration
+      ) {
+        logger.info('status_page.announcement_fanout_stale_generation', {
+          announcementId: announcement.id,
+          statusPageId,
+          expectedGeneration: notificationGeneration,
+          currentGeneration: liveGeneration,
+        });
+        await recordFanoutPage(fanout.id, {
+          cursor,
+          materialized: 0,
+          failed: 0,
+          complete: true,
+        });
+        break;
+      }
+
       const subscriptions = await prisma.statusPageSubscription.findMany({
         where: hasScopedServices
           ? {
@@ -667,12 +720,16 @@ export async function notifyStatusPageSubscribersAnnouncement(
       let pageFailed = 0;
       let pageError: unknown;
 
-      const isAllDay = announcement.allDay || (announcement as any).timeMode === 'ALL_DAY';
+      const isAllDay = announcement.allDay || announcement.timeMode === 'ALL_DAY';
 
       try {
         const result = await createCentralNotificationIntentsBatch(
           subscriptions.map(sub => {
-            const rawTz = sub.timezone || (sub.preferences as any)?.timezone;
+            const preferences =
+              sub.preferences && typeof sub.preferences === 'object' && !Array.isArray(sub.preferences)
+                ? (sub.preferences as Record<string, unknown>)
+                : null;
+            const rawTz = sub.timezone || preferences?.timezone;
             const subTz =
               typeof rawTz === 'string' && isValidTimeZone(rawTz.trim()) ? rawTz.trim() : 'UTC';
 
@@ -718,7 +775,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
               templateKey: 'status-page-announcement',
               sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
               sourceId: announcement.id,
-              eventKey: announcement.updatedAt.toISOString(),
+              eventKey: fanout.eventKey,
               displayMessage: subject,
               trafficClass,
               priority:
@@ -749,6 +806,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
         logger.error('status_page.announcement_fanout_page_failed', {
           statusPageId: page.id,
           announcementId: announcement.id,
+          notificationGeneration,
           error: error instanceof Error ? error.message : String(error),
         });
       }
@@ -771,7 +829,13 @@ export async function notifyStatusPageSubscribersAnnouncement(
       if (subscriptions.length < PAGE_SIZE || !cursor) break;
     }
 
-    logger.info(`Status announcement notifications enqueued: ${sent} success, ${failed} failed`);
+    logger.info('status_page.announcement_fanout_enqueued', {
+      statusPageId,
+      announcementId,
+      notificationGeneration,
+      sent,
+      failed,
+    });
     addOperationalMetric('opsknight_status_page_fanout_total', sent, {
       event: 'announcement',
       outcome: 'enqueued',
@@ -789,6 +853,8 @@ export async function notifyStatusPageSubscribersAnnouncement(
     logger.error('Failed to notify status page subscribers about announcement', {
       error: error instanceof Error ? error.message : 'Unknown error',
       announcementId,
+      statusPageId,
+      notificationGeneration,
     });
     addOperationalMetric('opsknight_status_page_fanout_total', 1, {
       event: 'announcement',

@@ -105,6 +105,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.eventType;
     case 'generation':
       return values.generation;
+    case 'notificationGeneration':
+      return values.notificationGeneration;
     case 'incidentId':
       return values.incidentId;
     case 'intentId':
@@ -130,6 +132,14 @@ function requiredPayloadString(payload: unknown, key: string): string {
   const value = payloadValue(payload, key);
   if (typeof value !== 'string' || !value.trim())
     throw new Error(`Background job payload is missing ${key}`);
+  return value;
+}
+
+function requiredPayloadGeneration(payload: unknown): number {
+  const value = payloadValue(payload, 'notificationGeneration');
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error('Background job payload is missing a valid notificationGeneration');
+  }
   return value;
 }
 
@@ -167,12 +177,16 @@ export async function scheduleStatusPageNotification(
 }
 export async function scheduleStatusPageAnnouncementFanout(
   announcementId: string,
-  statusPageId: string
+  statusPageId: string,
+  notificationGeneration: number
 ): Promise<string> {
+  if (!Number.isSafeInteger(notificationGeneration) || notificationGeneration < 0) {
+    throw new Error('A valid announcement notification generation is required');
+  }
   return scheduleJob(
     'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
     new Date(),
-    { announcementId, statusPageId },
+    { announcementId, statusPageId, notificationGeneration },
     5
   );
 }
@@ -513,14 +527,27 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           typeof payloadValue(job.payload, 'statusPageId') !== 'string'
         )
           throw new Error('Status page announcement fan-out job payload is invalid');
-        const { notifyStatusPageSubscribersAnnouncement } =
-          await import('../status-page-notifications');
-        const result = await notifyStatusPageSubscribersAnnouncement(
+        const notificationGeneration = requiredPayloadGeneration(job.payload);
+        const { executeAnnouncementNotificationFanout } =
+          await import('../status-pages/announcement-notification-execution');
+        const result = await executeAnnouncementNotificationFanout(
           requiredPayloadString(job.payload, 'announcementId'),
-          requiredPayloadString(job.payload, 'statusPageId')
+          requiredPayloadString(job.payload, 'statusPageId'),
+          notificationGeneration
         );
         if (result.failed > 0)
           throw new Error(`Status page announcement fan-out failed (${result.failed})`);
+        if (result.skipped) {
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'CANCELLED',
+              completedAt: new Date(),
+              error: 'Announcement fan-out generation is stale or no longer eligible',
+            },
+          });
+          return true;
+        }
         await markJobCompleted(job.id);
         return true;
       }

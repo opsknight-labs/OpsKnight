@@ -9,11 +9,40 @@ import {
 } from '@/lib/validation';
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
+import {
+  deriveAnnouncementNotificationPlan,
+  type AnnouncementNotificationTiming,
+} from '@/lib/status-pages/announcement-notification-plan';
+import {
+  incrementAnnouncementNotificationGeneration,
+  readAnnouncementNotificationGeneration,
+} from '@/lib/status-pages/announcement-notification-generation';
+
+class InvalidDateError extends Error {
+  constructor(public readonly fieldName: string) {
+    super(`Invalid ${fieldName}`);
+    this.name = 'InvalidDateError';
+  }
+}
+
+class AnnouncementInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AnnouncementInputError';
+  }
+}
+
+class AnnouncementNotFoundError extends Error {
+  constructor() {
+    super('Announcement not found.');
+    this.name = 'AnnouncementNotFoundError';
+  }
+}
 
 function parseDate(value: string, fieldName: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    throw new Error(`Invalid ${fieldName}`);
+    throw new InvalidDateError(fieldName);
   }
   return parsed;
 }
@@ -38,6 +67,83 @@ async function affectedServicesBelongToPage(
     where: { statusPageId, serviceId: { in: serviceIds }, showOnPage: true },
   });
   return count === serviceIds.length;
+}
+
+function effectiveNotificationTiming(
+  notificationTiming: AnnouncementNotificationTiming | undefined,
+  notifySubscribers?: boolean
+): AnnouncementNotificationTiming {
+  if (notifySubscribers === false) return 'NONE';
+  return notificationTiming ?? 'ON_PUBLISH';
+}
+
+async function lockAnnouncementMutation(
+  tx: Prisma.TransactionClient,
+  statusPageId: string,
+  announcementId: string
+) {
+  const lockKey = `${statusPageId}:${announcementId}`;
+  await tx.$queryRaw(Prisma.sql`
+    SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
+  `);
+}
+
+async function cancelPendingAnnouncementJobs(
+  tx: Prisma.TransactionClient,
+  announcementId: string,
+  statusPageId: string
+) {
+  await tx.$executeRaw`
+    DELETE FROM "BackgroundJob"
+    WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+      AND ("payload"->>'announcementId') = ${announcementId}
+      AND ("payload"->>'statusPageId') = ${statusPageId}
+      AND "status" = 'PENDING'
+  `;
+}
+
+async function suppressUndeliveredAnnouncementIntents(
+  tx: Prisma.TransactionClient,
+  announcementId: string,
+  reason: string
+) {
+  await tx.notification.updateMany({
+    where: {
+      sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+      sourceId: announcementId,
+      status: { in: ['PENDING', 'FAILED'] },
+    },
+    data: {
+      status: 'SKIPPED',
+      payloadEncrypted: null,
+      lastAttemptAt: null,
+      errorMsg: reason,
+    },
+  });
+}
+
+async function createAnnouncementFanoutJob(
+  tx: Prisma.TransactionClient,
+  input: {
+    announcementId: string;
+    statusPageId: string;
+    scheduledAt: Date;
+    generation: number;
+  }
+) {
+  return tx.backgroundJob.create({
+    data: {
+      type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
+      status: 'PENDING',
+      scheduledAt: input.scheduledAt,
+      maxAttempts: 5,
+      payload: {
+        announcementId: input.announcementId,
+        statusPageId: input.statusPageId,
+        notificationGeneration: input.generation,
+      },
+    },
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -84,9 +190,6 @@ export async function POST(req: NextRequest) {
     const isAllDay = allDay ?? timeMode === 'ALL_DAY';
     const effectiveTimeMode = isAllDay ? 'ALL_DAY' : 'EXACT';
 
-    // Separate concepts: eventStartAt, publishAt, notificationAt
-    // Publish NOW -> publishAt = now
-    // Publish AT_START -> publishAt = startDate
     const now = new Date();
     let effectivePublishAt = now;
     if (parsed.data.publishAt) {
@@ -95,19 +198,17 @@ export async function POST(req: NextRequest) {
       effectivePublishAt = parsedStartDate;
     }
 
-    // Notify ON_PUBLISH -> job.scheduledAt = publishAt
-    // Notify AT_START -> job.scheduledAt = startDate
-    // Notify NONE -> no job
-    const shouldNotify = notificationTiming !== 'NONE' && notifySubscribers !== false;
-    let scheduledNotificationAt = now;
-    if (notificationTiming === 'AT_START') {
-      scheduledNotificationAt = parsedStartDate;
-    } else if (notificationTiming === 'ON_PUBLISH') {
-      scheduledNotificationAt = effectivePublishAt;
-    }
+    const timing = effectiveNotificationTiming(notificationTiming, notifySubscribers);
+    const active = isActive !== false;
+    const plan = deriveAnnouncementNotificationPlan({
+      isActive: active,
+      notificationTiming: timing,
+      publishAt: effectivePublishAt,
+      startDate: parsedStartDate,
+    });
 
-    const announcement = await prisma.$transaction(async tx => {
-      const created = await tx.statusPageAnnouncement.create({
+    const result = await prisma.$transaction(async tx => {
+      const announcement = await tx.statusPageAnnouncement.create({
         data: {
           statusPageId,
           title: title.trim(),
@@ -118,36 +219,41 @@ export async function POST(req: NextRequest) {
           allDay: isAllDay,
           timeMode: effectiveTimeMode,
           publishAt: effectivePublishAt,
-          isActive: isActive !== false,
+          notificationTiming: timing,
+          isActive: active,
           affectedServiceIds:
             normalizedAffectedServiceIds === null
               ? Prisma.JsonNull
               : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
         },
       });
-      if (shouldNotify) {
-        await tx.backgroundJob.create({
-          data: {
-            type: 'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
-            status: 'PENDING',
-            scheduledAt: scheduledNotificationAt,
-            maxAttempts: 5,
-            payload: { announcementId: created.id, statusPageId },
-          },
+      const generation =
+        (await readAnnouncementNotificationGeneration(announcement.id, statusPageId, tx)) ?? 0;
+
+      if (plan.shouldNotify && plan.scheduledAt) {
+        await createAnnouncementFanoutJob(tx, {
+          announcementId: announcement.id,
+          statusPageId,
+          scheduledAt: plan.scheduledAt,
+          generation,
         });
       }
-      return created;
+      return { announcement, generation };
     });
 
     logger.info('api.status_page.announcement.created', {
-      announcementId: announcement.id,
+      announcementId: result.announcement.id,
       timeMode: effectiveTimeMode,
       publishAt: effectivePublishAt,
-      shouldNotify,
-      scheduledNotificationAt,
+      notificationTiming: timing,
+      notificationGeneration: result.generation,
+      scheduledNotificationAt: plan.scheduledAt,
     });
-    return jsonOk({ announcement }, 200);
+    return jsonOk({ announcement: result.announcement }, 200);
   } catch (error: unknown) {
+    if (error instanceof InvalidDateError || error instanceof AnnouncementInputError) {
+      return jsonError(error.message, 400);
+    }
     logger.error('api.status_page.announcement.create_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -185,76 +291,176 @@ export async function PATCH(req: NextRequest) {
       affectedServiceIds,
       publishOption,
       publishAt,
+      notificationTiming,
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
-    const existing = await prisma.statusPageAnnouncement.findFirst({
-      where: { id, statusPageId },
-      select: { startDate: true, endDate: true, publishAt: true },
-    });
-    if (!existing) return jsonError('Announcement not found.', 404);
-    if (
-      affectedServiceIds !== undefined &&
-      !(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds))
-    ) {
-      return jsonError('Affected services must belong to this status page.', 400);
-    }
-    const effectiveStart = startDate ? parseDate(startDate, 'startDate') : existing.startDate;
-    const effectiveEnd =
-      endDate === undefined ? existing.endDate : endDate ? parseDate(endDate, 'endDate') : null;
-    if (effectiveEnd && effectiveEnd <= effectiveStart) {
-      return jsonError('End date must be after start date.', 400);
-    }
 
-    let nextPublishAt: Date | undefined;
-    if (publishAt) {
-      nextPublishAt = parseDate(publishAt, 'publishAt');
-    } else if (publishOption === 'AT_START') {
-      nextPublishAt = effectiveStart;
-    } else if (publishOption === 'NOW') {
-      nextPublishAt = new Date();
-    }
+    const result = await prisma.$transaction(async tx => {
+      await lockAnnouncementMutation(tx, statusPageId, id);
 
-    const nextAllDay =
-      parsed.data.allDay !== undefined
-        ? parsed.data.allDay
-        : parsed.data.timeMode !== undefined
-          ? parsed.data.timeMode === 'ALL_DAY'
-          : undefined;
-    const nextTimeMode =
-      parsed.data.timeMode !== undefined
-        ? parsed.data.timeMode
-        : parsed.data.allDay !== undefined
+      const existing = await tx.statusPageAnnouncement.findFirst({
+        where: { id, statusPageId },
+        select: {
+          id: true,
+          startDate: true,
+          endDate: true,
+          publishAt: true,
+          isActive: true,
+          notificationTiming: true,
+        },
+      });
+      if (!existing) throw new AnnouncementNotFoundError();
+
+      if (
+        affectedServiceIds !== undefined &&
+        !(await affectedServicesBelongToPage(statusPageId, normalizedAffectedServiceIds, tx))
+      ) {
+        throw new AnnouncementInputError('Affected services must belong to this status page.');
+      }
+
+      const effectiveStart = startDate ? parseDate(startDate, 'startDate') : existing.startDate;
+      const effectiveEnd =
+        endDate === undefined ? existing.endDate : endDate ? parseDate(endDate, 'endDate') : null;
+      if (effectiveEnd && effectiveEnd <= effectiveStart) {
+        throw new AnnouncementInputError('End date must be after start date.');
+      }
+
+      let nextPublishAt: Date | undefined;
+      if (publishAt) {
+        nextPublishAt = parseDate(publishAt, 'publishAt');
+      } else if (publishOption === 'AT_START') {
+        nextPublishAt = effectiveStart;
+      } else if (publishOption === 'NOW') {
+        nextPublishAt = new Date();
+      }
+
+      const effectivePublishAt = nextPublishAt ?? existing.publishAt;
+      if (effectiveEnd && effectivePublishAt > effectiveEnd) {
+        throw new AnnouncementInputError('Publish date cannot be after end date.');
+      }
+
+      const nextAllDay =
+        parsed.data.allDay !== undefined
           ? parsed.data.allDay
-            ? 'ALL_DAY'
-            : 'EXACT'
-          : undefined;
+          : parsed.data.timeMode !== undefined
+            ? parsed.data.timeMode === 'ALL_DAY'
+            : undefined;
+      const nextTimeMode =
+        parsed.data.timeMode !== undefined
+          ? parsed.data.timeMode
+          : parsed.data.allDay !== undefined
+            ? parsed.data.allDay
+              ? 'ALL_DAY'
+              : 'EXACT'
+            : undefined;
 
-    const updated = await prisma.statusPageAnnouncement.update({
-      where: { id },
-      data: {
-        ...(title !== undefined ? { title: title.trim() } : {}),
-        ...(message !== undefined ? { message: message.trim() } : {}),
-        ...(type !== undefined ? { type } : {}),
-        ...(startDate ? { startDate: effectiveStart } : {}),
-        ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
-        ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
-        ...(nextPublishAt !== undefined ? { publishAt: nextPublishAt } : {}),
-        ...(nextTimeMode !== undefined ? { timeMode: nextTimeMode } : {}),
-        ...(nextAllDay !== undefined ? { allDay: nextAllDay } : {}),
-        ...(affectedServiceIds !== undefined
-          ? {
-              affectedServiceIds:
-                normalizedAffectedServiceIds === null
-                  ? Prisma.JsonNull
-                  : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
-            }
-          : {}),
-      },
+      const nextIsActive = isActive !== undefined ? Boolean(isActive) : existing.isActive;
+      const timing =
+        notificationTiming ??
+        ((existing.notificationTiming as AnnouncementNotificationTiming | null) ?? 'NONE');
+      const nextPlan = deriveAnnouncementNotificationPlan({
+        isActive: nextIsActive,
+        notificationTiming: timing,
+        publishAt: effectivePublishAt,
+        startDate: effectiveStart,
+      });
+
+      const timingChanged =
+        notificationTiming !== undefined && notificationTiming !== existing.notificationTiming;
+      const activeChanged = isActive !== undefined && nextIsActive !== existing.isActive;
+      const startAffectsNotification = startDate !== undefined && timing === 'AT_START';
+      const publishAffectsNotification =
+        (publishAt !== undefined || publishOption !== undefined) && timing === 'ON_PUBLISH';
+      const eligibilityChanged = affectedServiceIds !== undefined;
+      const schedulingMutation =
+        timingChanged || activeChanged || startAffectsNotification || publishAffectsNotification;
+      const generationMutation = schedulingMutation || eligibilityChanged;
+
+      const reactivating = existing.isActive === false && nextIsActive === true;
+      const enablingNotifications =
+        existing.notificationTiming === 'NONE' && timing !== 'NONE';
+      if (
+        schedulingMutation &&
+        nextPlan.shouldNotify &&
+        nextPlan.scheduledAt &&
+        nextPlan.scheduledAt.getTime() < Date.now() - 30_000 &&
+        publishOption !== 'NOW' &&
+        (reactivating || enablingNotifications || schedulingMutation)
+      ) {
+        throw new AnnouncementInputError(
+          'The subscriber notification time is already in the past. Choose Publish now with Notify on publish, choose a future time, or disable subscriber notification.'
+        );
+      }
+
+      const announcement = await tx.statusPageAnnouncement.update({
+        where: { id },
+        data: {
+          ...(title !== undefined ? { title: title.trim() } : {}),
+          ...(message !== undefined ? { message: message.trim() } : {}),
+          ...(type !== undefined ? { type } : {}),
+          ...(startDate !== undefined ? { startDate: effectiveStart } : {}),
+          ...(endDate !== undefined ? { endDate: effectiveEnd } : {}),
+          ...(isActive !== undefined ? { isActive: Boolean(isActive) } : {}),
+          ...(nextPublishAt !== undefined ? { publishAt: nextPublishAt } : {}),
+          ...(notificationTiming !== undefined ? { notificationTiming } : {}),
+          ...(nextTimeMode !== undefined ? { timeMode: nextTimeMode } : {}),
+          ...(nextAllDay !== undefined ? { allDay: nextAllDay } : {}),
+          ...(affectedServiceIds !== undefined
+            ? {
+                affectedServiceIds:
+                  normalizedAffectedServiceIds === null
+                    ? Prisma.JsonNull
+                    : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
+              }
+            : {}),
+        },
+      });
+
+      let generation = await readAnnouncementNotificationGeneration(id, statusPageId, tx);
+      if (generation == null) {
+        throw new Error('Announcement notification generation is missing');
+      }
+
+      if (generationMutation) {
+        generation = await incrementAnnouncementNotificationGeneration(id, statusPageId, tx);
+        await cancelPendingAnnouncementJobs(tx, id, statusPageId);
+        await suppressUndeliveredAnnouncementIntents(
+          tx,
+          id,
+          'Announcement notification policy was superseded by a newer generation.'
+        );
+
+        // Eligibility-only edits after the canonical send time invalidate stale
+        // work but do not unexpectedly re-email subscribers. Explicit scheduling
+        // edits into the past are rejected above and require an intentional NOW.
+        const mayCreateReplacement =
+          nextPlan.scheduledAt != null &&
+          (nextPlan.scheduledAt.getTime() >= Date.now() - 30_000 || publishOption === 'NOW');
+        if (nextPlan.shouldNotify && nextPlan.scheduledAt && mayCreateReplacement) {
+          await createAnnouncementFanoutJob(tx, {
+            announcementId: id,
+            statusPageId,
+            scheduledAt: nextPlan.scheduledAt,
+            generation,
+          });
+        }
+      }
+
+      return { announcement, generation };
     });
 
-    logger.info('api.status_page.announcement.updated', { announcementId: updated.id });
-    return jsonOk({ announcement: updated }, 200);
+    logger.info('api.status_page.announcement.updated', {
+      announcementId: result.announcement.id,
+      notificationGeneration: result.generation,
+    });
+    return jsonOk({ announcement: result.announcement }, 200);
   } catch (error: unknown) {
+    if (error instanceof AnnouncementNotFoundError) {
+      return jsonError(error.message, 404);
+    }
+    if (error instanceof InvalidDateError || error instanceof AnnouncementInputError) {
+      return jsonError(error.message, 400);
+    }
     logger.error('api.status_page.announcement.update_error', {
       error: error instanceof Error ? error.message : String(error),
     });
@@ -282,12 +488,30 @@ export async function DELETE(req: NextRequest) {
     }
     const { id, statusPageId } = parsed.data;
 
-    const deleted = await prisma.statusPageAnnouncement.deleteMany({ where: { id, statusPageId } });
-    if (deleted.count === 0) return jsonError('Announcement not found.', 404);
+    await prisma.$transaction(async tx => {
+      await lockAnnouncementMutation(tx, statusPageId, id);
+      const existing = await tx.statusPageAnnouncement.findFirst({
+        where: { id, statusPageId },
+        select: { id: true },
+      });
+      if (!existing) throw new AnnouncementNotFoundError();
 
-    logger.info('api.status_page.announcement.deleted', { announcementId: id });
+      await incrementAnnouncementNotificationGeneration(id, statusPageId, tx);
+      await cancelPendingAnnouncementJobs(tx, id, statusPageId);
+      await suppressUndeliveredAnnouncementIntents(
+        tx,
+        id,
+        'Announcement was deleted before provider delivery.'
+      );
+      await tx.statusPageAnnouncement.delete({ where: { id } });
+    });
+
+    logger.info('api.status_page.announcement.deleted', { announcementId: id, statusPageId });
     return jsonOk({ success: true }, 200);
   } catch (error: unknown) {
+    if (error instanceof AnnouncementNotFoundError) {
+      return jsonError(error.message, 404);
+    }
     logger.error('api.status_page.announcement.delete_error', {
       error: error instanceof Error ? error.message : String(error),
     });

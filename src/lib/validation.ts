@@ -291,29 +291,89 @@ export const StatusApiTokenRevokeSchema = z.object({
   id: z.string().min(1),
 });
 
+export const STATUS_ANNOUNCEMENT_TYPES = [
+  'INCIDENT',
+  'MAINTENANCE',
+  'UPDATE',
+  'WARNING',
+  'INFO',
+] as const;
+export type StatusAnnouncementType = (typeof STATUS_ANNOUNCEMENT_TYPES)[number];
+
+const AbsoluteInstantSchema = z.string().datetime({ offset: true });
+
+export const isValidDateTimeString = (val: string) =>
+  AbsoluteInstantSchema.safeParse(val).success;
+
 export const StatusAnnouncementCreateSchema = z
   .object({
     statusPageId: z.string().min(1),
     title: z.string().trim().min(1).max(200),
     message: z.string().trim().min(1).max(5000),
-    type: z.string().trim().max(50).optional(),
-    startDate: z.string().min(1),
-    endDate: z.string().optional().nullable(),
+    type: z.enum(STATUS_ANNOUNCEMENT_TYPES).optional().default('INFO'),
+    startDate: z.string().min(1).refine(isValidDateTimeString, {
+      message: 'startDate must be a valid ISO date string with an explicit timezone.',
+    }),
+    endDate: z
+      .string()
+      .refine(isValidDateTimeString, {
+        message: 'endDate must be a valid ISO date string with an explicit timezone.',
+      })
+      .optional()
+      .nullable(),
     isActive: z.boolean().optional(),
     notifySubscribers: z.boolean().optional(),
     affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
     timeMode: z.enum(['EXACT', 'ALL_DAY']).optional().default('EXACT'),
     allDay: z.boolean().optional(),
     publishOption: z.enum(['NOW', 'AT_START']).optional().default('NOW'),
-    publishAt: z.string().optional(),
-    notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional().default('ON_PUBLISH'),
+    publishAt: z
+      .string()
+      .refine(isValidDateTimeString, {
+        message: 'publishAt must be a valid ISO date string with an explicit timezone.',
+      })
+      .optional(),
+    notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.endDate && new Date(data.endDate).getTime() <= new Date(data.startDate).getTime()) {
+    const startMs = new Date(data.startDate).getTime();
+    if (data.endDate) {
+      const endMs = new Date(data.endDate).getTime();
+      if (endMs <= startMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['endDate'],
+          message: 'End date must be after start date.',
+        });
+      }
+    }
+    if (data.publishAt && data.endDate) {
+      const pubMs = new Date(data.publishAt).getTime();
+      const endMs = new Date(data.endDate).getTime();
+      if (pubMs > endMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['publishAt'],
+          message: 'Publish date cannot be after end date.',
+        });
+      }
+    }
+    if (
+      data.notifySubscribers === false &&
+      data.notificationTiming !== undefined &&
+      data.notificationTiming !== 'NONE'
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['endDate'],
-        message: 'End date must be after start date.',
+        path: ['notificationTiming'],
+        message: 'notificationTiming must be NONE when notifySubscribers is false.',
+      });
+    }
+    if (data.notifySubscribers === true && data.notificationTiming === 'NONE') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['notificationTiming'],
+        message: 'notificationTiming cannot be NONE when notifySubscribers is true.',
       });
     }
     if (data.allDay !== undefined) {
@@ -340,18 +400,56 @@ export const StatusAnnouncementPatchSchema = z
     id: z.string().min(1),
     title: z.string().trim().min(1).max(200).optional(),
     message: z.string().trim().min(1).max(5000).optional(),
-    type: z.string().trim().max(50).optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional().nullable(),
+    type: z.enum(STATUS_ANNOUNCEMENT_TYPES).optional(),
+    startDate: z
+      .string()
+      .refine(isValidDateTimeString, {
+        message: 'startDate must be a valid ISO date string with an explicit timezone.',
+      })
+      .optional(),
+    endDate: z
+      .string()
+      .refine(isValidDateTimeString, {
+        message: 'endDate must be a valid ISO date string with an explicit timezone.',
+      })
+      .optional()
+      .nullable(),
     isActive: z.boolean().optional(),
     affectedServiceIds: z.array(z.string().min(1)).optional().nullable(),
     timeMode: z.enum(['EXACT', 'ALL_DAY']).optional(),
     allDay: z.boolean().optional(),
     publishOption: z.enum(['NOW', 'AT_START']).optional(),
-    publishAt: z.string().optional(),
+    publishAt: z
+      .string()
+      .refine(isValidDateTimeString, {
+        message: 'publishAt must be a valid ISO date string with an explicit timezone.',
+      })
+      .optional(),
     notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.startDate && data.endDate) {
+      const startMs = new Date(data.startDate).getTime();
+      const endMs = new Date(data.endDate).getTime();
+      if (endMs <= startMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['endDate'],
+          message: 'End date must be after start date.',
+        });
+      }
+    }
+    if (data.publishAt && data.endDate) {
+      const pubMs = new Date(data.publishAt).getTime();
+      const endMs = new Date(data.endDate).getTime();
+      if (pubMs > endMs) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['publishAt'],
+          message: 'Publish date cannot be after end date.',
+        });
+      }
+    }
     if (data.allDay !== undefined && data.timeMode !== undefined) {
       if (data.allDay && data.timeMode === 'EXACT') {
         ctx.addIssue({

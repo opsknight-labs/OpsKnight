@@ -148,13 +148,20 @@ function ServiceHistoryV3Inner({
   const w30 = service.uptime?.days30;
   const w90 = service.uptime?.days90;
 
+  const rawMeasuredDays = service.uptime?.days90?.measuredDays ?? days.length;
+  const measuredDays = Number.isFinite(rawMeasuredDays) ? Math.round(rawMeasuredDays) : days.length;
+  const isPartialWindow = measuredDays > 0 && measuredDays < 90;
+  const uptimeLabel = isPartialWindow
+    ? ` · ${measuredDays}-day uptime (partial)`
+    : ' · 90-day uptime';
+
   return (
     <div className="status-v3-uptime" ref={ref}>
       {hasDays ? (
         <div className="status-v3-uptime__head">
           <span className="status-v3-uptime__value">
             {uptime90.value}
-            <span className="status-v3-uptime__unit"> · 90-day uptime</span>
+            <span className="status-v3-uptime__unit">{uptimeLabel}</span>
           </span>
           {showGrade && grade && (
             <StatusBadge status={grade} label={gradeLabel(grade) ?? grade} size="xs" showDot />
@@ -213,7 +220,6 @@ function ServiceHistoryV3Inner({
                   rx={0.22}
                   fill="currentColor"
                   data-day-index={index}
-                  aria-hidden="true"
                 >
                   <title>
                     {`${entry.date}: ${statusPresentation(entry.status).label}${entry.availabilityPercent != null ? ` · ${entry.availabilityPercent}%` : ''}`}
@@ -224,10 +230,25 @@ function ServiceHistoryV3Inner({
           </svg>
 
           <div className="status-v3-history__axis" aria-hidden="true">
-            <span>90 days ago</span>
-            <span>60 days ago</span>
-            <span>30 days ago</span>
-            <span>Today</span>
+            {days.length <= 30 ? (
+              <>
+                <span>{days.length > 1 ? `${days.length} days ago` : 'Yesterday'}</span>
+                <span>Today</span>
+              </>
+            ) : days.length <= 60 ? (
+              <>
+                <span>{days.length} days ago</span>
+                <span>30 days ago</span>
+                <span>Today</span>
+              </>
+            ) : (
+              <>
+                <span>{days.length >= 90 ? '90 days ago' : `${days.length} days ago`}</span>
+                <span>60 days ago</span>
+                <span>30 days ago</span>
+                <span>Today</span>
+              </>
+            )}
           </div>
         </>
       )}
