@@ -567,6 +567,38 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
             concurrentReservation = true;
             return;
           }
+          const ownerResult = owner?.resultPayload as Record<string, unknown> | null;
+          if (ownerResult?.createAttempted !== true) {
+            // The owner died before the pre-POST durability hook completed, so
+            // no external side effect can have occurred. Reclaim without
+            // manufacturing an operator-visible ambiguous delivery.
+            if (inside.createOperationId === id) {
+              const reclaimed = await tx.microsoftTeamsIncidentMessage.updateMany({
+                where: { incidentId, destinationId, createState: 'CREATING', createOperationId: id },
+                data: { mutationLeaseToken, mutationLeaseExpiresAt: new Date(Date.now() + CARD_MUTATION_LEASE_MS) },
+              });
+              mutationLeaseHeld = reclaimed.count === 1;
+              reservedByUs = mutationLeaseHeld;
+              previous = { messageId: null, conversationId: null } as unknown as typeof previous;
+              return;
+            }
+            await tx.microsoftTeamsIncidentMessage.deleteMany({
+              where: { incidentId, destinationId, createState: 'CREATING', createOperationId: inside.createOperationId },
+            });
+            await tx.microsoftTeamsIncidentMessage.create({
+              data: {
+                incidentId, destinationId, messageId: ownReservation,
+                channelId: destination.channelId, tenantId: destination.tenantId, teamId: destination.teamId,
+                conversationId: null, mutationLeaseToken,
+                mutationLeaseExpiresAt: new Date(Date.now() + CARD_MUTATION_LEASE_MS),
+                createOperationId: id, createState: 'CREATING',
+              },
+            });
+            mutationLeaseHeld = true;
+            reservedByUs = true;
+            previous = { messageId: null, conversationId: null } as unknown as typeof previous;
+            return;
+          }
           // CREATING is written immediately before POST. Once its owner is
           // reclaimed, expired, or missing, external outcome is unknowable.
           await tx.microsoftTeamsIncidentMessage.updateMany({

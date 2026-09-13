@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sendIncidentCard = vi.fn();
+const createIncidentCard = vi.fn();
 const updateIncidentCard = vi.fn();
 const recoverIncidentCard = vi.fn();
 const operationUpdates: Array<Record<string, unknown>> = [];
 let currentResultPayload: Record<string, unknown> | null = null;
-let ownerOperation = { id: 'op-create', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
+let ledgerUpdateCount = 0;
+let ownerOperation: {
+  id: string;
+  status: string;
+  leaseExpiresAt: Date | null;
+  resultPayload: Record<string, unknown> | null;
+} = { id: 'op-create', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
 
 const incident = {
   id: 'inc-1', title: 'Incident', description: null, status: 'RESOLVED', urgency: 'HIGH', priority: null,
@@ -28,10 +35,10 @@ const prismaMock = {
   service: { findUnique: vi.fn(async () => ({ serviceNotificationChannels: ['MICROSOFT_TEAMS'], serviceNotifyOnTriggered: true, serviceNotifyOnAck: true, serviceNotifyOnResolved: true })) },
   microsoftTeamsDestination: { findUnique: vi.fn(async () => ({ id: 'dest-1', tenantId: 'tenant-1', teamId: 'team-1', channelId: 'channel-1', enabled: true, updatedAt: new Date(), serviceId: 'svc-1' })) },
   microsoftTeamsIncidentMessage: {
-    findUnique: vi.fn(async () => ledger), updateMany: vi.fn(async () => ({ count: 0 })),
+    findUnique: vi.fn(async () => ledger), updateMany: vi.fn(async () => ({ count: ledgerUpdateCount })),
   },
   $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
-    microsoftTeamsIncidentMessage: { findUnique: vi.fn(async () => ledger), updateMany: vi.fn(async () => ({ count: 0 })) },
+    microsoftTeamsIncidentMessage: { findUnique: vi.fn(async () => ledger), updateMany: vi.fn(async () => ({ count: ledgerUpdateCount })) },
     externalOperation: { findUnique: vi.fn(async () => ownerOperation), updateMany: vi.fn(async () => ({ count: 1 })) },
   })),
 };
@@ -47,13 +54,14 @@ vi.mock('@/lib/circuit-breaker', () => ({
   CircuitBreakerError: class extends Error {},
   CircuitBreakers: { microsoftTeams: () => ({ getState: () => 'CLOSED', execute: (fn: () => Promise<unknown>) => fn() }) },
 }));
-vi.mock('@/lib/microsoft-teams/provider', () => ({ microsoftTeamsChatProvider: { sendIncidentCard, updateIncidentCard, recoverIncidentCard } }));
+vi.mock('@/lib/microsoft-teams/provider', () => ({ microsoftTeamsChatProvider: { sendIncidentCard, createIncidentCard, updateIncidentCard, recoverIncidentCard } }));
 vi.mock('@/lib/audit', () => ({ emitAuditEvent: vi.fn(async () => undefined) }));
 
 describe('processMicrosoftTeamsOperation create fence', () => {
   beforeEach(() => {
     operationUpdates.length = 0;
     currentResultPayload = null;
+    ledgerUpdateCount = 0;
     ownerOperation = { id: 'op-create', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
     Object.assign(ledger, { createState: 'AMBIGUOUS', createOperationId: 'op-create' });
     vi.clearAllMocks();
@@ -90,5 +98,24 @@ describe('processMicrosoftTeamsOperation create fence', () => {
     expect(sendIncidentCard).not.toHaveBeenCalled();
     expect(recoverIncidentCard).not.toHaveBeenCalled();
     expect(operationUpdates).toContainEqual(expect.objectContaining({ status: 'AMBIGUOUS' }));
+  });
+
+  it('safely resumes a same-operation CREATING fence when the worker died before provider I/O', async () => {
+    Object.assign(ledger, { createState: 'CREATING', createOperationId: 'op-late' });
+    ownerOperation = { id: 'op-late', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: null };
+    ledgerUpdateCount = 1;
+    createIncidentCard.mockImplementationOnce(async ({ beforeCreateAttempt }: { beforeCreateAttempt: () => Promise<void> }) => {
+      await beforeCreateAttempt();
+      throw new Error('provider path reached');
+    });
+
+    const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+    await expect(processMicrosoftTeamsOperation('op-late')).rejects.toThrow('provider path reached');
+
+    expect(createIncidentCard).toHaveBeenCalledOnce();
+    expect(operationUpdates).toContainEqual(expect.objectContaining({
+      resultPayload: expect.objectContaining({ createAttempted: true }),
+    }));
+    expect(operationUpdates).not.toContainEqual(expect.objectContaining({ status: 'AMBIGUOUS' }));
   });
 });
