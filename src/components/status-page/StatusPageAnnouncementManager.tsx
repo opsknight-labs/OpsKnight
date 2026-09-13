@@ -827,13 +827,7 @@ export default function StatusPageAnnouncementManager({
                       variant="ghost"
                       size="sm"
                       className="h-8 px-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition-colors"
-                      onClick={() => {
-    if (typeof window !== "undefined" && (window as any).__TEST__ || process.env.NODE_ENV === "test") {
-      handleDelete(announcement.id);
-    } else {
-      setDeletingAnnouncement(announcement);
-    }
-  }}
+                      onClick={() => setDeletingAnnouncement(announcement)}
                       disabled={isPending}
                       title="Delete Announcement"
                     >
@@ -987,9 +981,15 @@ export default function StatusPageAnnouncementManager({
                       </span>
                     </div>
 
-                    <div className="inline-flex w-full items-center bg-muted/60 p-1 rounded-lg border border-border/80 text-xs font-medium">
+                    <div
+                      className="inline-flex w-full items-center bg-muted/60 p-1 rounded-lg border border-border/80 text-xs font-medium"
+                      role="radiogroup"
+                      aria-label="Time Precision"
+                    >
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={specifyTime}
                         onClick={() => setSpecifyTime(true)}
                         className={cn(
                           'flex-1 py-1.5 rounded-md transition-all text-center font-semibold',
@@ -1002,6 +1002,8 @@ export default function StatusPageAnnouncementManager({
                       </button>
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={!specifyTime}
                         onClick={() => setSpecifyTime(false)}
                         className={cn(
                           'flex-1 py-1.5 rounded-md transition-all text-center font-semibold',

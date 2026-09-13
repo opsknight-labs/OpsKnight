@@ -148,7 +148,8 @@ function ServiceHistoryV3Inner({
   const w30 = service.uptime?.days30;
   const w90 = service.uptime?.days90;
 
-  const measuredDays = service.uptime?.days90?.measuredDays ?? days.length;
+  const rawMeasuredDays = service.uptime?.days90?.measuredDays ?? days.length;
+  const measuredDays = Number.isFinite(rawMeasuredDays) ? Math.round(rawMeasuredDays) : days.length;
   const isPartialWindow = measuredDays > 0 && measuredDays < 90;
   const uptimeLabel = isPartialWindow
     ? ` · ${measuredDays}-day uptime (partial)`

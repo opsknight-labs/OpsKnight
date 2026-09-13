@@ -81,18 +81,23 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
 
     // Default is Exact Time
-    const exactBtn = screen.getByRole('button', { name: /Exact Time/i });
-    const allDayBtn = screen.getByRole('button', { name: /All Day \/ Date Only/i });
+    const exactBtn = screen.getByRole('radio', { name: /Exact Time/i });
+    const allDayBtn = screen.getByRole('radio', { name: /All Day \/ Date Only/i });
     expect(exactBtn).toBeDefined();
     expect(allDayBtn).toBeDefined();
+    expect(exactBtn.getAttribute('aria-checked')).toBe('true');
+    expect(allDayBtn.getAttribute('aria-checked')).toBe('false');
 
     // Click All Day
     fireEvent.click(allDayBtn);
+    expect(exactBtn.getAttribute('aria-checked')).toBe('false');
+    expect(allDayBtn.getAttribute('aria-checked')).toBe('true');
     // Time input should no longer be present
     expect(screen.queryByDisplayValue(/\d{2}:\d{2}/)).toBeNull();
 
     // Click Exact Time back
     fireEvent.click(exactBtn);
+    expect(exactBtn.getAttribute('aria-checked')).toBe('true');
     expect(screen.getByText(/Set to Now/i)).toBeDefined();
   });
 
@@ -187,7 +192,7 @@ describe('StatusPageAnnouncementManager Component', () => {
     });
   });
 
-  it('deletes an announcement when delete button is clicked', async () => {
+  it('deletes an announcement when delete button is clicked and confirmed in dialog', async () => {
     (global.fetch as any).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ success: true }),
@@ -198,7 +203,16 @@ describe('StatusPageAnnouncementManager Component', () => {
     const deleteButtons = screen.getAllByTitle('Delete Announcement');
     expect(deleteButtons.length).toBeGreaterThan(0);
 
+    // Clicking trigger opens confirmation modal
     fireEvent.click(deleteButtons[0]);
+
+    // Verify modal dialog appeared
+    expect(screen.getByText('Delete announcement?')).toBeDefined();
+    const confirmDeleteBtn = screen.getByRole('button', { name: 'Delete Announcement' });
+    expect(confirmDeleteBtn).toBeDefined();
+
+    // Click confirm
+    fireEvent.click(confirmDeleteBtn);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(

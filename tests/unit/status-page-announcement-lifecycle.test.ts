@@ -27,6 +27,8 @@ describe('Centralized Announcement Lifecycle', () => {
     expect(res.isScheduled).toBe(true);
     expect(res.isPublished).toBe(true);
     expect(res.isPubliclyVisible).toBe(true);
+    expect(res.isPublishedUpcoming).toBe(true);
+    expect(res.isScheduledForPublication).toBe(false);
   });
 
   it('marks future publication dates as SCHEDULED and not publicly visible yet', () => {
@@ -41,6 +43,8 @@ describe('Centralized Announcement Lifecycle', () => {
     expect(res.isScheduled).toBe(true);
     expect(res.isPublished).toBe(false);
     expect(res.isPubliclyVisible).toBe(false);
+    expect(res.isScheduledForPublication).toBe(true);
+    expect(res.isPublishedUpcoming).toBe(false);
   });
 
   it('marks past end dates as CONCLUDED', () => {

@@ -28,6 +28,10 @@ export interface AnnouncementLifecycleResult {
   isConcluded: boolean;
   isPublished: boolean;
   isPubliclyVisible: boolean;
+  /** True when publishAt > now (held back from publication entirely) */
+  isScheduledForPublication: boolean;
+  /** True when publishAt <= now but startDate > now (published notice for an upcoming event window) */
+  isPublishedUpcoming: boolean;
 }
 
 /**
@@ -56,6 +60,8 @@ export function deriveAnnouncementLifecycle(
       isConcluded: false,
       isPublished: false,
       isPubliclyVisible: false,
+      isScheduledForPublication: false,
+      isPublishedUpcoming: false,
     };
   }
 
@@ -80,14 +86,17 @@ export function deriveAnnouncementLifecycle(
   const isStartInFuture = !Number.isNaN(startMs) && startMs > nowMs;
 
   if (isPublishInFuture || isStartInFuture) {
+    const isPublished = publishMs !== null ? publishMs <= nowMs : true;
     return {
       status: 'SCHEDULED',
       isDraft: false,
       isScheduled: true,
       isActive: false,
       isConcluded: false,
-      isPublished: publishMs !== null ? publishMs <= nowMs : true,
-      isPubliclyVisible: isPublishInFuture ? false : true,
+      isPublished,
+      isPubliclyVisible: !isPublishInFuture,
+      isScheduledForPublication: isPublishInFuture,
+      isPublishedUpcoming: !isPublishInFuture && isStartInFuture,
     };
   }
 
@@ -100,6 +109,8 @@ export function deriveAnnouncementLifecycle(
       isConcluded: true,
       isPublished: true,
       isPubliclyVisible: true,
+      isScheduledForPublication: false,
+      isPublishedUpcoming: false,
     };
   }
 
@@ -111,5 +122,7 @@ export function deriveAnnouncementLifecycle(
     isConcluded: false,
     isPublished: true,
     isPubliclyVisible: true,
+    isScheduledForPublication: false,
+    isPublishedUpcoming: false,
   };
 }
