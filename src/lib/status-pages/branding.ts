@@ -13,6 +13,7 @@ function num(value: unknown): number | undefined {
 }
 
 const LAYOUTS = new Set(['default', 'compact', 'wide']);
+const THEME_DENSITIES = new Set(['comfortable', 'compact']);
 
 /**
  * Normalize the stored branding JSON into the typed public contract shape.
@@ -20,13 +21,16 @@ const LAYOUTS = new Set(['default', 'compact', 'wide']);
  * The persisted object accumulated aliases over time (`primary`/`primaryColor`,
  * `background`/`backgroundColor`, `text`/`textColor`, `logo`/`logoUrl`); the public contract
  * exposes a single canonical key for each so no consumer has to know the history. Presentation
- * toggles (layout, chrome, refresh, API/RSS links) are preserved so a republish cannot reset them.
- * Returns null when nothing brand-worthy is present.
+ * toggles (layout, chrome, refresh, API/RSS links) and built-in theme metadata are preserved so a
+ * republish cannot reset them. Returns null when nothing brand-worthy is present.
  */
 export function projectPublicBranding(value: unknown): PublicStatusBranding | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const source = value as Record<string, unknown>;
   const layout = str(source.layout);
+  const themeId = str(source.themeId);
+  const themeVersion = num(source.themeVersion);
+  const themeDensity = str(source.themeDensity);
   // Branding images must be short asset URLs, never inline data URLs in the snapshot.
   // A 2.8 MB data:image in the snapshot bloats RSC + hydration props for every visitor.
   // Uploaded logos are normalized to /api/status-assets/* via status-page asset handling;
@@ -51,6 +55,11 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
     ...(str(source.metaTitle) ? { metaTitle: str(source.metaTitle) } : {}),
     ...(str(source.metaDescription) ? { metaDescription: str(source.metaDescription) } : {}),
     ...(str(source.customCss) ? { customCss: str(source.customCss) } : {}),
+    ...(themeId ? { themeId } : {}),
+    ...(themeVersion !== undefined && Number.isInteger(themeVersion) ? { themeVersion } : {}),
+    ...(themeDensity && THEME_DENSITIES.has(themeDensity)
+      ? { themeDensity: themeDensity as PublicStatusBranding['themeDensity'] }
+      : {}),
     ...(layout && LAYOUTS.has(layout) ? { layout: layout as PublicStatusBranding['layout'] } : {}),
     ...(bool(source.showHeader) !== undefined ? { showHeader: bool(source.showHeader) } : {}),
     ...(bool(source.showFooter) !== undefined ? { showFooter: bool(source.showFooter) } : {}),

@@ -4,6 +4,12 @@ import StatusPageV3 from './StatusPageV3';
 import type { StatusPageSnapshot } from '@/lib/status-pages/snapshot';
 import { toSafeStyleTagContent } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
+import { resolveStatusPageCustomCss } from '@/lib/status-pages/theme-custom-css';
+import {
+  compileStatusPageThemeCss,
+  resolveStatusPageTheme,
+  resolveStatusPageThemeDensity,
+} from '@/lib/status-pages/theme-contract';
 
 /**
  * Themed shell for the published status page.
@@ -20,6 +26,10 @@ export default function StatusPageSnapshotView({
 }) {
   const page = snapshot.page;
   const branding = page.branding ?? {};
+  const themeBranding = branding as typeof branding & {
+    themeId?: unknown;
+    themeDensity?: unknown;
+  };
   const presentation = page.presentation;
   const theme = computeStatusPageTheme({
     primaryColor: branding.primaryColor,
@@ -32,16 +42,26 @@ export default function StatusPageSnapshotView({
   const refreshInterval =
     presentation?.refreshInterval ??
     (typeof branding.refreshInterval === 'number' ? branding.refreshInterval : 60);
-  const customCss = toSafeStyleTagContent(branding.customCss);
+  const selectedTheme = resolveStatusPageTheme(themeBranding.themeId);
+  const customCss = toSafeStyleTagContent(
+    resolveStatusPageCustomCss(selectedTheme.id, branding.customCss)
+  );
+  const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
+  const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
   const autoRefresh = presentation?.autoRefresh ?? branding.autoRefresh;
 
   return (
     <main
       className="status-page-container"
+      data-sp-theme={selectedTheme.id}
+      data-sp-theme-version={selectedTheme.version}
+      data-sp-density={themeDensity}
       style={{
         minHeight: '100vh',
-        background: theme.backgroundColor,
-        color: theme.textColor,
+        // Built-in themes define these variables in their CSS layer. Default defines nothing and
+        // therefore falls back to the configured/native branding palette exactly as before.
+        background: `var(--sp-page-bg, ${theme.backgroundColor})`,
+        color: `var(--sp-page-text, ${theme.textColor})`,
         fontFamily: theme.fontFamily,
         padding: 0,
         ...(theme.cssVariables as CSSProperties),
@@ -56,7 +76,10 @@ export default function StatusPageSnapshotView({
         stale={stale}
         refreshIntervalSeconds={autoRefresh !== false ? Math.max(30, refreshInterval) : null}
       />
-      {customCss && <style dangerouslySetInnerHTML={{ __html: customCss }} />}
+      {builtInThemeCss && <style data-status-page-theme>{builtInThemeCss}</style>}
+      {customCss && (
+        <style data-status-page-custom-css dangerouslySetInnerHTML={{ __html: customCss }} />
+      )}
     </main>
   );
 }

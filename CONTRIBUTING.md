@@ -6,6 +6,7 @@ Thank you for your interest in contributing to OpsKnight! This document provides
 
 - [Code of Conduct](#code-of-conduct)
 - [Security Policy](#security-policy)
+- [License and Contributions](#license-and-contributions)
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
 - [Making Changes](#making-changes)
@@ -19,6 +20,14 @@ This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDU
 ## Security Policy
 
 Please review our [Security Policy](SECURITY.md) for instructions on how to report vulnerabilities.
+
+## License and Contributions
+
+OpsKnight's current development line is licensed under the [GNU Affero General Public License version 3 only](LICENSE) (`AGPL-3.0-only`).
+
+By intentionally submitting a contribution for inclusion in this repository, you agree that your contribution may be distributed under `AGPL-3.0-only`, and you represent that you have the right to submit it under those terms. Do not submit code or other material that you do not have permission to contribute.
+
+This contribution policy does not transfer ownership of your copyright to OpsKnight and does not grant a separate right to relicense your contribution under a proprietary license. Any future contributor license agreement or additional licensing arrangement would be handled separately and explicitly.
 
 ## Getting Started
 

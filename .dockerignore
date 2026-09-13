@@ -45,6 +45,8 @@ docker-compose*.yml
 # Documentation
 *.md
 !README.md
+!LICENSE-TRANSITION.md
+!TRADEMARKS.md
 
 # Misc
 tmp
