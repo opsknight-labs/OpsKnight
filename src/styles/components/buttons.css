@@ -12,7 +12,7 @@
     line-height: 1.4;
     border: 1px solid transparent;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -43,13 +43,13 @@
 
 .btn-outline {
     background: transparent;
-    border-color: rgba(17, 24, 39, 0.12);
+    border-color: var(--border);
     color: var(--text-primary);
 }
 
 .btn-ghost {
-    background: #fff;
-    border: 1px solid rgba(17, 24, 39, 0.12);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     color: var(--text-primary);
 }
 
@@ -78,8 +78,8 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.8125rem;
     font-weight: 500;
@@ -91,9 +91,9 @@
 }
 
 .copy-button:hover {
-    background: #f8fafc;
-    border-color: var(--primary-color);
-    color: var(--primary-color);
+    background: var(--bg-primary);
+    border-color: var(--border-hover);
+    color: var(--text-primary);
 }
 
 .copy-button svg {
