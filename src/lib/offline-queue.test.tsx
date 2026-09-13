@@ -179,7 +179,7 @@ describe('offline-queue', () => {
       open: vi.fn(() => {
         const request = {
           result: mockDb,
-          transaction: null as any,
+          transaction: null as IDBTransaction | null,
           onupgradeneeded: null as EventHandler,
           onsuccess: null as EventHandler,
           onerror: null as EventHandler,
