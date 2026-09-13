@@ -17,21 +17,32 @@ type Rgb = [number, number, number];
 
 function hexToRgb(hex: string): Rgb {
   const value = hex.replace('#', '');
-  return [0, 2, 4].map(index => Number.parseInt(value.slice(index, index + 2), 16) / 255) as Rgb;
+  return [
+    Number.parseInt(value.slice(0, 2), 16) / 255,
+    Number.parseInt(value.slice(2, 4), 16) / 255,
+    Number.parseInt(value.slice(4, 6), 16) / 255,
+  ];
 }
 
 function mix(left: string, right: string, leftWeight: number): Rgb {
   const a = hexToRgb(left);
   const b = hexToRgb(right);
-  return a.map((channel, index) => channel * leftWeight + b[index] * (1 - leftWeight)) as Rgb;
+  const rightWeight = 1 - leftWeight;
+  return [
+    a[0] * leftWeight + b[0] * rightWeight,
+    a[1] * leftWeight + b[1] * rightWeight,
+    a[2] * leftWeight + b[2] * rightWeight,
+  ];
 }
 
 function relativeLuminance(value: string | Rgb): number {
   const rgb = typeof value === 'string' ? hexToRgb(value) : value;
-  const linear = rgb.map(channel =>
-    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
-  );
-  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  const toLinear = (channel: number) =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  const red = toLinear(rgb[0]);
+  const green = toLinear(rgb[1]);
+  const blue = toLinear(rgb[2]);
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
 function contrastRatio(left: string | Rgb, right: string | Rgb): number {
@@ -84,15 +95,36 @@ describe('status page design contract', () => {
     expect(css).toContain('.status-v3-incident-pill__summary');
   });
 
-  it('hardens dark themes against inherited light branding tokens', () => {
+  it('bridges every curated palette into the V3 surface token namespace', () => {
+    for (const theme of STATUS_PAGE_THEMES.filter(item => item.id !== DEFAULT_STATUS_PAGE_THEME_ID)) {
+      const css = compileStatusPageThemeCss(theme.id);
+
+      expect(css).toContain(':where(.status-page-surface) {');
+      expect(css).toContain(`--status-text: ${theme.preview.text}`);
+      expect(css).toContain(`--status-text-strong: ${theme.preview.text}`);
+      expect(css).toContain(`--status-panel-bg: ${theme.preview.surface}`);
+      expect(css).toContain(`--status-panel-muted-bg: ${theme.preview.surfaceAlt}`);
+      expect(css).toContain('--status-primary: var(--sp-theme-accent)');
+      expect(css).toContain(':where(.status-page-surface) .status-v3-service');
+      expect(css).toContain('background: var(--status-panel-bg);');
+    }
+  });
+
+  it('keeps built-in scoping weaker than the supported Advanced CSS hooks', () => {
+    const css = compileStatusPageThemeCss('command-center');
+
+    expect(css).toContain(':where(.status-page-container) .status-v3-service');
+    expect(css).toContain(':where(.status-page-surface) .status-v3-service');
+    expect(css).not.toContain('.status-page-container .status-page-surface {');
+    expect(css).not.toContain('.status-page-container .status-page-surface .status-v3-service');
+  });
+
+  it('hardens dark themes against inherited light semantic tokens', () => {
     const css = compileStatusPageThemeCss('command-center');
 
     expect(resolveStatusPageTheme('command-center').mode).toBe('dark');
-    expect(css).toContain('.status-page-container .status-page-surface');
     expect(css).toContain('color-scheme: dark');
     expect(css).toContain('--sp-ink: #f8fafc');
-    expect(css).toContain('--status-primary: var(--sp-theme-accent)');
-    expect(css).toContain('--primary: var(--sp-theme-accent)');
     expect(css).toContain('--status-operational: #6ee7b7');
     expect(css).toContain('--status-operational-bg: color-mix');
     expect(css).toContain('--status-major-outage: #fda4af');
@@ -100,19 +132,13 @@ describe('status page design contract', () => {
     expect(css).toContain('.status-subscribe__button');
   });
 
-  it('bridges dark curated palettes into the complete V3 service-card token layer', () => {
+  it('connects the shared service-card CSS to the curated tokens', () => {
     const css = compileStatusPageThemeCss('command-center');
 
-    expect(css).toContain('--status-text: #f8fafc');
-    expect(css).toContain('--status-text-strong: #f8fafc');
     expect(css).toContain('--status-text-muted: color-mix');
     expect(css).toContain('--status-text-subtle: color-mix');
-    expect(css).toContain('--status-panel-bg: #0b1020');
-    expect(css).toContain('--status-panel-muted-bg: #111a30');
     expect(css).toContain('--status-panel-border: color-mix');
-    expect(css).toContain('.status-page-surface .status-v3-service');
-    expect(css).toContain('background: var(--status-panel-bg);');
-    expect(css).toContain('.status-page-surface .status-v3-inspector');
+    expect(css).toContain(':where(.status-page-surface) .status-v3-inspector');
 
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('.status-v3-service__name');
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('color: var(--status-text-strong)');
@@ -186,14 +212,14 @@ describe('status page design contract', () => {
     }
   });
 
-  it('does not inject any dark hardening into light themes', () => {
+  it('keeps dark-only semantic hardening out of light themes', () => {
     const css = compileStatusPageThemeCss('executive');
 
     expect(resolveStatusPageTheme('executive').mode).toBe('light');
+    expect(css).toContain('--status-panel-bg: #ffffff');
     expect(css).not.toContain('color-scheme: dark');
     expect(css).not.toContain('--status-operational:');
     expect(css).not.toContain('--status-major-outage:');
-    expect(css).not.toContain('.status-page-surface .status-v3-inspector');
     expect(css).not.toContain('[data-badge="true"][data-variant="success"]');
     expect(css).not.toContain('.status-v3-group__tally-pill--healthy');
     expect(css).not.toContain('.status-v3-incident-pill__redacted-badge');
