@@ -58,7 +58,7 @@ describe('status page design contract', () => {
     expect(css).toContain('.status-v3-incident-pill__summary');
   });
 
-  it('hardens dark themes against inherited light branding tokens', () => {
+  it('hardens dark themes against inherited light branding tokens while preserving status semantics', () => {
     const css = compileStatusPageThemeCss('command-center');
 
     expect(resolveStatusPageTheme('command-center').mode).toBe('dark');
@@ -67,9 +67,8 @@ describe('status page design contract', () => {
     expect(css).toContain('--sp-ink: #f8fafc');
     expect(css).toContain('--status-primary: var(--sp-theme-accent)');
     expect(css).toContain('--primary: var(--sp-theme-accent)');
-    expect(css).toContain('--status-operational: #6ee7b7');
-    expect(css).toContain('--status-operational-bg: color-mix');
-    expect(css).toContain('--status-major-outage: #fda4af');
+    expect(css).not.toContain('--status-operational: #6ee7b7');
+    expect(css).not.toContain('--status-major-outage: #fda4af');
     expect(css).toContain('.status-topbar__chip--accent');
     expect(css).toContain('.status-subscribe__button');
   });
@@ -93,13 +92,21 @@ describe('status page design contract', () => {
       'terminal',
       'arena-neon',
       'command-center',
+      'respawn-dark',
+      'stealth-val',
+      'monochrome-pro',
+      'slate-observability',
     ]);
   });
 
-  it('keeps the curated gallery intentionally small and versioned', () => {
-    expect(STATUS_PAGE_THEMES).toHaveLength(16);
-    expect(new Set(STATUS_PAGE_THEMES.map(theme => theme.id)).size).toBe(16);
+  it('keeps the curated gallery intentionally versioned with light and dark gaming themes', () => {
+    expect(STATUS_PAGE_THEMES).toHaveLength(24);
+    expect(new Set(STATUS_PAGE_THEMES.map(theme => theme.id)).size).toBe(24);
     expect(STATUS_PAGE_THEMES.every(theme => theme.version === 1)).toBe(true);
+
+    const gamingThemes = STATUS_PAGE_THEMES.filter(t => t.family === 'gaming');
+    expect(gamingThemes.some(t => t.mode === 'light')).toBe(true);
+    expect(gamingThemes.some(t => t.mode === 'dark')).toBe(true);
   });
 
   it('detects old template payloads without classifying ordinary advanced CSS as a template', () => {

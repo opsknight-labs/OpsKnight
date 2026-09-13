@@ -92,7 +92,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'enterprise',
     'Conservative, premium presentation for established companies.',
     { surface: '#ffffff', surfaceAlt: '#f8fafc', accent: '#1d4ed8', text: '#0f172a' },
-    { radius: '10px', shadow: '0 8px 22px rgb(15 23 42 / 0.06)', header: 'split', services: 'rows', incidents: 'compact' }
+    {
+      radius: '10px',
+      shadow: '0 8px 22px rgb(15 23 42 / 0.06)',
+      header: 'split',
+      services: 'rows',
+      incidents: 'compact',
+    }
   ),
   theme(
     'enterprise-grid',
@@ -100,7 +106,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'enterprise',
     'Structured grouping for broad service portfolios and operational teams.',
     { surface: '#ffffff', surfaceAlt: '#f1f5f9', accent: '#2563eb', text: '#111827' },
-    { radius: '12px', shadow: '0 10px 28px rgb(15 23 42 / 0.07)', header: 'split', services: 'cards', incidents: 'cards' }
+    {
+      radius: '12px',
+      shadow: '0 10px 28px rgb(15 23 42 / 0.07)',
+      header: 'split',
+      services: 'cards',
+      incidents: 'cards',
+    }
   ),
   theme(
     'global-operations',
@@ -108,7 +120,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'enterprise',
     'Dense operations-first layout for large infrastructure estates.',
     { surface: '#0f172a', surfaceAlt: '#172033', accent: '#38bdf8', text: '#f8fafc' },
-    { radius: '8px', shadow: '0 14px 32px rgb(2 6 23 / 0.24)', header: 'command', services: 'dense', incidents: 'compact' }
+    {
+      radius: '8px',
+      shadow: '0 14px 32px rgb(2 6 23 / 0.24)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
   ),
   theme(
     'product-clean',
@@ -116,7 +134,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'saas',
     'Airy product-led styling with quiet panels and generous spacing.',
     { surface: '#ffffff', surfaceAlt: '#fafafa', accent: '#6366f1', text: '#18181b' },
-    { radius: '14px', shadow: '0 6px 18px rgb(24 24 27 / 0.05)', header: 'classic', services: 'rows', incidents: 'timeline' }
+    {
+      radius: '14px',
+      shadow: '0 6px 18px rgb(24 24 27 / 0.05)',
+      header: 'classic',
+      services: 'rows',
+      incidents: 'timeline',
+    }
   ),
   theme(
     'launch',
@@ -124,7 +148,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'saas',
     'Friendly startup presentation with a stronger hero and softer geometry.',
     { surface: '#ffffff', surfaceAlt: '#f5f3ff', accent: '#7c3aed', text: '#1f2937' },
-    { radius: '18px', shadow: '0 12px 30px rgb(76 29 149 / 0.08)', header: 'centered', services: 'cards', incidents: 'cards' }
+    {
+      radius: '18px',
+      shadow: '0 12px 30px rgb(76 29 149 / 0.08)',
+      header: 'centered',
+      services: 'cards',
+      incidents: 'cards',
+    }
   ),
   theme(
     'signal',
@@ -132,7 +162,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'saas',
     'Crisp branded SaaS layout with stronger announcements and compact cards.',
     { surface: '#ffffff', surfaceAlt: '#ecfeff', accent: '#0891b2', text: '#0f172a' },
-    { radius: '14px', shadow: '0 10px 24px rgb(8 145 178 / 0.08)', header: 'split', services: 'cards', incidents: 'compact' }
+    {
+      radius: '14px',
+      shadow: '0 10px 24px rgb(8 145 178 / 0.08)',
+      header: 'split',
+      services: 'cards',
+      incidents: 'compact',
+    }
   ),
   theme(
     'cloud-control',
@@ -140,7 +176,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'developer',
     'Technical infrastructure presentation with compact operational grouping.',
     { surface: '#f8fafc', surfaceAlt: '#eef2ff', accent: '#4f46e5', text: '#0f172a' },
-    { radius: '8px', shadow: '0 8px 20px rgb(15 23 42 / 0.08)', header: 'command', services: 'dense', incidents: 'compact' }
+    {
+      radius: '8px',
+      shadow: '0 8px 20px rgb(15 23 42 / 0.08)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
   ),
   theme(
     'terminal',
@@ -148,7 +190,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'developer',
     'Dark developer-first styling with restrained terminal cues.',
     { surface: '#09090b', surfaceAlt: '#18181b', accent: '#22c55e', text: '#f4f4f5' },
-    { radius: '6px', shadow: '0 12px 30px rgb(0 0 0 / 0.32)', header: 'command', services: 'dense', incidents: 'compact' }
+    {
+      radius: '6px',
+      shadow: '0 12px 30px rgb(0 0 0 / 0.32)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
   ),
   theme(
     'arena-neon',
@@ -156,7 +204,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'gaming',
     'Dark esports personality with controlled neon accents and angular surfaces.',
     { surface: '#090b14', surfaceAlt: '#111827', accent: '#22d3ee', text: '#f8fafc' },
-    { radius: '4px', shadow: '0 0 24px rgb(34 211 238 / 0.12)', header: 'command', services: 'cards', incidents: 'cards' }
+    {
+      radius: '4px',
+      shadow: '0 0 24px rgb(34 211 238 / 0.12)',
+      header: 'command',
+      services: 'cards',
+      incidents: 'cards',
+    }
   ),
   theme(
     'command-center',
@@ -164,7 +218,125 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'gaming',
     'Dense game/backend operations view without decorative HUD clutter.',
     { surface: '#0b1020', surfaceAlt: '#111a30', accent: '#a3e635', text: '#f8fafc' },
-    { radius: '6px', shadow: '0 10px 26px rgb(0 0 0 / 0.3)', header: 'command', services: 'dense', incidents: 'compact' }
+    {
+      radius: '6px',
+      shadow: '0 10px 26px rgb(0 0 0 / 0.3)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'cyber-arcade',
+    'Cyber Arcade',
+    'gaming',
+    'Electric arcade light styling with vibrant purple accents for game portals and studios.',
+    { surface: '#faf8ff', surfaceAlt: '#f3e8ff', accent: '#9333ea', text: '#1e1b4b' },
+    {
+      radius: '10px',
+      shadow: '0 8px 24px rgb(147 51 234 / 0.08)',
+      header: 'split',
+      services: 'cards',
+      incidents: 'cards',
+    }
+  ),
+  theme(
+    'pixel-quest',
+    'Pixel Quest',
+    'gaming',
+    'Playful and clear game launcher layout with lush emerald status highlights.',
+    { surface: '#f8fafc', surfaceAlt: '#f1f5f9', accent: '#059669', text: '#0f172a' },
+    {
+      radius: '12px',
+      shadow: '0 8px 20px rgb(15 23 42 / 0.06)',
+      header: 'classic',
+      services: 'cards',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'respawn-dark',
+    'Respawn Dark',
+    'gaming',
+    'Deep obsidian game server telemetry with high-visibility amber alerts.',
+    { surface: '#0d0d12', surfaceAlt: '#161622', accent: '#f59e0b', text: '#f8fafc' },
+    {
+      radius: '8px',
+      shadow: '0 10px 28px rgb(0 0 0 / 0.35)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'stealth-val',
+    'Stealth Tactical',
+    'gaming',
+    'Tactical shooter-inspired dark cockpit with striking crimson focus states.',
+    { surface: '#0f111a', surfaceAlt: '#181b26', accent: '#ef4444', text: '#f8fafc' },
+    {
+      radius: '4px',
+      shadow: '0 0 20px rgb(239 68 68 / 0.12)',
+      header: 'command',
+      services: 'cards',
+      incidents: 'cards',
+    }
+  ),
+  theme(
+    'horizon-corporate',
+    'Horizon Corporate',
+    'enterprise',
+    'Polished corporate blue styling tailored for enterprise and institutional trust.',
+    { surface: '#ffffff', surfaceAlt: '#eff6ff', accent: '#1e40af', text: '#1e293b' },
+    {
+      radius: '8px',
+      shadow: '0 8px 24px rgb(30 64 175 / 0.06)',
+      header: 'split',
+      services: 'cards',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'nordic-frost',
+    'Nordic Frost',
+    'universal',
+    'Minimalist Scandinavian layout with clean icy surfaces and cobalt accents.',
+    { surface: '#ffffff', surfaceAlt: '#f0f4f8', accent: '#0284c7', text: '#0f172a' },
+    {
+      radius: '10px',
+      shadow: '0 6px 20px rgb(15 23 42 / 0.05)',
+      header: 'classic',
+      services: 'rows',
+      incidents: 'timeline',
+    }
+  ),
+  theme(
+    'monochrome-pro',
+    'Monochrome Pro',
+    'developer',
+    'Pure obsidian stealth minimalism with high-contrast monochrome cues.',
+    { surface: '#050505', surfaceAlt: '#121212', accent: '#f4f4f5', text: '#ededed' },
+    {
+      radius: '6px',
+      shadow: '0 10px 30px rgb(0 0 0 / 0.4)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
+  ),
+  theme(
+    'slate-observability',
+    'Slate Observability',
+    'developer',
+    'Telemetry-inspired dark dashboard with crisp cyan monitoring accents.',
+    { surface: '#111827', surfaceAlt: '#1f2937', accent: '#06b6d4', text: '#f9fafb' },
+    {
+      radius: '8px',
+      shadow: '0 12px 28px rgb(0 0 0 / 0.28)',
+      header: 'command',
+      services: 'dense',
+      incidents: 'compact',
+    }
   ),
   theme(
     'finance-ledger',
@@ -172,7 +344,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'regulated',
     'Squared, restrained presentation for banking and fintech status pages.',
     { surface: '#ffffff', surfaceAlt: '#f3f4f6', accent: '#334155', text: '#111827' },
-    { radius: '4px', shadow: '0 4px 12px rgb(15 23 42 / 0.05)', header: 'split', services: 'rows', incidents: 'compact' }
+    {
+      radius: '4px',
+      shadow: '0 4px 12px rgb(15 23 42 / 0.05)',
+      header: 'split',
+      services: 'rows',
+      incidents: 'compact',
+    }
   ),
   theme(
     'health-clear',
@@ -180,7 +358,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'regulated',
     'Calm, high-whitespace layout designed for clarity and accessibility.',
     { surface: '#ffffff', surfaceAlt: '#f0fdfa', accent: '#0f766e', text: '#134e4a' },
-    { radius: '12px', shadow: '0 6px 18px rgb(15 118 110 / 0.05)', header: 'classic', services: 'rows', incidents: 'timeline' }
+    {
+      radius: '12px',
+      shadow: '0 6px 18px rgb(15 118 110 / 0.05)',
+      header: 'classic',
+      services: 'rows',
+      incidents: 'timeline',
+    }
   ),
   theme(
     'civic-trust',
@@ -188,7 +372,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'regulated',
     'High-contrast public-sector hierarchy with restrained geometry.',
     { surface: '#ffffff', surfaceAlt: '#f8fafc', accent: '#1e3a8a', text: '#0f172a' },
-    { radius: '6px', shadow: '0 4px 14px rgb(15 23 42 / 0.05)', header: 'split', services: 'rows', incidents: 'timeline' }
+    {
+      radius: '6px',
+      shadow: '0 4px 14px rgb(15 23 42 / 0.05)',
+      header: 'split',
+      services: 'rows',
+      incidents: 'timeline',
+    }
   ),
   theme(
     'studio',
@@ -196,7 +386,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'consumer',
     'Editorial spacing and clean surfaces for design, media, and luxury brands.',
     { surface: '#fffdf8', surfaceAlt: '#f8f5ef', accent: '#7c3aed', text: '#292524' },
-    { radius: '2px', shadow: '0 10px 28px rgb(41 37 36 / 0.06)', header: 'centered', services: 'rows', incidents: 'cards' }
+    {
+      radius: '2px',
+      shadow: '0 10px 28px rgb(41 37 36 / 0.06)',
+      header: 'centered',
+      services: 'rows',
+      incidents: 'cards',
+    }
   ),
   theme(
     'pulse',
@@ -204,7 +400,13 @@ export const STATUS_PAGE_THEMES: readonly StatusPageThemeDefinition[] = [
     'consumer',
     'Energetic consumer-facing layout with rounded geometry and lively grouping.',
     { surface: '#ffffff', surfaceAlt: '#fff1f2', accent: '#e11d48', text: '#1f2937' },
-    { radius: '20px', shadow: '0 12px 30px rgb(225 29 72 / 0.08)', header: 'centered', services: 'cards', incidents: 'cards' }
+    {
+      radius: '20px',
+      shadow: '0 12px 30px rgb(225 29 72 / 0.08)',
+      header: 'centered',
+      services: 'cards',
+      incidents: 'cards',
+    }
   ),
 ] as const;
 
@@ -236,10 +438,7 @@ export function isLegacyStatusPageTemplateCss(value: unknown): boolean {
  * what a status means. Customer Advanced CSS is applied after this layer and remains the final
  * override. Default is the native renderer and returns an empty string by contract.
  */
-export function compileStatusPageThemeCss(
-  themeId: unknown,
-  densityValue?: unknown
-): string {
+export function compileStatusPageThemeCss(themeId: unknown, densityValue?: unknown): string {
   const selected = resolveStatusPageTheme(themeId);
   if (selected.id === DEFAULT_STATUS_PAGE_THEME_ID) return '';
 
@@ -295,27 +494,41 @@ export function compileStatusPageThemeCss(
   --sp-panel-muted-bg: ${preview.surfaceAlt};
   --sp-panel-border: color-mix(in srgb, ${preview.text} 16%, ${preview.surface} 84%);
   --sp-panel-muted-border: color-mix(in srgb, ${preview.text} 13%, ${preview.surfaceAlt} 87%);
+  --status-panel-bg: ${preview.surface};
+  --status-panel-muted-bg: ${preview.surfaceAlt};
+  --status-panel-border: color-mix(in srgb, ${preview.text} 16%, ${preview.surface} 84%);
+  --status-text: ${preview.text};
+  --status-text-strong: ${preview.text};
+  --status-text-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);
   --status-primary: var(--sp-theme-accent);
   --status-primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
   --primary: var(--sp-theme-accent);
   --primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
-  --status-operational: #6ee7b7;
-  --status-operational-bg: color-mix(in srgb, #10b981 14%, var(--sp-panel-bg) 86%);
-  --status-degraded: #fcd34d;
-  --status-degraded-bg: color-mix(in srgb, #f59e0b 14%, var(--sp-panel-bg) 86%);
-  --status-maintenance: #93c5fd;
-  --status-maintenance-bg: color-mix(in srgb, #3b82f6 14%, var(--sp-panel-bg) 86%);
-  --status-partial-outage: #fdba74;
-  --status-partial-outage-bg: color-mix(in srgb, #f97316 14%, var(--sp-panel-bg) 86%);
-  --status-major-outage: #fda4af;
-  --status-major-outage-bg: color-mix(in srgb, #e11d48 14%, var(--sp-panel-bg) 86%);
-  --status-unknown: #cbd5e1;
-  --status-unknown-bg: color-mix(in srgb, #64748b 16%, var(--sp-panel-bg) 84%);
+}
+.status-page-container .status-v3-service {
+  background: var(--sp-panel-bg);
+  color: var(--status-text);
 }
 .status-page-container .status-topbar__chip--accent,
 .status-page-container .status-subscribe__button,
 .status-page-container .status-subscribe__check--on .status-subscribe__check-box {
   color: var(--sp-theme-accent-contrast);
+}
+.status-page-container [data-badge="true"][data-variant="success"] {
+  background: linear-gradient(to right, #047857, #15803d) !important;
+  color: #ffffff !important;
+}
+.status-page-container [data-badge="true"][data-variant="warning"] {
+  background: linear-gradient(to right, #b45309, #c2410c) !important;
+  color: #ffffff !important;
+}
+.status-page-container [data-badge="true"][data-variant="info"] {
+  background: linear-gradient(to right, #2563eb, #4338ca) !important;
+  color: #ffffff !important;
+}
+.status-page-container [data-badge="true"][data-variant="danger"] {
+  background: linear-gradient(to right, #dc2626, #be123c) !important;
+  color: #ffffff !important;
 }
 `
       : '';
@@ -327,6 +540,11 @@ export function compileStatusPageThemeCss(
   --sp-page-text: ${preview.text};
   --sp-panel-bg: ${preview.surface};
   --sp-panel-muted-bg: ${preview.surfaceAlt};
+  --status-panel-bg: ${preview.surface};
+  --status-panel-muted-bg: ${preview.surfaceAlt};
+  --status-text: ${preview.text};
+  --status-text-strong: ${preview.text};
+  --status-text-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);
   --sp-ink: ${preview.text};
   --sp-ink-strong: ${preview.text};
   --sp-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);

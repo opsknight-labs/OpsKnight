@@ -8,6 +8,11 @@ import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import { buildPreviewSnapshot } from '@/lib/status-pages/preview-snapshot';
 import StatusPageV3 from '@/components/status-page/StatusPageV3';
 import { STATUS_PAGE_PREVIEW_BASE_CSS } from '@/lib/status-page-preview-css';
+import {
+  DEFAULT_STATUS_PAGE_THEME_ID,
+  resolveStatusPageTheme,
+  resolveStatusPageThemeDensity,
+} from '@/lib/status-pages/theme-contract';
 import { cn } from '@/lib/utils';
 import {
   Monitor,
@@ -341,6 +346,19 @@ function StatusPageLivePreview({
     previewData.branding?.fontFamily,
   ]);
 
+  const previewThemeBranding = previewData.branding as typeof previewData.branding & {
+    themeId?: unknown;
+    themeDensity?: unknown;
+  };
+  const selectedTheme = resolveStatusPageTheme(previewThemeBranding?.themeId);
+  const themeDensity = resolveStatusPageThemeDensity(previewThemeBranding?.themeDensity);
+
+  const isCustomTheme = selectedTheme.id !== DEFAULT_STATUS_PAGE_THEME_ID;
+  const previewBg = isCustomTheme
+    ? selectedTheme.preview.surfaceAlt
+    : computedTheme.backgroundColor;
+  const previewText = isCustomTheme ? selectedTheme.preview.text : computedTheme.textColor;
+
   const bindPreviewRoot = useCallback((host: HTMLDivElement | null) => {
     if (host) setPreviewRoot(host.shadowRoot || host.attachShadow({ mode: 'open' }));
   }, []);
@@ -349,14 +367,19 @@ function StatusPageLivePreview({
     <main
       className="status-page-container"
       data-device-view={deviceView}
+      data-sp-theme={selectedTheme.id}
+      data-sp-theme-version={selectedTheme.version}
+      data-sp-density={themeDensity}
       style={{
         flex: 1,
-        background: computedTheme.backgroundColor,
-        color: computedTheme.textColor,
+        background: `var(--sp-page-bg, ${previewBg})`,
+        color: `var(--sp-page-text, ${previewText})`,
         fontFamily: computedTheme.fontFamily,
         padding: 0,
         minHeight: '100%',
-        ...(computedTheme.cssVariables as CSSProperties),
+        ...(selectedTheme.id === DEFAULT_STATUS_PAGE_THEME_ID
+          ? (computedTheme.cssVariables as CSSProperties)
+          : {}),
         ['--status-content-width' as string]: contentMaxWidthValue,
       }}
     >
@@ -483,7 +506,7 @@ function StatusPageLivePreview({
                 : deviceView === 'ipad'
                   ? `${Math.round(12 * scale)}px solid #1c1d20`
                   : '1px solid rgba(0, 0, 0, 0.18)',
-            background: computedTheme.backgroundColor,
+            background: previewBg,
             boxShadow:
               deviceView === 'mac'
                 ? '0 20px 40px -10px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(15, 23, 42, 0.08)'
@@ -589,7 +612,7 @@ function StatusPageLivePreview({
             <div
               style={{
                 height: `${Math.round(chromeTopHeight * scale)}px`,
-                background: computedTheme.backgroundColor,
+                background: previewBg,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -607,7 +630,7 @@ function StatusPageLivePreview({
                   fontWeight: '600',
                   letterSpacing: '-0.02em',
                   fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-                  color: computedTheme.textColor,
+                  color: previewText,
                   width: `${54 * scale}px`,
                 }}
               >
@@ -653,7 +676,7 @@ function StatusPageLivePreview({
                   display: 'flex',
                   alignItems: 'center',
                   gap: `${5 * scale}px`,
-                  color: computedTheme.textColor,
+                  color: previewText,
                   width: `${54 * scale}px`,
                   justifyContent: 'flex-end',
                 }}
@@ -747,7 +770,7 @@ function StatusPageLivePreview({
             <div
               style={{
                 height: `${Math.round(chromeTopHeight * scale)}px`,
-                background: computedTheme.backgroundColor,
+                background: previewBg,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -762,7 +785,7 @@ function StatusPageLivePreview({
                 style={{
                   fontSize: `${12 * scale}px`,
                   fontWeight: '600',
-                  color: computedTheme.textColor,
+                  color: previewText,
                 }}
               >
                 9:41 Tue Sep 12
@@ -780,7 +803,7 @@ function StatusPageLivePreview({
                 style={{
                   fontSize: `${11 * scale}px`,
                   fontWeight: '600',
-                  color: computedTheme.textColor,
+                  color: previewText,
                 }}
               >
                 100%
@@ -795,7 +818,7 @@ function StatusPageLivePreview({
               height: `${Math.round(viewportHeight * scale)}px`,
               position: 'relative',
               overflow: 'hidden',
-              background: computedTheme.backgroundColor,
+              background: previewBg,
               flex: 1,
             }}
           >
@@ -816,10 +839,12 @@ function StatusPageLivePreview({
                 overflow: 'auto',
                 boxSizing: 'border-box',
                 containerType: 'inline-size',
-                backgroundColor: computedTheme.backgroundColor,
-                color: computedTheme.textColor,
+                backgroundColor: previewBg,
+                color: previewText,
                 fontFamily: computedTheme.fontFamily,
-                ...(computedTheme.cssVariables as React.CSSProperties),
+                ...(selectedTheme.id === DEFAULT_STATUS_PAGE_THEME_ID
+                  ? (computedTheme.cssVariables as React.CSSProperties)
+                  : {}),
               }}
             />
             {previewRoot &&
@@ -833,7 +858,14 @@ function StatusPageLivePreview({
                       }}
                     />
                   )}
-                  <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <div
+                    style={{
+                      minHeight: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      background: `var(--sp-page-bg, ${previewBg})`,
+                    }}
+                  >
                     {renderStatusPageContent(contentMaxWidth)}
                   </div>
                 </>,
@@ -846,7 +878,7 @@ function StatusPageLivePreview({
             <div
               style={{
                 height: `${Math.round(chromeBottomHeight * scale)}px`,
-                background: computedTheme.backgroundColor,
+                background: previewBg,
                 borderTop: '1px solid rgba(0,0,0,0.06)',
                 display: 'flex',
                 flexDirection: 'column',
@@ -871,7 +903,7 @@ function StatusPageLivePreview({
                   justifyContent: 'space-between',
                   padding: `0 ${14 * scale}px`,
                   fontSize: `${11 * scale}px`,
-                  color: computedTheme.textColor,
+                  color: previewText,
                 }}
               >
                 <span style={{ fontSize: `${11 * scale}px`, fontWeight: '700', opacity: 0.6 }}>
@@ -914,7 +946,7 @@ function StatusPageLivePreview({
                 style={{
                   width: `${125 * scale}px`,
                   height: `${4 * scale}px`,
-                  background: computedTheme.textColor,
+                  background: previewText,
                   opacity: 0.35,
                   borderRadius: '999px',
                 }}
@@ -926,7 +958,7 @@ function StatusPageLivePreview({
             <div
               style={{
                 height: `${Math.round(chromeBottomHeight * scale)}px`,
-                background: computedTheme.backgroundColor,
+                background: previewBg,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -938,7 +970,7 @@ function StatusPageLivePreview({
                 style={{
                   width: `${140 * scale}px`,
                   height: `${4 * scale}px`,
-                  background: computedTheme.textColor,
+                  background: previewText,
                   opacity: 0.35,
                   borderRadius: '999px',
                 }}

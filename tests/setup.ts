@@ -101,6 +101,12 @@ const mockPrisma = {
   alert: createMockModel(),
   incidentNote: createMockModel(),
   incidentWatcher: createMockModel(),
+  oidcLinkingApproval: createMockModel(),
+  postmortem: createMockModel(),
+  actionItem: createMockModel(),
+  userDevice: createMockModel(),
+  dashboard: createMockModel(),
+  jiraConfig: createMockModel(),
   $transaction: vi
     .fn()
     .mockImplementation((cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),

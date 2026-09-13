@@ -130,6 +130,17 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         badge: 'Admin',
         keywords: ['audit', 'history', 'events', 'compliance', 'security'],
       },
+      {
+        id: 'security-compliance',
+        label: 'Security & Compliance',
+        description:
+          'Review control readiness, privacy inventory, CRA posture, and evidence sources',
+        href: '/settings/security-compliance',
+        icon: 'shield-check',
+        requiresAdmin: true,
+        badge: 'Admin',
+        keywords: ['compliance', 'privacy', 'cra', 'gdpr', 'soc 2', 'iso', 'evidence', 'sbom'],
+      },
     ],
   },
   {

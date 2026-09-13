@@ -6,6 +6,7 @@ import { toSafeStyleTagContent } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import { resolveStatusPageCustomCss } from '@/lib/status-pages/theme-custom-css';
 import {
+  DEFAULT_STATUS_PAGE_THEME_ID,
   compileStatusPageThemeCss,
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
@@ -64,7 +65,9 @@ export default function StatusPageSnapshotView({
         color: `var(--sp-page-text, ${theme.textColor})`,
         fontFamily: theme.fontFamily,
         padding: 0,
-        ...(theme.cssVariables as CSSProperties),
+        ...(selectedTheme.id === DEFAULT_STATUS_PAGE_THEME_ID
+          ? (theme.cssVariables as CSSProperties)
+          : {}),
         ['--status-content-width' as string]: `${maxWidth}px`,
       }}
     >
