@@ -65,14 +65,19 @@ test.describe('mobile PWA browser contract', () => {
     const response = await request.get('/manifest.webmanifest');
     expect(response.ok()).toBe(true);
     const manifest = (await response.json()) as {
+      start_url?: string;
       orientation?: string;
       display?: string;
       shortcuts?: Array<{ url?: string }>;
     };
 
+    expect(manifest.start_url).toBe('/m');
     expect(manifest.display).toBe('standalone');
     expect(manifest.orientation).toBeUndefined();
-    expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m')).toBe(true);
-    expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m/incidents')).toBe(true);
+    expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m/incidents?filter=all_open')).toBe(
+      true
+    );
+    expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m/schedules')).toBe(true);
+    expect(manifest.shortcuts?.some(shortcut => shortcut.url === '/m/notifications')).toBe(true);
   });
 });
