@@ -223,18 +223,23 @@ export function resolveStatusPageThemeDensity(value: unknown): StatusPageThemeDe
 /** Old gallery templates were copied wholesale into branding.customCss. */
 export function isLegacyStatusPageTemplateCss(value: unknown): boolean {
   if (typeof value !== 'string') return false;
-  const sample = value.slice(0, 400);
-  return /\/\*\s*Template:\s*[^*]+\*\//i.test(sample) && value.includes('.status-page-');
+  const sample = value.slice(0, 400).toLowerCase();
+  const commentStart = sample.indexOf('/*');
+  if (commentStart === -1) return false;
+  const templateMarker = sample.indexOf('template:', commentStart + 2);
+  if (templateMarker === -1) return false;
+  const commentEnd = sample.indexOf('*/', templateMarker + 9);
+  return commentEnd !== -1 && value.includes('.status-page-');
 }
 
 /**
  * Compile a built-in theme into the single deterministic override layer used by both the public
  * Status Page and the admin live preview.
  *
- * Operational/degraded/outage colors remain semantically owned by the base renderer. Dark themes
- * only provide dark-safe foreground/background values for those same semantics; they never change
- * what a status means. Customer Advanced CSS is applied after this layer and remains the final
- * override. Default is the native renderer and returns an empty string by contract.
+ * Built-in selectors deliberately use `:where(...)` for scoping so they do not gain specificity
+ * merely from the Status Page wrapper. Advanced CSS is inserted after this layer and therefore
+ * remains the final supported override without requiring `!important`. Default is the native
+ * renderer and returns an empty string by contract.
  */
 export function compileStatusPageThemeCss(
   themeId: unknown,
@@ -250,42 +255,38 @@ export function compileStatusPageThemeCss(
   const cardPadding = compact ? '0.75rem' : '1rem';
   const { shape, preview } = selected;
   const accentContrast = isDarkHex(preview.accent) ? '#ffffff' : '#0b1020';
+  const scoped = ':where(.status-page-container)';
+  const surface = ':where(.status-page-surface)';
 
   const serviceLayout =
     shape.services === 'cards'
-      ? `.status-page-container .status-v3-services__list { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }`
+      ? `${scoped} .status-v3-services__list { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }`
       : shape.services === 'dense'
-        ? `.status-page-container .status-v3-service { padding-block: ${compact ? '0.55rem' : '0.7rem'}; }`
+        ? `${scoped} .status-v3-service { padding-block: ${compact ? '0.55rem' : '0.7rem'}; }`
         : '';
 
   const headerLayout =
     shape.header === 'centered'
-      ? `.status-page-container .status-topbar__inner { justify-content: center; text-align: center; flex-wrap: wrap; }\n.status-page-container .status-topbar__actions { justify-content: center; }`
+      ? `${scoped} .status-topbar__inner { justify-content: center; text-align: center; flex-wrap: wrap; }\n${scoped} .status-topbar__actions { justify-content: center; }`
       : shape.header === 'command'
-        ? `.status-page-container .status-topbar { border-bottom-style: dashed; }\n.status-page-container .status-topbar__inner { letter-spacing: 0.01em; }`
+        ? `${scoped} .status-topbar { border-bottom-style: dashed; }\n${scoped} .status-topbar__inner { letter-spacing: 0.01em; }`
         : shape.header === 'split'
-          ? `.status-page-container .status-topbar__inner { justify-content: space-between; }`
+          ? `${scoped} .status-topbar__inner { justify-content: space-between; }`
           : '';
 
   const incidentLayout =
     shape.incidents === 'compact'
-      ? `.status-page-container .status-v3-incident-pill__summary { padding: ${compact ? '0.7rem' : '0.85rem'}; }`
+      ? `${scoped} .status-v3-incident-pill__summary { padding: ${compact ? '0.7rem' : '0.85rem'}; }`
       : shape.incidents === 'cards'
-        ? `.status-page-container details.status-v3-incident-pill { border-radius: calc(${shape.radius} + 2px); }`
+        ? `${scoped} details.status-v3-incident-pill { border-radius: calc(${shape.radius} + 2px); }`
         : '';
 
-  // SnapshotView carries legacy branding variables inline on the outer container. The shared V3
-  // stylesheet consumes the newer --status-* token namespace on cards and inspectors, so a dark
-  // curated theme must bridge both namespaces on the child surface. Keeping that bridge here makes
-  // the theme layer authoritative without !important and still lets Advanced CSS override it later.
-  const darkSurfaceLayer =
-    selected.mode === 'dark'
-      ? `
-.status-page-container,
-.status-page-container .status-page-surface {
-  color-scheme: dark;
-}
-.status-page-container .status-page-surface {
+  // V3 consumes the --status-* namespace while the outer shell still exposes --sp-* branding
+  // tokens. Bridge every curated palette at the shared V3 surface so light and dark themes render
+  // identically in preview and public. `:where` gives the bridge zero scoping specificity, allowing
+  // later Advanced CSS to replace any token through the documented surface hook.
+  const surfaceTokenLayer = `
+${surface} {
   --sp-ink: ${preview.text};
   --sp-ink-strong: ${preview.text};
   --sp-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);
@@ -306,6 +307,31 @@ export function compileStatusPageThemeCss(
   --status-primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
   --primary: var(--sp-theme-accent);
   --primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
+}
+${surface} .status-v3-service {
+  background: var(--status-panel-bg);
+  color: var(--status-text);
+}
+${surface} .status-v3-inspector {
+  background: color-mix(in srgb, var(--status-panel-bg) 92%, var(--status-panel-muted-bg) 8%);
+  border-color: var(--status-panel-border);
+}
+${surface} .status-v3-service:hover,
+${surface} .status-v3-inspector:hover {
+  box-shadow: var(--sp-theme-shadow);
+}
+`;
+
+  // Status meaning remains owned by the base renderer. Dark themes only provide dark-safe colors
+  // for those existing semantic states and for UI elements that were authored for light surfaces.
+  const darkSemanticLayer =
+    selected.mode === 'dark'
+      ? `
+:where(.status-page-container),
+${surface} {
+  color-scheme: dark;
+}
+${surface} {
   --status-operational: #6ee7b7;
   --status-operational-bg: color-mix(in srgb, #10b981 14%, var(--status-panel-bg) 86%);
   --status-degraded: #fcd34d;
@@ -319,94 +345,82 @@ export function compileStatusPageThemeCss(
   --status-unknown: #cbd5e1;
   --status-unknown-bg: color-mix(in srgb, #64748b 16%, var(--status-panel-bg) 84%);
 }
-.status-page-container .status-page-surface .status-v3-service {
-  background: var(--status-panel-bg);
-  color: var(--status-text);
-}
-.status-page-container .status-page-surface .status-v3-inspector {
-  background: color-mix(in srgb, var(--status-panel-bg) 92%, var(--status-panel-muted-bg) 8%);
-  border-color: var(--status-panel-border);
-}
-.status-page-container .status-page-surface .status-v3-service:hover,
-.status-page-container .status-page-surface .status-v3-inspector:hover {
-  box-shadow: var(--sp-theme-shadow);
-}
 
 /* Bright theme accents need a computed foreground instead of assuming white text. */
-.status-page-container .status-topbar__chip--accent,
-.status-page-container .status-subscribe__button,
-.status-page-container .status-subscribe__check--on .status-subscribe__check-box,
-.status-page-container .status-v3-incident-pill__pir {
+${scoped} .status-topbar__chip--accent,
+${scoped} .status-subscribe__button,
+${scoped} .status-subscribe__check--on .status-subscribe__check-box,
+${scoped} .status-v3-incident-pill__pir {
   color: var(--sp-theme-accent-contrast);
 }
 
-/* The shared badge engine intentionally uses fixed gradients. On dark pages, use darker semantic
-   endpoints so white badge text remains WCAG-readable while badges still stand out from cards. */
-.status-page-container .status-page-surface [data-badge="true"][data-variant="success"] {
+/* The shared badge engine currently uses fixed gradients. Dark themes use darker semantic
+   endpoints so white badge text remains WCAG-readable. */
+${surface} [data-badge="true"][data-variant="success"] {
   background: linear-gradient(to right, #047857, #15803d) !important;
   color: #ffffff !important;
 }
-.status-page-container .status-page-surface [data-badge="true"][data-variant="warning"] {
+${surface} [data-badge="true"][data-variant="warning"] {
   background: linear-gradient(to right, #b45309, #c2410c) !important;
   color: #ffffff !important;
 }
-.status-page-container .status-page-surface [data-badge="true"][data-variant="info"] {
+${surface} [data-badge="true"][data-variant="info"] {
   background: linear-gradient(to right, #2563eb, #4338ca) !important;
   color: #ffffff !important;
 }
-.status-page-container .status-page-surface [data-badge="true"][data-variant="danger"] {
+${surface} [data-badge="true"][data-variant="danger"] {
   background: linear-gradient(to right, #dc2626, #be123c) !important;
   color: #ffffff !important;
 }
-.status-page-container .status-page-surface [data-badge="true"] {
+${surface} [data-badge="true"] {
   box-shadow: 0 0 0 1px color-mix(in srgb, #ffffff 10%, transparent), 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 
 /* Inline section tallies were authored with light pastel fills. Rebind only the dark theme path to
    the semantic token system so Regions, Services, Maintenance and Incidents remain visually native. */
-.status-page-container .status-page-surface .status-v3-group__tally-pill--healthy,
-.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--healthy {
+${surface} .status-v3-group__tally-pill--healthy,
+${surface} .status-v3-regions-inline__tally-pill--healthy {
   color: var(--status-operational);
   background: var(--status-operational-bg);
   border-color: color-mix(in srgb, var(--status-operational) 32%, var(--status-panel-border));
 }
-.status-page-container .status-page-surface .status-v3-group__tally-pill--healthy .status-v3-group__dot,
-.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--healthy .status-v3-regions-inline__dot {
+${surface} .status-v3-group__tally-pill--healthy .status-v3-group__dot,
+${surface} .status-v3-regions-inline__tally-pill--healthy .status-v3-regions-inline__dot {
   background: var(--status-operational);
 }
-.status-page-container .status-page-surface .status-v3-group__tally-pill--impacted,
-.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--impacted {
+${surface} .status-v3-group__tally-pill--impacted,
+${surface} .status-v3-regions-inline__tally-pill--impacted {
   color: var(--status-major-outage);
   background: var(--status-major-outage-bg);
   border-color: color-mix(in srgb, var(--status-major-outage) 32%, var(--status-panel-border));
 }
-.status-page-container .status-page-surface .status-v3-group__tally-pill--impacted .status-v3-group__dot,
-.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--impacted .status-v3-regions-inline__dot {
+${surface} .status-v3-group__tally-pill--impacted .status-v3-group__dot,
+${surface} .status-v3-regions-inline__tally-pill--impacted .status-v3-regions-inline__dot {
   background: var(--status-major-outage);
 }
-.status-page-container .status-page-surface .status-v3-maintenance-inline__tally-pill--active,
-.status-page-container .status-page-surface .status-v3-incidents-inline__tally-pill--active {
+${surface} .status-v3-maintenance-inline__tally-pill--active,
+${surface} .status-v3-incidents-inline__tally-pill--active {
   color: var(--status-degraded);
   background: var(--status-degraded-bg);
   border-color: color-mix(in srgb, var(--status-degraded) 32%, var(--status-panel-border));
 }
-.status-page-container .status-page-surface .status-v3-maintenance-inline__tally-pill--scheduled {
+${surface} .status-v3-maintenance-inline__tally-pill--scheduled {
   color: var(--status-maintenance);
   background: var(--status-maintenance-bg);
   border-color: color-mix(in srgb, var(--status-maintenance) 32%, var(--status-panel-border));
 }
-.status-page-container .status-page-surface .status-v3-maintenance-inline__tally-pill--completed,
-.status-page-container .status-page-surface .status-v3-incidents-inline__tally-pill--resolved {
+${surface} .status-v3-maintenance-inline__tally-pill--completed,
+${surface} .status-v3-incidents-inline__tally-pill--resolved {
   color: var(--status-unknown);
   background: var(--status-unknown-bg);
   border-color: color-mix(in srgb, var(--status-unknown) 28%, var(--status-panel-border));
 }
-.status-page-container .status-page-surface .status-v3-announcements-inline__tally-pill--changelog {
+${surface} .status-v3-announcements-inline__tally-pill--changelog {
   color: var(--status-text-muted);
   background: var(--status-panel-muted-bg);
   border-color: var(--status-panel-border);
 }
-.status-page-container .status-page-surface .status-v3-incident-pill__redacted-badge {
+${surface} .status-v3-incident-pill__redacted-badge {
   color: var(--status-unknown);
   background: var(--status-unknown-bg);
   border-color: color-mix(in srgb, var(--status-unknown) 30%, var(--status-panel-border));
@@ -435,26 +449,27 @@ export function compileStatusPageThemeCss(
   --sp-theme-service-gap: ${serviceGap};
   --sp-theme-section-gap: ${sectionGap};
 }
-${darkSurfaceLayer}
-.status-page-container .status-topbar,
-.status-page-container .status-page-header {
+${surfaceTokenLayer}
+${darkSemanticLayer}
+${scoped} .status-topbar,
+${scoped} .status-page-header {
   background: color-mix(in srgb, var(--sp-panel-bg) 92%, var(--sp-theme-accent) 8%);
   border-bottom-color: color-mix(in srgb, var(--sp-panel-border) 72%, var(--sp-theme-accent) 28%);
 }
-.status-page-container .status-v3-service,
-.status-page-container details.status-v3-incident-pill {
+${scoped} .status-v3-service,
+${scoped} details.status-v3-incident-pill {
   border-radius: var(--sp-theme-radius);
   border-color: color-mix(in srgb, var(--sp-panel-border) 86%, var(--sp-theme-accent) 14%);
   box-shadow: var(--sp-theme-shadow);
 }
-.status-page-container .status-v3-service {
+${scoped} .status-v3-service {
   padding: var(--sp-theme-card-padding);
 }
-.status-page-container .status-v3-services__list,
-.status-page-container .status-v3-incidents__list {
+${scoped} .status-v3-services__list,
+${scoped} .status-v3-incidents__list {
   gap: var(--sp-theme-service-gap);
 }
-.status-page-container section {
+${scoped} section {
   margin-block: var(--sp-theme-section-gap);
 }
 ${headerLayout}
