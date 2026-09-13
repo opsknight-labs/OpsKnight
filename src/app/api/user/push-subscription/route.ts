@@ -157,47 +157,5 @@ async function deleteSubscription(req: NextRequest) {
   }
 }
 
-async function getSubscriptionStatus(req: NextRequest) {
-  try {
-    const userId = await authenticatedUserId();
-    const endpoint = req.nextUrl.searchParams.get('endpoint');
-
-    const [user, totalDevices] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { pushNotificationsEnabled: true },
-      }),
-      prisma.userDevice.count({ where: { userId, platform: 'web' } }),
-    ]);
-
-    let deviceRegistered = false;
-    if (endpoint) {
-      const deviceId = webPushDeviceKey(endpoint);
-      const device = await prisma.userDevice.findFirst({
-        where: {
-          userId,
-          deviceId: { in: [deviceId, endpoint] },
-        },
-        select: { id: true },
-      });
-      deviceRegistered = Boolean(device);
-    }
-
-    return jsonOk({
-      accountEnabled: user?.pushNotificationsEnabled ?? false,
-      deviceRegistered,
-      totalDevices,
-    });
-  } catch (error) {
-    logger.error('push.subscription.get_failed', {
-      component: 'push-subscription-api',
-      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
-      error: error instanceof Error ? error.message : 'unknown',
-    });
-    return jsonError(isAppError(error) ? error : new AppError({ code: 'INTERNAL_ERROR' }));
-  }
-}
-
-export const GET = withRequestContext(getSubscriptionStatus, 'api.user.push-subscription.get');
 export const POST = withRequestContext(postSubscription, 'api.user.push-subscription.create');
 export const DELETE = withRequestContext(deleteSubscription, 'api.user.push-subscription.delete');
