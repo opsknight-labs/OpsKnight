@@ -300,13 +300,10 @@ export const STATUS_ANNOUNCEMENT_TYPES = [
 ] as const;
 export type StatusAnnouncementType = (typeof STATUS_ANNOUNCEMENT_TYPES)[number];
 
-const ISO_DATE_TIME_REGEX =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const AbsoluteInstantSchema = z.string().datetime({ offset: true });
 
 export const isValidDateTimeString = (val: string) =>
-  typeof val === 'string' &&
-  ISO_DATE_TIME_REGEX.test(val) &&
-  !Number.isNaN(new Date(val).getTime());
+  AbsoluteInstantSchema.safeParse(val).success;
 
 export const StatusAnnouncementCreateSchema = z
   .object({
@@ -315,12 +312,12 @@ export const StatusAnnouncementCreateSchema = z
     message: z.string().trim().min(1).max(5000),
     type: z.enum(STATUS_ANNOUNCEMENT_TYPES).optional().default('INFO'),
     startDate: z.string().min(1).refine(isValidDateTimeString, {
-      message: 'startDate must be a valid ISO date string.',
+      message: 'startDate must be a valid ISO date string with an explicit timezone.',
     }),
     endDate: z
       .string()
       .refine(isValidDateTimeString, {
-        message: 'endDate must be a valid ISO date string.',
+        message: 'endDate must be a valid ISO date string with an explicit timezone.',
       })
       .optional()
       .nullable(),
@@ -333,10 +330,10 @@ export const StatusAnnouncementCreateSchema = z
     publishAt: z
       .string()
       .refine(isValidDateTimeString, {
-        message: 'publishAt must be a valid ISO date string.',
+        message: 'publishAt must be a valid ISO date string with an explicit timezone.',
       })
       .optional(),
-    notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional().default('ON_PUBLISH'),
+    notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional(),
   })
   .superRefine((data, ctx) => {
     const startMs = new Date(data.startDate).getTime();
@@ -360,6 +357,24 @@ export const StatusAnnouncementCreateSchema = z
           message: 'Publish date cannot be after end date.',
         });
       }
+    }
+    if (
+      data.notifySubscribers === false &&
+      data.notificationTiming !== undefined &&
+      data.notificationTiming !== 'NONE'
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['notificationTiming'],
+        message: 'notificationTiming must be NONE when notifySubscribers is false.',
+      });
+    }
+    if (data.notifySubscribers === true && data.notificationTiming === 'NONE') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['notificationTiming'],
+        message: 'notificationTiming cannot be NONE when notifySubscribers is true.',
+      });
     }
     if (data.allDay !== undefined) {
       if (data.allDay && data.timeMode === 'EXACT') {
@@ -389,13 +404,13 @@ export const StatusAnnouncementPatchSchema = z
     startDate: z
       .string()
       .refine(isValidDateTimeString, {
-        message: 'startDate must be a valid ISO date string.',
+        message: 'startDate must be a valid ISO date string with an explicit timezone.',
       })
       .optional(),
     endDate: z
       .string()
       .refine(isValidDateTimeString, {
-        message: 'endDate must be a valid ISO date string.',
+        message: 'endDate must be a valid ISO date string with an explicit timezone.',
       })
       .optional()
       .nullable(),
@@ -407,7 +422,7 @@ export const StatusAnnouncementPatchSchema = z
     publishAt: z
       .string()
       .refine(isValidDateTimeString, {
-        message: 'publishAt must be a valid ISO date string.',
+        message: 'publishAt must be a valid ISO date string with an explicit timezone.',
       })
       .optional(),
     notificationTiming: z.enum(['ON_PUBLISH', 'AT_START', 'NONE']).optional(),
