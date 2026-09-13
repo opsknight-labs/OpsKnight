@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { formatDateTime } from '@/lib/timezone';
 import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
 import { STATUS_PAGE_PUBLIC_CSS, STATUS_PAGE_SURFACE_CLASS } from '@/lib/status-pages/public-css';
@@ -9,7 +9,6 @@ import {
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
 } from '@/lib/status-pages/theme-contract';
-import { resolveStatusPageThemeRuntimeVariables } from '@/lib/status-pages/theme-runtime';
 import StatusPageHeader from './StatusPageHeader';
 import StatusPageFooter from './StatusPageFooter';
 import StatusPageSubscribe from './StatusPageSubscribe';
@@ -27,7 +26,8 @@ import AnnouncementsV3, { ChangelogV3 } from './v3/AnnouncementsV3';
  *
  * Health, uptime, and region status are never recomputed here. The curated built-in theme is also
  * resolved here from snapshot branding, so preview and public rendering cannot drift into separate
- * theme implementations. The outer shell may still apply customer Advanced CSS afterwards.
+ * theme implementations. Theme tokens stay in the CSS cascade instead of inline styles so customer
+ * Advanced CSS, which is inserted afterwards, remains the final supported override layer.
  */
 export default function StatusPageV3({
   snapshot,
@@ -57,7 +57,6 @@ export default function StatusPageV3({
   };
   const selectedTheme = resolveStatusPageTheme(themeBranding.themeId);
   const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
-  const runtimeThemeVariables = resolveStatusPageThemeRuntimeVariables(selectedTheme.id);
   const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
 
   useEffect(() => {
@@ -153,7 +152,6 @@ export default function StatusPageV3({
       data-sp-theme={selectedTheme.id}
       data-sp-theme-version={selectedTheme.version}
       data-sp-density={themeDensity}
-      style={runtimeThemeVariables as CSSProperties}
     >
       {styleMode === 'inline' && <style>{STATUS_PAGE_PUBLIC_CSS}</style>}
       {builtInThemeCss && <style data-status-page-theme-runtime>{builtInThemeCss}</style>}
