@@ -12,9 +12,10 @@ type IncidentSLABadgesProps = {
 
 export default function IncidentSLABadges({ sla, className }: IncidentSLABadgesProps) {
   return (
-    <div className={cn('flex flex-wrap items-center gap-2 pt-1.5', className)}>
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-0.5">
-        <Activity className="h-3 w-3" /> Response Health:
+    <div className={cn('flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-1.5', className)}>
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
+        <Activity className="h-3.5 w-3.5 text-primary/70 shrink-0" />
+        <span>Response Health</span>
       </span>
       <SLAIndicator sla={sla} />
     </div>
