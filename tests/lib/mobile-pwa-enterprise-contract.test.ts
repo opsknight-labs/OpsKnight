@@ -104,7 +104,7 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(queue).toContain('leaseOwner');
     expect(queue).toContain("db.transaction(STORE_NAME, 'readwrite')");
     expect(worker).toContain('laneKey');
-    expect(worker).toContain('claimQueuedRequest');
+    expect(worker).toContain('claimRequest');
     expect(worker).toContain('leaseOwner');
     expect(worker).toContain('MAX_PARALLEL_LANES');
   });
