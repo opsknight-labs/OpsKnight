@@ -6,16 +6,16 @@ import { toSafeStyleTagContent } from '@/lib/status-page-content';
 import { computeStatusPageTheme } from '@/lib/status-page-theme';
 import { resolveStatusPageCustomCss } from '@/lib/status-pages/theme-custom-css';
 import {
-  compileStatusPageThemeCss,
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
 } from '@/lib/status-pages/theme-contract';
 
 /**
- * Themed shell for the published status page.
+ * Published status-page shell.
  *
- * Visitor-facing chrome (theme, width, custom CSS, auto-refresh) lives here.
- * The page body is StatusPageV3, shared with the admin preview.
+ * StatusPageV3 owns the shared base renderer and curated built-in theme layer. This shell only owns
+ * page-level sizing/branding fallback, refresh behavior, and customer Advanced CSS, which remains
+ * the final override layer after V3.
  */
 export default function StatusPageSnapshotView({
   snapshot,
@@ -47,7 +47,6 @@ export default function StatusPageSnapshotView({
     resolveStatusPageCustomCss(selectedTheme.id, branding.customCss)
   );
   const themeDensity = resolveStatusPageThemeDensity(themeBranding.themeDensity);
-  const builtInThemeCss = compileStatusPageThemeCss(selectedTheme.id, themeDensity);
   const autoRefresh = presentation?.autoRefresh ?? branding.autoRefresh;
 
   return (
@@ -58,8 +57,8 @@ export default function StatusPageSnapshotView({
       data-sp-density={themeDensity}
       style={{
         minHeight: '100vh',
-        // Built-in themes define these variables in their CSS layer. Default defines nothing and
-        // therefore falls back to the configured/native branding palette exactly as before.
+        // Curated themes define these variables from the shared V3 layer. Default defines nothing
+        // and therefore falls back to the configured/native branding palette exactly as before.
         background: `var(--sp-page-bg, ${theme.backgroundColor})`,
         color: `var(--sp-page-text, ${theme.textColor})`,
         fontFamily: theme.fontFamily,
@@ -76,7 +75,6 @@ export default function StatusPageSnapshotView({
         stale={stale}
         refreshIntervalSeconds={autoRefresh !== false ? Math.max(30, refreshInterval) : null}
       />
-      {builtInThemeCss && <style data-status-page-theme>{builtInThemeCss}</style>}
       {customCss && (
         <style data-status-page-custom-css dangerouslySetInnerHTML={{ __html: customCss }} />
       )}
