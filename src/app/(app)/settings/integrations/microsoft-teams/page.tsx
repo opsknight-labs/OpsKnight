@@ -68,8 +68,10 @@ export default async function MicrosoftTeamsIntegrationRoute() {
     botId: config?.clientId ?? '11111111-1111-1111-1111-111111111111',
     // Override the stable host-derived default when Entra uses a custom Application ID URI.
     applicationIdUri: process.env.MICROSOFT_TEAMS_APPLICATION_ID_URI?.trim() || undefined,
-    // Optional RSC surface — disabled by default (minimal Phase-1 manifest)
-    includeOptionalPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
+    // Team discovery and war-room administration are separate opt-in consent
+    // surfaces. Existing discovery installs must not silently request write RSC.
+    includeTeamSettingsPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
+    includeWarRoomPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_WAR_ROOM_RSC === '1',
   });
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;

@@ -20,15 +20,20 @@ export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
 ] as const;
 export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.2.0';
 
-export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
+export const MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',
-  // Phase 3 war rooms. These remain opt-in so installations that only send
-  // destination alerts retain the Phase 1 least-privilege consent surface.
+] as const;
+export const MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS = [
   'Channel.Create.Group',
   'ChannelSettings.ReadWrite.Group',
   'TeamMember.Read.Group',
   'ChannelMember.Read.Group',
   'ChannelMember.ReadWrite.Group',
+] as const;
+// Backwards-compatible export for callers that need the full opt-in union.
+export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
+  ...MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS,
+  ...MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS,
 ] as const;
 
 export const MICROSOFT_TEAMS_RSC_PERMISSIONS: string[] = [
@@ -49,10 +54,10 @@ export interface MicrosoftTeamsManifestOptions {
   /** Entra Application ID URI (e.g. `api://opsknight.example.com/<appId>`).
    * Defaults to the conventional, stable URI derived from the public app host. */
   applicationIdUri?: string;
-  /** When true, include optional RSC permissions (TeamSettings.Read.Group).
-   * Defaults to false — Phase 1 minimal surface; enable only when the
-   * corresponding capability (e.g. member management) is active. */
+  /** Legacy alias for TeamSettings.Read.Group only. */
   includeOptionalPermissions?: boolean;
+  includeTeamSettingsPermissions?: boolean;
+  includeWarRoomPermissions?: boolean;
 }
 
 // Messaging endpoint is configured on the Azure Bot resource, not in the manifest.
@@ -90,11 +95,15 @@ export function buildMicrosoftTeamsAppManifest({
   manifestId = botId,
   applicationIdUri,
   includeOptionalPermissions = false,
+  includeTeamSettingsPermissions = includeOptionalPermissions,
+  includeWarRoomPermissions = false,
 }: MicrosoftTeamsManifestOptions): MicrosoftTeamsAppManifest {
   const origin = appUrl.replace(/\/+$/, '');
-  const rscPermissions = includeOptionalPermissions
-    ? MICROSOFT_TEAMS_RSC_PERMISSIONS
-    : [...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS];
+  const rscPermissions = [
+    ...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS,
+    ...(includeTeamSettingsPermissions ? MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS : []),
+    ...(includeWarRoomPermissions ? MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS : []),
+  ];
   const manifest: MicrosoftTeamsAppManifest = {
     $schema: 'https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json',
     manifestVersion: '1.16',

@@ -8,6 +8,10 @@ import { createChannel, findWarRoomChannel, warRoomChannelName, warRoomMarker } 
 
 type RequestResult = { accepted: true; warRoomId: string; state: string } | { accepted: false; code: string };
 
+export class WarRoomRetryableError extends Error {
+  constructor(message: string, readonly retryAfterMs?: number) { super(message); this.name = 'WarRoomRetryableError'; }
+}
+
 /**
  * Durable request boundary. It deliberately makes no Microsoft request: callers
  * can retry it safely and a worker can provision the leased record afterwards.
@@ -29,6 +33,10 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
       manual,
     });
     if (!decision.allowed || !destination) return { accepted: false, code: decision.allowed ? 'DESTINATION_UNAVAILABLE' : decision.code };
+    // Private Teams channels need an explicit owner and initial membership.
+    // Until that capability is implemented, fail closed rather than creating a
+    // channel that may be inaccessible or have incorrect ownership.
+    if (decision.membershipType === 'PRIVATE') return { accepted: false, code: 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED' };
     const claimed = await claimWarRoomProvisioning(tx, { incidentId, provider: 'MICROSOFT_TEAMS' });
     if (claimed.claimed) {
       await tx.incidentWarRoom.update({ where: { id: claimed.warRoom.id }, data: { providerTenantId: destination.tenantId, providerContainerId: destination.teamId, membershipType: decision.membershipType } });
@@ -38,21 +46,31 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
   });
 }
 
-/** Worker entry point. A create timeout is left AMBIGUOUS and reconciled by marker. */
+/** Worker entry point. Every retry reconciles this same generation before POST. */
 export async function provisionMicrosoftTeamsWarRoom(warRoomId: string): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, include: { incident: { select: { id: true, title: true } } } });
-  if (!room || room.provider !== 'MICROSOFT_TEAMS' || room.state !== 'PROVISIONING' || !room.provisioningToken || !room.providerTenantId || !room.providerContainerId || !room.membershipType) return;
+  if (!room || room.provider !== 'MICROSOFT_TEAMS' || !['PROVISIONING', 'AMBIGUOUS'].includes(room.state) || !room.provisioningToken || !room.providerTenantId || !room.providerContainerId || !room.membershipType) return;
   const marker = warRoomMarker(room.incident.id, room.generation);
   const existing = await findWarRoomChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, marker });
   if (existing.ok && existing.value) {
     await runSerializableTransaction(tx => markWarRoomReady(tx, { warRoomId: room.id, provisioningToken: room.provisioningToken!, tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: existing.value!.id, channelName: existing.value!.displayName, channelUrl: existing.value!.webUrl }));
     return;
   }
-  if (!existing.ok && existing.code !== 'AMBIGUOUS_CREATE') return markFailed(room.id, existing.code, existing.message);
-  const created = await createChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, displayName: warRoomChannelName(room.incident.id, room.incident.title), description: marker, membershipType: room.membershipType });
+  // A failed or incomplete read is never evidence that a room is absent.
+  if (!existing.ok) {
+    if (existing.code === 'TRANSIENT_READ' || existing.code === 'RATE_LIMITED' || existing.code === 'GRAPH_TOKEN_FAILED') throw new WarRoomRetryableError(existing.message, existing.retryAfterMs);
+    await markFailed(room.id, existing.code, existing.message);
+    return;
+  }
+  if (room.membershipType !== 'STANDARD') return markFailed(room.id, 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED', 'Private Teams war rooms require an owner and initial members.');
+  const created = await createChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, displayName: warRoomChannelName(room.incident.id, room.generation, room.incident.title), description: marker, membershipType: 'STANDARD' });
   if (!created.ok) {
-    if (created.code === 'AMBIGUOUS_CREATE') await prisma.incidentWarRoom.update({ where: { id: room.id }, data: { state: 'AMBIGUOUS', lastErrorCode: created.code, lastError: created.message } });
-    else await markFailed(room.id, created.code, created.message);
+    if (created.code === 'AMBIGUOUS_CREATE') {
+      await prisma.incidentWarRoom.updateMany({ where: { id: room.id, provisioningToken: room.provisioningToken }, data: { state: 'AMBIGUOUS', lastErrorCode: created.code, lastError: created.message } });
+      throw new WarRoomRetryableError(created.message, created.retryAfterMs);
+    }
+    if (created.code === 'RATE_LIMITED' || created.code === 'GRAPH_TOKEN_FAILED' || created.code === 'TRANSIENT_READ') throw new WarRoomRetryableError(created.message, created.retryAfterMs);
+    await markFailed(room.id, created.code, created.message);
     return;
   }
   const adopted = await runSerializableTransaction(tx => markWarRoomReady(tx, { warRoomId: room.id, provisioningToken: room.provisioningToken!, tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: created.value.id, channelName: created.value.displayName, channelUrl: created.value.webUrl }));

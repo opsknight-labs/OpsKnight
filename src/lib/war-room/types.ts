@@ -22,6 +22,7 @@ export type WarRoomGraphFailureCode =
   | 'CHANNEL_NOT_FOUND'
   | 'MEMBER_NOT_IN_TEAM'
   | 'AMBIGUOUS_CREATE'
+  | 'TRANSIENT_READ'
   | 'GRAPH_TOKEN_FAILED'
   | 'UNKNOWN';
 

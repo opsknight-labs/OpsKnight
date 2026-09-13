@@ -542,6 +542,17 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
     }
   } catch (error) {
+    if (job.type === 'WAR_ROOM_PROVISION' && error instanceof Error && error.name === 'WarRoomRetryableError') {
+      const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
+      const delay = typeof retryAfterMs === 'number' && retryAfterMs > 0
+        ? retryAfterMs
+        : Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS);
+      const current = await prisma.backgroundJob.findUnique({ where: { id: job.id }, select: { attempts: true, maxAttempts: true } });
+      if (current && current.attempts < current.maxAttempts) {
+        await prisma.backgroundJob.update({ where: { id: job.id }, data: { status: 'PENDING', scheduledAt: new Date(Date.now() + delay), startedAt: null, error: null } });
+        return false;
+      }
+    }
     // Backpressure never consumes maxAttempts — reschedule until queue drains.
     if (isBulkNotificationJob(job.type as JobType) && isBulkQueueBackpressureError(error)) {
       try {

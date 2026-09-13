@@ -58,11 +58,21 @@ describe('Microsoft Teams app manifest', () => {
     for (const opt of MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS) {
       expect(names).not.toContain(opt);
     }
-    // With includeOptionalPermissions, all perms are emitted
+    // Legacy optional flag grants only the historical TeamSettings permission.
     const mFull = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeOptionalPermissions: true });
     const fullNames = (mFull.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
+    expect(fullNames).toContain('TeamSettings.Read.Group');
+    expect(fullNames).not.toContain('Channel.Create.Group');
+    const warRoom = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeWarRoomPermissions: true });
+    const warRoomNames = (warRoom.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
+    for (const perm of MICROSOFT_TEAMS_RSC_PERMISSIONS.filter(permission => permission !== 'TeamSettings.Read.Group')) {
+      expect(warRoomNames).toContain(perm);
+    }
+    expect(warRoomNames).not.toContain('TeamSettings.Read.Group');
+    const all = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeTeamSettingsPermissions: true, includeWarRoomPermissions: true });
+    const allNames = (all.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
     for (const perm of MICROSOFT_TEAMS_RSC_PERMISSIONS) {
-      expect(fullNames).toContain(perm);
+      expect(allNames).toContain(perm);
     }
   });
 
