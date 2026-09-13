@@ -76,7 +76,8 @@ export type JobType =
   | 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
   | 'CHATOPS_INTENT'
   | 'EXTERNAL_OPERATION'
-  | 'WAR_ROOM_PROVISION';
+  | 'WAR_ROOM_PROVISION'
+  | 'WAR_ROOM_PARTICIPANT_SYNC';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload {
   incidentId?: string;
@@ -411,6 +412,14 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         const { provisionMicrosoftTeamsWarRoom } = await import('../war-room/microsoft-teams');
         await provisionMicrosoftTeamsWarRoom(requiredPayloadString(job.payload, 'warRoomId'), requiredPayloadString(job.payload, 'provisioningToken'));
         return markWarRoomJobCompleted(job.id);
+      }
+      case 'WAR_ROOM_PARTICIPANT_SYNC': {
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
+          throw new Error('War-room participant sync job is missing warRoomId');
+        const { syncMicrosoftTeamsWarRoomParticipants } = await import('../war-room/participants');
+        await syncMicrosoftTeamsWarRoomParticipants(requiredPayloadString(job.payload, 'warRoomId'));
+        await markJobCompleted(job.id);
+        return true;
       }
       case 'EXTERNAL_OPERATION': {
         if (typeof payloadValue(job.payload, 'operationId') !== 'string')

@@ -4,6 +4,7 @@
 -- Keep PROCESSING while old workers may still emit it. New collaboration
 -- workers use PENDING; cleanup can happen only after old binaries are gone.
 ALTER TYPE "WarRoomParticipantState" ADD VALUE 'PENDING';
+ALTER TYPE "JobType" ADD VALUE 'WAR_ROOM_PARTICIPANT_SYNC';
 
 CREATE TYPE "WarRoomHealthState" AS ENUM ('HEALTHY', 'DEGRADED', 'MISSING', 'PERMISSION_ERROR');
 

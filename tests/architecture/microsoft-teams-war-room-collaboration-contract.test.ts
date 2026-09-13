@@ -19,6 +19,7 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     expect(participantState).toContain('PENDING');
     expect(participantState).toContain('PROCESSING');
     expect(migration).toContain("ADD VALUE 'PENDING'");
+    expect(migration).toContain("ADD VALUE 'WAR_ROOM_PARTICIPANT_SYNC'");
     expect(migration).toContain('CREATE TYPE "WarRoomHealthState"');
   });
 });
