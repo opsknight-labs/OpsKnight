@@ -168,9 +168,10 @@ describe('status page design contract', () => {
       expect(contrastRatio(subtle, surfaceAlt), `${theme.id} subtle text`).toBeGreaterThanOrEqual(
         4.5
       );
-      expect(contrastRatio(accentText, accent), `${theme.id} accent foreground`).toBeGreaterThanOrEqual(
-        4.5
-      );
+      expect(
+        contrastRatio(accentText, accent),
+        `${theme.id} accent foreground`
+      ).toBeGreaterThanOrEqual(4.5);
     }
   });
 
