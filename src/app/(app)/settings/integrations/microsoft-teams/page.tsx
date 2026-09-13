@@ -97,7 +97,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         breadcrumb={{ label: 'Settings', href: '/settings', current: 'Microsoft Teams' }}
         tag="COLLABORATION ENGINE"
         title="Microsoft Teams Integration"
-        subtitle="Send incident Adaptive Cards to Teams channels for broadcast and lifecycle tracking. Phase 1 delivers one-way notifications."
+        subtitle="Deliver incident cards, lifecycle updates, and controlled collaboration workflows to Microsoft Teams."
         badges={
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge

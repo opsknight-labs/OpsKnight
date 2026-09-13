@@ -144,7 +144,7 @@ export default function MicrosoftTeamsIntegrationPage({
             {!isConfigured ? 'Not configured — enter your Azure AD app credentials below.' : !isInstalled ? 'Credentials configured — awaiting a verified Teams installation.' : !isReady ? 'Bot installed — map and enable a Service → Teams destination.' : 'Ready — incident Adaptive Cards will post and update through the Bot Connector.'}
           </span>
         </div>
-        <p className="mt-1 opacity-80">Phase 1 is one-way broadcast only. Acknowledge / Resolve / Assign from Teams is prepared for Phase 2 and is intentionally not exposed.</p>
+        <p className="mt-1 opacity-80">Use the global and per-destination controls below to govern Teams delivery and authenticated incident actions.</p>
       </div>
 
       {/* Configure card — console UI only, no .env */}
@@ -177,7 +177,7 @@ export default function MicrosoftTeamsIntegrationPage({
             <select id="mt-tenantMode" name="tenantMode" defaultValue={config?.tenantMode ?? 'SINGLE'} disabled={!isAdmin} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
               <option value="SINGLE">SINGLE</option>
             </select>
-            <p className="text-[11px] text-muted-foreground">Phase 1 uses a verified single-tenant Bot authority.</p>
+            <p className="text-[11px] text-muted-foreground">A verified single-tenant Bot authority keeps Teams routing and token acquisition scoped to your organization.</p>
           </div>
         </div>
         <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
@@ -222,7 +222,7 @@ export default function MicrosoftTeamsIntegrationPage({
         </div>
       </div>
 
-      {/* Service → Teams destination (Phase 1: one Teams channel per service) */}
+      {/* Service → Teams destination routing */}
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Service → Teams destinations</h3>

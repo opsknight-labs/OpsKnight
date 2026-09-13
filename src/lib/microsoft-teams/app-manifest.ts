@@ -5,13 +5,12 @@
  * permission set, the Bot scopes, and the generated app manifest must not
  * drift into three hand-maintained copies.
  *
- * Phase 1 ships with the minimal Resource-Specific Consent (RSC) permission
- * so the first install can list teams/channels and post incident cards.
- * Additional permissions (channel creation / member management) are
- * intentionally deferred to Phase 2 per the spec.
+ * The base package requests only the Resource-Specific Consent (RSC) needed
+ * for team/channel discovery and card delivery. War-room permissions are an
+ * explicit administrator-controlled consent surface.
  */
 
-/** RSC permissions the app requests. Keep this minimal for Phase 1.
+/** RSC permissions requested by the base package. Keep this minimal.
  * Incident cards are posted via Bot Framework Connector (serviceUrl/Bot token),
  * not via Graph RSC `ChannelMessage.Send.Group`. Only ChannelSettings.Read.Group
  * is required for Teams/channel discovery. */

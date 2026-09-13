@@ -46,9 +46,8 @@ export async function saveMicrosoftTeamsConfig(
   const parsed = microsoftTeamsConfigSchema.safeParse({
     clientId: resolvedClientId,
     tenantId: tenantIdRaw,
-    // Phase 1 intentionally supports single-tenant Bot credentials only. The
-    // schema remains future-ready, but MULTI must not be exposed until its Bot
-    // authority model has been validated end-to-end.
+    // Teams credentials are scoped to one verified tenant. Keep the authority
+    // model explicit instead of accepting an implicit multi-tenant fallback.
     tenantMode: 'SINGLE',
     enabledValue: enabledValue as string | null,
     interactiveEnabledValue: interactiveEnabledValue as string | null,
@@ -58,7 +57,7 @@ export async function saveMicrosoftTeamsConfig(
     return { error: parsed.error.issues[0]?.message ?? 'Invalid Teams configuration.' };
   }
   const { tenantId } = parsed.data;
-  if (!tenantId) return { error: 'Tenant ID is required for the Phase 1 single-tenant integration.' };
+  if (!tenantId) return { error: 'Tenant ID is required for this single-tenant Teams integration.' };
   const tenantMode = parsed.data.tenantMode;
   const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === null;
   const interactiveEnabled = interactiveEnabledValue === 'on' || interactiveEnabledValue === 'true';
