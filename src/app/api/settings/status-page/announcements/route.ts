@@ -365,19 +365,22 @@ export async function PATCH(req: NextRequest) {
         startDate: effectiveStart,
       });
 
+      const timingChanged =
+        notificationTiming !== undefined && notificationTiming !== existing.notificationTiming;
+      const activeChanged = isActive !== undefined && nextIsActive !== existing.isActive;
+      const startAffectsNotification = startDate !== undefined && timing === 'AT_START';
+      const publishAffectsNotification =
+        (publishAt !== undefined || publishOption !== undefined) && timing === 'ON_PUBLISH';
+      const eligibilityChanged = affectedServiceIds !== undefined;
       const schedulingMutation =
-        notificationTiming !== undefined ||
-        startDate !== undefined ||
-        publishAt !== undefined ||
-        publishOption !== undefined ||
-        isActive !== undefined;
-      const generationMutation = schedulingMutation || affectedServiceIds !== undefined;
+        timingChanged || activeChanged || startAffectsNotification || publishAffectsNotification;
+      const generationMutation = schedulingMutation || eligibilityChanged;
 
       const reactivating = existing.isActive === false && nextIsActive === true;
       const enablingNotifications =
         existing.notificationTiming === 'NONE' && timing !== 'NONE';
       if (
-        generationMutation &&
+        schedulingMutation &&
         nextPlan.shouldNotify &&
         nextPlan.scheduledAt &&
         nextPlan.scheduledAt.getTime() < Date.now() - 30_000 &&
@@ -427,7 +430,13 @@ export async function PATCH(req: NextRequest) {
           'Announcement notification policy was superseded by a newer generation.'
         );
 
-        if (nextPlan.shouldNotify && nextPlan.scheduledAt) {
+        // Eligibility-only edits after the canonical send time invalidate stale
+        // work but do not unexpectedly re-email subscribers. Explicit scheduling
+        // edits into the past are rejected above and require an intentional NOW.
+        const mayCreateReplacement =
+          nextPlan.scheduledAt != null &&
+          (nextPlan.scheduledAt.getTime() >= Date.now() - 30_000 || publishOption === 'NOW');
+        if (nextPlan.shouldNotify && nextPlan.scheduledAt && mayCreateReplacement) {
           await createAnnouncementFanoutJob(tx, {
             announcementId: id,
             statusPageId,
