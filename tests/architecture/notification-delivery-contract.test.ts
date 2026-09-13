@@ -26,9 +26,11 @@ describe('notification delivery architecture', () => {
 
   it('does not fire-and-forget personal incident notifications from API adapters', () => {
     const slackActions = readFileSync('src/app/api/slack/actions/route.ts', 'utf8');
+    const providerCommands = readFileSync('src/lib/chatops/commands.ts', 'utf8');
     const chatOpsCommands = readFileSync('src/lib/incidents/chatops-lifecycle.ts', 'utf8');
 
-    expect(slackActions).toContain('executeChatOpsAssignment');
+    expect(slackActions).toContain('executeChatOpsCommand');
+    expect(providerCommands).toContain('executeChatOpsAssignment');
     expect(chatOpsCommands).toContain('enqueueIncidentUpdateSideEffects');
     expect(slackActions).not.toContain("import('@/lib/user-notifications')");
     expect(slackActions).not.toMatch(/sendIncidentNotifications\s*\(/);

@@ -29,7 +29,7 @@ type TeamsActivity = {
   id?: string;
   channelId?: string;
   serviceUrl?: string;
-  from?: { id?: string; name?: string };
+  from?: { id?: string; aadObjectId?: string; name?: string };
   recipient?: { id?: string };
   conversation?: { id?: string; name?: string; isGroup?: boolean };
   channelData?: {
@@ -41,6 +41,7 @@ type TeamsActivity = {
   membersRemoved?: Array<{ id?: string }>;
   name?: string;
   value?: unknown;
+  replyToId?: string;
 };
 
 function isTruthyString(v: unknown): v is string {
@@ -48,6 +49,10 @@ function isTruthyString(v: unknown): v is string {
 }
 
 export async function POST(request: NextRequest) {
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+    return NextResponse.json({ error: 'Teams activity payload is too large' }, { status: 413 });
+  }
   let body: unknown;
   try {
     body = await request.json();
@@ -113,6 +118,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    if (activityType === 'invoke' && activity.name === 'adaptiveCard/action') {
+      const tenantId = verifiedIdentity?.tenantId === '__test__' ? bodyTenantId : verifiedIdentity?.tenantId;
+      if (!tenantId) return NextResponse.json({ error: 'Verified tenant is required' }, { status: 403 });
+      const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
+      const response = await handleMicrosoftTeamsAdaptiveCardAction({ activity, verifiedTenantId: tenantId });
+      return NextResponse.json(response, { status: 200 });
+    }
     if (activityType === 'conversationUpdate') {
       // Prefer verified JWT tid when available; fall back to body only for test harness.
       const tenantId =
@@ -226,7 +238,7 @@ export async function POST(request: NextRequest) {
               select: { id: true },
             });
             await tx.microsoftTeamsInstallation.updateMany({ where: { tenantId, teamId }, data: { enabled: false } });
-            await tx.microsoftTeamsDestination.updateMany({ where: { tenantId, teamId }, data: { enabled: false } });
+            await tx.microsoftTeamsDestination.updateMany({ where: { tenantId, teamId }, data: { enabled: false, interactiveEnabled: false } });
             return revokeMicrosoftTeamsOperations(tx, {
               destinationIds: destRows.map(row => row.id),
               reason: 'Microsoft Teams app was removed from this Team',

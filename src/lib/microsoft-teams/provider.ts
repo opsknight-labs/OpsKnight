@@ -2,6 +2,7 @@ import type { IncidentChatProvider, ChatDeliveryResult } from '@/lib/chatops/pro
 import prisma from '@/lib/prisma';
 import { getBaseUrl } from '@/lib/env-validation';
 import { sendMicrosoftTeamsIncidentCard, updateMicrosoftTeamsIncidentCard, testMicrosoftTeamsConnection } from './client';
+import { getMicrosoftTeamsInteractiveCardContext } from './card-context';
 
 function incidentUrl(incidentId: string): string {
   const base = getBaseUrl().replace(/\/+$/, '');
@@ -59,10 +60,12 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     };
     eventType: 'triggered' | 'acknowledged' | 'resolved';
     beforeCreateAttempt?: () => Promise<void>;
+    replacementGeneration?: boolean;
   }): Promise<ChatDeliveryResult> {
     const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: args.destinationId } });
     if (!dest) return { success: false, error: 'Teams destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
     const url = args.incident.incidentUrl || incidentUrl(args.incident.id);
+    const interactive = await getMicrosoftTeamsInteractiveCardContext(args.destinationId, args.incident.id, args.replacementGeneration);
     const res = await sendMicrosoftTeamsIncidentCard({
       tenantId: dest.tenantId,
       teamId: dest.teamId,
@@ -70,6 +73,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
       beforeCreateAttempt: args.beforeCreateAttempt,
+      interactive,
     });
     return res;
   }
@@ -103,6 +107,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: args.destinationId } });
     if (!dest) return { success: false, error: 'Teams destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
     const url = args.incident.incidentUrl || incidentUrl(args.incident.id);
+    const interactive = await getMicrosoftTeamsInteractiveCardContext(args.destinationId, args.incident.id);
     return updateMicrosoftTeamsIncidentCard({
       tenantId: dest.tenantId,
       teamId: dest.teamId,
@@ -112,6 +117,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
       disableActions: args.disableActions,
+      interactive,
     });
   }
 
@@ -169,7 +175,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     eventType: 'triggered' | 'acknowledged' | 'resolved';
     beforeCreateAttempt?: () => Promise<void>;
   }): Promise<ChatDeliveryResult> {
-    return this.createIncidentCard(args);
+    return this.createIncidentCard({ ...args, replacementGeneration: true });
   }
 
   async testConnection(destinationId: string): Promise<ChatDeliveryResult> {

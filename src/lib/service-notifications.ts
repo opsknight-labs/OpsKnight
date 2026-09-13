@@ -214,7 +214,7 @@ export async function sendServiceNotifications(
       }
     }
 
-    if (serviceChannels.includes('MICROSOFT_TEAMS' as never) && eventType !== 'updated') {
+    if (serviceChannels.includes('MICROSOFT_TEAMS' as never)) {
       const teamsDestination = await (prisma as unknown as { microsoftTeamsDestination: { findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null> } }).microsoftTeamsDestination.findFirst({
         where: { serviceId: service.id, enabled: true },
         orderBy: { updatedAt: 'desc' },
@@ -224,14 +224,16 @@ export async function sendServiceNotifications(
         // (ExternalOperation @@unique([provider,idempotencyKey]) + advisory lock + AMBIGUOUS semantics).
         // Central Notification intent is superseded for Teams — this fence prevents duplicate cards
         // when multiple replicas race the same incidentVersion.
-        const teamsEventType = eventType as 'triggered' | 'acknowledged' | 'resolved';
+        const teamsEventType = eventType;
         const incidentUpdatedAtForTeams =
           options.eventAt ??
           (teamsEventType === 'triggered'
             ? incident.createdAt
             : teamsEventType === 'acknowledged'
               ? (incident.acknowledgedAt ?? incident.updatedAt)
-              : (incident.resolvedAt ?? incident.updatedAt));
+              : teamsEventType === 'resolved'
+                ? (incident.resolvedAt ?? incident.updatedAt)
+                : incident.updatedAt);
         const result = await persistIntent(async () => {
           await enqueueMicrosoftTeamsDelivery({
             incidentId,

@@ -371,6 +371,7 @@ model User {
   microsoftTeamsConfigs       MicrosoftTeamsConfig[]       @relation("MicrosoftTeamsConfigUpdater")
   microsoftTeamsInstallations MicrosoftTeamsInstallation[] @relation("MicrosoftTeamsInstallationInstaller")
   microsoftTeamsDestinations  MicrosoftTeamsDestination[]  @relation("MicrosoftTeamsDestinationUpdater")
+  chatIdentityLinks           ChatIdentityLink[]
   oidcConfigs                 OidcConfig[]
   oidcIdentities              OidcIdentity[]
   oidcLinkingApproval         OidcLinkingApproval?
@@ -685,6 +686,7 @@ model MicrosoftTeamsConfig {
   tenantId     String? // Entra tenant ID for SINGLE mode; null for MULTI
   tenantMode   MicrosoftTeamsTenantMode @default(SINGLE)
   enabled      Boolean                  @default(true)
+  interactiveEnabled Boolean            @default(false)
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
   updatedBy    String?
@@ -726,6 +728,7 @@ model MicrosoftTeamsDestination {
   teamName       String?
   installationId String?
   enabled        Boolean  @default(true)
+  interactiveEnabled Boolean @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   updatedBy      String?
@@ -756,6 +759,7 @@ model MicrosoftTeamsIncidentMessage {
   mutationLeaseExpiresAt DateTime?
   createOperationId      String?
   createState            String    @default("NONE")
+  messageGeneration      Int       @default(1)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -1693,6 +1697,50 @@ enum ChatProvider {
   MICROSOFT_TEAMS
 }
 
+enum ChatIdentityVerificationMethod {
+  ACCOUNT_LINK
+  OIDC
+  ADMIN
+}
+
+model ChatIdentityLink {
+  id                 String                         @id @default(cuid())
+  provider           ChatProvider
+  providerTenantId   String
+  providerUserId     String
+  providerObjectId   String?
+  userId             String
+  displayName        String?
+  verificationMethod ChatIdentityVerificationMethod
+  verifiedAt         DateTime                       @default(now())
+  revokedAt          DateTime?
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerTenantId, providerUserId])
+  @@unique([provider, providerTenantId, providerObjectId])
+  @@index([userId, provider])
+  @@index([provider, providerTenantId, revokedAt])
+}
+
+model ChatIdentityChallenge {
+  id                String       @id @default(cuid())
+  tokenHash         String       @unique
+  provider          ChatProvider
+  providerTenantId  String
+  providerUserId    String
+  providerObjectId  String?
+  displayName       String?
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime     @default(now())
+
+  @@index([expiresAt])
+  @@index([provider, providerTenantId, providerUserId])
+}
+
 enum ChatOpsResponseMode {
   INLINE
   DEFERRED
@@ -1731,6 +1779,12 @@ model ChatOpsIntent {
   workspaceId         String
   channelId           String?
   slackUserId         String?
+  providerTenantId    String?
+  providerConversationId String?
+  providerChannelId   String?
+  providerActivityId  String?
+  providerUserId      String?
+  providerObjectId    String?
   encryptedPayload    String
   responseMode        ChatOpsResponseMode @default(DEFERRED)
   payloadDigest       String?
@@ -1749,6 +1803,7 @@ model ChatOpsIntent {
   @@index([status, leaseExpiresAt])
   @@index([workspaceId, channelId])
   @@index([provider, status, leaseExpiresAt])
+  @@index([provider, providerTenantId, providerActivityId])
 }
 
 // Status Page Configuration

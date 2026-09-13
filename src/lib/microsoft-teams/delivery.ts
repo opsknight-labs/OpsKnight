@@ -45,7 +45,7 @@ export function deriveMicrosoftTeamsCardState(incident: {
 export type TeamsDeliveryEnqueueInput = {
   incidentId: string;
   destinationId: string;
-  eventType: 'triggered' | 'acknowledged' | 'resolved';
+  eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated';
   /** Monotonic incident updatedAt or version — part of the idempotency key. */
   incidentUpdatedAt: Date;
   escalationGeneration?: number;
@@ -875,6 +875,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
 
     let result: Awaited<ReturnType<typeof microsoftTeamsChatProvider.sendIncidentCard>>;
     let circuitOpened = false;
+    let replacingCanonicalActivity = false;
 
     const callWithBreaker = async <T extends { success: boolean; errorCode?: string; statusCode?: number; error?: string }>(
       fn: () => Promise<T>
@@ -923,6 +924,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           })
         );
         if (!updateResult.success && (updateResult.errorCode === 'MESSAGE_NOT_FOUND' || updateResult.statusCode === 404)) {
+          replacingCanonicalActivity = true;
           result = await callWithBreaker(() =>
             microsoftTeamsChatProvider.recoverIncidentCard({
               destinationId,
@@ -1199,6 +1201,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               conversationId: result.conversationId ?? null,
               createState: 'NONE',
               createOperationId: null,
+              ...(replacingCanonicalActivity ? { messageGeneration: { increment: 1 } } : {}),
             },
             update: {
               messageId: result.providerMessageId!,

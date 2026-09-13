@@ -116,4 +116,18 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     expect(JSON.stringify(triggered.body)).toContain('Created');
     expect(JSON.stringify(triggered.body)).toContain('UTC');
   });
+
+  it('renders strict Phase 2 actions only when explicitly enabled and capability-allowed', () => {
+    const card = buildMicrosoftTeamsIncidentCard(
+      { incident: incident(), eventType: 'triggered' },
+      { interactive: { destinationId: 'dest-1', messageGeneration: 3, capabilities: { canAcknowledge: true, canRead: true } } },
+    );
+    const json = JSON.stringify(card);
+    expect(json).toContain('Action.Execute');
+    expect(json).toContain('opsknight.incident.ack');
+    expect(json).toContain('opsknight.incident.who');
+    expect(json).not.toContain('opsknight.incident.resolve');
+    expect(json).toContain('"messageGeneration":3');
+    expect(card.refresh).toBeDefined();
+  });
 });

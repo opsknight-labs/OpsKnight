@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import * as retryModule from '@/lib/retry';
 import {
   chatOpsLifecycleErrorMessage,
+  executeChatOpsNote,
   executeChatOpsLifecycleCommand,
 } from '@/lib/incidents/chatops-lifecycle';
 import { sendIncidentNotifications } from '@/lib/user-notifications';
@@ -54,6 +55,7 @@ vi.mock('@/lib/retry', () => ({
 
 vi.mock('@/lib/incidents/chatops-lifecycle', () => ({
   executeChatOpsLifecycleCommand: vi.fn(),
+  executeChatOpsNote: vi.fn().mockResolvedValue({ created: true }),
   authorizeChatOpsIncident: vi.fn().mockResolvedValue(undefined),
   chatOpsLifecycleErrorMessage: vi.fn(error =>
     error instanceof Error ? error.message : 'Unable to update incident.'
@@ -217,13 +219,12 @@ describe('ChatOps Slash Command Dispatcher', () => {
     });
 
     expect(result.response_type).toBe('in_channel');
-    expect(prisma.incidentNote.create).toHaveBeenCalledWith(
+    expect(executeChatOpsNote).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          incidentId: 'inc-104',
-          userId: 'usr-alice',
-          content: 'Checking DB connection pool',
-        }),
+        incidentId: 'inc-104',
+        actor: { id: 'usr-alice', name: 'Alice' },
+        content: 'Checking DB connection pool',
+        provider: 'SLACK',
       })
     );
     expect(executeChatOpsLifecycleCommand).not.toHaveBeenCalled();

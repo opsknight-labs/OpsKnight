@@ -24,6 +24,7 @@ export const USER_REFERENCE_POLICY = {
   microsoftTeamsConfigs: { deactivate: 'KEEP', delete: 'SET_NULL' },
   microsoftTeamsInstallations: { deactivate: 'KEEP', delete: 'SET_NULL' },
   microsoftTeamsDestinations: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  chatIdentityLinks: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
   oidcConfigs: { deactivate: 'KEEP', delete: 'CASCADE' },
   oidcIdentities: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
   oidcLinkingApproval: { deactivate: 'REVOKE', delete: 'CASCADE' },

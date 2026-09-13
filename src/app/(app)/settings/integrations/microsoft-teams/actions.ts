@@ -25,6 +25,7 @@ export async function saveMicrosoftTeamsConfig(
   const clientSecretRaw = (formData.get('clientSecret') as string | null) ?? '';
   const tenantIdRaw = (formData.get('tenantId') as string | null)?.trim() || null;
   const enabledValue = formData.get('enabled');
+  const interactiveEnabledValue = formData.get('interactiveEnabled');
 
   // Strict validation — Zod is required by AGENTS.md §4 for every Server Action.
   const microsoftTeamsConfigSchema = z.object({
@@ -32,6 +33,7 @@ export async function saveMicrosoftTeamsConfig(
     tenantId: z.string().trim().uuid('Tenant ID must be a valid Azure tenant GUID.').nullable(),
     tenantMode: z.literal('SINGLE'),
     enabledValue: z.string().nullable().optional(),
+    interactiveEnabledValue: z.string().nullable().optional(),
   });
   const existingEarly = await (prisma as unknown as Record<string, unknown> & { microsoftTeamsConfig: { findFirst: (a: unknown) => Promise<{ id: string; clientSecret: string; tenantId: string | null; clientId: string } | null> } }).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never) as
     | { id: string; clientSecret: string; clientId: string }
@@ -47,6 +49,7 @@ export async function saveMicrosoftTeamsConfig(
     // authority model has been validated end-to-end.
     tenantMode: 'SINGLE',
     enabledValue: enabledValue as string | null,
+    interactiveEnabledValue: interactiveEnabledValue as string | null,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Invalid Teams configuration.' };
@@ -55,6 +58,7 @@ export async function saveMicrosoftTeamsConfig(
   if (!tenantId) return { error: 'Tenant ID is required for the Phase 1 single-tenant integration.' };
   const tenantMode = parsed.data.tenantMode;
   const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === null;
+  const interactiveEnabled = interactiveEnabledValue === 'on' || interactiveEnabledValue === 'true';
   const effectiveClientId = parsed.data.clientId;
   const existing = existingEarly;
 
@@ -100,6 +104,7 @@ export async function saveMicrosoftTeamsConfig(
         tenantId: tenantId || null,
         tenantMode,
         enabled: enabledValue ? enabled : true,
+        interactiveEnabled,
         updatedBy: actorId,
       },
       update: {
@@ -108,6 +113,7 @@ export async function saveMicrosoftTeamsConfig(
         tenantId: tenantId || null,
         tenantMode,
         ...(enabledValue ? { enabled } : {}),
+        interactiveEnabled,
         updatedBy: actorId,
       },
     } as unknown as never);
@@ -120,7 +126,7 @@ export async function saveMicrosoftTeamsConfig(
       if (instIds.length > 0) {
         await txAny.microsoftTeamsInstallation.updateMany({ where: { id: { in: instIds } }, data: { enabled: false } });
       }
-      await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false } });
+      await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false, interactiveEnabled: false } });
       await revokeMicrosoftTeamsOperations(tx, {
         reason: 'Microsoft Teams credential identity changed',
       });
@@ -137,6 +143,7 @@ export async function saveMicrosoftTeamsConfig(
       tenantId: tenantId ? `${tenantId.slice(0, 8)}...` : null,
       clientId: effectiveClientId.slice(0, 8) + '...',
       enabled,
+      interactiveEnabled,
       clientIdChanged,
       tenantChanged,
     },

@@ -9,9 +9,8 @@
  */
 import 'server-only';
 
-import type { ChatOpsCommandInput, ChatOpsCommand, ChatOpsActor } from '@/lib/chatops/types';
+import { chatOpsSourceLabel, type ChatOpsCommandInput, type ChatOpsActor } from '@/lib/chatops/types';
 import type { IdempotencyContext } from '@/lib/idempotency';
-import { chatOpsSourceLabel } from '@/lib/chatops/types';
 
 function providerEventMessage(provider: string, actorName: string, verb: string, extra?: string): string {
   const src = chatOpsSourceLabel(provider as never);
@@ -32,6 +31,10 @@ export async function executeChatOpsCommand(input: ChatOpsCommandInput): Promise
       return executeAssign(provider, actor, command.incidentId, command.targetUserId, idempotency);
     case 'NOTE':
       return executeNote(provider, actor, command.incidentId, command.content, idempotency);
+    case 'SET_PRIORITY':
+      return executePriority(provider, actor, command.incidentId, command.priority, idempotency);
+    case 'JOIN_RESPONDER':
+      return executeJoinResponder(provider, actor, command.incidentId, idempotency);
     case 'ESCALATE':
       return executeEscalate(provider, actor, command.incidentId);
     case 'POSTMORTEM':
@@ -129,11 +132,17 @@ async function executeNote(
 async function executeEscalate(provider: string, actor: ChatOpsActor, incidentId: string) {
   const { requestIncidentEscalation } = await import('@/lib/escalation/authorization');
   const source = provider === 'MICROSOFT_TEAMS' ? 'MICROSOFT_TEAMS' as const : 'SLACK' as const;
-  // `requestIncidentEscalation` only supports WEB|MOBILE|REST_API|SLACK today; map Teams to SLACK for lane semantics
-  // and keep the audit metadata provider-correct via the ChatOps caller. Use SLACK lane for now.
-  const mappedSource = provider === 'MICROSOFT_TEAMS' ? 'SLACK' : source;
-  void mappedSource;
-  return requestIncidentEscalation({ incidentId, actor: { userId: actor.id, name: actor.name }, source: 'SLACK' });
+  return requestIncidentEscalation({ incidentId, actor: { userId: actor.id, name: actor.name }, source });
+}
+
+async function executePriority(provider: string, actor: ChatOpsActor, incidentId: string, priority: string, idempotency: IdempotencyContext | undefined) {
+  const { executeChatOpsPriority } = await import('@/lib/incidents/chatops-lifecycle');
+  return executeChatOpsPriority({ incidentId, actor, priority, provider: provider as 'SLACK' | 'MICROSOFT_TEAMS', ...(idempotency ? { idempotency } : {}) });
+}
+
+async function executeJoinResponder(provider: string, actor: ChatOpsActor, incidentId: string, idempotency: IdempotencyContext | undefined) {
+  const { executeChatOpsJoinResponder } = await import('@/lib/incidents/chatops-lifecycle');
+  return executeChatOpsJoinResponder({ incidentId, actor, provider: provider as 'SLACK' | 'MICROSOFT_TEAMS', ...(idempotency ? { idempotency } : {}) });
 }
 
 async function executePostmortem(

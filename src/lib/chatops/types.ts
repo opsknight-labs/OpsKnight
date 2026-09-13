@@ -28,6 +28,8 @@ export type ChatOpsCommand =
   | { kind: 'UNSNOOZE'; incidentId: string }
   | { kind: 'ASSIGN'; incidentId: string; targetUserId: string }
   | { kind: 'NOTE'; incidentId: string; content: string }
+  | { kind: 'SET_PRIORITY'; incidentId: string; priority: string }
+  | { kind: 'JOIN_RESPONDER'; incidentId: string }
   | { kind: 'ESCALATE'; incidentId: string }
   | { kind: 'POSTMORTEM'; incidentId: string; channelName: string }
   | { kind: 'READ'; incidentId: string };
@@ -68,5 +70,5 @@ export const CHATOPS_PROVIDER_LABEL: Record<ChatProvider, string> = {
 } as const;
 
 export function chatOpsSourceLabel(provider: ChatProvider): string {
-  return CHATOPS_PROVIDER_LABEL[provider] ?? provider;
+  return provider === 'SLACK' ? CHATOPS_PROVIDER_LABEL.SLACK : CHATOPS_PROVIDER_LABEL.MICROSOFT_TEAMS;
 }

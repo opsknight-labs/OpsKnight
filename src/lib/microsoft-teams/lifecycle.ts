@@ -89,9 +89,9 @@ export async function disconnectMicrosoftTeamsIntegration(actorId: string): Prom
       where: { serviceNotificationChannels: { has: 'MICROSOFT_TEAMS' } },
       select: { id: true, serviceNotificationChannels: true },
     });
-    await tx.microsoftTeamsConfig.updateMany({ data: { enabled: false } });
+    await tx.microsoftTeamsConfig.updateMany({ data: { enabled: false, interactiveEnabled: false } });
     await tx.microsoftTeamsInstallation.updateMany({ data: { enabled: false } });
-    await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false } });
+    await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false, interactiveEnabled: false } });
 
     for (const service of routedServices) {
       await tx.service.update({

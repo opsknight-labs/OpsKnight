@@ -18,6 +18,7 @@
 export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
   'ChannelSettings.Read.Group', // List teams / channels for destination picker (Graph)
 ] as const;
+export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.1.0';
 
 export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',
@@ -90,7 +91,7 @@ export function buildMicrosoftTeamsAppManifest({
   const manifest: MicrosoftTeamsAppManifest = {
     $schema: 'https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json',
     manifestVersion: '1.16',
-    version: '1.0.0',
+    version: MICROSOFT_TEAMS_MANIFEST_VERSION,
     id: manifestId,
     packageName: 'com.opsknight.teams',
     developer: {

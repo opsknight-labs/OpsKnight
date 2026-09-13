@@ -5,9 +5,17 @@ on:
     branches: [main]
     paths:
       - 'src/lib/microsoft-teams/**'
+      - 'src/lib/chatops/**'
+      - 'src/lib/incidents/chatops-lifecycle.ts'
+      - 'src/lib/escalation/authorization.ts'
+      - 'src/lib/service-notifications.ts'
       - 'src/app/api/microsoft-teams/**'
+      - 'src/app/api/settings/chatops/**'
       - 'src/app/(app)/settings/integrations/microsoft-teams/**'
+      - 'src/app/(app)/settings/chatops/**'
+      - 'src/app/(app)/settings/profile/**'
       - 'src/components/settings/microsoft-teams/**'
+      - 'src/components/settings/ConnectedChatOpsAccounts.tsx'
       - 'prisma/schema.prisma'
       - 'prisma/migrations/**teams**/**'
       - 'tests/**/*microsoft-teams*'
@@ -16,9 +24,17 @@ on:
     branches: [main]
     paths:
       - 'src/lib/microsoft-teams/**'
+      - 'src/lib/chatops/**'
+      - 'src/lib/incidents/chatops-lifecycle.ts'
+      - 'src/lib/escalation/authorization.ts'
+      - 'src/lib/service-notifications.ts'
       - 'src/app/api/microsoft-teams/**'
+      - 'src/app/api/settings/chatops/**'
       - 'src/app/(app)/settings/integrations/microsoft-teams/**'
+      - 'src/app/(app)/settings/chatops/**'
+      - 'src/app/(app)/settings/profile/**'
       - 'src/components/settings/microsoft-teams/**'
+      - 'src/components/settings/ConnectedChatOpsAccounts.tsx'
       - 'prisma/schema.prisma'
       - 'prisma/migrations/**teams**/**'
       - 'tests/**/*microsoft-teams*'
@@ -63,7 +79,11 @@ jobs:
         run: >-
           npx vitest run --no-file-parallelism
           tests/lib/microsoft-teams-app-manifest.test.ts
+          tests/lib/chatops-inline-intents.test.ts
           tests/lib/microsoft-teams-auth.test.ts
+          tests/lib/microsoft-teams-actions.test.ts
+          tests/lib/microsoft-teams-identity.test.ts
+          tests/lib/microsoft-teams-invoke.test.ts
           tests/lib/microsoft-teams-capabilities.test.ts
           tests/lib/microsoft-teams-cards.test.ts
           tests/lib/microsoft-teams-delivery.test.ts
@@ -71,3 +91,4 @@ jobs:
           tests/lib/microsoft-teams-lifecycle.test.ts
           tests/lib/microsoft-teams-service-url.test.ts
           tests/architecture/microsoft-teams-transport-contract.test.ts
+          tests/architecture/microsoft-teams-phase2-contract.test.ts

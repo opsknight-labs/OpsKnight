@@ -17,7 +17,7 @@ import { AUTHORIZATION_ACTIONS, authorize } from '../authorization-policy';
 import { executeEscalation } from './index';
 import type { EscalationExecutionResult } from './types';
 
-export type ManualEscalationSource = 'WEB' | 'MOBILE' | 'REST_API' | 'SLACK';
+export type ManualEscalationSource = 'WEB' | 'MOBILE' | 'REST_API' | 'SLACK' | 'MICROSOFT_TEAMS';
 
 export interface ManualEscalationActor {
   /** The OpsKnight user id, already resolved from the transport's identity. */
@@ -145,7 +145,7 @@ async function recordManualEscalationRequest(input: {
   await Promise.all([
     emitAuditEvent({
       action: 'incident.escalation.requested',
-      source: input.source === 'SLACK' ? 'INTEGRATION' : 'UI',
+      source: input.source === 'SLACK' || input.source === 'MICROSOFT_TEAMS' ? 'INTEGRATION' : 'UI',
       target: { type: 'INCIDENT', id: input.incidentId },
       actor: { type: 'USER', id: input.actor.userId, name: input.actor.name ?? null },
       metadata: { source: input.source },
