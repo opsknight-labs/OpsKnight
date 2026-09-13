@@ -2,13 +2,13 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
-import { assertCanModifyIncident } from '@/lib/rbac';
+import { assertCanViewIncident } from '@/lib/rbac';
 
 /** Provider-neutral incident collaboration projection for the War Room panel. */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await context.params;
-    await assertCanModifyIncident(id);
+    await assertCanViewIncident(id);
     const rooms = await prisma.incidentWarRoom.findMany({
       where: { incidentId: id }, orderBy: [{ provider: 'asc' }, { generation: 'desc' }],
       select: {
