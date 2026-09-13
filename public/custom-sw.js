@@ -1,84 +1,165 @@
-// Custom Service Worker for OpsKnight PWA
-// Handles push notifications and notification clicks
-
-// Import Workbox (provided by Next.js PWA)
-importScripts();
+// OpsKnight PWA service-worker extensions.
+// Loaded by the generated Workbox service worker via importScripts.
 
 const OFFLINE_DB = 'opsknight-offline';
 const OFFLINE_STORE = 'request-queue';
+const OFFLINE_DB_VERSION = 2;
+const PUSH_CONTRACT_VERSION = 1;
+
+const randomId = () => {
+  if (self.crypto && typeof self.crypto.randomUUID === 'function') return self.crypto.randomUUID();
+  return `sw_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+};
 
 const openOfflineDb = () =>
   new Promise((resolve, reject) => {
-    const request = indexedDB.open(OFFLINE_DB, 1);
+    const request = indexedDB.open(OFFLINE_DB, OFFLINE_DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(OFFLINE_STORE)) {
-        const store = db.createObjectStore(OFFLINE_STORE, { keyPath: 'id' });
+      const store = db.objectStoreNames.contains(OFFLINE_STORE)
+        ? request.transaction.objectStore(OFFLINE_STORE)
+        : db.createObjectStore(OFFLINE_STORE, { keyPath: 'id' });
+      if (!store.indexNames.contains('createdAt')) {
         store.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+      if (!store.indexNames.contains('state')) {
+        store.createIndex('state', 'state', { unique: false });
       }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 
+const requestResult = request =>
+  new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+
+const normalizeQueuedRequest = value => {
+  const now = Date.now();
+  const headers = value.headers || {};
+  const idempotencyKey =
+    value.idempotencyKey || headers['Idempotency-Key'] || headers['idempotency-key'] || value.id;
+  return {
+    id: value.id,
+    operation: value.operation || 'GENERIC',
+    url: value.url,
+    method: value.method,
+    headers: { ...headers, 'Idempotency-Key': idempotencyKey },
+    body: value.body || null,
+    createdAt: value.createdAt || now,
+    updatedAt: value.updatedAt || value.createdAt || now,
+    idempotencyKey,
+    state: value.state || 'PENDING',
+    retryCount: value.retryCount || 0,
+    lastAttemptAt: value.lastAttemptAt || null,
+    lastError: value.lastError || null,
+    expectedState: value.expectedState || null,
+    completedAt: value.completedAt || null,
+  };
+};
+
 const listQueuedRequests = async () => {
   const db = await openOfflineDb();
-  return new Promise((resolve, reject) => {
+  try {
     const tx = db.transaction(OFFLINE_STORE, 'readonly');
-    const store = tx.objectStore(OFFLINE_STORE);
-    const index = store.index('createdAt');
-    const items = [];
-    const cursor = index.openCursor();
-    cursor.onsuccess = () => {
-      const current = cursor.result;
-      if (current) {
-        items.push(current.value);
-        current.continue();
-      }
-    };
-    tx.oncomplete = () => resolve(items);
-    tx.onerror = () => reject(tx.error);
-  });
+    const values = await requestResult(tx.objectStore(OFFLINE_STORE).getAll());
+    return values.map(normalizeQueuedRequest).sort((a, b) => a.createdAt - b.createdAt);
+  } finally {
+    db.close();
+  }
 };
 
-const removeQueuedRequest = async id => {
+const putQueuedRequest = async item => {
   const db = await openOfflineDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(OFFLINE_STORE, 'readwrite');
-    const store = tx.objectStore(OFFLINE_STORE);
-    store.delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_STORE).put(item);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
 };
 
-const isRetryableStatus = status => {
-  if (status >= 500) return true;
-  if (status === 408 || status === 429) return true;
-  return false;
+const broadcast = async (type, payload = {}) => {
+  const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of windows) client.postMessage({ type, ...payload });
+};
+
+const responseError = async response => {
+  try {
+    const payload = await response.clone().json();
+    if (payload && typeof payload.error === 'string') return payload.error;
+  } catch {}
+  return `HTTP ${response.status}`;
+};
+
+const terminalStateForStatus = status => {
+  if (status === 401 || status === 403) return 'AUTH_REQUIRED';
+  if (status === 409) return 'CONFLICT';
+  if (status >= 400 && status < 500 && status !== 408 && status !== 429) return 'FAILED';
+  return null;
+};
+
+const updateQueueState = async (item, patch) => {
+  const next = { ...item, ...patch, updatedAt: Date.now() };
+  await putQueuedRequest(next);
+  await broadcast('OFFLINE_QUEUE_CHANGED', { id: item.id, state: next.state });
+  return next;
 };
 
 const flushQueuedRequests = async () => {
   try {
-    const queue = await listQueuedRequests();
-    for (const item of queue) {
+    const queue = (await listQueuedRequests()).filter(item => item.state === 'PENDING');
+    for (const original of queue) {
+      const sending = await updateQueueState(original, {
+        state: 'SENDING',
+        retryCount: original.retryCount + 1,
+        lastAttemptAt: Date.now(),
+        lastError: null,
+      });
+
       try {
-        const response = await fetch(item.url, {
-          method: item.method,
-          headers: item.headers,
-          body: item.body || undefined,
+        const response = await fetch(sending.url, {
+          method: sending.method,
+          headers: sending.headers,
+          body: sending.body || undefined,
           credentials: 'include',
         });
+
         if (response.ok) {
-          await removeQueuedRequest(item.id);
+          await updateQueueState(sending, {
+            state: 'SUCCEEDED',
+            completedAt: Date.now(),
+            lastError: null,
+          });
           continue;
         }
-        if (!isRetryableStatus(response.status)) {
-          await removeQueuedRequest(item.id);
-          continue;
+
+        const error = await responseError(response);
+        const terminal = terminalStateForStatus(response.status);
+        if (terminal) {
+          await updateQueueState(sending, {
+            state: terminal,
+            completedAt: terminal === 'FAILED' ? Date.now() : null,
+            lastError: error,
+          });
+          // Preserve FIFO semantics; later state transitions may depend on this one.
+          break;
         }
+
+        await updateQueueState(sending, { state: 'PENDING', lastError: error });
         break;
-      } catch {
+      } catch (error) {
+        await updateQueueState(sending, {
+          state: 'PENDING',
+          lastError: error instanceof Error ? error.message : 'Network unavailable',
+        });
         break;
       }
     }
@@ -87,139 +168,215 @@ const flushQueuedRequests = async () => {
   }
 };
 
-// Listen for push events
-self.addEventListener('push', function (event) {
-  console.log('[Service Worker] Push received', event);
-
-  let data = {
-    title: 'OpsKnight',
-    body: 'New notification',
-    icon: '/icons/app-icon-192.png',
-    badge: '/icons/app-icon-192.png',
-    url: '/m/notifications',
-    actions: undefined,
-  };
-
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch (e) {
-      console.error('[Service Worker] Failed to parse push data', e);
-    }
+const safeAppPath = (candidate, fallback = '/m/notifications') => {
+  try {
+    const parsed = new URL(candidate || fallback, self.location.origin);
+    if (parsed.origin !== self.location.origin) return fallback;
+    if (!['http:', 'https:'].includes(parsed.protocol)) return fallback;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return fallback;
   }
+};
 
-  let resolvedActions;
-  const rawActions = data.actions || data.data?.actions;
-  if (rawActions) {
-    if (Array.isArray(rawActions)) {
-      resolvedActions = rawActions;
-    } else if (typeof rawActions === 'string') {
-      try {
-        const parsedActions = JSON.parse(rawActions);
-        if (Array.isArray(parsedActions)) {
-          resolvedActions = parsedActions;
-        }
-      } catch {
-        resolvedActions = undefined;
-      }
-    }
+const parseActions = raw => {
+  if (Array.isArray(raw)) return raw.slice(0, 2);
+  if (typeof raw !== 'string') return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.slice(0, 2) : undefined;
+  } catch {
+    return undefined;
   }
+};
 
-  const options = {
-    body: data.body,
+const normalizePushPayload = raw => {
+  const data = raw && typeof raw === 'object' ? raw : {};
+  const nested = data.data && typeof data.data === 'object' ? data.data : {};
+  const incidentId = data.incidentId || nested.incidentId || null;
+  const version = Number(data.version || nested.version || PUSH_CONTRACT_VERSION);
+  const fallbackUrl = incidentId ? `/incidents/${encodeURIComponent(incidentId)}` : '/m/notifications';
+  return {
+    version: Number.isFinite(version) ? version : PUSH_CONTRACT_VERSION,
+    eventId: data.eventId || nested.eventId || null,
+    deliveryId: data.deliveryId || nested.deliveryId || null,
+    eventType: data.eventType || nested.eventType || null,
+    incidentId,
+    status: data.status || nested.status || null,
+    urgency: data.urgency || nested.urgency || null,
+    title: typeof data.title === 'string' ? data.title : 'OpsKnight',
+    body: typeof data.body === 'string' ? data.body : 'New notification',
     icon: data.icon || '/icons/app-icon-192.png',
-    badge: data.badge || '/icons/app-icon-192.png',
-    data: {
-      url: data.url || data.data?.url || '/m/notifications',
-      ...data.data,
-    },
+    badge: data.badge || nested.badge || '/icons/app-icon-192.png',
+    url: safeAppPath(data.url || nested.url, fallbackUrl),
+    actions: parseActions(data.actions || nested.actions),
     tag:
       data.tag ||
-      data.data?.tag ||
-      (data.data?.incidentId
-        ? `incident-${data.data.incidentId}`
-        : 'opsknight-notification-' + Date.now()),
-    requireInteraction: true, // Keep notification visible on mobile
-    vibrate: [200, 100, 200], // Vibration pattern
+      nested.tag ||
+      (incidentId ? `incident-${incidentId}` : `opsknight-notification-${Date.now()}`),
   };
+};
 
-  if (resolvedActions && resolvedActions.length > 0) {
-    options.actions = resolvedActions;
+const focusOrOpen = async path => {
+  const safePath = safeAppPath(path, '/m');
+  const windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (const client of windowClients) {
+    if (!client.url.startsWith(self.location.origin)) continue;
+    if ('focus' in client) await client.focus();
+    if ('navigate' in client) return client.navigate(safePath);
+    return client;
   }
+  if (clients.openWindow) return clients.openWindow(safePath);
+  return undefined;
+};
 
-  event.waitUntil(self.registration.showNotification(data.title, options));
+const showFeedback = (title, body, incidentId, suffix) =>
+  self.registration.showNotification(title, {
+    body,
+    icon: '/icons/app-icon-192.png',
+    badge: '/icons/app-icon-192.png',
+    tag: `incident-${incidentId}-${suffix}`,
+    requireInteraction: false,
+    data: { incidentId, url: `/incidents/${encodeURIComponent(incidentId)}` },
+  });
+
+const queueAcknowledgement = async ({ incidentId, expectedStatus, idempotencyKey }) => {
+  const id = randomId();
+  const now = Date.now();
+  const url = new URL(`/api/incidents/${encodeURIComponent(incidentId)}/status`, self.location.origin).toString();
+  await putQueuedRequest({
+    id,
+    operation: 'INCIDENT_STATUS',
+    url,
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({
+      status: 'ACKNOWLEDGED',
+      ...(expectedStatus ? { expectedStatus } : {}),
+    }),
+    createdAt: now,
+    updatedAt: now,
+    idempotencyKey,
+    state: 'PENDING',
+    retryCount: 0,
+    lastAttemptAt: null,
+    lastError: 'Waiting for network',
+    expectedState: expectedStatus || null,
+    completedAt: null,
+  });
+  await broadcast('OFFLINE_QUEUE_CHANGED', { id, state: 'PENDING' });
+};
+
+const handleAcknowledgeAction = async notification => {
+  const data = notification.data || {};
+  const incidentId = data.incidentId;
+  if (!incidentId) return focusOrOpen(data.url || '/m/notifications');
+
+  const incidentPath = `/incidents/${encodeURIComponent(incidentId)}`;
+  const expectedStatus = data.status === 'OPEN' ? 'OPEN' : undefined;
+  const stableSeed = data.deliveryId || data.eventId || notification.tag || randomId();
+  const idempotencyKey = `push-ack:${incidentId}:${String(stableSeed).slice(0, 120)}`;
+
+  try {
+    const response = await fetch(`/api/incidents/${encodeURIComponent(incidentId)}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        status: 'ACKNOWLEDGED',
+        ...(expectedStatus ? { expectedStatus } : {}),
+      }),
+      credentials: 'include',
+    });
+
+    if (response.ok) {
+      await showFeedback('Incident acknowledged', `Incident #${incidentId} is acknowledged.`, incidentId, 'ack');
+      return;
+    }
+
+    if (response.status === 401) {
+      await showFeedback('Sign in required', 'Open OpsKnight to authenticate before acknowledging.', incidentId, 'auth');
+      return focusOrOpen(`/login?callbackUrl=${encodeURIComponent(incidentPath)}`);
+    }
+    if (response.status === 403) {
+      await showFeedback('Acknowledgement not authorized', 'Your account cannot acknowledge this incident.', incidentId, 'forbidden');
+      return focusOrOpen(incidentPath);
+    }
+    if (response.status === 409) {
+      await showFeedback('Incident changed', 'Another responder changed this incident. Open it for the latest state.', incidentId, 'conflict');
+      return focusOrOpen(incidentPath);
+    }
+    if (response.status === 429 || response.status >= 500) {
+      await showFeedback('Acknowledgement not confirmed', 'OpsKnight could not confirm the action. Open the incident and retry.', incidentId, 'retry');
+      return focusOrOpen(incidentPath);
+    }
+
+    await showFeedback('Acknowledgement failed', 'The incident was not acknowledged. Open it for details.', incidentId, 'failed');
+    return focusOrOpen(incidentPath);
+  } catch {
+    try {
+      await queueAcknowledgement({ incidentId, expectedStatus, idempotencyKey });
+      await showFeedback('Acknowledgement queued', 'Offline: the action is queued and is not confirmed yet.', incidentId, 'queued');
+    } catch {
+      await showFeedback('Acknowledgement not saved', 'Offline storage was unavailable. Open OpsKnight and retry.', incidentId, 'queue-failed');
+    }
+  }
+};
+
+self.addEventListener('push', event => {
+  let raw = {};
+  if (event.data) {
+    try {
+      raw = event.data.json();
+    } catch {
+      raw = {};
+    }
+  }
+  const payload = normalizePushPayload(raw);
+  const options = {
+    body: payload.body,
+    icon: payload.icon,
+    badge: payload.badge,
+    data: {
+      version: payload.version,
+      eventId: payload.eventId,
+      deliveryId: payload.deliveryId,
+      eventType: payload.eventType,
+      incidentId: payload.incidentId,
+      status: payload.status,
+      urgency: payload.urgency,
+      url: payload.url,
+    },
+    tag: payload.tag,
+    requireInteraction: payload.urgency === 'HIGH',
+    vibrate: payload.urgency === 'HIGH' ? [200, 100, 200] : [120],
+  };
+  if (payload.actions && payload.actions.length > 0) options.actions = payload.actions;
+  event.waitUntil(self.registration.showNotification(payload.title, options));
 });
 
-// Listen for notification clicks
-self.addEventListener('notificationclick', function (event) {
-  console.log('[Service Worker] Notification clicked', event);
-
+self.addEventListener('notificationclick', event => {
   event.notification.close();
-
-  const incidentId = event.notification.data?.incidentId;
-  const urlToOpen =
-    event.notification.data?.url ||
-    (incidentId ? `/m/incidents/${incidentId}` : '/m/notifications');
-
-  if (event.action === 'acknowledge' && incidentId) {
-    event.waitUntil(
-      fetch(`/api/mobile/incidents/${incidentId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': `push-ack-${incidentId}-${event.notification.tag || 'notification'}`,
-        },
-        body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
-        credentials: 'include',
-      })
-        .then(() => {
-          return self.registration.showNotification('Incident Acknowledged', {
-            body: `Incident #${incidentId} acknowledged.`,
-            icon: '/icons/app-icon-192.png',
-            tag: `incident-${incidentId}`,
-            requireInteraction: false,
-          });
-        })
-        .catch(err => {
-          console.error('Failed to acknowledge from notification', err);
-        })
-    );
+  if (event.action === 'acknowledge') {
+    event.waitUntil(handleAcknowledgeAction(event.notification));
     return;
   }
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
-      // Check if there's already a window open
-      for (let i = 0; i < clientList.length; i++) {
-        const client = clientList[i];
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus().then(() => {
-            // Navigate to the notification URL
-            return client.navigate(urlToOpen);
-          });
-        }
-      }
-      // If no window is open, open a new one
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
-      }
-    })
-  );
+  event.waitUntil(focusOrOpen(event.notification.data?.url || '/m/notifications'));
 });
 
-// Optional: Handle service worker installation
-self.addEventListener('install', function (event) {
-  console.log('[Service Worker] Installing');
-  self.skipWaiting(); // Activate immediately
-});
+// Do not force activation during an in-progress responder workflow. The app UI
+// explicitly sends SKIP_WAITING when the user accepts an available update.
+self.addEventListener('install', () => {});
 
-// Handle service worker activation
-self.addEventListener('activate', function (event) {
-  console.log('[Service Worker] Activating');
+self.addEventListener('activate', event => {
   event.waitUntil(
     (async () => {
-      // Clean up legacy or poisoned runtime caches from previous versions
-      const DYNAMIC_CACHES_TO_PURGE = [
+      const dynamicCachePatterns = [
         'pages',
         'pages-rsc',
         'pages-rsc-prefetch',
@@ -227,53 +384,53 @@ self.addEventListener('activate', function (event) {
         'apis',
         'static-data-assets',
         'cross-origin',
-        'no-cache-pages',
-        'no-cache-rsc',
       ];
       try {
         const cacheNames = await caches.keys();
         await Promise.all(
-          cacheNames.map(name => {
-            if (DYNAMIC_CACHES_TO_PURGE.some(pattern => name.includes(pattern))) {
-              console.log('[Service Worker] Deleting legacy cache:', name);
-              return caches.delete(name);
-            }
-            return Promise.resolve(false);
-          })
+          cacheNames.map(name =>
+            dynamicCachePatterns.some(pattern => name.includes(pattern))
+              ? caches.delete(name)
+              : Promise.resolve(false)
+          )
         );
-      } catch (err) {
-        console.warn('[Service Worker] Failed to purge legacy caches', err);
+      } catch (error) {
+        console.warn('[Service Worker] Failed to purge legacy dynamic caches', error);
       }
-      return self.clients.claim();
+      await self.clients.claim();
+      await broadcast('PWA_SERVICE_WORKER_ACTIVATED');
     })()
   );
 });
 
-self.addEventListener('sync', function (event) {
-  if (event.tag === 'opsknight-sync') {
-    event.waitUntil(flushQueuedRequests());
-  }
+self.addEventListener('sync', event => {
+  if (event.tag === 'opsknight-sync') event.waitUntil(flushQueuedRequests());
 });
 
-self.addEventListener('message', function (event) {
-  if (event.data && event.data.type === 'SYNC_OFFLINE_QUEUE') {
+self.addEventListener('message', event => {
+  if (!event.data) return;
+  if (event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+    return;
+  }
+  if (event.data.type === 'SYNC_OFFLINE_QUEUE') {
     event.waitUntil(flushQueuedRequests());
-  } else if (event.data && event.data.type === 'PURGE_AUTH_CACHES') {
+    return;
+  }
+  if (event.data.type === 'PURGE_AUTH_CACHES') {
     event.waitUntil(
       (async () => {
         try {
           const names = await caches.keys();
           await Promise.all(
             names
-              .filter(n => n.includes('page') || n.includes('start-url') || n.includes('api') || n.includes('rsc'))
-              .map(n => caches.delete(n))
+              .filter(name => /page|start-url|api|rsc/i.test(name))
+              .map(name => caches.delete(name))
           );
-        } catch (err) {
-          console.warn('[Service Worker] Failed to purge auth caches on message', err);
+        } catch (error) {
+          console.warn('[Service Worker] Failed to purge auth caches', error);
         }
       })()
     );
   }
 });
-
-console.log('[Service Worker] Custom SW loaded with push handlers');
