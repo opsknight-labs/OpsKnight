@@ -26,7 +26,7 @@ import AppHeader from '@/components/layout/AppHeader';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { IncidentAlertProvider } from '@/contexts/IncidentAlertContext';
 import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
-import { getAppShellContext } from '@/lib/app-shell-context';
+import { getAppShellContext, type AppShellContext } from '@/lib/app-shell-context';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 
 const isNextRedirectError = (error: unknown) => {
@@ -64,7 +64,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/login?error=SessionExpired');
   }
 
-  let shell: Awaited<ReturnType<typeof getAppShellContext>> = null;
+  let shell: AppShellContext | null = null;
   let shellError: unknown = null;
   try {
     shell = await getAppShellContext(requestContext);
@@ -80,6 +80,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     return <DatabaseOffline errorMessage={shellError instanceof Error ? shellError.message : String(shellError)} />;
   }
   if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
+  const activeShell: AppShellContext = shell;
 
   try {
     const { headers } = await import('next/headers');
@@ -90,16 +91,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       headerList.get('x-real-ip') ||
       '127.0.0.1';
     const { recordSessionHeartbeat } = await import('@/lib/active-sessions');
-    void recordSessionHeartbeat({ userId: shell.user.id, userAgent, ip }).catch(() => {});
+    void recordSessionHeartbeat({ userId: activeShell.user.id, userAgent, ip }).catch(() => {});
   } catch {}
 
-  const userName = shell.user.name || requestContext.session.user.name || null;
-  const userEmail = shell.user.email;
-  const userRole = shell.user.role;
-  const userAvatar = shell.user.avatarUrl;
-  const userGender = shell.user.gender;
-  const userId = shell.user.id;
-  const userTimeZone = shell.user.timeZone || 'UTC';
+  const userName = activeShell.user.name || requestContext.session.user.name || null;
+  const userEmail = activeShell.user.email;
+  const userRole = activeShell.user.role;
+  const userAvatar = activeShell.user.avatarUrl;
+  const userGender = activeShell.user.gender;
+  const userId = activeShell.user.id;
+  const userTimeZone = activeShell.user.timeZone || 'UTC';
   const canCreate = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
 
   return (
@@ -125,12 +126,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                         <SidebarTrigger />
                         <div className="hidden sm:block">
                           <OperationalStatus
-                            tone={shell.systemStatus}
-                            label={shell.statusLabel}
-                            detail={shell.statusDetail}
-                            criticalCount={shell.incidentCounts.high}
-                            mediumCount={shell.incidentCounts.medium}
-                            lowCount={shell.incidentCounts.low}
+                            tone={activeShell.systemStatus}
+                            label={activeShell.statusLabel}
+                            detail={activeShell.statusDetail}
+                            criticalCount={activeShell.incidentCounts.high}
+                            mediumCount={activeShell.incidentCounts.medium}
+                            lowCount={activeShell.incidentCounts.low}
                           />
                         </div>
                         <div className="hidden xl:block"><TopbarBreadcrumbs /></div>
@@ -159,7 +160,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                         userAvatar={userAvatar}
                         userGender={userGender}
                         userId={userId}
-                        initialActiveCount={shell.incidentCounts.active}
+                        initialActiveCount={activeShell.incidentCounts.active}
                       />
                       <div className="content-shell flex-1">
                         <GlobalIncidentBanner />
