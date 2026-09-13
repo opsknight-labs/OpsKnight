@@ -17,6 +17,7 @@ import {
 } from './email-components';
 import type { EmailConfig } from './notification-providers';
 import { decodeNotificationEnvelope } from './notification-payload';
+import { announcementEmailDeliveryRevoked } from './status-pages/announcement-delivery-eligibility';
 
 export type EmailOptions = {
   to: string;
@@ -28,6 +29,7 @@ export type EmailOptions = {
 
 export type EmailDeliveryResult = {
   success: boolean;
+  skipped?: boolean;
   providerMessageId?: string;
   error?: string;
   statusCode?: number;
@@ -310,6 +312,15 @@ export async function sendEmail(
   providedConfig?: unknown
 ): Promise<EmailDeliveryResult> {
   try {
+    const revokedReason = await announcementEmailDeliveryRevoked(options.idempotencyKey);
+    if (revokedReason) {
+      logger.info('status_page.announcement_delivery_suppressed', {
+        notificationId: options.idempotencyKey,
+        reason: revokedReason,
+      });
+      return { success: true, skipped: true, error: revokedReason };
+    }
+
     const configsToTry: EmailConfig[] = providedConfig
       ? [providedConfig as EmailConfig]
       : await import('./notification-providers').then(module =>
