@@ -122,8 +122,9 @@ export default function MobilePwaCoordinator() {
   const pending = (queue.PENDING ?? 0) + (queue.SENDING ?? 0);
   const conflicts = queue.CONFLICT ?? 0;
   const authRequired = queue.AUTH_REQUIRED ?? 0;
+  const forbidden = queue.FORBIDDEN ?? 0;
   const failed = queue.FAILED ?? 0;
-  const hasQueueNotice = pending + conflicts + authRequired + failed > 0;
+  const hasQueueNotice = pending + conflicts + authRequired + forbidden + failed > 0;
 
   const applyUpdate = () => {
     const worker = waitingWorker;
@@ -155,9 +156,11 @@ export default function MobilePwaCoordinator() {
                 ? `${authRequired} action${authRequired === 1 ? '' : 's'} need sign-in before syncing.`
                 : conflicts > 0
                   ? `${conflicts} action${conflicts === 1 ? '' : 's'} conflict with newer incident state.`
-                  : failed > 0
-                    ? `${failed} queued action${failed === 1 ? '' : 's'} failed and need attention.`
-                    : `${pending} action${pending === 1 ? '' : 's'} queued and not yet confirmed.`}
+                  : forbidden > 0
+                    ? `${forbidden} action${forbidden === 1 ? '' : 's'} were not authorized and will not retry after sign-in.`
+                    : failed > 0
+                      ? `${failed} queued action${failed === 1 ? '' : 's'} failed and need attention.`
+                      : `${pending} action${pending === 1 ? '' : 's'} queued and not yet confirmed.`}
             </span>
           </div>
           {pending > 0 && typeof navigator !== 'undefined' && navigator.onLine && (
