@@ -6,10 +6,18 @@ const read = (path: string) => readFileSync(path, 'utf8');
 describe('status page preview/live parity contract', () => {
   it('renders the same component on both surfaces', () => {
     const live = read('src/components/status-page/StatusPageSnapshotView.tsx');
-    const preview = read('src/components/status-page/StatusPageLivePreview.tsx');
+    const preview = read('src/components/status-page/StatusPageLivePreviewBase.tsx');
 
     expect(live).toContain('StatusPageV3');
     expect(preview).toContain('StatusPageV3');
+  });
+
+  it('normalizes legacy custom CSS through the same compatibility resolver', () => {
+    const live = read('src/components/status-page/StatusPageSnapshotView.tsx');
+    const preview = read('src/components/status-page/StatusPageLivePreview.tsx');
+
+    expect(live).toContain('resolveStatusPageCustomCss');
+    expect(preview).toContain('resolveStatusPageCustomCss');
   });
 
   it('keeps a single services renderer', () => {
@@ -31,7 +39,7 @@ describe('status page preview/live parity contract', () => {
 
   it('applies custom CSS after the shared stylesheet on both surfaces', () => {
     const live = read('src/components/status-page/StatusPageSnapshotView.tsx');
-    const preview = read('src/components/status-page/StatusPageLivePreview.tsx');
+    const preview = read('src/components/status-page/StatusPageLivePreviewBase.tsx');
     const portal = preview.slice(preview.indexOf('data-status-page-preview-baseline'));
 
     expect(live).toContain('toSafeStyleTagContent');
