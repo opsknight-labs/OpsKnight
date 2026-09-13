@@ -102,6 +102,10 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
     return;
   }
   const adopted = await runSerializableTransaction(tx => markWarRoomReady(tx, { warRoomId: room.id, provisioningToken: room.provisioningToken!, tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: created.value.id, channelName: created.value.displayName, channelUrl: created.value.webUrl }));
+  if (adopted) {
+    const { projectMicrosoftTeamsWarRoomParticipants } = await import('./participants');
+    await projectMicrosoftTeamsWarRoomParticipants(room.id);
+  }
   if (!adopted) await prisma.incidentWarRoom.updateMany({ where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'AMBIGUOUS', lastErrorCode: 'DATABASE_COMMIT_FAILED', lastError: 'Channel may have been created; reconcile by marker before retrying.' } });
 }
 
