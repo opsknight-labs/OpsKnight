@@ -117,6 +117,10 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.stepIndex;
     case 'task':
       return values.task;
+    case 'warRoomId':
+      return values.warRoomId;
+    case 'provisioningToken':
+      return values.provisioningToken;
     default:
       return undefined;
   }
@@ -374,10 +378,10 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return true;
       }
       case 'WAR_ROOM_PROVISION': {
-        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
-          throw new Error('War-room provision job is missing warRoomId');
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string' || typeof payloadValue(job.payload, 'provisioningToken') !== 'string')
+          throw new Error('War-room provision job is missing warRoomId or provisioningToken');
         const { provisionMicrosoftTeamsWarRoom } = await import('../war-room/microsoft-teams');
-        await provisionMicrosoftTeamsWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
+        await provisionMicrosoftTeamsWarRoom(requiredPayloadString(job.payload, 'warRoomId'), requiredPayloadString(job.payload, 'provisioningToken'));
         await markJobCompleted(job.id);
         return true;
       }

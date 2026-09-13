@@ -4,6 +4,7 @@ import * as queue from '../jobs/queue';
 import { sendNotification as mockedSendNotification } from '@/lib/notifications';
 import { processEventSideEffect as mockedProcessEventSideEffect } from '@/lib/event-side-effects';
 import { processAutoUnsnoozeIncidentInternal } from '@/lib/unsnooze';
+import { provisionMicrosoftTeamsWarRoom } from '@/lib/war-room/microsoft-teams';
 import { Prisma } from '@prisma/client';
 
 type TestMock = ReturnType<typeof vi.fn>;
@@ -17,6 +18,7 @@ const prismaMock = prisma as unknown as {
 const sendNotificationMock = mockedSendNotification as unknown as TestMock;
 const processEventSideEffectMock = mockedProcessEventSideEffect as unknown as TestMock;
 const processAutoUnsnoozeIncidentMock = processAutoUnsnoozeIncidentInternal as unknown as TestMock;
+const provisionMicrosoftTeamsWarRoomMock = provisionMicrosoftTeamsWarRoom as unknown as TestMock;
 
 vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
@@ -27,6 +29,7 @@ vi.mock('@/lib/status-page-webhooks', () => ({ triggerWebhooksForService: vi.fn(
 vi.mock('@/lib/notifications', () => ({ sendNotification: vi.fn() }));
 vi.mock('@/lib/event-side-effects', () => ({ processEventSideEffect: vi.fn() }));
 vi.mock('@/lib/unsnooze', () => ({ processAutoUnsnoozeIncidentInternal: vi.fn() }));
+vi.mock('@/lib/war-room/microsoft-teams', () => ({ provisionMicrosoftTeamsWarRoom: vi.fn() }));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
@@ -78,6 +81,39 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
     expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'job-stale' }, data: expect.objectContaining({ status: 'CANCELLED' }),
     }));
+  });
+});
+
+describe('queue.processJob WAR_ROOM_PROVISION', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.backgroundJob.update.mockResolvedValue({});
+  });
+
+  it('passes the durable fencing token to the Teams provisioning worker', async () => {
+    const result = await queue.processJob({
+      id: 'job-war-room',
+      type: 'WAR_ROOM_PROVISION',
+      status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' },
+      attempts: 1,
+      maxAttempts: 6,
+    });
+    expect(result).toBe(true);
+    expect(provisionMicrosoftTeamsWarRoomMock).toHaveBeenCalledWith('room-1', 'lease-a');
+    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room' },
+      data: expect.objectContaining({ status: 'COMPLETED' }),
+    }));
+  });
+
+  it('rejects an unfenced provisioning job before it can call Graph', async () => {
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 1, maxAttempts: 6, type: 'WAR_ROOM_PROVISION' });
+    const result = await queue.processJob({
+      id: 'job-war-room-invalid', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING', payload: { warRoomId: 'room-1' }, attempts: 1, maxAttempts: 6,
+    });
+    expect(result).toBe(false);
+    expect(provisionMicrosoftTeamsWarRoomMock).not.toHaveBeenCalled();
   });
 });
 

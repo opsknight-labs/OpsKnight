@@ -11,7 +11,7 @@ export async function claimWarRoomProvisioning(tx: Prisma.TransactionClient, inp
   const now = input.now ?? new Date();
   const existing = await tx.incidentWarRoom.findFirst({ where: { incidentId: input.incidentId, provider: input.provider }, orderBy: { generation: 'desc' } });
   if (existing?.state === 'READY' || existing?.state === 'CLOSING' || existing?.state === 'CLOSED' || existing?.state === 'ARCHIVED') return { claimed: false as const, warRoom: existing };
-  if (existing?.state === 'PROVISIONING' && existing.provisioningStartedAt && existing.provisioningStartedAt.getTime() > now.getTime() - LEASE_MS) return { claimed: false as const, warRoom: existing };
+  if ((existing?.state === 'PROVISIONING' || existing?.state === 'AMBIGUOUS') && existing.provisioningStartedAt && existing.provisioningStartedAt.getTime() > now.getTime() - LEASE_MS) return { claimed: false as const, warRoom: existing };
   const token = crypto.randomUUID();
   if (existing) {
     const warRoom = await tx.incidentWarRoom.update({ where: { id: existing.id }, data: { state: 'PROVISIONING', provisioningToken: token, provisioningStartedAt: now, lastError: null, lastErrorCode: null } });

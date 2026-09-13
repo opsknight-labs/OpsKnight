@@ -40,16 +40,16 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
     const claimed = await claimWarRoomProvisioning(tx, { incidentId, provider: 'MICROSOFT_TEAMS' });
     if (claimed.claimed) {
       await tx.incidentWarRoom.update({ where: { id: claimed.warRoom.id }, data: { providerTenantId: destination.tenantId, providerContainerId: destination.teamId, membershipType: decision.membershipType } });
-      await tx.backgroundJob.create({ data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: claimed.warRoom.id } } });
+      await tx.backgroundJob.create({ data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: claimed.warRoom.id, provisioningToken: claimed.warRoom.provisioningToken } } });
     }
     return { accepted: true, warRoomId: claimed.warRoom.id, state: claimed.warRoom.state };
   });
 }
 
 /** Worker entry point. Every retry reconciles this same generation before POST. */
-export async function provisionMicrosoftTeamsWarRoom(warRoomId: string): Promise<void> {
+export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expectedProvisioningToken: string): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, include: { incident: { select: { id: true, title: true } } } });
-  if (!room || room.provider !== 'MICROSOFT_TEAMS' || !['PROVISIONING', 'AMBIGUOUS'].includes(room.state) || !room.provisioningToken || !room.providerTenantId || !room.providerContainerId || !room.membershipType) return;
+  if (!room || room.provisioningToken !== expectedProvisioningToken || room.provider !== 'MICROSOFT_TEAMS' || !['PROVISIONING', 'AMBIGUOUS'].includes(room.state) || !room.provisioningToken || !room.providerTenantId || !room.providerContainerId || !room.membershipType) return;
   const marker = warRoomMarker(room.incident.id, room.generation);
   const existing = await findWarRoomChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, marker });
   if (existing.ok && existing.value) {
@@ -63,6 +63,10 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string): Promise
     return;
   }
   if (room.membershipType !== 'STANDARD') return markFailed(room.id, 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED', 'Private Teams war rooms require an owner and initial members.');
+  // A superseding retry can rotate the lease while this worker was reading
+  // channels. Recheck immediately before the only non-idempotent side effect.
+  const current = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { provisioningToken: true, state: true } });
+  if (!current || current.provisioningToken !== expectedProvisioningToken || !['PROVISIONING', 'AMBIGUOUS'].includes(current.state)) return;
   const created = await createChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, displayName: warRoomChannelName(room.incident.id, room.generation, room.incident.title), description: marker, membershipType: 'STANDARD' });
   if (!created.ok) {
     if (created.code === 'AMBIGUOUS_CREATE') {
