@@ -1683,6 +1683,21 @@ model BackgroundJob {
   @@index([scheduledAt]) // For time-based queries
 }
 
+/// Provider-neutral ChatOps intent. Slack and Teams both persist an intent
+/// before acknowledging the provider, then a durable worker executes the
+/// provider-neutral domain command. `provider`/`responseMode` make the
+/// transport generic while `workspaceId`/`slackUserId` remain for Slack
+/// back-compat (Teams stores tenantId in workspaceId, AAD oid in providerUserId).
+enum ChatProvider {
+  SLACK
+  MICROSOFT_TEAMS
+}
+
+enum ChatOpsResponseMode {
+  INLINE
+  DEFERRED
+}
+
 /// A signed Slack request is first persisted, then executed by the durable
 /// worker. `EFFECT_COMPLETED` intentionally precedes response delivery: Slack
 /// may retry a response URL request, but that must never repeat a mutation.
@@ -1710,12 +1725,15 @@ enum WarRoomProvisioningStatus {
 
 model ChatOpsIntent {
   id                  String              @id @default(cuid())
+  provider            ChatProvider        @default(SLACK)
   kind                ChatOpsIntentKind
   deliveryHash        String
   workspaceId         String
   channelId           String?
   slackUserId         String?
   encryptedPayload    String
+  responseMode        ChatOpsResponseMode @default(DEFERRED)
+  payloadDigest       String?
   status              ChatOpsIntentStatus @default(PENDING)
   attempt             Int                 @default(0)
   leaseToken          String?
@@ -1727,9 +1745,10 @@ model ChatOpsIntent {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
-  @@unique([kind, deliveryHash])
+  @@unique([provider, kind, deliveryHash])
   @@index([status, leaseExpiresAt])
   @@index([workspaceId, channelId])
+  @@index([provider, status, leaseExpiresAt])
 }
 
 // Status Page Configuration
