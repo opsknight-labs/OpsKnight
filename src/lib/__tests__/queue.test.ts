@@ -5,7 +5,6 @@ import { sendNotification as mockedSendNotification } from '@/lib/notifications'
 import { processEventSideEffect as mockedProcessEventSideEffect } from '@/lib/event-side-effects';
 import { processAutoUnsnoozeIncidentInternal } from '@/lib/unsnooze';
 import { provisionMicrosoftTeamsWarRoom } from '@/lib/war-room/microsoft-teams';
-import { Prisma } from '@prisma/client';
 
 type TestMock = ReturnType<typeof vi.fn>;
 
