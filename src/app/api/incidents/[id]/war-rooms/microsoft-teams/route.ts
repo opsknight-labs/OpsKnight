@@ -8,7 +8,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   try {
     const { id } = await context.params;
     await assertCanModifyIncident(id);
-    const result = await requestMicrosoftTeamsWarRoom(id, true);
+    const result = await requestMicrosoftTeamsWarRoom(id, { manual: true, allowNewGeneration: true });
     if (!result.accepted) return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: `Microsoft Teams war room cannot be created: ${result.code}.` }));
     return jsonOk(result, 202);
   } catch (error) {

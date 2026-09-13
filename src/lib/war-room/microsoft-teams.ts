@@ -9,6 +9,7 @@ import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilitie
 import crypto from 'crypto';
 
 type RequestResult = { accepted: true; warRoomId: string; state: string } | { accepted: false; code: string };
+type WarRoomRequestIntent = { manual: boolean; allowNewGeneration: boolean };
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
 export class WarRoomRetryableError extends Error {
@@ -19,7 +20,7 @@ export class WarRoomRetryableError extends Error {
  * Durable request boundary. It deliberately makes no Microsoft request: callers
  * can retry it safely and a worker can provision the leased record afterwards.
  */
-export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: boolean): Promise<RequestResult> {
+export async function requestMicrosoftTeamsWarRoom(incidentId: string, intent: WarRoomRequestIntent): Promise<RequestResult> {
   return runSerializableTransaction(async tx => {
     const incident = await tx.incident.findUnique({ where: { id: incidentId }, include: { service: { select: { microsoftTeamsWarRoomAutoCreate: true } } } });
     if (!incident) return { accepted: false, code: 'INCIDENT_NOT_FOUND' };
@@ -33,14 +34,16 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
       service: { autoCreate: incident.service.microsoftTeamsWarRoomAutoCreate },
       destination: destination ? { enabled: destination.enabled, warRoomEnabled: destination.warRoomEnabled, autoCreate: destination.warRoomAutoCreate, membershipType: destination.warRoomMembershipType } : null,
       config: { enabled: Boolean(chatOpsConfig?.enabled), warRoomsEnabled: Boolean(config?.warRoomsEnabled), autoCreateOnUrgency: chatOpsConfig?.autoCreateOnUrgency ?? [], autoCreateOnPriority: chatOpsConfig?.autoCreateOnPriority ?? [], defaultMembershipType: config?.defaultWarRoomMembershipType ?? 'STANDARD' },
-      manual,
+      manual: intent.manual,
     });
     if (!decision.allowed || !destination || !destination.installationId) return { accepted: false, code: decision.allowed ? 'DESTINATION_UNAVAILABLE' : decision.code };
     // Private Teams channels need an explicit owner and initial membership.
     // Until that capability is implemented, fail closed rather than creating a
     // channel that may be inaccessible or have incorrect ownership.
     if (decision.membershipType === 'PRIVATE') return { accepted: false, code: 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED' };
-    const claimed = await claimWarRoomProvisioning(tx, { incidentId, provider: 'MICROSOFT_TEAMS', reopen: true });
+    // A new generation is a lifecycle decision, never an accidental outcome
+    // of replaying the original incident-trigger event after a room was closed.
+    const claimed = await claimWarRoomProvisioning(tx, { incidentId, provider: 'MICROSOFT_TEAMS', reopen: intent.allowNewGeneration });
     if (claimed.claimed) {
       await tx.incidentWarRoom.updateMany({ where: { id: claimed.warRoom.id, destinationId: null }, data: { destinationId: destination.id, installationId: destination.installationId, providerTenantId: destination.tenantId, providerContainerId: destination.teamId, membershipType: decision.membershipType } });
       await tx.backgroundJob.create({ data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: claimed.warRoom.id, provisioningToken: claimed.warRoom.provisioningToken } } });
@@ -68,6 +71,39 @@ export async function closeActiveMicrosoftTeamsWarRooms(incidentId: string): Pro
     data: { state: 'CLOSED', closedAt: new Date(), provisioningToken: null },
   });
   return result.count;
+}
+
+/**
+ * Resolve fences every unfinished generation before its worker can become
+ * READY. A post-attempt create remains AMBIGUOUS for marker reconciliation;
+ * a pre-attempt lease is safely failed and its queue job cancelled.
+ */
+export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(incidentId: string): Promise<void> {
+  await prisma.$transaction(async tx => {
+    const rooms = await tx.incidentWarRoom.findMany({
+      where: { incidentId, provider: 'MICROSOFT_TEAMS', state: { in: ['READY', 'PROVISIONING', 'AMBIGUOUS'] } },
+      select: { id: true, state: true, createAttemptedAt: true },
+    });
+    const ready = rooms.filter(room => room.state === 'READY').map(room => room.id);
+    const attempted = rooms.filter(room => room.state !== 'READY' && room.createAttemptedAt).map(room => room.id);
+    const safe = rooms.filter(room => room.state !== 'READY' && !room.createAttemptedAt).map(room => room.id);
+    const now = new Date();
+    if (ready.length > 0) await tx.incidentWarRoom.updateMany({ where: { id: { in: ready }, state: 'READY' }, data: { state: 'CLOSED', closedAt: now, provisioningToken: null } });
+    if (attempted.length > 0) await tx.incidentWarRoom.updateMany({
+      where: { id: { in: attempted }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+      data: { state: 'AMBIGUOUS', provisioningToken: null, lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE', lastError: 'Incident resolved while channel creation may have completed; reconcile by marker only.' },
+    });
+    if (safe.length > 0) await tx.incidentWarRoom.updateMany({
+      where: { id: { in: safe }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+      data: { state: 'FAILED', provisioningToken: null, lastErrorCode: 'INCIDENT_RESOLVED', lastError: 'Incident resolved before Teams channel creation began.' },
+    });
+    const roomIds = rooms.map(room => room.id);
+    if (roomIds.length === 0) return;
+    const jobs = await tx.backgroundJob.findMany({ where: { type: 'WAR_ROOM_PROVISION', status: { in: ['PENDING', 'PROCESSING'] } }, select: { id: true, payload: true } });
+    const roomSet = new Set(roomIds);
+    const jobIds = jobs.filter(job => roomSet.has((job.payload as Record<string, unknown> | null)?.warRoomId as string)).map(job => job.id);
+    if (jobIds.length > 0) await tx.backgroundJob.updateMany({ where: { id: { in: jobIds }, status: { in: ['PENDING', 'PROCESSING'] } }, data: { status: 'CANCELLED', completedAt: now, error: 'Incident resolved' } });
+  });
 }
 
 /** Worker entry point. Every retry reconciles this same generation before POST. */
@@ -153,8 +189,11 @@ async function markFailed(id: string, provisioningToken: string, code: string, m
   await prisma.incidentWarRoom.updateMany({ where: { id, provisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'FAILED', lastErrorCode: code, lastError: message.slice(0, 1000), provisioningToken: null } });
 }
 
-async function validateWarRoomProvisioningAuthority(room: { destinationId: string | null; installationId: string | null; providerTenantId: string | null; providerContainerId: string | null; incident: { status: string } }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
-  if (!['OPEN', 'ACKNOWLEDGED'].includes(room.incident.status)) return { allowed: false, code: 'INCIDENT_NOT_ACTIVE', message: 'Incident is no longer active.' };
+async function validateWarRoomProvisioningAuthority(room: { destinationId: string | null; installationId: string | null; providerTenantId: string | null; providerContainerId: string | null; incident: { id: string; status: string } }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
+  // The worker's initial incident include may be stale after a resolve. Read
+  // it again immediately before the non-idempotent create authority decision.
+  const currentIncident = await prisma.incident.findUnique({ where: { id: room.incident.id }, select: { status: true } });
+  if (!currentIncident || !['OPEN', 'ACKNOWLEDGED'].includes(currentIncident.status)) return { allowed: false, code: 'INCIDENT_NOT_ACTIVE', message: 'Incident is no longer active.' };
   if (!room.destinationId) return { allowed: false, code: 'DESTINATION_SNAPSHOT_MISSING', message: 'War-room routing snapshot is missing.' };
   const [config, destination, installation] = await Promise.all([
     prisma.microsoftTeamsConfig.findFirst({ where: { enabled: true, warRoomsEnabled: true }, select: { id: true } }),

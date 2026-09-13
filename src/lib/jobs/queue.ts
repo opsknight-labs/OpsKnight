@@ -580,7 +580,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         ? retryAfterMs
         : Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS);
       const current = await prisma.backgroundJob.findUnique({ where: { id: job.id }, select: { attempts: true, maxAttempts: true } });
-      if (current && current.attempts < current.maxAttempts) {
+      if (current && (retryBudgetNeutral || current.attempts < current.maxAttempts)) {
         await prisma.backgroundJob.updateMany({
           where: { id: job.id, status: 'PROCESSING' },
           data: {

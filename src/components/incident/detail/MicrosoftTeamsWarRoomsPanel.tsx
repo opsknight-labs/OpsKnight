@@ -26,8 +26,8 @@ function message(error: unknown, fallback: string) {
 }
 
 export default function MicrosoftTeamsWarRoomsPanel({
-  incidentId, rooms, canManage, enabled,
-}: { incidentId: string; rooms: Room[]; canManage: boolean; enabled: boolean }) {
+  incidentId, rooms, canManage, enabled, unavailableReason,
+}: { incidentId: string; rooms: Room[]; canManage: boolean; enabled: boolean; unavailableReason?: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -88,10 +88,10 @@ export default function MicrosoftTeamsWarRoomsPanel({
         <div className="flex flex-wrap gap-2">
           {!active && !ambiguous && enabled && <Button size="sm" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/microsoft-teams`)}>{pending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <MicrosoftTeamsLogo className="mr-1 h-3.5 w-3.5" />}{latest ? 'Create new generation' : 'Create Teams war room'}</Button>}
           {active && <>
-            <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/sync`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Sync responders</Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/sync`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh responder plan</Button>
             <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/close`)}><SquareX className="mr-1 h-3.5 w-3.5" />Close room</Button>
           </>}
-          {!enabled && !latest && <span className="text-xs text-muted-foreground">An administrator must enable Teams war rooms and map this service to an installed Team first.</span>}
+          {!enabled && !latest && <span className="text-xs text-muted-foreground">{unavailableReason ?? 'Teams war-room creation is unavailable for this service.'}</span>}
         </div>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
