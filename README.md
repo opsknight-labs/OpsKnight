@@ -33,7 +33,7 @@ _From alert ingestion and on-call routing through response, customer communicati
 >
 > Over **260+ PRs** have been merged since our last release (`v1.4.0`). While we initially planned a minor `v1.5`, the massive improvements across the board—a completely redesigned modern UI, rock-solid availability, scalable architecture, and deep engine upgrades—mean our next milestone will be **OpsKnight 2.0**!
 >
-> 💡 **Planning a new deployment?** If you are evaluating or planning to install OpsKnight, **we strongly recommend waiting for the 2.0 release** (or following the active development branch) to take advantage of the new infrastructure and streamlined configuration:
+> 💡 **Planning a new deployment?** If you are evaluating or planning to install OpsKnight, **we strongly recommend waiting for the 2.0 release** (or following the active opsknight-test package) to take advantage of the new infrastructure and streamlined configuration:
 >
 > - 🌐 **Cloud-Native & Kubernetes-Ready**: Highly available, horizontally scalable architecture engineered for automatic scaling in Kubernetes and distributed container environments.
 > - ✨ **Modern UI & Intuitive Configuration**: Completely revamped user interface and configuration flows that make setting up services, channels, and team workflows simple and effortless.
