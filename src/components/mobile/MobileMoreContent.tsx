@@ -72,7 +72,7 @@ function NavigationRow({ item }: { item: NavigationItem }) {
       className="flex min-h-14 items-center gap-3 px-4 py-3 text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-        <Icon className="h-4.5 w-4.5" aria-hidden="true" />
+        <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{item.label}</span>
@@ -164,7 +164,7 @@ export default function MobileMoreContent({
         <Card className="divide-y divide-border overflow-hidden rounded-2xl border-border shadow-sm">
           {account.map(item => <NavigationRow key={item.href} item={item} />)}
           <MobileSignOutButton
-            icon={<LogOut className="h-4.5 w-4.5" aria-hidden="true" />}
+            icon={<LogOut className="h-[18px] w-[18px]" aria-hidden="true" />}
             label="Sign Out"
             description="Sign out of OpsKnight on this device"
             tone="red"
