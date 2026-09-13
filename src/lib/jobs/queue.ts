@@ -75,7 +75,8 @@ export type JobType =
   | 'STATUS_PAGE_NOTIFICATION'
   | 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
   | 'CHATOPS_INTENT'
-  | 'EXTERNAL_OPERATION';
+  | 'EXTERNAL_OPERATION'
+  | 'WAR_ROOM_PROVISION';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload {
   incidentId?: string;
@@ -369,6 +370,14 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           throw new Error('ChatOps intent job is missing intentId');
         const { processChatOpsIntent } = await import('../chatops/intents');
         await processChatOpsIntent(requiredPayloadString(job.payload, 'intentId'));
+        await markJobCompleted(job.id);
+        return true;
+      }
+      case 'WAR_ROOM_PROVISION': {
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
+          throw new Error('War-room provision job is missing warRoomId');
+        const { provisionMicrosoftTeamsWarRoom } = await import('../war-room/microsoft-teams');
+        await provisionMicrosoftTeamsWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
         await markJobCompleted(job.id);
         return true;
       }

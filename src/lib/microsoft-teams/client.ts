@@ -97,6 +97,13 @@ async function acquireToken(
 async function graphToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
   return acquireToken(graphTokenCache, 'https://graph.microsoft.com/.default', clientId, clientSecret, tenantId, 'Graph');
 }
+
+/** Server-only token seam for narrowly scoped Graph adapters. */
+export async function getMicrosoftTeamsGraphAccessToken(tenantId: string): Promise<string | null> {
+  const resolved = await getMicrosoftTeamsConfig();
+  if (!resolved || !tenantId.trim()) return null;
+  return graphToken(resolved.config.clientId, resolved.clientSecret, tenantId.trim());
+}
 async function botToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
   return acquireToken(botTokenCache, 'https://api.botframework.com/.default', clientId, clientSecret, tenantId, 'Bot');
 }

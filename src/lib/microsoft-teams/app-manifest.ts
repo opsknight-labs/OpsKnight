@@ -18,10 +18,17 @@
 export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
   'ChannelSettings.Read.Group', // List teams / channels for destination picker (Graph)
 ] as const;
-export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.1.0';
+export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.2.0';
 
 export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',
+  // Phase 3 war rooms. These remain opt-in so installations that only send
+  // destination alerts retain the Phase 1 least-privilege consent surface.
+  'Channel.Create.Group',
+  'ChannelSettings.ReadWrite.Group',
+  'TeamMember.Read.Group',
+  'ChannelMember.Read.Group',
+  'ChannelMember.ReadWrite.Group',
 ] as const;
 
 export const MICROSOFT_TEAMS_RSC_PERMISSIONS: string[] = [

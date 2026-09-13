@@ -98,6 +98,43 @@ enum MicrosoftTeamsTenantMode {
   MULTI
 }
 
+enum WarRoomProvider {
+  SLACK
+  MICROSOFT_TEAMS
+}
+
+enum WarRoomState {
+  PROVISIONING
+  READY
+  CLOSING
+  CLOSED
+  ARCHIVED
+  FAILED
+  AMBIGUOUS
+}
+
+enum WarRoomMembershipType {
+  STANDARD
+  PRIVATE
+}
+
+enum WarRoomParticipantSource {
+  ASSIGNEE
+  WATCHER
+  ESCALATION
+  TEAM
+  MANUAL
+}
+
+enum WarRoomParticipantState {
+  DESIRED
+  PROCESSING
+  PRESENT
+  SKIPPED
+  FAILED
+  REMOVED
+}
+
 enum NotificationTrafficClass {
   CRITICAL
   TRANSACTIONAL
@@ -371,6 +408,7 @@ model User {
   microsoftTeamsConfigs       MicrosoftTeamsConfig[]       @relation("MicrosoftTeamsConfigUpdater")
   microsoftTeamsInstallations MicrosoftTeamsInstallation[] @relation("MicrosoftTeamsInstallationInstaller")
   microsoftTeamsDestinations  MicrosoftTeamsDestination[]  @relation("MicrosoftTeamsDestinationUpdater")
+  warRoomParticipants         WarRoomParticipant[]
   chatIdentityLinks           ChatIdentityLink[]
   oidcConfigs                 OidcConfig[]
   oidcIdentities              OidcIdentity[]
@@ -476,6 +514,7 @@ model Service {
   defaultIncidentVisibility   IncidentVisibility    @default(PUBLIC) // Default incident visibility (PUBLIC vs PRIVATE)
   // ChatOps War-Room overrides
   autoCreateWarRoom           Boolean               @default(true) // Auto-create dedicated Slack channel for critical incidents
+  microsoftTeamsWarRoomAutoCreate Boolean           @default(true)
   warRoomVideoBridge          String? // Override video bridge provider: JITSI, ZOOM, GOOGLE_MEET, NONE
   warRoomCustomBridgeUrl      String? // Override custom bridge URL for this service
   slaDefinitions              SLADefinition[]
@@ -687,6 +726,8 @@ model MicrosoftTeamsConfig {
   tenantMode   MicrosoftTeamsTenantMode @default(SINGLE)
   enabled      Boolean                  @default(true)
   interactiveEnabled Boolean            @default(false)
+  warRoomsEnabled    Boolean            @default(false)
+  defaultWarRoomMembershipType WarRoomMembershipType @default(STANDARD)
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
   updatedBy    String?
@@ -729,6 +770,9 @@ model MicrosoftTeamsDestination {
   installationId String?
   enabled        Boolean  @default(true)
   interactiveEnabled Boolean @default(false)
+  warRoomEnabled    Boolean  @default(false)
+  warRoomAutoCreate Boolean  @default(true)
+  warRoomMembershipType WarRoomMembershipType?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   updatedBy      String?
@@ -773,6 +817,64 @@ model MicrosoftTeamsIncidentMessage {
   @@index([messageId])
   @@index([mutationLeaseExpiresAt])
   @@index([createState])
+}
+
+/// Provider-neutral, generation-safe collaboration room. Legacy Slack fields
+/// remain on Incident for backwards-compatible slash-command routing only.
+model IncidentWarRoom {
+  id                    String                @id @default(cuid())
+  incidentId            String
+  provider              WarRoomProvider
+  generation            Int                   @default(1)
+  state                 WarRoomState          @default(PROVISIONING)
+  providerTenantId      String?
+  providerContainerId   String?
+  providerChannelId     String?
+  providerChannelName   String?
+  providerChannelUrl    String?
+  membershipType        WarRoomMembershipType?
+  commandMessageId      String?
+  commandConversationId String?
+  messageGeneration     Int                   @default(1)
+  provisioningToken     String?
+  provisioningStartedAt DateTime?
+  readyAt               DateTime?
+  closedAt              DateTime?
+  archivedAt            DateTime?
+  lastError             String?
+  lastErrorCode         String?
+  metadata              Json?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  incident     Incident             @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  participants WarRoomParticipant[]
+
+  @@unique([incidentId, provider, generation])
+  @@index([incidentId, provider, state])
+  @@index([provider, providerTenantId, providerContainerId, providerChannelId])
+  @@index([state, provisioningStartedAt])
+}
+
+model WarRoomParticipant {
+  id               String                  @id @default(cuid())
+  warRoomId        String
+  userId           String?
+  providerUserId   String?
+  providerObjectId String?
+  source           WarRoomParticipantSource
+  state            WarRoomParticipantState @default(DESIRED)
+  lastError        String?
+  addedAt          DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  warRoom IncidentWarRoom @relation(fields: [warRoomId], references: [id], onDelete: Cascade)
+  user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([warRoomId, userId])
+  @@index([warRoomId, state])
+  @@index([userId])
 }
 
 model Alert {
@@ -877,6 +979,7 @@ model Incident {
   externalIssueLinks      ExternalIssueLink[]
   pinnedMessages          SlackPinnedMessage[]
   microsoftTeamsMessages  MicrosoftTeamsIncidentMessage[]
+  warRooms                IncidentWarRoom[]
   slaPauses               IncidentSlaPause[]
 
   @@index([dedupKey]) // Index for fast deduplication lookups
@@ -1657,6 +1760,7 @@ enum JobType {
   STATUS_PAGE_ANNOUNCEMENT_FANOUT
   CHATOPS_INTENT
   EXTERNAL_OPERATION
+  WAR_ROOM_PROVISION
 }
 
 enum JobStatus {

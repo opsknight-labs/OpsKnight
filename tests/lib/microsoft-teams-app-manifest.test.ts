@@ -28,13 +28,20 @@ describe('Microsoft Teams app manifest', () => {
     expect((mWithUri.webApplicationInfo as { resource: string }).resource).toContain(new URL(BASE).hostname);
   });
 
-  it('uses the minimal required RSC permissions for Phase 1', () => {
+  it('keeps destination delivery minimal and makes war-room RSC opt-in', () => {
     // Bot Framework Connector owns message delivery; Graph is only used for discovery.
     expect([...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS]).toEqual([
       'ChannelSettings.Read.Group',
     ]);
     expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('TeamSettings.Read.Group');
-    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(2);
+    expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toEqual(expect.arrayContaining([
+      'Channel.Create.Group',
+      'ChannelSettings.ReadWrite.Group',
+      'TeamMember.Read.Group',
+      'ChannelMember.Read.Group',
+      'ChannelMember.ReadWrite.Group',
+    ]));
+    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(7);
   });
 
   it('declares RSC permissions as Application-scoped in the manifest', () => {
