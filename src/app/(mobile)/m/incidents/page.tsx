@@ -140,7 +140,7 @@ export default async function MobileIncidentsPage(props: {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-              <AlertTriangle className="h-4.5 w-4.5" aria-hidden="true" />
+              <AlertTriangle className="h-[18px] w-[18px]" aria-hidden="true" />
             </span>
             <div className="min-w-0">
               <h1 className="text-xl font-bold tracking-tight text-foreground">Incidents</h1>
