@@ -349,11 +349,13 @@ async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<
   if (!incident || incident.status !== 'OPEN') return;
   const { createIncidentWarRoom } = await import('./chatops/war-room');
   const result = await createIncidentWarRoom(payload.incidentId);
-  if (!result.success) {
-    requireWarRoomDelivery(result, 'war-room ensure');
-    return;
-  }
-  await syncLifecycleWarRoom(payload);
+  if (!result.success) requireWarRoomDelivery(result, 'war-room ensure');
+  else await syncLifecycleWarRoom(payload);
+  // Teams provisioning is durable and runs in its own fenced queue job. A
+  // disabled/misconfigured destination is an expected per-provider skip and
+  // must not make the Slack lifecycle replay forever.
+  const { requestMicrosoftTeamsWarRoom } = await import('./war-room/microsoft-teams');
+  await requestMicrosoftTeamsWarRoom(payload.incidentId, false);
 }
 async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): Promise<void> {
   const lifecycle = payload.lifecycle;
@@ -369,6 +371,8 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
     return;
   const { archiveWarRoomChannel } = await import('./chatops/war-room');
   requireWarRoomDelivery(await archiveWarRoomChannel(payload.incidentId), 'war-room archive');
+  const { closeActiveMicrosoftTeamsWarRooms } = await import('./war-room/microsoft-teams');
+  await closeActiveMicrosoftTeamsWarRooms(payload.incidentId);
 }
 
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
@@ -394,6 +398,8 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
     case 'TRIGGER_WAR_ROOM': {
       const { createIncidentWarRoom } = await import('./chatops/war-room');
       requireWarRoomDelivery(await createIncidentWarRoom(payload.incidentId), 'war-room creation');
+      const { requestMicrosoftTeamsWarRoom } = await import('./war-room/microsoft-teams');
+      await requestMicrosoftTeamsWarRoom(payload.incidentId, false);
       return;
     }
     case 'TRIGGER_STATUS_PAGE':

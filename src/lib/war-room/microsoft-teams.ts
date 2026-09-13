@@ -61,6 +61,15 @@ export async function closeMicrosoftTeamsWarRoom(incidentId: string, warRoomId: 
   return { closed };
 }
 
+/** Lifecycle worker close: settle all known-ready Team rooms locally on resolve. */
+export async function closeActiveMicrosoftTeamsWarRooms(incidentId: string): Promise<number> {
+  const result = await prisma.incidentWarRoom.updateMany({
+    where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
+    data: { state: 'CLOSED', closedAt: new Date(), provisioningToken: null },
+  });
+  return result.count;
+}
+
 /** Worker entry point. Every retry reconciles this same generation before POST. */
 export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expectedProvisioningToken: string): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, include: { incident: { select: { id: true, title: true, status: true } } } });
