@@ -12,7 +12,7 @@ type RequestResult = { accepted: true; warRoomId: string; state: string } | { ac
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
 export class WarRoomRetryableError extends Error {
-  constructor(message: string, readonly retryAfterMs?: number) { super(message); this.name = 'WarRoomRetryableError'; }
+  constructor(message: string, readonly retryAfterMs?: number, readonly retryBudgetNeutral = false) { super(message); this.name = 'WarRoomRetryableError'; }
 }
 
 /**
@@ -98,7 +98,7 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
       },
     });
     if (remaining > 0) {
-      throw new WarRoomRetryableError('Reconciling an ambiguous Teams channel-create outcome by marker only.', Math.min(60_000, remaining));
+      throw new WarRoomRetryableError('Reconciling an ambiguous Teams channel-create outcome by marker only.', Math.min(60_000, remaining), true);
     }
     return;
   }

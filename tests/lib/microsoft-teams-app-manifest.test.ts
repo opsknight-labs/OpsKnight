@@ -36,12 +36,13 @@ describe('Microsoft Teams app manifest', () => {
     expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('TeamSettings.Read.Group');
     expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toEqual(expect.arrayContaining([
       'Channel.Create.Group',
+      'TeamsAppInstallation.Read.Group',
       'ChannelSettings.ReadWrite.Group',
       'TeamMember.Read.Group',
       'ChannelMember.Read.Group',
       'ChannelMember.ReadWrite.Group',
     ]));
-    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(7);
+    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(8);
   });
 
   it('declares RSC permissions as Application-scoped in the manifest', () => {
@@ -66,6 +67,7 @@ describe('Microsoft Teams app manifest', () => {
     const warRoom = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeWarRoomPermissions: true });
     const warRoomNames = (warRoom.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
     expect(warRoomNames).toContain('Channel.Create.Group');
+    expect(warRoomNames).toContain('TeamsAppInstallation.Read.Group');
     expect(warRoomNames).not.toContain('ChannelMember.ReadWrite.Group');
     expect(warRoomNames).not.toContain('TeamSettings.Read.Group');
     const all = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeTeamSettingsPermissions: true, includeWarRoomPermissions: true });

@@ -25,6 +25,9 @@ export const MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS = [
 ] as const;
 export const MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS = [
   'Channel.Create.Group',
+  // Reads the exact app-installation consentedPermissionSet used to verify
+  // Channel.Create.Group for this Team; without it preflight would 403.
+  'TeamsAppInstallation.Read.Group',
 ] as const;
 export const MICROSOFT_TEAMS_WAR_ROOM_LIFECYCLE_RSC_PERMISSIONS = [
   'ChannelSettings.ReadWrite.Group',

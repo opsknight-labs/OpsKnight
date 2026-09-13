@@ -122,6 +122,23 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
     }));
   });
 
+  it('keeps the retry budget intact while reconciling an ambiguous create marker', async () => {
+    const error = Object.assign(new Error('marker reconciliation'), {
+      name: 'WarRoomRetryableError', retryAfterMs: 1_000, retryBudgetNeutral: true,
+    });
+    provisionMicrosoftTeamsWarRoomMock.mockRejectedValueOnce(error);
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 1, maxAttempts: 6 });
+    const result = await queue.processJob({
+      id: 'job-war-room-reconcile', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 1, maxAttempts: 6,
+    });
+    expect(result).toBe(false);
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room-reconcile', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
+    }));
+  });
+
   it('rejects an unfenced provisioning job before it can call Graph', async () => {
     prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 1, maxAttempts: 6, type: 'WAR_ROOM_PROVISION' });
     const result = await queue.processJob({

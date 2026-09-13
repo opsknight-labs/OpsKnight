@@ -575,6 +575,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
   } catch (error) {
     if (job.type === 'WAR_ROOM_PROVISION' && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
+      const retryBudgetNeutral = (error as Error & { retryBudgetNeutral?: unknown }).retryBudgetNeutral === true;
       const delay = typeof retryAfterMs === 'number' && retryAfterMs > 0
         ? retryAfterMs
         : Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS);
@@ -582,7 +583,13 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
       if (current && current.attempts < current.maxAttempts) {
         await prisma.backgroundJob.updateMany({
           where: { id: job.id, status: 'PROCESSING' },
-          data: { status: 'PENDING', scheduledAt: new Date(Date.now() + delay), startedAt: null, error: null },
+          data: {
+            status: 'PENDING', scheduledAt: new Date(Date.now() + delay), startedAt: null, error: null,
+            // Marker-only reconciliation has no new side effect and must be
+            // allowed to cover its bounded consistency window. Provider/crash
+            // failures continue to consume the normal retry budget.
+            ...(retryBudgetNeutral ? { attempts: { decrement: 1 } } : {}),
+          },
         });
         return false;
       }

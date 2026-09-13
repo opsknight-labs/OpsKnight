@@ -40,5 +40,7 @@ describe('war-room generation lifecycle', () => {
       where: expect.objectContaining({ id: 'room-1', incidentId: 'incident-1', provider: 'MICROSOFT_TEAMS' }),
       data: expect.objectContaining({ state: 'CLOSED', provisioningToken: null }),
     }));
+    const where = updateMany.mock.calls[0][0].where;
+    expect(where.state.in).not.toContain('AMBIGUOUS');
   });
 });

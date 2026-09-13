@@ -26,7 +26,9 @@ export async function claimWarRoomProvisioning(tx: Prisma.TransactionClient, inp
 /** Local lifecycle close is deliberate and immediately prevents new commands. */
 export async function closeWarRoom(tx: Prisma.TransactionClient, input: { incidentId: string; warRoomId: string; provider: WarRoomProvider }) {
   const changed = await tx.incidentWarRoom.updateMany({
-    where: { id: input.warRoomId, incidentId: input.incidentId, provider: input.provider, state: { in: ['READY', 'FAILED', 'AMBIGUOUS'] } },
+    // AMBIGUOUS means an external channel may exist but is not yet adopted.
+    // Closing it would permit a new generation and risk an untracked duplicate.
+    where: { id: input.warRoomId, incidentId: input.incidentId, provider: input.provider, state: { in: ['READY', 'FAILED'] } },
     data: { state: 'CLOSED', closedAt: new Date(), provisioningToken: null },
   });
   return changed.count === 1;
