@@ -63,7 +63,26 @@ describe('mobile/PWA enterprise architecture contract', () => {
     );
   });
 
-  it('treats queued responder actions as a durable state machine', () => {
+  it('binds responder cache and offline replay to the authenticated principal generation', () => {
+    const cache = fs.readFileSync('src/lib/mobile-cache.ts', 'utf8');
+    const queue = fs.readFileSync('src/lib/offline-queue.ts', 'utf8');
+    const coordinator = fs.readFileSync('src/components/mobile/MobilePwaCoordinator.tsx', 'utf8');
+    const authPurge = fs.readFileSync('src/lib/auth-cache-purge.ts', 'utf8');
+    const worker = fs.readFileSync('public/custom-sw.js', 'utf8');
+
+    expect(cache).toContain('principalStorageSegment(context)');
+    expect(cache).toContain('stored.principalId !== context.principalId');
+    expect(cache).toContain('stored.authGeneration !== context.authGeneration');
+    expect(cache).toContain('purgeMobileCacheStorage');
+    expect(queue).toContain('principalId: principal.principalId');
+    expect(queue).toContain('authGeneration: principal.authGeneration');
+    expect(coordinator).toContain("type: 'SET_ACTIVE_PRINCIPAL'");
+    expect(authPurge).toContain('purgeMobileCacheStorage');
+    expect(authPurge).toContain('purgeOfflineQueueStorage');
+    expect(worker).toContain("event.data.type === 'SET_ACTIVE_PRINCIPAL'");
+  });
+
+  it('serializes dependent actions per resource while allowing independent resource lanes', () => {
     const queue = fs.readFileSync('src/lib/offline-queue.ts', 'utf8');
     const worker = fs.readFileSync('public/custom-sw.js', 'utf8');
 
@@ -78,12 +97,16 @@ describe('mobile/PWA enterprise architecture contract', () => {
     ]) {
       expect(queue).toContain(`'${state}'`);
     }
-    expect(queue).toContain('SENDING_LEASE_MS');
-    expect(queue).toContain('exponentialBackoffMs');
-    expect(queue).toContain('Strict FIFO invariant');
-    expect(worker).toContain('SENDING_LEASE_MS');
-    expect(worker).toContain('exponentialBackoffMs');
-    expect(worker).toContain('full creation-ordered queue');
+    expect(queue).toContain('laneKey');
+    expect(queue).toContain('firstPerLane');
+    expect(queue).toContain('MAX_PARALLEL_LANES');
+    expect(queue).toContain('claimRequest');
+    expect(queue).toContain('leaseOwner');
+    expect(queue).toContain("db.transaction(STORE_NAME, 'readwrite')");
+    expect(worker).toContain('laneKey');
+    expect(worker).toContain('claimQueuedRequest');
+    expect(worker).toContain('leaseOwner');
+    expect(worker).toContain('MAX_PARALLEL_LANES');
   });
 
   it('uses a versioned, same-origin push contract and disables unknown-version actions', () => {
