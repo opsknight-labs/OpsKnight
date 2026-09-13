@@ -34,6 +34,8 @@ CREATE TABLE "IncidentWarRoom" (
   "messageGeneration" INTEGER NOT NULL DEFAULT 1,
   "provisioningToken" TEXT,
   "provisioningStartedAt" TIMESTAMP(3),
+  "createAttemptedAt" TIMESTAMP(3),
+  "createOperationId" TEXT,
   "readyAt" TIMESTAMP(3),
   "closedAt" TIMESTAMP(3),
   "archivedAt" TIMESTAMP(3),

@@ -840,6 +840,8 @@ model IncidentWarRoom {
   messageGeneration     Int                   @default(1)
   provisioningToken     String?
   provisioningStartedAt DateTime?
+  createAttemptedAt     DateTime?
+  createOperationId     String?
   readyAt               DateTime?
   closedAt              DateTime?
   archivedAt            DateTime?

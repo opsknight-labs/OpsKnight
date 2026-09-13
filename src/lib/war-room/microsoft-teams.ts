@@ -6,6 +6,7 @@ import { evaluateWarRoomPolicy } from './policy';
 import { claimWarRoomProvisioning, markWarRoomReady } from './repository';
 import { createChannel, findWarRoomChannel, warRoomChannelName, warRoomMarker } from '@/lib/microsoft-teams/graph/channels';
 import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
+import crypto from 'crypto';
 
 type RequestResult = { accepted: true; warRoomId: string; state: string } | { accepted: false; code: string };
 
@@ -63,6 +64,13 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
     await markFailed(room.id, expectedProvisioningToken, existing.code, existing.message);
     return;
   }
+  // A negative reconciliation never authorizes a second POST after an unknown
+  // create outcome. Such rooms are reconciliation-only until an operator
+  // resolves the ambiguity.
+  if (room.createAttemptedAt) {
+    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'AMBIGUOUS', lastErrorCode: 'CREATE_OUTCOME_UNRESOLVED', lastError: 'A prior Teams channel-create may have succeeded; reconciliation is required.' } });
+    return;
+  }
   if (room.membershipType !== 'STANDARD') return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED', 'Private Teams war rooms require an owner and initial members.');
   // A superseding retry can rotate the lease while this worker was reading
   // channels. Recheck immediately before the only non-idempotent side effect.
@@ -77,9 +85,10 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
   // Keep the room lease aligned with this active queue worker immediately
   // before the POST. A concurrent manual request cannot reclaim the room
   // while this bounded (30s) Graph operation is in flight.
+  const operationId = crypto.randomUUID();
   const renewed = await prisma.incidentWarRoom.updateMany({
     where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
-    data: { provisioningStartedAt: new Date() },
+    data: { provisioningStartedAt: new Date(), createAttemptedAt: new Date(), createOperationId: operationId },
   });
   if (renewed.count !== 1) return;
   const created = await createChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, displayName: warRoomChannelName(room.incident.id, room.generation, room.incident.title), description: marker, membershipType: 'STANDARD' });
