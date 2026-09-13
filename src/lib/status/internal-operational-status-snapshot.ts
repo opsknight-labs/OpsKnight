@@ -70,6 +70,7 @@ const MAX_ENTRIES = 300;
 const MAX_CONCURRENT_CALCULATIONS = 4;
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<CacheEntry>>();
+const cacheEpochs = new Map<string, number>();
 let activeCalculations = 0;
 
 function scopeKey(actor: AuthorizationActor) {
@@ -92,7 +93,26 @@ function prune(now: number) {
   while (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value as string);
 }
 
-async function calculate(key: string, actor: AuthorizationActor): Promise<CacheEntry> {
+function cacheEpoch(key: string) {
+  return cacheEpochs.get(key) ?? 0;
+}
+
+/**
+ * A realtime generation change can represent an authorization visibility change. Treat it as
+ * a hard boundary: discard the cached projection and detach pre-boundary in-flight work. The
+ * epoch guard below prevents detached work from publishing stale authorized data afterward.
+ */
+function invalidateAuthorizationBoundary(key: string) {
+  cache.delete(key);
+  cacheEpochs.set(key, cacheEpoch(key) + 1);
+  inFlight.delete(key);
+}
+
+async function calculate(
+  key: string,
+  actor: AuthorizationActor,
+  epoch: number
+): Promise<CacheEntry> {
   activeCalculations += 1;
   const startedAt = Date.now();
   try {
@@ -264,8 +284,10 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
       staleUntil: generatedAt.getTime() + STALE_TTL_MS,
     };
 
-    cache.delete(key);
-    cache.set(key, entry);
+    if (cacheEpoch(key) === epoch) {
+      cache.delete(key);
+      cache.set(key, entry);
+    }
     return entry;
   } catch (error) {
     logger.error('status.internalSnapshot.calculate_failed', {
@@ -282,7 +304,8 @@ function startCalculation(key: string, actor: AuthorizationActor) {
   const existing = inFlight.get(key);
   if (existing) return existing;
   if (activeCalculations >= MAX_CONCURRENT_CALCULATIONS) return null;
-  const request = calculate(key, actor).finally(() => {
+  const epoch = cacheEpoch(key);
+  const request = calculate(key, actor, epoch).finally(() => {
     if (inFlight.get(key) === request) inFlight.delete(key);
   });
   inFlight.set(key, request);
@@ -314,17 +337,30 @@ export async function getInternalOperationalStatusSnapshot(
   prune(now);
   const key = scopeKey(actor);
   const entry = cache.get(key);
-  const currentGeneration = entry ? await getRealtimeChangeGeneration().catch(() => null) : null;
-  const generationChanged = Boolean(
-    entry && currentGeneration && currentGeneration !== entry.sourceGeneration
-  );
 
-  if (entry && entry.freshUntil > now && !generationChanged) return project(entry, 'fresh');
+  if (entry) {
+    const currentGeneration = await getRealtimeChangeGeneration().catch(() => null);
+    const generationTrusted =
+      currentGeneration !== null &&
+      entry.sourceGeneration !== null &&
+      currentGeneration === entry.sourceGeneration;
 
-  if (entry && entry.staleUntil > now) {
-    const refresh = startCalculation(key, actor);
-    if (refresh) void refresh.catch(() => undefined);
-    return project(entry, 'stale');
+    // Never serve actor-scoped stale data if the authorization generation changed or cannot
+    // be validated. Recalculate from the canonical actor-scoped read model instead.
+    if (!generationTrusted) {
+      invalidateAuthorizationBoundary(key);
+      const refresh = startCalculation(key, actor);
+      if (!refresh) throw new Error('Operational status is temporarily busy');
+      return project(await refresh, 'fresh');
+    }
+
+    if (entry.freshUntil > now) return project(entry, 'fresh');
+
+    if (entry.staleUntil > now) {
+      const refresh = startCalculation(key, actor);
+      if (refresh) void refresh.catch(() => undefined);
+      return project(entry, 'stale');
+    }
   }
 
   const request = startCalculation(key, actor);
@@ -335,5 +371,6 @@ export async function getInternalOperationalStatusSnapshot(
 export function resetInternalOperationalStatusCacheForTests() {
   cache.clear();
   inFlight.clear();
+  cacheEpochs.clear();
   activeCalculations = 0;
 }
