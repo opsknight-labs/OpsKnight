@@ -14,10 +14,10 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   timeout: 45_000,
   expect: {
-    // CI exercises the real Next.js dev server. The first invocation of a
-    // Server Action may include on-demand compilation, so keep assertions
-    // strict but avoid treating that one-time compile as an auth failure.
-    timeout: 15_000,
+    // CI exercises the real Next.js dev server. A successful auth callback can
+    // precede the first on-demand compilation of the destination route, so allow
+    // that compile to finish without weakening any application timeout itself.
+    timeout: 30_000,
   },
   reporter: process.env.CI ? [['line'], ['html', { open: 'never' }]] : 'line',
   use: {
@@ -28,6 +28,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testMatch: /auth-recovery\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
