@@ -53,14 +53,14 @@ export interface AnnouncementItem {
   title: string;
   message: string;
   type: string;
-  startDate: string | Date;
-  endDate?: string | Date | null;
+  startDate: string;
+  endDate?: string | null;
   allDay?: boolean;
   timeMode?: string;
-  publishAt?: string | Date;
+  publishAt?: string;
   isActive: boolean;
   affectedServiceIds?: string[] | null;
-  createdAt?: string | Date;
+  createdAt?: string;
 }
 
 interface StatusPageAnnouncementManagerProps {
