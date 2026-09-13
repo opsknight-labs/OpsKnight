@@ -203,6 +203,8 @@ export function computeStatusPageTheme(params: {
     '--status-text-strong': text,
     '--status-text-muted': textMuted,
     '--status-text-subtle': textSubtle,
+    '--sp-page-bg': bg,
+    '--sp-page-text': text,
     '--sp-ink': text,
     '--sp-ink-strong': text,
     '--sp-muted': textMuted,
@@ -210,6 +212,10 @@ export function computeStatusPageTheme(params: {
     '--status-panel-border': panelBorder,
     '--status-panel-muted-bg': panelMutedBg,
     '--status-panel-muted-border': panelMutedBorder,
+    '--sp-panel-bg': panelBg,
+    '--sp-panel-border': panelBorder,
+    '--sp-panel-muted-bg': panelMutedBg,
+    '--sp-panel-muted-border': panelMutedBorder,
     '--status-card-shadow': cardShadow,
   };
 
