@@ -27,6 +27,7 @@ const MAX_ENTRIES = 300;
 const MAX_CONCURRENT_CALCULATIONS = 3;
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<CacheEntry>>();
+const cacheEpochs = new Map<string, number>();
 let activeCalculations = 0;
 
 function scopeKey(actor: AuthorizationActor, windowDays: 7 | 30 | 90) {
@@ -48,10 +49,26 @@ function prune(now: number) {
   while (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value as string);
 }
 
+function cacheEpoch(key: string) {
+  return cacheEpochs.get(key) ?? 0;
+}
+
+/**
+ * Authorization/realtime generation changes are a hard cache boundary. In-flight work that
+ * started before the boundary may finish for its original caller, but must never repopulate
+ * the cache or be reused by callers after the boundary.
+ */
+function invalidateAuthorizationBoundary(key: string) {
+  cache.delete(key);
+  cacheEpochs.set(key, cacheEpoch(key) + 1);
+  inFlight.delete(key);
+}
+
 async function calculate(
   key: string,
   actor: AuthorizationActor,
-  windowDays: 7 | 30 | 90
+  windowDays: 7 | 30 | 90,
+  epoch: number
 ): Promise<CacheEntry> {
   activeCalculations += 1;
   const startedAt = Date.now();
@@ -76,8 +93,11 @@ async function calculate(
       freshUntil: generatedAt.getTime() + FRESH_TTL_MS,
       staleUntil: generatedAt.getTime() + STALE_TTL_MS,
     };
-    cache.delete(key);
-    cache.set(key, entry);
+
+    if (cacheEpoch(key) === epoch) {
+      cache.delete(key);
+      cache.set(key, entry);
+    }
     return entry;
   } catch (error) {
     logger.error('dashboard.responderAnalytics.calculate_failed', {
@@ -100,7 +120,8 @@ function startCalculation(
   if (existing) return existing;
   if (activeCalculations >= MAX_CONCURRENT_CALCULATIONS) return null;
 
-  const request = calculate(key, actor, windowDays).finally(() => {
+  const epoch = cacheEpoch(key);
+  const request = calculate(key, actor, windowDays, epoch).finally(() => {
     if (inFlight.get(key) === request) inFlight.delete(key);
   });
   inFlight.set(key, request);
@@ -125,17 +146,30 @@ export async function getResponderAnalyticsSnapshot(
   prune(now);
   const key = scopeKey(actor, windowDays);
   const entry = cache.get(key);
-  const currentGeneration = entry ? await getRealtimeChangeGeneration().catch(() => null) : null;
-  const generationChanged = Boolean(
-    entry && currentGeneration && currentGeneration !== entry.sourceGeneration
-  );
 
-  if (entry && entry.freshUntil > now && !generationChanged) return project(entry, 'fresh');
+  if (entry) {
+    const currentGeneration = await getRealtimeChangeGeneration().catch(() => null);
+    const generationTrusted =
+      currentGeneration !== null &&
+      entry.sourceGeneration !== null &&
+      currentGeneration === entry.sourceGeneration;
 
-  if (entry && entry.staleUntil > now) {
-    const refresh = startCalculation(key, actor, windowDays);
-    if (refresh) void refresh.catch(() => undefined);
-    return project(entry, 'stale');
+    // Never serve actor-scoped stale data if its authorization generation cannot be proven
+    // current. This includes both a known generation change and control-plane failure.
+    if (!generationTrusted) {
+      invalidateAuthorizationBoundary(key);
+      const refresh = startCalculation(key, actor, windowDays);
+      if (!refresh) throw new Error('Responder analytics is temporarily busy');
+      return project(await refresh, 'fresh');
+    }
+
+    if (entry.freshUntil > now) return project(entry, 'fresh');
+
+    if (entry.staleUntil > now) {
+      const refresh = startCalculation(key, actor, windowDays);
+      if (refresh) void refresh.catch(() => undefined);
+      return project(entry, 'stale');
+    }
   }
 
   const request = startCalculation(key, actor, windowDays);
@@ -146,5 +180,6 @@ export async function getResponderAnalyticsSnapshot(
 export function resetResponderAnalyticsCacheForTests() {
   cache.clear();
   inFlight.clear();
+  cacheEpochs.clear();
   activeCalculations = 0;
 }
