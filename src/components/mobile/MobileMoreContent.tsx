@@ -1,7 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type { ComponentType } from 'react';
+import {
+  BarChart3,
+  BookOpen,
+  CalendarDays,
+  ChevronRight,
+  FileText,
+  LogOut,
+  Monitor,
+  Settings,
+  ShieldCheck,
+  Signal,
+  Users,
+  UsersRound,
+} from 'lucide-react';
 import MobileThemeToggle from '@/components/mobile/MobileThemeToggle';
 import PushNotificationToggle from '@/components/mobile/PushNotificationToggle';
 import MobileBiometricToggle from '@/components/mobile/MobileBiometricToggle';
@@ -9,26 +23,17 @@ import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { useUserAvatarContextSafe } from '@/contexts/UserAvatarContext';
 import PwaInstallCard from '@/components/mobile/PwaInstallCard';
 import MobileSignOutButton from '@/components/mobile/MobileSignOutButton';
+import { Button } from '@/components/ui/shadcn/button';
+import { Card } from '@/components/ui/shadcn/card';
 import { APP_VERSION } from '@/lib/constants';
 
-type Tone = 'blue' | 'teal' | 'amber' | 'green' | 'slate' | 'red';
+type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
-type ShortcutItem = {
+type NavigationItem = {
   href: string;
   label: string;
   description: string;
-  icon: ReactNode;
-  tone: Tone;
-};
-
-type ListItem = {
-  href?: string;
-  label: string;
-  description?: string;
-  icon: ReactNode;
-  tone: Tone;
-  rightElement?: ReactNode;
-  danger?: boolean;
+  icon: IconComponent;
 };
 
 type MobileMoreContentProps = {
@@ -40,221 +45,52 @@ type MobileMoreContentProps = {
   avatarUrl?: string | null;
 };
 
-const chevronIcon = (
-  <svg className="mobile-more-item-chevron" viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M9 6l6 6-6 6"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+const shortcuts: NavigationItem[] = [
+  { href: '/m/teams', label: 'Teams', description: 'Ownership and responders', icon: UsersRound },
+  { href: '/m/users', label: 'Users', description: 'Directory and roles', icon: Users },
+  { href: '/m/schedules', label: 'Schedules', description: 'On-call rotations', icon: CalendarDays },
+  { href: '/m/policies', label: 'Policies', description: 'Escalation paths', icon: ShieldCheck },
+];
 
-const iconTeams = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    <circle cx="16" cy="9" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    <path
-      d="M3 20c0-3 3-5 5-5s5 2 5 5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-    <path
-      d="M13 20c0-2.5 2.5-4.5 5-4.5 1.5 0 3 .5 4 1.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-);
+const resources: NavigationItem[] = [
+  { href: '/m/analytics', label: 'Analytics', description: 'Incident performance and trends', icon: BarChart3 },
+  { href: '/m/postmortems', label: 'Postmortems', description: 'Reviews and follow-up work', icon: FileText },
+  { href: '/m/status', label: 'Status', description: 'Operational status pages', icon: Signal },
+];
 
-const iconUsers = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    <path
-      d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-);
+const account: NavigationItem[] = [
+  { href: '/settings/profile', label: 'Settings', description: 'Profile, security and preferences', icon: Settings },
+  { href: '/m/help', label: 'Help & Documentation', description: 'Guides and responder help', icon: BookOpen },
+  { href: '/api/prefer-desktop', label: 'Desktop mode', description: 'Open the full desktop workspace', icon: Monitor },
+];
 
-const iconSchedules = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <rect
-      x="3"
-      y="5"
-      width="18"
-      height="16"
-      rx="3"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    />
-    <path
-      d="M7 3v4M17 3v4M3 10h18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-    <path
-      d="M8 14h4M8 17h8"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-);
+function NavigationRow({ item }: { item: NavigationItem }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      className="flex min-h-14 items-center gap-3 px-4 py-3 text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+        <Icon className="h-4.5 w-4.5" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">{item.label}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{item.description}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </Link>
+  );
+}
 
-const iconPolicies = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3Z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    />
-    <path
-      d="M9 12l2 2 4-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const iconAnalytics = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M4 19V5M4 19h16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-    <path
-      d="M8 15l3-4 3 2 4-6"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const iconPostmortems = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M7 3h7l4 4v14H7z" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    <path d="M14 3v5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    <path
-      d="M9 13h6M9 17h4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const iconStatus = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M4 12h4l2-4 4 8 2-4h4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
-
-const iconSettings = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    />
-    <path
-      d="M4 12h2M18 12h2M12 4v2M12 18v2M6.5 6.5l1.4 1.4M16.1 16.1l1.4 1.4M6.5 17.5l1.4-1.4M16.1 7.9l1.4-1.4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const iconHelp = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.8" />
-    <path
-      d="M9.5 9a2.5 2.5 0 0 1 4.4 1.5c0 1.5-1.6 2-2.2 2.5-.4.4-.5.8-.5 1.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-    <circle cx="12" cy="17.5" r="0.9" fill="currentColor" />
-  </svg>
-);
-
-const iconDesktop = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <rect
-      x="3"
-      y="5"
-      width="18"
-      height="12"
-      rx="2.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    />
-    <path
-      d="M8 21h8M12 17v4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-const iconSignOut = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M9 7V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2v-2"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-    <path
-      d="M3 12h12M9 8l4 4-4 4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{title}</h2>
+      {children}
+    </section>
+  );
+}
 
 export default function MobileMoreContent({
   userId,
@@ -266,191 +102,77 @@ export default function MobileMoreContent({
 }: MobileMoreContentProps) {
   const { getAvatar } = useUserAvatarContextSafe();
   const avatarUrl = userId ? getAvatar(userId, gender, name, avatarUrlProp) : avatarUrlProp;
-  const shortcuts: ShortcutItem[] = [
-    {
-      href: '/m/teams',
-      label: 'Teams',
-      description: 'On-call rosters',
-      icon: iconTeams,
-      tone: 'blue',
-    },
-    {
-      href: '/m/users',
-      label: 'Users',
-      description: 'Directory & roles',
-      icon: iconUsers,
-      tone: 'teal',
-    },
-    {
-      href: '/m/schedules',
-      label: 'Schedules',
-      description: 'Rotations',
-      icon: iconSchedules,
-      tone: 'green',
-    },
-    {
-      href: '/m/policies',
-      label: 'Policies',
-      description: 'Escalations',
-      icon: iconPolicies,
-      tone: 'amber',
-    },
-  ];
-
-  const resources: ListItem[] = [
-    {
-      href: '/m/analytics',
-      label: 'Analytics',
-      description: 'Trends & uptime',
-      icon: iconAnalytics,
-      tone: 'teal',
-    },
-    {
-      href: '/m/postmortems',
-      label: 'Postmortems',
-      description: 'Incident reviews',
-      icon: iconPostmortems,
-      tone: 'amber',
-    },
-    {
-      href: '/m/status',
-      label: 'Status Page',
-      description: 'System health',
-      icon: iconStatus,
-      tone: 'green',
-    },
-  ];
-
-  const account: ListItem[] = [
-    {
-      href: '/settings/profile',
-      label: 'Settings',
-      description: 'Profile and security',
-      icon: iconSettings,
-      tone: 'slate',
-    },
-    {
-      href: '/m/help',
-      label: 'Help & Documentation',
-      description: 'Guides and support',
-      icon: iconHelp,
-      tone: 'blue',
-    },
-  ];
-
-  const actions: ListItem[] = [
-    {
-      href: '/api/prefer-desktop',
-      label: 'Switch to Desktop Mode',
-      description: 'Full dashboard view',
-      icon: iconDesktop,
-      tone: 'slate',
-    },
-  ];
-
-  const renderItem = (item: ListItem) => {
-    const itemClass = `mobile-more-item${item.danger ? ' danger' : ''}`;
-    const iconClass = `mobile-more-icon tone-${item.tone}`;
-    const content = (
-      <>
-        <div className={iconClass}>{item.icon}</div>
-        <div className="mobile-more-item-body">
-          <span className="mobile-more-item-label">{item.label}</span>
-          {item.description && <span className="mobile-more-item-desc">{item.description}</span>}
-        </div>
-        {item.rightElement ? (
-          <div className="mobile-more-item-right">{item.rightElement}</div>
-        ) : (
-          chevronIcon
-        )}
-      </>
-    );
-
-    if (item.href) {
-      return (
-        <Link key={item.label} href={item.href} className={itemClass}>
-          {content}
-        </Link>
-      );
-    }
-
-    return (
-      <div key={item.label} className={itemClass}>
-        {content}
-      </div>
-    );
-  };
 
   return (
-    <div className="mobile-more-page">
-      <section className="mobile-more-hero">
-        <div className="mobile-more-hero-content">
-          <div className="mobile-more-avatar">
+    <div className="responsive-page space-y-5 px-3 py-4 sm:px-4">
+      <Card className="overflow-hidden rounded-2xl border-border bg-card shadow-sm">
+        <div className="h-1 bg-gradient-to-r from-primary via-slate-500 to-primary/60" />
+        <div className="flex min-w-0 items-center gap-4 p-4 sm:p-5">
+          <div className="shrink-0 rounded-full ring-2 ring-border ring-offset-2 ring-offset-background">
             <MobileAvatar name={name} src={avatarUrl || undefined} size="xl" />
           </div>
-          <div className="mobile-more-identity">
-            <h1 className="mobile-more-name">{name}</h1>
-            <p className="mobile-more-email">{email || 'No email on file'}</p>
-            <div className="mobile-more-tags">
-              <span className="mobile-more-tag">{role}</span>
-            </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-bold tracking-tight text-foreground">{name}</h1>
+            <p className="truncate text-sm text-muted-foreground">{email || 'No email on file'}</p>
+            <span className="mt-2 inline-flex rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              {role}
+            </span>
           </div>
-          <div className="mobile-more-hero-actions">
-            <Link href="/m/notifications" className="mobile-more-hero-button secondary">
-              View Alerts
-            </Link>
-          </div>
+          <Button asChild variant="outline" size="sm" className="shrink-0 rounded-xl">
+            <Link href="/m/notifications">Alerts</Link>
+          </Button>
         </div>
-      </section>
+      </Card>
 
-      <section className="mobile-more-section">
-        <h2 className="mobile-more-section-title">Shortcuts</h2>
-        <div className="mobile-more-shortcuts">
-          {shortcuts.map(item => (
-            <Link key={item.label} href={item.href} className="mobile-more-tile">
-              <div className={`mobile-more-tile-icon tone-${item.tone}`}>{item.icon}</div>
-              <div className="mobile-more-tile-text">
-                <span className="mobile-more-tile-label">{item.label}</span>
-                <span className="mobile-more-tile-sub">{item.description}</span>
-              </div>
-            </Link>
-          ))}
+      <Section title="Workspace">
+        <div className="grid grid-cols-2 gap-2.5">
+          {shortcuts.map(item => {
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="group min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm transition hover:border-primary/30 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]"
+              >
+                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:text-foreground">
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <span className="block text-sm font-semibold">{item.label}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{item.description}</span>
+              </Link>
+            );
+          })}
         </div>
-      </section>
+      </Section>
 
-      <section className="mobile-more-section">
-        <h2 className="mobile-more-section-title">Resources</h2>
-        <div className="mobile-more-list">{resources.map(renderItem)}</div>
-      </section>
+      <Section title="Operations">
+        <Card className="divide-y divide-border overflow-hidden rounded-2xl border-border shadow-sm">
+          {resources.map(item => <NavigationRow key={item.href} item={item} />)}
+        </Card>
+      </Section>
 
-      <section className="mobile-more-section">
-        <h2 className="mobile-more-section-title">Preferences</h2>
-        <div className="mobile-more-preferences">
+      <Section title="Device & preferences">
+        <div className="space-y-2.5">
           <PwaInstallCard />
           <MobileThemeToggle />
           <MobileBiometricToggle />
           <PushNotificationToggle />
         </div>
-      </section>
+      </Section>
 
-      <section className="mobile-more-section">
-        <h2 className="mobile-more-section-title">Account</h2>
-        <div className="mobile-more-list">{account.map(renderItem)}</div>
-      </section>
-
-      <section className="mobile-more-section">
-        <div className="mobile-more-list">{actions.map(renderItem)}</div>
-        <div className="mobile-more-list" style={{ marginTop: '0.75rem' }}>
+      <Section title="Account">
+        <Card className="divide-y divide-border overflow-hidden rounded-2xl border-border shadow-sm">
+          {account.map(item => <NavigationRow key={item.href} item={item} />)}
           <MobileSignOutButton
-            icon={iconSignOut}
+            icon={<LogOut className="h-4.5 w-4.5" aria-hidden="true" />}
             label="Sign Out"
-            description="Sign out of OpsKnight"
+            description="Sign out of OpsKnight on this device"
             tone="red"
           />
-        </div>
-      </section>
+        </Card>
+      </Section>
 
-      <div className="mobile-more-footer">OpsKnight Mobile {APP_VERSION}</div>
+      <p className="pb-2 text-center text-[11px] text-muted-foreground">OpsKnight {APP_VERSION}</p>
     </div>
   );
 }
