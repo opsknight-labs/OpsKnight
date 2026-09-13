@@ -1,4 +1,5 @@
 import { createMobileIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
+import { Card } from '@/components/ui/shadcn/card';
 import MobileCreateIncidentClient from './client';
 
 export const dynamic = 'force-dynamic';
@@ -8,15 +9,16 @@ export default async function MobileCreateIncidentPage() {
 
   if (!context.canCreateIncident) {
     return (
-      <div className="flex flex-col gap-4 p-4 pb-24">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">
-            New Incident
-          </h1>
-          <p className="mt-1 text-sm text-[color:var(--text-muted)]">
+      <div className="responsive-page py-2">
+        <Card
+          className="rounded-2xl border-amber-300/70 bg-amber-50 p-4 text-amber-950 shadow-none dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100"
+          role="alert"
+        >
+          <p className="text-sm font-semibold">Incident creation is unavailable.</p>
+          <p className="mt-1 text-xs leading-relaxed opacity-80">
             You don&apos;t have access to create incidents for any service.
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -27,21 +29,25 @@ export default async function MobileCreateIncidentPage() {
     defaultIncidentVisibility: service.defaultIncidentVisibility,
   }));
   const users = context.users.map(user => ({ id: user.id, name: user.name, email: user.email }));
+  const templates = context.templates.map(template => ({
+    id: template.id,
+    name: template.name,
+    description: template.description,
+    title: template.title,
+    descriptionText: template.descriptionText,
+    defaultUrgency: template.defaultUrgency,
+    defaultPriority: template.defaultPriority,
+    defaultService: template.defaultService
+      ? { id: template.defaultService.id, name: template.defaultService.name }
+      : null,
+  }));
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">
-          New Incident
-        </h1>
-        <p className="mt-1 text-xs font-medium text-[color:var(--text-muted)]">
-          Report a new issue
-        </p>
-      </div>
-
+    <div className="responsive-page py-2">
       <MobileCreateIncidentClient
         services={services}
         users={users}
+        templates={templates}
         createAction={createMobileIncident}
       />
     </div>
