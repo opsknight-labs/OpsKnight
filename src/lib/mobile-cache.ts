@@ -40,9 +40,7 @@ const base64Encode = (bytes: ArrayBuffer): string => {
 const base64Decode = (value: string): ArrayBuffer => {
   if (typeof window === 'undefined') return new ArrayBuffer(0);
   const binary = window.atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
+  return Uint8Array.from(binary, character => character.charCodeAt(0)).buffer;
 };
 
 const getCryptoKey = async (): Promise<CryptoKey | null> => {
@@ -196,7 +194,9 @@ export const writeCache = async <T>(
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'QuotaExceededError') {
       try {
-        const keys = Object.keys(window.localStorage).filter(k => k.startsWith(CACHE_PREFIX));
+        const keys = Object.keys(window.localStorage).filter(storageKey =>
+          storageKey.startsWith(CACHE_PREFIX)
+        );
         const entries: { key: string; savedAt: number }[] = [];
         for (const storageKey of keys) {
           try {
@@ -210,7 +210,9 @@ export const writeCache = async <T>(
         }
         entries.sort((a, b) => a.savedAt - b.savedAt);
         const toDelete = Math.max(1, Math.ceil(entries.length * 0.25));
-        for (let i = 0; i < toDelete; i += 1) window.localStorage.removeItem(entries[i].key);
+        for (const entry of entries.slice(0, toDelete)) {
+          window.localStorage.removeItem(entry.key);
+        }
 
         const encrypted = await encryptEnvelope(payload);
         if (encrypted) {
