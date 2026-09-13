@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolveStatusPageCustomCss } from '@/lib/status-pages/theme-custom-css';
+import {
+  isLegacyStatusPageCustomCss,
+  resolveStatusPageCustomCss,
+} from '@/lib/status-pages/theme-custom-css';
 
 const LEGACY_LIGHT_TEMPLATE = `/* Template: Glacier */
 .status-page-container { background: #f8fafc; }
@@ -12,18 +15,20 @@ const MARKERLESS_LEGACY_TEMPLATE = `.status-page-container { background: #f8fafc
 #incidents .status-incident-card { background: #ffffff !important; }`;
 
 describe('status page curated theme custom CSS compatibility', () => {
-  it('temporarily disables all Advanced CSS for curated dark themes during PR #650 diagnosis', () => {
-    const genuineCustomCss = '.status-v3-service { outline: 2px solid hotpink; }';
+  it('preserves genuine customer Advanced CSS for curated dark themes', () => {
+    const customCss = '.status-v3-service { outline: 2px solid hotpink; }';
 
-    expect(resolveStatusPageCustomCss('command-center', genuineCustomCss)).toBe('');
-    expect(resolveStatusPageCustomCss('terminal', genuineCustomCss)).toBe('');
-    expect(resolveStatusPageCustomCss('arena-neon', genuineCustomCss)).toBe('');
-    expect(resolveStatusPageCustomCss('global-operations', genuineCustomCss)).toBe('');
+    expect(resolveStatusPageCustomCss('command-center', customCss)).toBe(customCss);
+    expect(resolveStatusPageCustomCss('terminal', customCss)).toBe(customCss);
+    expect(resolveStatusPageCustomCss('arena-neon', customCss)).toBe(customCss);
+    expect(resolveStatusPageCustomCss('global-operations', customCss)).toBe(customCss);
   });
 
-  it('suppresses stale legacy template CSS for non-default curated light themes', () => {
+  it('suppresses stale legacy template CSS for every non-default curated theme', () => {
     expect(resolveStatusPageCustomCss('executive', LEGACY_LIGHT_TEMPLATE)).toBe('');
     expect(resolveStatusPageCustomCss('executive', MARKERLESS_LEGACY_TEMPLATE)).toBe('');
+    expect(resolveStatusPageCustomCss('command-center', LEGACY_LIGHT_TEMPLATE)).toBe('');
+    expect(resolveStatusPageCustomCss('command-center', MARKERLESS_LEGACY_TEMPLATE)).toBe('');
   });
 
   it('preserves legacy template CSS under Default for backwards compatibility', () => {
@@ -35,14 +40,15 @@ describe('status page curated theme custom CSS compatibility', () => {
     );
   });
 
-  it('keeps genuine customer Advanced CSS for curated light themes', () => {
-    const customCss = '.status-v3-service { outline: 2px solid hotpink; }';
-
-    expect(resolveStatusPageCustomCss('executive', customCss)).toBe(customCss);
+  it('classifies legacy payloads without treating normal Advanced CSS as legacy', () => {
+    expect(isLegacyStatusPageCustomCss(LEGACY_LIGHT_TEMPLATE)).toBe(true);
+    expect(isLegacyStatusPageCustomCss(MARKERLESS_LEGACY_TEMPLATE)).toBe(true);
+    expect(isLegacyStatusPageCustomCss('.status-v3-service { padding: 1rem; }')).toBe(false);
   });
 
   it('fails safely for missing or invalid custom CSS', () => {
     expect(resolveStatusPageCustomCss('command-center', undefined)).toBe('');
     expect(resolveStatusPageCustomCss('command-center', null)).toBe('');
+    expect(isLegacyStatusPageCustomCss(undefined)).toBe(false);
   });
 });
