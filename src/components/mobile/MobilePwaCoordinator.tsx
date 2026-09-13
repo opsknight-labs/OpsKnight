@@ -1,7 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { flushQueuedRequests, listQueuedRequests, type OfflineQueueState } from '@/lib/offline-queue';
+import {
+  flushQueuedRequests,
+  listQueuedRequests,
+  resumeAuthRequiredOperations,
+  type OfflineQueueState,
+} from '@/lib/offline-queue';
 
 type QueueSummary = Partial<Record<OfflineQueueState, number>>;
 
@@ -40,7 +45,23 @@ export default function MobilePwaCoordinator() {
   }, [refreshQueue]);
 
   useEffect(() => {
-    void refreshQueue();
+    const restoreAuthenticatedQueue = async () => {
+      try {
+        const resumed = await resumeAuthRequiredOperations();
+        if (resumed > 0 && navigator.onLine) {
+          await requestSync();
+          return;
+        }
+      } catch {
+        // Queue recovery is best-effort; the visible queue state remains available for manual retry.
+      }
+      await refreshQueue();
+    };
+
+    // This component only renders inside the authenticated mobile layout. Reaching
+    // this boundary after a login/SSO round-trip is therefore the authoritative
+    // signal that AUTH_REQUIRED entries may re-enter normal ordered replay.
+    void restoreAuthenticatedQueue();
 
     const queueChanged = () => void refreshQueue();
     const online = () => void requestSync();
