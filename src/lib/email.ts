@@ -17,7 +17,7 @@ import {
 } from './email-components';
 import type { EmailConfig } from './notification-providers';
 import { decodeNotificationEnvelope } from './notification-payload';
-import { announcementEmailDeliveryRevoked } from './status-pages/announcement-delivery-eligibility';
+import { announcementEmailDeliveryEligibility } from './status-pages/announcement-delivery-eligibility';
 
 export type EmailOptions = {
   to: string;
@@ -312,13 +312,27 @@ export async function sendEmail(
   providedConfig?: unknown
 ): Promise<EmailDeliveryResult> {
   try {
-    const revokedReason = await announcementEmailDeliveryRevoked(options.idempotencyKey);
-    if (revokedReason) {
+    const eligibility = await announcementEmailDeliveryEligibility(options.idempotencyKey);
+    if (eligibility.status === 'STALE') {
       logger.info('status_page.announcement_delivery_suppressed', {
         notificationId: options.idempotencyKey,
-        reason: revokedReason,
+        reason: eligibility.reason,
       });
-      return { success: true, skipped: true, error: revokedReason };
+      return { success: true, skipped: true, error: eligibility.reason };
+    }
+    if (eligibility.status === 'NOT_DUE') {
+      const retryAfter = Math.max(1_000, eligibility.retryAt.getTime() - Date.now());
+      logger.info('status_page.announcement_delivery_deferred', {
+        notificationId: options.idempotencyKey,
+        retryAt: eligibility.retryAt,
+      });
+      return {
+        success: false,
+        statusCode: 425,
+        errorCode: 'ANNOUNCEMENT_NOT_DUE',
+        retryAfterMs: retryAfter,
+        error: eligibility.reason,
+      };
     }
 
     const configsToTry: EmailConfig[] = providedConfig
@@ -476,7 +490,6 @@ export function generateIncidentEmailHTML(
       label: 'Resolved',
       value: formatDateTime(incident.resolvedAt, timeZone, { format: 'datetime' }),
     });
-  // Deduplicate context/eventMessage if it merely echoes incident title or [Service] title
   const serviceName = incident.service?.name || '';
   const trimmedMsg = (eventMessage || '').trim().toLowerCase();
   const trimmedTitle = incident.title.trim().toLowerCase();
@@ -484,15 +497,13 @@ export function generateIncidentEmailHTML(
   const isDuplicateMessage =
     trimmedMsg === trimmedTitle ||
     trimmedMsg === prefixedTitle ||
-    (trimmedMsg.startsWith(`[${serviceName.toLowerCase()}]`) &&
-      trimmedMsg.endsWith(trimmedTitle));
+    (trimmedMsg.startsWith(`[${serviceName.toLowerCase()}]`) && trimmedMsg.endsWith(trimmedTitle));
 
   const context =
     eventMessage && !isDuplicateMessage
       ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid ${presentation.accentColor};border-radius:8px;padding:12px 16px;margin:16px 0;color:#334155;font-size:13px;line-height:1.5;">${escapeHtml(eventMessage)}</div>`
       : '';
 
-  // Structured Incident Description (replaces raw uncontained "Overview" header)
   const description = incident.description
     ? `<div class="desktop-font-body" style="margin-top:20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid ${presentation.accentColor};border-radius:8px;padding:14px 18px;">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;margin-bottom:6px;">
@@ -505,14 +516,10 @@ export function generateIncidentEmailHTML(
     : '';
 
   return EmailContainer(
-    EmailHeader(
-      presentation.header,
-      `Service: ${incident.service?.name || 'Service'}`,
-      {
-        headerGradient: presentation.headerGradient,
-        logoUrl: `${getBaseUrl()}/logo.png`,
-      }
-    ) +
+    EmailHeader(presentation.header, `Service: ${incident.service?.name || 'Service'}`, {
+      headerGradient: presentation.headerGradient,
+      logoUrl: `${getBaseUrl()}/logo.png`,
+    }) +
       EmailContent(`
         <div style="margin-bottom:16px">${StatusBadge(presentation.label.toUpperCase(), presentation.badge)}</div>
         <div class="desktop-font-body" style="font-size:14px;color:#475569;margin-bottom:18px;line-height:1.5;">${escapeHtml(presentation.message)}</div>
