@@ -37,7 +37,7 @@ describe('status page Design settings architecture', () => {
   it('keeps the shared V3 renderer authoritative for curated themes', () => {
     const page = read('src/components/status-page/StatusPageV3.tsx');
     const publicShell = read('src/components/status-page/StatusPageSnapshotView.tsx');
-    const preview = read('src/components/status-page/StatusPageLivePreview.tsx');
+    const preview = read('src/components/status-page/StatusPageLivePreviewBase.tsx');
 
     expect(page).toContain('compileStatusPageThemeCss');
     expect(page).toContain('data-status-page-theme-runtime');
