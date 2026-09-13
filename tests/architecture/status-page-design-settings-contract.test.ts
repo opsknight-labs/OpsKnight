@@ -40,20 +40,22 @@ describe('status page Design settings architecture', () => {
     const preview = read('src/components/status-page/StatusPageLivePreview.tsx');
 
     expect(page).toContain('compileStatusPageThemeCss');
-    expect(page).toContain('resolveStatusPageThemeRuntimeVariables');
     expect(page).toContain('data-status-page-theme-runtime');
     expect(publicShell).toContain('<StatusPageV3');
     expect(preview).toContain('<StatusPageV3');
     expect(publicShell).not.toContain('compileStatusPageThemeCss');
+    expect(page).not.toContain('resolveStatusPageThemeRuntimeVariables');
   });
 
-  it('keeps Default native while curated themes bridge runtime surface tokens', () => {
-    const runtime = read('src/lib/status-pages/theme-runtime.ts');
+  it('keeps Default native and the curated token bridge cascade-safe', () => {
+    const contract = read('src/lib/status-pages/theme-contract.ts');
 
-    expect(runtime).toContain("if (theme.id === 'default') return {};");
-    expect(runtime).toContain("'--status-panel-bg': preview.surface");
-    expect(runtime).toContain("'--status-panel-muted-bg': preview.surfaceAlt");
-    expect(runtime).toContain("'--status-text': preview.text");
-    expect(runtime).toContain("'--status-primary': preview.accent");
+    expect(contract).toContain("if (selected.id === DEFAULT_STATUS_PAGE_THEME_ID) return '';");
+    expect(contract).toContain("const surface = ':where(.status-page-surface)';");
+    expect(contract).toContain('--status-panel-bg: ${preview.surface}');
+    expect(contract).toContain('--status-panel-muted-bg: ${preview.surfaceAlt}');
+    expect(contract).toContain('--status-text: ${preview.text}');
+    expect(contract).toContain('--status-primary: var(--sp-theme-accent)');
+    expect(contract).not.toContain('.status-page-container .status-page-surface {');
   });
 });
