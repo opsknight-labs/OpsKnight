@@ -5,7 +5,7 @@ import type { ComponentType } from 'react';
 import {
   BarChart3,
   BookOpen,
-  CalendarDays,
+  CalendarClock,
   ChevronRight,
   FileText,
   LogOut,
@@ -15,6 +15,7 @@ import {
   Signal,
   Users,
   UsersRound,
+  Wrench,
 } from 'lucide-react';
 import MobileThemeToggle from '@/components/mobile/MobileThemeToggle';
 import PushNotificationToggle from '@/components/mobile/PushNotificationToggle';
@@ -23,7 +24,6 @@ import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { useUserAvatarContextSafe } from '@/contexts/UserAvatarContext';
 import PwaInstallCard from '@/components/mobile/PwaInstallCard';
 import MobileSignOutButton from '@/components/mobile/MobileSignOutButton';
-import { Button } from '@/components/ui/shadcn/button';
 import { Card } from '@/components/ui/shadcn/card';
 import { APP_VERSION } from '@/lib/constants';
 
@@ -32,7 +32,7 @@ type IconComponent = ComponentType<{ className?: string; 'aria-hidden'?: boolean
 type NavigationItem = {
   href: string;
   label: string;
-  description: string;
+  description?: string;
   icon: IconComponent;
 };
 
@@ -45,23 +45,21 @@ type MobileMoreContentProps = {
   avatarUrl?: string | null;
 };
 
-const shortcuts: NavigationItem[] = [
+const operations: NavigationItem[] = [
+  { href: '/m/schedules', label: 'On-call', description: 'Schedules and rotations', icon: CalendarClock },
+  { href: '/m/services', label: 'Services', description: 'Service health and incidents', icon: Wrench },
   { href: '/m/teams', label: 'Teams', description: 'Ownership and responders', icon: UsersRound },
-  { href: '/m/users', label: 'Users', description: 'Directory and roles', icon: Users },
-  { href: '/m/schedules', label: 'Schedules', description: 'On-call rotations', icon: CalendarDays },
-  { href: '/m/policies', label: 'Policies', description: 'Escalation paths', icon: ShieldCheck },
-];
-
-const resources: NavigationItem[] = [
-  { href: '/m/analytics', label: 'Analytics', description: 'Incident performance and trends', icon: BarChart3 },
+  { href: '/m/policies', label: 'Escalation policies', description: 'Escalation paths', icon: ShieldCheck },
   { href: '/m/postmortems', label: 'Postmortems', description: 'Reviews and follow-up work', icon: FileText },
-  { href: '/m/status', label: 'Status', description: 'Operational status pages', icon: Signal },
+  { href: '/m/status', label: 'System health', description: 'Operational status', icon: Signal },
+  { href: '/m/analytics', label: 'Analytics', description: 'Responder performance and trends', icon: BarChart3 },
+  { href: '/m/users', label: 'Users', description: 'Directory and roles', icon: Users },
 ];
 
 const account: NavigationItem[] = [
-  { href: '/settings/profile', label: 'Settings', description: 'Profile, security and preferences', icon: Settings },
-  { href: '/m/help', label: 'Help & Documentation', description: 'Guides and responder help', icon: BookOpen },
-  { href: '/api/prefer-desktop', label: 'Desktop mode', description: 'Open the full desktop workspace', icon: Monitor },
+  { href: '/settings/profile', label: 'Profile & security', description: 'Account, devices and sessions', icon: Settings },
+  { href: '/m/help', label: 'Help & documentation', description: 'Guides and responder help', icon: BookOpen },
+  { href: '/api/prefer-desktop', label: 'Desktop workspace', description: 'Open the full desktop workspace', icon: Monitor },
 ];
 
 function NavigationRow({ item }: { item: NavigationItem }) {
@@ -69,14 +67,14 @@ function NavigationRow({ item }: { item: NavigationItem }) {
   return (
     <Link
       href={item.href}
-      className="flex min-h-14 items-center gap-3 px-4 py-3 text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="flex min-h-[58px] items-center gap-3 px-3.5 py-2.5 text-card-foreground transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-        <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
-      </span>
+      <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">{item.label}</span>
-        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{item.description}</span>
+        <span className="block truncate text-[13px] font-semibold text-foreground">{item.label}</span>
+        {item.description && (
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{item.description}</span>
+        )}
       </span>
       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
     </Link>
@@ -86,7 +84,7 @@ function NavigationRow({ item }: { item: NavigationItem }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-2">
-      <h2 className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{title}</h2>
+      <h2 className="px-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{title}</h2>
       {children}
     </section>
   );
@@ -104,55 +102,28 @@ export default function MobileMoreContent({
   const avatarUrl = userId ? getAvatar(userId, gender, name, avatarUrlProp) : avatarUrlProp;
 
   return (
-    <div className="responsive-page space-y-5 px-3 py-4 sm:px-4">
-      <Card className="overflow-hidden rounded-2xl border-border bg-card shadow-sm">
-        <div className="h-1 bg-gradient-to-r from-primary via-slate-500 to-primary/60" />
-        <div className="flex min-w-0 items-center gap-4 p-4 sm:p-5">
-          <div className="shrink-0 rounded-full ring-2 ring-border ring-offset-2 ring-offset-background">
-            <MobileAvatar name={name} src={avatarUrl || undefined} size="xl" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold tracking-tight text-foreground">{name}</h1>
-            <p className="truncate text-sm text-muted-foreground">{email || 'No email on file'}</p>
-            <span className="mt-2 inline-flex rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-              {role}
-            </span>
-          </div>
-          <Button asChild variant="outline" size="sm" className="shrink-0 rounded-xl">
-            <Link href="/m/notifications">Alerts</Link>
-          </Button>
+    <div className="responsive-page space-y-5">
+      <section className="flex min-w-0 items-center gap-3 px-0.5 py-1">
+        <div className="shrink-0">
+          <MobileAvatar name={name} src={avatarUrl || undefined} size="lg" />
         </div>
-      </Card>
-
-      <Section title="Workspace">
-        <div className="grid grid-cols-2 gap-2.5">
-          {shortcuts.map(item => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="group min-w-0 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm transition hover:border-primary/30 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.99]"
-              >
-                <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:text-foreground">
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <span className="block text-sm font-semibold">{item.label}</span>
-                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{item.description}</span>
-              </Link>
-            );
-          })}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-sm font-bold text-foreground">{name}</h1>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{email || 'No email on file'}</p>
         </div>
-      </Section>
+        <span className="shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+          {role}
+        </span>
+      </section>
 
       <Section title="Operations">
-        <Card className="divide-y divide-border overflow-hidden rounded-2xl border-border shadow-sm">
-          {resources.map(item => <NavigationRow key={item.href} item={item} />)}
+        <Card className="divide-y divide-border/70 overflow-hidden rounded-xl border-border bg-card shadow-none">
+          {operations.map(item => <NavigationRow key={item.href} item={item} />)}
         </Card>
       </Section>
 
-      <Section title="Device & preferences">
-        <div className="space-y-2.5">
+      <Section title="App & device">
+        <div className="space-y-2">
           <PwaInstallCard />
           <MobileThemeToggle />
           <MobileBiometricToggle />
@@ -160,19 +131,19 @@ export default function MobileMoreContent({
         </div>
       </Section>
 
-      <Section title="Account">
-        <Card className="divide-y divide-border overflow-hidden rounded-2xl border-border shadow-sm">
+      <Section title="Account & help">
+        <Card className="divide-y divide-border/70 overflow-hidden rounded-xl border-border bg-card shadow-none">
           {account.map(item => <NavigationRow key={item.href} item={item} />)}
           <MobileSignOutButton
             icon={<LogOut className="h-[18px] w-[18px]" aria-hidden="true" />}
-            label="Sign Out"
+            label="Sign out"
             description="Sign out of OpsKnight on this device"
             tone="red"
           />
         </Card>
       </Section>
 
-      <p className="pb-2 text-center text-[11px] text-muted-foreground">OpsKnight {APP_VERSION}</p>
+      <p className="pb-1 text-center text-[10px] text-muted-foreground">OpsKnight {APP_VERSION}</p>
     </div>
   );
 }
