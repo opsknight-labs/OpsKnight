@@ -500,7 +500,7 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 604_800);
   });
 
-  it('keeps the one-year Remember Me lifetime for credential sessions', async () => {
+  it('caps Remember Me credential sessions at 90 days', async () => {
     const jwt = await getJwtCallback();
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'u-remember',
@@ -530,8 +530,8 @@ describe('Auth JWT + OIDC callback contract', () => {
       session: undefined,
     });
 
-    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 31_535_900);
-    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 31_536_000);
+    expect(token.exp).toBeGreaterThan(Math.floor(Date.now() / 1000) + 7_775_900);
+    expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 7_776_000);
   });
 
   it('revokeUserSessions increments tokenVersion', async () => {

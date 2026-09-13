@@ -41,11 +41,19 @@ export async function customJwtEncode(params: JWTEncodeParams): Promise<string> 
     delete payloadToEncrypt.error;
   }
 
+  // A session identifier must be stable across Auth.js refresh/re-encode cycles.
+  // Rotating jti on every encode makes per-session audit/revocation impossible and
+  // falsely turns one browser session into many logical sessions.
+  const sessionId =
+    typeof token.jti === 'string' && token.jti.length >= 16 && token.jti.length <= 128
+      ? token.jti
+      : uuidv4();
+
   return await new EncryptJWT(payloadToEncrypt)
     .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
     .setIssuedAt()
     .setExpirationTime(expirationTime)
-    .setJti(uuidv4())
+    .setJti(sessionId)
     .encrypt(encryptionSecret);
 }
 

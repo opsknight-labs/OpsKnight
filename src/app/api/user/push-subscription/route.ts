@@ -1,118 +1,159 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { z } from 'zod';
+
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { logger } from '@/lib/logger';
+import { logger, withRequestContext } from '@/lib/logger';
+import { AppError, isAppError } from '@/lib/errors';
+import { jsonError, jsonOk } from '@/lib/api-response';
+import {
+  WebPushSubscriptionSchema,
+  encodeWebPushSubscription,
+  normalizeWebPushSubscription,
+  webPushDeviceKey,
+} from '@/lib/web-push-subscription';
 
-export async function POST(req: NextRequest) {
-  const authOptions = await getAuthOptions();
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+const DeleteSubscriptionSchema = z.object({ endpoint: z.string().min(1).max(4096) }).strict();
 
-  try {
-    const subscription = await req.json();
-    const { endpoint, keys } = subscription || {};
-    if (!endpoint || typeof endpoint !== 'string' || !keys?.p256dh || !keys?.auth) {
-      return new NextResponse(
-        'Invalid PushSubscription payload: missing endpoint or cryptographic keys',
-        { status: 400 }
-      );
-    }
-
-    // Store subscription
-    // We use endpoint as deviceId (it's unique per browser)
-    const deviceId = subscription.endpoint;
-    const token = JSON.stringify(subscription);
-
-    // Remove any legacy subscriptions on this endpoint from other users on shared browsers
-    await prisma.userDevice.deleteMany({
-      where: {
-        deviceId,
-        userId: { not: session.user.id },
-      },
-    });
-
-    await prisma.userDevice.upsert({
-      where: {
-        userId_deviceId: {
-          userId: session.user.id,
-          deviceId: deviceId,
-        },
-      },
-      update: {
-        token: token,
-        lastUsed: new Date(),
-        userAgent: req.headers.get('user-agent') || undefined,
-      },
-      create: {
-        userId: session.user.id,
-        deviceId: deviceId,
-        token: token,
-        platform: 'web',
-        userAgent: req.headers.get('user-agent') || undefined,
-      },
-    });
-
-    // Also enable push notifications for user if not already
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { pushNotificationsEnabled: true },
-    });
-
-    return new NextResponse(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    logger.error('Failed to save subscription', { error });
-    return new NextResponse('Internal Server Error', { status: 500 });
-  }
+async function authenticatedUserId() {
+  const session = await getServerSession(await getAuthOptions());
+  if (!session?.user?.id) throw new AppError({ code: 'AUTHENTICATION_REQUIRED' });
+  return session.user.id;
 }
 
-export async function DELETE(req: NextRequest) {
-  const authOptions = await getAuthOptions();
-  const session = await getServerSession(authOptions);
-  if (!session || !session.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
+function validationError(field: string, message: string) {
+  return new AppError({
+    code: 'VALIDATION_FAILED',
+    fields: [{ field, code: 'invalid_url', message }],
+  });
+}
 
+async function postSubscription(req: NextRequest) {
   try {
-    let endpoint = '';
+    const userId = await authenticatedUserId();
+    let body: unknown;
     try {
-      const body = await req.json();
-      endpoint = typeof body?.endpoint === 'string' ? body.endpoint : '';
+      body = await req.json();
     } catch {
-      endpoint = '';
+      throw new AppError({ code: 'INVALID_JSON' });
     }
 
-    if (!endpoint) {
-      return new NextResponse('Invalid subscription', { status: 400 });
-    }
-
-    await prisma.userDevice.deleteMany({
-      where: {
-        userId: session.user.id,
-        deviceId: endpoint,
-      },
-    });
-
-    const remainingDevices = await prisma.userDevice.count({
-      where: { userId: session.user.id },
-    });
-
-    if (remainingDevices === 0) {
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { pushNotificationsEnabled: false },
+    const parsed = WebPushSubscriptionSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        fields: parsed.error.issues.map(issue => ({
+          field: issue.path.join('.') || 'request',
+          code: issue.code,
+          message: issue.message,
+        })),
       });
     }
 
-    return new NextResponse(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
+    let subscription;
+    try {
+      subscription = await normalizeWebPushSubscription(parsed.data);
+    } catch {
+      throw validationError(
+        'endpoint',
+        'A public HTTPS Web Push endpoint is required; private or reserved destinations are not allowed.'
+      );
+    }
+
+    const deviceId = webPushDeviceKey(subscription.endpoint);
+    const token = await encodeWebPushSubscription(subscription);
+    const userAgent = req.headers.get('user-agent')?.slice(0, 512) || undefined;
+
+    await prisma.$transaction(async tx => {
+      // Endpoint URLs are bearer-like capabilities. Persist only their hash as the
+      // stable device key, and clean up previous plaintext-key rows opportunistically.
+      await tx.userDevice.deleteMany({
+        where: {
+          userId: { not: userId },
+          deviceId: { in: [deviceId, subscription.endpoint] },
+        },
+      });
+      await tx.userDevice.deleteMany({ where: { userId, deviceId: subscription.endpoint } });
+
+      await tx.userDevice.upsert({
+        where: { userId_deviceId: { userId, deviceId } },
+        update: { token, lastUsed: new Date(), userAgent, platform: 'web' },
+        create: { userId, deviceId, token, platform: 'web', userAgent },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: { pushNotificationsEnabled: true },
+      });
     });
+
+    return jsonOk({ success: true });
   } catch (error) {
-    logger.error('Failed to delete subscription', { error });
-    return new NextResponse('Internal Server Error', { status: 500 });
+    logger.error('push.subscription.save_failed', {
+      component: 'push-subscription-api',
+      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    return jsonError(isAppError(error) ? error : new AppError({ code: 'INTERNAL_ERROR' }));
   }
 }
+
+async function deleteSubscription(req: NextRequest) {
+  try {
+    const userId = await authenticatedUserId();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      throw new AppError({ code: 'INVALID_JSON' });
+    }
+    const parsed = DeleteSubscriptionSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        fields: parsed.error.issues.map(issue => ({
+          field: issue.path.join('.') || 'request',
+          code: issue.code,
+          message: issue.message,
+        })),
+      });
+    }
+
+    let endpoint: string;
+    try {
+      endpoint = (await normalizeWebPushSubscription({
+        endpoint: parsed.data.endpoint,
+        expirationTime: null,
+        keys: { p256dh: 'x'.repeat(16), auth: 'x'.repeat(8) },
+      })).endpoint;
+    } catch {
+      throw validationError('endpoint', 'A valid public HTTPS Web Push endpoint is required.');
+    }
+    const deviceId = webPushDeviceKey(endpoint);
+
+    const remainingDevices = await prisma.$transaction(async tx => {
+      await tx.userDevice.deleteMany({
+        where: { userId, deviceId: { in: [deviceId, endpoint] } },
+      });
+      const remaining = await tx.userDevice.count({ where: { userId, platform: 'web' } });
+      if (remaining === 0) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { pushNotificationsEnabled: false },
+        });
+      }
+      return remaining;
+    });
+    return jsonOk({ success: true, remainingDevices });
+  } catch (error) {
+    logger.error('push.subscription.delete_failed', {
+      component: 'push-subscription-api',
+      errorCode: isAppError(error) ? error.code : 'INTERNAL_ERROR',
+      error: error instanceof Error ? error.message : 'unknown',
+    });
+    return jsonError(isAppError(error) ? error : new AppError({ code: 'INTERNAL_ERROR' }));
+  }
+}
+
+export const POST = withRequestContext(postSubscription, 'api.user.push-subscription.create');
+export const DELETE = withRequestContext(deleteSubscription, 'api.user.push-subscription.delete');
