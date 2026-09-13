@@ -157,10 +157,15 @@ describe('status page design contract', () => {
         ? '#ffffff'
         : '#0b1020';
 
-      expect(contrastRatio(text, surface)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(muted, surface)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(subtle, surfaceAlt)).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(accentText, accent)).toBeGreaterThanOrEqual(4.5);
+      const checks: Array<[string, number]> = [
+        ['primary text', contrastRatio(text, surface)],
+        ['muted text', contrastRatio(muted, surface)],
+        ['subtle text', contrastRatio(subtle, surfaceAlt)],
+        ['accent foreground', contrastRatio(accentText, accent)],
+      ];
+      for (const [label, ratio] of checks) {
+        expect(ratio, `${theme.id}: ${label}`).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 
@@ -177,7 +182,7 @@ describe('status page design contract', () => {
     ];
 
     for (const endpoint of endpoints) {
-      expect(contrastRatio('#ffffff', endpoint)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio('#ffffff', endpoint), endpoint).toBeGreaterThanOrEqual(4.5);
     }
   });
 
