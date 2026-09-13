@@ -72,7 +72,9 @@ describe('privacy discovery API', () => {
     );
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
-    expect(await response.json()).toEqual({
+    const body = await response.json();
+    expect(body).toMatchObject({ success: true, dataState: 'available' });
+    expect(body.data).toEqual({
       subjectUserId: userId,
       counts: { user: 1 },
       limitations: [],
