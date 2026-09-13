@@ -59,6 +59,7 @@ type LifecycleDeliveryPolicy = {
   targetKind?:
     | 'SERVICE_SLACK_CHANNEL'
     | 'SERVICE_SLACK_WEBHOOK'
+    | 'SERVICE_MICROSOFT_TEAMS_CHANNEL'
     | 'WEBHOOK_INTEGRATION'
     | 'LEGACY_SERVICE_WEBHOOK';
   targetId?: string;
@@ -150,6 +151,21 @@ export type CentralNotificationPayload =
       serviceId?: string;
       expectedStatus?: string;
       escalationGeneration?: number | null;
+    }
+  | {
+      kind: 'MICROSOFT_TEAMS_CHANNEL';
+      destinationId: string;
+      incident: IncidentPresentation & {
+        description?: string | null;
+        priority?: string | null;
+        assigneeName?: string | null;
+        incidentUrl: string;
+        createdAt: Date;
+        acknowledgedAt?: Date | null;
+        resolvedAt?: Date | null;
+      };
+      eventType: 'triggered' | 'acknowledged' | 'resolved';
+      lifecyclePolicy?: LifecycleDeliveryPolicy;
     };
 
 type IncidentCentralPayload = Extract<
@@ -161,6 +177,7 @@ export type CentralNotificationInput = {
   category: NotificationCategory;
   channel: NotificationChannel;
   recipientType: NotificationRecipientType;
+  // Phase 1 Teams uses serviceId as stable recipientAddress since Graph channel ids are not emails/phones.
   recipientId?: string;
   recipientAddress: string;
   userId?: string;
@@ -181,31 +198,37 @@ export type CentralNotificationInput = {
   tenantKey?: string;
 };
 
-const centralNotificationInputSchema = z
-  .object({
-    category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
-    channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP']),
-    recipientType: z.enum(['USER', 'EMAIL', 'PHONE', 'SUBSCRIBER', 'SLACK_CHANNEL', 'WEBHOOK']),
-    recipientId: z.string().max(191).optional(),
-    recipientAddress: z.string().max(2_048),
-    userId: z.string().max(191).optional(),
-    incidentId: z.string().max(191).optional(),
-    templateKey: z.string().max(191),
-    sourceType: z.string().max(191),
-    sourceId: z.string().max(191),
-    eventKey: z.string().max(512),
-    displayMessage: z.string().max(2_000),
-    payload: z.unknown(),
-    priority: z.number().int().optional(),
-    trafficClass: z.enum(['CRITICAL', 'TRANSACTIONAL', 'PUBLIC_INCIDENT', 'BULK']).optional(),
-    scheduledAt: z.date().optional(),
-    expiresAt: z.date().optional(),
-    maxAttempts: z.number().int().optional(),
-    contentId: z.string().max(191).optional(),
-    fanoutId: z.string().max(191).optional(),
-    tenantKey: z.string().trim().min(1).max(191).optional(),
-  })
-  .strict();
+const centralNotificationInputSchema = z.object({
+  category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
+  channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP', 'MICROSOFT_TEAMS']),
+  recipientType: z.enum([
+    'USER',
+    'EMAIL',
+    'PHONE',
+    'SUBSCRIBER',
+    'SLACK_CHANNEL',
+    'WEBHOOK',
+    'MICROSOFT_TEAMS_CHANNEL',
+  ]),
+  recipientId: z.string().max(191).optional(),
+  recipientAddress: z.string().max(2_048),
+  userId: z.string().max(191).optional(),
+  incidentId: z.string().max(191).optional(),
+  templateKey: z.string().max(191),
+  sourceType: z.string().max(191),
+  sourceId: z.string().max(191),
+  eventKey: z.string().max(512),
+  displayMessage: z.string().max(2_000),
+  payload: z.unknown(),
+  priority: z.number().int().optional(),
+  trafficClass: z.enum(['CRITICAL', 'TRANSACTIONAL', 'PUBLIC_INCIDENT', 'BULK']).optional(),
+  scheduledAt: z.date().optional(),
+  expiresAt: z.date().optional(),
+  maxAttempts: z.number().int().optional(),
+  contentId: z.string().max(191).optional(),
+  fanoutId: z.string().max(191).optional(),
+  tenantKey: z.string().trim().min(1).max(191).optional(),
+}).strict();
 
 type NotificationStore = Pick<Prisma.TransactionClient, 'notification'>;
 
@@ -276,6 +299,7 @@ function channelForPayload(payload: CentralNotificationPayload): NotificationCha
   if (payload.kind === 'INCIDENT_PUSH') return 'PUSH';
   if (payload.kind === 'INCIDENT_WHATSAPP') return 'WHATSAPP';
   if (payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK') return 'SLACK';
+  if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL') return 'MICROSOFT_TEAMS';
   if (payload.kind === 'STATUS_PAGE_WEBHOOK') return 'WEBHOOK';
   return payload.kind;
 }
@@ -317,6 +341,8 @@ function isCentralNotificationPayload(value: unknown): value is CentralNotificat
       return hasText(value.channel) && isRecord(value.incident) && hasText(value.incident.id);
     case 'SLACK_WEBHOOK':
       return isRecord(value.incident) && hasText(value.incident.id);
+    case 'MICROSOFT_TEAMS_CHANNEL':
+      return hasText(value.destinationId) && isRecord(value.incident) && hasText(value.incident.id);
     case 'WEBHOOK':
       return hasText(value.url) && isRecord(value.payload);
     case 'STATUS_PAGE_WEBHOOK':
@@ -618,10 +644,32 @@ function payloadProviderKey(payload: CentralNotificationPayload): string {
       return 'invalid-webhook';
     }
   }
+  if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL' && payload.lifecyclePolicy?.serviceId) {
+    // Will be resolved to tenant-scoped key by async helper below; fallthrough keeps sync callers safe
+    return 'default';
+  }
   if ('providerKey' in payload && payload.providerKey) return payload.providerKey;
   // Provider budgets are account-wide. A conservative shared key prevents
   // tenant/page/channel partitions from multiplying the upstream allowance.
   return 'default';
+}
+
+async function payloadProviderKeyAsync(payload: CentralNotificationPayload): Promise<string> {
+  if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL') {
+    try {
+      const anyPrisma = prisma as unknown as {
+        microsoftTeamsDestination: { findUnique: (a: unknown) => Promise<{ tenantId: string } | null> };
+      };
+      const dest = await anyPrisma.microsoftTeamsDestination.findUnique({
+        where: { id: payload.destinationId },
+        select: { tenantId: true },
+      } as never);
+      if (dest?.tenantId) return `tenant:${dest.tenantId}`;
+    } catch {
+      // best-effort — fall through to default
+    }
+  }
+  return payloadProviderKey(payload);
 }
 
 async function providerAdmission(
@@ -629,18 +677,21 @@ async function providerAdmission(
   trafficClass: NotificationTrafficClass
 ) {
   const channel = channelForPayload(payload);
-  return acquireProviderAdmission(
-    channel as ProviderAdmissionScope,
-    payloadProviderKey(payload),
-    new Date(),
-    trafficClass
-  );
+  const key = await payloadProviderKeyAsync(payload);
+  return acquireProviderAdmission(channel as ProviderAdmissionScope, key, new Date(), trafficClass);
 }
 
 function providerAdmissionIdentity(payload: CentralNotificationPayload) {
   return {
     scope: channelForPayload(payload) as ProviderAdmissionScope,
     providerKey: payloadProviderKey(payload),
+  };
+}
+
+async function providerAdmissionIdentityAsync(payload: CentralNotificationPayload) {
+  return {
+    scope: channelForPayload(payload) as ProviderAdmissionScope,
+    providerKey: await payloadProviderKeyAsync(payload),
   };
 }
 
@@ -967,6 +1018,24 @@ async function dispatchPayload(
             retryAfterMs: result.retryAfterMs,
           };
     }
+    case 'MICROSOFT_TEAMS_CHANNEL': {
+      // Single outbox: real incident delivery is exclusively via ExternalOperation
+      // claim-first path (`src/lib/microsoft-teams/delivery.ts` → Bot Framework
+      // `POST /v3/conversations` + `PUT .../activities`). The central Notification
+      // `MICROSOFT_TEAMS_CHANNEL` dispatch is RETIRED to eliminate the competing
+      // outbox that raced the ledger (`__reserved__` / advisory lock) and produced
+      // duplicate cards when both pipelines were enqueued. The Notification channel
+      // enum + health fallback remain for backwards-compat rows, but new Teams
+      // intents must not be created via `enqueueCentralNotification` — see
+      // `src/lib/service-notifications.ts` and `src/app/api/microsoft-teams/test`.
+      // Returning a permanent failure keeps old rows from retrying indefinitely.
+      return {
+        success: false,
+        statusCode: 410,
+        errorCode: 'DESTINATION_NOT_FOUND',
+        error: 'Microsoft Teams via central Notification is retired — use ExternalOperation delivery.',
+      };
+    }
   }
 }
 
@@ -1119,6 +1188,36 @@ async function serviceTargetDeliveryRevoked(
     });
     return target ? null : 'Webhook integration was disabled, removed, or retargeted';
   }
+  if (policy.targetKind === 'SERVICE_MICROSOFT_TEAMS_CHANNEL') {
+    const prismaAny = prisma as unknown as {
+      microsoftTeamsDestination: {
+        findUnique: (a: unknown) => Promise<{
+          enabled: boolean;
+          channelId: string;
+          serviceId: string;
+        } | null>;
+      };
+    };
+    const dest = await prismaAny.microsoftTeamsDestination.findUnique({
+      where: { id: policy.targetId },
+    });
+    if (!dest || !dest.enabled || dest.serviceId !== policy.serviceId) {
+      return 'Microsoft Teams destination was disabled, removed, or retargeted';
+    }
+    if (policy.targetAddress && dest.channelId !== policy.targetAddress) {
+      return 'Microsoft Teams channel was retargeted';
+    }
+    // Also verify the service still has MICROSOFT_TEAMS in its channels
+    const service = await prisma.service.findUnique({
+      where: { id: policy.serviceId },
+      select: { serviceNotificationChannels: true, serviceNotifyOnTriggered: true, serviceNotifyOnAck: true, serviceNotifyOnResolved: true },
+    });
+    if (!service || !serviceEventEnabled(service, policy.eventType)) return 'Service notification target was disabled';
+    if (!service.serviceNotificationChannels.includes('MICROSOFT_TEAMS' as never)) {
+      return 'Service Microsoft Teams notifications were disabled';
+    }
+    return null;
+  }
   const service = await prisma.service.findUnique({
     where: { id: policy.serviceId },
     select: {
@@ -1155,7 +1254,7 @@ async function lifecycleDeliveryRevoked(
   payload: CentralNotificationPayload
 ): Promise<string | null> {
   const policy =
-    payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK'
+    payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK' || payload.kind === 'MICROSOFT_TEAMS_CHANNEL'
       ? (payload.lifecyclePolicy ?? {
           incidentId: payload.incident.id,
           eventType: payload.eventType,
@@ -1525,8 +1624,7 @@ export async function deliverCentralNotification(
     return { success: true, claimed: true };
   }
 
-  // Acquire concurrency first so a later rate rejection can release the held slot.
-  const identity = providerAdmissionIdentity(payload);
+  const identity = await providerAdmissionIdentityAsync(payload);
   let concurrency;
   try {
     concurrency = await acquireProviderConcurrency(

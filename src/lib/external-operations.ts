@@ -241,6 +241,19 @@ async function releaseFailedOperation(
 }
 
 export async function processExternalOperation(id: string): Promise<JiraIssueSummary | null> {
+  // Teams claim-first delivery coexists on the same EXTERNAL_OPERATION table.
+  // Dispatch by provider before acquiring the Jira lease — Teams has its own
+  // processor (ExternalOperation row + advisory lock + AMBIGUOUS semantics).
+  const providerProbe = await prisma.externalOperation.findUnique({
+    where: { id },
+    select: { provider: true },
+  });
+  if ((providerProbe?.provider as string) === 'MICROSOFT_TEAMS') {
+    const { processMicrosoftTeamsOperation } = await import('./microsoft-teams/delivery');
+    const teamsResult = (await processMicrosoftTeamsOperation(id)) as unknown as JiraIssueSummary | null;
+    return teamsResult;
+  }
+
   const claim = await claimOperation(id);
   if (!claim) {
     const complete = await prisma.externalOperation.findUnique({ where: { id } });
