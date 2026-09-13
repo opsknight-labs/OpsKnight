@@ -491,24 +491,12 @@ export default function StatusPageConfig({
       return announcement.endDate >= today;
     });
 
-  const selectedTheme = resolveStatusPageTheme(formData.themeId);
-  const themePrimary =
-    selectedTheme.id !== 'default'
-      ? selectedTheme.preview.accent
-      : formData.primaryColor || '#667eea';
-  const themeBg =
-    selectedTheme.id !== 'default'
-      ? selectedTheme.preview.surfaceAlt
-      : formData.backgroundColor || '#ffffff';
-  const themeText =
-    selectedTheme.id !== 'default' ? selectedTheme.preview.text : formData.textColor || '#111827';
-
   const previewBranding = {
     logoUrl: formData.logoUrl,
     faviconUrl: formData.faviconUrl,
-    primaryColor: themePrimary,
-    backgroundColor: themeBg,
-    textColor: themeText,
+    primaryColor: formData.primaryColor,
+    backgroundColor: formData.backgroundColor,
+    textColor: formData.textColor,
     fontFamily: formData.fontFamily,
     themeId: formData.themeId,
     themeVersion: STATUS_PAGE_THEME_VERSION,
@@ -535,9 +523,9 @@ export default function StatusPageConfig({
           version: 1 as const,
           logoUrl: formData.logoUrl,
           faviconUrl: formData.faviconUrl,
-          primaryColor: themePrimary,
-          backgroundColor: themeBg,
-          textColor: themeText,
+          primaryColor: formData.primaryColor,
+          backgroundColor: formData.backgroundColor,
+          textColor: formData.textColor,
           fontFamily: formData.fontFamily,
           themeId: formData.themeId,
           themeVersion: STATUS_PAGE_THEME_VERSION,
