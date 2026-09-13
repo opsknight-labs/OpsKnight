@@ -13,6 +13,7 @@ import { Mail, Lock, Eye, EyeOff, AlertCircle, X, CheckCircle2 } from 'lucide-re
 import { cn } from '@/lib/utils';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
+import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
 
 type Props = {
   callbackUrl: string;
@@ -54,6 +55,7 @@ export default function LoginClient({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [trustedPwa, setTrustedPwa] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(() => formatError(errorCode) || ssoError || '');
   const [showPassword, setShowPassword] = useState(false);
@@ -74,6 +76,15 @@ export default function LoginClient({
   useEffect(() => {
     if (ssoError) setError(ssoError);
   }, [ssoError]);
+
+  useEffect(() => {
+    if (detectResponderSessionPolicy() !== 'TRUSTED_PWA') return;
+    // An installed PWA is an explicit responder-device context. Default the
+    // existing bounded extended session on, but leave the control visible so a
+    // user can opt out on a shared device. Ordinary mobile browsers stay STANDARD.
+    setTrustedPwa(true);
+    setRememberMe(true);
+  }, []);
 
   const handleSSO = async () => {
     setIsSSOLoading(true);
@@ -317,49 +328,56 @@ export default function LoginClient({
                 </button>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  type="button"
-                  role="checkbox"
-                  aria-checked={rememberMe}
-                  onClick={() => !isSubmitting && !isSuccess && setRememberMe(!rememberMe)}
-                  disabled={isSubmitting || isSuccess}
-                  className="flex items-center gap-2.5 cursor-pointer select-none group focus:outline-none disabled:opacity-50"
-                >
-                  {/* Custom checkbox — focus ring shown on the box itself for keyboard users */}
-                  <span
-                    className={cn(
-                      'h-4 w-4 rounded flex items-center justify-center border transition-all duration-150 shrink-0',
-                      'group-focus-visible:ring-2 group-focus-visible:ring-slate-900 group-focus-visible:ring-offset-1 dark:group-focus-visible:ring-white',
-                      rememberMe
-                        ? 'bg-slate-900 border-slate-900 dark:bg-white dark:border-white'
-                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 group-hover:border-slate-500 dark:group-hover:border-slate-400'
-                    )}
+              <div className="flex items-start justify-between gap-4 pt-1">
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={rememberMe}
+                    onClick={() => !isSubmitting && !isSuccess && setRememberMe(!rememberMe)}
+                    disabled={isSubmitting || isSuccess}
+                    className="flex items-center gap-2.5 cursor-pointer select-none group focus:outline-none disabled:opacity-50"
                   >
-                    {rememberMe && (
-                      <svg
-                        className="h-2.5 w-2.5 text-white dark:text-slate-900"
-                        viewBox="0 0 10 8"
-                        fill="none"
-                      >
-                        <path
-                          d="M1 4l3 3 5-6"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </span>
-                  <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors font-medium">
-                    Remember me
-                  </span>
-                </button>
+                    {/* Custom checkbox — focus ring shown on the box itself for keyboard users */}
+                    <span
+                      className={cn(
+                        'h-4 w-4 rounded flex items-center justify-center border transition-all duration-150 shrink-0',
+                        'group-focus-visible:ring-2 group-focus-visible:ring-slate-900 group-focus-visible:ring-offset-1 dark:group-focus-visible:ring-white',
+                        rememberMe
+                          ? 'bg-slate-900 border-slate-900 dark:bg-white dark:border-white'
+                          : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 group-hover:border-slate-500 dark:group-hover:border-slate-400'
+                      )}
+                    >
+                      {rememberMe && (
+                        <svg
+                          className="h-2.5 w-2.5 text-white dark:text-slate-900"
+                          viewBox="0 0 10 8"
+                          fill="none"
+                        >
+                          <path
+                            d="M1 4l3 3 5-6"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="text-xs text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors font-medium">
+                      {trustedPwa ? 'Trusted responder device' : 'Remember me'}
+                    </span>
+                  </button>
+                  {trustedPwa && (
+                    <p className="mt-1 max-w-[18rem] text-[10px] leading-4 text-slate-500 dark:text-slate-500">
+                      Installed PWA: stay signed in for up to 90 days. Turn this off on a shared device.
+                    </p>
+                  )}
+                </div>
 
                 <Link
                   href="/forgot-password"
-                  className="text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+                  className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
                 >
                   Forgot password?
                 </Link>
