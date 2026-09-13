@@ -54,7 +54,6 @@ export default function MobilePwaCoordinator() {
       };
     }
 
-    let registration: ServiceWorkerRegistration | null = null;
     let reloading = false;
 
     const onControllerChange = () => {
@@ -65,19 +64,20 @@ export default function MobilePwaCoordinator() {
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OFFLINE_QUEUE_CHANGED') void refreshQueue();
     };
-    const inspectRegistration = (next: ServiceWorkerRegistration) => {
-      registration = next;
-      if (next.waiting && navigator.serviceWorker.controller) setWaitingWorker(next.waiting);
-      next.addEventListener('updatefound', () => {
-        const installing = next.installing;
+    const inspectRegistration = (registration: ServiceWorkerRegistration) => {
+      if (registration.waiting && navigator.serviceWorker.controller) {
+        setWaitingWorker(registration.waiting);
+      }
+      registration.addEventListener('updatefound', () => {
+        const installing = registration.installing;
         if (!installing) return;
         installing.addEventListener('statechange', () => {
           if (
             installing.state === 'installed' &&
-            next.waiting &&
+            registration.waiting &&
             navigator.serviceWorker.controller
           ) {
-            setWaitingWorker(next.waiting);
+            setWaitingWorker(registration.waiting);
           }
         });
       });
@@ -85,8 +85,8 @@ export default function MobilePwaCoordinator() {
 
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
     navigator.serviceWorker.addEventListener('message', onMessage);
-    void navigator.serviceWorker.getRegistration().then(next => {
-      if (next) inspectRegistration(next);
+    void navigator.serviceWorker.getRegistration().then(registration => {
+      if (registration) inspectRegistration(registration);
     });
 
     return () => {
@@ -94,8 +94,7 @@ export default function MobilePwaCoordinator() {
       window.removeEventListener('online', online);
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
       navigator.serviceWorker.removeEventListener('message', onMessage);
-      // Registration listeners disappear with the page; no global mutable callback is retained.
-      registration = null;
+      // Registration listeners are page-scoped and are released with this document.
     };
   }, [refreshQueue, requestSync]);
 
@@ -148,7 +147,11 @@ export default function MobilePwaCoordinator() {
           {authRequired > 0 && (
             <button
               type="button"
-              onClick={() => window.location.assign(`/login?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`)}
+              onClick={() =>
+                window.location.assign(
+                  `/login?callbackUrl=${encodeURIComponent(window.location.pathname + window.location.search)}`
+                )
+              }
             >
               Sign in
             </button>
