@@ -15,6 +15,10 @@ export interface AnnouncementNotificationPlan {
 /**
  * Canonical scheduling contract for status-page announcement subscriber fan-out.
  * Mutation routes and execution fences must derive behavior from this helper.
+ *
+ * AT_START means "when the event starts, once the announcement is published".
+ * A future publishAt therefore pushes the notification forward rather than
+ * allowing subscriber delivery before the announcement is publicly eligible.
  */
 export function deriveAnnouncementNotificationPlan(
   input: AnnouncementNotificationPlanInput
@@ -26,6 +30,8 @@ export function deriveAnnouncementNotificationPlan(
   return {
     shouldNotify: true,
     scheduledAt:
-      input.notificationTiming === 'AT_START' ? input.startDate : input.publishAt,
+      input.notificationTiming === 'AT_START'
+        ? new Date(Math.max(input.startDate.getTime(), input.publishAt.getTime()))
+        : input.publishAt,
   };
 }
