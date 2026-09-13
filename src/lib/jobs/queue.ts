@@ -387,11 +387,12 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         // only its wake-up mechanism and must mirror that authoritative state.
         const operation = await prisma.externalOperation.findUnique({
           where: { id: operationId },
-          select: { status: true, nextAttemptAt: true, leaseExpiresAt: true, lastError: true },
+          select: { provider: true, status: true, nextAttemptAt: true, leaseExpiresAt: true, lastError: true },
         });
         if (!operation) throw processingError ?? new Error('External operation no longer exists');
-        if (operation.status === 'PENDING' || operation.status === 'PROCESSING') {
-          const scheduledAt = operation.status === 'PENDING'
+        const jiraNeedsReconciliation = operation.provider === 'JIRA' && operation.status === 'AMBIGUOUS';
+        if (operation.status === 'PENDING' || operation.status === 'PROCESSING' || jiraNeedsReconciliation) {
+          const scheduledAt = operation.status === 'PENDING' || jiraNeedsReconciliation
             ? operation.nextAttemptAt
             : operation.leaseExpiresAt ?? new Date(Date.now() + 30_000);
           await prisma.backgroundJob.update({
@@ -400,9 +401,9 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           });
           return false;
         }
-        // COMPLETED, FAILED and AMBIGUOUS are all settled operation states.
-        // AMBIGUOUS deliberately requires reconciliation and must never be
-        // converted into an automatic retry by the generic job backoff.
+        // Teams AMBIGUOUS is terminal pending explicit operator reconciliation;
+        // Jira AMBIGUOUS is a retryable/reconcilable state owned by its provider.
+        // COMPLETED and FAILED are settled for every provider.
         await markJobCompleted(job.id);
         return operation.status === 'COMPLETED';
       }
