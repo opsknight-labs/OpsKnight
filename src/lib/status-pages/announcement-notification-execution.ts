@@ -4,15 +4,15 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { notifyStatusPageSubscribersAnnouncement } from '@/lib/status-page-notifications';
 import {
-  announcementRevision,
   deriveAnnouncementNotificationPlan,
   type AnnouncementNotificationTiming,
 } from './announcement-notification-plan';
+import { readAnnouncementNotificationGeneration } from './announcement-notification-generation';
 
 export async function executeAnnouncementNotificationFanout(
   announcementId: string,
   statusPageId: string,
-  expectedRevision: string
+  expectedGeneration: number
 ): Promise<{ sent: number; failed: number; skipped?: boolean }> {
   const announcement = await prisma.statusPageAnnouncement.findFirst({
     where: { id: announcementId, statusPageId },
@@ -23,7 +23,6 @@ export async function executeAnnouncementNotificationFanout(
       notificationTiming: true,
       publishAt: true,
       startDate: true,
-      updatedAt: true,
     },
   });
 
@@ -31,19 +30,22 @@ export async function executeAnnouncementNotificationFanout(
     logger.info('status_page.announcement_fanout_stale', {
       announcementId,
       statusPageId,
+      expectedGeneration,
       reason: 'announcement_missing',
     });
     return { sent: 0, failed: 0, skipped: true };
   }
 
-  const currentRevision = announcementRevision(announcement.updatedAt);
-  if (!expectedRevision || expectedRevision !== currentRevision) {
-    logger.info('status_page.announcement_fanout_stale', {
+  const currentGeneration = await readAnnouncementNotificationGeneration(
+    announcementId,
+    statusPageId
+  );
+  if (currentGeneration == null || expectedGeneration !== currentGeneration) {
+    logger.info('status_page.announcement_fanout_stale_generation', {
       announcementId,
       statusPageId,
-      expectedRevision: expectedRevision || null,
-      currentRevision,
-      reason: 'revision_mismatch',
+      expectedGeneration,
+      currentGeneration,
     });
     return { sent: 0, failed: 0, skipped: true };
   }
@@ -69,24 +71,27 @@ export async function executeAnnouncementNotificationFanout(
     logger.info('status_page.announcement_fanout_stale', {
       announcementId,
       statusPageId,
-      expectedRevision,
+      expectedGeneration,
       reason: 'notification_disabled',
     });
     return { sent: 0, failed: 0, skipped: true };
   }
 
   // A due queue job must never execute before the latest committed schedule.
-  // This is a second fence in addition to the BackgroundJob scheduledAt predicate.
   if (plan.scheduledAt.getTime() > Date.now() + 1_000) {
     logger.info('status_page.announcement_fanout_stale', {
       announcementId,
       statusPageId,
-      expectedRevision,
+      expectedGeneration,
       canonicalScheduledAt: plan.scheduledAt.toISOString(),
       reason: 'canonical_schedule_in_future',
     });
     return { sent: 0, failed: 0, skipped: true };
   }
 
-  return notifyStatusPageSubscribersAnnouncement(announcementId, statusPageId);
+  return notifyStatusPageSubscribersAnnouncement(
+    announcementId,
+    statusPageId,
+    expectedGeneration
+  );
 }
