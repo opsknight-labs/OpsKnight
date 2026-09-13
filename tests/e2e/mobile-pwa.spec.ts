@@ -23,10 +23,30 @@ async function loginToMobile(page: import('@playwright/test').Page) {
   await expect(page.locator('.mobile-nav')).toBeVisible();
 }
 
+async function mobileThemeSnapshot(page: import('@playwright/test').Page) {
+  return page.evaluate(() => {
+    const root = document.documentElement;
+    const app = document.querySelector<HTMLElement>('.mobile-app');
+    const nav = document.querySelector<HTMLElement>('.mobile-nav');
+    if (!app || !nav) throw new Error('Mobile shell is not mounted');
+    const appStyle = getComputedStyle(app);
+    const navStyle = getComputedStyle(nav);
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    return {
+      classDark: root.classList.contains('dark'),
+      dataTheme: root.dataset.theme,
+      colorScheme: root.style.colorScheme || getComputedStyle(root).colorScheme,
+      appBackground: appStyle.backgroundColor,
+      appColor: appStyle.color,
+      navBackground: navStyle.backgroundColor,
+      navColor: navStyle.color,
+      themeColor: meta?.content ?? '',
+    };
+  });
+}
+
 test.describe('mobile PWA browser contract', () => {
   test.beforeAll(async () => {
-    // Establish a post-bootstrap active account that can exercise the real
-    // authenticated shell in both Chromium/Android and WebKit/iPhone projects.
     await prisma.user.upsert({
       where: { email: FIXTURE_EMAIL },
       update: {
@@ -95,6 +115,39 @@ test.describe('mobile PWA browser contract', () => {
         expect(target.width).toBeGreaterThan(0);
       }
     }
+  });
+
+  test('system dark mode renders dark semantic shell without light-card leakage', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await loginToMobile(page);
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('dark');
+
+    const snapshot = await mobileThemeSnapshot(page);
+    expect(snapshot.colorScheme).toContain('dark');
+    expect(snapshot.appBackground).not.toBe('rgb(255, 255, 255)');
+    expect(snapshot.navBackground).not.toBe('rgb(255, 255, 255)');
+    expect(snapshot.appColor).not.toBe(snapshot.appBackground);
+    expect(snapshot.themeColor.toLowerCase()).toBe('#020617');
+    await assertNoHorizontalOverflow(page);
+  });
+
+  test('system light mode stays light and explicit dark override survives a light OS', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await loginToMobile(page);
+    await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('light');
+    let snapshot = await mobileThemeSnapshot(page);
+    expect(snapshot.classDark).toBe(false);
+    expect(snapshot.appBackground).not.toBe('rgb(2, 6, 23)');
+    expect(snapshot.themeColor.toLowerCase()).toBe('#f8fafc');
+
+    await page.evaluate(() => localStorage.setItem('theme', 'dark'));
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('dark');
+    snapshot = await mobileThemeSnapshot(page);
+    expect(snapshot.appBackground).not.toBe('rgb(255, 255, 255)');
+    expect(snapshot.themeColor.toLowerCase()).toBe('#020617');
   });
 
   test('protected mobile navigation preserves a safe same-origin callback', async ({ page }) => {
