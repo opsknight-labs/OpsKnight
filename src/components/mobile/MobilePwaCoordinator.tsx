@@ -22,7 +22,33 @@ function summarize(states: OfflineQueueState[]): QueueSummary {
     CONFLICT: 0,
     AUTH_REQUIRED: 0,
   };
-  for (const state of states) result[state] += 1;
+
+  for (const state of states) {
+    switch (state) {
+      case 'PENDING':
+        result.PENDING += 1;
+        break;
+      case 'SENDING':
+        result.SENDING += 1;
+        break;
+      case 'SUCCEEDED':
+        result.SUCCEEDED += 1;
+        break;
+      case 'FAILED':
+        result.FAILED += 1;
+        break;
+      case 'FORBIDDEN':
+        result.FORBIDDEN += 1;
+        break;
+      case 'CONFLICT':
+        result.CONFLICT += 1;
+        break;
+      case 'AUTH_REQUIRED':
+        result.AUTH_REQUIRED += 1;
+        break;
+    }
+  }
+
   return result;
 }
 
