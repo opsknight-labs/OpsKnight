@@ -2,6 +2,7 @@
 
 import { Check, Code, RotateCcw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui';
+import { InlineNotice } from '@/components/ui/InlineNotice';
 import StatusPageSectionCard from '@/components/status-page/StatusPageSectionCard';
 import { cn } from '@/lib/utils';
 import {
@@ -10,6 +11,7 @@ import {
   resolveStatusPageTheme,
   type StatusPageThemeDensity,
 } from '@/lib/status-pages/theme-contract';
+import { isLegacyStatusPageCustomCss } from '@/lib/status-pages/theme-custom-css';
 
 interface StatusPageDesignSectionProps {
   themeId: string;
@@ -36,6 +38,8 @@ export default function StatusPageDesignSection({
   onCustomCssChange,
 }: StatusPageDesignSectionProps) {
   const selectedTheme = resolveStatusPageTheme(themeId);
+  const legacyCssIgnored =
+    selectedTheme.id !== DEFAULT_STATUS_PAGE_THEME_ID && isLegacyStatusPageCustomCss(customCss);
 
   return (
     <div className="flex flex-col gap-6">
@@ -175,6 +179,14 @@ export default function StatusPageDesignSection({
           ) : undefined
         }
       >
+        {legacyCssIgnored ? (
+          <InlineNotice tone="warning" title="Legacy template CSS is not applied" className="mb-3">
+            This CSS came from the retired template gallery and contains broad legacy overrides that
+            can conflict with curated themes. It is preserved for backwards compatibility with
+            Natural Default, but ignored while {selectedTheme.name} is selected. Clear it if you no
+            longer need the old template.
+          </InlineNotice>
+        ) : null}
         <textarea
           value={customCss}
           onChange={event => onCustomCssChange(event.target.value)}
