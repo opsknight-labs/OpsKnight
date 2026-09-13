@@ -97,8 +97,8 @@ export async function POST(request: NextRequest) {
           if (!installation) throw new Error('Teams installation no longer corresponds to this destination');
           await tx.microsoftTeamsIncidentMessage.upsert({
             where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
-            create: { incidentId: existing.incidentId, destinationId, messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId },
-            update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId },
+            create: { incidentId: existing.incidentId, destinationId, messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null },
+            update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null },
           });
           await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'COMPLETED', externalId: body.providerMessageId.trim(), externalKey: body.providerMessageId.trim(), resultPayload: { providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), reconciledManually: true }, lastError: null } });
           await emitAuditEvent({
@@ -114,6 +114,10 @@ export async function POST(request: NextRequest) {
           const destinationId = typeof payload?.destinationId === 'string' ? payload.destinationId : '';
           if (existing.incidentId && destinationId) {
             await tx.microsoftTeamsIncidentMessage.deleteMany({ where: { incidentId: existing.incidentId, destinationId, messageId: `__reserved__:${existing.id}` } });
+            await tx.microsoftTeamsIncidentMessage.updateMany({
+              where: { incidentId: existing.incidentId, destinationId, createState: 'AMBIGUOUS' },
+              data: { createState: 'NONE', createOperationId: null },
+            });
           }
           await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'FAILED', lastError: 'Operator confirmed the ambiguous Teams delivery was not delivered.' } });
           await emitAuditEvent({

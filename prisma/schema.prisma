@@ -753,6 +753,8 @@ model MicrosoftTeamsIncidentMessage {
   teamId                 String?
   mutationLeaseToken     String?
   mutationLeaseExpiresAt DateTime?
+  createOperationId      String?
+  createState            String    @default("NONE")
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -765,6 +767,7 @@ model MicrosoftTeamsIncidentMessage {
   @@index([conversationId])
   @@index([messageId])
   @@index([mutationLeaseExpiresAt])
+  @@index([createState])
 }
 
 model Alert {

@@ -22,19 +22,9 @@ export async function POST(request: NextRequest) {
 export async function DELETE(_request: NextRequest) {
   try {
     await assertAdmin();
-    const prisma = (await import('@/lib/prisma')).default as unknown as {
-      microsoftTeamsConfig: { deleteMany: (a: unknown) => Promise<unknown> };
-    };
-    await prisma.microsoftTeamsConfig.deleteMany({});
-    const { logAudit } = await import('@/lib/audit');
     const user = await getCurrentUser();
-    await logAudit({
-      action: 'microsoftTeams.config.deleted',
-      entityType: 'USER',
-      entityId: user.id,
-      actorId: user.id,
-      details: { configType: 'microsoft-teams' },
-    });
+    const { disconnectMicrosoftTeamsIntegration } = await import('@/lib/microsoft-teams/lifecycle');
+    await disconnectMicrosoftTeamsIntegration(user.id);
     return jsonOk({ success: true });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);

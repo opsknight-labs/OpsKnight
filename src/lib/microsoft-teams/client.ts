@@ -42,10 +42,14 @@ function putCachedToken(cache: TokenCache, clientId: string, tenantId: string, t
 }
 
 export function __clearGraphTokenCacheForTests(): void {
-  graphTokenCache.clear();
-  botTokenCache.clear();
+  clearMicrosoftTeamsTokenCaches();
 }
 export function __clearBotTokenCacheForTests(): void {
+  botTokenCache.clear();
+}
+
+export function clearMicrosoftTeamsTokenCaches(): void {
+  graphTokenCache.clear();
   botTokenCache.clear();
 }
 
@@ -185,8 +189,10 @@ async function sendBotActivity(args: {
     activity: activityPayload,
   };
   let createRes: Response;
+  // Do not translate local durability-hook failures into provider ambiguity:
+  // no HTTP request has started until this hook succeeds.
+  await args.beforeCreateAttempt?.();
   try {
-    await args.beforeCreateAttempt?.();
     // Creating a conversation/activity is not idempotent. A retry after a lost
     // response can create a second incident card, so this call is deliberately
     // single-attempt. Unknown outcomes are reconciled by an operator, never by

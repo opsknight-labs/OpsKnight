@@ -533,21 +533,26 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     const ownReservation = `${RESERVED_PREFIX}${id}`;
     let previous = await prisma.microsoftTeamsIncidentMessage.findUnique({
       where: { incidentId_destinationId: { incidentId, destinationId } },
-      select: { messageId: true, conversationId: true },
+      select: { messageId: true, conversationId: true, createState: true, createOperationId: true },
     });
 
     let reservedByUs = false;
     let concurrentReservation = false;
     let createAttemptStarted = false;
+    let cardCreateAmbiguous = false;
     const acquireCardMutationLease = async () => prisma.$transaction(async tx => {
       await acquireAdvisoryLock(tx, lockKey);
       const inside = await tx.microsoftTeamsIncidentMessage.findUnique({
         where: { incidentId_destinationId: { incidentId, destinationId } },
-        select: { messageId: true, conversationId: true },
+        select: { messageId: true, conversationId: true, createState: true, createOperationId: true },
       });
       // Re-read inside the lock — `previous` may be stale due to a concurrent writer.
       if (inside) {
         previous = inside;
+        if (inside.createState === 'AMBIGUOUS') {
+          cardCreateAmbiguous = true;
+          return;
+        }
         if (inside.messageId?.startsWith(RESERVED_PREFIX)) {
           if (inside.messageId === ownReservation) {
             // Own prior reservation (retry after AMBIGUOUS) — proceed to create.
@@ -587,6 +592,8 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               conversationId: null,
               mutationLeaseToken,
               mutationLeaseExpiresAt: new Date(Date.now() + CARD_MUTATION_LEASE_MS),
+              createOperationId: id,
+              createState: 'CREATING',
             },
           });
           reservedByUs = true;
@@ -595,7 +602,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         } catch {
           const recheck = await tx.microsoftTeamsIncidentMessage.findUnique({
             where: { incidentId_destinationId: { incidentId, destinationId } },
-            select: { messageId: true, conversationId: true },
+            select: { messageId: true, conversationId: true, createState: true, createOperationId: true },
           });
           if (recheck) {
             previous = recheck;
@@ -698,6 +705,20 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     }
 
     await acquireCardMutationLease();
+    if (cardCreateAmbiguous) {
+      await prisma.externalOperation.updateMany({
+        where: { id, status: 'PROCESSING', leaseToken },
+        data: {
+          status: 'FAILED',
+          nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+          lastError: 'Canonical Teams card has an unresolved create outcome; reconcile it before further lifecycle delivery',
+          leaseToken: null,
+          leaseExpiresAt: null,
+          resultPayload: { requiresManualReconciliation: false, blockedByCreateOperationId: previous?.createOperationId ?? null } as Prisma.InputJsonObject,
+        },
+      });
+      throw new Error('Canonical Teams card requires create reconciliation');
+    }
     if (concurrentReservation || !mutationLeaseHeld) await deferForCardLease();
 
     // The card is a materialized view of current incident state. Re-read only
@@ -726,7 +747,18 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         data: { resultPayload: { createAttempted: true, createStartedAt, requiresManualReconciliation: false } as Prisma.InputJsonObject },
       });
       if (markedAttempted.count !== 1) throw new Error('Teams delivery lease was lost before create');
+      const fenced = await prisma.microsoftTeamsIncidentMessage.updateMany({
+        where: { incidentId, destinationId, mutationLeaseToken },
+        data: { createOperationId: id, createState: 'CREATING' },
+      });
+      if (fenced.count !== 1) throw new Error('Teams card mutation lease was lost before create');
       createAttemptStarted = true;
+    };
+    const markCardCreateAmbiguous = async () => {
+      await prisma.microsoftTeamsIncidentMessage.updateMany({
+        where: { incidentId, destinationId, createOperationId: id },
+        data: { createState: 'AMBIGUOUS' },
+      });
     };
 
     const { microsoftTeamsChatProvider } = await import('./provider');
@@ -872,6 +904,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         const priorResult = operation.resultPayload as Record<string, unknown> | null;
         const isAmbiguousRetry = reservedByUs && priorResult?.createAttempted === true;
         if (isAmbiguousRetry) {
+          await markCardCreateAmbiguous();
           await prisma.externalOperation.updateMany({
             where: { id, status: 'PROCESSING', leaseToken },
             data: {
@@ -908,6 +941,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     if (!result.success) {
       await releaseTeamsConcurrency();
       if (result.errorCode === 'AMBIGUOUS_SIDE_EFFECT') {
+        await markCardCreateAmbiguous();
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
@@ -926,7 +960,8 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       const retryAfterMs = result.retryAfterMs;
       // A 5xx after a non-idempotent create cannot prove the side effect did
       // not occur. Preserve the reservation and require reconciliation.
-      if (reservedByUs && createAttemptStarted && statusCode != null && statusCode >= 500) {
+      if (createAttemptStarted && statusCode != null && statusCode >= 500) {
+        await markCardCreateAmbiguous();
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
@@ -943,12 +978,19 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       // An explicit non-5xx HTTP response proves the create was rejected. Clear
       // both reservation and uncertainty so a known-safe retry cannot become a
       // false AMBIGUOUS operation on its next wake-up.
-      if (reservedByUs && (!createAttemptStarted || (statusCode != null && statusCode < 500))) {
-        await prisma.microsoftTeamsIncidentMessage.deleteMany({
-          where: { incidentId, destinationId, messageId: ownReservation },
-        });
-        reservedByUs = false;
-        mutationLeaseHeld = false;
+      if ((!createAttemptStarted && reservedByUs) || (createAttemptStarted && statusCode != null && statusCode < 500)) {
+        if (reservedByUs) {
+          await prisma.microsoftTeamsIncidentMessage.deleteMany({
+            where: { incidentId, destinationId, messageId: ownReservation },
+          });
+          reservedByUs = false;
+          mutationLeaseHeld = false;
+        } else {
+          await prisma.microsoftTeamsIncidentMessage.updateMany({
+            where: { incidentId, destinationId, createOperationId: id },
+            data: { createState: 'NONE', createOperationId: null },
+          });
+        }
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
@@ -1084,6 +1126,8 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               tenantId: destination.tenantId,
               teamId: destination.teamId,
               conversationId: result.conversationId ?? null,
+              createState: 'NONE',
+              createOperationId: null,
             },
             update: {
               messageId: result.providerMessageId!,
@@ -1091,6 +1135,8 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               tenantId: destination.tenantId,
               teamId: destination.teamId,
               conversationId: result.conversationId ?? undefined,
+              createState: 'NONE',
+              createOperationId: null,
             },
           } as never);
         });
@@ -1098,6 +1144,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         // The provider accepted the side effect but the local ledger commit failed.
         // Re-sending could duplicate the card, so stop for explicit reconciliation.
         const msg = txErr instanceof Error ? txErr.message : String(txErr);
+        await markCardCreateAmbiguous();
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {

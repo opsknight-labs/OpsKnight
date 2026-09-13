@@ -1,0 +1,64 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const sendIncidentCard = vi.fn();
+const updateIncidentCard = vi.fn();
+const recoverIncidentCard = vi.fn();
+const operationUpdates: Array<Record<string, unknown>> = [];
+
+const incident = {
+  id: 'inc-1', title: 'Incident', description: null, status: 'RESOLVED', urgency: 'HIGH', priority: null,
+  serviceId: 'svc-1', service: { name: 'API' }, assignee: null, createdAt: new Date('2026-01-01T00:00:00Z'),
+  acknowledgedAt: new Date('2026-01-01T00:01:00Z'), resolvedAt: new Date('2026-01-01T00:02:00Z'),
+  escalationGeneration: 0, slaAckTargetMs: null, slaResolveTargetMs: null, slaPausedMs: null, slaPauseStartedAt: null,
+};
+const ledger = {
+  messageId: 'old-activity', conversationId: 'old-conversation', createState: 'AMBIGUOUS', createOperationId: 'op-create',
+};
+
+const prismaMock = {
+  externalOperation: {
+    updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { operationUpdates.push(data); return { count: 1 }; }),
+    findUnique: vi.fn(async ({ select }: { select?: Record<string, unknown> }) => select?.status
+      ? { status: 'FAILED', leaseToken: null }
+      : { id: 'op-late', provider: 'MICROSOFT_TEAMS', operation: 'TEAMS_SEND_CARD', status: 'PROCESSING', attempts: 1, incidentId: 'inc-1', requestPayload: { destinationId: 'dest-1', eventType: 'resolved', incidentUpdatedAt: incident.resolvedAt.toISOString() }, resultPayload: null }),
+  },
+  incident: { findUnique: vi.fn(async () => incident) },
+  service: { findUnique: vi.fn(async () => ({ serviceNotificationChannels: ['MICROSOFT_TEAMS'], serviceNotifyOnTriggered: true, serviceNotifyOnAck: true, serviceNotifyOnResolved: true })) },
+  microsoftTeamsDestination: { findUnique: vi.fn(async () => ({ id: 'dest-1', tenantId: 'tenant-1', teamId: 'team-1', channelId: 'channel-1', enabled: true, updatedAt: new Date(), serviceId: 'svc-1' })) },
+  microsoftTeamsIncidentMessage: {
+    findUnique: vi.fn(async () => ledger), updateMany: vi.fn(async () => ({ count: 0 })),
+  },
+  $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
+    microsoftTeamsIncidentMessage: { findUnique: vi.fn(async () => ledger), updateMany: vi.fn(async () => ({ count: 0 })) },
+  })),
+};
+
+vi.mock('@/lib/prisma', () => ({ default: prismaMock }));
+vi.mock('@/lib/db-locks', () => ({ acquireAdvisoryLock: vi.fn(async () => undefined) }));
+vi.mock('@/lib/provider-admission', () => ({
+  acquireProviderAdmission: vi.fn(async () => ({ allowed: true })),
+  acquireProviderConcurrency: vi.fn(async () => ({ allowed: true, leaseKey: 'lease' })),
+  releaseProviderConcurrency: vi.fn(async () => undefined), deferProviderAdmission: vi.fn(async () => undefined),
+}));
+vi.mock('@/lib/circuit-breaker', () => ({
+  CircuitBreakerError: class extends Error {},
+  CircuitBreakers: { microsoftTeams: () => ({ getState: () => 'CLOSED', execute: (fn: () => Promise<unknown>) => fn() }) },
+}));
+vi.mock('@/lib/microsoft-teams/provider', () => ({ microsoftTeamsChatProvider: { sendIncidentCard, updateIncidentCard, recoverIncidentCard } }));
+vi.mock('@/lib/audit', () => ({ emitAuditEvent: vi.fn(async () => undefined) }));
+
+describe('processMicrosoftTeamsOperation create fence', () => {
+  beforeEach(() => { operationUpdates.length = 0; vi.clearAllMocks(); });
+
+  it('does not issue update or recovery create while a previous create is ambiguous', async () => {
+    const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+    await expect(processMicrosoftTeamsOperation('op-late')).rejects.toThrow('requires create reconciliation');
+    expect(sendIncidentCard).not.toHaveBeenCalled();
+    expect(updateIncidentCard).not.toHaveBeenCalled();
+    expect(recoverIncidentCard).not.toHaveBeenCalled();
+    expect(operationUpdates).toContainEqual(expect.objectContaining({
+      status: 'FAILED',
+      resultPayload: expect.objectContaining({ blockedByCreateOperationId: 'op-create' }),
+    }));
+  });
+});
