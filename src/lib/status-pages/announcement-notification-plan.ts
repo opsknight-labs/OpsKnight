@@ -29,7 +29,3 @@ export function deriveAnnouncementNotificationPlan(
       input.notificationTiming === 'AT_START' ? input.startDate : input.publishAt,
   };
 }
-
-export function announcementRevision(updatedAt: Date): string {
-  return String(updatedAt.getTime());
-}
