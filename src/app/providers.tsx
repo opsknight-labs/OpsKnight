@@ -18,6 +18,17 @@ function ThemeAttributeBridge() {
     const effectiveTheme = resolvedTheme === 'dark' ? 'dark' : 'light';
     root.dataset.theme = effectiveTheme;
     root.style.colorScheme = effectiveTheme;
+
+    // Keep browser/PWA chrome aligned with an explicit in-app theme override,
+    // not only with the OS media query used during the initial HTML response.
+    const themeColor = effectiveTheme === 'dark' ? '#020617' : '#f8fafc';
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    meta.content = themeColor;
   }, [resolvedTheme]);
 
   return null;
