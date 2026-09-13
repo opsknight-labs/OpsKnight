@@ -112,7 +112,7 @@ export default function SwipeableIncidentCard({
         animate={controls}
         style={{ x }}
         className={cn(
-          'relative z-10 min-w-0 rounded-xl border border-border bg-card text-card-foreground shadow-[0_1px_2px_hsl(var(--foreground)/0.04)]',
+          'relative z-10 min-w-0 touch-pan-y rounded-xl border border-border bg-card text-card-foreground shadow-[0_1px_2px_hsl(var(--foreground)/0.04)]',
           isUpdating && 'opacity-60'
         )}
       >

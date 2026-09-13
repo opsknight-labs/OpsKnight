@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { createMobileIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileCreateIncidentClient from './client';
@@ -43,13 +44,21 @@ export default async function MobileCreateIncidentPage() {
   }));
 
   return (
-    <div className="responsive-page py-2">
-      <MobileCreateIncidentClient
-        services={services}
-        users={users}
-        templates={templates}
-        createAction={createMobileIncident}
-      />
+    <div className="responsive-page py-2 pb-12">
+      <Suspense
+        fallback={
+          <div className="flex min-h-[320px] items-center justify-center rounded-2xl border border-border bg-card p-6 text-xs text-muted-foreground">
+            Loading incident template…
+          </div>
+        }
+      >
+        <MobileCreateIncidentClient
+          services={services}
+          users={users}
+          templates={templates}
+          createAction={createMobileIncident}
+        />
+      </Suspense>
     </div>
   );
 }

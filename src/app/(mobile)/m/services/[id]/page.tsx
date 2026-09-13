@@ -6,7 +6,10 @@ import { ArrowRight, Plus, Server } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileTime from '@/components/mobile/MobileTime';
-import { IncidentStatusBadge, IncidentUrgencyBadge } from '@/components/incident/IncidentSemanticBadge';
+import {
+  IncidentStatusBadge,
+  IncidentUrgencyBadge,
+} from '@/components/incident/IncidentSemanticBadge';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { buildIncidentListHref } from '@/lib/incident-links';
 import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
@@ -58,7 +61,15 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
   const isOperational = service._count.incidents === 0;
 
   return (
-    <div className="responsive-page space-y-4">
+    <div className="responsive-page space-y-4 pb-12">
+      <Link
+        href="/m/services"
+        className="inline-flex min-h-8 items-center gap-1.5 rounded-lg text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowRight className="h-3.5 w-3.5 rotate-180" aria-hidden="true" />
+        <span>Back to services</span>
+      </Link>
+
       <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground">
         <div className="flex min-w-0 items-start gap-3">
           <span
@@ -72,7 +83,9 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h1 className="min-w-0 break-words text-base font-bold text-foreground">{service.name}</h1>
+              <h1 className="min-w-0 break-words text-base font-bold text-foreground">
+                {service.name}
+              </h1>
               <span
                 className={`rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
                   isOperational
@@ -84,7 +97,9 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
               </span>
             </div>
             {service.description && (
-              <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{service.description}</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                {service.description}
+              </p>
             )}
           </div>
         </div>
@@ -132,7 +147,9 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
                     <MobileTime value={incident.createdAt} format="relative-short" />
                   </span>
                 </div>
-                <p className="mt-1.5 line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">{incident.title}</p>
+                <p className="mt-1.5 line-clamp-2 text-[12px] font-semibold leading-snug text-foreground">
+                  {incident.title}
+                </p>
               </Link>
             ))}
           </Card>
@@ -147,7 +164,10 @@ export default async function MobileServiceDetailPage({ params }: PageProps) {
         <h2 className="text-xs font-semibold text-foreground">Service details</h2>
         <div className="mt-2 divide-y divide-border/70">
           <DetailRow label="Escalation policy" value={service.policy?.name || 'None'} />
-          <DetailRow label="Created" value={<MobileTime value={service.createdAt} format="date" />} />
+          <DetailRow
+            label="Created"
+            value={<MobileTime value={service.createdAt} format="date" />}
+          />
         </div>
       </Card>
     </div>

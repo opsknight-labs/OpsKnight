@@ -28,27 +28,27 @@ export default function IncidentDetailTabs({
 }: IncidentDetailTabsProps) {
   return (
     <Tabs defaultValue={defaultTab} className={cn('w-full', className)}>
-      <div className="rounded-xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden dark:bg-slate-900 dark:border-slate-800 transition-all">
+      <div className="rounded-xl border border-border bg-card shadow-2xs overflow-hidden text-card-foreground transition-all">
         {/* Compact, Unified Header Bar */}
-        <div className="px-3 sm:px-4 py-2 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/30 flex items-center justify-between gap-3">
-          <TabsList className="h-8 p-0.5 bg-slate-200/60 dark:bg-slate-800/80 border border-slate-200/50 dark:border-slate-700/50 rounded-lg">
+        <div className="px-3 sm:px-4 py-2 border-b border-border/80 bg-muted/30 flex items-center justify-between gap-3">
+          <TabsList className="h-8 p-0.5 bg-muted/80 border border-border/70 rounded-lg">
             <TabsTrigger
               value="overview"
-              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-2xs dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-slate-100 rounded-md transition-all"
+              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
             >
               <Settings2 className="h-4 w-4" />
               <span>Overview</span>
             </TabsTrigger>
             <TabsTrigger
               value="timeline"
-              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-2xs dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-slate-100 rounded-md transition-all"
+              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
             >
               <History className="h-4 w-4" />
               <span>Timeline</span>
             </TabsTrigger>
             <TabsTrigger
               value="postmortem"
-              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-2xs dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-slate-100 rounded-md transition-all"
+              className="gap-2 px-3 py-1 text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs rounded-md transition-all"
             >
               <FileText className="h-4 w-4" />
               <span>Postmortem</span>
@@ -68,7 +68,7 @@ export default function IncidentDetailTabs({
 
           <Badge
             variant="outline"
-            className="gap-1.5 py-1 px-2 border-slate-300 bg-white dark:bg-slate-800 dark:border-slate-700 shrink-0 text-xs font-medium"
+            className="gap-1.5 py-1 px-2 border-border bg-background shrink-0 text-xs font-medium"
           >
             <Zap className="h-3.5 w-3.5 text-amber-500" />
             <span>{eventCount} Events</span>
