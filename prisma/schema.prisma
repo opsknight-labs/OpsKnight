@@ -128,11 +128,18 @@ enum WarRoomParticipantSource {
 
 enum WarRoomParticipantState {
   DESIRED
-  PROCESSING
+  PENDING
   PRESENT
   SKIPPED
   FAILED
   REMOVED
+}
+
+enum WarRoomHealthState {
+  HEALTHY
+  DEGRADED
+  MISSING
+  PERMISSION_ERROR
 }
 
 enum NotificationTrafficClass {
@@ -838,6 +845,8 @@ model IncidentWarRoom {
   commandMessageId      String?
   commandConversationId String?
   messageGeneration     Int                   @default(1)
+  projectionVersion     Int                   @default(0)
+  lastProjectedAt       DateTime?
   provisioningToken     String?
   provisioningStartedAt DateTime?
   createAttemptedAt     DateTime?
@@ -847,6 +856,8 @@ model IncidentWarRoom {
   archivedAt            DateTime?
   lastError             String?
   lastErrorCode         String?
+  health                WarRoomHealthState    @default(HEALTHY)
+  lastReconciledAt      DateTime?
   metadata              Json?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
@@ -858,6 +869,7 @@ model IncidentWarRoom {
   @@index([incidentId, provider, state])
   @@index([provider, providerTenantId, providerContainerId, providerChannelId])
   @@index([state, provisioningStartedAt])
+  @@index([provider, health, lastReconciledAt])
 }
 
 model WarRoomParticipant {
@@ -868,7 +880,9 @@ model WarRoomParticipant {
   providerObjectId String?
   source           WarRoomParticipantSource
   state            WarRoomParticipantState @default(DESIRED)
+  lastSyncAt       DateTime?
   lastError        String?
+  lastErrorCode    String?
   addedAt          DateTime?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
