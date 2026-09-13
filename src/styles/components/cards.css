@@ -83,25 +83,18 @@
    ======================================== */
 
 @media (prefers-color-scheme: dark) {
-   .stats-card,
-   .panel,
-   .directory-panel,
-   [class*="card"],
-   .bg-white,
-   .bg-background {
+   :is(.stats-card, .panel, .directory-panel, [class*="card"], .bg-white, .bg-background):not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
       background-color: #ffffff !important;
       color: var(--text-primary) !important;
       filter: none !important;
       -webkit-filter: none !important;
    }
 
-   .stats-label,
-   .panel-eyebrow,
-   .hero-eyebrow {
+   :is(.stats-label, .panel-eyebrow, .hero-eyebrow):not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
       color: var(--text-muted) !important;
    }
 
-   .stats-value {
+   .stats-value:not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
       color: var(--text-primary) !important;
    }
 }
