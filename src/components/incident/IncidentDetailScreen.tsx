@@ -15,6 +15,7 @@ import IncidentDescriptionCard from '@/components/incident/detail/IncidentDescri
 import IncidentSLABadges from '@/components/incident/detail/IncidentSLABadges';
 import IncidentCustomFieldsCard from '@/components/incident/detail/IncidentCustomFieldsCard';
 import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLinksCard';
+import { IncidentStatusBadge, IncidentUrgencyBadge } from '@/components/incident/IncidentSemanticBadge';
 import {
   acknowledgeIncidentDetail,
   addIncidentDetailNote,
@@ -28,7 +29,7 @@ import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import { Badge } from '@/components/ui/shadcn/badge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
-import { AlertCircle, ArrowLeft, CheckCircle2, Pause, Volume2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle2, ChevronDown, Pause, Volume2 } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
 
@@ -36,17 +37,19 @@ export type IncidentDetailScreenProps = {
   id: string;
   backHref: string;
   backLabel?: string;
+  presentation?: 'desktop' | 'mobile';
 };
 
 /**
- * Canonical responsive incident-detail experience used by desktop and PWA.
- * Data loading, authorization, commands, Jira/War Room capability checks and
- * feature visibility live here so presentation routes cannot drift.
+ * Canonical incident-detail data and feature surface used by desktop and PWA.
+ * The presentation flag changes composition only; permissions, actions and
+ * operational capabilities stay shared.
  */
 export default async function IncidentDetailScreen({
   id,
   backHref,
   backLabel = 'Back to Incidents',
+  presentation = 'desktop',
 }: IncidentDetailScreenProps) {
   const user = await assertCanViewIncident(id);
   const appUrl = await getAppUrl();
@@ -189,61 +192,162 @@ export default async function IncidentDetailScreen({
     />
   );
 
+  const watchersContent = (
+    <IncidentWatchers
+      watchers={incident.watchers.map(watcher => ({
+        id: watcher.id,
+        user: watcher.user,
+        role: watcher.role,
+      }))}
+      users={users}
+      canManage={canManageIncident}
+      currentUserId={user.id}
+      onAddWatcher={handleAddWatcher}
+      onRemoveWatcher={handleRemoveWatcher}
+    />
+  );
+
+  const customFieldsContent = (
+    <IncidentCustomFieldsCard
+      incidentId={id}
+      customFieldValues={
+        incident.customFieldValues?.map(value => ({
+          id: value.id,
+          value: value.value,
+          customField: value.customField,
+        })) || []
+      }
+      allCustomFields={customFields}
+      canManage={canManageIncident}
+    />
+  );
+
+  const quickLinksContent = (
+    <IncidentQuickLinksCard
+      incidentId={incident.id}
+      service={{
+        id: incident.service.id,
+        name: incident.service.name,
+        status: incident.service.status,
+        slaTier: incident.service.slaTier,
+        policy: incident.service.policy
+          ? { id: incident.service.policy.id, name: incident.service.policy.name }
+          : null,
+      }}
+      team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
+      warRoomUrl={incident.warRoomUrl}
+      slackChannelName={incident.slackChannelName}
+    />
+  );
+
   return (
-    <div className="responsive-page w-full space-y-4 px-3 py-4 sm:space-y-6 sm:px-4 sm:py-6">
-      <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
-        <div className={`h-1 w-full bg-gradient-to-r ${statusGradient}`} />
-        <div className="p-4 sm:p-6">
-          <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
-            <Link
-              href={backHref}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>{backLabel}</span>
-            </Link>
-            <div className="flex min-w-0 items-center gap-1.5">
-              <Badge variant="outline" className="hidden font-mono text-xs text-muted-foreground sm:inline-flex">
-                #{id.slice(0, 8)}
-              </Badge>
-              <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
+    <div
+      className={
+        presentation === 'mobile'
+          ? 'responsive-page w-full space-y-3'
+          : 'responsive-page w-full space-y-4 px-3 py-4 sm:space-y-6 sm:px-4 sm:py-6'
+      }
+    >
+      {presentation === 'mobile' ? (
+        <section className="rounded-xl border border-border bg-card p-3.5 text-card-foreground shadow-none">
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <IncidentStatusBadge status={incident.status} />
+                <IncidentUrgencyBadge urgency={incident.urgency} />
+                {incident.priority && (
+                  <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-bold">
+                    {incident.priority}
+                  </Badge>
+                )}
+              </div>
+              <h1 className="mt-2 break-words text-base font-bold leading-snug tracking-tight text-foreground">
+                {incident.title}
+              </h1>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <CopyButton text={id} label="ID" className="h-8 px-2 text-[10px]" />
               <CopyButton
                 text={`${appUrl}/incidents/${id}`}
                 icon="link"
                 label="Link"
-                className="h-9 px-2 text-xs"
+                className="h-8 px-2 text-[10px]"
               />
             </div>
           </div>
 
-          <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm sm:h-11 sm:w-11 ${statusGradient}`}
-            >
-              {incident.status === 'RESOLVED' ? (
-                <CheckCircle2 className="h-5 w-5" />
-              ) : incident.status === 'SNOOZED' ? (
-                <Pause className="h-5 w-5" />
-              ) : incident.status === 'SUPPRESSED' ? (
-                <Volume2 className="h-5 w-5" />
-              ) : (
-                <AlertCircle className="h-5 w-5" />
-              )}
+          <div className="mt-3">
+            <IncidentSLABadges sla={incidentSla} />
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-border/70 pt-3 text-[11px]">
+            <div className="min-w-0">
+              <span className="block text-muted-foreground">Service</span>
+              <span className="mt-0.5 block truncate font-semibold text-foreground">{incident.service.name}</span>
             </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <h1 className="min-w-0 break-words text-lg font-bold leading-snug tracking-tight text-foreground sm:text-2xl">
-                  {incident.title}
-                </h1>
-                <Badge className={`shrink-0 border-0 bg-gradient-to-r text-xs font-bold text-white ${statusGradient}`}>
-                  {incident.status}
-                </Badge>
-              </div>
-              <IncidentSLABadges sla={incidentSla} />
+            <div className="min-w-0">
+              <span className="block text-muted-foreground">Assigned to</span>
+              <span className="mt-0.5 block truncate font-semibold text-foreground">
+                {incident.assignee?.name || 'Unassigned'}
+              </span>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : (
+        <section className="relative overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-sm">
+          <div className={`h-1 w-full bg-gradient-to-r ${statusGradient}`} />
+          <div className="p-4 sm:p-6">
+            <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+              <Link
+                href={backHref}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                <span>{backLabel}</span>
+              </Link>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Badge variant="outline" className="hidden font-mono text-xs text-muted-foreground sm:inline-flex">
+                  #{id.slice(0, 8)}
+                </Badge>
+                <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
+                <CopyButton
+                  text={`${appUrl}/incidents/${id}`}
+                  icon="link"
+                  label="Link"
+                  className="h-9 px-2 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+              <div
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-sm sm:h-11 sm:w-11 ${statusGradient}`}
+              >
+                {incident.status === 'RESOLVED' ? (
+                  <CheckCircle2 className="h-5 w-5" />
+                ) : incident.status === 'SNOOZED' ? (
+                  <Pause className="h-5 w-5" />
+                ) : incident.status === 'SUPPRESSED' ? (
+                  <Volume2 className="h-5 w-5" />
+                ) : (
+                  <AlertCircle className="h-5 w-5" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h1 className="min-w-0 break-words text-lg font-bold leading-snug tracking-tight text-foreground sm:text-2xl">
+                    {incident.title}
+                  </h1>
+                  <Badge className={`shrink-0 border-0 bg-gradient-to-r text-xs font-bold text-white ${statusGradient}`}>
+                    {incident.status}
+                  </Badge>
+                </div>
+                <IncidentSLABadges sla={incidentSla} />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <IncidentCommandBar
         incidentId={incident.id}
@@ -261,7 +365,7 @@ export default async function IncidentDetailScreen({
           title: incident.title,
           service: { name: incident.service.name },
         }}
-        postmortemHref={`/postmortems/${id}`}
+        postmortemHref={presentation === 'mobile' ? `/m/postmortems/${id}` : `/postmortems/${id}`}
         postmortemExists={Boolean(postmortem)}
         warRoom={{
           slackChannelId: incident.slackChannelId,
@@ -284,7 +388,19 @@ export default async function IncidentDetailScreen({
         jiraCapability={incidentJiraCapability}
       />
 
-      <IncidentHeader incident={incident} users={users} teams={teams} canManage={canManageIncident} />
+      {presentation === 'mobile' ? (
+        <details className="group overflow-hidden rounded-xl border border-border bg-card">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+            <span>Incident details & assignment</span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="border-t border-border p-2">
+            <IncidentHeader incident={incident} users={users} teams={teams} canManage={canManageIncident} />
+          </div>
+        </details>
+      ) : (
+        <IncidentHeader incident={incident} users={users} teams={teams} canManage={canManageIncident} />
+      )}
 
       <IncidentDescriptionCard
         incidentId={incident.id}
@@ -314,49 +430,25 @@ export default async function IncidentDetailScreen({
           />
         </div>
 
-        <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-6 2xl:col-span-3">
-          <IncidentWatchers
-            watchers={incident.watchers.map(watcher => ({
-              id: watcher.id,
-              user: watcher.user,
-              role: watcher.role,
-            }))}
-            users={users}
-            canManage={canManageIncident}
-            currentUserId={user.id}
-            onAddWatcher={handleAddWatcher}
-            onRemoveWatcher={handleRemoveWatcher}
-          />
-
-          <IncidentCustomFieldsCard
-            incidentId={id}
-            customFieldValues={
-              incident.customFieldValues?.map(value => ({
-                id: value.id,
-                value: value.value,
-                customField: value.customField,
-              })) || []
-            }
-            allCustomFields={customFields}
-            canManage={canManageIncident}
-          />
-
-          <IncidentQuickLinksCard
-            incidentId={incident.id}
-            service={{
-              id: incident.service.id,
-              name: incident.service.name,
-              status: incident.service.status,
-              slaTier: incident.service.slaTier,
-              policy: incident.service.policy
-                ? { id: incident.service.policy.id, name: incident.service.policy.name }
-                : null,
-            }}
-            team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
-            warRoomUrl={incident.warRoomUrl}
-            slackChannelName={incident.slackChannelName}
-          />
-        </aside>
+        {presentation === 'mobile' ? (
+          <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+              <span>People, fields & links</span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="space-y-3 border-t border-border p-3">
+              {watchersContent}
+              {customFieldsContent}
+              {quickLinksContent}
+            </div>
+          </details>
+        ) : (
+          <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-6 2xl:col-span-3">
+            {watchersContent}
+            {customFieldsContent}
+            {quickLinksContent}
+          </aside>
+        )}
       </div>
     </div>
   );
