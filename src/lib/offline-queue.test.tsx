@@ -29,88 +29,94 @@ type StoredRecord = QueuedRequest | PrincipalRecord;
 
 const requestStore = new Map<string, StoredRecord>();
 
-const mockTransaction = {
-  objectStore: vi.fn(),
-  oncomplete: null as EventHandler,
-  onerror: null as EventHandler,
-  onabort: null as EventHandler,
-  error: null as DOMException | null,
-  abort: vi.fn(),
-};
+const createTransaction = () => {
+  let pendingRequests = 0;
+  let aborted = false;
 
-const completeTransaction = () => {
-  queueMicrotask(() => mockTransaction.oncomplete?.(new Event('complete')));
-};
+  const tx = {
+    oncomplete: null as EventHandler,
+    onerror: null as EventHandler,
+    onabort: null as EventHandler,
+    error: null as DOMException | null,
+    abort: vi.fn(() => {
+      aborted = true;
+      queueMicrotask(() => {
+        tx.onabort?.(new Event('abort'));
+      });
+    }),
+    objectStore: vi.fn(() => store),
+  };
 
-const mockStore = {
-  put: vi.fn((item: StoredRecord) => {
-    requestStore.set(item.id, item);
-    const request: MockRequest<string> = {
+  const notifyCompleteIfIdle = () => {
+    queueMicrotask(() => {
+      if (pendingRequests === 0 && !aborted) {
+        tx.oncomplete?.(new Event('complete'));
+      }
+    });
+  };
+
+  const executeRequest = <T,>(fn: () => T): MockRequest<T> => {
+    pendingRequests++;
+    const request: MockRequest<T> = {
       onsuccess: null,
       onerror: null,
       error: null,
-      result: item.id,
+      result: undefined as T,
     };
     queueMicrotask(() => {
-      request.onsuccess?.(new Event('success'));
-      completeTransaction();
+      if (aborted) return;
+      try {
+        request.result = fn();
+        request.onsuccess?.(new Event('success'));
+      } catch (err) {
+        request.error = err as DOMException;
+        request.onerror?.(new Event('error'));
+      } finally {
+        pendingRequests--;
+        notifyCompleteIfIdle();
+      }
     });
     return request;
-  }),
-  get: vi.fn((id: string) => {
-    const request: MockRequest<StoredRecord | undefined> = {
-      result: requestStore.get(id),
-      onsuccess: null,
-      onerror: null,
-      error: null,
-    };
-    queueMicrotask(() => request.onsuccess?.(new Event('success')));
-    return request;
-  }),
-  delete: vi.fn((id: string) => {
-    requestStore.delete(id);
-    const request: MockRequest<undefined> = {
-      onsuccess: null,
-      onerror: null,
-      error: null,
-      result: undefined,
-    };
-    queueMicrotask(() => {
-      request.onsuccess?.(new Event('success'));
-      completeTransaction();
-    });
-    return request;
-  }),
-  getAll: vi.fn(() => {
-    const request: MockRequest<StoredRecord[]> = {
-      result: Array.from(requestStore.values()),
-      onsuccess: null,
-      onerror: null,
-      error: null,
-    };
-    queueMicrotask(() => request.onsuccess?.(new Event('success')));
-    return request;
-  }),
-  indexNames: { contains: vi.fn(() => true) },
-  createIndex: vi.fn(),
-};
+  };
 
-mockTransaction.objectStore.mockImplementation(() => mockStore);
+  const store = {
+    put: vi.fn((item: StoredRecord) => {
+      return executeRequest(() => {
+        requestStore.set(item.id, item);
+        return item.id;
+      });
+    }),
+    get: vi.fn((id: string) => {
+      return executeRequest(() => {
+        return requestStore.get(id);
+      });
+    }),
+    delete: vi.fn((id: string) => {
+      return executeRequest(() => {
+        requestStore.delete(id);
+        return undefined;
+      });
+    }),
+    getAll: vi.fn(() => {
+      return executeRequest(() => {
+        return Array.from(requestStore.values());
+      });
+    }),
+    indexNames: { contains: vi.fn(() => true) },
+    createIndex: vi.fn(),
+  };
+
+  return tx;
+};
 
 const mockDb = {
-  transaction: vi.fn(() => mockTransaction),
-  createObjectStore: vi.fn(() => mockStore),
+  transaction: vi.fn(() => createTransaction()),
+  createObjectStore: vi.fn(() => ({
+    indexNames: { contains: vi.fn(() => true) },
+    createIndex: vi.fn(),
+  })),
   objectStoreNames: { contains: vi.fn(() => true) },
   close: vi.fn(),
-};
-
-const mockOpenRequest = {
-  result: mockDb,
-  transaction: mockTransaction,
-  onupgradeneeded: null as EventHandler,
-  onsuccess: null as EventHandler,
-  onerror: null as EventHandler,
-  error: null as DOMException | null,
 };
 
 const originalIndexedDB = global.indexedDB;
@@ -168,16 +174,19 @@ describe('offline-queue', () => {
     requestStore.clear();
     document.body.innerHTML = '';
     setPrincipal(userA);
-    mockTransaction.oncomplete = null;
-    mockTransaction.onerror = null;
-    mockTransaction.onabort = null;
-    mockTransaction.error = null;
-    mockTransaction.objectStore.mockImplementation(() => mockStore);
 
     global.indexedDB = {
       open: vi.fn(() => {
-        setTimeout(() => mockOpenRequest.onsuccess?.(new Event('success')), 0);
-        return mockOpenRequest;
+        const request = {
+          result: mockDb,
+          transaction: null as any,
+          onupgradeneeded: null as EventHandler,
+          onsuccess: null as EventHandler,
+          onerror: null as EventHandler,
+          error: null as DOMException | null,
+        };
+        queueMicrotask(() => request.onsuccess?.(new Event('success')));
+        return request;
       }),
     } as unknown as IDBFactory;
     global.fetch = vi.fn() as unknown as typeof fetch;

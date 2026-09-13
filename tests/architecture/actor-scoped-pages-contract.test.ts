@@ -54,10 +54,22 @@ describe('actor-scoped page read contract', () => {
   it.each([
     ['mobile incidents', pages.mobileIncidents, ['incidentReadWhere(actor)']],
     ['mobile incident detail', pages.mobileIncidentDetail, ['incidentReadWhere(actor)']],
-    ['mobile services', pages.mobileServices, ['serviceReadWhere(actor)', 'incidentReadWhere(actor)']],
-    ['mobile service detail', pages.mobileServiceDetail, ['serviceReadWhere(actor)', 'incidentReadWhere(actor)']],
+    [
+      'mobile services',
+      pages.mobileServices,
+      ['serviceReadWhere(actor)', 'incidentReadWhere(actor)'],
+    ],
+    [
+      'mobile service detail',
+      pages.mobileServiceDetail,
+      ['serviceReadWhere(actor)', 'incidentReadWhere(actor)'],
+    ],
     ['mobile teams', pages.mobileTeams, ['teamReadWhere(actor)', 'incidentReadWhere(actor)']],
-    ['service detail', pages.serviceDetail, ['serviceReadWhere(actor)', 'incidentReadWhere(actor)']],
+    [
+      'service detail',
+      pages.serviceDetail,
+      ['serviceReadWhere(actor)', 'incidentReadWhere(actor)'],
+    ],
   ])('%s uses centralized actor scope for rows and counts', (_name, page, predicates) => {
     expect(page).toContain('getCurrentAuthorizationActor()');
     for (const predicate of predicates) expect(page).toContain(predicate);
@@ -65,8 +77,8 @@ describe('actor-scoped page read contract', () => {
 
   it('routes mobile application chrome through the canonical actor-scoped shell read model', () => {
     expect(pages.mobileLayout).toContain('getAppShellContext(');
-    expect(pages.appShellContext).toContain('getCurrentAuthorizationActor()');
-    expect(pages.appShellContext).toContain('incidentReadWhere(actor)');
+    expect(pages.appShellContext).toContain('getRequestActorContext()');
+    expect(pages.appShellContext).toContain('incidentReadWhere(context.actor)');
   });
 
   it('keeps authenticated uptime behind the actor-aware boundary', () => {
