@@ -33,9 +33,10 @@ export async function GET(request: NextRequest) {
     const serviceId = new URL(request.url).searchParams.get('serviceId');
     if (!serviceId?.trim()) return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: 'serviceId is required.' }));
     await assertCanModifyService(serviceId.trim());
+    // Immutable identity: return only the enabled row (tombstoned history is preserved but not routable)
     const dest = await (prisma as unknown as {
-      microsoftTeamsDestination: { findUnique: (a: unknown) => Promise<null | { id: string; tenantId: string; teamId: string; channelId: string; channelName: string | null; teamName: string | null; enabled: boolean }> };
-    }).microsoftTeamsDestination.findUnique({ where: { serviceId: serviceId.trim() } } as never);
+      microsoftTeamsDestination: { findFirst: (a: unknown) => Promise<null | { id: string; tenantId: string; teamId: string; channelId: string; channelName: string | null; teamName: string | null; enabled: boolean }> };
+    }).microsoftTeamsDestination.findFirst({ where: { serviceId: serviceId.trim(), enabled: true }, orderBy: { updatedAt: 'desc' } } as never);
     return jsonOk({ destination: dest ?? null });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
@@ -82,8 +83,12 @@ export async function POST(request: NextRequest) {
     const prismaAny = prisma as unknown as {
       microsoftTeamsInstallation: { findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null> };
       microsoftTeamsDestination: {
-        upsert: (a: unknown) => Promise<{ id: string }>;
+        create: (a: unknown) => Promise<{ id: string }>;
+        findFirst: (a: unknown) => Promise<{ id: string; tenantId: string; teamId: string; channelId: string; enabled: boolean } | null>;
+        findMany: (a: unknown) => Promise<Array<{ id: string }>>;
         findUnique: (a: unknown) => Promise<unknown>;
+        update: (a: unknown) => Promise<{ id: string }>;
+        updateMany: (a: unknown) => Promise<{ count: number }>;
       };
     };
 
@@ -141,43 +146,71 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Transaction — destination upsert + service channel enable must be atomic.
-    // If serviceNotificationChannels cannot be updated, the destination must not commit half-configured.
+    // Immutable identity (tenantId,teamId,channelId) per row: routing change tombstones the old
+    // enabled row and creates a new row with a new id so ledger (ExternalOperation.destinationId,
+    // MicrosoftTeamsIncidentMessage.*) stays pinned to the original D1. At most one enabled per
+    // service (partial unique WHERE enabled=true). Same-tuple re-save only refreshes metadata.
     const dest = await prisma.$transaction(async tx => {
       const txAny = tx as unknown as typeof prismaAny & {
         service: { findUnique: (a: unknown) => Promise<{ serviceNotificationChannels: string[] } | null>; update: (a: unknown) => Promise<unknown> };
       };
-      const created = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.upsert({
-        where: { serviceId },
-        create: {
-          serviceId,
-          tenantId,
-          teamId,
-          channelId,
-          channelName: channelName ?? null,
-          teamName: teamName ?? null,
-          installationId: installation.id,
-          enabled: true,
-          updatedBy: actorId,
-        },
-        update: {
-          tenantId,
-          teamId,
-          channelId,
-          channelName: channelName ?? null,
-          teamName: teamName ?? null,
-          installationId: installation.id,
-          enabled: true,
-          updatedBy: actorId,
-        },
+      const existing = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.findFirst({
+        where: { serviceId, enabled: true },
+        orderBy: { updatedAt: 'desc' },
       } as never);
+      const tupleMatches = Boolean(
+        existing &&
+        (existing as unknown as { tenantId: string; teamId: string; channelId: string }).tenantId === tenantId &&
+        (existing as unknown as { tenantId: string; teamId: string; channelId: string }).teamId === teamId &&
+        (existing as unknown as { tenantId: string; teamId: string; channelId: string }).channelId === channelId
+      );
+      let row: { id: string };
+      if (existing && tupleMatches) {
+        // Idempotent metadata refresh — same immutable identity, same id
+        row = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.update({
+          where: { id: (existing as unknown as { id: string }).id },
+          data: { channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, updatedBy: actorId },
+        } as never);
+      } else {
+        // Tombstone prior routing (if any) and fence its in-flight AMBIGUOUS work before introducing D2
+        if (existing) {
+          const oldId = (existing as unknown as { id: string }).id;
+          await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.update({
+            where: { id: oldId },
+            data: { enabled: false },
+          } as never);
+          await revokeMicrosoftTeamsOperations(tx, { destinationIds: [oldId], reason: 'Microsoft Teams destination retargeted' });
+        }
+        // Create-or-reuse the target tuple: an old tombstone for same (service,tuple) is revived (id reused
+        // and ledger preserved) so already-delivered message history for that channel is not orphaned.
+        // A fresh tuple creates a new immutable row.
+        const tombstoned = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.findFirst({
+          where: { serviceId, tenantId, teamId, channelId },
+        } as never);
+        if (tombstoned && !(tombstoned as unknown as { enabled: boolean }).enabled) {
+          row = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.update({
+            where: { id: (tombstoned as unknown as { id: string }).id },
+            data: { channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, updatedBy: actorId },
+          } as never);
+        } else if (tombstoned) {
+          // Should not happen (we tombstoned the single enabled above, and tuple didn't match), but handle race
+          row = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.update({
+            where: { id: (tombstoned as unknown as { id: string }).id },
+            data: { channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, updatedBy: actorId },
+          } as never);
+        } else {
+          row = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.create({
+            data: { serviceId, tenantId, teamId, channelId, channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, updatedBy: actorId },
+          } as never);
+        }
+      }
       const svc = await txAny.service.findUnique({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
       const channels = new Set((svc?.serviceNotificationChannels ?? []) as string[]);
       if (!channels.has('MICROSOFT_TEAMS')) {
         channels.add('MICROSOFT_TEAMS');
         await txAny.service.update({ where: { id: serviceId }, data: { serviceNotificationChannels: [...channels] as never } });
       }
-      return created;
+      return row;
     });
 
     await logAudit({

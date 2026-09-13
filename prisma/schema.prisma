@@ -492,8 +492,8 @@ model Service {
   webhookIntegrations       WebhookIntegration[]
   slackIntegration          SlackIntegration?               @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
   jiraServiceMapping        JiraServiceMapping?
-  subscriptionServices      StatusPageSubscriptionService[]
-  microsoftTeamsDestination MicrosoftTeamsDestination?
+  subscriptionServices       StatusPageSubscriptionService[]
+  microsoftTeamsDestinations MicrosoftTeamsDestination[]
 
   @@index([teamId])
   @@index([escalationPolicyId])
@@ -718,7 +718,7 @@ model MicrosoftTeamsInstallation {
 
 model MicrosoftTeamsDestination {
   id             String   @id @default(cuid())
-  serviceId      String   @unique // Phase 1: one Teams channel per OpsKnight service
+  serviceId      String // Immutable routing identity per row: (tenantId, teamId, channelId). At most one enabled row per service (enforced by partial unique index).
   tenantId       String
   teamId         String
   channelId      String // Teams channel id (19:...@thread.tacv2)
@@ -736,6 +736,7 @@ model MicrosoftTeamsDestination {
   messages     MicrosoftTeamsIncidentMessage[]
 
   @@unique([serviceId, tenantId, teamId, channelId])
+  @@index([serviceId])
   @@index([tenantId, teamId])
   @@index([channelId])
   @@index([installationId])

@@ -215,9 +215,10 @@ export async function sendServiceNotifications(
     }
 
     if (serviceChannels.includes('MICROSOFT_TEAMS' as never) && eventType !== 'updated') {
-      const teamsDestination = await prisma.microsoftTeamsDestination.findUnique({
-        where: { serviceId: service.id },
-      });
+      const teamsDestination = await (prisma as unknown as { microsoftTeamsDestination: { findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null> } }).microsoftTeamsDestination.findFirst({
+        where: { serviceId: service.id, enabled: true },
+        orderBy: { updatedAt: 'desc' },
+      } as never);
       if (teamsDestination?.enabled) {
         // Claim-first ExternalOperation path: idempotent row + durable BackgroundJob
         // (ExternalOperation @@unique([provider,idempotencyKey]) + advisory lock + AMBIGUOUS semantics).

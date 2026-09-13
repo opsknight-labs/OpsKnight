@@ -120,7 +120,8 @@ export async function getMicrosoftTeamsHealth(options?: {
         teamId: true,
         teamName: true,
         enabled: true,
-        destinations: { select: { id: true } },
+        // Only routable (enabled) destinations — tombstoned rows are ledger history for AMBIGUOUS reconciliation, not active routing
+        destinations: { where: { enabled: true }, select: { id: true } },
       },
       orderBy: { teamName: 'asc' },
       take: 100,

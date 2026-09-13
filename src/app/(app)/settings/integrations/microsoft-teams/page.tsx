@@ -51,7 +51,9 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   };
 
   const config = await prismaAny.microsoftTeamsConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+  // Only routable destinations — tombstoned rows (enabled=false) are preserved for ledger/AMBIGUOUS reconciliation but not shown as active routing
   const destinations = await prismaAny.microsoftTeamsDestination.findMany({
+    where: { enabled: true },
     orderBy: { updatedAt: 'desc' },
     include: { service: { select: { name: true } } },
   });
