@@ -80,7 +80,9 @@ export default async function SecuritySettingsPage() {
     }
   }
 
-  // Resolve multi-device active sessions
+  // This is recent device activity inferred from login/heartbeat audit events.
+  // It is intentionally not presented as a cryptographic per-browser registry;
+  // tokenVersion remains the authoritative immediate revoke-all boundary.
   const headerList = await headers();
   const currentUserAgent = headerList.get('user-agent') || '';
   const currentIp =
@@ -131,7 +133,7 @@ export default async function SecuritySettingsPage() {
         }}
         tag="Identity & Protection"
         title="Security & Authentication"
-        subtitle="Control how you sign in, manage cryptographic credentials, and monitor active sessions across all devices."
+        subtitle="Control how you sign in, manage credentials, and review recent device activity across your account."
         icon={
           <div className="p-3.5 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/25 shadow-inner">
             <ShieldCheck className="h-8 w-8" />
@@ -167,14 +169,14 @@ export default async function SecuritySettingsPage() {
             subtext: 'Session state',
           },
           {
-            label: 'Active Sessions',
+            label: 'Recent Devices',
             value: `${activeSessions.length} ${activeSessions.length === 1 ? 'Device' : 'Devices'}`,
             icon: <Laptop className="h-3.5 w-3.5" />,
             subtext:
               activeSessions.length === 1
                 ? 'Current browser'
-                : `${activeSessions.length} active devices`,
-            tooltip: `${activeSessions.length} authenticated ${activeSessions.length === 1 ? 'session' : 'sessions'}`,
+                : `${activeSessions.length} recently active devices`,
+            tooltip: 'Inferred from recent sign-in and session-heartbeat audit activity',
           },
           {
             label: 'Auth Method',
@@ -205,14 +207,14 @@ export default async function SecuritySettingsPage() {
         <SecurityForm hasPassword={hasPassword} />
       </SettingsSection>
 
-      {/* Section 2: Active Sessions & Devices */}
+      {/* Section 2: Recent Device Activity */}
       <SettingsSection
-        title="Active Sessions"
-        description="Manage connected browsers and devices with active cryptographic access to your account."
+        title="Recent Device Activity"
+        description="Review browsers and device profiles seen in recent authenticated activity. This is an audit-derived view, not a per-device revocation registry."
         footer={
           <p className="text-xs text-muted-foreground">
-            Revoking all sessions increments your identity token version and signs you out from
-            every browser immediately.
+            Revoke all sessions is the authoritative emergency control: it increments your identity
+            token version and invalidates every existing browser session.
           </p>
         }
       >
