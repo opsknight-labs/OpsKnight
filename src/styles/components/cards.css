@@ -77,24 +77,9 @@
    padding: 0.85rem 1rem;
 }
 
-/* ========================================
-   Card Dark Mode Protection
-   Prevents browser dark mode from affecting card colors
-   ======================================== */
-
-@media (prefers-color-scheme: dark) {
-   :is(.stats-card, .panel, .directory-panel, [class*="card"], .bg-white, .bg-background):not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
-      background-color: #ffffff !important;
-      color: var(--text-primary) !important;
-      filter: none !important;
-      -webkit-filter: none !important;
-   }
-
-   :is(.stats-label, .panel-eyebrow, .hero-eyebrow):not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
-      color: var(--text-muted) !important;
-   }
-
-   .stats-value:not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
-      color: var(--text-primary) !important;
-   }
-}
+/*
+ * Do not add prefers-color-scheme overrides here. Browser/system preference is
+ * resolved by next-themes and semantic components render from the canonical
+ * token set. A browser media query must never force cards back to white while
+ * the application is intentionally in dark mode.
+ */
