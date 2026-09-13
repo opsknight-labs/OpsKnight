@@ -1,0 +1,235 @@
+import type { PersonalDataDomain } from './types';
+
+/**
+ * Descriptive metadata only. Classifications are OpsKnight information-handling
+ * labels, not legal-category findings; SENSITIVE does not by itself mean GDPR
+ * Article 9 special-category data. This registry does not read, export, alter
+ * or delete data.
+ */
+export const personalDataRegistry = [
+  {
+    domain: 'user-profile',
+    models: ['User', 'UserAvatar'],
+    fields: [
+      'name',
+      'email',
+      'phoneNumber',
+      'avatarUrl/data',
+      'department',
+      'jobTitle',
+      'gender',
+      'timeZone',
+    ],
+    purpose: ['Workspace identity', 'incident response coordination', 'localized scheduling'],
+    classifications: ['PERSONAL', 'SENSITIVE'],
+    locations: ['DATABASE'],
+    retention: {
+      current: 'Account record is retained; some relations cascade or detach on deletion.',
+      target: 'Approved account lifecycle and field-specific erasure policy.',
+    },
+    discoverable: 'COUNTED',
+    notes: ['Password hashes and tokens are security credentials, not returned by discovery.'],
+  },
+  {
+    domain: 'federated-identity',
+    models: ['OidcIdentity', 'OidcLinkingApproval'],
+    fields: [
+      'issuer',
+      'subject',
+      'email',
+      'providerObjectId',
+      'tenantId',
+      'issuerFingerprint',
+      'emailAtLink',
+      'expectedEmail',
+    ],
+    purpose: ['Authentication', 'safe identity linking', 'identity lifecycle'],
+    classifications: ['PERSONAL', 'SENSITIVE'],
+    locations: ['DATABASE'],
+    retention: {
+      current: 'Linked identity rows cascade with the user.',
+      target: 'Documented de-linking, offboarding and erasure policy.',
+    },
+    discoverable: 'COUNTED',
+    notes: ['Identity-provider records remain under the operator and provider policies.'],
+  },
+  {
+    domain: 'session-security',
+    models: ['AuditLog', 'UserToken', 'UserDevice'],
+    fields: [
+      'actorEmail',
+      'actorName',
+      'targetEmail',
+      'ip',
+      'details.userAgent',
+      'identifier',
+      'deviceId',
+      'token',
+    ],
+    purpose: ['Session visibility', 'account recovery', 'security investigation', 'push delivery'],
+    classifications: ['PERSONAL', 'SENSITIVE', 'SECRET'],
+    locations: ['DATABASE', 'LOG'],
+    retention: {
+      current: 'Audit/log retention is configurable; token/device lifecycle varies by record.',
+      target: 'Purpose-specific schedules and minimized immutable snapshots.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Discovery counts direct IDs only and does not search email, IP, JSON details or application logs.',
+    ],
+  },
+  {
+    domain: 'incident-participation',
+    models: ['Incident', 'IncidentWatcher', 'TeamMember'],
+    fields: ['assigneeId', 'userId', 'role'],
+    purpose: ['Assignment', 'access control', 'response coordination'],
+    classifications: ['INTERNAL', 'PERSONAL'],
+    locations: ['DATABASE'],
+    retention: {
+      current:
+        'Incident retention is configurable; membership lifecycle follows workspace administration.',
+      target: 'Documented historical attribution and erasure/anonymization rules.',
+    },
+    discoverable: 'COUNTED',
+    notes: ['Team-assigned incidents are not attributed to every team member by discovery.'],
+  },
+  {
+    domain: 'incident-content',
+    models: ['IncidentNote', 'Postmortem', 'ActionItem', 'IncidentEvent'],
+    fields: ['userId', 'createdById', 'ownerId', 'content', 'summary', 'timeline', 'message'],
+    purpose: ['Incident collaboration', 'auditability', 'post-incident learning'],
+    classifications: ['INTERNAL', 'PERSONAL', 'SENSITIVE'],
+    locations: ['DATABASE', 'FREE_TEXT'],
+    retention: {
+      current: 'Content follows incident/log cleanup where covered.',
+      target: 'Free-text minimization, subject review and hold-aware lifecycle.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Counts cover author/owner IDs; names, emails and other identifiers embedded in free text are not searched.',
+    ],
+  },
+  {
+    domain: 'on-call-scheduling',
+    models: ['OnCallLayerUser', 'OnCallOverride', 'OnCallShift'],
+    fields: ['userId', 'replacesUserId', 'start', 'end'],
+    purpose: ['On-call planning', 'routing', 'coverage history'],
+    classifications: ['INTERNAL', 'PERSONAL'],
+    locations: ['DATABASE'],
+    retention: {
+      current: 'Schedule records persist with operational configuration.',
+      target: 'Approved schedule-history retention and attribution policy.',
+    },
+    discoverable: 'COUNTED',
+    notes: ['Discovery reports assignments, replacements and materialized shifts separately.'],
+  },
+  {
+    domain: 'notifications',
+    models: [
+      'Notification',
+      'NotificationContent',
+      'NotificationDeliveryAttempt',
+      'InAppNotification',
+      'UserDevice',
+    ],
+    fields: [
+      'userId',
+      'recipientDisplay',
+      'recipientHash',
+      'message',
+      'payloadEncrypted',
+      'providerMessageId',
+      'errorMsg',
+      'userAgent',
+      'token',
+    ],
+    purpose: ['Incident notification delivery', 'delivery diagnosis', 'in-app communication'],
+    classifications: ['PERSONAL', 'SENSITIVE', 'SECRET'],
+    locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
+    retention: {
+      current:
+        'Some notifications follow incident/log cleanup; provider copies follow provider/operator terms.',
+      target: 'Channel-specific minimization and retention coverage.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Discovery counts user-linked rows, not recipient strings, nested content or external provider records.',
+    ],
+  },
+  {
+    domain: 'audit-and-application-logs',
+    models: ['AuditLog', 'LogEntry'],
+    fields: [
+      'actorId',
+      'actorEmail',
+      'actorName',
+      'targetEmail',
+      'ip',
+      'details',
+      'message',
+      'context',
+    ],
+    purpose: ['Security audit', 'operations', 'abuse prevention', 'diagnostics'],
+    classifications: ['INTERNAL', 'PERSONAL', 'SENSITIVE'],
+    locations: ['DATABASE', 'LOG', 'FREE_TEXT'],
+    retention: {
+      current: 'Log retention is configurable for covered database records.',
+      target: 'PII minimization, external sink inventory and legal-hold-aware retention.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Actor/entity IDs are counted; snapshots, JSON, free text and external logs are not searched.',
+    ],
+  },
+  {
+    domain: 'status-page-subscriptions',
+    models: ['StatusPageSubscription', 'StatusPageSubscriptionToken'],
+    fields: ['email', 'phone', 'token', 'verificationToken', 'preferences'],
+    purpose: [
+      'Subscription verification',
+      'public status notification delivery',
+      'unsubscribe handling',
+    ],
+    classifications: ['PERSONAL', 'SECRET'],
+    locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
+    retention: {
+      current: 'Unsubscribed records remain with subscription state; no user relation exists.',
+      target: 'Phase-two subscriber lifecycle and verified request matching.',
+    },
+    discoverable: 'NOT_COUNTED',
+    notes: ['User-ID discovery cannot safely infer subscriber identity from email.'],
+  },
+  {
+    domain: 'integrations',
+    models: [
+      'OidcConfig',
+      'SlackIntegration',
+      'SlackOAuthConfig',
+      'JiraConfig',
+      'NotificationProvider',
+      'StatusPageWebhook',
+    ],
+    fields: [
+      'updatedBy',
+      'userEmail',
+      'config',
+      'clientSecret',
+      'botToken',
+      'signingSecret',
+      'apiTokenEncrypted',
+      'webhookSecretEncrypted',
+      'url',
+    ],
+    purpose: ['Identity, ChatOps, ticketing, notification and webhook integrations'],
+    classifications: ['INTERNAL', 'PERSONAL', 'SECRET'],
+    locations: ['DATABASE', 'EXTERNAL_PROVIDER'],
+    retention: {
+      current: 'Configuration persists until replaced or removed; provider copies are external.',
+      target: 'Provider-specific minimization, ownership and deletion procedure.',
+    },
+    discoverable: 'PARTIAL',
+    notes: [
+      'Discovery counts updater IDs where modeled; it never reads secrets or queries providers.',
+    ],
+  },
+] as const satisfies readonly PersonalDataDomain[];

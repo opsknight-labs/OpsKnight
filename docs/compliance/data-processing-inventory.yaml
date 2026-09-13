@@ -1,0 +1,80 @@
+version: 1
+reviewed_at: 2026-09-13
+scope: self-hosted OpsKnight repository; each operator must adapt this inventory to its deployment
+notice: readiness metadata only; not a record of lawful basis, consent, transfers, processors, or actual retention execution
+classification_notice: SENSITIVE is an OpsKnight internal handling label; it does not by itself classify data as GDPR Article 9 special-category personal data or an equivalent statutory category
+domains:
+  - domain: user-profile
+    data: [name, email, phone, avatar, department, job-title, gender, timezone]
+    purpose: [workspace-identity, incident-response, scheduling]
+    storage: [postgresql]
+    recipients: [authorized-workspace-users, configured-notification-providers]
+    retention: { current: account-record-retained, target: approved-account-lifecycle }
+    exportable: partial
+    deletion: { current: relation-dependent, target: phase-2-or-3 }
+  - domain: federated-identity
+    data: [issuer, subject, email, provider-object-id, tenant-id, identity-link-evidence]
+    purpose: [authentication, identity-linking, lifecycle]
+    storage: [postgresql, configured-identity-provider]
+    recipients: [operator, identity-provider]
+    retention: { current: linked-records-cascade-with-user, target: documented-identity-lifecycle }
+    exportable: false
+    deletion: { current: partial, target: phase-2-or-3 }
+  - domain: session-security
+    data: [ip, user-agent, device-id, token-metadata, actor-snapshots]
+    purpose: [session-visibility, security-investigation, account-recovery, push-delivery]
+    storage: [postgresql, application-logs]
+    recipients: [operator, configured-push-provider]
+    retention: { current: mixed-and-partly-configurable, target: purpose-specific-schedules }
+    exportable: false
+    deletion: { current: partial, target: phase-2-or-3 }
+  - domain: incident-participation-and-content
+    data: [assignee, watcher, team-member, author, owner, notes, events, postmortem-free-text]
+    purpose: [response-coordination, auditability, learning]
+    storage: [postgresql]
+    recipients: [authorized-workspace-users, configured-integrations]
+    retention:
+      { current: incident-and-log-policy-where-covered, target: attribution-and-free-text-policy }
+    exportable: partial
+    deletion: { current: partial, target: phase-3 }
+  - domain: on-call-scheduling
+    data: [assignment, replacement, shift-start, shift-end]
+    purpose: [routing, coverage, schedule-history]
+    storage: [postgresql]
+    recipients: [authorized-workspace-users, configured-notification-providers]
+    retention: { current: operational-record-retained, target: approved-schedule-history-policy }
+    exportable: partial
+    deletion: { current: relation-dependent, target: phase-3 }
+  - domain: notifications
+    data: [recipient, message, encrypted-payload, provider-id, delivery-error, device-token]
+    purpose: [incident-delivery, delivery-diagnosis, in-app-communication]
+    storage: [postgresql, configured-delivery-providers]
+    recipients: [intended-recipient, configured-delivery-providers]
+    retention: { current: mixed-and-partly-covered, target: channel-specific-policy }
+    exportable: partial
+    deletion: { current: partial, target: phase-2-or-3 }
+  - domain: audit-and-application-logs
+    data: [actor, target-email, ip, user-agent, event-details, messages, structured-context]
+    purpose: [security-audit, diagnostics, abuse-prevention]
+    storage: [postgresql, operator-log-sinks]
+    recipients: [authorized-auditors, operator-log-processors]
+    retention:
+      { current: configurable-for-covered-database-records, target: complete-sink-and-hold-policy }
+    exportable: partial
+    deletion: { current: policy-cleanup, target: minimized-hold-aware-lifecycle }
+  - domain: status-page-subscriber
+    data: [email, phone, preferences, verification-token, unsubscribe-token]
+    purpose: [subscription-verification, status-notification, unsubscribe]
+    storage: [postgresql, configured-delivery-providers]
+    recipients: [configured-delivery-providers]
+    retention: { current: unsubscribe-record-retained, target: phase-2-lifecycle }
+    exportable: false
+    deletion: { current: partial, target: phase-2 }
+  - domain: integrations
+    data: [administrator-email, updater-id, provider-identifiers, credentials, payloads]
+    purpose: [identity, chatops, ticketing, notifications, webhooks]
+    storage: [postgresql, external-providers]
+    recipients: [operator-selected-providers]
+    retention: { current: configuration-and-provider-specific, target: provider-specific-inventory }
+    exportable: false
+    deletion: { current: configuration-dependent, target: phase-2-or-3 }
