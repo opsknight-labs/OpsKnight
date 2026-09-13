@@ -7,6 +7,9 @@ This catalogue describes repository capabilities and known gaps. It is not a cer
 - [Control catalogue](../../src/lib/compliance/controls.ts): stable IDs, implementation, status, owner, evidence and gaps.
 - [Framework definitions](../../src/lib/compliance/frameworks.ts): primary sources and scope.
 - [Evidence index](../../src/lib/compliance/evidence.ts): derived directly from the catalogue.
+- [Security capability manifest](../../security-capabilities.json): testable, deliberately bounded public claims.
+- [Shared responsibility](shared-responsibility.md): maintainer, operator and organizational ownership.
+- [Processing inventory](data-processing-inventory.yaml): current and target personal-data handling.
 
 Implemented means the narrowly described repository capability exists. Partial means material technical or operational gaps remain. Missing means the described capability is not established. Ownership is separate: maintainers implement software, operators configure and run it, and organizations determine applicable obligations and maintain governance evidence.
 

@@ -1,0 +1,51 @@
+{
+  "$schema": "./docs/compliance/security-capabilities.schema.json",
+  "reviewedAt": "2026-09-13",
+  "scope": "repository capabilities; deployment operation must be verified separately",
+  "encryption": {
+    "newSecretWrites": "AES-256-GCM-v3-envelope",
+    "legacyReads": ["AES-256-CBC-v1", "AES-256-CBC-v2"],
+    "keyringOverlapRotation": true,
+    "generalDatabaseFieldEncryption": false
+  },
+  "identity": {
+    "oidc": true,
+    "scimUsers": true,
+    "scimGroups": false,
+    "nativeServerVerifiedMfa": false,
+    "identityProviderMfaSupported": true
+  },
+  "sessions": {
+    "strategy": "jwt",
+    "tokenVersionRevocation": true,
+    "sameSite": "lax",
+    "secureOnHttps": true
+  },
+  "securityAutomation": {
+    "codeql": true,
+    "dependencyScanning": true,
+    "secretScanning": true,
+    "validatedSourceSbom": true,
+    "releaseImageSbomRequested": true,
+    "releaseImageProvenanceRequested": true,
+    "vulnerabilitySeverityGate": false
+  },
+  "privacy": {
+    "personalDataRegistry": true,
+    "processingInventory": true,
+    "directRelationCountDiscovery": true,
+    "subjectAccessExport": false,
+    "subjectErasure": false,
+    "legalHolds": false,
+    "subscriberLifecyclePolicy": false
+  },
+  "audit": {
+    "databaseAuditTrail": true,
+    "immutableOrWormStorage": false
+  },
+  "recovery": {
+    "documentedBackupRestore": true,
+    "ciRestoreDrill": true,
+    "productionRestoreEvidence": "operator-responsibility"
+  }
+}
