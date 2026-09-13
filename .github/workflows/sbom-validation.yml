@@ -1,0 +1,39 @@
+name: SBOM artifact validation
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install validation tools without lifecycle scripts
+        run: npm ci --legacy-peer-deps --ignore-scripts
+      - name: Generate source dependency inventory
+        run: |
+          mkdir -p reports
+          npx --no-install cyclonedx-npm --package-lock-only --ignore-npm-errors --omit dev --flatten-components --output-format JSON --spec-version 1.5 --output-file reports/source-sbom.cdx.json
+      - name: Validate schema, graph and release identity
+        env:
+          SBOM_SOURCE_SHA: ${{ github.sha }}
+          SBOM_SOURCE_REF: ${{ github.ref }}
+        run: node scripts/compliance/validate-sbom.mjs > reports/source-sbom-manifest.json
+      - name: Preserve validated artifact with source association
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-sbom-${{ github.sha }}
+          path: |
+            reports/source-sbom.cdx.json
+            reports/source-sbom-manifest.json
+          if-no-files-found: error
+          retention-days: 90
