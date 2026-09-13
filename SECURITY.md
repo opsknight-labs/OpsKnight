@@ -50,7 +50,9 @@ CSP currently permits `unsafe-inline` and `unsafe-eval` for scripts. It also res
 ## Security and compliance evidence
 
 - [Control catalogue and framework mappings](docs/compliance/README.md)
+- [Shared responsibility](docs/compliance/shared-responsibility.md)
 - [Evidence collection](docs/compliance/evidence/README.md)
+- [SBOM handling](docs/security/sbom.md)
 - [Release security checklist](docs/security/release-security-checklist.md)
 - [Advisory template](docs/security/security-advisory-template.md)
 

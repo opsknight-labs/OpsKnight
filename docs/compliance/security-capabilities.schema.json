@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reviewedAt",
+    "scope",
+    "encryption",
+    "identity",
+    "sessions",
+    "securityAutomation",
+    "privacy",
+    "audit",
+    "recovery"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "reviewedAt": { "type": "string", "format": "date" },
+    "scope": { "type": "string", "minLength": 20 },
+    "encryption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "newSecretWrites",
+        "legacyReads",
+        "keyringOverlapRotation",
+        "generalDatabaseFieldEncryption"
+      ],
+      "properties": {
+        "newSecretWrites": { "const": "AES-256-GCM-v3-envelope" },
+        "legacyReads": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "keyringOverlapRotation": { "type": "boolean" },
+        "generalDatabaseFieldEncryption": { "type": "boolean" }
+      }
+    },
+    "identity": { "$ref": "#/$defs/booleanCapabilities" },
+    "sessions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "tokenVersionRevocation", "sameSite", "secureOnHttps"],
+      "properties": {
+        "strategy": { "const": "jwt" },
+        "tokenVersionRevocation": { "type": "boolean" },
+        "sameSite": { "enum": ["lax", "strict", "none"] },
+        "secureOnHttps": { "type": "boolean" }
+      }
+    },
+    "securityAutomation": { "$ref": "#/$defs/booleanCapabilities" },
+    "privacy": { "$ref": "#/$defs/booleanCapabilities" },
+    "audit": { "$ref": "#/$defs/booleanCapabilities" },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["documentedBackupRestore", "ciRestoreDrill", "productionRestoreEvidence"],
+      "properties": {
+        "documentedBackupRestore": { "type": "boolean" },
+        "ciRestoreDrill": { "type": "boolean" },
+        "productionRestoreEvidence": { "const": "operator-responsibility" }
+      }
+    }
+  },
+  "$defs": {
+    "booleanCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": { "^[A-Za-z][A-Za-z0-9]+$": { "type": "boolean" } }
+    }
+  }
+}
