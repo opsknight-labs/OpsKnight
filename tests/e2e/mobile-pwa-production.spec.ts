@@ -34,7 +34,10 @@ test.describe('production PWA service-worker contract', () => {
     expect(workerText).toMatch(/custom-sw\.js/);
 
     await page.goto('/login');
-    await expect(page.locator('img[alt="OpsKnight"]')).toBeVisible();
+    // The app can render more than one branded OpsKnight image (for example
+    // install/browser chrome), so use a unique interactive login contract rather
+    // than an alt-text locator whose multiplicity is unrelated to PWA readiness.
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 
     const registration = await page.evaluate(async () => {
       if (!('serviceWorker' in navigator)) return null;
@@ -62,7 +65,7 @@ test.describe('production PWA service-worker contract', () => {
     await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(
       true
     );
-    await expect(page.locator('img[alt="OpsKnight"]')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 
     // Authenticated/dynamic documents, APIs, and RSC responses are authoritative
     // network data and must not leak into CacheStorage.
