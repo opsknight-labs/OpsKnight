@@ -53,27 +53,32 @@
       --ui-radius: 0.75rem;
    }
 
+   /*
+    * Dark mode intentionally stays neutral and low-chroma. Status/urgency
+    * colors remain semantic accents, but application chrome and surfaces use
+    * the original OpsKnight zinc treatment rather than a colorful dark theme.
+    */
    .dark,
    [data-theme='dark'] {
-      --ui-background: 222.2 47.4% 7.5%;
-      --ui-foreground: 210 40% 96.1%;
-      --ui-muted: 217.2 32.6% 17.5%;
-      --ui-muted-foreground: 215 20.2% 65.1%;
-      --ui-popover: 222.2 47.4% 10.5%;
-      --ui-popover-foreground: 210 40% 96.1%;
-      --ui-card: 222.2 47.4% 10.5%;
-      --ui-card-foreground: 210 40% 96.1%;
-      --ui-border: 215 25% 26.7%;
-      --ui-input: 215 25% 26.7%;
-      --ui-primary: 210 40% 96.1%;
+      --ui-background: 240 10% 3.9%;
+      --ui-foreground: 210 40% 98%;
+      --ui-muted: 240 3.7% 15.9%;
+      --ui-muted-foreground: 240 5% 64.9%;
+      --ui-popover: 240 5.9% 7.5%;
+      --ui-popover-foreground: 210 40% 98%;
+      --ui-card: 240 5.9% 7.5%;
+      --ui-card-foreground: 210 40% 98%;
+      --ui-border: 240 3.7% 15.9%;
+      --ui-input: 240 3.7% 15.9%;
+      --ui-primary: 210 40% 98%;
       --ui-primary-foreground: 222.2 47.4% 11.2%;
-      --ui-secondary: 217.2 32.6% 17.5%;
-      --ui-secondary-foreground: 210 40% 96.1%;
-      --ui-accent: 217.2 32.6% 17.5%;
-      --ui-accent-foreground: 210 40% 96.1%;
-      --ui-destructive: 346.8 77.2% 55%;
+      --ui-secondary: 240 3.7% 15.9%;
+      --ui-secondary-foreground: 210 40% 98%;
+      --ui-accent: 240 3.7% 15.9%;
+      --ui-accent-foreground: 210 40% 98%;
+      --ui-destructive: 0 62.8% 30.6%;
       --ui-destructive-foreground: 210 40% 98%;
-      --ui-ring: 212.7 26.8% 83.9%;
+      --ui-ring: 240 4.9% 83.9%;
    }
 }
 
