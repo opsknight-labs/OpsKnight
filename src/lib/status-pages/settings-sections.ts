@@ -14,6 +14,9 @@ const sectionFields = new Map<string, readonly string[]>([
     ],
   ],
   ['appearance', ['branding']],
+  ['design', ['branding']],
+  // Legacy route kept for backwards compatibility with older clients/bookmarks. The current UI
+  // exposes curated themes and Advanced CSS through the Design section instead.
   ['customization', ['branding']],
   [
     'services',
