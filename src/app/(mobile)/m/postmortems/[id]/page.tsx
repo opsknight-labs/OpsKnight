@@ -1,9 +1,11 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft } from 'lucide-react';
 import { getUserPermissions } from '@/lib/rbac';
+import { getRequestActorContext } from '@/lib/request-actor-context';
+import { postmortemReadWhere } from '@/lib/authorization-filters';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,9 +15,21 @@ type PageProps = {
 
 export default async function MobilePostmortemDetailPage({ params }: PageProps) {
   const { id } = await params;
+  const [context, permissions] = await Promise.all([
+    getRequestActorContext(),
+    getUserPermissions(),
+  ]);
+  if (!context) redirect(`/login?callbackUrl=/m/postmortems/${encodeURIComponent(id)}`);
 
-  const pm = await prisma.postmortem.findUnique({
-    where: { id },
+  const postmortemAccess = postmortemReadWhere(context.actor);
+  const pm = await prisma.postmortem.findFirst({
+    where: {
+      AND: [
+        { id },
+        postmortemAccess,
+        ...(permissions.isResponderOrAbove ? [] : [{ status: 'PUBLISHED' as const }]),
+      ],
+    },
     include: {
       incident: {
         select: {
@@ -30,11 +44,6 @@ export default async function MobilePostmortemDetailPage({ params }: PageProps) 
   });
 
   if (!pm) {
-    notFound();
-  }
-
-  const permissions = await getUserPermissions();
-  if (pm.status !== 'PUBLISHED' && !permissions.isResponderOrAbove) {
     notFound();
   }
 
