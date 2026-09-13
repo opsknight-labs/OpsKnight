@@ -1,4 +1,4 @@
-name: Microsoft Teams E2E
+name: Microsoft Teams Contract + DB Integration
 
 on:
   pull_request:
@@ -69,4 +69,3 @@ jobs:
           tests/lib/microsoft-teams-delivery.test.ts
           tests/lib/microsoft-teams-service-url.test.ts
           tests/architecture/microsoft-teams-transport-contract.test.ts
-

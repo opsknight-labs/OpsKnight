@@ -3,10 +3,11 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import prisma from '@/lib/prisma';
+import { emitAuditEvent } from '@/lib/audit';
 
 async function requireAdmin() {
   const session = await getServerSession(await getAuthOptions());
-  return session?.user?.role === 'ADMIN';
+  return session?.user?.role === 'ADMIN' ? session : null;
 }
 
 export async function GET() {
@@ -61,7 +62,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await requireAdmin())) return jsonError('Forbidden', 403);
+  const admin = await requireAdmin();
+  if (!admin) return jsonError('Forbidden', 403);
   const body = (await request.json().catch(() => null)) as {
     kind?: string;
     id?: string;
@@ -99,6 +101,12 @@ export async function POST(request: NextRequest) {
             update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId },
           });
           await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'COMPLETED', externalId: body.providerMessageId.trim(), externalKey: body.providerMessageId.trim(), resultPayload: { providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), reconciledManually: true }, lastError: null } });
+          await emitAuditEvent({
+            action: 'microsoftTeams.delivery.reconciled_delivered', source: 'UI',
+            target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
+            oldValue: { status: 'AMBIGUOUS' }, newValue: { status: 'COMPLETED' },
+            metadata: { operationId: existing.id, destinationId, tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim() },
+          }, tx);
           return;
         }
         if (body.resolution === 'mark_failed') {
@@ -108,6 +116,12 @@ export async function POST(request: NextRequest) {
             await tx.microsoftTeamsIncidentMessage.deleteMany({ where: { incidentId: existing.incidentId, destinationId, messageId: `__reserved__:${existing.id}` } });
           }
           await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'FAILED', lastError: 'Operator confirmed the ambiguous Teams delivery was not delivered.' } });
+          await emitAuditEvent({
+            action: 'microsoftTeams.delivery.reconciled_failed', source: 'UI',
+            target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
+            oldValue: { status: 'AMBIGUOUS' }, newValue: { status: 'FAILED' },
+            metadata: { operationId: existing.id, destinationId },
+          }, tx);
           return;
         }
         throw new Error('Ambiguous deliveries cannot be retried; reconcile as mark_delivered or mark_failed');
@@ -135,6 +149,11 @@ export async function POST(request: NextRequest) {
           payload: { operationId: operation.id },
         },
       });
+      await emitAuditEvent({
+        action: existing.provider === 'MICROSOFT_TEAMS' ? 'microsoftTeams.delivery.manual_retry' : 'externalOperation.manual_retry', source: 'UI',
+        target: { type: 'INCIDENT', id: existing.incidentId }, actor: { type: 'USER', id: admin.user.id },
+        oldValue: { status: 'FAILED' }, newValue: { status: 'PENDING' }, metadata: { operationId: existing.id, provider: existing.provider },
+      }, tx);
     } else {
       const intent = await tx.chatOpsIntent.update({
         where: { id: body.id },

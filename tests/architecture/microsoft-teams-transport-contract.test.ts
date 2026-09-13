@@ -40,6 +40,7 @@ describe('microsoft teams transport contract', () => {
     expect(createRegion).not.toContain('retryFetch(');
     expect(createRegion).toContain('if (!conversationId || !providerMessageId)');
     expect(createRegion).toContain("errorCode: 'AMBIGUOUS_SIDE_EFFECT'");
+    expect(client.match(/signal: AbortSignal\.timeout\(30_000\)/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
   it('never automatically recreates an ambiguous card and fences ledger writes by lease', () => {
@@ -47,6 +48,9 @@ describe('microsoft teams transport contract', () => {
     expect(delivery).not.toContain('probeMicrosoftTeamsForIncidentMessage');
     expect(delivery).toContain("new Date('9999-12-31T23:59:59.999Z')");
     expect(delivery).toContain('requiresManualReconciliation: true');
+    expect(delivery).toContain('createAttempted: false');
+    expect(delivery).toContain('statusCode >= 500');
+    expect(delivery).toContain("lastKnownRejection: result.errorCode");
     const transactionStart = delivery.indexOf('await prisma.$transaction(async tx => {', delivery.indexOf('Durable atomic ledger'));
     const completionCheck = delivery.indexOf('if (completed.count !== 1)', transactionStart);
     const ledgerUpsert = delivery.indexOf('microsoftTeamsIncidentMessage.upsert', transactionStart);

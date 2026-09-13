@@ -136,6 +136,7 @@ async function sendBotActivity(args: {
   clientId: string;
   clientSecret: string;
   tenantId: string;
+  beforeCreateAttempt?: () => Promise<void>;
 }): Promise<TeamsDeliveryResult> {
   const normalizedServiceUrl = normalizeTrustedMicrosoftTeamsServiceUrl(args.serviceUrl);
   if (!normalizedServiceUrl) {
@@ -185,6 +186,7 @@ async function sendBotActivity(args: {
   };
   let createRes: Response;
   try {
+    await args.beforeCreateAttempt?.();
     // Creating a conversation/activity is not idempotent. A retry after a lost
     // response can create a second incident card, so this call is deliberately
     // single-attempt. Unknown outcomes are reconciled by an operator, never by
@@ -193,6 +195,9 @@ async function sendBotActivity(args: {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(createBody),
+      // Must remain comfortably shorter than the 120s canonical-card lease.
+      // A timeout is an ambiguous create outcome and is never auto-replayed.
+      signal: AbortSignal.timeout(30_000),
     });
   } catch (error) {
     return {
@@ -281,6 +286,7 @@ async function updateBotActivity(args: {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
     },
     { maxAttempts: 2, initialDelayMs: 800 }
   );
@@ -319,6 +325,7 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
   incident: MicrosoftTeamsIncidentCardInput['incident'];
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
   disableActions?: boolean;
+  beforeCreateAttempt?: () => Promise<void>;
 }): Promise<TeamsDeliveryResult> {
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
@@ -350,6 +357,7 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
     clientId: resolved.config.clientId,
     clientSecret: resolved.clientSecret,
     tenantId,
+    beforeCreateAttempt: args.beforeCreateAttempt,
   });
 }
 

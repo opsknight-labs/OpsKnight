@@ -538,6 +538,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
 
     let reservedByUs = false;
     let concurrentReservation = false;
+    let createAttemptStarted = false;
     const acquireCardMutationLease = async () => prisma.$transaction(async tx => {
       await acquireAdvisoryLock(tx, lockKey);
       const inside = await tx.microsoftTeamsIncidentMessage.findUnique({
@@ -613,7 +614,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
-          status: retryStatus(operation.attempts),
+          status: 'PENDING',
           attempts: { decrement: 1 },
           nextAttemptAt: new Date(Date.now() + jitteredDelayMs(1500)),
           lastError: 'Teams card mutation is leased by another operation — retrying',
@@ -638,7 +639,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
-          status: retryStatus(operation.attempts),
+          status: 'PENDING',
           attempts: { decrement: 1 },
           nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
           lastError: `Teams admission rate-limited: retry at ${admission.retryAt.toISOString()}`,
@@ -660,7 +661,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         await prisma.externalOperation.updateMany({
           where: { id, status: 'PROCESSING', leaseToken },
           data: {
-            status: retryStatus(operation.attempts),
+            status: 'PENDING',
             attempts: { decrement: 1 },
             nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
             lastError: `Teams concurrency at capacity: retry at ${concurrency.retryAt.toISOString()}`,
@@ -718,6 +719,15 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       resolvedAt: currentIncident.resolvedAt,
     });
     const cardState = deriveMicrosoftTeamsCardState(currentIncident);
+    const markCreateAttemptStarted = async () => {
+      const createStartedAt = new Date().toISOString();
+      const markedAttempted = await prisma.externalOperation.updateMany({
+        where: { id, status: 'PROCESSING', leaseToken },
+        data: { resultPayload: { createAttempted: true, createStartedAt, requiresManualReconciliation: false } as Prisma.InputJsonObject },
+      });
+      if (markedAttempted.count !== 1) throw new Error('Teams delivery lease was lost before create');
+      createAttemptStarted = true;
+    };
 
     const { microsoftTeamsChatProvider } = await import('./provider');
     const { categorizeTeamsErrorCode } = await import('./capabilities');
@@ -781,7 +791,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           await prisma.externalOperation.updateMany({
             where: { id, status: 'PROCESSING', leaseToken },
             data: {
-              status: retryStatus(operation.attempts),
+              status: 'PENDING',
               attempts: { decrement: 1 },
               nextAttemptAt: new Date(Date.now() + jitteredDelayMs(retryAfterMs)),
               lastError: `Teams circuit open: ${String(e.message).slice(0, 400)}`,
@@ -815,6 +825,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               destinationId,
               incident: incidentInput,
               eventType: cardState.eventType,
+              beforeCreateAttempt: markCreateAttemptStarted,
             })
           );
         } else if (!updateResult.success && updateResult.errorCode === 'PATCH_NOT_SUPPORTED') {
@@ -875,22 +886,16 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
           await releaseTeamsConcurrency();
           throw new Error('Teams create outcome is ambiguous; manual reconciliation required');
         }
-        result = await callWithBreaker(async () => {
-          // This callback is entered only after the circuit breaker admits the
-          // call. Persist immediately before POST so createAttempted means the
-          // external side effect may truly have happened.
-          const createStartedAt = new Date().toISOString();
-          const markedAttempted = await prisma.externalOperation.updateMany({
-            where: { id, status: 'PROCESSING', leaseToken },
-            data: { resultPayload: { createAttempted: true, createStartedAt, requiresManualReconciliation: false } as Prisma.InputJsonObject },
-          });
-          if (markedAttempted.count !== 1) throw new Error('Teams delivery lease was lost before create');
-          return microsoftTeamsChatProvider.sendIncidentCard({
+        result = await callWithBreaker(() =>
+          microsoftTeamsChatProvider.createIncidentCard({
             destinationId,
             incident: incidentInput,
             eventType: cardState.eventType,
-          });
-        });
+            // Client invokes this after every local prerequisite succeeds and
+            // immediately before the single non-idempotent HTTP POST.
+            beforeCreateAttempt: markCreateAttemptStarted,
+          })
+        );
       }
     } catch (e) {
       if (circuitOpened) {
@@ -919,6 +924,43 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       const code = categorizeTeamsErrorCode(result.errorCode);
       const statusCode = result.statusCode;
       const retryAfterMs = result.retryAfterMs;
+      // A 5xx after a non-idempotent create cannot prove the side effect did
+      // not occur. Preserve the reservation and require reconciliation.
+      if (reservedByUs && createAttemptStarted && statusCode != null && statusCode >= 500) {
+        await prisma.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            status: 'AMBIGUOUS',
+            nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+            lastError: `Teams create returned HTTP ${statusCode}; external outcome is uncertain: ${result.error.slice(0, 800)}`,
+            leaseToken: null,
+            leaseExpiresAt: null,
+            resultPayload: { createAttempted: true, requiresManualReconciliation: true, providerStatus: statusCode } as Prisma.InputJsonObject,
+          },
+        });
+        throw new Error(result.error);
+      }
+      // An explicit non-5xx HTTP response proves the create was rejected. Clear
+      // both reservation and uncertainty so a known-safe retry cannot become a
+      // false AMBIGUOUS operation on its next wake-up.
+      if (reservedByUs && (!createAttemptStarted || (statusCode != null && statusCode < 500))) {
+        await prisma.microsoftTeamsIncidentMessage.deleteMany({
+          where: { incidentId, destinationId, messageId: ownReservation },
+        });
+        reservedByUs = false;
+        mutationLeaseHeld = false;
+        await prisma.externalOperation.updateMany({
+          where: { id, status: 'PROCESSING', leaseToken },
+          data: {
+            resultPayload: {
+              createAttempted: false,
+              requiresManualReconciliation: false,
+              lastKnownRejection: result.errorCode ?? (statusCode != null ? `http_${statusCode}` : 'PRE_REQUEST_FAILURE'),
+              providerStatus: statusCode ?? null,
+            } as Prisma.InputJsonObject,
+          },
+        });
+      }
       const err = new AppError({
         code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
         userMessage: result.error,

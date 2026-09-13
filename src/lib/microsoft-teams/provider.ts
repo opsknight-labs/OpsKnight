@@ -58,6 +58,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       resolvedAt?: Date | null;
     };
     eventType: 'triggered' | 'acknowledged' | 'resolved';
+    beforeCreateAttempt?: () => Promise<void>;
   }): Promise<ChatDeliveryResult> {
     const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: args.destinationId } });
     if (!dest) return { success: false, error: 'Teams destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
@@ -68,6 +69,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       channelId: dest.channelId,
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
+      beforeCreateAttempt: args.beforeCreateAttempt,
     });
     return res;
   }
@@ -165,6 +167,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       resolvedAt?: Date | null;
     };
     eventType: 'triggered' | 'acknowledged' | 'resolved';
+    beforeCreateAttempt?: () => Promise<void>;
   }): Promise<ChatDeliveryResult> {
     return this.createIncidentCard(args);
   }
