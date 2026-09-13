@@ -1,7 +1,5 @@
 import prisma from '@/lib/prisma';
 import OperationalStatus from '@/components/OperationalStatus';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 
 import Sidebar from '@/components/Sidebar';
@@ -29,6 +27,7 @@ import { RealtimeProvider } from '@/hooks/useRealtime';
 import { IncidentAlertProvider } from '@/contexts/IncidentAlertContext';
 import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
 import { getAppShellContext } from '@/lib/app-shell-context';
+import { getRequestActorContext } from '@/lib/request-actor-context';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -40,15 +39,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(await getAuthOptions());
+  const requestContext = await getRequestActorContext();
 
-  if (!session?.user?.email) {
-    logger.warn('[App Layout] No authenticated session', {
-      component: 'layout',
-      hasSession: !!session,
-      hasUser: !!session?.user,
-    });
-
+  if (!requestContext) {
+    logger.warn('[App Layout] No authenticated actor context', { component: 'layout' });
     let userCount = 0;
     let userCountError: unknown = null;
     try {
@@ -62,9 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (userCountError) {
       return (
         <DatabaseOffline
-          errorMessage={
-            userCountError instanceof Error ? userCountError.message : String(userCountError)
-          }
+          errorMessage={userCountError instanceof Error ? userCountError.message : String(userCountError)}
         />
       );
     }
@@ -75,7 +67,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   let shell: Awaited<ReturnType<typeof getAppShellContext>> = null;
   let shellError: unknown = null;
   try {
-    shell = await getAppShellContext(session.user.email);
+    shell = await getAppShellContext(requestContext);
   } catch (error) {
     if (!isNextRedirectError(error)) {
       shellError = error;
@@ -84,27 +76,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       throw error;
     }
   }
-
   if (shellError) {
-    return (
-      <DatabaseOffline
-        errorMessage={shellError instanceof Error ? shellError.message : String(shellError)}
-      />
-    );
+    return <DatabaseOffline errorMessage={shellError instanceof Error ? shellError.message : String(shellError)} />;
   }
-
-  if (!shell) {
-    let userCount = 0;
-    try {
-      userCount = await prisma.user.count();
-    } catch (error) {
-      return (
-        <DatabaseOffline errorMessage={error instanceof Error ? error.message : String(error)} />
-      );
-    }
-    if (userCount === 0) redirect('/setup');
-    redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
-  }
+  if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
 
   try {
     const { headers } = await import('next/headers');
@@ -116,19 +91,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       '127.0.0.1';
     const { recordSessionHeartbeat } = await import('@/lib/active-sessions');
     void recordSessionHeartbeat({ userId: shell.user.id, userAgent, ip }).catch(() => {});
-  } catch {
-    // Session heartbeat is observability only and must never block the application.
-  }
+  } catch {}
 
-  const userName = shell.user.name || session.user.name || null;
+  const userName = shell.user.name || requestContext.session.user.name || null;
   const userEmail = shell.user.email;
   const userRole = shell.user.role;
   const userAvatar = shell.user.avatarUrl;
   const userGender = shell.user.gender;
   const userId = shell.user.id;
   const userTimeZone = shell.user.timeZone || 'UTC';
-  const canCreate =
-    isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
+  const canCreate = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
 
   return (
     <AppErrorBoundary>
@@ -161,9 +133,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                             lowCount={shell.incidentCounts.low}
                           />
                         </div>
-                        <div className="hidden xl:block">
-                          <TopbarBreadcrumbs />
-                        </div>
+                        <div className="hidden xl:block"><TopbarBreadcrumbs /></div>
                       </div>
                       <div className="mx-auto hidden max-w-md flex-1 items-center justify-center px-2 md:flex">
                         <SidebarSearch />
@@ -193,9 +163,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                       />
                       <div className="content-shell flex-1">
                         <GlobalIncidentBanner />
-                        <main id="main-content" className="page-shell">
-                          {children}
-                        </main>
+                        <main id="main-content" className="page-shell">{children}</main>
                       </div>
                     </div>
                   </div>
