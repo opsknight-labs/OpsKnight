@@ -161,10 +161,16 @@ describe('status page design contract', () => {
         ? '#ffffff'
         : '#0b1020';
 
-      expect(contrastRatio(text, surface), `${theme.id} primary text`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(text, surface), `${theme.id} primary text`).toBeGreaterThanOrEqual(
+        4.5
+      );
       expect(contrastRatio(muted, surface), `${theme.id} muted text`).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(subtle, surfaceAlt), `${theme.id} subtle text`).toBeGreaterThanOrEqual(4.5);
-      expect(contrastRatio(accentText, accent), `${theme.id} accent foreground`).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(subtle, surfaceAlt), `${theme.id} subtle text`).toBeGreaterThanOrEqual(
+        4.5
+      );
+      expect(contrastRatio(accentText, accent), `${theme.id} accent foreground`).toBeGreaterThanOrEqual(
+        4.5
+      );
     }
   });
 
