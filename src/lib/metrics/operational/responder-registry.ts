@@ -44,6 +44,7 @@ export const RESPONDER_OPERATIONAL_METRICS = [
 
 type ResponderMetricName = (typeof RESPONDER_OPERATIONAL_METRICS)[number]['name'];
 type CacheState = 'fresh' | 'stale' | 'miss';
+type CanonicalMetricName = Parameters<typeof addOperationalMetric>[0];
 
 let registered = false;
 
@@ -63,41 +64,34 @@ export function registerResponderOperationalMetrics() {
   registered = true;
 }
 
-function asRegisteredName(name: ResponderMetricName) {
+function asCanonicalName(name: ResponderMetricName): CanonicalMetricName {
   // The canonical registry's compile-time union is derived from its static
-  // definitions. This extension registers the definitions at runtime before
-  // delegating, while keeping callers restricted to the typed responder names.
-  return name as Parameters<typeof addOperationalMetric>[0];
+  // definitions. These definitions are registered before delegation; the
+  // unknown bridge keeps the escape hatch isolated to this extension module.
+  return name as unknown as CanonicalMetricName;
 }
 
 export function setResponderInflight(value: number) {
   registerResponderOperationalMetrics();
-  setOperationalGauge(
-    asRegisteredName('opsknight_responder_dashboard_inflight') as Parameters<
-      typeof setOperationalGauge
-    >[0],
-    value
-  );
+  setOperationalGauge(asCanonicalName('opsknight_responder_dashboard_inflight'), value);
 }
 
 export function observeResponderDuration(seconds: number) {
   registerResponderOperationalMetrics();
   observeOperationalHistogram(
-    asRegisteredName('opsknight_responder_dashboard_duration_seconds') as Parameters<
-      typeof observeOperationalHistogram
-    >[0],
+    asCanonicalName('opsknight_responder_dashboard_duration_seconds'),
     seconds
   );
 }
 
 export function addResponderFailure() {
   registerResponderOperationalMetrics();
-  addOperationalMetric(asRegisteredName('opsknight_responder_dashboard_failures_total'), 1);
+  addOperationalMetric(asCanonicalName('opsknight_responder_dashboard_failures_total'), 1);
 }
 
 export function addResponderCacheLookup(state: CacheState) {
   registerResponderOperationalMetrics();
-  addOperationalMetric(asRegisteredName('opsknight_responder_dashboard_cache_hits_total'), 1, {
+  addOperationalMetric(asCanonicalName('opsknight_responder_dashboard_cache_hits_total'), 1, {
     state,
   });
 }
