@@ -193,8 +193,19 @@ function projectForUser(
     ? snapshot.currentShifts.find(shift => shift.userId === userId && shift.end) ?? null
     : null;
 
-  const { currentShifts: _currentShifts, ...shared } = snapshot;
-  return { ...shared, currentOnCallShift, freshness };
+  return {
+    openIncidents: snapshot.openIncidents,
+    criticalIncidents: snapshot.criticalIncidents,
+    acknowledgedIncidents: snapshot.acknowledgedIncidents,
+    resolved24h: snapshot.resolved24h,
+    mutedIncidents: snapshot.mutedIncidents,
+    totalActive: snapshot.totalActive,
+    activeIncidents: snapshot.activeIncidents,
+    currentOnCallShift,
+    generatedAt: snapshot.generatedAt,
+    sourceGeneration: snapshot.sourceGeneration,
+    freshness,
+  };
 }
 
 /**
