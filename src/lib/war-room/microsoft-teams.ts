@@ -30,10 +30,7 @@ export class WarRoomRetryableError extends Error {
   }
 }
 
-/**
- * Durable request boundary. It deliberately makes no Microsoft request: callers
- * can retry it safely and a worker can provision the leased record afterwards.
- */
+/** Durable request boundary. No Microsoft I/O occurs here. */
 export async function requestMicrosoftTeamsWarRoom(
   incidentId: string,
   intent: WarRoomRequestIntent
@@ -91,12 +88,9 @@ export async function requestMicrosoftTeamsWarRoom(
         accepted: false,
         code: decision.allowed ? 'DESTINATION_UNAVAILABLE' : decision.code,
       };
-
     if (decision.membershipType === 'PRIVATE')
       return { accepted: false, code: 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED' };
 
-    // A new generation is a lifecycle decision, never an accidental outcome
-    // of replaying the original incident-trigger event after a room was closed.
     const claimed = await claimWarRoomProvisioning(tx, {
       incidentId,
       provider: 'MICROSOFT_TEAMS',
@@ -132,7 +126,6 @@ export async function requestMicrosoftTeamsWarRoom(
   });
 }
 
-/** Local lifecycle close; external archival remains an optional capability. */
 export async function closeMicrosoftTeamsWarRoom(
   incidentId: string,
   warRoomId: string
@@ -144,9 +137,10 @@ export async function closeMicrosoftTeamsWarRoom(
 }
 
 /**
- * Resolve fences every unfinished generation before its worker can become
- * READY. A post-attempt create remains AMBIGUOUS for marker reconciliation;
- * a pre-attempt lease is safely failed and its queue job cancelled.
+ * Resolve settles ready/pre-create rooms immediately. If a Graph create may
+ * already be in flight, rotate the fencing token and enqueue a marker-only
+ * reconciliation job. The old create worker is cancelled/fenced and the new
+ * worker is structurally unable to POST because createAttemptedAt is durable.
  */
 export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
   incidentId: string
@@ -158,33 +152,27 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
         provider: 'MICROSOFT_TEAMS',
         state: { in: ['READY', 'PROVISIONING', 'AMBIGUOUS'] },
       },
-      select: { id: true, state: true, createAttemptedAt: true },
+      select: {
+        id: true,
+        state: true,
+        createAttemptedAt: true,
+        provisioningToken: true,
+        lastErrorCode: true,
+      },
     });
+    if (rooms.length === 0) return;
+
+    const now = new Date();
     const ready = rooms.filter(room => room.state === 'READY').map(room => room.id);
-    const attempted = rooms
-      .filter(room => room.state !== 'READY' && room.createAttemptedAt)
-      .map(room => room.id);
     const safe = rooms
       .filter(room => room.state !== 'READY' && !room.createAttemptedAt)
       .map(room => room.id);
-    const now = new Date();
+    const attempted = rooms.filter(room => room.state !== 'READY' && room.createAttemptedAt);
 
     if (ready.length > 0)
       await tx.incidentWarRoom.updateMany({
         where: { id: { in: ready }, state: 'READY' },
         data: { state: 'CLOSED', closedAt: now, provisioningToken: null },
-      });
-
-    if (attempted.length > 0)
-      await tx.incidentWarRoom.updateMany({
-        where: { id: { in: attempted }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
-        data: {
-          state: 'AMBIGUOUS',
-          provisioningToken: null,
-          lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE',
-          lastError:
-            'Incident resolved while channel creation may have completed; reconcile by marker only.',
-        },
       });
 
     if (safe.length > 0)
@@ -198,27 +186,75 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
         },
       });
 
-    const roomIds = rooms.map(room => room.id);
-    if (roomIds.length === 0) return;
-    const jobs = await tx.backgroundJob.findMany({
+    const reconciliationClaims: Array<{ roomId: string; token: string }> = [];
+    for (const room of attempted) {
+      const alreadyReconciliationOnly =
+        room.lastErrorCode === 'INCIDENT_RESOLVED_DURING_CREATE' && Boolean(room.provisioningToken);
+      const token = alreadyReconciliationOnly ? room.provisioningToken! : crypto.randomUUID();
+      const changed = await tx.incidentWarRoom.updateMany({
+        where: { id: room.id, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+        data: {
+          state: 'AMBIGUOUS',
+          provisioningToken: token,
+          provisioningStartedAt: alreadyReconciliationOnly ? undefined : now,
+          lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE',
+          lastError:
+            'Incident resolved while channel creation may have completed; reconciling by marker only.',
+        },
+      });
+      if (changed.count === 1) reconciliationClaims.push({ roomId: room.id, token });
+    }
+
+    const roomIds = new Set(rooms.map(room => room.id));
+    const activeJobs = await tx.backgroundJob.findMany({
       where: { type: 'WAR_ROOM_PROVISION', status: { in: ['PENDING', 'PROCESSING'] } },
       select: { id: true, payload: true },
     });
-    const roomSet = new Set(roomIds);
-    const jobIds = jobs
-      .filter(job =>
-        roomSet.has((job.payload as Record<string, unknown> | null)?.warRoomId as string)
-      )
-      .map(job => job.id);
-    if (jobIds.length > 0)
+    const reconciliationByRoom = new Map(
+      reconciliationClaims.map(claim => [claim.roomId, claim.token] as const)
+    );
+    const keptReconciliationJobs = new Set<string>();
+    const cancelJobIds: string[] = [];
+
+    for (const job of activeJobs) {
+      const payload = job.payload as Record<string, unknown> | null;
+      const roomId = typeof payload?.warRoomId === 'string' ? payload.warRoomId : null;
+      const token = typeof payload?.provisioningToken === 'string' ? payload.provisioningToken : null;
+      if (!roomId || !roomIds.has(roomId)) continue;
+      const reconciliationToken = reconciliationByRoom.get(roomId);
+      if (reconciliationToken && token === reconciliationToken) {
+        keptReconciliationJobs.add(roomId);
+      } else {
+        cancelJobIds.push(job.id);
+      }
+    }
+
+    if (cancelJobIds.length > 0)
       await tx.backgroundJob.updateMany({
-        where: { id: { in: jobIds }, status: { in: ['PENDING', 'PROCESSING'] } },
+        where: { id: { in: cancelJobIds }, status: { in: ['PENDING', 'PROCESSING'] } },
         data: {
           status: 'CANCELLED',
           completedAt: now,
-          error: 'Incident resolved',
+          error: 'Incident resolved; create worker fenced',
         },
       });
+
+    for (const claim of reconciliationClaims) {
+      if (keptReconciliationJobs.has(claim.roomId)) continue;
+      await tx.backgroundJob.create({
+        data: {
+          type: 'WAR_ROOM_PROVISION',
+          status: 'PENDING',
+          scheduledAt: now,
+          maxAttempts: 6,
+          payload: {
+            warRoomId: claim.roomId,
+            provisioningToken: claim.token,
+            reconciliationOnly: true,
+          },
+        },
+      });
+    }
   });
 }
 
@@ -277,11 +313,7 @@ export async function provisionMicrosoftTeamsWarRoom(
   });
 
   if (existing.ok && existing.value) {
-    const adoption = await adoptProviderChannel(
-      room,
-      expectedProvisioningToken,
-      existing.value
-    );
+    const adoption = await adoptProviderChannel(room, expectedProvisioningToken, existing.value);
     if (adoption === 'READY') {
       const { projectMicrosoftTeamsWarRoomParticipants } = await import('./participants');
       await projectMicrosoftTeamsWarRoomParticipants(room.id);
@@ -289,7 +321,6 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
 
-  // A failed or incomplete read is never evidence that a room is absent.
   if (!existing.ok) {
     if (
       existing.code === 'TRANSIENT_READ' ||
@@ -301,9 +332,8 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
 
-  // A negative reconciliation never authorizes a second POST after an unknown
-  // create outcome. Such rooms are reconciliation-only until an operator
-  // resolves the ambiguity.
+  // createAttemptedAt is the durable one-way gate: after it is set, no worker
+  // for this generation may ever issue another channel-create POST.
   if (room.createAttemptedAt) {
     const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
     const remaining = deadline - Date.now();
@@ -339,8 +369,6 @@ export async function provisionMicrosoftTeamsWarRoom(
       'Private Teams war rooms require an owner and initial members.'
     );
 
-  // A superseding retry can rotate the lease while this worker was reading
-  // channels. Recheck immediately before the only non-idempotent side effect.
   const current = await prisma.incidentWarRoom.findUnique({
     where: { id: room.id },
     select: { provisioningToken: true, state: true },
@@ -359,9 +387,6 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
 
-  // Keep the room lease aligned with this active queue worker immediately
-  // before the POST. A concurrent manual request cannot reclaim the room while
-  // this bounded Graph operation is in flight.
   const operationId = crypto.randomUUID();
   const renewed = await prisma.incidentWarRoom.updateMany({
     where: {
@@ -451,8 +476,6 @@ async function validateWarRoomProvisioningAuthority(room: {
   providerContainerId: string | null;
   incident: { id: string; status: string };
 }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
-  // The worker's initial incident include may be stale after a resolve. Read it
-  // again immediately before the only non-idempotent create authority decision.
   const currentIncident = await prisma.incident.findUnique({
     where: { id: room.incident.id },
     select: { status: true },
