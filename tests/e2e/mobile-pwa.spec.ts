@@ -117,7 +117,37 @@ test.describe('mobile PWA browser contract', () => {
     }
   });
 
-  test('system dark mode renders dark semantic shell without light-card leakage', async ({ page }) => {
+  test('bottom navigation remains anchored while application content scrolls', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginToMobile(page);
+
+    const nav = page.locator('.mobile-nav');
+    const before = await nav.boundingBox();
+    expect(before).not.toBeNull();
+
+    const scrollState = await page.evaluate(() => {
+      const content = document.querySelector<HTMLElement>('.mobile-content');
+      if (!content) throw new Error('Mobile content is not mounted');
+      const spacer = document.createElement('div');
+      spacer.dataset.navScrollFixture = 'true';
+      spacer.style.height = '1600px';
+      spacer.style.pointerEvents = 'none';
+      content.appendChild(spacer);
+      content.scrollTop = 600;
+      return { contentScrollTop: content.scrollTop, windowScrollY: window.scrollY };
+    });
+
+    expect(scrollState.contentScrollTop).toBeGreaterThan(0);
+    expect(scrollState.windowScrollY).toBe(0);
+    const after = await nav.boundingBox();
+    expect(after).not.toBeNull();
+    expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThanOrEqual(1);
+    expect(Math.abs((after?.height ?? 0) - (before?.height ?? 0))).toBeLessThanOrEqual(1);
+
+    await page.evaluate(() => document.querySelector('[data-nav-scroll-fixture]')?.remove());
+  });
+
+  test('system dark mode renders the neutral dark semantic shell without light-card leakage', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
     await loginToMobile(page);
     await expect(page.locator('html')).toHaveClass(/dark/);
@@ -128,7 +158,7 @@ test.describe('mobile PWA browser contract', () => {
     expect(snapshot.appBackground).not.toBe('rgb(255, 255, 255)');
     expect(snapshot.navBackground).not.toBe('rgb(255, 255, 255)');
     expect(snapshot.appColor).not.toBe(snapshot.appBackground);
-    expect(snapshot.themeColor.toLowerCase()).toBe('#020617');
+    expect(snapshot.themeColor.toLowerCase()).toBe('#09090b');
     await assertNoHorizontalOverflow(page);
   });
 
@@ -138,7 +168,7 @@ test.describe('mobile PWA browser contract', () => {
     await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('light');
     let snapshot = await mobileThemeSnapshot(page);
     expect(snapshot.classDark).toBe(false);
-    expect(snapshot.appBackground).not.toBe('rgb(2, 6, 23)');
+    expect(snapshot.appBackground).not.toBe('rgb(9, 9, 11)');
     expect(snapshot.themeColor.toLowerCase()).toBe('#f8fafc');
 
     await page.evaluate(() => localStorage.setItem('theme', 'dark'));
@@ -147,7 +177,7 @@ test.describe('mobile PWA browser contract', () => {
     await expect.poll(async () => (await mobileThemeSnapshot(page)).dataTheme).toBe('dark');
     snapshot = await mobileThemeSnapshot(page);
     expect(snapshot.appBackground).not.toBe('rgb(255, 255, 255)');
-    expect(snapshot.themeColor.toLowerCase()).toBe('#020617');
+    expect(snapshot.themeColor.toLowerCase()).toBe('#09090b');
   });
 
   test('protected mobile navigation preserves a safe same-origin callback', async ({ page }) => {
