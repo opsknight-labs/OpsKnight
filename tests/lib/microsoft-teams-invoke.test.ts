@@ -4,8 +4,10 @@ const executeChatOpsCommand = vi.fn(async () => ({ changed: true }));
 const resolveMicrosoftTeamsUser = vi.fn<() => Promise<{ linkId: string; userId: string; displayName: string } | null>>(async () => ({ linkId: 'link-1', userId: 'user-1', displayName: 'Alice' }));
 const createMicrosoftTeamsIdentityChallenge = vi.fn(async () => 'challenge-token');
 let persistedIntentPayload: Record<string, unknown> = {};
-const enqueueChatOpsIntent = vi.fn(async (input: { payload: Record<string, unknown> }) => {
+let capturedPayloadDigest: string | undefined;
+const enqueueChatOpsIntent = vi.fn(async (input: { payload: Record<string, unknown>; payloadDigest?: string }) => {
   persistedIntentPayload = input.payload;
+  capturedPayloadDigest = input.payloadDigest;
   return { id: 'intent-1', duplicate: false };
 });
 const processInlineChatOpsIntent = vi.fn(async (_id: string, execute: (input: { intentId: string; payload: Record<string, unknown> }) => Promise<unknown>) => execute({ intentId: 'intent-1', payload: persistedIntentPayload }));
@@ -22,7 +24,11 @@ const prismaMock = {
 
 vi.mock('@/lib/prisma', () => ({ default: prismaMock }));
 vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true, remaining: 10, resetAt: Date.now() + 1000, count: 1 })) }));
-vi.mock('@/lib/chatops/intents', () => ({ enqueueChatOpsIntent, processInlineChatOpsIntent }));
+vi.mock('@/lib/chatops/intents', () => ({
+  enqueueChatOpsIntent,
+  processInlineChatOpsIntent,
+  payloadDigestFromPayload: vi.fn((p: Record<string, unknown>) => JSON.stringify(p)),
+}));
 vi.mock('@/lib/chatops/commands', () => ({ executeChatOpsCommand }));
 vi.mock('@/lib/chatops/incident-capabilities', () => ({ getIncidentChatOpsCapabilities: vi.fn(async () => ({ canRead: true })) }));
 vi.mock('@/lib/microsoft-teams/identity', () => ({ resolveMicrosoftTeamsUser, createMicrosoftTeamsIdentityChallenge }));
@@ -109,9 +115,19 @@ describe('Microsoft Teams invoke adapter', () => {
     await expect(handleMicrosoftTeamsAdaptiveCardAction({ activity: snooze, verifiedTenantId: 'tenant-1' })).resolves.toMatchObject({ statusCode: 200 });
 
     expect(persistedIntentPayload.snoozedUntil).toBe('2026-09-13T10:30:00.000Z');
+    expect(capturedPayloadDigest).toBeDefined();
+    expect(capturedPayloadDigest).not.toContain('snoozedUntil');
     expect(executeChatOpsCommand).toHaveBeenCalledWith(expect.objectContaining({
       command: expect.objectContaining({ kind: 'SNOOZE', snoozedUntil: new Date('2026-09-13T10:30:00.000Z') }),
     }));
+
+    // Simulate Teams retrying the same snooze activity after 5 seconds
+    const firstDigest = capturedPayloadDigest;
+    vi.advanceTimersByTime(5000);
+    enqueueChatOpsIntent.mockResolvedValueOnce({ id: 'intent-1', duplicate: true });
+    await expect(handleMicrosoftTeamsAdaptiveCardAction({ activity: snooze, verifiedTenantId: 'tenant-1' })).resolves.toMatchObject({ statusCode: 200 });
+    expect(capturedPayloadDigest).toBe(firstDigest);
+
     vi.useRealTimers();
   });
 });

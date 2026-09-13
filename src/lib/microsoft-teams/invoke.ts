@@ -8,7 +8,7 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { normalizeError, toPublicAppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
-import { enqueueChatOpsIntent, processInlineChatOpsIntent } from '@/lib/chatops/intents';
+import { enqueueChatOpsIntent, payloadDigestFromPayload, processInlineChatOpsIntent } from '@/lib/chatops/intents';
 import { executeChatOpsCommand } from '@/lib/chatops/commands';
 import { getIncidentChatOpsCapabilities } from '@/lib/chatops/incident-capabilities';
 import { buildMicrosoftTeamsIncidentCard } from './cards';
@@ -86,15 +86,20 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     }
 
     const signature = `${tenantId}:${activityId}`;
+    const canonicalPayload = { action, tenantId, teamId, channelId, providerUserId, userId: linked.userId };
+    const payloadDigest = payloadDigestFromPayload(canonicalPayload);
     // Intent payload is the retry contract. Convert relative user input to an
     // absolute deadline once, before it is encrypted and durably replayed.
+    // Dynamic execution metadata like `snoozedUntil` is kept out of duplicate-payload
+    // comparison so that provider delivery retries do not trigger a false conflict.
     const snoozedUntil = action.action.verb === TEAMS_CHATOPS_VERBS.SNOOZE
       ? new Date(Date.now() + (action.data as unknown as { minutes: number }).minutes * 60_000).toISOString()
       : undefined;
-    const payload = { action, tenantId, teamId, channelId, providerUserId, userId: linked.userId, ...(snoozedUntil ? { snoozedUntil } : {}) };
+    const payload = { ...canonicalPayload, ...(snoozedUntil ? { snoozedUntil } : {}) };
     const intent = await enqueueChatOpsIntent({
       provider: 'MICROSOFT_TEAMS', kind: 'INTERACTIVE_ACTION', signature,
       workspaceId: tenantId, channelId, providerUserId, payload, responseMode: 'INLINE',
+      payloadDigest,
       providerTenantId: tenantId, providerConversationId: input.activity.conversation?.id,
       providerChannelId: channelId, providerActivityId: activityId,
       providerObjectId: identityInput.aadObjectId ?? undefined,

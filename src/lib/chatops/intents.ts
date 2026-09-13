@@ -34,8 +34,11 @@ function legacyDeliveryHash(kind: string, signature: string): string {
   return crypto.createHash('sha256').update(`${kind}:${signature}`).digest('hex');
 }
 
-function payloadDigestFromPayload(payload: Record<string, unknown>): string {
-  return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+export function payloadDigestFromPayload(payload: Record<string, unknown>): string {
+  // Exclude dynamic execution deadlines (e.g. snoozedUntil) from duplicate-payload
+  // comparison so that provider delivery retries do not trigger a false conflict.
+  const { snoozedUntil: _, ...digestible } = payload;
+  return crypto.createHash('sha256').update(JSON.stringify(digestible)).digest('hex');
 }
 
 function resolveProvider(input: ChatOpsIntentInput): ChatProvider {

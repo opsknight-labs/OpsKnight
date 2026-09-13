@@ -33,7 +33,14 @@ const chatOpsIntent = {
   }),
 };
 
-vi.mock('@/lib/prisma', () => ({ default: { chatOpsIntent, $transaction: vi.fn() } }));
+import { Prisma } from '@prisma/client';
+
+vi.mock('@/lib/prisma', () => ({
+  default: {
+    chatOpsIntent,
+    $transaction: vi.fn(async (cb: (tx: { chatOpsIntent: typeof chatOpsIntent }) => Promise<unknown>) => cb({ chatOpsIntent })),
+  },
+}));
 vi.mock('@/lib/encryption', () => ({ decrypt: vi.fn(async (value: string) => value), encrypt: vi.fn(async (value: string) => value) }));
 
 describe('inline ChatOps intent durability', () => {
@@ -79,5 +86,29 @@ describe('inline ChatOps intent durability', () => {
     })).resolves.toEqual({ id: 'legacy-intent', duplicate: true });
 
     expect(chatOpsIntent.create).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates a delivery retry of a snooze intent even if snoozedUntil deadline timestamp recomputes', async () => {
+    const { enqueueChatOpsIntent, payloadDigestFromPayload } = await import('@/lib/chatops/intents');
+    const digest = payloadDigestFromPayload({ action: 'snooze', incidentId: 'inc-1', snoozedUntil: '2026-09-13T10:30:00.000Z' });
+
+    // Simulate P2002 conflict on insert
+    const error = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+      code: 'P2002',
+      clientVersion: '5.0.0',
+    });
+    chatOpsIntent.create.mockRejectedValueOnce(error);
+    chatOpsIntent.findUnique.mockResolvedValueOnce({ id: 'intent-1', payloadDigest: digest } as never);
+
+    const res = await enqueueChatOpsIntent({
+      provider: 'MICROSOFT_TEAMS',
+      kind: 'INTERACTIVE_ACTION',
+      signature: 'teams-snooze-retry',
+      workspaceId: 'tenant-1',
+      payload: { action: 'snooze', incidentId: 'inc-1', snoozedUntil: '2026-09-13T10:35:00.000Z' },
+      responseMode: 'INLINE',
+    });
+
+    expect(res).toEqual({ id: 'intent-1', duplicate: true });
   });
 });
