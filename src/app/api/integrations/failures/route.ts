@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
             throw new Error('Teams destination changed after this delivery; it cannot be reconciled against the new target');
           }
           const installation = await tx.microsoftTeamsInstallation.findFirst({
-            where: { tenantId: destination.tenantId, teamId: destination.teamId, enabled: true },
+            where: { tenantId: destination.tenantId, teamId: destination.teamId },
             select: { id: true },
           });
           if (!installation) throw new Error('Teams installation no longer corresponds to this destination');
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
           if (existing.incidentId && destinationId) {
             await tx.microsoftTeamsIncidentMessage.deleteMany({ where: { incidentId: existing.incidentId, destinationId, messageId: `__reserved__:${existing.id}` } });
             await tx.microsoftTeamsIncidentMessage.updateMany({
-              where: { incidentId: existing.incidentId, destinationId, createState: 'AMBIGUOUS' },
+              where: { incidentId: existing.incidentId, destinationId, createState: 'AMBIGUOUS', createOperationId: existing.id },
               data: { createState: 'NONE', createOperationId: null },
             });
           }

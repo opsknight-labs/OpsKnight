@@ -5,17 +5,17 @@ import { clearMicrosoftTeamsTokenCaches } from './client';
 export async function disconnectMicrosoftTeamsIntegration(actorId: string): Promise<void> {
   await prisma.$transaction(async tx => {
     const destinations = await tx.microsoftTeamsDestination.findMany({ select: { id: true, serviceId: true } });
-    const destinationIds = new Set(destinations.map(destination => destination.id));
-    const serviceIds = [...new Set(destinations.map(destination => destination.serviceId))];
+    const routedServices = await tx.service.findMany({
+      where: { serviceNotificationChannels: { has: 'MICROSOFT_TEAMS' } },
+      select: { id: true, serviceNotificationChannels: true },
+    });
     await tx.microsoftTeamsConfig.updateMany({ data: { enabled: false } });
     await tx.microsoftTeamsInstallation.updateMany({ data: { enabled: false } });
     await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false } });
 
-    for (const serviceId of serviceIds) {
-      const service = await tx.service.findUnique({ where: { id: serviceId }, select: { serviceNotificationChannels: true } });
-      if (!service) continue;
+    for (const service of routedServices) {
       await tx.service.update({
-        where: { id: serviceId },
+        where: { id: service.id },
         data: { serviceNotificationChannels: service.serviceNotificationChannels.filter(channel => channel !== 'MICROSOFT_TEAMS') },
       });
     }
@@ -28,7 +28,6 @@ export async function disconnectMicrosoftTeamsIntegration(actorId: string): Prom
     for (const operation of operations) {
       const request = operation.requestPayload as Record<string, unknown> | null;
       const destinationId = typeof request?.destinationId === 'string' ? request.destinationId : '';
-      if (!destinationIds.has(destinationId)) continue;
       const result = operation.resultPayload as Record<string, unknown> | null;
       const createMayHaveRun = operation.status === 'PROCESSING' && result?.createAttempted === true;
       if (createMayHaveRun) {
@@ -78,7 +77,7 @@ export async function disconnectMicrosoftTeamsIntegration(actorId: string): Prom
     await emitAuditEvent({
       action: 'microsoftTeams.integration.disconnected', source: 'UI',
       target: { type: 'SYSTEM_CONFIG', id: 'microsoft-teams' }, actor: { type: 'USER', id: actorId },
-      metadata: { destinationsDisabled: destinations.length, servicesUpdated: serviceIds.length, operationsRevoked: revokedIds.length, jobsCancelled: jobIds.length },
+      metadata: { destinationsDisabled: destinations.length, servicesUpdated: routedServices.length, operationsRevoked: revokedIds.length, jobsCancelled: jobIds.length },
     }, tx);
   });
   clearMicrosoftTeamsTokenCaches();

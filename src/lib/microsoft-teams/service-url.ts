@@ -1,9 +1,6 @@
-const TRUSTED_TEAMS_CONNECTOR_HOSTS = new Set([
-  'smba.trafficmanager.net',
-  'smba.infra.gcc.teams.microsoft.com',
-  'smba.infra.gov.teams.microsoft.us',
-  'smba.infra.dod.teams.microsoft.us',
-]);
+import trustedServiceHosts from './trusted-service-hosts.json';
+
+const TRUSTED_TEAMS_CONNECTOR_HOSTS = new Set(trustedServiceHosts);
 
 /**
  * Validate the Bot Connector service URL before it can be persisted or receive

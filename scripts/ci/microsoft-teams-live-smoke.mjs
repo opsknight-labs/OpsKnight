@@ -1,3 +1,5 @@
+import trustedServiceHosts from '../../src/lib/microsoft-teams/trusted-service-hosts.json' with { type: 'json' };
+
 const required = ['TEAMS_E2E_TENANT_ID', 'TEAMS_E2E_CLIENT_ID', 'TEAMS_E2E_CLIENT_SECRET', 'TEAMS_E2E_TEAM_ID', 'TEAMS_E2E_CHANNEL_ID', 'TEAMS_E2E_SERVICE_URL'];
 const missing = required.filter(name => !process.env[name]?.trim());
 if (missing.length) {
@@ -7,7 +9,7 @@ if (missing.length) {
 
 const env = Object.fromEntries(required.map(name => [name, process.env[name].trim()]));
 const serviceUrl = new URL(env.TEAMS_E2E_SERVICE_URL);
-if (serviceUrl.protocol !== 'https:' || !/(^|\.)botframework\.com$|(^|\.)teams\.microsoft\.com$/.test(serviceUrl.hostname)) {
+if (serviceUrl.protocol !== 'https:' || serviceUrl.username || serviceUrl.password || serviceUrl.port || serviceUrl.search || serviceUrl.hash || !trustedServiceHosts.includes(serviceUrl.hostname.toLowerCase())) {
   throw new Error('TEAMS_E2E_SERVICE_URL is not a trusted Bot Framework host');
 }
 

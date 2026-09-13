@@ -4,6 +4,8 @@ const sendIncidentCard = vi.fn();
 const updateIncidentCard = vi.fn();
 const recoverIncidentCard = vi.fn();
 const operationUpdates: Array<Record<string, unknown>> = [];
+let currentResultPayload: Record<string, unknown> | null = null;
+let ownerOperation = { id: 'op-create', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
 
 const incident = {
   id: 'inc-1', title: 'Incident', description: null, status: 'RESOLVED', urgency: 'HIGH', priority: null,
@@ -20,7 +22,7 @@ const prismaMock = {
     updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { operationUpdates.push(data); return { count: 1 }; }),
     findUnique: vi.fn(async ({ select }: { select?: Record<string, unknown> }) => select?.status
       ? { status: 'FAILED', leaseToken: null }
-      : { id: 'op-late', provider: 'MICROSOFT_TEAMS', operation: 'TEAMS_SEND_CARD', status: 'PROCESSING', attempts: 1, incidentId: 'inc-1', requestPayload: { destinationId: 'dest-1', eventType: 'resolved', incidentUpdatedAt: incident.resolvedAt.toISOString() }, resultPayload: null }),
+      : { id: 'op-late', provider: 'MICROSOFT_TEAMS', operation: 'TEAMS_SEND_CARD', status: 'PROCESSING', attempts: 1, incidentId: 'inc-1', requestPayload: { destinationId: 'dest-1', eventType: 'resolved', incidentUpdatedAt: incident.resolvedAt.toISOString() }, resultPayload: currentResultPayload }),
   },
   incident: { findUnique: vi.fn(async () => incident) },
   service: { findUnique: vi.fn(async () => ({ serviceNotificationChannels: ['MICROSOFT_TEAMS'], serviceNotifyOnTriggered: true, serviceNotifyOnAck: true, serviceNotifyOnResolved: true })) },
@@ -30,6 +32,7 @@ const prismaMock = {
   },
   $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({
     microsoftTeamsIncidentMessage: { findUnique: vi.fn(async () => ledger), updateMany: vi.fn(async () => ({ count: 0 })) },
+    externalOperation: { findUnique: vi.fn(async () => ownerOperation), updateMany: vi.fn(async () => ({ count: 1 })) },
   })),
 };
 
@@ -48,7 +51,13 @@ vi.mock('@/lib/microsoft-teams/provider', () => ({ microsoftTeamsChatProvider: {
 vi.mock('@/lib/audit', () => ({ emitAuditEvent: vi.fn(async () => undefined) }));
 
 describe('processMicrosoftTeamsOperation create fence', () => {
-  beforeEach(() => { operationUpdates.length = 0; vi.clearAllMocks(); });
+  beforeEach(() => {
+    operationUpdates.length = 0;
+    currentResultPayload = null;
+    ownerOperation = { id: 'op-create', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
+    Object.assign(ledger, { createState: 'AMBIGUOUS', createOperationId: 'op-create' });
+    vi.clearAllMocks();
+  });
 
   it('does not issue update or recovery create while a previous create is ambiguous', async () => {
     const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
@@ -60,5 +69,26 @@ describe('processMicrosoftTeamsOperation create fence', () => {
       status: 'FAILED',
       resultPayload: expect.objectContaining({ blockedByCreateOperationId: 'op-create' }),
     }));
+  });
+
+  it('defers behind a live CREATING owner without issuing a provider call', async () => {
+    Object.assign(ledger, { createState: 'CREATING', createOperationId: 'op-create' });
+    const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+    await expect(processMicrosoftTeamsOperation('op-late')).rejects.toThrow('mutation is leased');
+    expect(sendIncidentCard).not.toHaveBeenCalled();
+    expect(updateIncidentCard).not.toHaveBeenCalled();
+    expect(recoverIncidentCard).not.toHaveBeenCalled();
+    expect(operationUpdates).toContainEqual(expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }));
+  });
+
+  it('turns a reclaimed same-operation CREATING fence into AMBIGUOUS without another POST', async () => {
+    Object.assign(ledger, { createState: 'CREATING', createOperationId: 'op-late' });
+    currentResultPayload = { createAttempted: true };
+    ownerOperation = { id: 'op-late', status: 'PROCESSING', leaseExpiresAt: new Date(Date.now() + 60_000), resultPayload: { createAttempted: true } };
+    const { processMicrosoftTeamsOperation } = await import('@/lib/microsoft-teams/delivery');
+    await expect(processMicrosoftTeamsOperation('op-late')).rejects.toThrow('requires create reconciliation');
+    expect(sendIncidentCard).not.toHaveBeenCalled();
+    expect(recoverIncidentCard).not.toHaveBeenCalled();
+    expect(operationUpdates).toContainEqual(expect.objectContaining({ status: 'AMBIGUOUS' }));
   });
 });

@@ -540,6 +540,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
     let concurrentReservation = false;
     let createAttemptStarted = false;
     let cardCreateAmbiguous = false;
+    let ambiguousCreateOwnerId: string | null = null;
     const acquireCardMutationLease = async () => prisma.$transaction(async tx => {
       await acquireAdvisoryLock(tx, lockKey);
       const inside = await tx.microsoftTeamsIncidentMessage.findUnique({
@@ -551,6 +552,42 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         previous = inside;
         if (inside.createState === 'AMBIGUOUS') {
           cardCreateAmbiguous = true;
+          ambiguousCreateOwnerId = inside.createOperationId;
+          return;
+        }
+        if (inside.createState === 'CREATING') {
+          const owner = inside.createOperationId
+            ? await tx.externalOperation.findUnique({
+                where: { id: inside.createOperationId },
+                select: { id: true, status: true, leaseExpiresAt: true, resultPayload: true },
+              })
+            : null;
+          const ownerLeaseAlive = owner?.status === 'PROCESSING' && owner.leaseExpiresAt != null && owner.leaseExpiresAt > new Date();
+          if (inside.createOperationId !== id && ownerLeaseAlive) {
+            concurrentReservation = true;
+            return;
+          }
+          // CREATING is written immediately before POST. Once its owner is
+          // reclaimed, expired, or missing, external outcome is unknowable.
+          await tx.microsoftTeamsIncidentMessage.updateMany({
+            where: { incidentId, destinationId, createState: 'CREATING', createOperationId: inside.createOperationId },
+            data: { createState: 'AMBIGUOUS' },
+          });
+          if (owner) {
+            await tx.externalOperation.updateMany({
+              where: { id: owner.id, status: 'PROCESSING' },
+              data: {
+                status: 'AMBIGUOUS',
+                nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
+                lastError: 'Teams worker stopped during a create; external outcome requires reconciliation',
+                leaseToken: null,
+                leaseExpiresAt: null,
+                resultPayload: { ...((owner.resultPayload as Prisma.InputJsonObject | null) ?? {}), createAttempted: true, requiresManualReconciliation: true },
+              },
+            });
+          }
+          cardCreateAmbiguous = true;
+          ambiguousCreateOwnerId = inside.createOperationId;
           return;
         }
         if (inside.messageId?.startsWith(RESERVED_PREFIX)) {
@@ -709,12 +746,14 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
       await prisma.externalOperation.updateMany({
         where: { id, status: 'PROCESSING', leaseToken },
         data: {
-          status: 'FAILED',
+          status: ambiguousCreateOwnerId === id ? 'AMBIGUOUS' : 'FAILED',
           nextAttemptAt: new Date('9999-12-31T23:59:59.999Z'),
           lastError: 'Canonical Teams card has an unresolved create outcome; reconcile it before further lifecycle delivery',
           leaseToken: null,
           leaseExpiresAt: null,
-          resultPayload: { requiresManualReconciliation: false, blockedByCreateOperationId: previous?.createOperationId ?? null } as Prisma.InputJsonObject,
+          resultPayload: ambiguousCreateOwnerId === id
+            ? { createAttempted: true, requiresManualReconciliation: true } as Prisma.InputJsonObject
+            : { requiresManualReconciliation: false, blockedByCreateOperationId: ambiguousCreateOwnerId } as Prisma.InputJsonObject,
         },
       });
       throw new Error('Canonical Teams card requires create reconciliation');
