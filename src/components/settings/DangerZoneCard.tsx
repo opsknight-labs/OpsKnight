@@ -3,7 +3,7 @@
 type Props = {
     title?: string;
     description?: string;
-    children?: React.ReactNode;
+    children: React.ReactNode;
 };
 
 export default function DangerZoneCard({
@@ -17,11 +17,9 @@ export default function DangerZoneCard({
                 <h2>{title}</h2>
                 <p>{description}</p>
             </div>
-            {children ? (
-                <div className="settings-danger-body">
-                    {children}
-                </div>
-            ) : null}
+            <div className="settings-danger-body">
+                {children}
+            </div>
         </section>
     );
 }

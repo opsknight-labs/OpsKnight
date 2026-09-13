@@ -7,8 +7,6 @@ import { Button } from '@/components/ui';
 import { InlineNotice } from '@/components/ui/InlineNotice';
 import { notify } from '@/lib/toast';
 import { cn } from '@/lib/utils';
-import type { PublicStatusPageSnapshot } from '@/lib/status-pages/public-contract';
-import StatusPageThemePreview from './StatusPageThemePreview';
 import {
   DEFAULT_STATUS_PAGE_THEME_ID,
   STATUS_PAGE_THEMES,
@@ -17,6 +15,7 @@ import {
   resolveStatusPageTheme,
   resolveStatusPageThemeDensity,
   type StatusPageThemeDensity,
+  type StatusPageThemeFamily,
 } from '@/lib/status-pages/theme-contract';
 
 type BrandingRecord = Record<string, unknown>;
@@ -28,13 +27,44 @@ interface StatusPageDesignSettingsProps {
     updatedAt?: Date | string;
     branding?: unknown;
   };
-  liveSnapshot?: PublicStatusPageSnapshot | null;
 }
+
+type ThemeFamilyFilter = StatusPageThemeFamily | 'all';
 
 interface SavedDesignState {
   themeId: string;
   density: StatusPageThemeDensity;
   customCss: string;
+}
+
+const FAMILY_FILTERS: ReadonlyArray<{ id: ThemeFamilyFilter; label: string }> = [
+  { id: 'all', label: 'All' },
+  { id: 'universal', label: 'Universal' },
+  { id: 'enterprise', label: 'Enterprise' },
+  { id: 'saas', label: 'SaaS' },
+  { id: 'developer', label: 'Developer' },
+  { id: 'gaming', label: 'Gaming' },
+  { id: 'regulated', label: 'Regulated' },
+  { id: 'consumer', label: 'Consumer' },
+];
+
+function getFamilyLabel(family: StatusPageThemeFamily): string {
+  switch (family) {
+    case 'universal':
+      return 'Universal';
+    case 'enterprise':
+      return 'Enterprise';
+    case 'saas':
+      return 'SaaS';
+    case 'developer':
+      return 'Developer';
+    case 'gaming':
+      return 'Gaming';
+    case 'regulated':
+      return 'Regulated';
+    case 'consumer':
+      return 'Consumer';
+  }
 }
 
 function asBranding(value: unknown): BrandingRecord {
@@ -43,10 +73,7 @@ function asBranding(value: unknown): BrandingRecord {
     : {};
 }
 
-export default function StatusPageDesignSettings({
-  statusPage,
-  liveSnapshot,
-}: StatusPageDesignSettingsProps) {
+export default function StatusPageDesignSettings({ statusPage }: StatusPageDesignSettingsProps) {
   const router = useRouter();
   const initialBranding = useMemo(() => asBranding(statusPage.branding), [statusPage.branding]);
   const initialTheme = resolveStatusPageTheme(initialBranding.themeId);
@@ -62,6 +89,7 @@ export default function StatusPageDesignSettings({
     density: initialDensity,
     customCss: initialCustomCss,
   }));
+  const [family, setFamily] = useState<ThemeFamilyFilter>('all');
   const [revision, setRevision] = useState(() =>
     statusPage.updatedAt ? new Date(statusPage.updatedAt).toISOString() : undefined
   );
@@ -70,6 +98,9 @@ export default function StatusPageDesignSettings({
 
   const selectedTheme = resolveStatusPageTheme(themeId);
   const legacyTemplateCss = isLegacyStatusPageTemplateCss(customCss);
+  const visibleThemes =
+    family === 'all' ? STATUS_PAGE_THEMES : STATUS_PAGE_THEMES.filter(item => item.family === family);
+
   const dirty =
     themeId !== savedDesign.themeId ||
     density !== savedDesign.density ||
@@ -77,7 +108,8 @@ export default function StatusPageDesignSettings({
 
   const selectTheme = (nextThemeId: string) => {
     setThemeId(nextThemeId);
-    // Positively identified old gallery payloads are stale once a curated theme is selected.
+    // Old gallery templates were copied into customCss. Only remove CSS that is positively
+    // identified as one of those template payloads; genuine customer-written CSS is preserved.
     if (isLegacyStatusPageTemplateCss(customCss)) setCustomCss('');
     setError(null);
   };
@@ -114,7 +146,7 @@ export default function StatusPageDesignSettings({
 
         const payload = await response.json().catch(() => null);
         if (!response.ok) {
-          throw new Error(payload?.error || 'Failed to save status page appearance');
+          throw new Error(payload?.error || 'Failed to save status page design');
         }
 
         const nextRevision = payload?.data?.updatedAt;
@@ -122,199 +154,215 @@ export default function StatusPageDesignSettings({
         setSavedDesign({ themeId, density, customCss });
 
         const publicationStatus = payload?.data?.publication?.status;
-        const notificationId = `status-page:${statusPage.id}:appearance:save`;
+        const notificationId = `status-page:${statusPage.id}:design:save`;
         if (publicationStatus === 'LIVE') {
-          notify.success('Status page appearance saved and published.', { id: notificationId });
+          notify.success('Status page design saved and published.', { id: notificationId });
+        } else if (publicationStatus === 'DISABLED') {
+          notify.info('Status page design saved. This status page is disabled, so it is not public.', {
+            id: notificationId,
+          });
         } else if (publicationStatus === 'PUBLISHING') {
-          notify.info('Appearance saved. Publishing to the public page…', { id: notificationId });
+          notify.info('Status page design saved. Publishing to the public page…', {
+            id: notificationId,
+          });
         } else if (publicationStatus === 'FAILED') {
-          notify.warning('Appearance saved, but publishing failed.', { id: notificationId });
+          notify.warning('Status page design saved, but publishing to the public page failed.', {
+            id: notificationId,
+          });
         } else {
-          notify.success('Status page appearance saved.', { id: notificationId });
+          notify.success('Status page design saved.', { id: notificationId });
         }
 
+        // Refresh the server-owned status-page record so switching back to Settings receives the
+        // new optimistic-concurrency revision instead of submitting the pre-design updatedAt.
         router.refresh();
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'Failed to save status page appearance');
+        const message = cause instanceof Error ? cause.message : 'Failed to save status page design';
+        setError(message);
       }
     });
   };
 
   return (
-    <section className="border-b border-border bg-muted/10 px-3 py-4 sm:px-4 lg:px-6">
-      <div className="mx-auto max-w-[1800px] space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="p-4 sm:p-5 lg:p-6 space-y-6 bg-background min-h-[640px]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Sparkles className="h-4 w-4 text-primary" />
+            Status Page Design
+          </div>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+            Choose a curated design independently from brand colors and Advanced CSS. Built-in
+            themes are versioned; customer CSS remains a final override layer.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={resetAllDesignOverrides}>
+            <RotateCcw className="h-3.5 w-3.5" />
+            Natural default
+          </Button>
+          <Button type="button" size="sm" onClick={save} isLoading={isPending} disabled={!dirty}>
+            <Save className="h-3.5 w-3.5" />
+            Save design
+          </Button>
+        </div>
+      </div>
+
+      {error && <InlineNotice tone="error">{error}</InlineNotice>}
+      {legacyTemplateCss && (
+        <InlineNotice tone="neutral" title="Legacy template detected">
+          This page still contains CSS copied by the old template gallery. Selecting any curated
+          theme — including Default — removes that legacy template CSS. Hand-written Advanced CSS
+          is never removed automatically.
+        </InlineNotice>
+      )}
+
+      <section className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+        <div className="border-b border-border px-4 py-3.5 sm:px-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Appearance
-            </div>
-            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-              Themes now live inside Status Page Settings and render against the real V3 status page
-              before you save. The preview uses the same shared stylesheet and theme compiler as the
-              published page.
+            <h2 className="text-sm font-semibold text-foreground">Theme</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {selectedTheme.id === DEFAULT_STATUS_PAGE_THEME_ID
+                ? 'Default uses the native Status Page renderer with zero built-in theme CSS.'
+                : `${selectedTheme.name} · ${getFamilyLabel(selectedTheme.family)} · v${selectedTheme.version}`}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={resetAllDesignOverrides}>
-              <RotateCcw className="h-3.5 w-3.5" />
-              Natural default
-            </Button>
-            <Button type="button" size="sm" onClick={save} isLoading={isPending} disabled={!dirty}>
-              <Save className="h-3.5 w-3.5" />
-              Save appearance
-            </Button>
+          <div className="flex flex-wrap gap-1.5" aria-label="Theme family filter">
+            {FAMILY_FILTERS.map(filter => (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => setFamily(filter.id)}
+                className={cn(
+                  'rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                  family === filter.id
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
+                )}
+              >
+                {filter.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {error && <InlineNotice tone="error">{error}</InlineNotice>}
-        {legacyTemplateCss && (
-          <InlineNotice tone="neutral" title="Legacy template CSS detected">
-            Selecting a curated theme removes the old gallery payload so it cannot compete with the
-            new theme system.
-          </InlineNotice>
-        )}
-        {selectedTheme.mode === 'dark' && selectedTheme.id !== DEFAULT_STATUS_PAGE_THEME_ID && (
-          <InlineNotice tone="warning" title="PR #650 diagnostic mode">
-            Advanced CSS is temporarily disabled for curated dark themes on this branch. This is an
-            isolation test for the persistent white service-card issue. Do not merge the diagnostic
-            behavior until local testing confirms whether the card still turns white.
-          </InlineNotice>
-        )}
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(360px,500px)_minmax(0,1fr)] xl:items-start">
-          <div className="space-y-4">
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-              <div className="border-b border-border px-4 py-3">
-                <h2 className="text-sm font-semibold text-foreground">Theme</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {selectedTheme.name} · {selectedTheme.mode} · v{selectedTheme.version}
-                </p>
-              </div>
-              <div className="grid max-h-[420px] grid-cols-1 gap-2 overflow-auto p-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                {STATUS_PAGE_THEMES.map(item => {
-                  const selected = item.id === themeId;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => selectTheme(item.id)}
-                      aria-pressed={selected}
-                      className={cn(
-                        'rounded-lg border p-2.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                        selected
-                          ? 'border-primary ring-1 ring-primary/30 shadow-sm'
-                          : 'border-border hover:border-primary/45 hover:bg-muted/20'
-                      )}
-                    >
-                      <div
-                        className="mb-2 h-12 overflow-hidden rounded-md border p-2"
-                        style={{
-                          background: item.preview.surfaceAlt,
-                          borderColor: `${item.preview.accent}45`,
-                          color: item.preview.text,
-                        }}
-                      >
-                        <div
-                          className="h-full rounded border px-2 py-1"
-                          style={{
-                            background: item.preview.surface,
-                            borderColor: `${item.preview.accent}38`,
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="h-1.5 w-16 rounded bg-current opacity-50" />
-                            <span
-                              className="h-2.5 w-8 rounded-full"
-                              style={{ background: item.preview.accent }}
-                            />
-                          </div>
-                        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4 sm:p-5">
+          {visibleThemes.map(item => {
+            const selected = item.id === themeId;
+            const isDefault = item.id === DEFAULT_STATUS_PAGE_THEME_ID;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => selectTheme(item.id)}
+                aria-pressed={selected}
+                className={cn(
+                  'group overflow-hidden rounded-xl border text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                  selected
+                    ? 'border-primary ring-1 ring-primary/30 shadow-md'
+                    : 'border-border hover:border-primary/45 hover:shadow-sm'
+                )}
+              >
+                <div
+                  className="h-32 p-3 relative overflow-hidden"
+                  style={{ background: item.preview.surfaceAlt, color: item.preview.text }}
+                >
+                  <div
+                    className="absolute inset-x-0 top-0 h-1"
+                    style={{ background: isDefault ? 'transparent' : item.preview.accent }}
+                  />
+                  <div
+                    className="h-full rounded-lg border p-2.5 flex flex-col gap-2"
+                    style={{
+                      background: item.preview.surface,
+                      borderColor: `${item.preview.accent}2f`,
+                      borderRadius: item.shape.radius,
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="h-4 w-4 rounded-sm shrink-0"
+                          style={{ background: item.preview.accent }}
+                        />
+                        <span className="h-1.5 w-20 rounded-full bg-current opacity-70" />
                       </div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate text-xs font-semibold text-foreground">
-                            {item.name}
-                          </div>
-                          <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-muted-foreground">
-                            {item.description}
-                          </div>
-                        </div>
-                        {selected && (
-                          <span className="shrink-0 rounded-full bg-primary p-1 text-primary-foreground">
-                            <Check className="h-3 w-3" />
+                      <span className="h-4 w-12 rounded-full border opacity-50" />
+                    </div>
+                    <div className="mt-1 h-5 w-3/5 rounded-md bg-current opacity-[0.08]" />
+                    <div className="grid grid-cols-2 gap-1.5 flex-1">
+                      <div className="rounded-md border p-2" style={{ borderColor: `${item.preview.accent}28` }}>
+                        <span className="block h-1.5 w-10 rounded-full bg-current opacity-30" />
+                        <span className="mt-2 block h-1.5 w-14 rounded-full" style={{ background: item.preview.accent }} />
+                      </div>
+                      <div className="rounded-md border p-2" style={{ borderColor: `${item.preview.accent}28` }}>
+                        <span className="block h-1.5 w-12 rounded-full bg-current opacity-30" />
+                        <span className="mt-2 block h-1.5 w-10 rounded-full bg-current opacity-15" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3.5 bg-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">{item.name}</span>
+                        {isDefault && (
+                          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                            Native
                           </span>
                         )}
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-4 shadow-xs">
-              <div className="text-sm font-semibold text-foreground">Density</div>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {(['comfortable', 'compact'] as const).map(value => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setDensity(value)}
-                    aria-pressed={density === value}
-                    className={cn(
-                      'rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition-colors',
-                      density === value
-                        ? 'border-primary bg-primary/10 text-foreground'
-                        : 'border-border text-muted-foreground hover:text-foreground'
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </div>
+                    {selected && (
+                      <span className="rounded-full bg-primary text-primary-foreground p-1 shrink-0">
+                        <Check className="h-3 w-3" />
+                      </span>
                     )}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
-              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Code className="h-4 w-4 text-primary" />
-                    <h2 className="text-sm font-semibold text-foreground">Advanced CSS</h2>
                   </div>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    Final override layer. Temporarily ignored for dark themes during diagnosis.
-                  </p>
                 </div>
-                {customCss && (
-                  <Button type="button" variant="secondary" size="sm" onClick={() => setCustomCss('')}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <div className="p-3">
-                <textarea
-                  value={customCss}
-                  onChange={event => setCustomCss(event.target.value)}
-                  rows={10}
-                  spellCheck={false}
-                  aria-label="Advanced CSS"
-                  placeholder="/* Optional advanced overrides */"
-                  className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2.5 font-mono text-xs leading-5 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                />
-              </div>
-            </div>
-          </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
-          <div className="xl:sticky xl:top-4">
-            <StatusPageThemePreview
-              snapshot={liveSnapshot}
-              themeId={themeId}
-              density={density}
-              customCss={customCss}
-            />
+      <section className="rounded-xl border border-border bg-card shadow-xs overflow-hidden">
+        <div className="border-b border-border px-4 py-3.5 sm:px-5 flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Code className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">Advanced CSS</h2>
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Applied after the selected theme. Intended for advanced branding requirements.
+            </p>
+          </div>
+          {customCss && (
+            <Button type="button" variant="secondary" size="sm" onClick={() => setCustomCss('')}>
+              Clear CSS
+            </Button>
+          )}
+        </div>
+        <div className="p-4 sm:p-5">
+          <textarea
+            value={customCss}
+            onChange={event => setCustomCss(event.target.value)}
+            rows={14}
+            spellCheck={false}
+            aria-label="Advanced CSS"
+            placeholder="/* Optional advanced overrides */"
+            className="w-full resize-y rounded-lg border border-input bg-background px-3 py-2.5 font-mono text-xs leading-6 text-foreground outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring/40"
+          />
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            Default theme injects no built-in theme rules. Use “Natural default” to remove both the
+            selected theme and Advanced CSS in one action.
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }
