@@ -3,7 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { evaluateWarRoomPolicy } from './policy';
-import { claimWarRoomProvisioning, markWarRoomReady } from './repository';
+import { claimWarRoomProvisioning, closeWarRoom, markWarRoomReady } from './repository';
 import { createChannel, findWarRoomChannel, warRoomChannelName, warRoomMarker } from '@/lib/microsoft-teams/graph/channels';
 import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
 import crypto from 'crypto';
@@ -40,13 +40,25 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
     // Until that capability is implemented, fail closed rather than creating a
     // channel that may be inaccessible or have incorrect ownership.
     if (decision.membershipType === 'PRIVATE') return { accepted: false, code: 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED' };
-    const claimed = await claimWarRoomProvisioning(tx, { incidentId, provider: 'MICROSOFT_TEAMS' });
+    const claimed = await claimWarRoomProvisioning(tx, { incidentId, provider: 'MICROSOFT_TEAMS', reopen: true });
     if (claimed.claimed) {
       await tx.incidentWarRoom.updateMany({ where: { id: claimed.warRoom.id, destinationId: null }, data: { destinationId: destination.id, installationId: destination.installationId, providerTenantId: destination.tenantId, providerContainerId: destination.teamId, membershipType: decision.membershipType } });
       await tx.backgroundJob.create({ data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: claimed.warRoom.id, provisioningToken: claimed.warRoom.provisioningToken } } });
     }
     return { accepted: true, warRoomId: claimed.warRoom.id, state: claimed.warRoom.state };
   });
+}
+
+/**
+ * Close the local command surface first. Microsoft Graph archival is an
+ * optional lifecycle capability and must never delay incident containment;
+ * reopening therefore always creates a new immutable generation.
+ */
+export async function closeMicrosoftTeamsWarRoom(incidentId: string, warRoomId: string): Promise<{ closed: boolean }> {
+  const closed = await runSerializableTransaction(tx => closeWarRoom(tx, {
+    incidentId, warRoomId, provider: 'MICROSOFT_TEAMS',
+  }));
+  return { closed };
 }
 
 /** Worker entry point. Every retry reconciles this same generation before POST. */

@@ -7,19 +7,29 @@ const LEASE_MS = 5 * 60_000;
  * Atomically creates or reclaims one lifecycle generation. A lease expiry is a
  * worker concern, never evidence that an incident was reopened.
  */
-export async function claimWarRoomProvisioning(tx: Prisma.TransactionClient, input: { incidentId: string; provider: WarRoomProvider; now?: Date }) {
+export async function claimWarRoomProvisioning(tx: Prisma.TransactionClient, input: { incidentId: string; provider: WarRoomProvider; now?: Date; reopen?: boolean }) {
   const now = input.now ?? new Date();
   const existing = await tx.incidentWarRoom.findFirst({ where: { incidentId: input.incidentId, provider: input.provider }, orderBy: { generation: 'desc' } });
-  if (existing?.state === 'READY' || existing?.state === 'CLOSING' || existing?.state === 'CLOSED' || existing?.state === 'ARCHIVED') return { claimed: false as const, warRoom: existing };
+  if (existing?.state === 'READY' || existing?.state === 'CLOSING') return { claimed: false as const, warRoom: existing };
+  if ((existing?.state === 'CLOSED' || existing?.state === 'ARCHIVED') && !input.reopen) return { claimed: false as const, warRoom: existing };
   if ((existing?.state === 'PROVISIONING' || existing?.state === 'AMBIGUOUS') && existing.provisioningStartedAt && existing.provisioningStartedAt.getTime() > now.getTime() - LEASE_MS) return { claimed: false as const, warRoom: existing };
   const token = crypto.randomUUID();
-  if (existing) {
+  if (existing && existing.state !== 'CLOSED' && existing.state !== 'ARCHIVED') {
     const warRoom = await tx.incidentWarRoom.update({ where: { id: existing.id }, data: { state: 'PROVISIONING', provisioningToken: token, provisioningStartedAt: now, lastError: null, lastErrorCode: null } });
     return { claimed: true as const, warRoom };
   }
-  const generation = 1;
+  const generation = existing ? existing.generation + 1 : 1;
   const warRoom = await tx.incidentWarRoom.create({ data: { incidentId: input.incidentId, provider: input.provider, generation, state: 'PROVISIONING', provisioningToken: token, provisioningStartedAt: now } });
   return { claimed: true as const, warRoom };
+}
+
+/** Local lifecycle close is deliberate and immediately prevents new commands. */
+export async function closeWarRoom(tx: Prisma.TransactionClient, input: { incidentId: string; warRoomId: string; provider: WarRoomProvider }) {
+  const changed = await tx.incidentWarRoom.updateMany({
+    where: { id: input.warRoomId, incidentId: input.incidentId, provider: input.provider, state: { in: ['READY', 'FAILED', 'AMBIGUOUS'] } },
+    data: { state: 'CLOSED', closedAt: new Date(), provisioningToken: null },
+  });
+  return changed.count === 1;
 }
 
 export async function markWarRoomReady(tx: Prisma.TransactionClient, input: { warRoomId: string; provisioningToken: string; tenantId: string; teamId: string; channelId: string; channelName: string; channelUrl?: string | null }) {
