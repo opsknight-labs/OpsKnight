@@ -1,7 +1,9 @@
 -- Phase 3 collaboration state is additive and provider-neutral. It lets
 -- workers coalesce command-card projections and distinguish room lifecycle
 -- from external provider health.
-ALTER TYPE "WarRoomParticipantState" RENAME VALUE 'PROCESSING' TO 'PENDING';
+-- Keep PROCESSING while old workers may still emit it. New collaboration
+-- workers use PENDING; cleanup can happen only after old binaries are gone.
+ALTER TYPE "WarRoomParticipantState" ADD VALUE 'PENDING';
 
 CREATE TYPE "WarRoomHealthState" AS ENUM ('HEALTHY', 'DEGRADED', 'MISSING', 'PERMISSION_ERROR');
 

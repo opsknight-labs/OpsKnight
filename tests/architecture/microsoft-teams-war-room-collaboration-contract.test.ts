@@ -17,8 +17,8 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     expect(schema).toContain('lastErrorCode    String?');
     const participantState = schema.match(/enum WarRoomParticipantState \{([\s\S]*?)\n\}/)?.[1];
     expect(participantState).toContain('PENDING');
-    expect(participantState).not.toContain('PROCESSING');
-    expect(migration).toContain("RENAME VALUE 'PROCESSING' TO 'PENDING'");
+    expect(participantState).toContain('PROCESSING');
+    expect(migration).toContain("ADD VALUE 'PENDING'");
     expect(migration).toContain('CREATE TYPE "WarRoomHealthState"');
   });
 });
