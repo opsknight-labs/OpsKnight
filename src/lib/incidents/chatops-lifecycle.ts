@@ -113,10 +113,52 @@ export async function authorizeChatOpsIncidentInTransaction(
     });
 }
 
+function chatOpsProviderDisplayLabel(provider?: string): string {
+  if (provider === 'MICROSOFT_TEAMS') return 'Microsoft Teams';
+  return 'Slack';
+}
+
+export async function executeChatOpsNote(input: {
+  incidentId: string;
+  actor: ChatOpsLifecycleActor;
+  content: string;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
+  idempotency?: IdempotencyContext;
+}): Promise<{ created: boolean }> {
+  const trimmed = input.content.trim();
+  if (!trimmed) {
+    throw new AppError({ code: 'INCIDENT_INVALID_ARGUMENT', userMessage: 'Note content is required.' });
+  }
+  return runSerializableTransaction(async tx => {
+    await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'NOTE');
+    const label = chatOpsProviderDisplayLabel(input.provider);
+    const execution = await executeIdempotentOperation(tx, {
+      scope: 'chatops-note',
+      context: input.idempotency,
+      payload: { incidentId: input.incidentId, userId: input.actor.id, content: trimmed },
+      execute: async () => {
+        await tx.incidentNote.create({
+          data: { incidentId: input.incidentId, userId: input.actor.id, content: trimmed },
+        });
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: input.incidentId,
+            type: 'COMMENT',
+            message: `Note added via ${label} ChatOps by ${input.actor.name}:\n${trimmed}`,
+          },
+        });
+        return { created: true };
+      },
+    });
+    return execution.value;
+  });
+}
+
 export async function executeChatOpsAssignment(input: {
   incidentId: string;
   actor: ChatOpsLifecycleActor;
   targetUserId: string;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
   idempotency?: IdempotencyContext;
 }): Promise<{ changed: boolean }> {
   return runSerializableTransaction(async tx => {
@@ -144,11 +186,12 @@ export async function executeChatOpsAssignment(input: {
           where: { id: input.incidentId },
           data: { assigneeId: target.id, teamId: null },
         });
+        const label = chatOpsProviderDisplayLabel(input.provider);
         await tx.incidentEvent.create({
           data: {
             incidentId: input.incidentId,
             type: 'ASSIGNMENT',
-            message: `Assigned to ${input.actor.name} via Slack button`,
+            message: `Assigned to ${input.actor.name} via ${label} ChatOps`,
           },
         });
         await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [

@@ -12,9 +12,8 @@ import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
   authorizeChatOpsIncident,
+  executeChatOpsNote,
 } from '@/lib/incidents/chatops-lifecycle';
-import { executeIdempotentOperation } from '@/lib/idempotency';
-import { runSerializableTransaction } from '@/lib/db-utils';
 
 export interface SlashCommandPayload {
   command: string;
@@ -263,36 +262,25 @@ export async function handleSlashCommand(payload: SlashCommandPayload): Promise<
         };
       }
 
-      const noteUserId = actor!.id;
-
-      if (!noteUserId) {
+      try {
+        await executeChatOpsNote({
+          incidentId: incident.id,
+          actor: { id: actor!.id, name: actor!.name },
+          content: args,
+          provider: 'SLACK',
+          ...(idempotency ? { idempotency } : {}),
+        });
+      } catch (error) {
+        logger.warn('[ChatOps] Slash note rejected', {
+          incidentId: incident.id,
+          userId: actor!.id,
+          error,
+        });
         return {
           response_type: 'ephemeral',
-          text: '⚠️ Could not find your OpsKnight account. Please make sure your Slack email matches your OpsKnight email.',
+          text: `⚠️ ${chatOpsLifecycleErrorMessage(error)}`,
         };
       }
-
-      await authorizeChatOpsIncident(incident.id, noteUserId, 'NOTE');
-      await runSerializableTransaction(async tx => {
-        await executeIdempotentOperation(tx, {
-          scope: 'chatops-note',
-          context: idempotency,
-          payload: { incidentId: incident.id, userId: noteUserId, content: args },
-          execute: async () => {
-            await tx.incidentNote.create({
-              data: { incidentId: incident.id, userId: noteUserId, content: args },
-            });
-            await tx.incidentEvent.create({
-              data: {
-                incidentId: incident.id,
-                type: 'COMMENT',
-                message: `Note added via Slack ChatOps by @${payload.user_name}${args ? `:\n${args}` : ''}`,
-              },
-            });
-            return { created: true };
-          },
-        });
-      });
 
       logger.info('[ChatOps] Note added via slash command', {
         incidentId: incident.id,
