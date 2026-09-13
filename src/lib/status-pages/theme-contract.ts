@@ -327,10 +327,89 @@ export function compileStatusPageThemeCss(
   background: color-mix(in srgb, var(--status-panel-bg) 92%, var(--status-panel-muted-bg) 8%);
   border-color: var(--status-panel-border);
 }
+.status-page-container .status-page-surface .status-v3-service:hover,
+.status-page-container .status-page-surface .status-v3-inspector:hover {
+  box-shadow: var(--sp-theme-shadow);
+}
+
+/* Bright theme accents need a computed foreground instead of assuming white text. */
 .status-page-container .status-topbar__chip--accent,
 .status-page-container .status-subscribe__button,
-.status-page-container .status-subscribe__check--on .status-subscribe__check-box {
+.status-page-container .status-subscribe__check--on .status-subscribe__check-box,
+.status-page-container .status-v3-incident-pill__pir {
   color: var(--sp-theme-accent-contrast);
+}
+
+/* The shared badge engine intentionally uses fixed gradients. On dark pages, use darker semantic
+   endpoints so white badge text remains WCAG-readable while badges still stand out from cards. */
+.status-page-container .status-page-surface [data-badge="true"][data-variant="success"] {
+  background: linear-gradient(to right, #047857, #15803d) !important;
+  color: #ffffff !important;
+}
+.status-page-container .status-page-surface [data-badge="true"][data-variant="warning"] {
+  background: linear-gradient(to right, #b45309, #c2410c) !important;
+  color: #ffffff !important;
+}
+.status-page-container .status-page-surface [data-badge="true"][data-variant="info"] {
+  background: linear-gradient(to right, #2563eb, #4338ca) !important;
+  color: #ffffff !important;
+}
+.status-page-container .status-page-surface [data-badge="true"][data-variant="danger"] {
+  background: linear-gradient(to right, #dc2626, #be123c) !important;
+  color: #ffffff !important;
+}
+.status-page-container .status-page-surface [data-badge="true"] {
+  box-shadow: 0 0 0 1px color-mix(in srgb, #ffffff 10%, transparent), 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+/* Inline section tallies were authored with light pastel fills. Rebind only the dark theme path to
+   the semantic token system so Regions, Services, Maintenance and Incidents remain visually native. */
+.status-page-container .status-page-surface .status-v3-group__tally-pill--healthy,
+.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--healthy {
+  color: var(--status-operational);
+  background: var(--status-operational-bg);
+  border-color: color-mix(in srgb, var(--status-operational) 32%, var(--status-panel-border));
+}
+.status-page-container .status-page-surface .status-v3-group__tally-pill--healthy .status-v3-group__dot,
+.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--healthy .status-v3-regions-inline__dot {
+  background: var(--status-operational);
+}
+.status-page-container .status-page-surface .status-v3-group__tally-pill--impacted,
+.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--impacted {
+  color: var(--status-major-outage);
+  background: var(--status-major-outage-bg);
+  border-color: color-mix(in srgb, var(--status-major-outage) 32%, var(--status-panel-border));
+}
+.status-page-container .status-page-surface .status-v3-group__tally-pill--impacted .status-v3-group__dot,
+.status-page-container .status-page-surface .status-v3-regions-inline__tally-pill--impacted .status-v3-regions-inline__dot {
+  background: var(--status-major-outage);
+}
+.status-page-container .status-page-surface .status-v3-maintenance-inline__tally-pill--active,
+.status-page-container .status-page-surface .status-v3-incidents-inline__tally-pill--active {
+  color: var(--status-degraded);
+  background: var(--status-degraded-bg);
+  border-color: color-mix(in srgb, var(--status-degraded) 32%, var(--status-panel-border));
+}
+.status-page-container .status-page-surface .status-v3-maintenance-inline__tally-pill--scheduled {
+  color: var(--status-maintenance);
+  background: var(--status-maintenance-bg);
+  border-color: color-mix(in srgb, var(--status-maintenance) 32%, var(--status-panel-border));
+}
+.status-page-container .status-page-surface .status-v3-maintenance-inline__tally-pill--completed,
+.status-page-container .status-page-surface .status-v3-incidents-inline__tally-pill--resolved {
+  color: var(--status-unknown);
+  background: var(--status-unknown-bg);
+  border-color: color-mix(in srgb, var(--status-unknown) 28%, var(--status-panel-border));
+}
+.status-page-container .status-page-surface .status-v3-announcements-inline__tally-pill--changelog {
+  color: var(--status-text-muted);
+  background: var(--status-panel-muted-bg);
+  border-color: var(--status-panel-border);
+}
+.status-page-container .status-page-surface .status-v3-incident-pill__redacted-badge {
+  color: var(--status-unknown);
+  background: var(--status-unknown-bg);
+  border-color: color-mix(in srgb, var(--status-unknown) 30%, var(--status-panel-border));
 }
 `
       : '';
