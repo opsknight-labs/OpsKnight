@@ -74,6 +74,19 @@ describe('status page design contract', () => {
     expect(css).toContain('.status-subscribe__button');
   });
 
+  it('bridges dark curated palettes into the V3 service-card token layer', () => {
+    const css = compileStatusPageThemeCss('command-center');
+
+    expect(css).toContain('--status-text: #f8fafc');
+    expect(css).toContain('--status-text-strong: #f8fafc');
+    expect(css).toContain('--status-panel-bg: #0b1020');
+    expect(css).toContain('--status-panel-muted-bg: #111a30');
+    expect(css).toContain('--status-panel-border: color-mix');
+    expect(css).toContain('.status-page-surface .status-v3-service');
+    expect(css).toContain('background: var(--status-panel-bg);');
+    expect(css).toContain('.status-page-surface .status-v3-inspector');
+  });
+
   it('does not inject dark semantic overrides into light themes', () => {
     const css = compileStatusPageThemeCss('executive');
 
@@ -81,6 +94,7 @@ describe('status page design contract', () => {
     expect(css).not.toContain('color-scheme: dark');
     expect(css).not.toContain('--status-operational:');
     expect(css).not.toContain('--status-major-outage:');
+    expect(css).not.toContain('.status-page-surface .status-v3-inspector');
   });
 
   it('classifies the curated dark themes explicitly', () => {
