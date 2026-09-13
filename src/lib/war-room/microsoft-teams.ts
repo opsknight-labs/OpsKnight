@@ -5,6 +5,7 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { evaluateWarRoomPolicy } from './policy';
 import { claimWarRoomProvisioning, markWarRoomReady } from './repository';
 import { createChannel, findWarRoomChannel, warRoomChannelName, warRoomMarker } from '@/lib/microsoft-teams/graph/channels';
+import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
 
 type RequestResult = { accepted: true; warRoomId: string; state: string } | { accepted: false; code: string };
 
@@ -99,7 +100,7 @@ async function markFailed(id: string, provisioningToken: string, code: string, m
   await prisma.incidentWarRoom.updateMany({ where: { id, provisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'FAILED', lastErrorCode: code, lastError: message.slice(0, 1000), provisioningToken: null } });
 }
 
-async function validateWarRoomProvisioningAuthority(room: { destinationId: string | null; installationId: string | null; incident: { status: string } }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
+async function validateWarRoomProvisioningAuthority(room: { destinationId: string | null; installationId: string | null; providerTenantId: string | null; incident: { status: string } }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
   if (!['OPEN', 'ACKNOWLEDGED'].includes(room.incident.status)) return { allowed: false, code: 'INCIDENT_NOT_ACTIVE', message: 'Incident is no longer active.' };
   if (!room.destinationId) return { allowed: false, code: 'DESTINATION_SNAPSHOT_MISSING', message: 'War-room routing snapshot is missing.' };
   const [config, destination, installation] = await Promise.all([
@@ -108,5 +109,7 @@ async function validateWarRoomProvisioningAuthority(room: { destinationId: strin
     room.installationId ? prisma.microsoftTeamsInstallation.findUnique({ where: { id: room.installationId }, select: { enabled: true } }) : Promise.resolve(null),
   ]);
   if (!config || !destination?.enabled || !destination.warRoomEnabled || (room.installationId && (!installation?.enabled || destination.installationId !== room.installationId))) return { allowed: false, code: 'WAR_ROOM_AUTHORITY_REVOKED', message: 'Microsoft Teams war-room configuration or installation was disabled.' };
+  const capabilities = await getMicrosoftTeamsCapabilities({ tenantId: room.providerTenantId ?? undefined });
+  if (!capabilities.canCreateWarRooms) return { allowed: false, code: 'WAR_ROOM_CAPABILITY_UNAVAILABLE', message: capabilities.failureReason ?? 'Microsoft Teams channel-create capability is unavailable.' };
   return { allowed: true };
 }

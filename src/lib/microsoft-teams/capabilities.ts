@@ -21,6 +21,11 @@ export type MicrosoftTeamsCapability = {
   canPost: boolean;
   canUpdateCard: boolean;
   canCreateChannel: boolean;
+  canCreateWarRooms: boolean;
+  canCreatePrivateWarRooms: boolean;
+  canManageWarRoomMembers: boolean;
+  canUpdateWarRoom: boolean;
+  canArchiveWarRoom: boolean;
   canCreateMeeting: boolean;
   canManageMembers: boolean;
   canUseChatOps: boolean;
@@ -47,6 +52,11 @@ export async function getMicrosoftTeamsCapabilities(options?: {
       canPost: false,
       canUpdateCard: false,
       canCreateChannel: false,
+      canCreateWarRooms: false,
+      canCreatePrivateWarRooms: false,
+      canManageWarRoomMembers: false,
+      canUpdateWarRoom: false,
+      canArchiveWarRoom: false,
       canCreateMeeting: false,
       canManageMembers: false,
       canUseChatOps: false,
@@ -117,12 +127,21 @@ export async function getMicrosoftTeamsCapabilities(options?: {
     ? await prismaAny.microsoftTeamsDestination.count({ where: { tenantId: tenantId || undefined, enabled: true, interactiveEnabled: true, installation: { enabled: true } } }).catch(() => 0)
     : 0;
 
+  // Graph cannot safely dry-run a channel POST. A healthy RSC discovery probe
+  // plus the explicitly enabled create feature is the centralized admission
+  // decision; the adapter still turns a provider 403 into an actionable error.
+  const canCreateWarRooms = Boolean(resolved.config.warRoomsEnabled && botInstalled && rsc && !rsc.unknown && rsc.missing.length === 0);
   return {
     connected: true,
     botInstalled,
     canPost,
     canUpdateCard,
-    canCreateChannel: false,
+    canCreateChannel: canCreateWarRooms,
+    canCreateWarRooms,
+    canCreatePrivateWarRooms: false,
+    canManageWarRoomMembers: false,
+    canUpdateWarRoom: false,
+    canArchiveWarRoom: false,
     canCreateMeeting: false,
     canManageMembers: false,
     canUseChatOps: interactiveDestinationCount > 0,

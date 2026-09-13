@@ -70,7 +70,7 @@ describe('Microsoft Teams app manifest', () => {
     expect(warRoomNames).not.toContain('TeamSettings.Read.Group');
     const all = buildMicrosoftTeamsAppManifest({ appUrl: BASE, botId: BOT_ID, includeTeamSettingsPermissions: true, includeWarRoomPermissions: true });
     const allNames = (all.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
-    for (const perm of MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS.concat(['TeamSettings.Read.Group', 'Channel.Create.Group'])) {
+    for (const perm of [...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS, 'TeamSettings.Read.Group', 'Channel.Create.Group']) {
       expect(allNames).toContain(perm);
     }
   });
