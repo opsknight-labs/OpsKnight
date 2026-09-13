@@ -6,6 +6,9 @@ const databaseUrl =
 
 export default defineConfig({
   testDir: './tests/e2e',
+  // The generated service-worker contract has its own production-build config.
+  // Never run it against `next dev`, where next-pwa intentionally does not emit /sw.js.
+  testIgnore: /mobile-pwa-production\.spec\.ts/,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
