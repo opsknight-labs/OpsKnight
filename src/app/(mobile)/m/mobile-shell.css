@@ -21,10 +21,16 @@
   --border-color: #e2e8f0;
   --border-hover: #cbd5e1;
 
-  min-height: 100vh;
-  min-height: 100dvh;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
   min-width: 0;
-  overflow-x: clip;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: hsl(var(--ui-background));
   color: hsl(var(--ui-foreground));
   color-scheme: inherit;
@@ -33,23 +39,29 @@
 
 .dark .mobile-app,
 [data-theme='dark'] .mobile-app {
-  --bg-primary: #020617;
-  --bg-secondary: #0f172a;
-  --bg-surface: #111827;
-  --text-primary: #e2e8f0;
+  --bg-primary: #09090b;
+  --bg-secondary: #121216;
+  --bg-surface: #121216;
+  --text-primary: #f8fafc;
   --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
-  --border-color: #334155;
-  --border-hover: #475569;
+  --border-color: #27272a;
+  --border-hover: #3f3f46;
 }
 
 .mobile-content {
+  grid-row: 2;
   width: min(100%, var(--mobile-content-max));
   min-width: 0;
-  min-height: calc(100dvh - var(--mobile-header-height));
+  min-height: 0;
+  height: 100%;
   margin-inline: auto;
-  padding: 0.875rem 0.875rem calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+  padding: 0.875rem 0.875rem 1rem;
   overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable both-edges;
 }
 
 .responsive-page {
@@ -59,10 +71,10 @@
   overflow-wrap: anywhere;
 }
 
-/* App header */
+/* App header. It is a dedicated grid row, never part of the scroll container. */
 .mobile-header {
-  position: sticky;
-  top: 0;
+  grid-row: 1;
+  position: relative;
   z-index: 60;
   min-height: calc(var(--mobile-header-height) + env(safe-area-inset-top, 0px));
   padding: env(safe-area-inset-top, 0px) max(0.75rem, env(safe-area-inset-right, 0px)) 0
@@ -72,10 +84,10 @@
   justify-content: space-between;
   gap: 0.75rem;
   border-bottom: 1px solid hsl(var(--ui-border) / 0.82);
-  background: hsl(var(--ui-card) / 0.96);
+  background: hsl(var(--ui-card) / 0.98);
   color: hsl(var(--ui-foreground));
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
 }
 
 .mobile-header-primary,
@@ -158,30 +170,32 @@
 .mobile-header-system-button[data-status='warning'] { color: #d97706; }
 .mobile-header-system-button[data-status='danger'] { color: #e11d48; }
 
-/* Bottom navigation */
+/* Bottom navigation is a dedicated app-frame row, not a fixed child of a
+ * scrolling document. This prevents iOS/Android scroll and browser-chrome
+ * changes from making the bar drift or rubber-band with page content. */
 .mobile-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  grid-row: 3;
+  position: relative;
   z-index: 70;
+  width: 100%;
   min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom, 0px));
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 0.25rem max(0.4rem, env(safe-area-inset-right, 0px))
     max(0.25rem, env(safe-area-inset-bottom, 0px)) max(0.4rem, env(safe-area-inset-left, 0px));
   border-top: 1px solid hsl(var(--ui-border) / 0.9);
-  background: hsl(var(--ui-card) / 0.97);
-  box-shadow: 0 -6px 22px hsl(var(--ui-foreground) / 0.035);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: hsl(var(--ui-card) / 0.99);
+  box-shadow: 0 -4px 16px hsl(var(--ui-foreground) / 0.025);
+  backdrop-filter: blur(14px) saturate(110%);
+  -webkit-backdrop-filter: blur(14px) saturate(110%);
+  contain: layout paint;
 }
 
 .mobile-nav-item {
   position: relative;
   min-width: 0;
   min-height: 54px;
-  border-radius: 0.75rem;
+  border-radius: 0.7rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -189,15 +203,15 @@
   gap: 0.18rem;
   color: hsl(var(--ui-muted-foreground));
   text-decoration: none;
-  transition: color 140ms ease, background-color 140ms ease, transform 140ms ease;
+  transition: color 140ms ease, background-color 140ms ease, transform 100ms ease;
 }
 
 .mobile-nav-item.active {
-  background: hsl(var(--ui-accent) / 0.72);
+  background: hsl(var(--ui-accent) / 0.58);
   color: hsl(var(--ui-foreground));
 }
 
-.mobile-nav-item:active { transform: scale(0.97); }
+.mobile-nav-item:active { transform: scale(0.98); }
 
 .mobile-nav-icon {
   position: relative;
@@ -242,7 +256,7 @@
 /* Network and PWA state */
 .mobile-network-banner {
   position: sticky;
-  top: 0.5rem;
+  top: 0;
   z-index: 40;
   display: flex;
   align-items: center;
