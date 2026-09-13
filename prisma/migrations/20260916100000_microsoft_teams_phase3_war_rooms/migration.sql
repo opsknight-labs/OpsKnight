@@ -21,6 +21,8 @@ CREATE TABLE "IncidentWarRoom" (
   "provider" "WarRoomProvider" NOT NULL,
   "generation" INTEGER NOT NULL DEFAULT 1,
   "state" "WarRoomState" NOT NULL DEFAULT 'PROVISIONING',
+  "destinationId" TEXT,
+  "installationId" TEXT,
   "providerTenantId" TEXT,
   "providerContainerId" TEXT,
   "providerChannelId" TEXT,
@@ -65,6 +67,9 @@ CREATE UNIQUE INDEX "IncidentWarRoom_incidentId_provider_generation_key" ON "Inc
 CREATE INDEX "IncidentWarRoom_incidentId_provider_state_idx" ON "IncidentWarRoom"("incidentId", "provider", "state");
 CREATE INDEX "IncidentWarRoom_provider_providerTenantId_providerContainerId_providerChannelId_idx" ON "IncidentWarRoom"("provider", "providerTenantId", "providerContainerId", "providerChannelId");
 CREATE INDEX "IncidentWarRoom_state_provisioningStartedAt_idx" ON "IncidentWarRoom"("state", "provisioningStartedAt");
-CREATE UNIQUE INDEX "WarRoomParticipant_warRoomId_userId_key" ON "WarRoomParticipant"("warRoomId", "userId");
+CREATE UNIQUE INDEX "IncidentWarRoom_provider_tenant_team_channel_unique" ON "IncidentWarRoom"("provider", "providerTenantId", "providerContainerId", "providerChannelId") WHERE "providerChannelId" IS NOT NULL;
+CREATE UNIQUE INDEX "WarRoomParticipant_warRoomId_userId_unique" ON "WarRoomParticipant"("warRoomId", "userId") WHERE "userId" IS NOT NULL;
+CREATE UNIQUE INDEX "WarRoomParticipant_warRoomId_providerObjectId_unique" ON "WarRoomParticipant"("warRoomId", "providerObjectId") WHERE "providerObjectId" IS NOT NULL;
+CREATE UNIQUE INDEX "WarRoomParticipant_warRoomId_providerUserId_unique" ON "WarRoomParticipant"("warRoomId", "providerUserId") WHERE "providerUserId" IS NOT NULL;
 CREATE INDEX "WarRoomParticipant_warRoomId_state_idx" ON "WarRoomParticipant"("warRoomId", "state");
 CREATE INDEX "WarRoomParticipant_userId_idx" ON "WarRoomParticipant"("userId");

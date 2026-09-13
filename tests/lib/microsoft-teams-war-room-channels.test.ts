@@ -12,6 +12,7 @@ describe('Teams war-room channel identity', () => {
   });
 
   it('uses the incident and generation marker rather than a mutable title', () => {
-    expect(warRoomMarker('incident-abcdefgh', 2)).toBe('OpsKnight war room | incident=incident-abcdefgh | generation=2');
+    expect(warRoomMarker('incident-abcdefgh', 2)).toBe('[OKWR:incident-abcdefgh:g2]');
+    expect(warRoomMarker('incident-abcdefgh', 10)).not.toContain(warRoomMarker('incident-abcdefgh', 1));
   });
 });

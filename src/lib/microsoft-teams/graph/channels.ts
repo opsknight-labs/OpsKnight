@@ -33,7 +33,8 @@ export function warRoomChannelName(incidentId: string, generation: number, title
 }
 
 export function warRoomMarker(incidentId: string, generation: number): string {
-  return `OpsKnight war room | incident=${incidentId} | generation=${generation}`;
+  // The closing bracket makes g1 and g10 distinct under a substring search.
+  return `[OKWR:${incidentId}:g${generation}]`;
 }
 
 export async function createChannel(input: { tenantId: string; teamId: string; displayName: string; description: string; membershipType: 'STANDARD' }): Promise<WarRoomGraphResult<Channel>> {
@@ -51,8 +52,9 @@ export async function findWarRoomChannel(input: { tenantId: string; teamId: stri
     if (!result.ok) return result;
     const body = await result.value.json().catch(() => null) as { value?: Channel[]; '@odata.nextLink'?: string } | null;
     if (!Array.isArray(body?.value)) return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph returned an invalid channel listing.' };
-    const value = body.value.find(channel => channel.description?.includes(input.marker));
-    if (value) return { ok: true, value };
+    const matches = body.value.filter(channel => channel.description?.includes(input.marker));
+    if (matches.length > 1) return { ok: false, code: 'DUPLICATE_WAR_ROOMS', message: 'Multiple Microsoft Teams channels claim this OpsKnight war-room marker.' };
+    if (matches.length === 1) return { ok: true, value: matches[0] };
     next = typeof body['@odata.nextLink'] === 'string' ? body['@odata.nextLink'] : null;
   }
   return next ? { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph channel pagination exceeded its safety limit.' } : { ok: true, value: null };

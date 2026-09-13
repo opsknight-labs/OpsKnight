@@ -23,6 +23,7 @@ export type WarRoomGraphFailureCode =
   | 'MEMBER_NOT_IN_TEAM'
   | 'AMBIGUOUS_CREATE'
   | 'TRANSIENT_READ'
+  | 'DUPLICATE_WAR_ROOMS'
   | 'GRAPH_TOKEN_FAILED'
   | 'UNKNOWN';
 

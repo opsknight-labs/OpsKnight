@@ -827,6 +827,8 @@ model IncidentWarRoom {
   provider              WarRoomProvider
   generation            Int                   @default(1)
   state                 WarRoomState          @default(PROVISIONING)
+  destinationId         String?
+  installationId        String?
   providerTenantId      String?
   providerContainerId   String?
   providerChannelId     String?
@@ -872,7 +874,6 @@ model WarRoomParticipant {
   warRoom IncidentWarRoom @relation(fields: [warRoomId], references: [id], onDelete: Cascade)
   user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@unique([warRoomId, userId])
   @@index([warRoomId, state])
   @@index([userId])
 }

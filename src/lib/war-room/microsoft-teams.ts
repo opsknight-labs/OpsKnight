@@ -39,7 +39,7 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
     if (decision.membershipType === 'PRIVATE') return { accepted: false, code: 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED' };
     const claimed = await claimWarRoomProvisioning(tx, { incidentId, provider: 'MICROSOFT_TEAMS' });
     if (claimed.claimed) {
-      await tx.incidentWarRoom.update({ where: { id: claimed.warRoom.id }, data: { providerTenantId: destination.tenantId, providerContainerId: destination.teamId, membershipType: decision.membershipType } });
+      await tx.incidentWarRoom.updateMany({ where: { id: claimed.warRoom.id, destinationId: null }, data: { destinationId: destination.id, installationId: destination.installationId, providerTenantId: destination.tenantId, providerContainerId: destination.teamId, membershipType: decision.membershipType } });
       await tx.backgroundJob.create({ data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: claimed.warRoom.id, provisioningToken: claimed.warRoom.provisioningToken } } });
     }
     return { accepted: true, warRoomId: claimed.warRoom.id, state: claimed.warRoom.state };
@@ -48,7 +48,7 @@ export async function requestMicrosoftTeamsWarRoom(incidentId: string, manual: b
 
 /** Worker entry point. Every retry reconciles this same generation before POST. */
 export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expectedProvisioningToken: string): Promise<void> {
-  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, include: { incident: { select: { id: true, title: true } } } });
+  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, include: { incident: { select: { id: true, title: true, status: true } } } });
   if (!room || room.provisioningToken !== expectedProvisioningToken || room.provider !== 'MICROSOFT_TEAMS' || !['PROVISIONING', 'AMBIGUOUS'].includes(room.state) || !room.provisioningToken || !room.providerTenantId || !room.providerContainerId || !room.membershipType) return;
   const marker = warRoomMarker(room.incident.id, room.generation);
   const existing = await findWarRoomChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, marker });
@@ -59,14 +59,28 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
   // A failed or incomplete read is never evidence that a room is absent.
   if (!existing.ok) {
     if (existing.code === 'TRANSIENT_READ' || existing.code === 'RATE_LIMITED' || existing.code === 'GRAPH_TOKEN_FAILED') throw new WarRoomRetryableError(existing.message, existing.retryAfterMs);
-    await markFailed(room.id, existing.code, existing.message);
+    await markFailed(room.id, expectedProvisioningToken, existing.code, existing.message);
     return;
   }
-  if (room.membershipType !== 'STANDARD') return markFailed(room.id, 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED', 'Private Teams war rooms require an owner and initial members.');
+  if (room.membershipType !== 'STANDARD') return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED', 'Private Teams war rooms require an owner and initial members.');
   // A superseding retry can rotate the lease while this worker was reading
   // channels. Recheck immediately before the only non-idempotent side effect.
   const current = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { provisioningToken: true, state: true } });
   if (!current || current.provisioningToken !== expectedProvisioningToken || !['PROVISIONING', 'AMBIGUOUS'].includes(current.state)) return;
+  const authority = await validateWarRoomProvisioningAuthority(room);
+  if (!authority.allowed) {
+    if (room.state === 'AMBIGUOUS') return;
+    await markFailed(room.id, expectedProvisioningToken, authority.code, authority.message);
+    return;
+  }
+  // Keep the room lease aligned with this active queue worker immediately
+  // before the POST. A concurrent manual request cannot reclaim the room
+  // while this bounded (30s) Graph operation is in flight.
+  const renewed = await prisma.incidentWarRoom.updateMany({
+    where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+    data: { provisioningStartedAt: new Date() },
+  });
+  if (renewed.count !== 1) return;
   const created = await createChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, displayName: warRoomChannelName(room.incident.id, room.generation, room.incident.title), description: marker, membershipType: 'STANDARD' });
   if (!created.ok) {
     if (created.code === 'AMBIGUOUS_CREATE') {
@@ -74,13 +88,25 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
       throw new WarRoomRetryableError(created.message, created.retryAfterMs);
     }
     if (created.code === 'RATE_LIMITED' || created.code === 'GRAPH_TOKEN_FAILED' || created.code === 'TRANSIENT_READ') throw new WarRoomRetryableError(created.message, created.retryAfterMs);
-    await markFailed(room.id, created.code, created.message);
+    await markFailed(room.id, expectedProvisioningToken, created.code, created.message);
     return;
   }
   const adopted = await runSerializableTransaction(tx => markWarRoomReady(tx, { warRoomId: room.id, provisioningToken: room.provisioningToken!, tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: created.value.id, channelName: created.value.displayName, channelUrl: created.value.webUrl }));
-  if (!adopted) await prisma.incidentWarRoom.update({ where: { id: room.id }, data: { state: 'AMBIGUOUS', lastErrorCode: 'DATABASE_COMMIT_FAILED', lastError: 'Channel may have been created; reconcile by marker before retrying.' } });
+  if (!adopted) await prisma.incidentWarRoom.updateMany({ where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'AMBIGUOUS', lastErrorCode: 'DATABASE_COMMIT_FAILED', lastError: 'Channel may have been created; reconcile by marker before retrying.' } });
 }
 
-async function markFailed(id: string, code: string, message: string): Promise<void> {
-  await prisma.incidentWarRoom.update({ where: { id }, data: { state: 'FAILED', lastErrorCode: code, lastError: message.slice(0, 1000), provisioningToken: null } });
+async function markFailed(id: string, provisioningToken: string, code: string, message: string): Promise<void> {
+  await prisma.incidentWarRoom.updateMany({ where: { id, provisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'FAILED', lastErrorCode: code, lastError: message.slice(0, 1000), provisioningToken: null } });
+}
+
+async function validateWarRoomProvisioningAuthority(room: { destinationId: string | null; installationId: string | null; incident: { status: string } }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
+  if (!['OPEN', 'ACKNOWLEDGED'].includes(room.incident.status)) return { allowed: false, code: 'INCIDENT_NOT_ACTIVE', message: 'Incident is no longer active.' };
+  if (!room.destinationId) return { allowed: false, code: 'DESTINATION_SNAPSHOT_MISSING', message: 'War-room routing snapshot is missing.' };
+  const [config, destination, installation] = await Promise.all([
+    prisma.microsoftTeamsConfig.findFirst({ where: { enabled: true, warRoomsEnabled: true }, select: { id: true } }),
+    prisma.microsoftTeamsDestination.findUnique({ where: { id: room.destinationId }, select: { enabled: true, warRoomEnabled: true, installationId: true } }),
+    room.installationId ? prisma.microsoftTeamsInstallation.findUnique({ where: { id: room.installationId }, select: { enabled: true } }) : Promise.resolve(null),
+  ]);
+  if (!config || !destination?.enabled || !destination.warRoomEnabled || (room.installationId && (!installation?.enabled || destination.installationId !== room.installationId))) return { allowed: false, code: 'WAR_ROOM_AUTHORITY_REVOKED', message: 'Microsoft Teams war-room configuration or installation was disabled.' };
+  return { allowed: true };
 }

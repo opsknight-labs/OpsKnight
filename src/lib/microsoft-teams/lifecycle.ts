@@ -103,10 +103,21 @@ export async function disconnectMicrosoftTeamsIntegration(actorId: string): Prom
     const revoked = await revokeMicrosoftTeamsOperations(tx, {
       reason: 'Microsoft Teams integration disconnected',
     });
+    // War-room channel creation is a separate non-idempotent workload. Cancel
+    // it explicitly; unresolved AMBIGUOUS rows are retained for marker-only
+    // reconciliation and can never create another channel while disconnected.
+    const revokedWarRoomJobs = await tx.backgroundJob.updateMany({
+      where: { type: 'WAR_ROOM_PROVISION', status: { in: ['PENDING', 'PROCESSING'] } },
+      data: { status: 'CANCELLED', completedAt: new Date(), error: 'Microsoft Teams integration disconnected' },
+    });
+    await tx.incidentWarRoom.updateMany({
+      where: { provider: 'MICROSOFT_TEAMS', state: 'PROVISIONING' },
+      data: { state: 'FAILED', lastErrorCode: 'WAR_ROOM_AUTHORITY_REVOKED', lastError: 'Microsoft Teams integration disconnected', provisioningToken: null },
+    });
     await emitAuditEvent({
       action: 'microsoftTeams.integration.disconnected', source: 'UI',
       target: { type: 'SYSTEM_CONFIG', id: 'microsoft-teams' }, actor: { type: 'USER', id: actorId },
-      metadata: { destinationsDisabled: destinations.length, servicesUpdated: routedServices.length, operationsRevoked: revoked.operationIds.length, jobsCancelled: revoked.jobsCancelled },
+      metadata: { destinationsDisabled: destinations.length, servicesUpdated: routedServices.length, operationsRevoked: revoked.operationIds.length, jobsCancelled: revoked.jobsCancelled, warRoomJobsCancelled: revokedWarRoomJobs.count },
     }, tx);
   });
   clearMicrosoftTeamsTokenCaches();
