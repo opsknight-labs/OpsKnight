@@ -30,13 +30,12 @@ describe('Microsoft Teams app manifest', () => {
   });
 
   it('uses the minimal required RSC permissions for Phase 1', () => {
-    // Bot Framework Connector is the delivery transport — ChannelMessage.Send.Group is optional
+    // Bot Framework Connector owns message delivery; Graph is only used for discovery.
     expect([...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS]).toEqual([
       'ChannelSettings.Read.Group',
     ]);
-    expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('ChannelMessage.Send.Group');
     expect(MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS).toContain('TeamSettings.Read.Group');
-    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(4);
+    expect(MICROSOFT_TEAMS_RSC_PERMISSIONS).toHaveLength(2);
   });
 
   it('declares RSC permissions as Application-scoped in the manifest', () => {
@@ -85,11 +84,11 @@ describe('Microsoft Teams app manifest', () => {
     expect(m.description.short.length).toBeGreaterThan(10);
     expect(m.developer.websiteUrl).toBe('https://opsknight.com');
     expect(m.manifestVersion).toBe('1.16');
-    expect(m.bots[0].scopes).toEqual(expect.arrayContaining(['team', 'groupChat']));
+    expect(m.bots[0].scopes).toEqual(['team']);
+    expect(m.bots[0].isNotificationOnly).toBe(true);
     expect(m.bots[0].botId).toBe(BOT_ID);
     expect((m as Record<string, unknown>).webApplicationInfo).toBeUndefined();
-    // manifest `id` is the packaging manifestId, not the botId
-    expect(m.id).toBe('11111111-1111-1111-1111-111111111111');
+    expect(m.id).toBe(BOT_ID);
     expect((m as unknown as Record<string, unknown>).botsEndpoint).toBeUndefined();
   });
 

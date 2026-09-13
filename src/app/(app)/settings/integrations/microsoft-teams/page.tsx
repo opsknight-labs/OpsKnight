@@ -72,6 +72,18 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const rscMissingCount = rscState?.missing.length ?? 0;
   const rscGrantedCount = rscState?.granted?.length ?? 0;
   const health = isConnected ? await getMicrosoftTeamsHealth({ tenantId: config?.tenantId ?? undefined }).catch(() => null) : null;
+  const installationPermissions = [...(rscState?.installations ?? [])];
+  for (const installation of health?.installations ?? []) {
+    if (installationPermissions.some(state => state.teamId === installation.teamId)) continue;
+    installationPermissions.push({
+      teamId: installation.teamId,
+      teamName: installation.teamName,
+      granted: null,
+      missing: [],
+      unknown: true,
+      error: installation.enabled ? 'PERMISSION_STATE_UNAVAILABLE' : 'BOT_REMOVED',
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -161,8 +173,9 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         destinations={destinations as unknown as MicrosoftTeamsDestinationRow[]}
         appManifestJson={manifestJson}
         isAdmin={permissions.isAdmin}
-        health={health as unknown as { lastSuccessAt: string | null; lastErrorAt: string | null; lastErrorCode: string | null; lastErrorMessage: string | null; botHealthy: boolean | null; permissionsHealthy: boolean | null } | null}
+        health={health}
         installationCount={installationCount}
+        installationPermissions={installationPermissions}
       />
     </div>
   );

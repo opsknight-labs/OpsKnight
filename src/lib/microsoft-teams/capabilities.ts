@@ -75,7 +75,7 @@ export async function getMicrosoftTeamsCapabilities(options?: {
     const { getTeamsGrantedRscPermissions } = await import('./client');
     rsc = await getTeamsGrantedRscPermissions({ explicitTenantId: tenantId || undefined });
   } catch {
-    rsc = { granted: null, missing: [], unknown: true, error: 'RSC_UNAVAILABLE' };
+    rsc = { granted: null, missing: [], unknown: true, error: 'RSC_UNAVAILABLE', installations: [] };
   }
 
   // Bot Connector is the delivery transport — `ChannelMessage.Send.Group` is optional.

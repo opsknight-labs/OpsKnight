@@ -7,6 +7,17 @@ export type MicrosoftTeamsHealth = {
   lastErrorMessage: string | null;
   botHealthy: boolean | null;
   permissionsHealthy: boolean | null;
+  installations: MicrosoftTeamsInstallationHealth[];
+};
+
+export type MicrosoftTeamsInstallationHealth = {
+  teamId: string;
+  teamName: string | null;
+  enabled: boolean;
+  destinationCount: number;
+  lastDeliveryAt: string | null;
+  lastDeliveryStatus: string | null;
+  lastErrorMessage: string | null;
 };
 
 /**
@@ -24,6 +35,7 @@ export async function getMicrosoftTeamsHealth(options?: {
   let lastErrorAt: string | null = null;
   let lastErrorMessage: string | null = null;
   const lastErrorCode: MicrosoftTeamsFailureCode | null = null;
+  const installationHealth: MicrosoftTeamsInstallationHealth[] = [];
 
   // 1) Preferred: ExternalOperation (durable fence used by real incident delivery).
   //    Status: COMPLETED = success, FAILED/AMBIGUOUS = error.
@@ -76,6 +88,75 @@ export async function getMicrosoftTeamsHealth(options?: {
 
   const { getMicrosoftTeamsCapabilities } = await import('./capabilities');
   const caps = await getMicrosoftTeamsCapabilities(options).catch(() => null);
+
+  // Resource truth: correlate each verified installation with its destinations
+  // and most recent durable operation. Overall health must never conceal a
+  // broken Team behind a successful operation for a different Team.
+  try {
+    const prismaHealth = (await import('@/lib/prisma')).default as unknown as {
+      microsoftTeamsInstallation: {
+        findMany: (a: unknown) => Promise<Array<{
+          teamId: string;
+          teamName: string | null;
+          enabled: boolean;
+          destinations: Array<{ id: string }>;
+        }>>;
+      };
+      externalOperation: {
+        findMany: (a: unknown) => Promise<Array<{
+          status: string;
+          updatedAt: Date;
+          lastError: string | null;
+          requestPayload: unknown;
+        }>>;
+      };
+    };
+    const tenantId = options?.tenantId?.trim();
+    const installations = await prismaHealth.microsoftTeamsInstallation.findMany({
+      where: { ...(tenantId ? { tenantId } : {}) },
+      select: {
+        teamId: true,
+        teamName: true,
+        enabled: true,
+        destinations: { select: { id: true } },
+      },
+      orderBy: { teamName: 'asc' },
+      take: 100,
+    });
+    const destinationIds = installations.flatMap(installation => installation.destinations.map(destination => destination.id));
+    const latestByDestination = new Map<string, { status: string; updatedAt: Date; lastError: string | null }>();
+    if (destinationIds.length > 0) {
+      const operations = await prismaHealth.externalOperation.findMany({
+        where: { provider: 'MICROSOFT_TEAMS' as never },
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+        select: { status: true, updatedAt: true, lastError: true, requestPayload: true },
+      });
+      const allowedDestinationIds = new Set(destinationIds);
+      for (const operation of operations) {
+        const destinationId = (operation.requestPayload as Record<string, unknown> | null)?.destinationId;
+        if (typeof destinationId !== 'string' || !allowedDestinationIds.has(destinationId) || latestByDestination.has(destinationId)) continue;
+        latestByDestination.set(destinationId, operation);
+      }
+    }
+    for (const installation of installations) {
+      const latest = installation.destinations
+        .map(destination => latestByDestination.get(destination.id))
+        .filter((operation): operation is NonNullable<typeof operation> => Boolean(operation))
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+      installationHealth.push({
+        teamId: installation.teamId,
+        teamName: installation.teamName,
+        enabled: installation.enabled,
+        destinationCount: installation.destinations.length,
+        lastDeliveryAt: latest?.updatedAt.toISOString() ?? null,
+        lastDeliveryStatus: latest?.status ?? null,
+        lastErrorMessage: latest?.lastError?.slice(0, 400) ?? null,
+      });
+    }
+  } catch {
+    // best-effort health enrichment
+  }
   return {
     lastSuccessAt,
     lastErrorAt,
@@ -83,5 +164,6 @@ export async function getMicrosoftTeamsHealth(options?: {
     lastErrorMessage: caps?.failureReason ?? lastErrorMessage,
     botHealthy: caps ? caps.botInstalled : null,
     permissionsHealthy: caps ? caps.canPost : null,
+    installations: installationHealth,
   };
 }

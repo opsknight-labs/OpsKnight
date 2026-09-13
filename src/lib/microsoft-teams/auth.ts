@@ -1,6 +1,7 @@
 import { decrypt, decryptStoredSecret } from '@/lib/encryption';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { normalizeTrustedMicrosoftTeamsServiceUrl } from './service-url';
 
 export type MicrosoftTeamsAuthContext = {
   configId: string;
@@ -79,6 +80,30 @@ async function fetchBotJwks(forceRefresh = false): Promise<Record<string, unknow
  */
 const PROD_BOT_ISSUER = 'https://api.botframework.com';
 
+function isBotSigningKeyEndorsed(
+  jwks: Record<string, unknown>,
+  signingKeyId: string,
+  channelId: string,
+): boolean {
+  if (!signingKeyId || !channelId) return false;
+  const keys = Array.isArray((jwks as { keys?: unknown[] }).keys)
+    ? ((jwks as { keys: Array<{ kid?: unknown; endorsements?: unknown }> }).keys)
+    : [];
+  const signingKey = keys.find(key => key.kid === signingKeyId);
+  const endorsements = Array.isArray(signingKey?.endorsements)
+    ? signingKey.endorsements.filter((value): value is string => typeof value === 'string')
+    : [];
+  return endorsements.includes(channelId);
+}
+
+export function __isBotSigningKeyEndorsedForTests(
+  jwks: Record<string, unknown>,
+  signingKeyId: string,
+  channelId: string,
+): boolean {
+  return isBotSigningKeyEndorsed(jwks, signingKeyId, channelId);
+}
+
 function isAllowedBotIssuer(iss: string): boolean {
   if (!iss) return false;
   // Production Connector -> Bot: only api.botframework.com per
@@ -105,7 +130,7 @@ export function __isAllowedBotIssuerForTests(iss: string): boolean {
 async function verifyBotFrameworkToken(
   token: string,
   expectedAppId: string,
-  options?: { expectedServiceUrl?: string | null }
+  options?: { expectedServiceUrl?: string | null; expectedChannelId?: string | null }
 ): Promise<VerifiedTeamsIdentity | null> {
   let jwks = await fetchBotJwks();
   const jose = await import('jose');
@@ -119,6 +144,7 @@ async function verifyBotFrameworkToken(
         algorithms: ['RS256', 'RS384', 'RS512'],
       });
       const claims = result.payload as Record<string, unknown>;
+      const signingKeyId = typeof result.protectedHeader.kid === 'string' ? result.protectedHeader.kid : '';
       const rawAud = claims.aud;
       const aud = typeof rawAud === 'string' ? rawAud : Array.isArray(rawAud) ? String(rawAud[0] ?? '') : '';
       const iss = typeof claims.iss === 'string' ? claims.iss : '';
@@ -143,26 +169,32 @@ async function verifyBotFrameworkToken(
         return null;
       }
 
+      // Connector signing keys carry channel endorsements. A valid Connector
+      // signature alone does not prove that the Activity.channelId is genuine.
+      // Teams is a published channel, so fail closed when the selected signing
+      // key is not explicitly endorsed for `msteams`.
+      const expectedChannelId = options?.expectedChannelId?.trim() || '';
+      if (process.env.NODE_ENV === 'production' || expectedChannelId) {
+        if (!isBotSigningKeyEndorsed(jwks, signingKeyId, expectedChannelId)) {
+          logger.warn('[MicrosoftTeams] Bot JWT signing key lacks channel endorsement', {
+            channelId: expectedChannelId || '(missing)',
+            kid: signingKeyId.slice(0, 24),
+          });
+          return null;
+        }
+      }
+
       // Bot Connector spec: JWT must carry serviceUrl and it must match
       // Activity.serviceUrl. In production missing claim/body is a reject;
       // in non-prod test traffic may lack the claim — validated only when present.
       const expectedServiceUrl = options?.expectedServiceUrl?.trim() || null;
-      const normalize = (value: string): string | null => {
-        try {
-          const u = new URL(value.trim());
-          const withoutHash = u.origin.toLowerCase() + u.pathname.replace(/\/+$/, '') + (u.search || '');
-          return withoutHash.replace(/\/$/, '') || u.origin.toLowerCase();
-        } catch {
-          return null;
-        }
-      };
       if (process.env.NODE_ENV === 'production') {
         if (!serviceUrl || !expectedServiceUrl) {
           logger.warn('[MicrosoftTeams] Bot JWT missing serviceUrl — rejecting in production');
           return null;
         }
-        const claimNorm = normalize(serviceUrl);
-        const activityNorm = normalize(expectedServiceUrl);
+        const claimNorm = normalizeTrustedMicrosoftTeamsServiceUrl(serviceUrl);
+        const activityNorm = normalizeTrustedMicrosoftTeamsServiceUrl(expectedServiceUrl);
         if (!claimNorm || !activityNorm) {
           logger.warn('[MicrosoftTeams] Bot JWT serviceUrl unparseable — rejecting', {
             claim: serviceUrl.slice(0, 80),
@@ -178,8 +210,8 @@ async function verifyBotFrameworkToken(
           return null;
         }
       } else if (serviceUrl && expectedServiceUrl) {
-        const claimNorm = normalize(serviceUrl);
-        const activityNorm = normalize(expectedServiceUrl);
+        const claimNorm = normalizeTrustedMicrosoftTeamsServiceUrl(serviceUrl);
+        const activityNorm = normalizeTrustedMicrosoftTeamsServiceUrl(expectedServiceUrl);
         if (!claimNorm || !activityNorm) {
           logger.warn('[MicrosoftTeams] Bot JWT serviceUrl unparseable — rejecting', {
             claim: serviceUrl.slice(0, 80),
@@ -213,7 +245,7 @@ async function verifyBotFrameworkToken(
 
 export async function assertMicrosoftTeamsActivityAuth(
   request: Request,
-  options?: { expectedServiceUrl?: string | null }
+  options?: { expectedServiceUrl?: string | null; expectedChannelId?: string | null }
 ): Promise<VerifiedTeamsIdentity | null> {
   // Test harness bypass — only in non-production
   if (process.env.NODE_ENV !== 'production' && request.headers.get('x-opsknight-teams-test') === '1') {

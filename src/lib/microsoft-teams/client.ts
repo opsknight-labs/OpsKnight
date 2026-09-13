@@ -2,6 +2,7 @@ import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
 import { buildMicrosoftTeamsIncidentCard, type MicrosoftTeamsIncidentCardInput } from './cards';
 import { getMicrosoftTeamsConfig } from './auth';
+import { normalizeTrustedMicrosoftTeamsServiceUrl } from './service-url';
 
 export type TeamsDeliveryResult = { success: true; providerMessageId?: string; conversationId?: string } | { success: false; error: string; statusCode?: number; retryAfterMs?: number; errorCode?: string };
 
@@ -136,7 +137,7 @@ async function sendBotActivity(args: {
   clientSecret: string;
   tenantId: string;
 }): Promise<TeamsDeliveryResult> {
-  const normalizedServiceUrl = args.serviceUrl.replace(/\/+$/, '');
+  const normalizedServiceUrl = normalizeTrustedMicrosoftTeamsServiceUrl(args.serviceUrl);
   if (!normalizedServiceUrl) {
     return { success: false, error: 'Teams serviceUrl is not configured for this Team — bot not installed', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
   }
@@ -249,10 +250,10 @@ async function updateBotActivity(args: {
   tenantId: string;
 }): Promise<TeamsDeliveryResult> {
   const rawServiceUrl = (args.serviceUrl ?? '').trim();
-  let serviceUrl = rawServiceUrl.replace(/\/+$/, '');
+  let serviceUrl = rawServiceUrl ? normalizeTrustedMicrosoftTeamsServiceUrl(rawServiceUrl) ?? '' : '';
   if (!serviceUrl) {
     const resolved = await resolveServiceUrlForDestination(args.tenantId, args.teamId);
-    serviceUrl = (resolved.serviceUrl ?? '').replace(/\/+$/, '');
+    serviceUrl = resolved.serviceUrl ? normalizeTrustedMicrosoftTeamsServiceUrl(resolved.serviceUrl) ?? '' : '';
   }
   if (!serviceUrl) {
     return { success: false, error: 'Teams serviceUrl is not configured — cannot update card', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
@@ -412,6 +413,16 @@ export type TeamsRscGrantState = {
   missing: string[];
   unknown: boolean;
   error?: string;
+  installations: TeamsRscInstallationState[];
+};
+
+export type TeamsRscInstallationState = {
+  teamId: string;
+  teamName: string | null;
+  granted: string[] | null;
+  missing: string[];
+  unknown: boolean;
+  error?: string;
 };
 
 export async function getTeamsGrantedRscPermissions(options?: {
@@ -422,16 +433,16 @@ export async function getTeamsGrantedRscPermissions(options?: {
 
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) {
-    return { granted: null, missing: required, unknown: true, error: 'NOT_CONFIGURED' };
+    return { granted: null, missing: required, unknown: true, error: 'NOT_CONFIGURED', installations: [] };
   }
   const tenantId = resolveTenantForCall(options?.explicitTenantId, resolved.config.tenantId);
   if (!tenantId) {
-    return { granted: null, missing: required, unknown: true, error: 'TENANT_REQUIRED' };
+    return { granted: null, missing: required, unknown: true, error: 'TENANT_REQUIRED', installations: [] };
   }
 
   const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
   if (!token) {
-    return { granted: null, missing: required, unknown: true, error: 'GRAPH_TOKEN_FAILED' };
+    return { granted: null, missing: required, unknown: true, error: 'GRAPH_TOKEN_FAILED', installations: [] };
   }
 
   // Try to list teams and aggregate permissionGrants per team. RSC grants are
@@ -439,39 +450,20 @@ export async function getTeamsGrantedRscPermissions(options?: {
   // If the tenant has no installed teams, we cannot verify → unknown (not "granted").
   try {
     const prismaForTeams = (await import('@/lib/prisma')).default as unknown as {
-      microsoftTeamsInstallation: { findMany: (a: unknown) => Promise<Array<{ teamId: string }>> };
+      microsoftTeamsInstallation: { findMany: (a: unknown) => Promise<Array<{ teamId: string; teamName: string | null }>> };
     };
     const installations = await prismaForTeams.microsoftTeamsInstallation.findMany({
       where: { tenantId, enabled: true },
-      select: { teamId: true },
-      take: 5,
+      select: { teamId: true, teamName: true },
+      orderBy: { teamName: 'asc' },
+      take: 100,
     });
 
-    // If no installations, try a lightweight Graph probe to verify consent.
-    // A 403 on `GET /teams` with ChannelSettings.Read.Group missing indicates not granted.
     if (installations.length === 0) {
-      const probe = await retryFetch(
-        'https://graph.microsoft.com/v1.0/teams?$top=1',
-        { headers: { Authorization: `Bearer ${token}` } },
-        { maxAttempts: 1, initialDelayMs: 400 },
-      );
-      if (probe.status === 401 || probe.status === 403) {
-        // Check error body for missing permission signal
-        const probeText = await probe.text().catch(() => '');
-        const needsConsent = /permission|consent|authorization/i.test(probeText);
-        if (needsConsent) {
-          return { granted: [], missing: required, unknown: false };
-        }
-        return { granted: null, missing: required, unknown: true, error: `http_${probe.status}` };
-      }
-      if (probe.ok) {
-        return { granted: null, missing: required, unknown: true, error: 'NO_TEAMS_INSTALLED' };
-      }
-      return { granted: null, missing: required, unknown: true, error: `http_${probe.status}` };
+      return { granted: null, missing: required, unknown: true, error: 'NO_TEAMS_INSTALLED', installations: [] };
     }
 
-    let allGranted: string[] | null = null;
-    let hadSuccess = false;
+    const installationStates: TeamsRscInstallationState[] = [];
 
     for (const inst of installations) {
       const res = await retryFetch(
@@ -480,42 +472,59 @@ export async function getTeamsGrantedRscPermissions(options?: {
         { maxAttempts: 2, initialDelayMs: 500 },
       );
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          return { granted: [], missing: required, unknown: false };
-        }
-        if (res.status === 404) continue; // Team may be deleted
+        const error = res.status === 401 || res.status === 403
+          ? 'CONSENT_REQUIRED'
+          : res.status === 404 ? 'TEAM_NOT_FOUND' : `http_${res.status}`;
+        installationStates.push({
+          teamId: inst.teamId,
+          teamName: inst.teamName,
+          granted: res.status === 401 || res.status === 403 ? [] : null,
+          missing: required,
+          unknown: res.status !== 401 && res.status !== 403,
+          error,
+        });
         continue;
       }
-      hadSuccess = true;
       try {
         // Graph `GET /teams/{id}/permissionGrants` returns `permission` (resource-specific
         // consent string like `ChannelMessage.Send.Group`), NOT `resourceSpecificPermission`.
-        const data = (await res.json()) as { value?: Array<{ permission?: string; resourceSpecificPermission?: string }> };
+        const data = (await res.json()) as { value?: Array<{ clientAppId?: string; permission?: string; resourceSpecificPermission?: string }> };
         const perms = (data.value ?? [])
+          .filter(grant => grant.clientAppId === resolved.config.clientId)
           .map(v => v.permission ?? v.resourceSpecificPermission)
           .filter((p): p is string => typeof p === 'string' && p.length > 0);
-        if (allGranted === null) allGranted = [];
-        for (const p of perms) {
-          if (!allGranted.includes(p)) allGranted.push(p);
-        }
+        installationStates.push({
+          teamId: inst.teamId,
+          teamName: inst.teamName,
+          granted: perms,
+          missing: required.filter(permission => !perms.includes(permission)),
+          unknown: false,
+        });
       } catch {
-        // JSON parse failure → treat as unknown
+        installationStates.push({ teamId: inst.teamId, teamName: inst.teamName, granted: null, missing: required, unknown: true, error: 'INVALID_RESPONSE' });
       }
     }
 
-    if (!hadSuccess) {
-      return { granted: null, missing: required, unknown: true, error: 'PERMISSION_GRANTS_UNAVAILABLE' };
-    }
-
-    const grantedList = allGranted ?? [];
-    const missing = required.filter(p => !grantedList.includes(p));
-    return { granted: grantedList, missing, unknown: false };
+    const unknown = installationStates.some(state => state.unknown);
+    const missing = [...new Set(installationStates.flatMap(state => state.missing))];
+    const knownStates = installationStates.filter(state => !state.unknown && state.granted);
+    const granted = unknown || knownStates.length === 0
+      ? null
+      : required.filter(permission => knownStates.every(state => state.granted!.includes(permission)));
+    return {
+      granted,
+      missing,
+      unknown,
+      error: unknown ? 'ONE_OR_MORE_INSTALLATIONS_UNVERIFIED' : undefined,
+      installations: installationStates,
+    };
   } catch (e) {
     return {
       granted: null,
       missing: required,
       unknown: true,
       error: e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200),
+      installations: [],
     };
   }
 }
@@ -559,51 +568,6 @@ export async function listMicrosoftTeamsForDiscovery(options?: {
       teams: [],
       error: e instanceof Error ? e.message.slice(0, 400) : String(e).slice(0, 400),
     };
-  }
-}
-
-/**
- * Reconcile probe for AMBIGUOUS send — lists recent channel messages and looks
- * for an Adaptive Card attachment whose id matches the incident id. This is
- * best-effort: Graph does not expose provider-side idempotency for `POST
- * /teams/{team}/channels/{channel}/messages`, so a timeout after a successful
- * server-side commit would otherwise cause a duplicate card on retry.
- */
-export async function probeMicrosoftTeamsForIncidentMessage(args: {
-  tenantId: string;
-  teamId: string;
-  channelId: string;
-  incidentId: string;
-}): Promise<{ messageId: string | null; error?: string }> {
-  const { tenantId, teamId, channelId, incidentId } = args;
-  const resolved = await getMicrosoftTeamsConfig();
-  if (!resolved) return { messageId: null, error: 'NOT_CONFIGURED' };
-  const tenant = resolveTenantForCall(tenantId, resolved.config.tenantId);
-  if (!tenant) return { messageId: null, error: 'TENANT_REQUIRED' };
-  const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenant);
-  if (!token) return { messageId: null, error: 'GRAPH_TOKEN_FAILED' };
-  try {
-    const res = await retryFetch(
-      `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(teamId)}/channels/${encodeURIComponent(channelId)}/messages?$top=25`,
-      { headers: { Authorization: `Bearer ${token}` } },
-      { maxAttempts: 2, initialDelayMs: 500 },
-    );
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      return { messageId: null, error: text.slice(0, 400) || `HTTP ${res.status}` };
-    }
-    const data = (await res.json()) as {
-      value?: Array<{ id?: string; attachments?: Array<{ id?: string }> }>;
-    };
-    for (const msg of data.value ?? []) {
-      const attachments = msg.attachments ?? [];
-      if (attachments.some(a => a.id === incidentId) && msg.id) {
-        return { messageId: msg.id };
-      }
-    }
-    return { messageId: null };
-  } catch (e) {
-    return { messageId: null, error: e instanceof Error ? e.message.slice(0, 400) : String(e).slice(0, 400) };
   }
 }
 

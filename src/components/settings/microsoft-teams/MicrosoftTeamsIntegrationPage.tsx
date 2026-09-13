@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { notify as toast } from '@/lib/toast';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
-import { Copy, Check, AlertTriangle, ShieldCheck, Hash, ExternalLink, Activity, Clock3 } from 'lucide-react';
+import { Copy, Check, AlertTriangle, ShieldCheck, Hash, ExternalLink, Activity, Clock3, Download } from 'lucide-react';
 
 type DestinationRow = {
   id: string;
@@ -31,7 +31,24 @@ type TeamsHealth = {
   lastErrorMessage: string | null;
   botHealthy: boolean | null;
   permissionsHealthy: boolean | null;
+  installations: Array<{
+    teamId: string;
+    teamName: string | null;
+    enabled: boolean;
+    destinationCount: number;
+    lastDeliveryAt: string | null;
+    lastDeliveryStatus: string | null;
+    lastErrorMessage: string | null;
+  }>;
 } | null;
+
+type InstallationPermissionState = {
+  teamId: string;
+  teamName: string | null;
+  missing: string[];
+  unknown: boolean;
+  error?: string;
+};
 
 export default function MicrosoftTeamsIntegrationPage({
   config,
@@ -40,6 +57,7 @@ export default function MicrosoftTeamsIntegrationPage({
   isAdmin,
   health,
   installationCount,
+  installationPermissions,
 }: {
   config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean } | null;
   destinations: DestinationRow[];
@@ -47,6 +65,7 @@ export default function MicrosoftTeamsIntegrationPage({
   isAdmin: boolean;
   health?: TeamsHealth;
   installationCount: number;
+  installationPermissions: InstallationPermissionState[];
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -170,6 +189,11 @@ export default function MicrosoftTeamsIntegrationPage({
         <p className="text-xs text-muted-foreground">The Phase 1 package requests only the required `ChannelSettings.Read.Group` RSC permission; card delivery uses Bot Connector credentials.</p>
         <pre className="max-h-64 overflow-auto rounded-lg border bg-muted/30 p-3 text-[11px] font-mono">{appManifestJson}</pre>
         <div className="flex gap-2">
+          {isConfigured && (
+            <Button asChild variant="default" size="sm" className="h-7 text-xs">
+              <a href="/api/microsoft-teams/package"><Download className="h-3.5 w-3.5 mr-1" />Download Teams app</a>
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => copy(appManifestJson, 'manifest')}>
             {copied === 'manifest' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
             <span className="ml-1">Copy manifest</span>
@@ -240,6 +264,44 @@ export default function MicrosoftTeamsIntegrationPage({
           {!health.lastErrorAt && !health.lastSuccessAt && (
             <p className="text-xs text-muted-foreground">No delivery history yet — send a test or trigger an incident to exercise the durable queue.</p>
           )}
+        </div>
+      )}
+
+      {isConfigured && installationPermissions.length > 0 && (
+        <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+          <h3 className="text-sm font-semibold">Installation readiness</h3>
+          <p className="text-xs text-muted-foreground">Consent and connectivity are resource-scoped. Every installed Team is reported independently.</p>
+          <div className="space-y-2">
+            {installationPermissions.map(installation => {
+              const healthy = !installation.unknown && installation.missing.length === 0;
+              const delivery = health?.installations.find(item => item.teamId === installation.teamId);
+              return (
+                <div key={installation.teamId} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{installation.teamName ?? installation.teamId}</div>
+                    <div className="truncate text-[11px] text-muted-foreground">{installation.teamId}</div>
+                    {!healthy && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        {installation.unknown
+                          ? installation.error ?? 'Permission state could not be verified.'
+                          : `Missing: ${installation.missing.join(', ')}`}
+                      </div>
+                    )}
+                    {delivery && (
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        {delivery.enabled ? `${delivery.destinationCount} destination(s)` : 'Bot removed'}
+                        {delivery.lastDeliveryAt ? ` · Last delivery ${delivery.lastDeliveryStatus?.toLowerCase()} ${new Date(delivery.lastDeliveryAt).toLocaleString()}` : ' · No delivery history'}
+                      </div>
+                    )}
+                    {delivery?.lastErrorMessage && <div className="mt-1 text-[11px] text-amber-700 break-words">{delivery.lastErrorMessage}</div>}
+                  </div>
+                  <Badge variant="outline" className={healthy ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700'}>
+                    {healthy ? 'Healthy' : installation.unknown ? 'Unknown' : 'Consent required'}
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

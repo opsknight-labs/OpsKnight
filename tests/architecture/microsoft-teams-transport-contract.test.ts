@@ -64,11 +64,11 @@ describe('microsoft teams transport contract', () => {
     const manifest = readFileSync('src/lib/microsoft-teams/app-manifest.ts', 'utf8');
     // Required must be exactly ChannelSettings.Read.Group — check the literal array, not comments
     expect(manifest).toMatch(/MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS\s*=\s*\[\s*'ChannelSettings\.Read\.Group'/);
-    // Required array must not declare ChannelMessage.Send.Group (optional array does)
+    // Graph message permissions are not part of the Phase-1 package.
     const requiredDecl = manifest.slice(manifest.indexOf('MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS'), manifest.indexOf('MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS'));
     expect(requiredDecl).not.toContain('ChannelMessage.Send.Group');
-    // ChannelMessage.Send.Group must be optional (legacy/Graph path)
-    expect(manifest).toMatch(/MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS[^]*ChannelMessage\.Send\.Group/);
+    expect(manifest).not.toContain("'ChannelMessage.Send.Group'");
+    expect(manifest).not.toContain("'ChannelMessage.Read.Group'");
     // Capabilities must gate on botInstalled, not on ChannelMessage.Send.Group (comment mention is allowed)
     const caps = readFileSync('src/lib/microsoft-teams/capabilities.ts', 'utf8');
     expect(caps).toContain("canPost = Boolean(botInstalled)");
@@ -77,6 +77,19 @@ describe('microsoft teams transport contract', () => {
     expect(caps).not.toContain("rsc.missing.includes('ChannelMessage");
     // healthy must be defined (was missing `healthy` reference in prior diff)
     expect(caps).toMatch(/const healthy\s*=\s*canPost/);
+    const client = readFileSync('src/lib/microsoft-teams/client.ts', 'utf8');
+    expect(client).toContain('.filter(grant => grant.clientAppId === resolved.config.clientId)');
+    expect(client).toContain('installations: installationStates');
+  });
+
+  it('binds inbound JWTs to the Teams channel endorsement and outbound tokens to trusted Connector hosts', () => {
+    const auth = readFileSync('src/lib/microsoft-teams/auth.ts', 'utf8');
+    const route = readFileSync('src/app/api/microsoft-teams/messages/route.ts', 'utf8');
+    const client = readFileSync('src/lib/microsoft-teams/client.ts', 'utf8');
+    expect(auth).toContain('isBotSigningKeyEndorsed');
+    expect(auth).toContain('expectedChannelId');
+    expect(route).toContain('expectedChannelId: activity.channelId');
+    expect(client).toContain('normalizeTrustedMicrosoftTeamsServiceUrl');
   });
 
   it('retires central Notification MICROSOFT_TEAMS_CHANNEL dispatch — single outbox is ExternalOperation', () => {

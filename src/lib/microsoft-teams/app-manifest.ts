@@ -14,17 +14,13 @@
 /** RSC permissions the app requests. Keep this minimal for Phase 1.
  * Incident cards are posted via Bot Framework Connector (serviceUrl/Bot token),
  * not via Graph RSC `ChannelMessage.Send.Group`. Only ChannelSettings.Read.Group
- * is required for Teams/channel discovery. ChannelMessage.Send.Group is retained
- * as optional for environments that still use Graph message APIs or for the
- * AMBIGUOUS reconcile probe (ChannelMessage.Read.Group) when enabled. */
+ * is required for Teams/channel discovery. */
 export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
   'ChannelSettings.Read.Group', // List teams / channels for destination picker (Graph)
 ] as const;
 
 export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',
-  'ChannelMessage.Send.Group', // Legacy/optional: Graph channel message send (Bot transport is primary)
-  'ChannelMessage.Read.Group', // Optional: AMBIGUOUS reconcile probe (not required for core delivery)
 ] as const;
 
 export const MICROSOFT_TEAMS_RSC_PERMISSIONS: string[] = [
@@ -41,7 +37,7 @@ export interface MicrosoftTeamsManifestOptions {
   botId: string; // Entra Application (client) ID — GUID
   appName?: string;
   appDescription?: string;
-  manifestId?: string; // GUID for manifest `id` field, defaults to stable placeholder
+  manifestId?: string; // GUID for manifest `id`; defaults to the stable Bot app ID
   /** Entra Application ID URI for SSO (e.g. `api://opsknight.example.com/<appId>`).
    * When omitted, `webApplicationInfo` is excluded — Teams validates it strictly
    * and a fabricated `api://host/botId` will fail submission. */
@@ -84,7 +80,7 @@ export function buildMicrosoftTeamsAppManifest({
   botId,
   appName = 'OpsKnight',
   appDescription = 'OpsKnight incident operations for Microsoft Teams',
-  manifestId = '11111111-1111-1111-1111-111111111111',
+  manifestId = botId,
   applicationIdUri,
   includeOptionalPermissions = false,
 }: MicrosoftTeamsManifestOptions): MicrosoftTeamsAppManifest {
@@ -111,9 +107,9 @@ export function buildMicrosoftTeamsAppManifest({
     bots: [
       {
         botId,
-        scopes: ['team', 'groupChat', 'personal'],
+        scopes: ['team'],
         commandLists: [],
-        isNotificationOnly: false,
+        isNotificationOnly: true,
       },
     ],
     validDomains: [new URL(origin).hostname],

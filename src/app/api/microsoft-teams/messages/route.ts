@@ -5,6 +5,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import { assertMicrosoftTeamsActivityAuth, getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
+import { normalizeTrustedMicrosoftTeamsServiceUrl } from '@/lib/microsoft-teams/service-url';
 
 /**
  * Bot Framework / Teams activity endpoint.
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
   // Pass Activity.serviceUrl for token claim binding (prevents token replay across serviceUrl boundaries).
   const verifiedIdentity = await assertMicrosoftTeamsActivityAuth(request, {
     expectedServiceUrl: activityServiceUrl,
+    expectedChannelId: activity.channelId ?? null,
   });
   if (!verifiedIdentity) {
     // In production without a valid Bearer token, reject with 401.
@@ -172,7 +174,9 @@ export async function POST(request: NextRequest) {
               upsert: (args: unknown) => Promise<unknown>;
             };
           };
-          const serviceUrl = typeof activity.serviceUrl === 'string' ? activity.serviceUrl.trim().slice(0, 512) : null;
+          const serviceUrl = typeof activity.serviceUrl === 'string'
+            ? normalizeTrustedMicrosoftTeamsServiceUrl(activity.serviceUrl)
+            : null;
           const conversationId = typeof activity.conversation?.id === 'string' ? activity.conversation.id.trim().slice(0, 512) : null;
           const botRecipientId = activity.recipient?.id?.trim().slice(0, 256) || null;
           await prismaAny.microsoftTeamsInstallation.upsert({
