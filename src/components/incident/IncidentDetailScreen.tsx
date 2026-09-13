@@ -2,13 +2,6 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { assertCanViewIncident, getUserPermissions } from '@/lib/rbac';
-import {
-  addNote,
-  addWatcher,
-  removeWatcher,
-  updateIncidentDescription,
-  updateIncidentStatus,
-} from '@/app/(app)/incidents/actions';
 import { getPostmortem } from '@/app/(app)/postmortems/actions';
 import IncidentHeader from '@/components/incident/IncidentHeader';
 import IncidentWatchers from '@/components/incident/detail/IncidentWatchers';
@@ -20,9 +13,18 @@ import IncidentResolutionSummary from '@/components/incident/detail/IncidentReso
 import IncidentPostmortemTabContent from '@/components/incident/detail/IncidentPostmortemTabContent';
 import IncidentDescriptionCard from '@/components/incident/detail/IncidentDescriptionCard';
 import IncidentSLABadges from '@/components/incident/detail/IncidentSLABadges';
-import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import IncidentCustomFieldsCard from '@/components/incident/detail/IncidentCustomFieldsCard';
 import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLinksCard';
+import {
+  acknowledgeIncidentDetail,
+  addIncidentDetailNote,
+  addIncidentDetailWatcher,
+  removeIncidentDetailWatcher,
+  reopenIncidentDetail,
+  suppressIncidentDetail,
+  updateIncidentDetailDescription,
+} from '@/components/incident/detail/actions';
+import { projectIncidentSlaState } from '@/lib/incident-sla/state';
 import { Badge } from '@/components/ui/shadcn/badge';
 import CopyButton from '@/components/common/CopyButton';
 import { getAppUrl } from '@/lib/app-url';
@@ -117,54 +119,13 @@ export default async function IncidentDetailScreen({
   const isWarRoomEnabled = Boolean(chatOpsConfig?.enabled && hasSlackWorkspace);
   const resolutionNote = incident.notes.find(note => note.content.startsWith('Resolution:')) ?? null;
 
-  async function handleAddNote(formData: FormData) {
-    'use server';
-    await addNote(id, formData.get('content') as string);
-  }
-
-  async function handleAcknowledge() {
-    'use server';
-    await updateIncidentStatus(id, 'ACKNOWLEDGED');
-  }
-
-  async function handleUnacknowledge() {
-    'use server';
-    await updateIncidentStatus(id, 'OPEN');
-  }
-
-  async function handleSuppress() {
-    'use server';
-    await updateIncidentStatus(id, 'SUPPRESSED');
-  }
-
-  async function handleUnsnooze() {
-    'use server';
-    await updateIncidentStatus(id, 'OPEN');
-  }
-
-  async function handleUnsuppress() {
-    'use server';
-    await updateIncidentStatus(id, 'OPEN');
-  }
-
-  async function handleAddWatcher(formData: FormData) {
-    'use server';
-    await addWatcher(
-      id,
-      formData.get('watcherId') as string,
-      formData.get('watcherRole') as string
-    );
-  }
-
-  async function handleRemoveWatcher(formData: FormData) {
-    'use server';
-    await removeWatcher(id, formData.get('watcherMemberId') as string);
-  }
-
-  async function handleUpdateDescription(description: string) {
-    'use server';
-    await updateIncidentDescription(id, description);
-  }
+  const handleAddNote = addIncidentDetailNote.bind(null, id);
+  const handleAcknowledge = acknowledgeIncidentDetail.bind(null, id);
+  const handleReopen = reopenIncidentDetail.bind(null, id);
+  const handleSuppress = suppressIncidentDetail.bind(null, id);
+  const handleAddWatcher = addIncidentDetailWatcher.bind(null, id);
+  const handleRemoveWatcher = removeIncidentDetailWatcher.bind(null, id);
+  const handleUpdateDescription = updateIncidentDetailDescription.bind(null, id);
 
   const statusGradient = (() => {
     switch (incident.status) {
@@ -291,10 +252,10 @@ export default async function IncidentDetailScreen({
         canAcknowledge={canManageIncident || canAcknowledgeIncident}
         snoozedUntil={incident.snoozedUntil}
         onAcknowledge={handleAcknowledge}
-        onUnacknowledge={handleUnacknowledge}
-        onUnsnooze={handleUnsnooze}
+        onUnacknowledge={handleReopen}
+        onUnsnooze={handleReopen}
         onSuppress={handleSuppress}
-        onUnsuppress={handleUnsuppress}
+        onUnsuppress={handleReopen}
         resolvingIncident={{
           id: incident.id,
           title: incident.title,
