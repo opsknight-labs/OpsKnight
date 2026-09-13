@@ -6,11 +6,10 @@ import { actorMetricReadScope } from '@/lib/authorization-filters';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getRealtimeChangeGeneration } from '@/lib/realtime-change-control-plane';
 import {
-  addResponderCacheLookup,
-  addResponderFailure,
-  observeResponderDuration,
-  setResponderInflight,
-} from '@/lib/metrics/operational/responder-registry';
+  addOperationalMetric,
+  observeOperationalHistogram,
+  setOperationalGauge,
+} from '@/lib/metrics/operational/registry';
 import { logger } from '@/lib/logger';
 
 export type ResponderDashboardSnapshot = {
@@ -97,7 +96,7 @@ function prune(now: number) {
 
 async function calculate(key: string, actor: AuthorizationActor): Promise<CacheEntry> {
   activeCalculations += 1;
-  setResponderInflight(activeCalculations);
+  setOperationalGauge('opsknight_responder_dashboard_inflight', activeCalculations);
   const startedAt = Date.now();
 
   try {
@@ -155,10 +154,13 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
     };
     cache.delete(key);
     cache.set(key, entry);
-    observeResponderDuration((Date.now() - startedAt) / 1000);
+    observeOperationalHistogram(
+      'opsknight_responder_dashboard_duration_seconds',
+      (Date.now() - startedAt) / 1000
+    );
     return entry;
   } catch (error) {
-    addResponderFailure();
+    addOperationalMetric('opsknight_responder_dashboard_failures_total', 1);
     logger.error('dashboard.responder.calculate_failed', {
       scopeFingerprint: fingerprint(key),
       durationMs: Date.now() - startedAt,
@@ -167,7 +169,7 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
     throw error;
   } finally {
     activeCalculations -= 1;
-    setResponderInflight(activeCalculations);
+    setOperationalGauge('opsknight_responder_dashboard_inflight', activeCalculations);
   }
 }
 
@@ -225,18 +227,18 @@ export async function getResponderDashboardSnapshot(
   );
 
   if (entry && entry.freshUntil > now && !generationChanged) {
-    addResponderCacheLookup('fresh');
+    addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'fresh' });
     return projectForUser(entry.snapshot, userId, 'fresh');
   }
 
   if (entry && entry.staleUntil > now) {
-    addResponderCacheLookup('stale');
+    addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'stale' });
     const refresh = startCalculation(key, actor);
     if (refresh) void refresh.catch(() => undefined);
     return projectForUser(entry.snapshot, userId, 'stale');
   }
 
-  addResponderCacheLookup('miss');
+  addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'miss' });
   const request = startCalculation(key, actor);
   if (!request) throw new ResponderDashboardUnavailableError();
   const calculated = await request;
@@ -247,5 +249,5 @@ export function resetResponderDashboardCacheForTests() {
   cache.clear();
   inFlight.clear();
   activeCalculations = 0;
-  setResponderInflight(0);
+  setOperationalGauge('opsknight_responder_dashboard_inflight', 0);
 }
