@@ -1,9 +1,12 @@
 import 'server-only';
 
 import prisma from '@/lib/prisma';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import {
+  getRequestActorContext,
+  type AuthenticatedRequestActorContext,
+} from '@/lib/request-actor-context';
 
 export type AppShellContext = {
   user: {
@@ -14,6 +17,7 @@ export type AppShellContext = {
     avatarUrl: string | null;
     gender: string | null;
     timeZone: string | null;
+    tokenVersion: number;
   };
   incidentCounts: {
     high: number;
@@ -26,34 +30,17 @@ export type AppShellContext = {
   statusDetail: string;
 };
 
-/**
- * Canonical server read model for authenticated application chrome.
- * Both desktop and mobile presentations must consume the same actor-filtered
- * incident status semantics instead of independently issuing unscoped counts.
- */
-export async function getAppShellContext(email: string): Promise<AppShellContext | null> {
-  const [user, actor] = await Promise.all([
-    prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        avatarUrl: true,
-        gender: true,
-        timeZone: true,
-      },
-    }),
-    getCurrentAuthorizationActor(),
-  ]);
-
-  if (!user) return null;
+/** Canonical actor-scoped server read model for authenticated application chrome. */
+export async function getAppShellContext(
+  requestContext?: AuthenticatedRequestActorContext | null
+): Promise<AppShellContext | null> {
+  const context = requestContext ?? (await getRequestActorContext());
+  if (!context) return null;
 
   const urgencyCounts = await prisma.incident.groupBy({
     by: ['urgency'],
     where: {
-      AND: [incidentReadWhere(actor), { status: { in: activeIncidentStatuses() } }],
+      AND: [incidentReadWhere(context.actor), { status: { in: activeIncidentStatuses() } }],
     },
     _count: { _all: true },
   });
@@ -86,7 +73,16 @@ export async function getAppShellContext(email: string): Promise<AppShellContext
   }
 
   return {
-    user,
+    user: {
+      id: context.user.id,
+      name: context.user.name,
+      email: context.user.email,
+      role: context.user.role,
+      avatarUrl: context.user.avatarUrl,
+      gender: context.user.gender,
+      timeZone: context.user.timeZone,
+      tokenVersion: context.user.tokenVersion,
+    },
     incidentCounts: { high, medium, low, active },
     systemStatus,
     statusLabel,
