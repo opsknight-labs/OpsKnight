@@ -29,6 +29,22 @@ const FORBIDDEN_LABELS = new Set([
 
 export const OPERATIONAL_METRICS = [
   {
+    name: 'opsknight_chatops_invokes_total', help: 'Authenticated ChatOps invokes by provider, verb, and outcome',
+    kind: 'counter', labels: ['provider', 'verb', 'result'], scope: 'counter', estimatedMaxSeries: 80,
+  },
+  {
+    name: 'opsknight_chatops_identity_resolution_total', help: 'ChatOps identity resolution outcomes',
+    kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
+  },
+  {
+    name: 'opsknight_chatops_authorization_denied_total', help: 'Denied ChatOps commands by provider and verb',
+    kind: 'counter', labels: ['provider', 'verb'], scope: 'counter', estimatedMaxSeries: 24,
+  },
+  {
+    name: 'opsknight_chatops_duplicate_total', help: 'Replayed ChatOps provider deliveries',
+    kind: 'counter', labels: ['provider', 'verb'], scope: 'counter', estimatedMaxSeries: 24,
+  },
+  {
     name: 'opsknight_dashboard_shell_duration_seconds',
     help: 'Time spent loading the bounded operational dashboard shell',
     kind: 'histogram',

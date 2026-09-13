@@ -19,6 +19,7 @@ type DestinationRow = {
   channelName?: string | null;
   teamName?: string | null;
   enabled: boolean;
+  interactiveEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   service?: { name: string } | null;
@@ -59,7 +60,7 @@ export default function MicrosoftTeamsIntegrationPage({
   installationCount,
   installationPermissions,
 }: {
-  config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean } | null;
+  config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean } | null;
   destinations: DestinationRow[];
   appManifestJson: string;
   isAdmin: boolean;
@@ -113,6 +114,15 @@ export default function MicrosoftTeamsIntegrationPage({
     } finally {
       setTesting(null);
     }
+  };
+
+  const onToggleInteractive = async (destination: DestinationRow) => {
+    const res = await fetch('/api/microsoft-teams/destinations', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serviceId: destination.serviceId, destinationId: destination.id, interactiveEnabled: !destination.interactiveEnabled }),
+    });
+    if (res.ok) { toast.success(`Interactive actions ${destination.interactiveEnabled ? 'disabled' : 'enabled'}.`); router.refresh(); }
+    else toast.error('Failed to update interactive actions.');
   };
 
   const copy = async (text: string, key: string) => {
@@ -170,6 +180,10 @@ export default function MicrosoftTeamsIntegrationPage({
             <p className="text-[11px] text-muted-foreground">Phase 1 uses a verified single-tenant Bot authority.</p>
           </div>
         </div>
+        <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+          <input type="checkbox" name="interactiveEnabled" defaultChecked={config?.interactiveEnabled ?? false} disabled={!isAdmin} className="mt-0.5" />
+          <span><span className="font-medium">Enable interactive incident actions</span><span className="block text-xs text-muted-foreground">Global kill switch for authenticated Teams ChatOps. Each destination must also opt in.</span></span>
+        </label>
         {isAdmin && (
           <Button type="submit" disabled={saving} className="h-9 text-xs font-semibold">
             {saving ? 'Saving…' : 'Save Teams Configuration'}
@@ -223,10 +237,12 @@ export default function MicrosoftTeamsIntegrationPage({
                   <div className="text-xs text-muted-foreground truncate">
                     {(d.teamName ?? d.teamId) + ' → ' + (d.channelName ?? d.channelId)}
                   </div>
+                  <div className="mt-1 text-[11px] text-muted-foreground">Interactive actions: {d.interactiveEnabled ? 'ON' : 'OFF'}</div>
                 </div>
-                <Button size="sm" variant="outline" className="h-7 text-xs shrink-0 ml-3" onClick={() => onTest(d.id)} disabled={testing === d.id}>
-                  {testing === d.id ? 'Sending…' : 'Send Test'}
-                </Button>
+                <div className="ml-3 flex shrink-0 gap-2">
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onToggleInteractive(d)} disabled={!isAdmin || !config?.interactiveEnabled}>{d.interactiveEnabled ? 'Disable actions' : 'Enable actions'}</Button>
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => onTest(d.id)} disabled={testing === d.id}>{testing === d.id ? 'Sending…' : 'Send Test'}</Button>
+                </div>
               </div>
             ))}
           </div>

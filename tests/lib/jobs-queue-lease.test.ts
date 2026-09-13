@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   updateMany: vi.fn(),
   update: vi.fn(),
   findUnique: vi.fn(),
+  externalFindUnique: vi.fn(),
+  processExternalOperation: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -15,11 +17,16 @@ vi.mock('@/lib/prisma', () => ({
       update: mocks.update,
       findUnique: mocks.findUnique,
     },
+    externalOperation: { findUnique: mocks.externalFindUnique },
   },
 }));
 
 vi.mock('@/lib/event-side-effects', () => ({
   processEventSideEffect: mocks.processEventSideEffect,
+}));
+
+vi.mock('@/lib/external-operations', () => ({
+  processExternalOperation: mocks.processExternalOperation,
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -70,5 +77,35 @@ describe('background job processing lease', () => {
     finishEffect();
     await expect(processing).resolves.toBe(true);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('reschedules Jira ambiguity but settles Teams ambiguity for explicit reconciliation', async () => {
+    const nextAttemptAt = new Date('2026-09-13T12:00:00.000Z');
+    mocks.processExternalOperation.mockRejectedValue(new Error('provider unavailable'));
+    mocks.externalFindUnique.mockResolvedValueOnce({
+      provider: 'JIRA', status: 'AMBIGUOUS', nextAttemptAt, leaseExpiresAt: null, lastError: 'retry',
+    });
+    const job = {
+      id: 'job-jira', type: 'EXTERNAL_OPERATION' as const, status: 'PROCESSING' as const,
+      attempts: 1, maxAttempts: 8, payload: { operationId: 'op-jira' },
+    };
+
+    await expect(processJob(job)).resolves.toBe(false);
+    expect(mocks.update).toHaveBeenCalledWith({
+      where: { id: 'job-jira' },
+      data: { status: 'PENDING', scheduledAt: nextAttemptAt, startedAt: null, attempts: 0, error: null },
+    });
+
+    vi.clearAllMocks();
+    mocks.updateMany.mockResolvedValue({ count: 1 });
+    mocks.update.mockResolvedValue({});
+    mocks.processExternalOperation.mockRejectedValue(new Error('ambiguous create'));
+    mocks.externalFindUnique.mockResolvedValueOnce({
+      provider: 'MICROSOFT_TEAMS', status: 'AMBIGUOUS', nextAttemptAt, leaseExpiresAt: null, lastError: 'reconcile',
+    });
+    await expect(processJob({ ...job, id: 'job-teams', payload: { operationId: 'op-teams' } })).resolves.toBe(false);
+    expect(mocks.update).not.toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: 'PENDING' }),
+    }));
   });
 });

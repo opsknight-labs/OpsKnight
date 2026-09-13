@@ -34,7 +34,11 @@ const marker = `OpsKnight CI ${new Date().toISOString()}`;
 const activity = text => ({
   type: 'message',
   attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: {
-    type: 'AdaptiveCard', version: '1.4', body: [{ type: 'TextBlock', text, wrap: true }],
+    type: 'AdaptiveCard', version: '1.5', body: [{ type: 'TextBlock', text, wrap: true }],
+    ...(process.env.TEAMS_E2E_INCIDENT_ID && process.env.TEAMS_E2E_DESTINATION_ID ? { actions: [{
+      type: 'Action.Execute', title: 'Verify Interactive Action', verb: 'opsknight.incident.refresh',
+      data: { v: 2, incidentId: process.env.TEAMS_E2E_INCIDENT_ID, destinationId: process.env.TEAMS_E2E_DESTINATION_ID, messageGeneration: Number(process.env.TEAMS_E2E_MESSAGE_GENERATION || '1') },
+    }] } : {}),
   } }],
   channelData: { tenant: { id: env.TEAMS_E2E_TENANT_ID } },
 });
@@ -58,4 +62,4 @@ const update = await fetch(`${serviceUrl.toString().replace(/\/+$/, '')}/v3/conv
   body: JSON.stringify({ ...activity(`${marker} — resolved`), id: created.activityId }),
 });
 if (!update.ok) throw new Error(`Bot update failed: HTTP ${update.status}`);
-console.log('Live Microsoft Teams smoke passed: discovery, create, and update succeeded.');
+console.log(`Live Microsoft Teams smoke passed: discovery, create, and update succeeded.${process.env.TEAMS_E2E_INCIDENT_ID ? ' Interactive verification card posted for a human client click.' : ''}`);

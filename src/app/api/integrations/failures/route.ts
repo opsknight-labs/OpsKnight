@@ -95,10 +95,15 @@ export async function POST(request: NextRequest) {
             select: { id: true },
           });
           if (!installation) throw new Error('Teams installation no longer corresponds to this destination');
+          const priorMessage = await tx.microsoftTeamsIncidentMessage.findUnique({
+            where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
+            select: { messageId: true },
+          });
+          const replacesCanonical = Boolean(priorMessage?.messageId && !priorMessage.messageId.startsWith('__reserved__:'));
           await tx.microsoftTeamsIncidentMessage.upsert({
             where: { incidentId_destinationId: { incidentId: existing.incidentId, destinationId } },
             create: { incidentId: existing.incidentId, destinationId, messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null },
-            update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null },
+            update: { messageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), tenantId: destination.tenantId, teamId: destination.teamId, channelId: destination.channelId, createState: 'NONE', createOperationId: null, ...(replacesCanonical ? { messageGeneration: { increment: 1 } } : {}) },
           });
           await tx.externalOperation.update({ where: { id: body.id }, data: { status: 'COMPLETED', externalId: body.providerMessageId.trim(), externalKey: body.providerMessageId.trim(), resultPayload: { providerMessageId: body.providerMessageId.trim(), conversationId: body.conversationId.trim(), reconciledManually: true }, lastError: null } });
           await emitAuditEvent({

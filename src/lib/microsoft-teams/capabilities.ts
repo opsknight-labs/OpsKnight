@@ -60,11 +60,12 @@ export async function getMicrosoftTeamsCapabilities(options?: {
   // SINGLE requires tenantId; MULTI may infer from installations — but for capability check we require explicit resolution
   const prismaAny = (await import('@/lib/prisma')).default as unknown as {
     microsoftTeamsInstallation: { count: (a: unknown) => Promise<number> };
+    microsoftTeamsDestination: { count: (a: unknown) => Promise<number> };
   };
   let botInstalled = false;
   try {
     const count = await prismaAny.microsoftTeamsInstallation.count({
-      where: { tenantId: tenantId || undefined, enabled: true },
+      where: { tenantId: tenantId || undefined, enabled: true, serviceUrl: { not: null }, botRecipientId: { not: null } },
     } as never);
     botInstalled = count > 0;
   } catch {
@@ -112,6 +113,10 @@ export async function getMicrosoftTeamsCapabilities(options?: {
   // Healthy means the Bot can post — RSC unknown does not block Bot transport.
   const healthy = canPost;
 
+  const interactiveDestinationCount = resolved.config.interactiveEnabled
+    ? await prismaAny.microsoftTeamsDestination.count({ where: { tenantId: tenantId || undefined, enabled: true, interactiveEnabled: true, installation: { enabled: true } } }).catch(() => 0)
+    : 0;
+
   return {
     connected: true,
     botInstalled,
@@ -120,7 +125,7 @@ export async function getMicrosoftTeamsCapabilities(options?: {
     canCreateChannel: false,
     canCreateMeeting: false,
     canManageMembers: false,
-    canUseChatOps: false,
+    canUseChatOps: interactiveDestinationCount > 0,
     healthy,
     failureCode,
     failureReason,

@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
-import { assertMicrosoftTeamsActivityAuth, getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
+import { assertMicrosoftTeamsActivityAuth, enforceMicrosoftTeamsTenantAllowlist, getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
 import { normalizeTrustedMicrosoftTeamsServiceUrl } from '@/lib/microsoft-teams/service-url';
 import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
 
@@ -13,9 +13,10 @@ import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle'
  *
  * `POST /api/microsoft-teams/messages`
  *
- * All `tenantId` / `teamId` / `channelId` values are derived from the verified
- * Bot Framework JWT (via `assertMicrosoftTeamsActivityAuth`), never from raw
- * JSON. The Azure Bot resource's messaging endpoint should point here; the
+ * The Bot Framework JWT authenticates the Connector, app, channel and service
+ * URL. Teams routing context is then derived from the authenticated activity
+ * and checked against configured installations and destinations. The Azure Bot
+ * resource's messaging endpoint should point here; the
  * Teams app manifest does not carry a `botsEndpoint` property.
  *
  * Phase 1 handles:
@@ -29,7 +30,7 @@ type TeamsActivity = {
   id?: string;
   channelId?: string;
   serviceUrl?: string;
-  from?: { id?: string; name?: string };
+  from?: { id?: string; aadObjectId?: string; name?: string };
   recipient?: { id?: string };
   conversation?: { id?: string; name?: string; isGroup?: boolean };
   channelData?: {
@@ -41,6 +42,7 @@ type TeamsActivity = {
   membersRemoved?: Array<{ id?: string }>;
   name?: string;
   value?: unknown;
+  replyToId?: string;
 };
 
 function isTruthyString(v: unknown): v is string {
@@ -48,6 +50,10 @@ function isTruthyString(v: unknown): v is string {
 }
 
 export async function POST(request: NextRequest) {
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+    return NextResponse.json({ error: 'Teams activity payload is too large' }, { status: 413 });
+  }
   let body: unknown;
   try {
     body = await request.json();
@@ -77,48 +83,25 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // For non-test identities, cross-check body tenant against verified JWT tid when present.
-  // Spec Phase 7: hard reject on mismatch — never fall back to body value, and emit a denial audit.
+  // Connector JWT authentication above establishes that this activity is
+  // genuine Teams traffic. The customer tenant is defined by Teams channelData,
+  // then checked against OpsKnight configuration/installations/destinations.
   const bodyTenantId = activity.channelData?.tenant?.id?.trim() || '';
-  if (verifiedIdentity && verifiedIdentity.tenantId && verifiedIdentity.tenantId !== '__test__') {
-    if (bodyTenantId && bodyTenantId !== verifiedIdentity.tenantId) {
-      logger.warn('[MicrosoftTeams] Body tenantId does not match verified JWT tid — rejecting', {
-        bodyTenantId,
-        verifiedTenantId: verifiedIdentity.tenantId,
-      });
-      try {
-        await emitAuditEvent({
-          action: 'microsoftTeams.installation.tenant_mismatch',
-          source: 'INTEGRATION',
-          target: { type: 'SYSTEM_CONFIG', id: verifiedIdentity.tenantId },
-          actor: { type: 'SYSTEM' },
-          metadata: {
-            provider: 'MICROSOFT_TEAMS',
-            verifiedTenantId: verifiedIdentity.tenantId,
-            bodyTenantId,
-            teamId: activity.channelData?.team?.id?.trim() || null,
-            channelId: activity.channelData?.channel?.id?.trim() || null,
-            activityType,
-            activityId: activity.id ?? null,
-          },
-        });
-      } catch {
-        // audit is best-effort — do not mask the 403
-      }
-      return NextResponse.json(
-        { error: 'Tenant identifier mismatch', code: 'TENANT_MISMATCH' },
-        { status: 403 }
-      );
-    }
-  }
 
   try {
+    if (activityType === 'invoke' && activity.name === 'adaptiveCard/action') {
+      const tenantId = bodyTenantId;
+      if (!tenantId) return NextResponse.json({ error: 'Teams tenant is required' }, { status: 403 });
+      const configured = await getMicrosoftTeamsConfig();
+      if (!configured) return NextResponse.json({ error: 'Microsoft Teams is not configured' }, { status: 403 });
+      const allowlist = await enforceMicrosoftTeamsTenantAllowlist(tenantId, configured.config);
+      if (!allowlist.allowed) return NextResponse.json({ error: allowlist.reason, code: allowlist.code }, { status: 403 });
+      const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
+      const response = await handleMicrosoftTeamsAdaptiveCardAction({ activity, verifiedTenantId: tenantId });
+      return NextResponse.json(response, { status: 200 });
+    }
     if (activityType === 'conversationUpdate') {
-      // Prefer verified JWT tid when available; fall back to body only for test harness.
-      const tenantId =
-        verifiedIdentity && verifiedIdentity.tenantId !== '__test__' && verifiedIdentity.tenantId
-          ? verifiedIdentity.tenantId
-          : bodyTenantId;
+      const tenantId = bodyTenantId;
       const teamId = activity.channelData?.team?.id?.trim() || activity.conversation?.id?.trim();
       const channelId = activity.channelData?.channel?.id?.trim();
       const teamName = activity.channelData?.team?.name?.trim() || activity.conversation?.name?.trim() || null;
@@ -126,7 +109,7 @@ export async function POST(request: NextRequest) {
       if (isTruthyString(tenantId) && isTruthyString(teamId)) {
         // Phase 7/13: tenant allowlist — SINGLE must match configured tenant, MULTI allows any verified tid.
         // We do this *after* deriving tenantId so the test harness (__test__) still works.
-        const isTestTenant = tenantId === '__test__' && process.env.NODE_ENV !== 'production';
+        const isTestTenant = verifiedIdentity?.appId === '__test__' && process.env.NODE_ENV !== 'production';
         if (!isTestTenant) {
           const configForAllowlist = await getMicrosoftTeamsConfig();
           if (configForAllowlist) {
@@ -146,7 +129,7 @@ export async function POST(request: NextRequest) {
                     actor: { type: 'SYSTEM' },
                     metadata: {
                       provider: 'MICROSOFT_TEAMS',
-                      verifiedTenantId: verifiedIdentity?.tenantId ?? null,
+                      connectorAppId: verifiedIdentity?.appId ?? null,
                       bodyTenantId,
                       tenantId,
                       teamId,
@@ -215,7 +198,7 @@ export async function POST(request: NextRequest) {
                 teamName,
                 channelId,
                 activityId: activity.id ?? null,
-                verifiedTenantId: verifiedIdentity?.tenantId ?? null,
+                connectorAppId: verifiedIdentity?.appId ?? null,
               },
             });
           } catch {}
@@ -226,7 +209,7 @@ export async function POST(request: NextRequest) {
               select: { id: true },
             });
             await tx.microsoftTeamsInstallation.updateMany({ where: { tenantId, teamId }, data: { enabled: false } });
-            await tx.microsoftTeamsDestination.updateMany({ where: { tenantId, teamId }, data: { enabled: false } });
+            await tx.microsoftTeamsDestination.updateMany({ where: { tenantId, teamId }, data: { enabled: false, interactiveEnabled: false } });
             return revokeMicrosoftTeamsOperations(tx, {
               destinationIds: destRows.map(row => row.id),
               reason: 'Microsoft Teams app was removed from this Team',
@@ -246,7 +229,7 @@ export async function POST(request: NextRequest) {
                 teamId,
                 channelId,
                 activityId: activity.id ?? null,
-                verifiedTenantId: verifiedIdentity?.tenantId ?? null,
+                connectorAppId: verifiedIdentity?.appId ?? null,
               },
             });
           } catch {}

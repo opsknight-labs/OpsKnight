@@ -29,6 +29,9 @@ jobs:
       TEAMS_E2E_TEAM_ID: ${{ secrets.TEAMS_E2E_TEAM_ID }}
       TEAMS_E2E_CHANNEL_ID: ${{ secrets.TEAMS_E2E_CHANNEL_ID }}
       TEAMS_E2E_SERVICE_URL: ${{ secrets.TEAMS_E2E_SERVICE_URL }}
+      TEAMS_E2E_INCIDENT_ID: ${{ secrets.TEAMS_E2E_INCIDENT_ID }}
+      TEAMS_E2E_DESTINATION_ID: ${{ secrets.TEAMS_E2E_DESTINATION_ID }}
+      TEAMS_E2E_MESSAGE_GENERATION: ${{ secrets.TEAMS_E2E_MESSAGE_GENERATION }}
     steps:
       - uses: actions/checkout@v7
         with:

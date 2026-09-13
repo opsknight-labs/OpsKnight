@@ -1,6 +1,6 @@
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
-import { buildMicrosoftTeamsIncidentCard, type MicrosoftTeamsIncidentCardInput } from './cards';
+import { buildMicrosoftTeamsIncidentCard, type MicrosoftTeamsCardOptions, type MicrosoftTeamsIncidentCardInput } from './cards';
 import { getMicrosoftTeamsConfig } from './auth';
 import { normalizeTrustedMicrosoftTeamsServiceUrl } from './service-url';
 
@@ -335,6 +335,7 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
   disableActions?: boolean;
   beforeCreateAttempt?: () => Promise<void>;
+  interactive?: MicrosoftTeamsCardOptions['interactive'];
 }): Promise<TeamsDeliveryResult> {
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
@@ -343,7 +344,7 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
 
   const cardObj = buildMicrosoftTeamsIncidentCard(
     { incident: args.incident, eventType: args.eventType },
-    { disableActions: args.disableActions },
+    { disableActions: args.disableActions, interactive: args.interactive },
   );
   // Resolve serviceUrl + botRecipientId from Installation (verified via Bot Framework conversationUpdate).
   // Send path uses tenantId+teamId to avoid trusting channel-scoped caller input alone.
@@ -379,6 +380,7 @@ export async function updateMicrosoftTeamsIncidentCard(args: {
   incident: MicrosoftTeamsIncidentCardInput['incident'];
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
   disableActions?: boolean;
+  interactive?: MicrosoftTeamsCardOptions['interactive'];
 }): Promise<TeamsDeliveryResult> {
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
@@ -387,7 +389,7 @@ export async function updateMicrosoftTeamsIncidentCard(args: {
 
   const cardObj = buildMicrosoftTeamsIncidentCard(
     { incident: args.incident, eventType: args.eventType },
-    { disableActions: args.disableActions },
+    { disableActions: args.disableActions, interactive: args.interactive },
   );
   return updateBotActivity({
     teamId: args.teamId,

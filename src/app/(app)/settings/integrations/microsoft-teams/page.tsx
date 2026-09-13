@@ -27,6 +27,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         tenantId: string | null;
         tenantMode: 'SINGLE' | 'MULTI';
         enabled: boolean;
+        interactiveEnabled: boolean;
         createdAt: Date;
         updatedAt: Date;
         updatedBy?: string | null;
@@ -42,6 +43,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         channelName?: string | null;
         teamName?: string | null;
         enabled: boolean;
+        interactiveEnabled: boolean;
         createdAt: Date;
         updatedAt: Date;
         service?: { name: string } | null;
@@ -172,7 +174,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
       />
 
       <MicrosoftTeamsIntegrationPage
-        config={config as unknown as { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean } | null}
+        config={config as unknown as { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean } | null}
         destinations={destinations as unknown as MicrosoftTeamsDestinationRow[]}
         appManifestJson={manifestJson}
         isAdmin={permissions.isAdmin}
@@ -193,6 +195,7 @@ type MicrosoftTeamsDestinationRow = {
   channelName?: string | null;
   teamName?: string | null;
   enabled: boolean;
+  interactiveEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   service?: { name: string } | null;

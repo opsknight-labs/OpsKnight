@@ -20,6 +20,7 @@ import {
   enqueueIncidentUpdateSideEffects,
   enqueueWarRoomSideEffects,
 } from '@/lib/event-outbox';
+import { normalizeIncidentPriority } from '@/lib/incidents/priority';
 
 export type ChatOpsLifecycleCommand = Extract<
   IncidentLifecycleCommand,
@@ -42,7 +43,7 @@ export type ChatOpsLifecycleInput = {
   idempotency?: IdempotencyContext;
 };
 
-export type ChatOpsIncidentAuthorizationAction = 'READ' | 'NOTE' | 'MANAGE';
+export type ChatOpsIncidentAuthorizationAction = 'READ' | 'NOTE' | 'ACKNOWLEDGE' | 'MANAGE';
 
 /** Central authorization adapter for non-lifecycle ChatOps commands. */
 export async function authorizeChatOpsIncident(
@@ -94,6 +95,8 @@ export async function authorizeChatOpsIncidentInTransaction(
       ? AUTHORIZATION_ACTIONS.INCIDENT_READ
       : requested === 'NOTE'
         ? AUTHORIZATION_ACTIONS.INCIDENT_NOTE
+        : requested === 'ACKNOWLEDGE'
+          ? AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE
         : AUTHORIZATION_ACTIONS.INCIDENT_MANAGE;
   const decision = authorize({
     actor: {
@@ -113,10 +116,52 @@ export async function authorizeChatOpsIncidentInTransaction(
     });
 }
 
+function chatOpsProviderDisplayLabel(provider?: string): string {
+  if (provider === 'MICROSOFT_TEAMS') return 'Microsoft Teams';
+  return 'Slack';
+}
+
+export async function executeChatOpsNote(input: {
+  incidentId: string;
+  actor: ChatOpsLifecycleActor;
+  content: string;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
+  idempotency?: IdempotencyContext;
+}): Promise<{ created: boolean }> {
+  const trimmed = input.content.trim();
+  if (!trimmed) {
+    throw new AppError({ code: 'INCIDENT_INVALID_ARGUMENT', userMessage: 'Note content is required.' });
+  }
+  return runSerializableTransaction(async tx => {
+    await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'NOTE');
+    const label = chatOpsProviderDisplayLabel(input.provider);
+    const execution = await executeIdempotentOperation(tx, {
+      scope: 'chatops-note',
+      context: input.idempotency,
+      payload: { incidentId: input.incidentId, userId: input.actor.id, content: trimmed },
+      execute: async () => {
+        await tx.incidentNote.create({
+          data: { incidentId: input.incidentId, userId: input.actor.id, content: trimmed },
+        });
+        await tx.incidentEvent.create({
+          data: {
+            incidentId: input.incidentId,
+            type: 'COMMENT',
+            message: `Note added via ${label} ChatOps by ${input.actor.name}:\n${trimmed}`,
+          },
+        });
+        return { created: true };
+      },
+    });
+    return execution.value;
+  });
+}
+
 export async function executeChatOpsAssignment(input: {
   incidentId: string;
   actor: ChatOpsLifecycleActor;
   targetUserId: string;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
   idempotency?: IdempotencyContext;
 }): Promise<{ changed: boolean }> {
   return runSerializableTransaction(async tx => {
@@ -144,11 +189,12 @@ export async function executeChatOpsAssignment(input: {
           where: { id: input.incidentId },
           data: { assigneeId: target.id, teamId: null },
         });
+        const label = chatOpsProviderDisplayLabel(input.provider);
         await tx.incidentEvent.create({
           data: {
             incidentId: input.incidentId,
             type: 'ASSIGNMENT',
-            message: `Assigned to ${input.actor.name} via Slack button`,
+            message: `Assigned to ${input.actor.name} via ${label} ChatOps`,
           },
         });
         await enqueueIncidentUpdateSideEffects(tx, input.incidentId, [
@@ -162,6 +208,58 @@ export async function executeChatOpsAssignment(input: {
           { effect: 'WAR_ROOM_INVITE_USER', userId: target.id },
           { effect: 'WAR_ROOM_TOPIC' },
         ]);
+        return { changed: true };
+      },
+    });
+    return execution.value;
+  });
+}
+
+export async function executeChatOpsPriority(input: {
+  incidentId: string;
+  actor: ChatOpsLifecycleActor;
+  priority: string;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
+  idempotency?: IdempotencyContext;
+}): Promise<{ changed: boolean }> {
+  const priority = normalizeIncidentPriority(input.priority);
+  if (!priority) throw new AppError({ code: 'INCIDENT_INVALID_ARGUMENT', userMessage: 'Choose a valid incident priority.' });
+  return runSerializableTransaction(async tx => {
+    await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'MANAGE');
+    const incident = await tx.incident.findUnique({ where: { id: input.incidentId }, select: { priority: true } });
+    if (!incident) throw new AppError({ code: 'INCIDENT_NOT_FOUND', userMessage: 'Incident not found.' });
+    const execution = await executeIdempotentOperation(tx, {
+      scope: 'chatops-priority', context: input.idempotency,
+      payload: { incidentId: input.incidentId, priority },
+      execute: async () => {
+        if (incident.priority === priority) return { changed: false };
+        await tx.incident.update({ where: { id: input.incidentId }, data: { priority } });
+        await tx.incidentEvent.create({ data: { incidentId: input.incidentId, type: 'STATUS_CHANGE', message: `Priority changed to ${priority} via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps by ${input.actor.name}` } });
+        await enqueueIncidentUpdateSideEffects(tx, input.incidentId, ['INCIDENT_UPDATE_SERVICE_NOTIFICATION']);
+        return { changed: true };
+      },
+    });
+    return execution.value;
+  });
+}
+
+export async function executeChatOpsJoinResponder(input: {
+  incidentId: string;
+  actor: ChatOpsLifecycleActor;
+  provider?: 'SLACK' | 'MICROSOFT_TEAMS';
+  idempotency?: IdempotencyContext;
+}): Promise<{ changed: boolean }> {
+  return runSerializableTransaction(async tx => {
+    await authorizeChatOpsIncidentInTransaction(tx, input.incidentId, input.actor.id, 'READ');
+    const execution = await executeIdempotentOperation(tx, {
+      scope: 'chatops-join-responder', context: input.idempotency,
+      payload: { incidentId: input.incidentId, userId: input.actor.id },
+      execute: async () => {
+        const existing = await tx.incidentWatcher.findUnique({ where: { incidentId_userId: { incidentId: input.incidentId, userId: input.actor.id } } });
+        if (existing) return { changed: false };
+        await tx.incidentWatcher.create({ data: { incidentId: input.incidentId, userId: input.actor.id, role: 'FOLLOWER' } });
+        await tx.incidentEvent.create({ data: { incidentId: input.incidentId, type: 'COMMENT', message: `${input.actor.name} joined as a responder via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps` } });
+        await enqueueIncidentUpdateSideEffects(tx, input.incidentId, ['INCIDENT_UPDATE_SERVICE_NOTIFICATION']);
         return { changed: true };
       },
     });

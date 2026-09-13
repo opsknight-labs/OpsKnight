@@ -16,8 +16,11 @@ import { resolveUserActor } from '../authorization-actors';
 import { AUTHORIZATION_ACTIONS, authorize } from '../authorization-policy';
 import { executeEscalation } from './index';
 import type { EscalationExecutionResult } from './types';
+import { createHash } from 'node:crypto';
+import type { IdempotencyContext } from '@/lib/idempotency';
+import { Prisma } from '@prisma/client';
 
-export type ManualEscalationSource = 'WEB' | 'MOBILE' | 'REST_API' | 'SLACK';
+export type ManualEscalationSource = 'WEB' | 'MOBILE' | 'REST_API' | 'SLACK' | 'MICROSOFT_TEAMS';
 
 export interface ManualEscalationActor {
   /** The OpsKnight user id, already resolved from the transport's identity. */
@@ -99,6 +102,7 @@ export async function requestIncidentEscalation(input: {
   incidentId: string;
   actor: ManualEscalationActor;
   source: ManualEscalationSource;
+  idempotency?: IdempotencyContext;
 }): Promise<ManualEscalationResult> {
   await authorizeIncidentEscalation({
     actorId: input.actor.userId,
@@ -107,7 +111,7 @@ export async function requestIncidentEscalation(input: {
 
   const incident = await prisma.incident.findUnique({
     where: { id: input.incidentId },
-    select: { status: true },
+    select: { status: true, escalationGeneration: true, currentEscalationStep: true },
   });
   if (!incident) return { requested: false, reason: 'INCIDENT_NOT_FOUND' };
 
@@ -117,11 +121,22 @@ export async function requestIncidentEscalation(input: {
     return { requested: false, reason: 'INCIDENT_NOT_ESCALATABLE' };
   }
 
-  await recordManualEscalationRequest(input);
+  const planned = await planManualEscalation(input, {
+    generation: incident.escalationGeneration ?? 0,
+    stepIndex: incident.currentEscalationStep ?? 0,
+  });
+  if (planned.result) return { requested: true, execution: planned.result };
+  if (planned.created) await recordManualEscalationRequest(input);
 
   // No generation is passed: a person is asking for the incident's *current*
   // escalation to advance, not for a specific historical run to resume.
-  const execution = await executeEscalation(input.incidentId);
+  const execution = await executeEscalation(input.incidentId, planned.stepIndex, { generation: planned.generation });
+  if (planned.recordId) {
+    await prisma.backgroundJob.updateMany({
+      where: { id: planned.recordId },
+      data: { payload: { ...planned.payload, result: JSON.parse(JSON.stringify(execution)) } as Prisma.InputJsonObject },
+    });
+  }
 
   logger.info('escalation.manual.requested', {
     incidentId: input.incidentId,
@@ -131,6 +146,55 @@ export async function requestIncidentEscalation(input: {
   });
 
   return { requested: true, execution };
+}
+
+type ManualEscalationPlan = {
+  recordId: string | null;
+  created: boolean;
+  generation: number;
+  stepIndex: number;
+  payload: Record<string, unknown>;
+  result: EscalationExecutionResult | null;
+};
+
+async function planManualEscalation(
+  input: { incidentId: string; actor: ManualEscalationActor; source: ManualEscalationSource; idempotency?: IdempotencyContext },
+  cursor: { generation: number; stepIndex: number },
+): Promise<ManualEscalationPlan> {
+  if (!input.idempotency) {
+    return { recordId: null, created: true, ...cursor, payload: {}, result: null };
+  }
+  const key = input.idempotency.key.trim();
+  const principalId = input.idempotency.principalId.trim();
+  if (!key || !principalId) throw new Error('Invalid escalation idempotency context');
+  const digest = createHash('sha256').update(`${principalId}:${key}`).digest('hex');
+  const recordId = `idem:manual-escalation:${digest}`;
+  const payload = {
+    task: 'MANUAL_ESCALATION_IDEMPOTENCY', incidentId: input.incidentId,
+    actorId: input.actor.userId, source: input.source, requestId: key, principalId,
+    generation: cursor.generation, stepIndex: cursor.stepIndex,
+  };
+  try {
+    await prisma.backgroundJob.create({
+      data: {
+        id: recordId, type: 'SCHEDULED_TASK', status: 'COMPLETED', scheduledAt: new Date(),
+        completedAt: new Date(), maxAttempts: 1, payload,
+      },
+    });
+    return { recordId, created: true, ...cursor, payload, result: null };
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+    const existing = await prisma.backgroundJob.findUnique({ where: { id: recordId }, select: { payload: true } });
+    const saved = existing?.payload as Record<string, unknown> | null | undefined;
+    if (!saved || saved.incidentId !== input.incidentId || saved.actorId !== input.actor.userId || saved.source !== input.source) {
+      throw new Error('Escalation idempotency key conflict');
+    }
+    return {
+      recordId, created: false,
+      generation: Number(saved.generation), stepIndex: Number(saved.stepIndex), payload: saved,
+      result: (saved.result as EscalationExecutionResult | undefined) ?? null,
+    };
+  }
 }
 
 async function recordManualEscalationRequest(input: {
@@ -145,7 +209,7 @@ async function recordManualEscalationRequest(input: {
   await Promise.all([
     emitAuditEvent({
       action: 'incident.escalation.requested',
-      source: input.source === 'SLACK' ? 'INTEGRATION' : 'UI',
+      source: input.source === 'SLACK' || input.source === 'MICROSOFT_TEAMS' ? 'INTEGRATION' : 'UI',
       target: { type: 'INCIDENT', id: input.incidentId },
       actor: { type: 'USER', id: input.actor.userId, name: input.actor.name ?? null },
       metadata: { source: input.source },

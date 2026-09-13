@@ -116,4 +116,32 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     expect(JSON.stringify(triggered.body)).toContain('Created');
     expect(JSON.stringify(triggered.body)).toContain('UTC');
   });
+
+  it('renders strict Phase 2 actions only when explicitly enabled and capability-allowed', () => {
+    const card = buildMicrosoftTeamsIncidentCard(
+      { incident: incident(), eventType: 'triggered' },
+      { interactive: { destinationId: 'dest-1', messageGeneration: 3, capabilities: { canAcknowledge: true, canRead: true } } },
+    );
+    const json = JSON.stringify(card);
+    expect(json).toContain('Action.Execute');
+    expect(json).toContain('opsknight.incident.ack');
+    expect(json).toContain('opsknight.incident.who');
+    expect(json).not.toContain('opsknight.incident.resolve');
+    expect(json).toContain('"messageGeneration":3');
+    expect(card.refresh).toBeDefined();
+  });
+
+  it('keeps at most three primary actions and scopes personalized refresh', () => {
+    const card = buildMicrosoftTeamsIncidentCard(
+      { incident: incident(), eventType: 'triggered' },
+      { interactive: { destinationId: 'dest-1', messageGeneration: 4, refreshUserIds: ['29:alice'], capabilities: {
+        canAcknowledge: true, canAssignSelf: true, canEscalate: true, canAddNote: true,
+        canSetPriority: true, canSnooze: true, canJoinResponder: true, canRead: true,
+      } } },
+    );
+    const actions = card.actions as Array<{ title: string; mode?: string }>;
+    expect(actions.filter(action => action.mode !== 'secondary')).toHaveLength(3);
+    expect(actions.find(action => action.title === 'Current responders')?.mode).toBe('secondary');
+    expect((card.refresh as { userIds: string[] }).userIds).toEqual(['29:alice']);
+  });
 });

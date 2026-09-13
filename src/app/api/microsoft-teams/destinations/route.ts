@@ -16,12 +16,35 @@ const upsertSchema = z.object({
   channelId: z.string().trim().min(1).max(1_024),
   channelName: z.string().trim().max(255).nullable().optional(),
   teamName: z.string().trim().max(255).nullable().optional(),
+  interactiveEnabled: z.boolean().optional(),
 });
 
 const deleteSchema = z.object({
   serviceId: z.string().trim().min(1).max(191),
   destinationId: z.string().trim().min(1).max(191).optional(),
 });
+const interactiveSchema = z.object({
+  serviceId: z.string().trim().min(1).max(191),
+  destinationId: z.string().trim().min(1).max(191),
+  interactiveEnabled: z.boolean(),
+}).strict();
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const parsed = interactiveSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Invalid interactive destination settings.' }));
+    await assertCanModifyService(parsed.data.serviceId);
+    const updated = await prisma.microsoftTeamsDestination.updateMany({
+      where: { id: parsed.data.destinationId, serviceId: parsed.data.serviceId, enabled: true, installation: { enabled: true } },
+      data: { interactiveEnabled: parsed.data.interactiveEnabled },
+    });
+    if (updated.count !== 1) return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Active Teams destination not found.' }));
+    return jsonOk({ ok: true });
+  } catch (error) {
+    if (isAppError(error)) return jsonError(error);
+    return jsonError('Failed to update Teams interactive settings', 500);
+  }
+}
 
 /**
  * GET  /api/microsoft-teams/destinations?serviceId=... → current mapping
@@ -55,7 +78,7 @@ export async function POST(request: NextRequest) {
     const parsed = upsertSchema.safeParse(body);
     if (!parsed.success) return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: parsed.error.issues[0]?.message ?? 'Invalid request.' }));
 
-    const { serviceId, teamId, channelId, channelName, teamName } = parsed.data;
+    const { serviceId, teamId, channelId, channelName, teamName, interactiveEnabled } = parsed.data;
     let tenantId = parsed.data.tenantId?.trim() || '';
     await assertCanModifyService(serviceId);
 
@@ -169,7 +192,7 @@ export async function POST(request: NextRequest) {
         // Idempotent metadata refresh — same immutable identity, same id
         row = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.update({
           where: { id: (existing as unknown as { id: string }).id },
-          data: { channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, updatedBy: actorId },
+          data: { channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, ...(interactiveEnabled !== undefined ? { interactiveEnabled } : {}), updatedBy: actorId },
         } as never);
       } else {
         // Tombstone prior routing (if any) and fence its in-flight AMBIGUOUS work before introducing D2
@@ -190,7 +213,7 @@ export async function POST(request: NextRequest) {
         if (tombstoned && !(tombstoned as unknown as { enabled: boolean }).enabled) {
           row = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.update({
             where: { id: (tombstoned as unknown as { id: string }).id },
-            data: { channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, updatedBy: actorId },
+            data: { channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, ...(interactiveEnabled !== undefined ? { interactiveEnabled } : {}), updatedBy: actorId },
           } as never);
         } else if (tombstoned) {
           // Should not happen (we tombstoned the single enabled above, and tuple didn't match), but handle race
@@ -200,7 +223,7 @@ export async function POST(request: NextRequest) {
           } as never);
         } else {
           row = await (txAny as unknown as typeof prismaAny).microsoftTeamsDestination.create({
-            data: { serviceId, tenantId, teamId, channelId, channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, updatedBy: actorId },
+            data: { serviceId, tenantId, teamId, channelId, channelName: channelName ?? null, teamName: teamName ?? null, installationId: installation.id, enabled: true, interactiveEnabled: interactiveEnabled ?? false, updatedBy: actorId },
           } as never);
         }
       }
@@ -258,7 +281,7 @@ export async function DELETE(request: NextRequest) {
         : { serviceId: sid };
       const destinations = await txAny.microsoftTeamsDestination.findMany({ where, select: { id: true } } as never);
       const destinationIds = destinations.map(destination => destination.id);
-      await txAny.microsoftTeamsDestination.updateMany({ where, data: { enabled: false } } as never);
+      await txAny.microsoftTeamsDestination.updateMany({ where, data: { enabled: false, interactiveEnabled: false } } as never);
       await revokeMicrosoftTeamsOperations(tx, {
         destinationIds,
         reason: 'Microsoft Teams destination unlinked',

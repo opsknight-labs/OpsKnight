@@ -1,4 +1,6 @@
 import { sanitizeUrl } from '@/lib/email-components';
+import { INCIDENT_PRIORITIES, getIncidentPriorityDefinition } from '@/lib/incidents/priority';
+import { TEAMS_CHATOPS_VERBS } from './action-schema';
 
 /** JSON-safe URL for Adaptive Card Action.OpenUrl (host does no HTML unescape). */
 function safeTeamsUrl(url: string | null | undefined): string {
@@ -38,7 +40,60 @@ export type MicrosoftTeamsIncidentCardInput = {
 export type MicrosoftTeamsCardOptions = {
   /** When true, render card with actions disabled (e.g. resolved terminal state). */
   disableActions?: boolean;
+  interactive?: {
+    destinationId: string;
+    messageGeneration: number;
+    refreshUserIds?: string[];
+    capabilities?: Partial<{
+      canAcknowledge: boolean; canResolve: boolean; canAssignSelf: boolean;
+      canAddNote: boolean; canSetPriority: boolean; canSnooze: boolean;
+      canEscalate: boolean; canJoinResponder: boolean; canRead: boolean;
+    }>;
+  };
 };
+
+export type TeamsIncidentPresentationState = 'OPEN' | 'ACKNOWLEDGED' | 'SNOOZED' | 'RESOLVED' | 'SUPPRESSED';
+
+export function deriveTeamsIncidentPresentation(input: MicrosoftTeamsIncidentCardInput): TeamsIncidentPresentationState {
+  if (input.incident.status === 'RESOLVED') return 'RESOLVED';
+  if (input.incident.status === 'SNOOZED') return 'SNOOZED';
+  if (input.incident.status === 'SUPPRESSED') return 'SUPPRESSED';
+  if (input.incident.status === 'ACKNOWLEDGED' || input.eventType === 'acknowledged') return 'ACKNOWLEDGED';
+  return 'OPEN';
+}
+
+function interactiveActions(input: MicrosoftTeamsIncidentCardInput, options?: MicrosoftTeamsCardOptions): Array<Record<string, unknown>> {
+  const interactive = options?.interactive;
+  if (!interactive || options?.disableActions) return [];
+  const caps = interactive.capabilities;
+  const allow = (key: keyof NonNullable<typeof caps>) => {
+    if (!caps) return true;
+    switch (key) {
+      case 'canAcknowledge': return caps.canAcknowledge === true;
+      case 'canResolve': return caps.canResolve === true;
+      case 'canAssignSelf': return caps.canAssignSelf === true;
+      case 'canAddNote': return caps.canAddNote === true;
+      case 'canSetPriority': return caps.canSetPriority === true;
+      case 'canSnooze': return caps.canSnooze === true;
+      case 'canEscalate': return caps.canEscalate === true;
+      case 'canJoinResponder': return caps.canJoinResponder === true;
+      case 'canRead': return caps.canRead === true;
+    }
+  };
+  const ctx = { v: 2, incidentId: input.incident.id, destinationId: interactive.destinationId, messageGeneration: interactive.messageGeneration };
+  const execute = (title: string, verb: string, mode?: 'secondary') => ({ type: 'Action.Execute', title, verb, associatedInputs: 'none', data: ctx, ...(mode ? { mode } : {}) });
+  const actions: Array<Record<string, unknown>> = [];
+  if (!input.incident.acknowledgedAt && allow('canAcknowledge')) actions.push(execute('Acknowledge', TEAMS_CHATOPS_VERBS.ACK));
+  if (input.incident.acknowledgedAt && input.incident.status !== 'RESOLVED' && allow('canResolve')) actions.push(execute('Resolve', TEAMS_CHATOPS_VERBS.RESOLVE));
+  if (allow('canAssignSelf')) actions.push(execute('Assign to me', TEAMS_CHATOPS_VERBS.ASSIGN_SELF));
+  if (allow('canEscalate')) actions.push(execute('Escalate', TEAMS_CHATOPS_VERBS.ESCALATE));
+  if (allow('canAddNote')) actions.push({ type: 'Action.ShowCard', title: 'Add note', mode: 'secondary', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.Text', id: 'note', label: 'Incident note', isMultiline: true, isRequired: true, maxLength: 2000, errorMessage: 'Enter a note.' }], actions: [{ type: 'Action.Execute', title: 'Add note', verb: TEAMS_CHATOPS_VERBS.NOTE, associatedInputs: 'auto', data: ctx }] } });
+  if (allow('canSetPriority')) actions.push({ type: 'Action.ShowCard', title: 'Priority', mode: 'secondary', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.ChoiceSet', id: 'priority', label: 'Priority', value: input.incident.priority ?? 'P3', choices: INCIDENT_PRIORITIES.map(priority => ({ title: `${priority} — ${getIncidentPriorityDefinition(priority).label}`, value: priority })) }], actions: [{ type: 'Action.Execute', title: 'Set priority', verb: TEAMS_CHATOPS_VERBS.PRIORITY, associatedInputs: 'auto', data: ctx }] } });
+  if (allow('canSnooze')) actions.push({ type: 'Action.ShowCard', title: 'Snooze', mode: 'secondary', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.ChoiceSet', id: 'minutes', label: 'Duration', value: '30', choices: [{ title: '15 minutes', value: '15' }, { title: '30 minutes', value: '30' }, { title: '1 hour', value: '60' }, { title: '2 hours', value: '120' }] }, { type: 'Input.Text', id: 'reason', label: 'Reason (optional)', maxLength: 500 }], actions: [{ type: 'Action.Execute', title: 'Snooze', verb: TEAMS_CHATOPS_VERBS.SNOOZE, associatedInputs: 'auto', data: ctx }] } });
+  if (allow('canJoinResponder')) actions.push(execute('Join as responder', TEAMS_CHATOPS_VERBS.JOIN_RESPONDER, 'secondary'));
+  if (allow('canRead')) actions.push(execute('Current responders', TEAMS_CHATOPS_VERBS.WHO, 'secondary'));
+  return actions;
+}
 
 /** Brand-aligned accent color for the Adaptive Card header. */
 function statusAccent(eventType: MicrosoftTeamsIncidentCardInput['eventType']): string {
@@ -81,6 +136,7 @@ export function buildMicrosoftTeamsIncidentCard(
   options?: MicrosoftTeamsCardOptions,
 ) {
   const { incident, eventType } = input;
+  const presentation = deriveTeamsIncidentPresentation(input);
   const safeUrl = safeTeamsUrl(incident.incidentUrl);
 
   const description = safeIncidentDescription(incident.description);
@@ -95,6 +151,7 @@ export function buildMicrosoftTeamsIncidentCard(
   if (incident.priority) facts.push({ title: 'Priority', value: incident.priority });
 
   const disableActions = Boolean(options?.disableActions);
+  const chatOpsActions = interactiveActions(input, options);
   function slaLabel(remainingMs: number | null | undefined): string | null {
     if (remainingMs == null || !Number.isFinite(remainingMs)) return null;
     if (remainingMs <= 0) return 'SLA breached';
@@ -134,7 +191,7 @@ export function buildMicrosoftTeamsIncidentCard(
                 type: 'Column',
                 width: 'stretch',
                 items: [
-                  { type: 'TextBlock', text: `OpsKnight · ${statusBadge(eventType)}`, weight: 'Bolder', size: 'Medium', color: 'Attention', wrap: true },
+                  { type: 'TextBlock', text: `OpsKnight · ${presentation === 'OPEN' ? statusBadge(eventType) : presentation[0] + presentation.slice(1).toLowerCase()}`, weight: 'Bolder', size: 'Medium', color: 'Attention', wrap: true },
                   { type: 'TextBlock', text: incident.title, weight: 'Bolder', size: 'Large', wrap: true, maxLines: 2 },
                   { type: 'TextBlock', text: subtitle, isSubtle: true, size: 'Small', wrap: true, spacing: 'Small' },
                 ],
@@ -172,21 +229,8 @@ export function buildMicrosoftTeamsIncidentCard(
         ],
       },
     ],
-    actions: disableActions
-      ? [
-          {
-            type: 'Action.OpenUrl',
-            title: 'View Incident ↗',
-            url: safeUrl,
-          },
-        ]
-      : [
-          {
-            type: 'Action.OpenUrl',
-            title: 'View Incident ↗',
-            url: safeUrl,
-          },
-        ],
+    actions: [...chatOpsActions, { type: 'Action.OpenUrl', title: 'View Incident ↗', url: safeUrl, ...(options?.interactive ? { mode: 'secondary' } : {}) }],
+    ...(options?.interactive ? { refresh: { action: { type: 'Action.Execute', verb: TEAMS_CHATOPS_VERBS.REFRESH, data: { v: 2, incidentId: incident.id, destinationId: options.interactive.destinationId, messageGeneration: options.interactive.messageGeneration } }, ...(options.interactive.refreshUserIds?.length ? { userIds: options.interactive.refreshUserIds.slice(0, 60) } : {}) } } : {}),
     // Phase 2 note: ACK/Resolve/Assign will use Action.Execute with verb `opsknight.ack` etc.
     // and route through POST /api/microsoft-teams/messages as `invoke` activity.
     // Intentionally omitted in Phase 1 per spec — prepare the architecture, not the buttons.

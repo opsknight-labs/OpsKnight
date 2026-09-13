@@ -11,6 +11,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     incident: { findUnique: vi.fn() },
     incidentEvent: { create: vi.fn() },
+    backgroundJob: { create: vi.fn(), findUnique: vi.fn(), updateMany: vi.fn() },
   },
 }));
 
@@ -61,6 +62,9 @@ beforeEach(() => {
   mocks.emitAuditEvent.mockResolvedValue(undefined);
   vi.mocked(prisma.incident.findUnique).mockResolvedValue(incidentResource() as never);
   vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
+  vi.mocked(prisma.backgroundJob.create).mockResolvedValue({} as never);
+  vi.mocked(prisma.backgroundJob.findUnique).mockResolvedValue(null as never);
+  vi.mocked(prisma.backgroundJob.updateMany).mockResolvedValue({ count: 1 } as never);
 });
 
 describe('authorizeIncidentEscalation', () => {
@@ -173,7 +177,36 @@ describe('requestIncidentEscalation', () => {
     );
     // The engine is asked to advance the incident's current escalation, never a
     // caller-supplied generation.
-    expect(mocks.executeEscalation).toHaveBeenCalledWith('inc-1');
+    expect(mocks.executeEscalation).toHaveBeenCalledWith('inc-1', 0, { generation: 0 });
+  });
+
+  it('fences retry after an escalation effect at the original generation and step', async () => {
+    mocks.resolveUserActor.mockResolvedValue(actor({ role: 'RESPONDER' }));
+    vi.mocked(prisma.incident.findUnique)
+      .mockResolvedValueOnce(incidentResource() as never)
+      .mockResolvedValueOnce({ status: 'OPEN', escalationGeneration: 4, currentEscalationStep: 2 } as never)
+      .mockResolvedValueOnce(incidentResource() as never)
+      .mockResolvedValueOnce({ status: 'OPEN', escalationGeneration: 4, currentEscalationStep: 3 } as never);
+    const { Prisma } = await import('@prisma/client');
+    const duplicate = new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: '5.22.0' });
+    vi.mocked(prisma.backgroundJob.create)
+      .mockResolvedValueOnce({} as never)
+      .mockRejectedValueOnce(duplicate);
+    vi.mocked(prisma.backgroundJob.findUnique).mockResolvedValueOnce({
+      payload: {
+        task: 'MANUAL_ESCALATION_IDEMPOTENCY', incidentId: 'inc-1', actorId: 'user-1', source: 'SLACK',
+        requestId: 'intent-1', principalId: 'chatops:user-1', generation: 4, stepIndex: 2,
+      },
+    } as never);
+    const input = { ...request, idempotency: { key: 'intent-1', principalId: 'chatops:user-1' } };
+
+    await requestIncidentEscalation(input);
+    await requestIncidentEscalation(input);
+
+    expect(prisma.incidentEvent.create).toHaveBeenCalledTimes(1);
+    expect(mocks.emitAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(1, 'inc-1', 2, { generation: 4 });
+    expect(mocks.executeEscalation).toHaveBeenNthCalledWith(2, 'inc-1', 2, { generation: 4 });
   });
 
   it('never reaches the engine for an unauthorized actor', async () => {

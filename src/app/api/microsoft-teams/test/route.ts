@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
-import { assertAdmin } from '@/lib/rbac';
+import { assertCanModifyService, getCurrentUser } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { integrationProviderError, jsonProviderError } from '@/lib/provider-errors';
@@ -28,7 +28,7 @@ const teamsTestSchema = z
  */
 export async function POST(request: NextRequest) {
   try {
-    await assertAdmin();
+    await getCurrentUser();
     let body: unknown;
     try {
       body = await request.json();
@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
       return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: parsed.error.issues[0]?.message ?? 'Invalid request.' }));
     }
     const { destinationId, serviceId } = parsed.data as { destinationId?: string; serviceId?: string };
+    if (serviceId) await assertCanModifyService(serviceId);
 
     const prismaAny = prisma as unknown as {
       microsoftTeamsDestination: {
@@ -48,13 +49,16 @@ export async function POST(request: NextRequest) {
     };
     let dest: { id: string; serviceId: string; tenantId: string; teamId: string; channelId: string } | null = null;
     if (destinationId) {
-      dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { id: destinationId, enabled: true, installation: { enabled: true } } });
+      dest = await prismaAny.microsoftTeamsDestination.findFirst({
+        where: { id: destinationId, ...(serviceId ? { serviceId } : {}), enabled: true, installation: { enabled: true } },
+      });
     } else if (serviceId) {
       dest = await prismaAny.microsoftTeamsDestination.findFirst({ where: { serviceId, enabled: true, installation: { enabled: true } } });
     }
     if (!dest) {
       return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'Teams destination not found. Map a Service → Teams channel first.' }));
     }
+    if (!serviceId) await assertCanModifyService(dest.serviceId);
 
     const baseUrl = await getAppUrl();
     const incidentId = `test-${Date.now()}`;

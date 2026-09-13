@@ -371,6 +371,7 @@ model User {
   microsoftTeamsConfigs       MicrosoftTeamsConfig[]       @relation("MicrosoftTeamsConfigUpdater")
   microsoftTeamsInstallations MicrosoftTeamsInstallation[] @relation("MicrosoftTeamsInstallationInstaller")
   microsoftTeamsDestinations  MicrosoftTeamsDestination[]  @relation("MicrosoftTeamsDestinationUpdater")
+  chatIdentityLinks           ChatIdentityLink[]
   oidcConfigs                 OidcConfig[]
   oidcIdentities              OidcIdentity[]
   oidcLinkingApproval         OidcLinkingApproval?
@@ -685,6 +686,7 @@ model MicrosoftTeamsConfig {
   tenantId     String? // Entra tenant ID for SINGLE mode; null for MULTI
   tenantMode   MicrosoftTeamsTenantMode @default(SINGLE)
   enabled      Boolean                  @default(true)
+  interactiveEnabled Boolean            @default(false)
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
   updatedBy    String?
@@ -726,6 +728,7 @@ model MicrosoftTeamsDestination {
   teamName       String?
   installationId String?
   enabled        Boolean  @default(true)
+  interactiveEnabled Boolean @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   updatedBy      String?
@@ -756,6 +759,7 @@ model MicrosoftTeamsIncidentMessage {
   mutationLeaseExpiresAt DateTime?
   createOperationId      String?
   createState            String    @default("NONE")
+  messageGeneration      Int       @default(1)
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -1683,6 +1687,65 @@ model BackgroundJob {
   @@index([scheduledAt]) // For time-based queries
 }
 
+/// Provider-neutral ChatOps intent. Slack and Teams both persist an intent
+/// before acknowledging the provider, then a durable worker executes the
+/// provider-neutral domain command. `provider`/`responseMode` make the
+/// transport generic while `workspaceId`/`slackUserId` remain for Slack
+/// back-compat (Teams stores tenantId in workspaceId, AAD oid in providerUserId).
+enum ChatProvider {
+  SLACK
+  MICROSOFT_TEAMS
+}
+
+enum ChatIdentityVerificationMethod {
+  ACCOUNT_LINK
+  OIDC
+  ADMIN
+}
+
+model ChatIdentityLink {
+  id                 String                         @id @default(cuid())
+  provider           ChatProvider
+  providerTenantId   String
+  providerUserId     String
+  providerObjectId   String?
+  userId             String
+  displayName        String?
+  verificationMethod ChatIdentityVerificationMethod
+  verifiedAt         DateTime                       @default(now())
+  revokedAt          DateTime?
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerTenantId, providerUserId])
+  @@unique([provider, providerTenantId, providerObjectId])
+  @@index([userId, provider])
+  @@index([provider, providerTenantId, revokedAt])
+}
+
+model ChatIdentityChallenge {
+  id                String       @id @default(cuid())
+  tokenHash         String       @unique
+  provider          ChatProvider
+  providerTenantId  String
+  providerUserId    String
+  providerObjectId  String?
+  displayName       String?
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  createdAt         DateTime     @default(now())
+
+  @@index([expiresAt])
+  @@index([provider, providerTenantId, providerUserId])
+}
+
+enum ChatOpsResponseMode {
+  INLINE
+  DEFERRED
+}
+
 /// A signed Slack request is first persisted, then executed by the durable
 /// worker. `EFFECT_COMPLETED` intentionally precedes response delivery: Slack
 /// may retry a response URL request, but that must never repeat a mutation.
@@ -1710,12 +1773,21 @@ enum WarRoomProvisioningStatus {
 
 model ChatOpsIntent {
   id                  String              @id @default(cuid())
+  provider            ChatProvider        @default(SLACK)
   kind                ChatOpsIntentKind
   deliveryHash        String
   workspaceId         String
   channelId           String?
   slackUserId         String?
+  providerTenantId    String?
+  providerConversationId String?
+  providerChannelId   String?
+  providerActivityId  String?
+  providerUserId      String?
+  providerObjectId    String?
   encryptedPayload    String
+  responseMode        ChatOpsResponseMode @default(DEFERRED)
+  payloadDigest       String?
   status              ChatOpsIntentStatus @default(PENDING)
   attempt             Int                 @default(0)
   leaseToken          String?
@@ -1727,9 +1799,11 @@ model ChatOpsIntent {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
-  @@unique([kind, deliveryHash])
+  @@unique([provider, kind, deliveryHash])
   @@index([status, leaseExpiresAt])
   @@index([workspaceId, channelId])
+  @@index([provider, status, leaseExpiresAt])
+  @@index([provider, providerTenantId, providerActivityId])
 }
 
 // Status Page Configuration

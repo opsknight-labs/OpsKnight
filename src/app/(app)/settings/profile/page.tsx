@@ -12,6 +12,7 @@ import { getUserTimeZone, formatDateTime } from '@/lib/timezone';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { Users, Calendar, Flame, ShieldCheck } from 'lucide-react';
+import ConnectedChatOpsAccounts from '@/components/settings/ConnectedChatOpsAccounts';
 
 export const revalidate = 0;
 
@@ -103,6 +104,11 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         },
       })
     : null;
+  const chatIdentityLinks = user ? await prisma.chatIdentityLink.findMany({
+    where: { userId: user.id, revokedAt: null },
+    select: { id: true, provider: true, providerTenantId: true, displayName: true },
+    orderBy: { verifiedAt: 'desc' },
+  }) : [];
 
   const name = user?.name || session?.user?.name || 'User';
   const role = user?.role || (session?.user as any)?.role || 'USER'; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -194,7 +200,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         escalationRules={user?.escalationRules ?? []}
         slaMetrics={slaMetrics}
         profileContent={
-          <ProfileForm
+          <><ProfileForm
             name={name}
             email={email}
             role={role}
@@ -203,7 +209,7 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
             jobTitle={user?.jobTitle}
             avatarUrl={user?.avatarUrl}
             lastOidcSync={lastOidcSync}
-          />
+          /><ConnectedChatOpsAccounts links={chatIdentityLinks} /></>
         }
         notificationsContent={
           <NotificationPreferencesForm

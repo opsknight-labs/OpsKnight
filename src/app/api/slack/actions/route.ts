@@ -11,7 +11,6 @@ import { verifySlackSignature } from '@/lib/slack-signature';
 import {
   chatOpsLifecycleErrorMessage,
   executeChatOpsLifecycleCommand,
-  executeChatOpsAssignment,
 } from '@/lib/incidents/chatops-lifecycle';
 
 /**
@@ -241,12 +240,13 @@ export async function handleSlackActionRequest(payload: SlackActionPayload) {
               });
             }
 
-            const assignment = await executeChatOpsAssignment({
-              incidentId,
+            const { executeChatOpsCommand } = await import('@/lib/chatops/commands');
+            const assignment = (await executeChatOpsCommand({
+              provider: 'SLACK',
               actor: { id: actorUser.id, name: targetUser.name },
-              targetUserId: targetUser.id,
+              command: { kind: 'ASSIGN', incidentId, targetUserId: targetUser.id },
               ...(idempotency ? { idempotency } : {}),
-            });
+            })) as { changed: boolean };
             responseMessage = assignment.changed
               ? `🙋 Incident assigned to *${targetUser.name}* (<@${slackUserId}>)`
               : `ℹ️ Incident is already assigned to *${targetUser.name}* (<@${slackUserId}>)`;
