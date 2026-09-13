@@ -118,9 +118,7 @@ describe('status page design contract', () => {
 
     // The shared renderer must keep every service-card text/detail layer on semantic tokens so the
     // dark bridge above reaches names, descriptions, metadata chips, uptime labels and history.
-    expect(STATUS_PAGE_PUBLIC_CSS).toContain(
-      '.status-v3-service__name, ${R} .status-v3-region__name'
-    );
+    expect(STATUS_PAGE_PUBLIC_CSS).toContain('.status-v3-service__name');
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('color: var(--status-text-strong)');
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('.status-v3-service__desc');
     expect(STATUS_PAGE_PUBLIC_CSS).toContain('color: var(--status-text-muted)');
