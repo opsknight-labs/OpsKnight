@@ -29,6 +29,7 @@ import { getAppUrl } from '@/lib/app-url';
 import { AlertCircle, ArrowLeft, CheckCircle2, Pause, Volume2 } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import MicrosoftTeamsWarRoomsPanel from '@/components/incident/detail/MicrosoftTeamsWarRoomsPanel';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -101,7 +102,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   // Rendering an incident must not perform hidden Jira network I/O. Persisted
   // Jira metadata is refreshed by authenticated webhooks or the explicit Sync
   // action, keeping page latency deterministic and lifecycle operations fenced.
-  const [jiraLinks, chatOpsConfig, globalSlackIntegration] = await Promise.all([
+  const [jiraLinks, chatOpsConfig, globalSlackIntegration, teamsWarRooms, teamsWarRoomEnabled] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -113,6 +114,21 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
     prisma.slackIntegration.findFirst({
       where: { enabled: true, services: { none: {} } },
       select: { workspaceId: true },
+    }),
+    prisma.incidentWarRoom.findMany({
+      where: { incidentId: id, provider: 'MICROSOFT_TEAMS' }, orderBy: { generation: 'desc' },
+      select: {
+        id: true, generation: true, state: true, providerChannelName: true, providerChannelUrl: true,
+        membershipType: true, lastError: true,
+        participants: { orderBy: { createdAt: 'asc' }, select: { id: true, source: true, state: true, lastError: true, user: { select: { name: true } } } },
+      },
+    }),
+    prisma.microsoftTeamsDestination.count({
+      where: { serviceId: incident.serviceId, enabled: true, warRoomEnabled: true, installation: { is: { enabled: true } } },
+    }).then(async destinations => {
+      if (destinations === 0) return false;
+      const config = await prisma.microsoftTeamsConfig.findFirst({ where: { enabled: true, warRoomsEnabled: true }, select: { id: true } });
+      return Boolean(config);
     }),
   ]);
 
@@ -361,6 +377,13 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         description={incident.description}
         canManage={canManageIncident}
         onUpdateDescription={handleUpdateDescription}
+      />
+
+      <MicrosoftTeamsWarRoomsPanel
+        incidentId={incident.id}
+        rooms={teamsWarRooms}
+        canManage={canManageIncident}
+        enabled={teamsWarRoomEnabled}
       />
 
       {incident.status === 'RESOLVED' && (
