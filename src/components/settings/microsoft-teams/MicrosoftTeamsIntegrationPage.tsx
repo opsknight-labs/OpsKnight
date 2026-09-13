@@ -60,7 +60,7 @@ export default function MicrosoftTeamsIntegrationPage({
   installationCount,
   installationPermissions,
 }: {
-  config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean } | null;
+  config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean; warRoomsEnabled: boolean } | null;
   destinations: DestinationRow[];
   appManifestJson: string;
   isAdmin: boolean;
@@ -144,7 +144,7 @@ export default function MicrosoftTeamsIntegrationPage({
             {!isConfigured ? 'Not configured — enter your Azure AD app credentials below.' : !isInstalled ? 'Credentials configured — awaiting a verified Teams installation.' : !isReady ? 'Bot installed — map and enable a Service → Teams destination.' : 'Ready — incident Adaptive Cards will post and update through the Bot Connector.'}
           </span>
         </div>
-        <p className="mt-1 opacity-80">Phase 1 is one-way broadcast only. Acknowledge / Resolve / Assign from Teams is prepared for Phase 2 and is intentionally not exposed.</p>
+        <p className="mt-1 opacity-80">Use the global and per-destination controls below to govern Teams delivery and authenticated incident actions.</p>
       </div>
 
       {/* Configure card — console UI only, no .env */}
@@ -177,12 +177,16 @@ export default function MicrosoftTeamsIntegrationPage({
             <select id="mt-tenantMode" name="tenantMode" defaultValue={config?.tenantMode ?? 'SINGLE'} disabled={!isAdmin} className="h-9 w-full rounded-md border bg-background px-3 text-sm">
               <option value="SINGLE">SINGLE</option>
             </select>
-            <p className="text-[11px] text-muted-foreground">Phase 1 uses a verified single-tenant Bot authority.</p>
+            <p className="text-[11px] text-muted-foreground">A verified single-tenant Bot authority keeps Teams routing and token acquisition scoped to your organization.</p>
           </div>
         </div>
         <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
           <input type="checkbox" name="interactiveEnabled" defaultChecked={config?.interactiveEnabled ?? false} disabled={!isAdmin} className="mt-0.5" />
           <span><span className="font-medium">Enable interactive incident actions</span><span className="block text-xs text-muted-foreground">Global kill switch for authenticated Teams ChatOps. Each destination must also opt in.</span></span>
+        </label>
+        <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+          <input type="checkbox" name="warRoomsEnabled" defaultChecked={config?.warRoomsEnabled ?? false} disabled={!isAdmin} className="mt-0.5" />
+          <span><span className="font-medium">Enable incident war rooms</span><span className="block text-xs text-muted-foreground">Adds `Channel.Create.Group` to the downloadable app package. Re-download and re-consent the package in every target Team before creating war rooms.</span></span>
         </label>
         {isAdmin && (
           <Button type="submit" disabled={saving} className="h-9 text-xs font-semibold">
@@ -200,7 +204,7 @@ export default function MicrosoftTeamsIntegrationPage({
             <span className="ml-1">Bot endpoint</span>
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">The Phase 1 package requests only the required `ChannelSettings.Read.Group` RSC permission; card delivery uses Bot Connector credentials.</p>
+        <p className="text-xs text-muted-foreground">Card delivery uses Bot Connector credentials. When incident war rooms are enabled above, this package also requests `Channel.Create.Group`; download and re-consent it for each target Team.</p>
         <pre className="max-h-64 overflow-auto rounded-lg border bg-muted/30 p-3 text-[11px] font-mono">{appManifestJson}</pre>
         <div className="flex gap-2">
           {isConfigured && (
@@ -218,7 +222,7 @@ export default function MicrosoftTeamsIntegrationPage({
         </div>
       </div>
 
-      {/* Service → Teams destination (Phase 1: one Teams channel per service) */}
+      {/* Service → Teams destination routing */}
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">Service → Teams destinations</h3>

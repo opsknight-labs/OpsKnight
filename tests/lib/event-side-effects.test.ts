@@ -32,6 +32,10 @@ vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() 
 vi.mock('@/lib/status-page-webhooks', () => ({ triggerWebhooksForService: vi.fn() }));
 vi.mock('@/lib/status-page-notifications', () => ({ notifyStatusPageSubscribers: vi.fn() }));
 vi.mock('@/lib/slack', () => ({ notifySlackForIncident: vi.fn() }));
+vi.mock('@/lib/war-room/microsoft-teams', () => ({
+  requestMicrosoftTeamsWarRoom: vi.fn().mockResolvedValue({ accepted: false, code: 'DISABLED' }),
+  settleMicrosoftTeamsWarRoomsOnIncidentResolve: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: { incident: { findUnique: vi.fn() } },

@@ -6,7 +6,7 @@ import prisma from '@/lib/prisma';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { encrypt, decrypt } from '@/lib/encryption';
-import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
+import { revokeMicrosoftTeamsOperations, revokeMicrosoftTeamsWarRoomProvisioning } from '@/lib/microsoft-teams/lifecycle';
 
 /**
  * Console-UI only Teams app credentials. No .env secret.
@@ -26,6 +26,7 @@ export async function saveMicrosoftTeamsConfig(
   const tenantIdRaw = (formData.get('tenantId') as string | null)?.trim() || null;
   const enabledValue = formData.get('enabled');
   const interactiveEnabledValue = formData.get('interactiveEnabled');
+  const warRoomsEnabledValue = formData.get('warRoomsEnabled');
 
   // Strict validation — Zod is required by AGENTS.md §4 for every Server Action.
   const microsoftTeamsConfigSchema = z.object({
@@ -34,6 +35,7 @@ export async function saveMicrosoftTeamsConfig(
     tenantMode: z.literal('SINGLE'),
     enabledValue: z.string().nullable().optional(),
     interactiveEnabledValue: z.string().nullable().optional(),
+    warRoomsEnabledValue: z.string().nullable().optional(),
   });
   const existingEarly = await (prisma as unknown as Record<string, unknown> & { microsoftTeamsConfig: { findFirst: (a: unknown) => Promise<{ id: string; clientSecret: string; tenantId: string | null; clientId: string } | null> } }).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never) as
     | { id: string; clientSecret: string; clientId: string }
@@ -44,21 +46,22 @@ export async function saveMicrosoftTeamsConfig(
   const parsed = microsoftTeamsConfigSchema.safeParse({
     clientId: resolvedClientId,
     tenantId: tenantIdRaw,
-    // Phase 1 intentionally supports single-tenant Bot credentials only. The
-    // schema remains future-ready, but MULTI must not be exposed until its Bot
-    // authority model has been validated end-to-end.
+    // Teams credentials are scoped to one verified tenant. Keep the authority
+    // model explicit instead of accepting an implicit multi-tenant fallback.
     tenantMode: 'SINGLE',
     enabledValue: enabledValue as string | null,
     interactiveEnabledValue: interactiveEnabledValue as string | null,
+    warRoomsEnabledValue: warRoomsEnabledValue as string | null,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Invalid Teams configuration.' };
   }
   const { tenantId } = parsed.data;
-  if (!tenantId) return { error: 'Tenant ID is required for the Phase 1 single-tenant integration.' };
+  if (!tenantId) return { error: 'Tenant ID is required for this single-tenant Teams integration.' };
   const tenantMode = parsed.data.tenantMode;
   const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === null;
   const interactiveEnabled = interactiveEnabledValue === 'on' || interactiveEnabledValue === 'true';
+  const warRoomsEnabled = warRoomsEnabledValue === 'on' || warRoomsEnabledValue === 'true';
   const effectiveClientId = parsed.data.clientId;
   const existing = existingEarly;
 
@@ -88,6 +91,7 @@ export async function saveMicrosoftTeamsConfig(
   const priorTenantMode = (existing as unknown as { tenantMode?: string } | null)?.tenantMode ?? null;
   const clientIdChanged = priorClientId != null && priorClientId !== effectiveClientId;
   const tenantChanged = priorTenantId !== (tenantId || null) || priorTenantMode !== tenantMode;
+  const warRoomsDisabled = Boolean((existing as unknown as { warRoomsEnabled?: boolean } | null)?.warRoomsEnabled) && !warRoomsEnabled;
 
   await prisma.$transaction(async tx => {
     const txAny = tx as unknown as {
@@ -105,6 +109,7 @@ export async function saveMicrosoftTeamsConfig(
         tenantMode,
         enabled: enabledValue ? enabled : true,
         interactiveEnabled,
+        warRoomsEnabled,
         updatedBy: actorId,
       },
       update: {
@@ -114,6 +119,7 @@ export async function saveMicrosoftTeamsConfig(
         tenantMode,
         enabled,
         interactiveEnabled,
+        warRoomsEnabled,
         updatedBy: actorId,
       },
     } as unknown as never);
@@ -130,6 +136,14 @@ export async function saveMicrosoftTeamsConfig(
       await revokeMicrosoftTeamsOperations(tx, {
         reason: 'Microsoft Teams credential identity changed',
       });
+      await revokeMicrosoftTeamsWarRoomProvisioning(tx, {
+        reason: 'Microsoft Teams credential identity changed',
+      });
+    }
+    if (warRoomsDisabled) {
+      await revokeMicrosoftTeamsWarRoomProvisioning(tx, {
+        reason: 'Microsoft Teams war rooms were disabled by an administrator',
+      });
     }
   });
 
@@ -144,6 +158,7 @@ export async function saveMicrosoftTeamsConfig(
       clientId: effectiveClientId.slice(0, 8) + '...',
       enabled,
       interactiveEnabled,
+      warRoomsEnabled,
       clientIdChanged,
       tenantChanged,
     },

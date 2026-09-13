@@ -24,6 +24,9 @@ export const USER_REFERENCE_POLICY = {
   microsoftTeamsConfigs: { deactivate: 'KEEP', delete: 'SET_NULL' },
   microsoftTeamsInstallations: { deactivate: 'KEEP', delete: 'SET_NULL' },
   microsoftTeamsDestinations: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  // Preserve the room's provider-side membership/audit projection when an
+  // OpsKnight account is removed; Prisma clears only the local user link.
+  warRoomParticipants: { deactivate: 'KEEP', delete: 'SET_NULL' },
   chatIdentityLinks: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },
   oidcConfigs: { deactivate: 'KEEP', delete: 'CASCADE' },
   oidcIdentities: { deactivate: 'DENY_AUTH', delete: 'CASCADE' },

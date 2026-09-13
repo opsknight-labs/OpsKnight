@@ -28,6 +28,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         tenantMode: 'SINGLE' | 'MULTI';
         enabled: boolean;
         interactiveEnabled: boolean;
+        warRoomsEnabled: boolean;
         createdAt: Date;
         updatedAt: Date;
         updatedBy?: string | null;
@@ -68,8 +69,10 @@ export default async function MicrosoftTeamsIntegrationRoute() {
     botId: config?.clientId ?? '11111111-1111-1111-1111-111111111111',
     // Override the stable host-derived default when Entra uses a custom Application ID URI.
     applicationIdUri: process.env.MICROSOFT_TEAMS_APPLICATION_ID_URI?.trim() || undefined,
-    // Optional RSC surface — disabled by default (minimal Phase-1 manifest)
-    includeOptionalPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
+    // Team discovery and war-room administration are separate opt-in consent
+    // surfaces. Existing discovery installs must not silently request write RSC.
+    includeTeamSettingsPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
+    includeWarRoomPermissions: config?.warRoomsEnabled ?? false,
   });
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;
@@ -94,7 +97,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         breadcrumb={{ label: 'Settings', href: '/settings', current: 'Microsoft Teams' }}
         tag="COLLABORATION ENGINE"
         title="Microsoft Teams Integration"
-        subtitle="Send incident Adaptive Cards to Teams channels for broadcast and lifecycle tracking. Phase 1 delivers one-way notifications."
+        subtitle="Deliver incident cards, lifecycle updates, and controlled collaboration workflows to Microsoft Teams."
         badges={
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
@@ -174,7 +177,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
       />
 
       <MicrosoftTeamsIntegrationPage
-        config={config as unknown as { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean } | null}
+        config={config as unknown as { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean; warRoomsEnabled: boolean } | null}
         destinations={destinations as unknown as MicrosoftTeamsDestinationRow[]}
         appManifestJson={manifestJson}
         isAdmin={permissions.isAdmin}

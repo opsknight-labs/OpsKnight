@@ -29,6 +29,8 @@ import { getAppUrl } from '@/lib/app-url';
 import { AlertCircle, ArrowLeft, CheckCircle2, Pause, Volume2 } from 'lucide-react';
 import { getJiraCapabilities } from '@/lib/jira-capabilities';
 import { serializeJiraIssueReference } from '@/lib/jira-references';
+import MicrosoftTeamsWarRoomsPanel from '@/components/incident/detail/MicrosoftTeamsWarRoomsPanel';
+import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -101,7 +103,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
   // Rendering an incident must not perform hidden Jira network I/O. Persisted
   // Jira metadata is refreshed by authenticated webhooks or the explicit Sync
   // action, keeping page latency deterministic and lifecycle operations fenced.
-  const [jiraLinks, chatOpsConfig, globalSlackIntegration] = await Promise.all([
+  const [jiraLinks, chatOpsConfig, globalSlackIntegration, teamsWarRooms, teamsWarRoomDestination] = await Promise.all([
     prisma.externalIssueLink.findMany({
       where: { incidentId: id, provider: 'JIRA' },
       orderBy: { createdAt: 'desc' },
@@ -114,7 +116,26 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       where: { enabled: true, services: { none: {} } },
       select: { workspaceId: true },
     }),
+    prisma.incidentWarRoom.findMany({
+      where: { incidentId: id, provider: 'MICROSOFT_TEAMS' }, orderBy: { generation: 'desc' },
+      select: {
+        id: true, generation: true, state: true, providerChannelName: true, providerChannelUrl: true,
+        membershipType: true, lastError: true,
+        participants: { orderBy: { createdAt: 'asc' }, select: { id: true, source: true, state: true, lastError: true, user: { select: { name: true } } } },
+      },
+    }),
+    prisma.microsoftTeamsDestination.findFirst({
+      where: { serviceId: incident.serviceId, enabled: true, warRoomEnabled: true, installation: { is: { enabled: true } } },
+      select: { tenantId: true, teamId: true }, orderBy: { createdAt: 'asc' },
+    }),
   ]);
+  const teamsWarRoomCapability = teamsWarRoomDestination
+    ? await getMicrosoftTeamsCapabilities({ tenantId: teamsWarRoomDestination.tenantId, teamId: teamsWarRoomDestination.teamId }).catch(() => null)
+    : null;
+  const teamsWarRoomEnabled = Boolean(teamsWarRoomCapability?.canCreateWarRooms);
+  const teamsWarRoomUnavailableReason = teamsWarRoomDestination
+    ? teamsWarRoomCapability?.failureReason ?? 'Teams war-room capability could not be verified for the configured Team.'
+    : 'Map this service to an installed Teams destination with war rooms enabled.';
 
   const incidentJiraIssues = jiraLinks.map(serializeJiraIssueReference);
 
@@ -361,6 +382,14 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
         description={incident.description}
         canManage={canManageIncident}
         onUpdateDescription={handleUpdateDescription}
+      />
+
+      <MicrosoftTeamsWarRoomsPanel
+        incidentId={incident.id}
+        rooms={teamsWarRooms}
+        canManage={canManageIncident}
+        enabled={teamsWarRoomEnabled}
+        unavailableReason={teamsWarRoomUnavailableReason}
       />
 
       {incident.status === 'RESOLVED' && (

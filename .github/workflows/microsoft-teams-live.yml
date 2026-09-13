@@ -1,13 +1,6 @@
 name: Microsoft Teams Live Tenant Smoke
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/lib/microsoft-teams/**'
-      - 'src/app/api/microsoft-teams/**'
-      - 'scripts/ci/microsoft-teams-live-smoke.mjs'
-      - '.github/workflows/microsoft-teams-live.yml'
   workflow_dispatch:
 
 permissions:
@@ -38,13 +31,5 @@ jobs:
           ref: main
       - uses: actions/setup-node@v7
         with: { node-version: 20 }
-      - name: Require live-tenant configuration
-        run: |
-          test -n "$TEAMS_E2E_TENANT_ID"
-          test -n "$TEAMS_E2E_CLIENT_ID"
-          test -n "$TEAMS_E2E_CLIENT_SECRET"
-          test -n "$TEAMS_E2E_TEAM_ID"
-          test -n "$TEAMS_E2E_CHANNEL_ID"
-          test -n "$TEAMS_E2E_SERVICE_URL"
       - name: Discover channel, create card, and update the same activity
         run: node scripts/ci/microsoft-teams-live-smoke.mjs

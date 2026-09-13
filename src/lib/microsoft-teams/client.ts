@@ -53,6 +53,14 @@ export function clearMicrosoftTeamsTokenCaches(): void {
   botTokenCache.clear();
 }
 
+/** Drop only one tenant's Graph credential after a Graph 401. */
+export function clearMicrosoftTeamsGraphAccessToken(tenantId: string): void {
+  const suffix = `:${tenantId.trim()}`;
+  for (const key of graphTokenCache.keys()) {
+    if (key.endsWith(suffix)) graphTokenCache.delete(key);
+  }
+}
+
 async function acquireToken(
   cache: TokenCache,
   scope: string,
@@ -96,6 +104,13 @@ async function acquireToken(
 
 async function graphToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
   return acquireToken(graphTokenCache, 'https://graph.microsoft.com/.default', clientId, clientSecret, tenantId, 'Graph');
+}
+
+/** Server-only token seam for narrowly scoped Graph adapters. */
+export async function getMicrosoftTeamsGraphAccessToken(tenantId: string): Promise<string | null> {
+  const resolved = await getMicrosoftTeamsConfig();
+  if (!resolved || !tenantId.trim()) return null;
+  return graphToken(resolved.config.clientId, resolved.clientSecret, tenantId.trim());
 }
 async function botToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
   return acquireToken(botTokenCache, 'https://api.botframework.com/.default', clientId, clientSecret, tenantId, 'Bot');
@@ -446,6 +461,58 @@ export type TeamsRscInstallationState = {
   unknown: boolean;
   error?: string;
 };
+
+/**
+ * Unlike an endpoint probe, this reads the consented permission set for this
+ * app installed in this exact Team. It is used for non-idempotent operations
+ * (such as channel creation) where claiming a capability from an unrelated
+ * read permission would be unsafe and misleading.
+ */
+export async function getTeamsWarRoomRscGrantState(input: {
+  tenantId: string;
+  teamId: string;
+}): Promise<TeamsRscGrantState> {
+  const required = ['Channel.Create.Group'];
+  const resolved = await getMicrosoftTeamsConfig();
+  const tenantId = input.tenantId.trim();
+  const teamId = input.teamId.trim();
+  if (!resolved || !tenantId || !teamId) {
+    return { granted: null, missing: required, unknown: true, error: !resolved ? 'NOT_CONFIGURED' : 'TEAM_OR_TENANT_REQUIRED', installations: [] };
+  }
+  const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
+  if (!token) return { granted: null, missing: required, unknown: true, error: 'GRAPH_TOKEN_FAILED', installations: [] };
+  try {
+    const response = await retryFetch(
+      `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(teamId)}/installedApps?$expand=teamsAppDefinition&$select=id,consentedPermissionSet`,
+      { headers: { Authorization: `Bearer ${token}` } },
+      { maxAttempts: 2, initialDelayMs: 500 },
+    );
+    if (!response.ok) {
+      const error = response.status === 401 ? 'GRAPH_TOKEN_FAILED' : response.status === 403 ? 'RSC_GRANTS_UNREADABLE' : response.status === 404 ? 'TEAM_NOT_FOUND' : `http_${response.status}`;
+      return { granted: null, missing: required, unknown: true, error, installations: [{ teamId, teamName: null, granted: null, missing: required, unknown: true, error }] };
+    }
+    const body = await response.json() as {
+      value?: Array<{
+        teamsAppDefinition?: { teamsAppId?: string | null } | null;
+        consentedPermissionSet?: { resourceSpecificPermissions?: Array<{ permissionValue?: string | null; permissionType?: string | null }> | null } | null;
+      }>;
+    };
+    const app = body.value?.find(installation => installation.teamsAppDefinition?.teamsAppId === resolved.config.clientId);
+    const granted = (app?.consentedPermissionSet?.resourceSpecificPermissions ?? [])
+      .filter(permission => permission.permissionType?.toLowerCase() === 'application' && typeof permission.permissionValue === 'string')
+      .map(permission => permission.permissionValue!);
+    const missing = required.filter(permission => !granted.includes(permission));
+    return {
+      granted,
+      missing,
+      unknown: false,
+      installations: [{ teamId, teamName: null, granted, missing, unknown: false }],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
+    return { granted: null, missing: required, unknown: true, error: message, installations: [{ teamId, teamName: null, granted: null, missing: required, unknown: true, error: message }] };
+  }
+}
 
 export async function getTeamsGrantedRscPermissions(options?: {
   explicitTenantId?: string;

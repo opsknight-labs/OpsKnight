@@ -4,7 +4,7 @@ import * as queue from '../jobs/queue';
 import { sendNotification as mockedSendNotification } from '@/lib/notifications';
 import { processEventSideEffect as mockedProcessEventSideEffect } from '@/lib/event-side-effects';
 import { processAutoUnsnoozeIncidentInternal } from '@/lib/unsnooze';
-import { Prisma } from '@prisma/client';
+import { provisionMicrosoftTeamsWarRoom } from '@/lib/war-room/microsoft-teams';
 
 type TestMock = ReturnType<typeof vi.fn>;
 
@@ -12,11 +12,13 @@ const prismaMock = prisma as unknown as {
   backgroundJob: {
     findUnique: TestMock;
     update: TestMock;
+    updateMany: TestMock;
   };
 };
 const sendNotificationMock = mockedSendNotification as unknown as TestMock;
 const processEventSideEffectMock = mockedProcessEventSideEffect as unknown as TestMock;
 const processAutoUnsnoozeIncidentMock = processAutoUnsnoozeIncidentInternal as unknown as TestMock;
+const provisionMicrosoftTeamsWarRoomMock = provisionMicrosoftTeamsWarRoom as unknown as TestMock;
 
 vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
@@ -27,6 +29,7 @@ vi.mock('@/lib/status-page-webhooks', () => ({ triggerWebhooksForService: vi.fn(
 vi.mock('@/lib/notifications', () => ({ sendNotification: vi.fn() }));
 vi.mock('@/lib/event-side-effects', () => ({ processEventSideEffect: vi.fn() }));
 vi.mock('@/lib/unsnooze', () => ({ processAutoUnsnoozeIncidentInternal: vi.fn() }));
+vi.mock('@/lib/war-room/microsoft-teams', () => ({ provisionMicrosoftTeamsWarRoom: vi.fn() }));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
@@ -41,6 +44,7 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.backgroundJob.update.mockResolvedValue({});
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.backgroundJob.findUnique.mockResolvedValue({ type: 'AUTO_UNSNOOZE' });
   });
 
@@ -78,6 +82,87 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
     expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'job-stale' }, data: expect.objectContaining({ status: 'CANCELLED' }),
     }));
+  });
+});
+
+describe('queue.processJob WAR_ROOM_PROVISION', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.backgroundJob.update.mockResolvedValue({});
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('passes the durable fencing token to the Teams provisioning worker', async () => {
+    const result = await queue.processJob({
+      id: 'job-war-room',
+      type: 'WAR_ROOM_PROVISION',
+      status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' },
+      attempts: 1,
+      maxAttempts: 6,
+    });
+    expect(result).toBe(true);
+    expect(provisionMicrosoftTeamsWarRoomMock).toHaveBeenCalledWith('room-1', 'lease-a');
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'COMPLETED' }),
+    }));
+  });
+
+  it('does not revive a job cancelled while its Graph request was in flight', async () => {
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 0 });
+    const result = await queue.processJob({
+      id: 'job-war-room-cancelled', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 1, maxAttempts: 6,
+    });
+    expect(result).toBe(false);
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room-cancelled', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'COMPLETED' }),
+    }));
+  });
+
+  it('keeps the retry budget intact while reconciling an ambiguous create marker', async () => {
+    const error = Object.assign(new Error('marker reconciliation'), {
+      name: 'WarRoomRetryableError', retryAfterMs: 1_000, retryBudgetNeutral: true,
+    });
+    provisionMicrosoftTeamsWarRoomMock.mockRejectedValueOnce(error);
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 1, maxAttempts: 6 });
+    const result = await queue.processJob({
+      id: 'job-war-room-reconcile', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 1, maxAttempts: 6,
+    });
+    expect(result).toBe(false);
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room-reconcile', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
+    }));
+  });
+
+  it('continues marker-only reconciliation after ordinary create retries exhausted the budget', async () => {
+    const error = Object.assign(new Error('marker reconciliation'), {
+      name: 'WarRoomRetryableError', retryAfterMs: 1_000, retryBudgetNeutral: true,
+    });
+    provisionMicrosoftTeamsWarRoomMock.mockRejectedValueOnce(error);
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 6, maxAttempts: 6 });
+    const result = await queue.processJob({
+      id: 'job-war-room-final-reconcile', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 6, maxAttempts: 6,
+    });
+    expect(result).toBe(false);
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room-final-reconcile', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
+    }));
+  });
+
+  it('rejects an unfenced provisioning job before it can call Graph', async () => {
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 1, maxAttempts: 6, type: 'WAR_ROOM_PROVISION' });
+    const result = await queue.processJob({
+      id: 'job-war-room-invalid', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING', payload: { warRoomId: 'room-1' }, attempts: 1, maxAttempts: 6,
+    });
+    expect(result).toBe(false);
+    expect(provisionMicrosoftTeamsWarRoomMock).not.toHaveBeenCalled();
   });
 });
 
