@@ -138,8 +138,8 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
         }),
         prisma.incident.findMany({
           where: activeWhere,
-          orderBy: [{ urgency: 'desc' }, { createdAt: 'desc' }],
-          take: 10,
+          orderBy: [{ createdAt: 'desc' }],
+          take: 40,
           select: {
             id: true,
             title: true,
@@ -205,6 +205,27 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
       })
     );
 
+    const urgencyRank = (urgency: string) => {
+      switch (urgency) {
+        case 'HIGH':
+          return 0;
+        case 'MEDIUM':
+          return 1;
+        case 'LOW':
+          return 2;
+        default:
+          return 3;
+      }
+    };
+
+    const sortedActiveIncidents = [...activeIncidents]
+      .sort((a, b) => {
+        const rankDiff = urgencyRank(a.urgency) - urgencyRank(b.urgency);
+        if (rankDiff !== 0) return rankDiff;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      })
+      .slice(0, 10);
+
     const generatedAt = new Date();
     const entry: CacheEntry = {
       name: statusPage?.name || 'System health',
@@ -217,7 +238,7 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
         activeIncidents: activeIncidentCount,
         criticalIncidents: criticalIncidentCount,
       },
-      activeIncidents: activeIncidents.map(incident => ({
+      activeIncidents: sortedActiveIncidents.map(incident => ({
         id: incident.id,
         title: incident.title,
         status: incident.status,

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+// eslint-disable-next-line security/detect-non-literal-fs-filename
 const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('application theme contract', () => {

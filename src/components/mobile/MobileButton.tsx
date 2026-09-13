@@ -20,26 +20,55 @@ type MobileButtonProps = {
   className?: string;
 } & ButtonHTMLAttributes<HTMLButtonElement>;
 
-const variantConfig = {
-  primary: { variant: 'default' as const, className: '' },
-  secondary: { variant: 'outline' as const, className: '' },
-  danger: { variant: 'destructive' as const, className: '' },
-  success: {
-    variant: 'default' as const,
-    className: 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500',
-  },
-  warning: {
-    variant: 'default' as const,
-    className: 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-400',
-  },
-  ghost: { variant: 'ghost' as const, className: '' },
-};
+function getVariantConfig(variant: ButtonVariant) {
+  switch (variant) {
+    case 'secondary':
+      return { variant: 'outline' as const, className: '' };
+    case 'danger':
+      return { variant: 'destructive' as const, className: '' };
+    case 'success':
+      return {
+        variant: 'default' as const,
+        className:
+          'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500',
+      };
+    case 'warning':
+      return {
+        variant: 'default' as const,
+        className:
+          'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-400',
+      };
+    case 'ghost':
+      return { variant: 'ghost' as const, className: '' };
+    case 'primary':
+    default:
+      return { variant: 'default' as const, className: '' };
+  }
+}
 
-const sizeConfig = {
-  sm: { size: 'sm' as const, className: 'min-h-10 rounded-lg' },
-  md: { size: 'default' as const, className: 'min-h-11 rounded-xl' },
-  lg: { size: 'lg' as const, className: 'min-h-12 rounded-xl' },
-};
+function getSizeConfig(size: ButtonSize) {
+  switch (size) {
+    case 'sm':
+      return { size: 'sm' as const, className: 'min-h-10 rounded-lg' };
+    case 'lg':
+      return { size: 'lg' as const, className: 'min-h-12 rounded-xl' };
+    case 'md':
+    default:
+      return { size: 'default' as const, className: 'min-h-11 rounded-xl' };
+  }
+}
+
+function getIconSize(size: ButtonSize) {
+  switch (size) {
+    case 'sm':
+      return 'h-10 w-10';
+    case 'lg':
+      return 'h-12 w-12';
+    case 'md':
+    default:
+      return 'h-11 w-11';
+  }
+}
 
 export default function MobileButton({
   children,
@@ -54,8 +83,8 @@ export default function MobileButton({
   disabled,
   ...props
 }: MobileButtonProps) {
-  const variantStyle = variantConfig[variant];
-  const sizeStyle = sizeConfig[size];
+  const variantStyle = getVariantConfig(variant);
+  const sizeStyle = getSizeConfig(size);
   const classes = cn(
     'font-semibold active:scale-[0.98]',
     variantStyle.className,
@@ -66,7 +95,11 @@ export default function MobileButton({
 
   const content = (
     <>
-      {loading ? <LoadingSpinner /> : icon && iconPosition === 'left' ? <span className="flex">{icon}</span> : null}
+      {loading ? (
+        <LoadingSpinner />
+      ) : icon && iconPosition === 'left' ? (
+        <span className="flex">{icon}</span>
+      ) : null}
       <span>{children}</span>
       {!loading && icon && iconPosition === 'right' ? <span className="flex">{icon}</span> : null}
     </>
@@ -95,7 +128,14 @@ export default function MobileButton({
 
 function LoadingSpinner() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="animate-spin" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      className="animate-spin"
+      aria-hidden="true"
+    >
       <circle
         cx="8"
         cy="8"
@@ -120,18 +160,12 @@ export function MobileIconButton({
   icon: ReactNode;
   badge?: number | string;
 } & Omit<MobileButtonProps, 'children'>) {
-  const iconSizes = {
-    sm: 'h-10 w-10',
-    md: 'h-11 w-11',
-    lg: 'h-12 w-12',
-  };
-
   return (
     <div className="relative inline-flex">
       <MobileButton
         variant={variant}
         size={size}
-        className={cn('rounded-full p-0', iconSizes[size])}
+        className={cn('rounded-full p-0', getIconSize(size))}
         {...props}
       >
         {icon}

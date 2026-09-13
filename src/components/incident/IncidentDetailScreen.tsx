@@ -444,10 +444,10 @@ export default async function IncidentDetailScreen({
           service: { name: incident.service.name },
         }}
         postmortemHref={
-          presentation === 'mobile'
-            ? postmortem
+          postmortem
+            ? presentation === 'mobile'
               ? `/m/postmortems/${postmortem.id}`
-              : `/m/postmortems`
+              : `/postmortems/${id}`
             : `/postmortems/${id}`
         }
         postmortemExists={Boolean(postmortem)}
@@ -538,20 +538,27 @@ export default async function IncidentDetailScreen({
         </div>
 
         {presentation === 'mobile' ? (
-          <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
-              <span>People, fields & links</span>
-              <ChevronDown
-                className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
-                aria-hidden="true"
-              />
-            </summary>
-            <div className="space-y-3 border-t border-border p-3">
+          <>
+            <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+                <span>People, fields & links</span>
+                <ChevronDown
+                  className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              <div className="space-y-3 border-t border-border p-3">
+                {watchersContent}
+                {customFieldsContent}
+                {quickLinksContent}
+              </div>
+            </details>
+            <aside className="hidden min-w-0 space-y-4 lg:block lg:col-span-4 lg:space-y-6 2xl:col-span-3">
               {watchersContent}
               {customFieldsContent}
               {quickLinksContent}
-            </div>
-          </details>
+            </aside>
+          </>
         ) : (
           <aside className="min-w-0 space-y-4 lg:col-span-4 lg:space-y-6 2xl:col-span-3">
             {watchersContent}

@@ -65,9 +65,13 @@ export default async function MobileIncidentsPage(props: {
     searchParams?.urgency === 'LOW'
       ? searchParams.urgency
       : undefined;
-  const resolvedAfter = searchParams?.resolvedAfter ? new Date(searchParams.resolvedAfter) : undefined;
+  const resolvedAfter = searchParams?.resolvedAfter
+    ? new Date(searchParams.resolvedAfter)
+    : undefined;
   const createdAfter = searchParams?.createdAfter ? new Date(searchParams.createdAfter) : undefined;
-  const createdBefore = searchParams?.createdBefore ? new Date(searchParams.createdBefore) : undefined;
+  const createdBefore = searchParams?.createdBefore
+    ? new Date(searchParams.createdBefore)
+    : undefined;
   const page = Math.max(1, Number.parseInt(searchParams?.page || '1', 10) || 1);
 
   const selectedWhere: Prisma.IncidentWhereInput = {};
@@ -80,30 +84,89 @@ export default async function MobileIncidentsPage(props: {
   else if (filter === 'resolved') selectedWhere.status = 'RESOLVED';
 
   if (status) selectedWhere.status = status;
-  if (assignee) selectedWhere.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
+  if (assignee)
+    selectedWhere.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
   if (serviceId) selectedWhere.serviceId = serviceId;
   if (urgency) selectedWhere.urgency = urgency;
-  if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime())) selectedWhere.resolvedAt = { gte: resolvedAfter };
+  if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime()))
+    selectedWhere.resolvedAt = { gte: resolvedAfter };
   if (createdAfter && !Number.isNaN(createdAfter.getTime())) {
-    selectedWhere.createdAt = { ...(selectedWhere.createdAt as Prisma.DateTimeFilter), gte: createdAfter };
+    selectedWhere.createdAt = {
+      ...(selectedWhere.createdAt as Prisma.DateTimeFilter),
+      gte: createdAfter,
+    };
   }
   if (createdBefore && !Number.isNaN(createdBefore.getTime())) {
-    selectedWhere.createdAt = { ...(selectedWhere.createdAt as Prisma.DateTimeFilter), lte: createdBefore };
+    selectedWhere.createdAt = {
+      ...(selectedWhere.createdAt as Prisma.DateTimeFilter),
+      lte: createdBefore,
+    };
   }
-
-  const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
-    sort === 'created_asc'
-      ? [{ createdAt: 'asc' }]
-      : sort === 'urgency'
-        ? [{ urgency: 'desc' }, { createdAt: 'desc' }]
-        : [{ createdAt: 'desc' }];
 
   const where: Prisma.IncidentWhereInput = {
     AND: [incidentReadWhere(context.actor), selectedWhere],
   };
 
-  const [incidents, totalCount, services] = await Promise.all([
-    prisma.incident.findMany({
+  const [totalCount, services] = await Promise.all([
+    prisma.incident.count({ where }),
+    prisma.service.findMany({
+      where: serviceReadWhere(context.actor),
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  type IncidentItem = React.ComponentProps<typeof MobileIncidentList>['incidents'][number];
+  let incidents: IncidentItem[] = [];
+
+  if (sort === 'urgency') {
+    // Rank urgency explicitly: HIGH > MEDIUM > LOW, avoiding PostgreSQL enum sequence
+    const skip = (page - 1) * PAGE_SIZE;
+    const take = PAGE_SIZE;
+    const [highCount, medCount] = await Promise.all([
+      prisma.incident.count({ where: { AND: [where, { urgency: 'HIGH' }] } }),
+      prisma.incident.count({ where: { AND: [where, { urgency: 'MEDIUM' }] } }),
+    ]);
+
+    const tiers: Array<{ urgency: 'HIGH' | 'MEDIUM' | 'LOW'; count: number }> = [
+      { urgency: 'HIGH', count: highCount },
+      { urgency: 'MEDIUM', count: medCount },
+      { urgency: 'LOW', count: Math.max(0, totalCount - highCount - medCount) },
+    ];
+
+    let currentSkip = skip;
+    let remainingTake = take;
+
+    for (const tier of tiers) {
+      if (remainingTake <= 0) break;
+      if (currentSkip >= tier.count) {
+        currentSkip -= tier.count;
+        continue;
+      }
+      const tierTake = Math.min(remainingTake, tier.count - currentSkip);
+      const tierIncidents = await prisma.incident.findMany({
+        where: { AND: [where, { urgency: tier.urgency }] },
+        orderBy: [{ createdAt: 'desc' }],
+        skip: currentSkip,
+        take: tierTake,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          urgency: true,
+          createdAt: true,
+          service: { select: { name: true } },
+        },
+      });
+      incidents.push(...(tierIncidents as IncidentItem[]));
+      remainingTake -= tierIncidents.length;
+      currentSkip = 0;
+    }
+  } else {
+    const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
+      sort === 'created_asc' ? [{ createdAt: 'asc' }] : [{ createdAt: 'desc' }];
+
+    incidents = (await prisma.incident.findMany({
       where,
       orderBy,
       skip: (page - 1) * PAGE_SIZE,
@@ -116,14 +179,8 @@ export default async function MobileIncidentsPage(props: {
         createdAt: true,
         service: { select: { name: true } },
       },
-    }),
-    prisma.incident.count({ where }),
-    prisma.service.findMany({
-      where: serviceReadWhere(context.actor),
-      orderBy: { name: 'asc' },
-      select: { id: true, name: true },
-    }),
-  ]);
+    })) as IncidentItem[];
+  }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const buildPageUrl = (newPage: number) => {
@@ -135,16 +192,25 @@ export default async function MobileIncidentsPage(props: {
     if (assignee) params.set('assignee', assignee);
     if (serviceId) params.set('serviceId', serviceId);
     if (urgency) params.set('urgency', urgency);
-    if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime())) params.set('resolvedAfter', resolvedAfter.toISOString());
-    if (createdAfter && !Number.isNaN(createdAfter.getTime())) params.set('createdAfter', createdAfter.toISOString());
-    if (createdBefore && !Number.isNaN(createdBefore.getTime())) params.set('createdBefore', createdBefore.toISOString());
+    if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime()))
+      params.set('resolvedAfter', resolvedAfter.toISOString());
+    if (createdAfter && !Number.isNaN(createdAfter.getTime()))
+      params.set('createdAfter', createdAfter.toISOString());
+    if (createdBefore && !Number.isNaN(createdBefore.getTime()))
+      params.set('createdBefore', createdBefore.toISOString());
     if (newPage > 1) params.set('page', String(newPage));
     const suffix = params.toString();
     return suffix ? `/m/incidents?${suffix}` : '/m/incidents';
   };
 
   const hasFilters = Boolean(
-    query || filter !== 'all' || sort !== 'created_desc' || status || assignee || serviceId || urgency
+    query ||
+    filter !== 'all' ||
+    sort !== 'created_desc' ||
+    status ||
+    assignee ||
+    serviceId ||
+    urgency
   );
 
   return (
@@ -165,7 +231,9 @@ export default async function MobileIncidentsPage(props: {
         <EmptyState
           icon={<SearchX aria-hidden="true" />}
           title="No incidents found"
-          description={query ? `Nothing matches “${query}”.` : 'Change the filters or create a new incident.'}
+          description={
+            query ? `Nothing matches “${query}”.` : 'Change the filters or create a new incident.'
+          }
           size="sm"
           action={
             <Button asChild size="sm">
@@ -188,7 +256,10 @@ export default async function MobileIncidentsPage(props: {
       )}
 
       {totalPages > 1 && (
-        <nav aria-label="Incident result navigation" className="flex items-center justify-center gap-2 pt-1">
+        <nav
+          aria-label="Incident result navigation"
+          className="flex items-center justify-center gap-2 pt-1"
+        >
           {page > 1 && (
             <Button asChild variant="outline" size="sm" className="h-10 rounded-xl">
               <Link href={buildPageUrl(page - 1)}>Newer</Link>

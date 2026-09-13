@@ -171,10 +171,15 @@ export default function MobileCreateIncidentClient({
               <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <label htmlFor="incident-template" className="block text-sm font-semibold text-foreground">
+              <label
+                htmlFor="incident-template"
+                className="block text-sm font-semibold text-foreground"
+              >
                 Incident template
               </label>
-              <p className="text-[11px] text-muted-foreground">Optional · pre-fills the incident form</p>
+              <p className="text-[11px] text-muted-foreground">
+                Optional · pre-fills the incident form
+              </p>
             </div>
           </div>
 
@@ -204,8 +209,12 @@ export default function MobileCreateIncidentClient({
               {selectedTemplate.description ? ` · ${selectedTemplate.description}` : ''}
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
                 <span>{selectedTemplate.defaultUrgency} urgency</span>
-                {selectedTemplate.defaultPriority && <span>{selectedTemplate.defaultPriority} priority</span>}
-                {selectedTemplate.defaultService && <span>{selectedTemplate.defaultService.name}</span>}
+                {selectedTemplate.defaultPriority && (
+                  <span>{selectedTemplate.defaultPriority} priority</span>
+                )}
+                {selectedTemplate.defaultService && (
+                  <span>{selectedTemplate.defaultService.name}</span>
+                )}
               </div>
             </div>
           )}
@@ -229,7 +238,9 @@ export default function MobileCreateIncidentClient({
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="incident-description" className={FIELD_LABEL}>Description</label>
+          <label htmlFor="incident-description" className={FIELD_LABEL}>
+            Description
+          </label>
           <textarea
             id="incident-description"
             name="description"
@@ -254,7 +265,9 @@ export default function MobileCreateIncidentClient({
               onChange={event => handleServiceChange(event.target.value)}
               className={cn(CONTROL, 'appearance-none pr-10')}
             >
-              <option value="" disabled>Select a service</option>
+              <option value="" disabled>
+                Select a service
+              </option>
               {services.map(service => (
                 <option key={service.id} value={service.id}>
                   {truncate(service.name, 40)}
@@ -271,7 +284,9 @@ export default function MobileCreateIncidentClient({
         <div className="space-y-2">
           <div>
             <span className={FIELD_LABEL}>Urgency</span>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">Controls responder notification behavior.</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Controls responder notification behavior.
+            </p>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <UrgencyRadio
@@ -300,7 +315,9 @@ export default function MobileCreateIncidentClient({
 
         <div className="space-y-2">
           <div>
-            <label htmlFor="incident-priority" className={FIELD_LABEL}>Priority</label>
+            <label htmlFor="incident-priority" className={FIELD_LABEL}>
+              Priority
+            </label>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
               Optional business-impact classification, separate from paging urgency.
             </p>
@@ -314,9 +331,9 @@ export default function MobileCreateIncidentClient({
               className={cn(CONTROL, 'appearance-none pr-10')}
             >
               <option value="">Unassigned</option>
-              {INCIDENT_PRIORITIES.map(value => (
-                <option key={value} value={value}>
-                  {value} · {INCIDENT_PRIORITY_DEFINITIONS[value].label}
+              {Object.entries(INCIDENT_PRIORITY_DEFINITIONS).map(([priorityKey, definition]) => (
+                <option key={priorityKey} value={priorityKey}>
+                  {priorityKey} · {definition.label}
                 </option>
               ))}
             </select>
@@ -359,7 +376,9 @@ export default function MobileCreateIncidentClient({
         </div>
 
         <div className="space-y-2">
-          <label htmlFor="incident-assignee" className={FIELD_LABEL}>Assignee (optional)</label>
+          <label htmlFor="incident-assignee" className={FIELD_LABEL}>
+            Assignee (optional)
+          </label>
           <div className="relative">
             <select
               id="incident-assignee"
@@ -391,12 +410,7 @@ export default function MobileCreateIncidentClient({
       )}
 
       <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
-        <MobileButton
-          type="button"
-          variant="secondary"
-          fullWidth
-          onClick={() => router.back()}
-        >
+        <MobileButton type="button" variant="secondary" fullWidth onClick={() => router.back()}>
           Cancel
         </MobileButton>
         <MobileButton type="submit" fullWidth loading={loading}>

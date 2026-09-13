@@ -22,13 +22,22 @@ function ThemeAttributeBridge() {
     // Keep browser/PWA chrome aligned with an explicit in-app theme override,
     // not only with the OS media query used during the initial HTML response.
     const themeColor = effectiveTheme === 'dark' ? '#09090b' : '#f8fafc';
-    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    if (!meta) {
-      meta = document.createElement('meta');
+    const existingMetaTags = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+    if (existingMetaTags.length > 0) {
+      existingMetaTags.forEach((tag, index) => {
+        if (index === 0) {
+          tag.removeAttribute('media');
+          tag.content = themeColor;
+        } else {
+          tag.remove();
+        }
+      });
+    } else {
+      const meta = document.createElement('meta');
       meta.name = 'theme-color';
+      meta.content = themeColor;
       document.head.appendChild(meta);
     }
-    meta.content = themeColor;
   }, [resolvedTheme]);
 
   return null;
@@ -47,12 +56,7 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
     : { forcedTheme: 'light' as const, defaultTheme: 'light' as const, enableSystem: false };
 
   return (
-    <ThemeProvider
-      attribute="class"
-      disableTransitionOnChange
-      enableColorScheme
-      {...themeProps}
-    >
+    <ThemeProvider attribute="class" disableTransitionOnChange enableColorScheme {...themeProps}>
       <ThemeAttributeBridge />
       {children}
     </ThemeProvider>

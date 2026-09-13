@@ -2,10 +2,12 @@
 
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import MobileCard from '@/components/mobile/MobileCard';
 import { cn } from '@/lib/utils';
 import { haptics } from '@/lib/haptics';
+
+const emptySubscribe = () => () => {};
 
 const options = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -15,9 +17,11 @@ const options = [
 
 export default function MobileThemeToggle() {
   const { theme, resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   const selected = mounted && (theme === 'light' || theme === 'dark') ? theme : 'system';
   const resolvedLabel = mounted ? (resolvedTheme === 'dark' ? 'Dark' : 'Light') : 'System';
@@ -28,7 +32,9 @@ export default function MobileThemeToggle() {
         <div className="min-w-0">
           <div className="text-sm font-semibold text-foreground">Appearance</div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {selected === 'system' ? `Following system · ${resolvedLabel}` : `${resolvedLabel} mode`}
+            {selected === 'system'
+              ? `Following system · ${resolvedLabel}`
+              : `${resolvedLabel} mode`}
           </p>
         </div>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -36,7 +42,11 @@ export default function MobileThemeToggle() {
         </span>
       </div>
 
-      <div className="grid grid-cols-3 rounded-xl bg-muted p-1" role="radiogroup" aria-label="Appearance">
+      <div
+        className="grid grid-cols-3 rounded-xl bg-muted p-1"
+        role="radiogroup"
+        aria-label="Appearance"
+      >
         {options.map(option => {
           const Icon = option.icon;
           const active = selected === option.value;

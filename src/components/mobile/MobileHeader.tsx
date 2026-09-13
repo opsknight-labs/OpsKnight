@@ -1,23 +1,38 @@
 'use client';
-
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, CircleAlert, CircleCheck, Plus, TriangleAlert } from 'lucide-react';
 import MobileQuickSwitcher from '@/components/mobile/MobileQuickSwitcher';
 
-const LIST_TITLES: Record<string, string> = {
-  '/m/incidents': 'Incidents',
-  '/m/services': 'Services',
-  '/m/notifications': 'Alerts',
-  '/m/schedules': 'On-call',
-  '/m/teams': 'Teams',
-  '/m/users': 'Users',
-  '/m/policies': 'Policies',
-  '/m/analytics': 'Analytics',
-  '/m/postmortems': 'Postmortems',
-  '/m/status': 'System health',
-  '/m/more': 'More',
-};
+function getListTitle(pathname: string): string {
+  switch (pathname) {
+    case '/m/incidents':
+      return 'Incidents';
+    case '/m/services':
+      return 'Services';
+    case '/m/notifications':
+      return 'Alerts';
+    case '/m/schedules':
+      return 'On-call';
+    case '/m/teams':
+      return 'Teams';
+    case '/m/users':
+      return 'Users';
+    case '/m/policies':
+      return 'Policies';
+    case '/m/analytics':
+      return 'Analytics';
+    case '/m/postmortems':
+      return 'Postmortems';
+    case '/m/status':
+      return 'System health';
+    case '/m/more':
+      return 'More';
+    default:
+      return 'OpsKnight';
+  }
+}
 
 const DETAIL_ROUTES = [
   { prefix: '/m/incidents/', title: 'Incident', backHref: '/m/incidents' },
@@ -40,7 +55,7 @@ function routeContext(pathname: string) {
   }
   const detail = DETAIL_ROUTES.find(route => pathname.startsWith(route.prefix));
   if (detail) return { home: false, title: detail.title, backHref: detail.backHref } as const;
-  return { home: false, title: LIST_TITLES[pathname] || 'OpsKnight' } as const;
+  return { home: false, title: getListTitle(pathname) } as const;
 }
 
 export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps) {
@@ -59,7 +74,7 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
       <div className="mobile-header-primary">
         {route.home ? (
           <Link href="/m" className="mobile-header-brand" aria-label="OpsKnight home">
-            <img src="/logo.svg" alt="" width={28} height={28} aria-hidden="true" />
+            <Image src="/logo.svg" alt="" width={28} height={28} aria-hidden="true" priority />
             <span>OpsKnight</span>
           </Link>
         ) : route.backHref ? (
@@ -80,7 +95,11 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
 
       <div className="mobile-header-actions">
         {pathname === '/m/incidents' && (
-          <Link href="/m/incidents/create" className="mobile-header-icon-button" aria-label="Create incident">
+          <Link
+            href="/m/incidents/create"
+            className="mobile-header-icon-button"
+            aria-label="Create incident"
+          >
             <Plus aria-hidden="true" />
           </Link>
         )}

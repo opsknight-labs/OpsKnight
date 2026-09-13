@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import SwipeableIncidentCard from '@/components/mobile/SwipeableIncidentCard';
 
 vi.mock('@/contexts/TimezoneContext', () => ({
