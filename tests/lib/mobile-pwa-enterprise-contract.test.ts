@@ -1,23 +1,22 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-
-const ROOT = process.cwd();
-const read = (relativePath: string) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
 describe('mobile/PWA enterprise architecture contract', () => {
   it('keeps mobile login on the canonical login implementation', () => {
-    const mobileLogin = read('src/app/(public)/m/login/page.tsx');
+    const mobileLogin = fs.readFileSync('src/app/(public)/m/login/page.tsx', 'utf8');
     expect(mobileLogin).toContain("import LoginPage from '@/app/login/page'");
     expect(mobileLogin).toContain('export default LoginPage');
-    expect(fs.existsSync(path.join(ROOT, 'src/app/(public)/m/login/MobileLoginClient.tsx'))).toBe(false);
+    expect(fs.existsSync('src/app/(public)/m/login/MobileLoginClient.tsx')).toBe(false);
   });
 
   it('uses one incident lifecycle transport for desktop, mobile and replay', () => {
-    const canonicalRoute = read('src/app/api/incidents/[id]/status/route.ts');
-    const legacyMobileRoute = read('src/app/api/mobile/incidents/[id]/status/route.ts');
-    const client = read('src/lib/incidents/status-client.ts');
-    const worker = read('public/custom-sw.js');
+    const canonicalRoute = fs.readFileSync('src/app/api/incidents/[id]/status/route.ts', 'utf8');
+    const legacyMobileRoute = fs.readFileSync(
+      'src/app/api/mobile/incidents/[id]/status/route.ts',
+      'utf8'
+    );
+    const client = fs.readFileSync('src/lib/incidents/status-client.ts', 'utf8');
+    const worker = fs.readFileSync('public/custom-sw.js', 'utf8');
 
     expect(canonicalRoute).toContain('createIncidentStatusRoute');
     expect(legacyMobileRoute).toContain('createIncidentStatusRoute');
@@ -28,8 +27,11 @@ describe('mobile/PWA enterprise architecture contract', () => {
   });
 
   it('never auto-grants notification permission or silently trusts a mobile user-agent', () => {
-    const dashboardNotifications = read('src/components/DashboardNotifications.tsx');
-    const auth = read('src/lib/auth.ts');
+    const dashboardNotifications = fs.readFileSync(
+      'src/components/DashboardNotifications.tsx',
+      'utf8'
+    );
+    const auth = fs.readFileSync('src/lib/auth.ts', 'utf8');
 
     expect(dashboardNotifications).toContain('onClick={() => void requestPermission()}');
     expect(dashboardNotifications).not.toMatch(
@@ -40,7 +42,7 @@ describe('mobile/PWA enterprise architecture contract', () => {
   });
 
   it('keeps dynamic authenticated routes and APIs out of service-worker caches', () => {
-    const config = read('next.config.ts');
+    const config = fs.readFileSync('next.config.ts', 'utf8');
     expect(config).toContain("handler: 'NetworkOnly'");
     expect(config).toContain("url.pathname.startsWith('/m/')");
     expect(config).toContain('extendDefaultRuntimeCaching: false');
@@ -49,9 +51,9 @@ describe('mobile/PWA enterprise architecture contract', () => {
   });
 
   it('requires explicit activation for a waiting service worker', () => {
-    const config = read('next.config.ts');
-    const coordinator = read('src/components/mobile/MobilePwaCoordinator.tsx');
-    const worker = read('public/custom-sw.js');
+    const config = fs.readFileSync('next.config.ts', 'utf8');
+    const coordinator = fs.readFileSync('src/components/mobile/MobilePwaCoordinator.tsx', 'utf8');
+    const worker = fs.readFileSync('public/custom-sw.js', 'utf8');
 
     expect(config).toContain('skipWaiting: false');
     expect(coordinator).toContain("worker.postMessage({ type: 'SKIP_WAITING' })");
@@ -62,14 +64,15 @@ describe('mobile/PWA enterprise architecture contract', () => {
   });
 
   it('treats queued responder actions as a durable state machine', () => {
-    const queue = read('src/lib/offline-queue.ts');
-    const worker = read('public/custom-sw.js');
+    const queue = fs.readFileSync('src/lib/offline-queue.ts', 'utf8');
+    const worker = fs.readFileSync('public/custom-sw.js', 'utf8');
 
     for (const state of [
       'PENDING',
       'SENDING',
       'SUCCEEDED',
       'FAILED',
+      'FORBIDDEN',
       'CONFLICT',
       'AUTH_REQUIRED',
     ]) {
@@ -77,13 +80,15 @@ describe('mobile/PWA enterprise architecture contract', () => {
     }
     expect(queue).toContain('SENDING_LEASE_MS');
     expect(queue).toContain('exponentialBackoffMs');
+    expect(queue).toContain('Strict FIFO invariant');
     expect(worker).toContain('SENDING_LEASE_MS');
     expect(worker).toContain('exponentialBackoffMs');
+    expect(worker).toContain('full creation-ordered queue');
   });
 
   it('uses a versioned, same-origin push contract and disables unknown-version actions', () => {
-    const worker = read('public/custom-sw.js');
-    const producer = read('src/lib/incident-push-delivery.ts');
+    const worker = fs.readFileSync('public/custom-sw.js', 'utf8');
+    const producer = fs.readFileSync('src/lib/incident-push-delivery.ts', 'utf8');
 
     expect(worker).toContain('SUPPORTED_PUSH_CONTRACT_VERSIONS');
     expect(worker).toContain('parsed.origin !== self.location.origin');
