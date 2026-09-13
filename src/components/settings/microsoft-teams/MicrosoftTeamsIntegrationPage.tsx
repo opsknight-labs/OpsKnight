@@ -60,7 +60,7 @@ export default function MicrosoftTeamsIntegrationPage({
   installationCount,
   installationPermissions,
 }: {
-  config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean } | null;
+  config: { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean; warRoomsEnabled: boolean } | null;
   destinations: DestinationRow[];
   appManifestJson: string;
   isAdmin: boolean;
@@ -184,6 +184,10 @@ export default function MicrosoftTeamsIntegrationPage({
           <input type="checkbox" name="interactiveEnabled" defaultChecked={config?.interactiveEnabled ?? false} disabled={!isAdmin} className="mt-0.5" />
           <span><span className="font-medium">Enable interactive incident actions</span><span className="block text-xs text-muted-foreground">Global kill switch for authenticated Teams ChatOps. Each destination must also opt in.</span></span>
         </label>
+        <label className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+          <input type="checkbox" name="warRoomsEnabled" defaultChecked={config?.warRoomsEnabled ?? false} disabled={!isAdmin} className="mt-0.5" />
+          <span><span className="font-medium">Enable incident war rooms</span><span className="block text-xs text-muted-foreground">Adds `Channel.Create.Group` to the downloadable app package. Re-download and re-consent the package in every target Team before creating war rooms.</span></span>
+        </label>
         {isAdmin && (
           <Button type="submit" disabled={saving} className="h-9 text-xs font-semibold">
             {saving ? 'Saving…' : 'Save Teams Configuration'}
@@ -200,7 +204,7 @@ export default function MicrosoftTeamsIntegrationPage({
             <span className="ml-1">Bot endpoint</span>
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">The Phase 1 package requests only the required `ChannelSettings.Read.Group` RSC permission; card delivery uses Bot Connector credentials.</p>
+        <p className="text-xs text-muted-foreground">Card delivery uses Bot Connector credentials. When incident war rooms are enabled above, this package also requests `Channel.Create.Group`; download and re-consent it for each target Team.</p>
         <pre className="max-h-64 overflow-auto rounded-lg border bg-muted/30 p-3 text-[11px] font-mono">{appManifestJson}</pre>
         <div className="flex gap-2">
           {isConfigured && (

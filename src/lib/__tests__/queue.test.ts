@@ -12,6 +12,7 @@ const prismaMock = prisma as unknown as {
   backgroundJob: {
     findUnique: TestMock;
     update: TestMock;
+    updateMany: TestMock;
   };
 };
 const sendNotificationMock = mockedSendNotification as unknown as TestMock;
@@ -43,6 +44,7 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.backgroundJob.update.mockResolvedValue({});
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.backgroundJob.findUnique.mockResolvedValue({ type: 'AUTO_UNSNOOZE' });
   });
 
@@ -87,6 +89,7 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.backgroundJob.update.mockResolvedValue({});
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('passes the durable fencing token to the Teams provisioning worker', async () => {
@@ -100,8 +103,21 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
     });
     expect(result).toBe(true);
     expect(provisionMicrosoftTeamsWarRoomMock).toHaveBeenCalledWith('room-1', 'lease-a');
-    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-war-room' },
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'COMPLETED' }),
+    }));
+  });
+
+  it('does not revive a job cancelled while its Graph request was in flight', async () => {
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 0 });
+    const result = await queue.processJob({
+      id: 'job-war-room-cancelled', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 1, maxAttempts: 6,
+    });
+    expect(result).toBe(false);
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room-cancelled', status: 'PROCESSING' },
       data: expect.objectContaining({ status: 'COMPLETED' }),
     }));
   });

@@ -9,6 +9,7 @@ import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilitie
 import crypto from 'crypto';
 
 type RequestResult = { accepted: true; warRoomId: string; state: string } | { accepted: false; code: string };
+const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
 export class WarRoomRetryableError extends Error {
   constructor(message: string, readonly retryAfterMs?: number) { super(message); this.name = 'WarRoomRetryableError'; }
@@ -72,7 +73,21 @@ export async function provisionMicrosoftTeamsWarRoom(warRoomId: string, expected
   // create outcome. Such rooms are reconciliation-only until an operator
   // resolves the ambiguity.
   if (room.createAttemptedAt) {
-    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'AMBIGUOUS', lastErrorCode: 'CREATE_OUTCOME_UNRESOLVED', lastError: 'A prior Teams channel-create may have succeeded; reconciliation is required.' } });
+    const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
+    const remaining = deadline - Date.now();
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+      data: {
+        state: 'AMBIGUOUS',
+        lastErrorCode: remaining > 0 ? 'CREATE_OUTCOME_RECONCILING' : 'CREATE_OUTCOME_UNRESOLVED',
+        lastError: remaining > 0
+          ? 'A prior Teams channel-create may have succeeded; reconciling by marker only.'
+          : 'Teams channel-create outcome remains unresolved after the reconciliation window; operator reconciliation is required.',
+      },
+    });
+    if (remaining > 0) {
+      throw new WarRoomRetryableError('Reconciling an ambiguous Teams channel-create outcome by marker only.', Math.min(60_000, remaining));
+    }
     return;
   }
   if (room.membershipType !== 'STANDARD') return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED', 'Private Teams war rooms require an owner and initial members.');
@@ -117,7 +132,7 @@ async function markFailed(id: string, provisioningToken: string, code: string, m
   await prisma.incidentWarRoom.updateMany({ where: { id, provisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } }, data: { state: 'FAILED', lastErrorCode: code, lastError: message.slice(0, 1000), provisioningToken: null } });
 }
 
-async function validateWarRoomProvisioningAuthority(room: { destinationId: string | null; installationId: string | null; providerTenantId: string | null; incident: { status: string } }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
+async function validateWarRoomProvisioningAuthority(room: { destinationId: string | null; installationId: string | null; providerTenantId: string | null; providerContainerId: string | null; incident: { status: string } }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
   if (!['OPEN', 'ACKNOWLEDGED'].includes(room.incident.status)) return { allowed: false, code: 'INCIDENT_NOT_ACTIVE', message: 'Incident is no longer active.' };
   if (!room.destinationId) return { allowed: false, code: 'DESTINATION_SNAPSHOT_MISSING', message: 'War-room routing snapshot is missing.' };
   const [config, destination, installation] = await Promise.all([
@@ -126,7 +141,7 @@ async function validateWarRoomProvisioningAuthority(room: { destinationId: strin
     room.installationId ? prisma.microsoftTeamsInstallation.findUnique({ where: { id: room.installationId }, select: { enabled: true } }) : Promise.resolve(null),
   ]);
   if (!config || !destination?.enabled || !destination.warRoomEnabled || (room.installationId && (!installation?.enabled || destination.installationId !== room.installationId))) return { allowed: false, code: 'WAR_ROOM_AUTHORITY_REVOKED', message: 'Microsoft Teams war-room configuration or installation was disabled.' };
-  const capabilities = await getMicrosoftTeamsCapabilities({ tenantId: room.providerTenantId ?? undefined });
+  const capabilities = await getMicrosoftTeamsCapabilities({ tenantId: room.providerTenantId ?? undefined, teamId: room.providerContainerId ?? undefined });
   if (!capabilities.canCreateWarRooms) return { allowed: false, code: 'WAR_ROOM_CAPABILITY_UNAVAILABLE', message: capabilities.failureReason ?? 'Microsoft Teams channel-create capability is unavailable.' };
   return { allowed: true };
 }

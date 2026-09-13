@@ -28,6 +28,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         tenantMode: 'SINGLE' | 'MULTI';
         enabled: boolean;
         interactiveEnabled: boolean;
+        warRoomsEnabled: boolean;
         createdAt: Date;
         updatedAt: Date;
         updatedBy?: string | null;
@@ -71,7 +72,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
     // Team discovery and war-room administration are separate opt-in consent
     // surfaces. Existing discovery installs must not silently request write RSC.
     includeTeamSettingsPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
-    includeWarRoomPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_WAR_ROOM_RSC === '1',
+    includeWarRoomPermissions: config?.warRoomsEnabled ?? false,
   });
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;
@@ -176,7 +177,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
       />
 
       <MicrosoftTeamsIntegrationPage
-        config={config as unknown as { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean } | null}
+        config={config as unknown as { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean; warRoomsEnabled: boolean } | null}
         destinations={destinations as unknown as MicrosoftTeamsDestinationRow[]}
         appManifestJson={manifestJson}
         isAdmin={permissions.isAdmin}

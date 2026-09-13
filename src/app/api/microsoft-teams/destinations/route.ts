@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { logAudit } from '@/lib/audit';
 import prisma from '@/lib/prisma';
 import { getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
-import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
+import { revokeMicrosoftTeamsOperations, revokeMicrosoftTeamsWarRoomProvisioning } from '@/lib/microsoft-teams/lifecycle';
 
 const upsertSchema = z.object({
   serviceId: z.string().trim().min(1).max(191),
@@ -203,6 +203,7 @@ export async function POST(request: NextRequest) {
             data: { enabled: false },
           } as never);
           await revokeMicrosoftTeamsOperations(tx, { destinationIds: [oldId], reason: 'Microsoft Teams destination retargeted' });
+          await revokeMicrosoftTeamsWarRoomProvisioning(tx, { destinationIds: [oldId], reason: 'Microsoft Teams destination retargeted' });
         }
         // Create-or-reuse the target tuple: an old tombstone for same (service,tuple) is revived (id reused
         // and ledger preserved) so already-delivered message history for that channel is not orphaned.
@@ -283,6 +284,10 @@ export async function DELETE(request: NextRequest) {
       const destinationIds = destinations.map(destination => destination.id);
       await txAny.microsoftTeamsDestination.updateMany({ where, data: { enabled: false, interactiveEnabled: false } } as never);
       await revokeMicrosoftTeamsOperations(tx, {
+        destinationIds,
+        reason: 'Microsoft Teams destination unlinked',
+      });
+      await revokeMicrosoftTeamsWarRoomProvisioning(tx, {
         destinationIds,
         reason: 'Microsoft Teams destination unlinked',
       });

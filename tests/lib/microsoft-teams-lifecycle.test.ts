@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
+import { revokeMicrosoftTeamsOperations, revokeMicrosoftTeamsWarRoomProvisioning } from '@/lib/microsoft-teams/lifecycle';
 
 function transactionWith(operations: Array<Record<string, unknown>>) {
   return {
@@ -55,5 +55,44 @@ describe('Microsoft Teams lifecycle revocation', () => {
     expect(result).toEqual({ operationIds: [], jobsCancelled: 0 });
     expect(tx.externalOperation.update).not.toHaveBeenCalled();
     expect(tx.backgroundJob.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('fences provisioners and retains attempted room creation as ambiguous', async () => {
+    const tx = {
+      incidentWarRoom: {
+        findMany: vi.fn(async () => [
+          { id: 'safe-room', destinationId: 'dest-1', createAttemptedAt: null },
+          { id: 'unknown-room', destinationId: 'dest-1', createAttemptedAt: new Date() },
+          { id: 'other-room', destinationId: 'dest-2', createAttemptedAt: null },
+        ]),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+      },
+      backgroundJob: {
+        findMany: vi.fn(async () => [
+          { id: 'safe-job', payload: { warRoomId: 'safe-room' } },
+          { id: 'unknown-job', payload: { warRoomId: 'unknown-room' } },
+          { id: 'other-job', payload: { warRoomId: 'other-room' } },
+        ]),
+        updateMany: vi.fn(async () => ({ count: 2 })),
+      },
+    };
+
+    const result = await revokeMicrosoftTeamsWarRoomProvisioning(tx as never, {
+      destinationIds: ['dest-1'], reason: 'Teams destination unlinked',
+    });
+
+    expect(result).toEqual({ warRoomIds: ['safe-room', 'unknown-room'], jobsCancelled: 2 });
+    expect(tx.incidentWarRoom.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: { in: ['safe-room'] } }),
+      data: expect.objectContaining({ state: 'FAILED', provisioningToken: null }),
+    }));
+    expect(tx.incidentWarRoom.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: { in: ['unknown-room'] } }),
+      data: expect.objectContaining({ state: 'AMBIGUOUS', provisioningToken: null }),
+    }));
+    expect(tx.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: { in: ['safe-job', 'unknown-job'] } }),
+      data: expect.objectContaining({ status: 'CANCELLED' }),
+    }));
   });
 });

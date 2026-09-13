@@ -6,7 +6,7 @@ import { AppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import { assertMicrosoftTeamsActivityAuth, enforceMicrosoftTeamsTenantAllowlist, getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
 import { normalizeTrustedMicrosoftTeamsServiceUrl } from '@/lib/microsoft-teams/service-url';
-import { revokeMicrosoftTeamsOperations } from '@/lib/microsoft-teams/lifecycle';
+import { revokeMicrosoftTeamsOperations, revokeMicrosoftTeamsWarRoomProvisioning } from '@/lib/microsoft-teams/lifecycle';
 
 /**
  * Bot Framework / Teams activity endpoint.
@@ -210,10 +210,15 @@ export async function POST(request: NextRequest) {
             });
             await tx.microsoftTeamsInstallation.updateMany({ where: { tenantId, teamId }, data: { enabled: false } });
             await tx.microsoftTeamsDestination.updateMany({ where: { tenantId, teamId }, data: { enabled: false, interactiveEnabled: false } });
-            return revokeMicrosoftTeamsOperations(tx, {
+            const revoked = await revokeMicrosoftTeamsOperations(tx, {
               destinationIds: destRows.map(row => row.id),
               reason: 'Microsoft Teams app was removed from this Team',
             });
+            await revokeMicrosoftTeamsWarRoomProvisioning(tx, {
+              destinationIds: destRows.map(row => row.id),
+              reason: 'Microsoft Teams app was removed from this Team',
+            });
+            return revoked;
           });
           logger.info('[MicrosoftTeams] Teams operations settled after bot removal', { tenantId, teamId, revokedCount: revoked.operationIds.length });
           logger.info('[MicrosoftTeams] Installation revoked — destinations disabled', { tenantId, teamId });

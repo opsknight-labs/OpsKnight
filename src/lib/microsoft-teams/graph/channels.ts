@@ -1,4 +1,4 @@
-import { getMicrosoftTeamsGraphAccessToken } from '../client';
+import { clearMicrosoftTeamsGraphAccessToken, getMicrosoftTeamsGraphAccessToken } from '../client';
 import type { WarRoomGraphResult } from '@/lib/war-room/types';
 
 type Channel = { id: string; displayName: string; description?: string | null; webUrl?: string | null };
@@ -12,7 +12,7 @@ function failure(status: number, body: string, retryAfter: string | null, operat
   return { ok: false, code: 'UNKNOWN', message: body.slice(0, 500) || `Microsoft Graph returned HTTP ${status}.` };
 }
 
-async function graph(tenantId: string, path: string, init: RequestInit, operation: 'READ' | 'CREATE' | 'UPDATE'): Promise<WarRoomGraphResult<Response>> {
+async function graph(tenantId: string, path: string, init: RequestInit, operation: 'READ' | 'CREATE' | 'UPDATE', refreshed = false): Promise<WarRoomGraphResult<Response>> {
   const token = await getMicrosoftTeamsGraphAccessToken(tenantId);
   if (!token) return { ok: false, code: 'GRAPH_TOKEN_FAILED', message: 'Unable to obtain a Microsoft Graph access token.' };
   try {
@@ -21,6 +21,13 @@ async function graph(tenantId: string, path: string, init: RequestInit, operatio
     if (parsed.protocol !== 'https:' || parsed.hostname !== 'graph.microsoft.com') return { ok: false, code: 'UNKNOWN', message: 'Microsoft Graph returned an untrusted pagination URL.' };
     const response = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...init.headers }, signal: AbortSignal.timeout(30_000) });
     if (response.ok) return { ok: true, value: response };
+    // A 401 is an authentication failure before the request is authorized, so
+    // one fresh credential attempt is safe even for the channel-create POST.
+    // Never treat 403 as refreshable: it is a consent/authorization failure.
+    if (response.status === 401 && !refreshed) {
+      clearMicrosoftTeamsGraphAccessToken(tenantId);
+      return graph(tenantId, path, init, operation, true);
+    }
     return failure(response.status, await response.text().catch(() => ''), response.headers.get('Retry-After'), operation);
   } catch (error) {
     return { ok: false, code: operation === 'CREATE' ? 'AMBIGUOUS_CREATE' : 'TRANSIENT_READ', message: `Microsoft Graph request failed: ${error instanceof Error ? error.message : String(error)}` };
@@ -48,17 +55,22 @@ export async function createChannel(input: { tenantId: string; teamId: string; d
 /** Reconciliation is marker-based, never name-only, to avoid adopting an unrelated channel. */
 export async function findWarRoomChannel(input: { tenantId: string; teamId: string; marker: string }): Promise<WarRoomGraphResult<Channel | null>> {
   let next: string | null = `/teams/${encodeURIComponent(input.teamId)}/channels?$top=100&$select=id,displayName,description,webUrl`;
+  let matchingChannel: Channel | null = null;
   for (let page = 0; next && page < 100; page += 1) {
     const result = await graph(input.tenantId, next, { method: 'GET' }, 'READ');
     if (!result.ok) return result;
     const body = await result.value.json().catch(() => null) as { value?: Channel[]; '@odata.nextLink'?: string } | null;
     if (!Array.isArray(body?.value)) return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph returned an invalid channel listing.' };
     const matches = body.value.filter(channel => channel.description?.includes(input.marker));
-    if (matches.length > 1) return { ok: false, code: 'DUPLICATE_WAR_ROOMS', message: 'Multiple Microsoft Teams channels claim this OpsKnight war-room marker.' };
-    if (matches.length === 1) return { ok: true, value: matches[0] };
+    if (matches.length > 1 || (matchingChannel && matches.length === 1)) {
+      return { ok: false, code: 'DUPLICATE_WAR_ROOMS', message: 'Multiple Microsoft Teams channels claim this OpsKnight war-room marker.' };
+    }
+    if (matches.length === 1) matchingChannel = matches[0];
     next = typeof body['@odata.nextLink'] === 'string' ? body['@odata.nextLink'] : null;
   }
-  return next ? { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph channel pagination exceeded its safety limit.' } : { ok: true, value: null };
+  return next
+    ? { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph channel pagination exceeded its safety limit.' }
+    : { ok: true, value: matchingChannel };
 }
 
 export async function updateChannel(input: { tenantId: string; teamId: string; channelId: string; displayName?: string; description?: string }): Promise<WarRoomGraphResult<null>> {

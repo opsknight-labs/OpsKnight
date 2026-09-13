@@ -42,6 +42,7 @@ export type MicrosoftTeamsCapability = {
  */
 export async function getMicrosoftTeamsCapabilities(options?: {
   tenantId?: string;
+  teamId?: string;
   rscState?: TeamsRscGrantState | null;
 }): Promise<MicrosoftTeamsCapability> {
   const resolved = await getMicrosoftTeamsConfig();
@@ -127,10 +128,22 @@ export async function getMicrosoftTeamsCapabilities(options?: {
     ? await prismaAny.microsoftTeamsDestination.count({ where: { tenantId: tenantId || undefined, enabled: true, interactiveEnabled: true, installation: { enabled: true } } }).catch(() => 0)
     : 0;
 
-  // Graph cannot safely dry-run a channel POST. A healthy RSC discovery probe
-  // plus the explicitly enabled create feature is the centralized admission
-  // decision; the adapter still turns a provider 403 into an actionable error.
-  const canCreateWarRooms = Boolean(resolved.config.warRoomsEnabled && botInstalled && rsc && !rsc.unknown && rsc.missing.length === 0);
+  // Channel.Create.Group is a distinct RSC consent. Do not infer it from the
+  // ordinary ChannelSettings.Read.Group discovery probe. The consented set is
+  // read from the exact app installation for the target Team.
+  let warRoomRsc: TeamsRscGrantState | null = null;
+  if (resolved.config.warRoomsEnabled && options?.teamId?.trim()) {
+    try {
+      const { getTeamsWarRoomRscGrantState } = await import('./client');
+      warRoomRsc = await getTeamsWarRoomRscGrantState({ tenantId, teamId: options.teamId.trim() });
+    } catch {
+      warRoomRsc = { granted: null, missing: ['Channel.Create.Group'], unknown: true, error: 'WAR_ROOM_RSC_UNAVAILABLE', installations: [] };
+    }
+  }
+  const canCreateWarRooms = Boolean(
+    resolved.config.warRoomsEnabled && botInstalled && warRoomRsc &&
+    !warRoomRsc.unknown && warRoomRsc.missing.length === 0,
+  );
   return {
     connected: true,
     botInstalled,
@@ -147,7 +160,11 @@ export async function getMicrosoftTeamsCapabilities(options?: {
     canUseChatOps: interactiveDestinationCount > 0,
     healthy,
     failureCode,
-    failureReason,
+    failureReason: canCreateWarRooms || !resolved.config.warRoomsEnabled
+      ? failureReason
+      : warRoomRsc?.unknown
+        ? 'War-room permission consent could not be verified for this Team.'
+        : `Missing war-room RSC permissions: ${warRoomRsc?.missing.join(', ') || 'Channel.Create.Group'}`,
     rsc,
   };
 }

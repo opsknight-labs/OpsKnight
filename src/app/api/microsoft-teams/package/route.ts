@@ -23,6 +23,7 @@ export async function GET() {
       appUrl: getBaseUrl(),
       botId: resolved.config.clientId,
       applicationIdUri: process.env.MICROSOFT_TEAMS_APPLICATION_ID_URI?.trim() || undefined,
+      includeWarRoomPermissions: resolved.config.warRoomsEnabled,
     });
     const assetRoot = path.join(process.cwd(), 'public', 'microsoft-teams');
     const [color, outline] = await Promise.all([
