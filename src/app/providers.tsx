@@ -1,20 +1,34 @@
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
-import { ThemeProvider } from 'next-themes';
+import { ThemeProvider, useTheme } from 'next-themes';
 import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
 import { Toaster } from '@/components/ui/shadcn/sonner';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvider';
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
 import ActivityTracker from '@/components/auth/ActivityTracker';
 
+function ThemeAttributeBridge() {
+  const { resolvedTheme } = useTheme();
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const effectiveTheme = resolvedTheme === 'dark' ? 'dark' : 'light';
+    root.dataset.theme = effectiveTheme;
+    root.style.colorScheme = effectiveTheme;
+  }, [resolvedTheme]);
+
+  return null;
+}
+
 function AppThemeProvider({ children }: { children: React.ReactNode }) {
-  // Save-feedback PR keeps the existing product theme behavior: mobile routes
-  // may follow the system theme, desktop remains forced light. Toast/InlineNotice
-  // tokens are dark-capable (see globals.css .dark / --toast-*), but enabling
-  // global desktop dark mode is a separate product change that requires a full
-  // authenticated-surface audit. Do not broaden scope here.
+  // Mobile/PWA follows the user/system theme. Desktop intentionally remains
+  // light until the authenticated desktop surface has completed its own dark
+  // mode migration. The class attribute is canonical for Tailwind's dark:
+  // variant; ThemeAttributeBridge mirrors it to data-theme for legacy CSS that
+  // has not yet migrated to semantic utilities.
   const pathname = usePathname();
   const isMobileRoute = pathname?.startsWith('/m');
   const themeProps = isMobileRoute
@@ -25,9 +39,10 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
     <ThemeProvider
       attribute="class"
       disableTransitionOnChange
-      enableColorScheme={false}
+      enableColorScheme
       {...themeProps}
     >
+      <ThemeAttributeBridge />
       {children}
     </ThemeProvider>
   );
