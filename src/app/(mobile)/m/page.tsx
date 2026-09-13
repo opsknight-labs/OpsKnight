@@ -1,56 +1,50 @@
-import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, PhoneCall, ShieldCheck } from 'lucide-react';
 import MobileTime from '@/components/mobile/MobileTime';
 import NewIncidentButton from '@/components/mobile/NewIncidentButton';
+import { Card } from '@/components/ui/shadcn/card';
 import { formatDurationShort } from '@/lib/mobile-time';
 import { logger } from '@/lib/logger';
-import { INCIDENT_METRIC_DEFINITIONS, metricDefinitionTooltip } from '@/lib/metric-contract';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { getResponderDashboardSnapshot } from '@/lib/dashboard/responder-dashboard-snapshot';
+import { getRequestActorContext } from '@/lib/request-actor-context';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MobileDashboard() {
-  const [session, actor] = await Promise.all([
-    getServerSession(await getAuthOptions()),
-    getCurrentAuthorizationActor(),
-  ]);
-  const userId = session?.user?.id || actor.id;
+  const context = await getRequestActorContext();
+  if (!context) redirect('/login?callbackUrl=/m');
 
-  const [snapshot, dbUser] = await Promise.all([
-    getResponderDashboardSnapshot(actor, userId).catch(error => {
-      logger.error('mobile.dashboard.snapshotUnavailable', {
-        component: 'MobileDashboard',
-        error,
-      });
-      return null;
-    }),
-    session?.user?.email
-      ? prisma.user.findUnique({
-          where: { email: session.user.email },
-          select: { timeZone: true, name: true },
-        })
-      : Promise.resolve(null),
-  ]);
+  const snapshot = await getResponderDashboardSnapshot(context.actor, context.user.id).catch(error => {
+    logger.error('mobile.dashboard.snapshotUnavailable', {
+      component: 'MobileDashboard',
+      error,
+    });
+    return null;
+  });
+
+  const firstName = context.user.name?.trim().split(/\s+/)[0] || 'there';
+  const timeZone = context.user.timeZone || 'UTC';
+  const hour = Number(
+    new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone }).format(new Date())
+  );
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
   if (!snapshot) {
     return (
-      <div className="mobile-dashboard">
-        <div
-          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-          role="alert"
-        >
-          <strong>Incident statistics are unavailable.</strong>
-          <p className="mt-1">
-            OpsKnight could not calculate metrics, so zero values are not shown. Incident workflows
-            remain available.
+      <div className="responsive-page space-y-4 px-3 py-4 sm:px-4">
+        <Card className="rounded-2xl border-amber-300/70 bg-amber-50 p-4 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100" role="alert">
+          <strong className="text-sm">Operational summary is temporarily unavailable.</strong>
+          <p className="mt-1 text-xs leading-relaxed opacity-80">
+            Incident actions are still available. OpsKnight is not substituting unknown metrics with zeroes.
           </p>
-        </div>
-        <div className="mobile-quick-actions mt-4">
+        </Card>
+        <div className="grid grid-cols-2 gap-2.5">
           <NewIncidentButton />
-          <Link href="/m/incidents" className="mobile-quick-action secondary">
+          <Link
+            href="/m/incidents"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm"
+          >
             View incidents
           </Link>
         </div>
@@ -58,238 +52,163 @@ export default async function MobileDashboard() {
     );
   }
 
-  const dayMs = 24 * 60 * 60 * 1000;
-  const lastUpdated = snapshot.generatedAt;
-  const resolvedAfter = new Date(lastUpdated.getTime() - dayMs).toISOString();
-  const userTimeZone = dbUser?.timeZone || 'UTC';
-  const userName = dbUser?.name?.split(' ')[0] || session?.user?.name?.split(' ')[0] || 'there';
-
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    hour12: false,
-    timeZone: userTimeZone,
-  });
-  const hour = parseInt(formatter.format(new Date()), 10);
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-
   return (
-    <div className="mobile-dashboard">
-      <div style={{ marginBottom: '0.5rem' }}>
-        <h1 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>
-          {greeting}, {userName}!
-        </h1>
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>
-          Here&apos;s your incident overview
-        </p>
-      </div>
-
-      {snapshot.currentOnCallShift && (
-        <Link
-          href={`/m/schedules/${snapshot.currentOnCallShift.scheduleId || snapshot.currentOnCallShift.schedule.id || ''}`}
-          className="mobile-enter delay-100"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            padding: '0.875rem 1rem',
-            background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-            borderRadius: '12px',
-            marginBottom: '1rem',
-            textDecoration: 'none',
-            color: 'white',
-            boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
-          }}
-        >
-          <div
-            aria-hidden="true"
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '10px',
-              background: 'rgba(255,255,255,0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.25rem',
-            }}
-          >
-            📞
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>You&apos;re On-Call</div>
-            <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>
-              {snapshot.currentOnCallShift.schedule.name} • Until{' '}
-              <MobileTime value={snapshot.currentOnCallShift.end} format="shift-end" />
-            </div>
-          </div>
-          <svg
-            aria-hidden="true"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Link>
-      )}
-
-      <div className="mobile-quick-actions mobile-enter delay-200">
-        <NewIncidentButton />
-        <Link href="/m/incidents" className="mobile-quick-action secondary">
-          <svg
-            aria-hidden="true"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M12 3 2.5 20h19L12 3Zm0 6 4.5 9h-9L12 9Z" strokeLinecap="round" />
-          </svg>
-          View All
-        </Link>
-      </div>
-
-      <div className="mobile-metrics-grid mobile-enter delay-300">
-        <Link
-          href="/m/incidents?filter=open"
-          className="mobile-metric-card"
-          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.triggeredIncidents)}
-        >
-          <div className="mobile-metric-value">{snapshot.openIncidents}</div>
-          <div className="mobile-metric-label">Triggered · Current</div>
-        </Link>
-        <Link
-          href="/m/incidents?filter=all_open&urgency=HIGH"
-          className="mobile-metric-card"
-          style={{ borderLeft: '3px solid #dc2626' }}
-          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.highUrgencyActive)}
-        >
-          <div className="mobile-metric-value" style={{ color: '#dc2626' }}>
-            {snapshot.criticalIncidents}
-          </div>
-          <div className="mobile-metric-label">High urgency · Current</div>
-        </Link>
-        <Link
-          href={`/m/incidents?filter=resolved&resolvedAfter=${encodeURIComponent(resolvedAfter)}`}
-          className="mobile-metric-card"
-          style={{ borderLeft: '3px solid #16a34a' }}
-          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.resolved24h)}
-        >
-          <div className="mobile-metric-value" style={{ color: '#16a34a' }}>
-            {snapshot.resolved24h}
-          </div>
-          <div className="mobile-metric-label">Resolved (24h)</div>
-        </Link>
-        <Link
-          href="/m/incidents?filter=all_open"
-          className="mobile-metric-card"
-          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.activeIncidents)}
-        >
-          <div className="mobile-metric-value">{snapshot.totalActive}</div>
-          <div className="mobile-metric-label">Active · Current</div>
-        </Link>
-        <Link
-          href="/m/incidents?filter=muted"
-          className="mobile-metric-card"
-          title={metricDefinitionTooltip(INCIDENT_METRIC_DEFINITIONS.mutedIncidents)}
-        >
-          <div className="mobile-metric-value">{snapshot.mutedIncidents}</div>
-          <div className="mobile-metric-label">Muted · Current</div>
-        </Link>
-      </div>
-      <p className="text-[11px] font-medium text-[color:var(--text-muted)] mobile-enter delay-300">
-        <strong>Active</strong>: Triggered plus acknowledged. <strong>Muted</strong>: Snoozed plus
-        suppressed. Current backlog counts are separate from period metrics.
-      </p>
-      <p className="text-[11px] text-[color:var(--text-muted)] mobile-enter delay-300">
-        Last updated <MobileTime value={lastUpdated} format="time" />
-        {snapshot.freshness === 'stale' ? ' · refreshing' : ''}
-      </p>
-
-      <div style={{ marginTop: '1.5rem' }} className="mobile-enter delay-400">
-        <div className="mobile-section-header">
-          <h2 className="mobile-section-title">Recent Incidents</h2>
-          <Link href="/m/incidents" className="mobile-section-link">
-            See all →
-          </Link>
+    <div className="responsive-page space-y-5 px-3 py-4 sm:px-4">
+      <section className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-muted-foreground">Responder workspace</p>
+          <h1 className="mt-1 truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            {greeting}, {firstName}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Focus on what needs action now.</p>
         </div>
+        <div className="shrink-0">
+          <NewIncidentButton />
+        </div>
+      </section>
 
-        <div className="mobile-incident-list">
-          {snapshot.activeIncidents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--bg-primary)] py-12 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100/50 dark:bg-emerald-900/20">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
-                  <svg
-                    aria-hidden="true"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                    <path d="M22 4L12 14.01l-3-3" />
-                  </svg>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold text-[color:var(--text-primary)]">All Clear!</h3>
-                <p className="text-xs text-[color:var(--text-muted)]">
-                  No active incidents right now.
+      {snapshot.currentOnCallShift ? (
+        <Link href={`/m/schedules/${snapshot.currentOnCallShift.scheduleId || snapshot.currentOnCallShift.schedule.id || ''}`}>
+          <Card className="rounded-2xl border-emerald-500/20 bg-emerald-500/5 p-4 shadow-sm transition hover:bg-emerald-500/10">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
+                <PhoneCall className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-foreground">You are on call</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                  {snapshot.currentOnCallShift.schedule.name} · until{' '}
+                  <MobileTime value={snapshot.currentOnCallShift.end} format="shift-end" />
                 </p>
               </div>
+              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             </div>
-          ) : (
-            snapshot.activeIncidents.map(incident => (
-              <Link
-                key={incident.id}
-                href={`/m/incidents/${incident.id}`}
-                className="mobile-incident-card"
-              >
-                <div className="mobile-incident-header">
-                  <span className={`mobile-incident-status ${incident.status.toLowerCase()}`}>
-                    {incident.status}
-                  </span>
-                  {incident.urgency && (
-                    <span className={`mobile-incident-urgency ${incident.urgency.toLowerCase()}`}>
-                      {incident.urgency}
-                    </span>
-                  )}
-                  <span
-                    style={{
-                      marginLeft: 'auto',
-                      fontSize: '0.7rem',
-                      color: 'var(--text-muted)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                    }}
-                  >
-                    <span aria-hidden="true">⏱️</span> {formatDurationShort(incident.createdAt)}
-                  </span>
-                </div>
-                <div className="mobile-incident-title">{incident.title}</div>
-                <div className="mobile-incident-meta">
-                  <span>{incident.service.name}</span>
-                  <span aria-hidden="true">•</span>
-                  <MobileTime value={incident.createdAt} format="relative-short" />
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
-      </div>
+          </Card>
+        </Link>
+      ) : (
+        <Card className="rounded-2xl border-border bg-card p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">No active on-call shift</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">You can still respond to incidents you can access.</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
-      <Link href="/api/prefer-desktop" className="mobile-desktop-link">
-        Switch to Desktop Version
+      <section aria-labelledby="mobile-priority-heading" className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <h2 id="mobile-priority-heading" className="text-sm font-bold text-foreground">Needs attention</h2>
+          <Link href="/m/incidents?filter=all_open" className="inline-flex min-h-11 items-center text-xs font-semibold text-primary">
+            All active <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+          <Link href="/m/incidents?filter=all_open&urgency=HIGH" className="min-w-0">
+            <Card className="h-full rounded-2xl border-red-500/20 bg-red-500/5 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-2xl font-bold tabular-nums text-red-600 dark:text-red-400">{snapshot.criticalIncidents}</span>
+                <AlertTriangle className="h-4 w-4 text-red-500" aria-hidden="true" />
+              </div>
+              <p className="mt-2 text-xs font-semibold text-foreground">High urgency</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Active now</p>
+            </Card>
+          </Link>
+          <Link href="/m/incidents?filter=open" className="min-w-0">
+            <Card className="h-full rounded-2xl border-border bg-card p-4 shadow-sm">
+              <span className="text-2xl font-bold tabular-nums text-foreground">{snapshot.openIncidents}</span>
+              <p className="mt-2 text-xs font-semibold text-foreground">Triggered</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Awaiting ACK</p>
+            </Card>
+          </Link>
+          <Link href="/m/incidents?filter=acknowledged" className="min-w-0">
+            <Card className="h-full rounded-2xl border-border bg-card p-4 shadow-sm">
+              <span className="text-2xl font-bold tabular-nums text-foreground">{Math.max(0, snapshot.totalActive - snapshot.openIncidents)}</span>
+              <p className="mt-2 text-xs font-semibold text-foreground">Acknowledged</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Being worked</p>
+            </Card>
+          </Link>
+          <Link href="/m/incidents?filter=muted" className="min-w-0">
+            <Card className="h-full rounded-2xl border-border bg-card p-4 shadow-sm">
+              <span className="text-2xl font-bold tabular-nums text-foreground">{snapshot.mutedIncidents}</span>
+              <p className="mt-2 text-xs font-semibold text-foreground">Muted</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">Snoozed/suppressed</p>
+            </Card>
+          </Link>
+        </div>
+      </section>
+
+      <section aria-labelledby="mobile-active-heading" className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3 px-1">
+          <h2 id="mobile-active-heading" className="text-sm font-bold text-foreground">Active incidents</h2>
+          <span className="text-[11px] text-muted-foreground">
+            Updated <MobileTime value={snapshot.generatedAt} format="time" />
+            {snapshot.freshness === 'stale' ? ' · refreshing' : ''}
+          </span>
+        </div>
+
+        {snapshot.activeIncidents.length === 0 ? (
+          <Card className="rounded-2xl border-dashed border-border bg-card px-5 py-10 text-center shadow-none">
+            <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <h3 className="mt-3 text-sm font-bold text-foreground">No active incidents</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Nothing currently needs responder action.</p>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {snapshot.activeIncidents.map(incident => (
+              <Link key={incident.id} href={`/m/incidents/${incident.id}`} className="block min-w-0">
+                <Card className="rounded-2xl border-border bg-card p-4 shadow-sm transition hover:bg-accent/30 active:scale-[0.995]">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span
+                      className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${incident.urgency === 'HIGH' ? 'bg-red-500' : incident.status === 'OPEN' ? 'bg-amber-500' : 'bg-slate-400'}`}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <h3 className="min-w-0 break-words text-sm font-semibold leading-snug text-foreground">{incident.title}</h3>
+                        <span className="shrink-0 text-[11px] font-medium text-muted-foreground">{formatDurationShort(incident.createdAt)}</span>
+                      </div>
+                      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                        <span className="truncate">{incident.service.name}</span>
+                        <span aria-hidden="true">•</span>
+                        <span>{incident.status}</span>
+                        <span aria-hidden="true">•</span>
+                        <span>{incident.urgency || 'NORMAL'}</span>
+                      </div>
+                    </div>
+                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <Card className="rounded-2xl border-border bg-muted/30 p-4 shadow-none">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+            Resolved last 24h
+          </span>
+          <strong className="tabular-nums text-foreground">{snapshot.resolved24h}</strong>
+        </div>
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+            Current active backlog
+          </span>
+          <strong className="tabular-nums text-foreground">{snapshot.totalActive}</strong>
+        </div>
+      </Card>
+
+      <Link href="/api/prefer-desktop" className="block min-h-11 py-3 text-center text-xs font-semibold text-muted-foreground hover:text-foreground">
+        Switch to desktop workspace
       </Link>
     </div>
   );
