@@ -1,122 +1,167 @@
 ---
 order: 2
 title: Mobile development
-description: Contributor guide for mobile routes, PWA generation, push, caches, offline actions, and tests
+description: Contributor guide for the responsive mobile shell, shared incident UI, PWA lifecycle, push, caches, offline actions, and tests
 ---
 
 # Mobile development
 
-The mobile application is a route group inside the main Next.js application, not a separate project or native application. Its public URL prefix is `/m`.
+OpsKnight mobile is a responsive route group inside the main Next.js application. It is not a separate product, native application, or independent design system. The public URL prefix is `/m`, while desktop and mobile share the same authorization, incident lifecycle, design tokens, domain components, and server-side contracts.
+
+## Architecture contract
+
+Use this order of preference when building mobile functionality:
+
+1. Reuse the canonical desktop/server component when it can respond cleanly to available width.
+2. Compose shared `src/components/ui/shadcn/` primitives with the global semantic theme tokens.
+3. Add a thin mobile presentation wrapper only when the interaction genuinely differs on a small touch screen.
+4. Never duplicate domain mutations, authorization, incident lifecycle logic, status semantics, or integration capability checks for mobile.
+
+The incident detail route is the reference pattern. Both `/incidents/[id]` and `/m/incidents/[id]` render `src/components/incident/IncidentDetailScreen.tsx`, so SLA, assignment, notes, watchers, Jira, War Room, custom fields, quick links, postmortems, permissions, and incident commands cannot drift between presentation routes.
 
 ## Source layout
 
-- `src/app/(mobile)/m/` — mobile pages and layout.
-- `src/components/mobile/` — mobile shell, navigation, lists, actions, preferences, and shared UI.
-- `src/components/mobile/mobileNavItems.tsx` — bottom navigation and routes grouped under **More**.
+- `src/app/(mobile)/m/` — mobile routes and the PWA shell.
+- `src/app/(mobile)/m/mobile-shell.css` — safe-area, viewport, bottom-navigation, focus, touch-target, and responsive-shell behavior only.
+- `src/app/(mobile)/m/mobile.css` — transitional compatibility rules for older mobile routes. Do not add new page-specific styling here; migrate existing pages toward shared components instead.
+- `src/components/mobile/` — mobile-specific composition such as navigation, connectivity, installed-PWA controls, and touch-oriented lists.
+- `src/components/incident/IncidentDetailScreen.tsx` — canonical responsive incident detail used by desktop and mobile.
+- `src/components/ui/shadcn/` — canonical buttons, cards, dialogs, inputs, badges, and other primitives.
+- `src/app/globals.css` — product theme, semantic status colors, spacing, radii, and desktop/mobile shared tokens.
 - `src/app/manifest.ts` — install manifest with `/m` start URL.
-- `next.config.ts` — PWA generation and Workbox configuration.
-- `public/custom-sw.js` — push display, click navigation, and background-sync handlers imported by generated `/sw.js`.
-- `src/lib/mobile-cache.ts` — encrypted last-known list cache in browser `localStorage`.
-- `src/lib/offline-queue.ts` — selected request queue in IndexedDB.
-- `src/lib/push.ts` — server-side Web Push delivery.
+- `next.config.ts` — PWA generation and Workbox cache policy.
+- `public/custom-sw.js` — push display, notification actions, safe navigation, and offline replay imported by generated `/sw.js`.
+- `src/lib/mobile-cache.ts` — principal-scoped encrypted last-known responder cache.
+- `src/lib/offline-queue.ts` — principal-scoped, per-resource mutation queue in IndexedDB.
 
-The application currently uses Next.js App Router, NextAuth, `@ducanh2912/next-pwa`, and `web-push`. Check `package.json` for the exact version in the branch you are changing.
+## Responsive design system
 
-## Add or change a route
+Desktop is the visual source of truth. Mobile uses the same product identity and semantic tokens, with a different composition for touch and constrained width.
 
-1. Add a `page.tsx` under `src/app/(mobile)/m/<feature>`.
-2. Use the mobile layout and components instead of creating another application shell.
-3. Add a bottom-navigation item only for a primary responder task. Put secondary routes in `MobileMoreContent` and include the root in `MOBILE_MORE_ROUTES` so the **More** item receives active state.
-4. Enforce authentication and authorization on the server. A mobile link or hidden control is not a permission check.
-5. Decide explicitly whether the route is read-only or has mobile mutations. Point users to the desktop editor when mutation is intentionally absent.
-6. Add component tests and, for database behavior, integration tests.
-7. Update the [mobile support matrix](./README) when the user-visible contract changes.
+Use the shared primitives first:
 
-Do not claim offline support because a page happened to render from the service-worker cache. Offline support is documented only when the route's client code deliberately reads a defined last-known cache or queues a defined mutation.
+- `Button` for actions and links that behave like actions.
+- `Card` for surfaces.
+- `Badge` and semantic status components for state.
+- the canonical `Dialog` for overlays. On phone widths it renders as a safe-area-aware bottom sheet; on larger widths it renders as a centered dialog.
+- shared incident components for incident behavior and feature visibility.
+
+Do not create another `MobileModal`, `MobileBottomSheet`, mobile-only status palette, page-specific button system, or parallel incident command implementation.
+
+### Responsive acceptance rules
+
+Every changed mobile screen must remain usable with:
+
+- narrow phone widths down to approximately 320px;
+- representative iPhone and Android portrait widths;
+- landscape phone orientation;
+- tablet widths;
+- display cutouts and safe-area insets;
+- the software keyboard open;
+- light, dark, and system theme;
+- long incident/service/user names;
+- browser text scaling and accessibility zoom;
+- reduced motion.
+
+There must be no horizontal page overflow, clipped critical controls, content underneath bottom navigation, keyboard-covered form actions, or essential behavior available only through a gesture or color.
+
+Critical touch controls should meet a 44px minimum target. Mobile inputs should remain at least 16px to avoid unwanted iOS Safari viewport zoom.
+
+## Shell and navigation
+
+`mobile-shell.css` owns the responsive shell. It intentionally does not define a second product palette.
+
+The header and bottom navigation must use global theme tokens and safe-area insets. The bottom navigation is reserved for primary responder tasks; secondary destinations belong under **More**. Route state is centralized in `mobileNavItems.tsx`.
+
+Avoid nested full-page scroll containers. Pages should normally allow the document/mobile content region to own vertical scrolling. Dialog content can scroll independently when the keyboard or viewport reduces available height.
+
+## Home, incidents, and incident detail
+
+These three surfaces are the reference design for future mobile migrations:
+
+- **Home** prioritizes on-call state and incidents needing responder attention before secondary metrics.
+- **Incidents** uses touch-friendly search/filter controls, discoverable actions, bounded server queries, and compact result navigation. Swipe actions are optional accelerators; critical ACK behavior must also be visibly tappable.
+- **Incident detail** is shared with desktop through `IncidentDetailScreen` instead of a mobile feature fork.
+
+When migrating Services, Schedules, Alerts, Analytics, Status, Teams, Users, Policies, Postmortems, or More, follow these reference surfaces rather than introducing another visual language.
+
+## Authentication and responder storage
+
+Mobile authentication uses the canonical login/session implementation. An installed standalone PWA can use the trusted-responder session policy, but authentication and authorization remain server-side concerns.
+
+Responder cache and offline queue state are bound to the active principal and authentication generation. Account changes or security-generation changes must not expose or replay another principal's responder data.
+
+Never put secrets, provider credentials, session tokens, or unbounded histories in browser responder caches.
+
+## Offline mutations
+
+The queue records explicit states including pending, sending, conflict, authentication-required, forbidden, failed, and succeeded outcomes. The UI must distinguish **queued** from **committed**.
+
+Dependent commands are FIFO within the same incident/resource lane, while unrelated resource lanes may progress independently. Foreground and service-worker replay use atomic IndexedDB claim/lease ownership; server idempotency remains the second safety layer.
+
+If authentication expires, eligible `AUTH_REQUIRED` work can resume only after authentication is restored for the same principal generation. A `403 FORBIDDEN` result is terminal and must not be revived by signing in again.
 
 ## PWA lifecycle
 
-Production builds generate `public/sw.js`. Workbox imports `/custom-sw.js`, registers the worker, skips waiting, reloads on reconnection, and uses `/m` as the cached start URL. PWA generation is disabled when `NODE_ENV=development` or `DISABLE_PWA=true`.
+Production builds generate `public/sw.js`; Workbox imports `/custom-sw.js`. PWA generation is disabled in development and when `DISABLE_PWA=true`.
 
-Because the worker is generated, do not edit `public/sw.js` as source. Change `next.config.ts` or `public/custom-sw.js`, run a production build, and inspect the generated result.
+Do not edit generated `public/sw.js` directly. Change `next.config.ts` or `public/custom-sw.js`, run a production build, and verify the generated worker.
 
-When changing worker behavior, test upgrade from the previous deployed worker as well as a fresh install. A browser can keep an old worker or old cached resources until activation and reload complete.
+OpsKnight does not force a waiting worker to replace a responder's running client. A waiting update is activated explicitly. Reconnection synchronizes data and queued work without reloading an in-progress responder form.
+
+Authenticated pages, APIs, and RSC payloads remain network-authoritative and are not treated as service-worker cache authority.
 
 ## Web Push
 
-The mobile toggle obtains the public VAPID key from `/api/system/vapid-public-key`, registers `/sw.js` at scope `/`, creates a Push API subscription, and stores it through the user push-subscription route. The server uses `src/lib/push.ts` to send encrypted Web Push messages.
+The device toggle obtains the active public VAPID key, registers the production service worker, creates a Web Push subscription from an explicit user gesture, and registers that subscription with OpsKnight. Server-side delivery uses the canonical Web Push configuration and safe outbound transport.
 
-For the environment fallback, configure a matching base64url key pair:
+Push capability URLs are sensitive. Do not log raw endpoints. Subscription storage and delivery must continue to use the hardened endpoint identity/encryption boundary.
 
-```env
-NEXT_PUBLIC_VAPID_PUBLIC_KEY=public_base64url_key
-VAPID_PRIVATE_KEY=private_base64url_key
-VAPID_SUBJECT=mailto:admin@example.com
-```
+Test at minimum:
 
-The database-backed provider configuration can supply the active public key instead. Never expose `VAPID_PRIVATE_KEY` to client code or commit it.
+- missing or disabled provider configuration;
+- permission allow and deny;
+- subscription creation and server persistence;
+- stale or replaced subscriptions;
+- test delivery;
+- foreground and background notification display;
+- incident deep links;
+- responder actions after session expiry;
+- expired subscription cleanup.
 
-Generate a development key pair with:
+Use HTTPS outside localhost.
 
-```bash
-npx web-push generate-vapid-keys
-```
+## Add or change a route
 
-Test denied permission, missing key, invalid key, subscription replacement, expired subscription cleanup, notification display, and deep-link navigation. Use HTTPS outside `localhost`.
+1. Start with shared server/read models and shared UI primitives.
+2. Add a page under `src/app/(mobile)/m/<feature>` only when a distinct mobile route is still useful.
+3. Reuse canonical authorization and mutation contracts; hidden UI is never an authorization boundary.
+4. Avoid new global or page-specific mobile CSS. Extend shared primitives or the shell only for genuinely cross-route responsive behavior.
+5. Keep primary responder actions visible; gestures may accelerate them but may not be the only interaction.
+6. Add unit/integration tests for behavior and Playwright coverage for responsive contracts.
+7. Update this guide and the public mobile support documentation when the user-visible contract changes.
 
-## Last-known data cache
+## Verification
 
-`mobile-cache.ts` encrypts a timestamped payload with browser Web Crypto and stores it in `localStorage`. Current clients use it for incident, notification, service, schedule, and team lists. Service and team search queries have distinct cache keys.
-
-The key material is part of the client application. Treat this as defense against casual storage inspection, not protection against a user or script that can execute in the application origin. Keep cached payloads minimal and never add provider secrets, API keys, session tokens, or unbounded histories.
-
-When storage quota is exhausted, the helper removes the oldest timestamped entries and retries once. Callers must tolerate an empty, unreadable, evicted, or stale cache.
-
-## Offline request queue
-
-`offline-queue.ts` stores method, URL, headers, body, and creation time in the `opsknight-offline` IndexedDB database. It registers the `opsknight-sync` background-sync tag when supported. The network banner also asks the active service worker to flush and the foreground client flushes after reconnection.
-
-Only enqueue a mutation when all of these are true:
-
-- the server endpoint is idempotent enough to retry safely;
-- the UI clearly reports that the action is queued, not completed;
-- authentication, authorization, validation, conflicts, and stale state are handled;
-- the user can verify the resulting server state; and
-- the public offline support matrix is updated.
-
-The foreground queue keeps network errors and 401, 408, 429, and 5xx responses for another attempt. It removes other non-success responses. The service worker keeps 408, 429, and 5xx responses but removes other failures. Reconcile these paths if changing retry policy.
-
-## Local app lock
-
-`MobileBiometricToggle` and `MobileBiometricGuard` use browser WebAuthn/platform-authenticator prompts and local preference state to cover the mobile UI after backgrounding. This is a client-side privacy layer. Do not treat it as server authentication, reauthentication for sensitive actions, proof of a particular biometric, or a replacement for session expiry and device controls.
-
-## Styling and interaction
-
-- Mobile theme and status variables live in `src/app/(mobile)/m/mobile.css`, `mobile-premium.css`, and global CSS.
-- Use semantic color variables and preserve dark-mode contrast.
-- Keep controls keyboard reachable even when the primary design is touch-first.
-- Give icon-only controls an accessible name and expose active navigation with `aria-current`.
-- Respect `prefers-reduced-motion`; do not make essential state depend only on animation, haptics, gesture direction, or color.
-- Test without vibration and without a platform authenticator because both are optional.
-
-## Test and verify
-
-Run targeted tests while iterating:
+Run the repository quality gates before opening a pull request:
 
 ```bash
-npx vitest run tests/components/mobile src/lib/offline-queue.test.ts
+npx tsc --noEmit
+npx eslint <modified-files>
+npx vitest run <relevant-tests>
 ```
 
-Before opening a PR, run the repository's normal lint, type-check, unit/integration, and production-build gates as appropriate. For PWA changes, add manual device coverage:
+For mobile/PWA work, also run the Playwright mobile projects and production PWA worker contract. Release acceptance should include an installed application on representative current iPhone/Safari and Android/Chrome devices.
 
-1. fresh browser load without an installed worker;
-2. install and standalone launch at `/m`;
-3. upgrade from the previous worker;
-4. push permission allow and deny;
-5. push display and deep link;
-6. offline last-known lists;
-7. every documented queued action and reconnect result;
-8. storage clearing and expired-session behavior; and
-9. switch to desktop mode and back.
+The practical device checklist is:
 
-Record the browser, operating system, installation mode, and result because PWA behavior is platform-dependent.
+1. 320px-class narrow viewport with no horizontal overflow;
+2. representative iPhone portrait and landscape;
+3. representative Android portrait and landscape;
+4. tablet width;
+5. software keyboard open on dialogs and forms;
+6. large text/accessibility zoom;
+7. light, dark, and system theme;
+8. offline/reconnect with queued incident actions;
+9. notification allow/deny, delivery, deep link, and action;
+10. previous-worker to new-worker upgrade without losing in-progress responder state.

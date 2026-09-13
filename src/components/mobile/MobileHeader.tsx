@@ -1,54 +1,118 @@
 'use client';
-
+import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { ArrowLeft, CircleAlert, CircleCheck, Plus, TriangleAlert } from 'lucide-react';
 import MobileQuickSwitcher from '@/components/mobile/MobileQuickSwitcher';
+
+function getListTitle(pathname: string): string {
+  switch (pathname) {
+    case '/m/incidents':
+      return 'Incidents';
+    case '/m/services':
+      return 'Services';
+    case '/m/notifications':
+      return 'Alerts';
+    case '/m/schedules':
+      return 'On-call';
+    case '/m/teams':
+      return 'Teams';
+    case '/m/users':
+      return 'Users';
+    case '/m/policies':
+      return 'Policies';
+    case '/m/analytics':
+      return 'Analytics';
+    case '/m/postmortems':
+      return 'Postmortems';
+    case '/m/status':
+      return 'System health';
+    case '/m/more':
+      return 'More';
+    default:
+      return 'OpsKnight';
+  }
+}
+
+const DETAIL_ROUTES = [
+  { prefix: '/m/incidents/', title: 'Incident', backHref: '/m/incidents' },
+  { prefix: '/m/services/', title: 'Service', backHref: '/m/services' },
+  { prefix: '/m/schedules/', title: 'Schedule', backHref: '/m/schedules' },
+  { prefix: '/m/teams/', title: 'Team', backHref: '/m/teams' },
+  { prefix: '/m/users/', title: 'User', backHref: '/m/users' },
+  { prefix: '/m/policies/', title: 'Policy', backHref: '/m/policies' },
+  { prefix: '/m/postmortems/', title: 'Postmortem', backHref: '/m/postmortems' },
+] as const;
 
 type MobileHeaderProps = {
   systemStatus?: 'ok' | 'warning' | 'danger';
 };
 
+function routeContext(pathname: string) {
+  if (pathname === '/m') return { home: true, title: 'OpsKnight' } as const;
+  if (pathname === '/m/incidents/create') {
+    return { home: false, title: 'New incident', backHref: '/m/incidents' } as const;
+  }
+  const detail = DETAIL_ROUTES.find(route => pathname.startsWith(route.prefix));
+  if (detail) return { home: false, title: detail.title, backHref: detail.backHref } as const;
+  return { home: false, title: getListTitle(pathname) } as const;
+}
+
 export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps) {
-  const status = (() => {
-    switch (systemStatus) {
-      case 'ok':
-        return 'All Systems Operational';
-      case 'warning':
-        return 'Degraded Performance';
-      case 'danger':
-        return 'Critical Issues';
-    }
-  })();
+  const pathname = usePathname() || '/m';
+  const route = routeContext(pathname);
+  const status =
+    systemStatus === 'danger'
+      ? { label: 'Critical issues', Icon: CircleAlert }
+      : systemStatus === 'warning'
+        ? { label: 'Degraded performance', Icon: TriangleAlert }
+        : { label: 'All systems operational', Icon: CircleCheck };
+  const StatusIcon = status.Icon;
 
   return (
     <header className="mobile-header">
-      <Link href="/m" className="mobile-header-logo">
-        {/* Using img instead of Next.js Image for SVG - no optimization benefit for vectors */}
-        <img src="/logo.svg" alt="OpsKnight" width={28} height={28} />
-        <span className="mobile-header-title">OpsKnight</span>
-      </Link>
+      <div className="mobile-header-primary">
+        {route.home ? (
+          <Link href="/m" className="mobile-header-brand" aria-label="OpsKnight home">
+            <Image src="/logo.svg" alt="" width={28} height={28} aria-hidden="true" priority />
+            <span>OpsKnight</span>
+          </Link>
+        ) : route.backHref ? (
+          <>
+            <Link
+              href={route.backHref}
+              className="mobile-header-icon-button"
+              aria-label={`Back to ${route.backHref.split('/').pop() || 'previous page'}`}
+            >
+              <ArrowLeft aria-hidden="true" />
+            </Link>
+            <span className="mobile-header-page-title">{route.title}</span>
+          </>
+        ) : (
+          <span className="mobile-header-page-title">{route.title}</span>
+        )}
+      </div>
 
       <div className="mobile-header-actions">
+        {pathname === '/m/incidents' && (
+          <Link
+            href="/m/incidents/create"
+            className="mobile-header-icon-button"
+            aria-label="Create incident"
+          >
+            <Plus aria-hidden="true" />
+          </Link>
+        )}
         <MobileQuickSwitcher />
-        <div className="mobile-header-status" data-status={systemStatus}>
-          <span className="mobile-status-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path
-                d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <path
-                d="M8.5 12.5h7"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-          </span>
-          <span className="mobile-status-text">{status}</span>
-        </div>
+        <Link
+          href="/m/status"
+          className="mobile-header-system-button"
+          data-status={systemStatus}
+          aria-label={`System status: ${status.label}`}
+          title={status.label}
+        >
+          <StatusIcon aria-hidden="true" />
+        </Link>
       </div>
     </header>
   );

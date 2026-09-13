@@ -121,4 +121,55 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(producer).toContain('deliveryId: `web-push:${notificationId}`');
     expect(producer).toContain('url: canonicalIncidentUrl');
   });
+
+  it('uses one responsive design system instead of parallel mobile UI foundations', () => {
+    const mobileLayout = fs.readFileSync('src/app/(mobile)/m/layout.tsx', 'utf8');
+    const shellCss = fs.readFileSync('src/app/(mobile)/m/mobile-shell.css', 'utf8');
+    const dialog = fs.readFileSync('src/components/ui/shadcn/dialog.tsx', 'utf8');
+    const mobileButton = fs.readFileSync('src/components/mobile/MobileButton.tsx', 'utf8');
+    const mobileCard = fs.readFileSync('src/components/mobile/MobileCard.tsx', 'utf8');
+
+    expect(mobileLayout).toContain("import './mobile-shell.css'");
+    expect(mobileLayout).not.toContain('mobile-premium.css');
+    expect(mobileLayout).not.toContain('mobile-hardening.css');
+    expect(fs.existsSync('src/app/(mobile)/m/mobile-premium.css')).toBe(false);
+    expect(fs.existsSync('src/app/(mobile)/m/mobile-hardening.css')).toBe(false);
+    expect(fs.existsSync('src/components/mobile/MobileModal.tsx')).toBe(false);
+    expect(fs.existsSync('src/components/mobile/MobileBottomSheet.tsx')).toBe(false);
+    expect(shellCss).toContain('env(safe-area-inset-bottom');
+    expect(shellCss).toContain('min-height: 44px');
+    expect(dialog).toContain('safe-area-inset-bottom');
+    expect(mobileButton).toContain("@/components/ui/shadcn/button");
+    expect(mobileCard).toContain("@/components/ui/shadcn/card");
+  });
+
+  it('shares the complete incident detail experience across desktop and mobile', () => {
+    const desktopPage = fs.readFileSync('src/app/(app)/incidents/[id]/page.tsx', 'utf8');
+    const mobilePage = fs.readFileSync('src/app/(mobile)/m/incidents/[id]/page.tsx', 'utf8');
+    const sharedDetail = fs.readFileSync('src/components/incident/IncidentDetailScreen.tsx', 'utf8');
+
+    expect(desktopPage).toContain('IncidentDetailScreen');
+    expect(mobilePage).toContain('IncidentDetailScreen');
+    expect(fs.existsSync('src/app/(mobile)/m/incidents/[id]/actions.tsx')).toBe(false);
+    expect(sharedDetail).toContain('IncidentSLABadges');
+    expect(sharedDetail).toContain('IncidentCommandBar');
+    expect(sharedDetail).toContain('IncidentWatchers');
+    expect(sharedDetail).toContain('IncidentCustomFieldsCard');
+    expect(sharedDetail).toContain('IncidentQuickLinksCard');
+    expect(sharedDetail).toContain('getJiraCapabilities');
+  });
+
+  it('keeps mobile home and incident list on the request-scoped actor contract', () => {
+    const home = fs.readFileSync('src/app/(mobile)/m/page.tsx', 'utf8');
+    const incidents = fs.readFileSync('src/app/(mobile)/m/incidents/page.tsx', 'utf8');
+    const incidentCard = fs.readFileSync('src/components/mobile/SwipeableIncidentCard.tsx', 'utf8');
+
+    expect(home).toContain('getRequestActorContext');
+    expect(home).not.toContain('getServerSession');
+    expect(home).not.toContain('getCurrentAuthorizationActor');
+    expect(incidents).toContain('getRequestActorContext');
+    expect(incidents).not.toContain('getCurrentAuthorizationActor');
+    expect(incidentCard).toContain('Acknowledge');
+    expect(incidentCard).toContain('View details');
+  });
 });

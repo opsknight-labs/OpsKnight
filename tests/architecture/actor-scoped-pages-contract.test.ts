@@ -21,6 +21,10 @@ const pages = {
   serviceDetail: readFileSync('src/app/(app)/services/[id]/page.tsx', 'utf8'),
   executiveReport: readFileSync('src/app/(app)/reports/executive/page.tsx', 'utf8'),
   responderSnapshot: readFileSync('src/lib/dashboard/responder-dashboard-snapshot.ts', 'utf8'),
+  responderAnalyticsSnapshot: readFileSync(
+    'src/lib/dashboard/responder-analytics-snapshot.ts',
+    'utf8'
+  ),
   appShellContext: readFileSync('src/lib/app-shell-context.ts', 'utf8'),
 };
 
@@ -38,13 +42,17 @@ describe('actor-scoped page read contract', () => {
   });
 
   it('routes user-facing analytics through actor-first metric read models', () => {
-    for (const page of [pages.analyticsContent, pages.mobileAnalytics, pages.executiveReport]) {
+    for (const page of [pages.analyticsContent, pages.executiveReport]) {
       expect(page).toContain('calculateActorSLAMetrics(');
     }
 
+    // Mobile analytics consumes the cached responder analytics snapshot
+    expect(pages.mobileAnalytics).toContain('getResponderAnalyticsSnapshot(context.actor');
+    expect(pages.responderAnalyticsSnapshot).toContain('calculateActorSLAMetrics(actor');
+
     // The responder dashboard deliberately consumes the centralized bounded
     // snapshot rather than invoking the expensive actor metrics projection itself.
-    expect(pages.mobileDashboard).toContain('getResponderDashboardSnapshot(actor');
+    expect(pages.mobileDashboard).toContain('getResponderDashboardSnapshot(context.actor');
     expect(pages.responderSnapshot).toContain('calculateActorSLAMetrics(actor');
 
     expect(pages.dashboard).not.toContain('calculateActorSLAMetrics(');
@@ -52,26 +60,36 @@ describe('actor-scoped page read contract', () => {
   });
 
   it.each([
-    ['mobile incidents', pages.mobileIncidents, ['incidentReadWhere(actor)']],
-    ['mobile incident detail', pages.mobileIncidentDetail, ['incidentReadWhere(actor)']],
+    ['mobile incidents', pages.mobileIncidents, ['incidentReadWhere(context.actor)']],
+    ['mobile incident detail', pages.mobileIncidentDetail, ['IncidentDetailScreen']],
     [
       'mobile services',
       pages.mobileServices,
-      ['serviceReadWhere(actor)', 'incidentReadWhere(actor)'],
+      ['serviceReadWhere(context.actor)', 'incidentReadWhere(context.actor)'],
     ],
     [
       'mobile service detail',
       pages.mobileServiceDetail,
-      ['serviceReadWhere(actor)', 'incidentReadWhere(actor)'],
+      ['serviceReadWhere(context.actor)', 'incidentReadWhere(context.actor)'],
     ],
-    ['mobile teams', pages.mobileTeams, ['teamReadWhere(actor)', 'incidentReadWhere(actor)']],
+    [
+      'mobile teams',
+      pages.mobileTeams,
+      ['teamReadWhere(context.actor)', 'incidentReadWhere(context.actor)'],
+    ],
     [
       'service detail',
       pages.serviceDetail,
       ['serviceReadWhere(actor)', 'incidentReadWhere(actor)'],
     ],
-  ])('%s uses centralized actor scope for rows and counts', (_name, page, predicates) => {
-    expect(page).toContain('getCurrentAuthorizationActor()');
+  ])('%s uses centralized actor scope for rows and counts', (name, page, predicates) => {
+    if (name === 'service detail') {
+      expect(page).toContain('getCurrentAuthorizationActor()');
+    } else if (name === 'mobile incident detail') {
+      expect(page).toContain('<IncidentDetailScreen');
+    } else {
+      expect(page).toContain('getRequestActorContext()');
+    }
     for (const predicate of predicates) expect(page).toContain(predicate);
   });
 

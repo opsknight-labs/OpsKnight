@@ -2,6 +2,7 @@
 
 import { signOut } from 'next-auth/react';
 import { useState, type ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 
 type Props = {
@@ -11,36 +12,31 @@ type Props = {
   tone: 'red' | 'slate' | 'blue' | 'teal' | 'amber' | 'green';
 };
 
-export default function MobileSignOutButton({ icon, label, description, tone }: Props) {
+export default function MobileSignOutButton({ icon, label, description }: Props) {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = async () => {
+    if (isSigningOut) return;
     setIsSigningOut(true);
     await purgeBrowserAuthCaches();
     await signOut({ callbackUrl: '/m/login' });
   };
 
   return (
-    <div
-      className="mobile-more-item danger"
+    <button
+      type="button"
       onClick={handleSignOut}
-      style={{ cursor: 'pointer', opacity: isSigningOut ? 0.7 : 1 }}
+      disabled={isSigningOut}
+      className="flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left text-destructive transition-colors hover:bg-destructive/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
     >
-      <div className={`mobile-more-icon tone-${tone}`}>{icon}</div>
-      <div className="mobile-more-item-body">
-        <span className="mobile-more-item-label">{isSigningOut ? 'Signing out...' : label}</span>
-        <span className="mobile-more-item-desc">{description}</span>
-      </div>
-      <svg className="mobile-more-item-chevron" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          d="M9 6l6 6-6 6"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </div>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{isSigningOut ? 'Signing out…' : label}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    </button>
   );
 }

@@ -53,6 +53,7 @@ type IncidentHeaderProps = {
   }>;
   teams: Array<{ id: string; name: string }>;
   canManage: boolean;
+  routePrefix?: string;
 };
 
 function formatDuration(startDate: Date, endDate: Date | null): string {
@@ -68,7 +69,13 @@ function formatDuration(startDate: Date, endDate: Date | null): string {
   return `${days}d ${hours % 24}h`;
 }
 
-export default function IncidentHeader({ incident, users, teams, canManage }: IncidentHeaderProps) {
+export default function IncidentHeader({
+  incident,
+  users,
+  teams,
+  canManage,
+  routePrefix = '',
+}: IncidentHeaderProps) {
   const { userTimeZone } = useTimezone();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -264,7 +271,7 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
 
         {/* Service */}
         <Link
-          href={`/services/${incident.serviceId}`}
+          href={`${routePrefix}/services/${incident.serviceId}`}
           title={`Service: ${incident.service.name}`}
           className="group flex flex-col justify-center p-3.5 min-h-[74px] hover:bg-slate-50/80 transition-colors"
         >
@@ -306,7 +313,7 @@ export default function IncidentHeader({ incident, users, teams, canManage }: In
         {/* Policy */}
         {incident.service.policy ? (
           <Link
-            href={`/policies/${incident.service.policy.id}`}
+            href={`${routePrefix}/policies/${incident.service.policy.id}`}
             title={`Escalation Policy: ${incident.service.policy.name}`}
             className="group flex flex-col justify-center p-3.5 min-h-[74px] hover:bg-slate-50/80 transition-colors"
           >

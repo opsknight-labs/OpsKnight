@@ -623,7 +623,7 @@ export default function IncidentCommandBar({
       </div>
 
       {canAct && (
-        <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 flex items-center gap-2 pb-[calc(0.625rem+env(safe-area-inset-bottom))]">
+        <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur-md px-3 py-2.5 flex items-center gap-2 pb-[calc(0.625rem+env(safe-area-inset-bottom))] text-card-foreground shadow-lg">
           {isResolved ? (
             <Link href={postmortemHref} className="flex-1">
               <Button className="w-full h-11 gap-2 text-sm font-semibold">
@@ -684,7 +684,7 @@ export default function IncidentCommandBar({
           <SheetHeader>
             <SheetTitle>Incident actions</SheetTitle>
           </SheetHeader>
-          <div className="py-2.5 border-b border-slate-100 dark:border-slate-800 my-1">
+          <div className="py-2.5 border-b border-border my-1">
             <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
           </div>
           <div className="flex flex-col gap-2 py-2">
@@ -890,7 +890,8 @@ export default function IncidentCommandBar({
                     Create new issue in project
                   </div>
                   <p className="text-xs text-slate-500">
-                    Automatically creates a Jira issue with this incident&apos;s title and description.
+                    Automatically creates a Jira issue with this incident&apos;s title and
+                    description.
                   </p>
                   <Button
                     type="button"
@@ -941,11 +942,7 @@ export default function IncidentCommandBar({
                       disabled={isJiraPending || !jiraLinkKey.trim()}
                       className="h-9 text-xs font-semibold shrink-0 px-3"
                     >
-                      {isJiraPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        'Link'
-                      )}
+                      {isJiraPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link'}
                     </Button>
                   </div>
                 </div>

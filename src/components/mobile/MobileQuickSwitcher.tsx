@@ -65,88 +65,34 @@ const typeIcons: Record<ResultType, ReactElement> = {
   ),
   service: (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-      <rect
-        x="4"
-        y="5"
-        width="16"
-        height="6"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <rect
-        x="4"
-        y="13"
-        width="16"
-        height="6"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
+      <rect x="4" y="5" width="16" height="6" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <rect x="4" y="13" width="16" height="6" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
     </svg>
   ),
   team: (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
       <circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
       <circle cx="17" cy="9" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M3 20c0-3 3-5 6-5s6 2 6 5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M3 20c0-3 3-5 6-5s6 2 6 5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   ),
   user: (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
       <circle cx="12" cy="8" r="3.5" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M5 20c0-3.5 3.1-6 7-6s7 2.5 7 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   ),
   policy: (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
-      <path
-        d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M9 12l2 2 4-4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3Z" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   postmortem: (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="h-4 w-4">
       <path d="M7 3h7l4 4v14H7z" fill="none" stroke="currentColor" strokeWidth="1.8" />
-      <path
-        d="M14 3v5h5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <path
-        d="M9 13h6M9 17h4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M14 3v5h5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M9 13h6M9 17h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   ),
 };
@@ -169,32 +115,21 @@ const toneClasses: Record<string, string> = {
 
 function mapToMobileHref(result: SearchResult) {
   switch (result.type) {
-    case 'incident':
-      return `/m/incidents/${result.id}`;
-    case 'service':
-      return `/m/services/${result.id}`;
-    case 'team':
-      return `/m/teams/${result.id}`;
-    case 'user':
-      return `/m/users/${result.id}`;
-    case 'policy':
-      return `/m/policies/${result.id}`;
-    case 'postmortem':
-      return `/m/postmortems/${result.id}`;
-    default:
-      return '/m';
+    case 'incident': return `/m/incidents/${result.id}`;
+    case 'service': return `/m/services/${result.id}`;
+    case 'team': return `/m/teams/${result.id}`;
+    case 'user': return `/m/users/${result.id}`;
+    case 'policy': return `/m/policies/${result.id}`;
+    case 'postmortem': return `/m/postmortems/${result.id}`;
+    default: return '/m';
   }
 }
 
 function readRecents(): RecentItem[] {
-  if (typeof window === 'undefined') {
-    return [];
-  }
+  if (typeof window === 'undefined') return [];
   try {
     const stored = window.localStorage.getItem(RECENTS_KEY);
-    if (!stored) {
-      return [];
-    }
+    if (!stored) return [];
     const parsed = JSON.parse(stored) as RecentItem[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -206,7 +141,7 @@ function writeRecents(items: RecentItem[]) {
   try {
     window.localStorage.setItem(RECENTS_KEY, JSON.stringify(items));
   } catch {
-    // Ignore storage issues silently
+    // Recents are optional; storage failures must not block navigation.
   }
 }
 
@@ -217,36 +152,23 @@ export default function MobileQuickSwitcher() {
   const [isLoading, setIsLoading] = useState(false);
   const [recents, setRecents] = useState<RecentItem[]>([]);
   const router = useRouter();
-  const [isMac, setIsMac] = useState(false);
-
-  useEffect(() => {
-    setIsMac(navigator.platform.toUpperCase().indexOf('MAC') >= 0);
-  }, []);
 
   const hasQuery = query.trim().length >= MIN_QUERY_LENGTH;
 
-  // Global Command+K listener
   useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen(open => !open);
+    const down = (event: KeyboardEvent) => {
+      if (event.key === 'k' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setOpen(value => !value);
       }
     };
-
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
   }, []);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-    setRecents(readRecents());
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) {
+    if (open) setRecents(readRecents());
+    else {
       setQuery('');
       setResults([]);
     }
@@ -266,17 +188,12 @@ export default function MobileQuickSwitcher() {
         const response = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
           signal: controller.signal,
         });
-        if (!response.ok) {
-          throw new Error('Search request failed');
-        }
+        if (!response.ok) throw new Error('Search request failed');
         const data = await response.json();
         setResults((data?.results || []) as SearchResult[]);
       } catch (error: unknown) {
         if ((error as Error).name !== 'AbortError') {
-          logger.error('mobile.quickSwitcher.searchFailed', {
-            component: 'MobileQuickSwitcher',
-            error,
-          });
+          logger.error('mobile.quickSwitcher.searchFailed', { component: 'MobileQuickSwitcher', error });
         }
       } finally {
         setIsLoading(false);
@@ -311,55 +228,39 @@ export default function MobileQuickSwitcher() {
     <>
       <button
         type="button"
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)] shadow-sm transition hover:bg-[color:var(--bg-secondary)]"
-        aria-label="Open quick switcher"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="Search OpsKnight"
         onClick={() => setOpen(true)}
       >
-        <Search className="h-5 w-5" />
+        <Search className="h-4 w-4" aria-hidden="true" />
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        {/* Custom DialogContent to position below header (top-aligned) */}
-        <DialogContent className="fixed left-[50%] top-[4rem] z-[150] grid w-[95%] max-w-lg translate-x-[-50%] translate-y-0 gap-4 border border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-primary)] p-0 shadow-lg duration-200 sm:rounded-lg">
+        <DialogContent className="top-auto bottom-0 left-0 w-full max-w-none translate-x-0 translate-y-0 gap-0 rounded-t-2xl border-x-0 border-b-0 border-border bg-popover p-0 text-popover-foreground shadow-2xl sm:bottom-auto sm:left-1/2 sm:top-24 sm:w-[min(92vw,32rem)] sm:max-w-lg sm:-translate-x-1/2 sm:rounded-2xl sm:border">
           <DialogTitle className="sr-only">Quick switcher</DialogTitle>
-          <DialogDescription className="sr-only">
-            Search incidents, services, teams, and more.
-          </DialogDescription>
-          <Command
-            shouldFilter={false}
-            className="!bg-[color:var(--bg-surface)] [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
-          >
+          <DialogDescription className="sr-only">Search incidents, services, teams, and more.</DialogDescription>
+          <Command shouldFilter={false} className="bg-transparent">
             <CommandInput
-              placeholder="Type a command or search..."
+              placeholder="Search incidents, services, teams…"
               value={query}
               onValueChange={setQuery}
               autoFocus
             />
-            <CommandList className="max-h-[70vh]">
-              <CommandEmpty>{isLoading ? 'Searching...' : 'No results found.'}</CommandEmpty>
+            <CommandList className="max-h-[min(68dvh,32rem)] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+              <CommandEmpty>{isLoading ? 'Searching…' : 'No results found.'}</CommandEmpty>
 
               {!hasQuery && (
                 <>
                   {recentItems.length > 0 && (
                     <CommandGroup heading="Recent">
                       {recentItems.map(item => (
-                        <CommandItem
-                          key={`${item.type}-${item.id}`}
-                          onSelect={() => handleSelect(item)}
-                          className="gap-3"
-                        >
-                          <span className={cn('flex shrink-0', toneClasses[typeTones[item.type]])}>
-                            {typeIcons[item.type]}
-                          </span>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{item.title}</span>
-                            {item.subtitle && (
-                              <span className="text-xs text-muted-foreground">{item.subtitle}</span>
-                            )}
+                        <CommandItem key={`${item.type}-${item.id}`} onSelect={() => handleSelect(item)} className="gap-3 py-3">
+                          <span className={cn('flex shrink-0', toneClasses[typeTones[item.type]])}>{typeIcons[item.type]}</span>
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{item.title}</span>
+                            {item.subtitle && <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>}
                           </div>
-                          <span className="ml-auto text-[10px] uppercase text-muted-foreground">
-                            {typeLabels[item.type]}
-                          </span>
+                          <span className="text-[10px] uppercase text-muted-foreground">{typeLabels[item.type]}</span>
                         </CommandItem>
                       ))}
                       <CommandSeparator />
@@ -368,11 +269,9 @@ export default function MobileQuickSwitcher() {
 
                   <CommandGroup heading="Explore">
                     {quickLinks.map(link => (
-                      <CommandItem key={link.href} onSelect={() => handleQuickLink(link.href)}>
-                        <span className="flex shrink-0 text-slate-500">
-                          <Search className="h-4 w-4" />
-                        </span>
-                        <span className="ml-2 font-medium">{link.label}</span>
+                      <CommandItem key={link.href} onSelect={() => handleQuickLink(link.href)} className="py-3">
+                        <Search className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                        <span className="font-medium">{link.label}</span>
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -382,23 +281,13 @@ export default function MobileQuickSwitcher() {
               {hasQuery && results.length > 0 && (
                 <CommandGroup heading="Results">
                   {results.map(item => (
-                    <CommandItem
-                      key={`${item.type}-${item.id}`}
-                      onSelect={() => handleSelect(item)}
-                      className="gap-3"
-                    >
-                      <span className={cn('flex shrink-0', toneClasses[typeTones[item.type]])}>
-                        {typeIcons[item.type]}
-                      </span>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{item.title}</span>
-                        {item.subtitle && (
-                          <span className="text-xs text-muted-foreground">{item.subtitle}</span>
-                        )}
+                    <CommandItem key={`${item.type}-${item.id}`} onSelect={() => handleSelect(item)} className="gap-3 py-3">
+                      <span className={cn('flex shrink-0', toneClasses[typeTones[item.type]])}>{typeIcons[item.type]}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{item.title}</span>
+                        {item.subtitle && <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>}
                       </div>
-                      <span className="ml-auto text-[10px] uppercase text-muted-foreground">
-                        {typeLabels[item.type]}
-                      </span>
+                      <span className="text-[10px] uppercase text-muted-foreground">{typeLabels[item.type]}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

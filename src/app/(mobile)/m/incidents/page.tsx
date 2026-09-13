@@ -1,20 +1,23 @@
 import Link from 'next/link';
-import MobileIncidentList, { type IncidentFilter } from '@/components/mobile/MobileIncidentList';
-import MobileListControls from '@/components/mobile/MobileListControls';
+import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
+import { Plus, SearchX } from 'lucide-react';
+import MobileIncidentList, { type IncidentFilter } from '@/components/mobile/MobileIncidentList';
+import MobileIncidentFilters from '@/components/mobile/MobileIncidentFilters';
+import EmptyState from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/shadcn/button';
 import prisma from '@/lib/prisma';
 import { activeIncidentStatuses, mutedIncidentStatuses } from '@/lib/incident-status';
 import { normalizeIncidentStatus } from '@/lib/incidents-query';
-import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import { incidentReadWhere } from '@/lib/authorization-filters';
-import { AlertTriangle, Plus, ChevronLeft, ChevronRight, SearchX } from 'lucide-react';
+import { incidentReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
+import { getRequestActorContext } from '@/lib/request-actor-context';
 
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 20;
 type MobileIncidentSort = 'created_desc' | 'created_asc' | 'urgency';
 
-const normalizeFilter = (value?: string): IncidentFilter => {
+function normalizeFilter(value?: string): IncidentFilter {
   if (
     value === 'all_open' ||
     value === 'muted' ||
@@ -25,14 +28,11 @@ const normalizeFilter = (value?: string): IncidentFilter => {
     return value;
   }
   return 'all';
-};
+}
 
-const normalizeSort = (value?: string): MobileIncidentSort => {
-  if (value === 'created_asc' || value === 'urgency') {
-    return value;
-  }
-  return 'created_desc';
-};
+function normalizeSort(value?: string): MobileIncidentSort {
+  return value === 'created_asc' || value === 'urgency' ? value : 'created_desc';
+}
 
 export default async function MobileIncidentsPage(props: {
   searchParams?: Promise<{
@@ -49,8 +49,11 @@ export default async function MobileIncidentsPage(props: {
     createdBefore?: string;
   }>;
 }) {
+  const context = await getRequestActorContext();
+  if (!context) redirect('/login?callbackUrl=/m/incidents');
+
   const searchParams = await props.searchParams;
-  const query = searchParams?.q || '';
+  const query = searchParams?.q?.trim() || '';
   const filter = normalizeFilter(searchParams?.filter);
   const sort = normalizeSort(searchParams?.sort);
   const status = normalizeIncidentStatus(searchParams?.status);
@@ -62,60 +65,108 @@ export default async function MobileIncidentsPage(props: {
     searchParams?.urgency === 'LOW'
       ? searchParams.urgency
       : undefined;
-  const resolvedAfterValue = searchParams?.resolvedAfter;
-  const resolvedAfter = resolvedAfterValue ? new Date(resolvedAfterValue) : undefined;
-  const createdAfterValue = searchParams?.createdAfter;
-  const createdBeforeValue = searchParams?.createdBefore;
-  const createdAfter = createdAfterValue ? new Date(createdAfterValue) : undefined;
-  const createdBefore = createdBeforeValue ? new Date(createdBeforeValue) : undefined;
-  const page = Math.max(1, parseInt(searchParams?.page || '1', 10));
+  const resolvedAfter = searchParams?.resolvedAfter
+    ? new Date(searchParams.resolvedAfter)
+    : undefined;
+  const createdAfter = searchParams?.createdAfter ? new Date(searchParams.createdAfter) : undefined;
+  const createdBefore = searchParams?.createdBefore
+    ? new Date(searchParams.createdBefore)
+    : undefined;
+  const page = Math.max(1, Number.parseInt(searchParams?.page || '1', 10) || 1);
 
   const selectedWhere: Prisma.IncidentWhereInput = {};
+  if (query) selectedWhere.title = { contains: query, mode: 'insensitive' };
 
-  if (query) {
-    selectedWhere.title = { contains: query, mode: 'insensitive' };
-  }
-
-  if (filter === 'all_open') {
-    selectedWhere.status = { in: activeIncidentStatuses() };
-  } else if (filter === 'muted') {
-    selectedWhere.status = { in: mutedIncidentStatuses() };
-  } else if (filter === 'open') {
-    selectedWhere.status = 'OPEN';
-  } else if (filter === 'acknowledged') {
-    selectedWhere.status = 'ACKNOWLEDGED';
-  } else if (filter === 'resolved') {
-    selectedWhere.status = 'RESOLVED';
-  }
+  if (filter === 'all_open') selectedWhere.status = { in: activeIncidentStatuses() };
+  else if (filter === 'muted') selectedWhere.status = { in: mutedIncidentStatuses() };
+  else if (filter === 'open') selectedWhere.status = 'OPEN';
+  else if (filter === 'acknowledged') selectedWhere.status = 'ACKNOWLEDGED';
+  else if (filter === 'resolved') selectedWhere.status = 'RESOLVED';
 
   if (status) selectedWhere.status = status;
-  if (assignee) selectedWhere.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
+  if (assignee)
+    selectedWhere.assigneeId = assignee.toLowerCase() === 'unassigned' ? null : assignee;
   if (serviceId) selectedWhere.serviceId = serviceId;
   if (urgency) selectedWhere.urgency = urgency;
-  if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime())) {
+  if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime()))
     selectedWhere.resolvedAt = { gte: resolvedAfter };
-  }
   if (createdAfter && !Number.isNaN(createdAfter.getTime())) {
-    selectedWhere.createdAt = { ...(selectedWhere.createdAt as Prisma.DateTimeFilter), gte: createdAfter };
+    selectedWhere.createdAt = {
+      ...(selectedWhere.createdAt as Prisma.DateTimeFilter),
+      gte: createdAfter,
+    };
   }
   if (createdBefore && !Number.isNaN(createdBefore.getTime())) {
-    selectedWhere.createdAt = { ...(selectedWhere.createdAt as Prisma.DateTimeFilter), lte: createdBefore };
+    selectedWhere.createdAt = {
+      ...(selectedWhere.createdAt as Prisma.DateTimeFilter),
+      lte: createdBefore,
+    };
   }
 
-  const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
-    sort === 'created_asc'
-      ? [{ createdAt: 'asc' }]
-      : sort === 'urgency'
-        ? [{ urgency: 'desc' }, { createdAt: 'desc' }]
-        : [{ createdAt: 'desc' }];
-
-  const actor = await getCurrentAuthorizationActor();
   const where: Prisma.IncidentWhereInput = {
-    AND: [incidentReadWhere(actor), selectedWhere],
+    AND: [incidentReadWhere(context.actor), selectedWhere],
   };
 
-  const [incidents, totalCount] = await Promise.all([
-    prisma.incident.findMany({
+  const [totalCount, services] = await Promise.all([
+    prisma.incident.count({ where }),
+    prisma.service.findMany({
+      where: serviceReadWhere(context.actor),
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  type IncidentItem = React.ComponentProps<typeof MobileIncidentList>['incidents'][number];
+  let incidents: IncidentItem[] = [];
+
+  if (sort === 'urgency') {
+    // Rank urgency explicitly: HIGH > MEDIUM > LOW, avoiding PostgreSQL enum sequence
+    const skip = (page - 1) * PAGE_SIZE;
+    const take = PAGE_SIZE;
+    const [highCount, medCount] = await Promise.all([
+      prisma.incident.count({ where: { AND: [where, { urgency: 'HIGH' }] } }),
+      prisma.incident.count({ where: { AND: [where, { urgency: 'MEDIUM' }] } }),
+    ]);
+
+    const tiers: Array<{ urgency: 'HIGH' | 'MEDIUM' | 'LOW'; count: number }> = [
+      { urgency: 'HIGH', count: highCount },
+      { urgency: 'MEDIUM', count: medCount },
+      { urgency: 'LOW', count: Math.max(0, totalCount - highCount - medCount) },
+    ];
+
+    let currentSkip = skip;
+    let remainingTake = take;
+
+    for (const tier of tiers) {
+      if (remainingTake <= 0) break;
+      if (currentSkip >= tier.count) {
+        currentSkip -= tier.count;
+        continue;
+      }
+      const tierTake = Math.min(remainingTake, tier.count - currentSkip);
+      const tierIncidents = await prisma.incident.findMany({
+        where: { AND: [where, { urgency: tier.urgency }] },
+        orderBy: [{ createdAt: 'desc' }],
+        skip: currentSkip,
+        take: tierTake,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          urgency: true,
+          createdAt: true,
+          service: { select: { name: true } },
+        },
+      });
+      incidents.push(...(tierIncidents as IncidentItem[]));
+      remainingTake -= tierIncidents.length;
+      currentSkip = 0;
+    }
+  } else {
+    const orderBy: Prisma.IncidentOrderByWithRelationInput[] =
+      sort === 'created_asc' ? [{ createdAt: 'asc' }] : [{ createdAt: 'desc' }];
+
+    incidents = (await prisma.incident.findMany({
       where,
       orderBy,
       skip: (page - 1) * PAGE_SIZE,
@@ -127,146 +178,99 @@ export default async function MobileIncidentsPage(props: {
         urgency: true,
         createdAt: true,
         service: { select: { name: true } },
-        assignee: { select: { id: true, name: true, avatarUrl: true, gender: true } },
       },
-    }),
-    prisma.incident.count({ where }),
-  ]);
+    })) as IncidentItem[];
+  }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const startIndex = (page - 1) * PAGE_SIZE + 1;
-  const endIndex = Math.min(page * PAGE_SIZE, totalCount);
-
   const buildPageUrl = (newPage: number) => {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
-    if (filter && filter !== 'all') params.set('filter', filter);
-    if (sort && sort !== 'created_desc') params.set('sort', sort);
+    if (filter !== 'all') params.set('filter', filter);
+    if (sort !== 'created_desc') params.set('sort', sort);
     if (status) params.set('status', status);
     if (assignee) params.set('assignee', assignee);
     if (serviceId) params.set('serviceId', serviceId);
     if (urgency) params.set('urgency', urgency);
-    if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime())) {
+    if (resolvedAfter && !Number.isNaN(resolvedAfter.getTime()))
       params.set('resolvedAfter', resolvedAfter.toISOString());
-    }
-    if (createdAfter && !Number.isNaN(createdAfter.getTime())) {
+    if (createdAfter && !Number.isNaN(createdAfter.getTime()))
       params.set('createdAfter', createdAfter.toISOString());
-    }
-    if (createdBefore && !Number.isNaN(createdBefore.getTime())) {
+    if (createdBefore && !Number.isNaN(createdBefore.getTime()))
       params.set('createdBefore', createdBefore.toISOString());
-    }
-    params.set('page', newPage.toString());
-    return `/m/incidents?${params.toString()}`;
+    if (newPage > 1) params.set('page', String(newPage));
+    const suffix = params.toString();
+    return suffix ? `/m/incidents?${suffix}` : '/m/incidents';
   };
 
-  return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)] flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-primary" />
-            Incidents
-          </h1>
-          <p className="text-xs font-medium text-[color:var(--text-muted)] mt-0.5">
-            {totalCount > 0 ? `${startIndex}-${endIndex} of ${totalCount}` : '0 incidents'}
-          </p>
-        </div>
-      </div>
+  const hasFilters = Boolean(
+    query ||
+    filter !== 'all' ||
+    sort !== 'created_desc' ||
+    status ||
+    assignee ||
+    serviceId ||
+    urgency
+  );
 
-      {/* Search and Filters */}
-      <MobileListControls
-        basePath="/m/incidents"
-        placeholder="Search incidents..."
-        filters={[
-          { label: 'All', value: 'all' },
-          { label: 'Active', value: 'all_open' },
-          { label: 'Muted', value: 'muted' },
-          { label: 'Triggered', value: 'open' },
-          { label: 'Acknowledged', value: 'acknowledged' },
-          { label: 'Resolved', value: 'resolved' },
-        ]}
-        sortOptions={[
-          { label: 'Newest first', value: 'created_desc' },
-          { label: 'Oldest first', value: 'created_asc' },
-          { label: 'Urgency first', value: 'urgency' },
-        ]}
+  return (
+    <div className="responsive-page space-y-4">
+      <MobileIncidentFilters
+        currentQuery={query}
+        currentFilter={filter}
+        currentUrgency={urgency}
+        currentAssignee={assignee}
+        currentServiceId={serviceId}
+        currentSort={sort}
+        currentUserId={context.user.id}
+        services={services}
+        totalCount={totalCount}
       />
 
-      {/* Create Button */}
-      <Link
-        href="/m/incidents/create"
-        className="flex items-center justify-center gap-2 rounded-xl bg-primary text-white py-3 px-4 font-semibold text-sm shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
-      >
-        <Plus className="h-4 w-4" />
-        New Incident
-      </Link>
-
-      {/* Incident List */}
       {incidents.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--bg-surface)] py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[color:var(--bg-secondary)] text-[color:var(--text-muted)]">
-            <SearchX className="h-7 w-7" />
-          </div>
-          <div>
-            <p className="font-semibold text-[color:var(--text-primary)]">No incidents found</p>
-            <p className="text-sm text-[color:var(--text-muted)] mt-1">
-              {query ? `No match for "${query}"` : 'Change filters or create a new one'}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 mt-2">
-            <Link
-              href="/m/incidents/create"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-white py-2 px-4 font-semibold text-sm transition-all active:scale-[0.98]"
-            >
-              <Plus className="h-4 w-4" />
-              Create incident
-            </Link>
-            {(query || filter !== 'all' || sort !== 'created_desc') && (
-              <Link
-                href="/m/incidents"
-                className="inline-flex items-center justify-center rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-primary)] py-2 px-4 font-medium text-sm transition-all active:scale-[0.98]"
-              >
-                Reset filters
+        <EmptyState
+          icon={<SearchX aria-hidden="true" />}
+          title="No incidents found"
+          description={
+            query ? `Nothing matches “${query}”.` : 'Change the filters or create a new incident.'
+          }
+          size="sm"
+          action={
+            <Button asChild size="sm">
+              <Link href="/m/incidents/create">
+                <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                New incident
               </Link>
-            )}
-          </div>
-        </div>
+            </Button>
+          }
+          secondaryAction={
+            hasFilters ? (
+              <Button asChild size="sm" variant="outline">
+                <Link href="/m/incidents">Clear filters</Link>
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <MobileIncidentList incidents={incidents} filter={filter} />
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-4 pt-2">
-          {page > 1 ? (
-            <Link
-              href={buildPageUrl(page - 1)}
-              className="flex items-center gap-1.5 rounded-lg border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-2 text-sm font-medium text-[color:var(--text-secondary)] transition-all active:scale-[0.98]"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Prev
-            </Link>
-          ) : (
-            <div />
+        <nav
+          aria-label="Incident result navigation"
+          className="flex items-center justify-center gap-2 pt-1"
+        >
+          {page > 1 && (
+            <Button asChild variant="outline" size="sm" className="h-10 rounded-xl">
+              <Link href={buildPageUrl(page - 1)}>Newer</Link>
+            </Button>
           )}
-
-          <span className="text-sm font-medium text-[color:var(--text-muted)]">
-            Page {page} of {totalPages}
-          </span>
-
-          {page < totalPages ? (
-            <Link
-              href={buildPageUrl(page + 1)}
-              className="flex items-center gap-1.5 rounded-lg bg-primary text-white px-3 py-2 text-sm font-medium transition-all active:scale-[0.98]"
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-          ) : (
-            <div />
+          {page < totalPages && (
+            <Button asChild size="sm" className="h-10 rounded-xl px-5">
+              <Link href={buildPageUrl(page + 1)}>Load older incidents</Link>
+            </Button>
           )}
-        </div>
+        </nav>
       )}
     </div>
   );

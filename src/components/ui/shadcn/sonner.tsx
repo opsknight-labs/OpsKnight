@@ -7,19 +7,18 @@ import { Toaster as Sonner } from 'sonner';
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ theme: propTheme, ...props }: ToasterProps) => {
-  const { theme: contextTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
-  // Support browser dark and light mode dynamically:
-  // - If propTheme is explicitly provided, respect it.
-  // - If contextTheme is 'dark', respect the explicit dark context.
-  // - Otherwise default to 'system' so Sonner queries window.matchMedia('(prefers-color-scheme: dark)')
-  //   and dynamically adapts to browser dark or light mode.
-  const resolvedTheme: ToasterProps['theme'] =
-    propTheme ?? (contextTheme === 'dark' ? 'dark' : 'system');
+  // Sonner must follow the resolved application theme, not query the OS again.
+  // Desktop is intentionally forced light while mobile/PWA may follow system;
+  // using `system` here created a split-brain UI where dark OS preferences could
+  // render dark toasts inside an explicitly light application (or vice versa).
+  const effectiveTheme: ToasterProps['theme'] =
+    propTheme ?? (resolvedTheme === 'dark' ? 'dark' : 'light');
 
   return (
     <Sonner
-      theme={resolvedTheme}
+      theme={effectiveTheme}
       className="toaster group"
       position="top-right"
       visibleToasts={3}

@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Server } from 'lucide-react';
 import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
+import EmptyState from '@/components/ui/EmptyState';
+import { Card } from '@/components/ui/shadcn/card';
 import { readCache, writeCache } from '@/lib/mobile-cache';
 import { haptics } from '@/lib/haptics';
 
@@ -22,7 +24,6 @@ export default function MobileServicesClient({
   query: string;
 }) {
   const cacheKey = `mobile-services:${query || 'all'}`;
-
   const [services, setServices] = useState<ServiceItem[]>(initialServices);
 
   useEffect(() => {
@@ -31,9 +32,7 @@ export default function MobileServicesClient({
     const handleOnlineStatus = async () => {
       if (!navigator.onLine) {
         const cached = await readCache<ServiceItem[]>(cacheKey);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-          setServices(cached);
-        }
+        if (cached && Array.isArray(cached) && cached.length > 0) setServices(cached);
       } else {
         setServices(initialServices);
       }
@@ -41,8 +40,6 @@ export default function MobileServicesClient({
 
     window.addEventListener('online', handleOnlineStatus);
     window.addEventListener('offline', handleOnlineStatus);
-
-    // Initial check
     void handleOnlineStatus();
 
     return () => {
@@ -53,94 +50,75 @@ export default function MobileServicesClient({
 
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator.onLine) {
-      writeCache(cacheKey, initialServices);
+      void writeCache(cacheKey, initialServices);
     }
   }, [cacheKey, initialServices]);
 
-  const healthyCount = services.filter(service => service._count.incidents === 0).length;
-  const degradedCount = services.filter(service => service._count.incidents > 0).length;
+  const operationalCount = services.filter(service => service._count.incidents === 0).length;
+  const impactedCount = services.length - operationalCount;
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">
-          Services
-        </h1>
-        <p className="mt-1 text-xs font-medium text-[color:var(--text-muted)]">
-          {healthyCount} healthy · {degradedCount} with issues
-        </p>
-      </div>
-
-      <MobileSearchWithParams placeholder="Search services..." />
-
-      <div className="flex flex-col gap-3">
-        {services.length === 0 ? (
-          <EmptyState />
-        ) : (
-          services.map(service => (
-            <ServiceCard
-              key={service.id}
-              service={service}
-              openIncidents={service._count.incidents}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ServiceCard({
-  service,
-  openIncidents,
-}: {
-  service: { id: string; name: string; description: string | null };
-  openIncidents: number;
-}) {
-  const isHealthy = openIncidents === 0;
-
-  return (
-    <Link
-      href={`/m/services/${service.id}`}
-      onClick={() => haptics.soft()}
-      className="flex items-center gap-3 rounded-2xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] p-4 text-[color:var(--text-primary)] shadow-sm transition hover:bg-[color:var(--bg-secondary)]"
-    >
-      <div className="flex flex-1 items-center gap-3 min-w-0">
-        <div
-          className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-            isHealthy
-              ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
-              : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-          }`}
-        />
-
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold">{service.name}</div>
-          {service.description && (
-            <div className="truncate text-xs text-[color:var(--text-secondary)]">
-              {service.description}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {openIncidents > 0 && (
-        <span className="rounded-full bg-red-100 px-2 py-1 text-[10px] font-bold uppercase text-red-700 dark:bg-red-900/40 dark:text-red-300">
-          {openIncidents} active
+    <div className="responsive-page space-y-4">
+      <section className="flex items-center justify-between gap-3 px-0.5 text-[11px] text-muted-foreground">
+        <span>{services.length} {services.length === 1 ? 'service' : 'services'}</span>
+        <span>
+          <strong className="font-semibold text-foreground">{impactedCount}</strong> impacted ·{' '}
+          <strong className="font-semibold text-foreground">{operationalCount}</strong> operational
         </span>
+      </section>
+
+      <MobileSearchWithParams placeholder="Search services" />
+
+      {services.length === 0 ? (
+        <EmptyState
+          icon={<Server aria-hidden="true" />}
+          title={query ? 'No matching services' : 'No services available'}
+          description={query ? `Nothing matches “${query}”.` : 'Services you can access will appear here.'}
+          size="sm"
+        />
+      ) : (
+        <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
+          {services.map((service, index) => {
+            const openIncidents = service._count.incidents;
+            const impacted = openIncidents > 0;
+            return (
+              <Link
+                key={service.id}
+                href={`/m/services/${service.id}`}
+                onClick={() => haptics.soft()}
+                className={`flex min-h-[68px] min-w-0 items-center gap-3 px-3.5 py-3 text-card-foreground transition-colors hover:bg-accent/40 ${
+                  index > 0 ? 'border-t border-border/70' : ''
+                }`}
+              >
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${impacted ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-[13px] font-semibold text-foreground">{service.name}</span>
+                    <span
+                      className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                        impacted
+                          ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/70 dark:bg-rose-950/35 dark:text-rose-300'
+                          : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/70 dark:bg-emerald-950/35 dark:text-emerald-300'
+                      }`}
+                    >
+                      {impacted ? 'Impacted' : 'Operational'}
+                    </span>
+                  </span>
+                  <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+                    {impacted
+                      ? `${openIncidents} active incident${openIncidents === 1 ? '' : 's'}`
+                      : service.description || 'No active incidents'}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </Link>
+            );
+          })}
+        </Card>
       )}
-
-      <ChevronRight className="h-4 w-4 text-[color:var(--text-muted)]" />
-    </Link>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--bg-secondary)] px-6 py-10 text-center">
-      <div className="text-3xl">{'\u{1F527}'}</div>
-      <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">No services</h3>
-      <p className="text-xs text-[color:var(--text-muted)]">Use desktop to create services</p>
     </div>
   );
 }

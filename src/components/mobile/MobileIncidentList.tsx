@@ -39,9 +39,7 @@ export default function MobileIncidentList({
     const loadFromCache = async () => {
       if (!navigator.onLine) {
         const cached = await readCache<IncidentListItem[]>('mobile-incidents', 24 * 60 * 60 * 1000);
-        if (cached && Array.isArray(cached) && cached.length > 0) {
-          setLocalIncidents(cached);
-        }
+        if (cached && Array.isArray(cached) && cached.length > 0) setLocalIncidents(cached);
       }
     };
     void loadFromCache();
@@ -58,10 +56,7 @@ export default function MobileIncidentList({
     void writeCache('mobile-incidents', localIncidents);
   }, [localIncidents]);
 
-  const handleStatusUpdate = async (
-    id: string,
-    status: 'ACKNOWLEDGED' | 'RESOLVED' | 'SNOOZED'
-  ) => {
+  const handleStatusUpdate = async (id: string, status: 'ACKNOWLEDGED' | 'SNOOZED') => {
     if (updatingId) return;
     setUpdatingId(id);
     setErrorMessage('');
@@ -69,8 +64,6 @@ export default function MobileIncidentList({
     const previous = localIncidents;
     const expectedStatus = localIncidents.find(incident => incident.id === id)?.status;
 
-    // Optimism is only provisional. If the mutation is queued rather than
-    // committed we restore the server-known state so the UI never lies.
     setLocalIncidents(current => {
       const updated = current.map(incident =>
         incident.id === id ? { ...incident, status } : incident
@@ -85,25 +78,16 @@ export default function MobileIncidentList({
       if (filter === 'muted' && status !== 'SNOOZED') {
         return updated.filter(incident => incident.id !== id);
       }
-      if (filter === 'resolved' && status !== 'RESOLVED') {
-        return updated.filter(incident => incident.id !== id);
-      }
       return updated;
     });
 
     try {
-      const result = await mutateIncidentStatus({
-        incidentId: id,
-        status,
-        expectedStatus,
-      });
-
+      const result = await mutateIncidentStatus({ incidentId: id, status, expectedStatus });
       if (result.state === 'QUEUED') {
         setLocalIncidents(previous);
-        setErrorMessage('Offline. Update queued but not yet confirmed by OpsKnight.');
+        setErrorMessage('Offline. Update queued and waiting for OpsKnight to confirm it.');
         return;
       }
-
       router.refresh();
     } catch (error: unknown) {
       setLocalIncidents(previous);
@@ -126,7 +110,7 @@ export default function MobileIncidentList({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       {errorMessage && (
         <div
           role="status"
@@ -148,11 +132,6 @@ export default function MobileIncidentList({
           onSnooze={
             incident.status === 'OPEN'
               ? () => handleStatusUpdate(incident.id, 'SNOOZED')
-              : undefined
-          }
-          onResolve={
-            incident.status !== 'RESOLVED'
-              ? () => handleStatusUpdate(incident.id, 'RESOLVED')
               : undefined
           }
           isUpdating={updatingId === incident.id}

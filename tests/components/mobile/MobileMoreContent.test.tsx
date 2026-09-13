@@ -56,7 +56,7 @@ describe('MobileMoreContent', () => {
   it('renders account actions', () => {
     render(<MobileMoreContent name="User" email="" role="User" />);
 
-    expect(screen.getByRole('link', { name: /Settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Profile & security/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Help & Documentation/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Sign Out/i })).toBeInTheDocument();
   });

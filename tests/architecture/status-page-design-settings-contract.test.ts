@@ -11,11 +11,10 @@ describe('status page design settings & styling contracts', () => {
     expect(fields?.has('expectedUpdatedAt')).toBe(true);
   });
 
-  it('excludes status page elements from browser dark-mode card overrides in cards.css', () => {
+  it('does not globally force cards to light colors from the browser dark preference', () => {
     const cardsCss = readFileSync('src/styles/components/cards.css', 'utf8');
-    expect(cardsCss).toContain('@media (prefers-color-scheme: dark)');
-    expect(cardsCss).toContain(':not(.status-page-surface');
-    expect(cardsCss).toContain('.status-page-container');
+    expect(cardsCss).not.toContain('@media (prefers-color-scheme: dark)');
+    expect(cardsCss).not.toContain('[class*="card"]');
   });
 
   it('ensures status tokens in public-css have no circular variable references', () => {

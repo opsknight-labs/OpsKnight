@@ -1,52 +1,127 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { ChevronDown, LayoutTemplate } from 'lucide-react';
 import MobileButton from '@/components/mobile/MobileButton';
 import { cn } from '@/lib/utils';
 import { notify as toast } from '@/lib/toast';
 import { toUserFacingError } from '@/lib/user-facing-error';
+import {
+  INCIDENT_PRIORITIES,
+  INCIDENT_PRIORITY_DEFINITIONS,
+  type IncidentPriority,
+} from '@/lib/incidents/priority';
 
 type Service = {
   id: string;
   name: string;
   defaultIncidentVisibility?: 'PUBLIC' | 'PRIVATE';
 };
+
 type User = { id: string; name: string | null; email: string };
+
+type Template = {
+  id: string;
+  name: string;
+  description?: string | null;
+  title: string;
+  descriptionText?: string | null;
+  defaultUrgency: 'HIGH' | 'MEDIUM' | 'LOW';
+  defaultPriority?: string | null;
+  defaultService?: { id: string; name: string } | null;
+};
+
 type CreateIncidentResult = {
   id: string;
   outcome: 'CREATED' | 'MERGED' | 'REOPENED';
 } | null;
 
+const FIELD_LABEL = 'text-xs font-semibold text-foreground';
+const CONTROL =
+  'min-h-11 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20';
+
 export default function MobileCreateIncidentClient({
   services,
   users,
+  templates,
   createAction,
 }: {
   services: Service[];
   users: User[];
+  templates: Template[];
   createAction: (formData: FormData) => Promise<CreateIncidentResult>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const defaultServiceId = searchParams.get('serviceId') || '';
+  const requestedServiceId = searchParams.get('serviceId') || '';
+  const requestedTemplateId = searchParams.get('templateId') || '';
+  const initialTemplate = templates.find(template => template.id === requestedTemplateId);
+  const initialTemplateServiceId = initialTemplate?.defaultService?.id || '';
+  const initialServiceId = initialTemplate
+    ? services.some(service => service.id === initialTemplateServiceId)
+      ? initialTemplateServiceId
+      : ''
+    : services.some(service => service.id === requestedServiceId)
+      ? requestedServiceId
+      : '';
+  const initialService = services.find(service => service.id === initialServiceId);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [urgency, setUrgency] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('HIGH');
-  const [selectedServiceId, setSelectedServiceId] = useState(defaultServiceId);
-  const selectedService = services.find(s => s.id === selectedServiceId);
+  const [title, setTitle] = useState(initialTemplate?.title || '');
+  const [description, setDescription] = useState(initialTemplate?.descriptionText || '');
+  const [urgency, setUrgency] = useState<'HIGH' | 'MEDIUM' | 'LOW'>(
+    initialTemplate?.defaultUrgency || 'HIGH'
+  );
+  const [priority, setPriority] = useState(initialTemplate?.defaultPriority || '');
+  const [selectedTemplateId, setSelectedTemplateId] = useState(initialTemplate?.id || '');
+  const [selectedServiceId, setSelectedServiceId] = useState(initialServiceId);
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(
-    selectedService?.defaultIncidentVisibility || 'PUBLIC'
+    initialService?.defaultIncidentVisibility || 'PUBLIC'
   );
   const [userModifiedVisibility, setUserModifiedVisibility] = useState(false);
 
+  const selectedService = services.find(service => service.id === selectedServiceId);
+  const selectedTemplate = templates.find(template => template.id === selectedTemplateId);
+  const selectedPriorityDefinition = useMemo(() => {
+    if (!priority || !INCIDENT_PRIORITIES.includes(priority as IncidentPriority)) return null;
+    return INCIDENT_PRIORITY_DEFINITIONS[priority as IncidentPriority];
+  }, [priority]);
+
   const handleServiceChange = (serviceId: string) => {
     setSelectedServiceId(serviceId);
-    const svc = services.find(s => s.id === serviceId);
-    if (!userModifiedVisibility && svc?.defaultIncidentVisibility) {
-      setVisibility(svc.defaultIncidentVisibility);
+    const service = services.find(item => item.id === serviceId);
+    if (!userModifiedVisibility && service?.defaultIncidentVisibility) {
+      setVisibility(service.defaultIncidentVisibility);
     }
+  };
+
+  const applyTemplate = (template: Template) => {
+    setSelectedTemplateId(template.id);
+    setTitle(template.title);
+    setDescription(template.descriptionText || '');
+    setUrgency(template.defaultUrgency);
+    setPriority(template.defaultPriority || '');
+
+    const templateServiceId = template.defaultService?.id || '';
+    const allowedServiceId = services.some(service => service.id === templateServiceId)
+      ? templateServiceId
+      : '';
+    setSelectedServiceId(allowedServiceId);
+    const service = services.find(item => item.id === allowedServiceId);
+    setUserModifiedVisibility(false);
+    setVisibility(service?.defaultIncidentVisibility || 'PUBLIC');
+  };
+
+  const handleTemplateChange = (templateId: string) => {
+    if (!templateId) {
+      // Clearing the selector must not destroy responder-entered content.
+      setSelectedTemplateId('');
+      return;
+    }
+    const template = templates.find(item => item.id === templateId);
+    if (template) applyTemplate(template);
   };
 
   async function handleSubmit(formData: FormData) {
@@ -84,76 +159,135 @@ export default function MobileCreateIncidentClient({
 
   const truncate = (str: string | null, len: number) => {
     if (!str) return '';
-    return str.length > len ? str.substring(0, len) + '...' : str;
+    return str.length > len ? `${str.substring(0, len)}...` : str;
   };
 
   return (
-    <form action={handleSubmit}>
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
-            Title <span className="text-red-500">*</span>
+    <form action={handleSubmit} className="space-y-5">
+      {templates.length > 0 && (
+        <section className="rounded-2xl border border-border bg-card p-3.5 shadow-sm">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+              <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <label
+                htmlFor="incident-template"
+                className="block text-sm font-semibold text-foreground"
+              >
+                Incident template
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                Optional · pre-fills the incident form
+              </p>
+            </div>
+          </div>
+
+          <div className="relative">
+            <select
+              id="incident-template"
+              value={selectedTemplateId}
+              onChange={event => handleTemplateChange(event.target.value)}
+              className={cn(CONTROL, 'appearance-none pr-10')}
+            >
+              <option value="">Start without a template</option>
+              {templates.map(template => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </div>
+
+          {selectedTemplate && (
+            <div className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              <span className="font-semibold text-foreground">{selectedTemplate.name}</span>
+              {selectedTemplate.description ? ` · ${selectedTemplate.description}` : ''}
+              <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                <span>{selectedTemplate.defaultUrgency} urgency</span>
+                {selectedTemplate.defaultPriority && (
+                  <span>{selectedTemplate.defaultPriority} priority</span>
+                )}
+                {selectedTemplate.defaultService && (
+                  <span>{selectedTemplate.defaultService.name}</span>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label htmlFor="incident-title" className={FIELD_LABEL}>
+            Title <span className="text-destructive">*</span>
           </label>
           <input
+            id="incident-title"
             name="title"
             required
+            value={title}
+            onChange={event => setTitle(event.target.value)}
             placeholder="e.g. API Gateway High Latency"
-            className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-3 text-sm text-[color:var(--text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className={CONTROL}
           />
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
+        <div className="space-y-2">
+          <label htmlFor="incident-description" className={FIELD_LABEL}>
             Description
           </label>
           <textarea
+            id="incident-description"
             name="description"
             rows={4}
+            value={description}
+            onChange={event => setDescription(event.target.value)}
             placeholder="What's happening? Add context..."
-            className="w-full resize-none rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-3 text-sm text-[color:var(--text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className={cn(CONTROL, 'min-h-28 resize-y py-3')}
           />
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
-            Service <span className="text-red-500">*</span>
+        <div className="space-y-2">
+          <label htmlFor="incident-service" className={FIELD_LABEL}>
+            Service <span className="text-destructive">*</span>
           </label>
           <div className="relative">
             <select
+              id="incident-service"
               name="serviceId"
               required
               value={selectedServiceId}
-              onChange={e => handleServiceChange(e.target.value)}
-              className="w-full appearance-none rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-3 pr-10 text-sm text-[color:var(--text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              onChange={event => handleServiceChange(event.target.value)}
+              className={cn(CONTROL, 'appearance-none pr-10')}
             >
               <option value="" disabled>
                 Select a service
               </option>
-              {services.map(s => (
-                <option key={s.id} value={s.id}>
-                  {truncate(s.name, 25)}
+              {services.map(service => (
+                <option key={service.id} value={service.id}>
+                  {truncate(service.name, 40)}
                 </option>
               ))}
             </select>
-            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
+            <ChevronDown
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
-            Urgency
-          </label>
+        <div className="space-y-2">
+          <div>
+            <span className={FIELD_LABEL}>Urgency</span>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Controls responder notification behavior.
+            </p>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <UrgencyRadio
               name="urgency"
@@ -179,122 +313,109 @@ export default function MobileCreateIncidentClient({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
-            Visibility
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label
-              className={cn(
-                'flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold uppercase tracking-wide transition',
-                visibility === 'PUBLIC'
-                  ? 'border-sky-500 bg-sky-100 text-sky-700 dark:border-sky-600 dark:bg-sky-950/40 dark:text-sky-300'
-                  : 'border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)]'
-              )}
-            >
-              <input
-                type="radio"
-                name="visibility"
-                value="PUBLIC"
-                checked={visibility === 'PUBLIC'}
-                onChange={() => {
-                  setUserModifiedVisibility(true);
-                  setVisibility('PUBLIC');
-                }}
-                className="sr-only"
-              />
-              <span>Public</span>
-              {selectedService?.defaultIncidentVisibility === 'PUBLIC' && (
-                <span className="text-[10px] lowercase text-sky-600 dark:text-sky-400 font-normal">
-                  (default)
-                </span>
-              )}
+        <div className="space-y-2">
+          <div>
+            <label htmlFor="incident-priority" className={FIELD_LABEL}>
+              Priority
             </label>
-
-            <label
-              className={cn(
-                'flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 py-2.5 text-xs font-semibold uppercase tracking-wide transition',
-                visibility === 'PRIVATE'
-                  ? 'border-slate-500 bg-slate-100 text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-300'
-                  : 'border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)]'
-              )}
-            >
-              <input
-                type="radio"
-                name="visibility"
-                value="PRIVATE"
-                checked={visibility === 'PRIVATE'}
-                onChange={() => {
-                  setUserModifiedVisibility(true);
-                  setVisibility('PRIVATE');
-                }}
-                className="sr-only"
-              />
-              <span>Private</span>
-              {selectedService?.defaultIncidentVisibility === 'PRIVATE' && (
-                <span className="text-[10px] lowercase text-slate-600 dark:text-slate-400 font-normal">
-                  (default)
-                </span>
-              )}
-            </label>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Optional business-impact classification, separate from paging urgency.
+            </p>
           </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
-            Assignee (Optional)
-          </label>
           <div className="relative">
             <select
-              name="assigneeId"
-              className="w-full appearance-none rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-3 pr-10 text-sm text-[color:var(--text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              id="incident-priority"
+              name="priority"
+              value={priority}
+              onChange={event => setPriority(event.target.value)}
+              className={cn(CONTROL, 'appearance-none pr-10')}
             >
               <option value="">Unassigned</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>
-                  {truncate(u.name || u.email, 25)}
+              {Object.entries(INCIDENT_PRIORITY_DEFINITIONS).map(([priorityKey, definition]) => (
+                <option key={priorityKey} value={priorityKey}>
+                  {priorityKey} · {definition.label}
                 </option>
               ))}
             </select>
-            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--text-muted)]">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
+            <ChevronDown
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+          </div>
+          {selectedPriorityDefinition && (
+            <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground">
+              {selectedPriorityDefinition.description}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <span className={FIELD_LABEL}>Visibility</span>
+          <div className="grid grid-cols-2 gap-2">
+            <VisibilityRadio
+              value="PUBLIC"
+              label="Public"
+              checked={visibility === 'PUBLIC'}
+              isDefault={selectedService?.defaultIncidentVisibility === 'PUBLIC'}
+              onChange={() => {
+                setUserModifiedVisibility(true);
+                setVisibility('PUBLIC');
+              }}
+            />
+            <VisibilityRadio
+              value="PRIVATE"
+              label="Private"
+              checked={visibility === 'PRIVATE'}
+              isDefault={selectedService?.defaultIncidentVisibility === 'PRIVATE'}
+              onChange={() => {
+                setUserModifiedVisibility(true);
+                setVisibility('PRIVATE');
+              }}
+            />
           </div>
         </div>
 
-        {error && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">
-            {error}
+        <div className="space-y-2">
+          <label htmlFor="incident-assignee" className={FIELD_LABEL}>
+            Assignee (optional)
+          </label>
+          <div className="relative">
+            <select
+              id="incident-assignee"
+              name="assigneeId"
+              className={cn(CONTROL, 'appearance-none pr-10')}
+            >
+              <option value="">Unassigned</option>
+              {users.map(user => (
+                <option key={user.id} value={user.id}>
+                  {truncate(user.name || user.email, 40)}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
           </div>
-        )}
-
-        <div className="flex gap-3 pt-2">
-          <MobileButton
-            type="button"
-            variant="secondary"
-            className="flex-1"
-            onClick={() => router.back()}
-          >
-            Cancel
-          </MobileButton>
-          <MobileButton
-            type="submit"
-            variant={urgency === 'HIGH' ? 'danger' : urgency === 'MEDIUM' ? 'warning' : 'success'}
-            className="flex-1"
-            loading={loading}
-          >
-            {loading ? 'Submitting...' : 'Submit Incident'}
-          </MobileButton>
         </div>
+      </div>
+
+      {error && (
+        <div
+          className="rounded-xl border border-destructive/25 bg-destructive/10 px-3 py-2.5 text-xs font-medium text-destructive"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
+        <MobileButton type="button" variant="secondary" fullWidth onClick={() => router.back()}>
+          Cancel
+        </MobileButton>
+        <MobileButton type="submit" fullWidth loading={loading}>
+          {loading ? 'Submitting...' : 'Create incident'}
+        </MobileButton>
       </div>
     </form>
   );
@@ -308,7 +429,7 @@ function UrgencyRadio({
   onChange,
 }: {
   name: string;
-  value: string;
+  value: 'HIGH' | 'MEDIUM' | 'LOW';
   label: string;
   checked: boolean;
   onChange: () => void;
@@ -316,14 +437,14 @@ function UrgencyRadio({
   return (
     <label
       className={cn(
-        'flex cursor-pointer items-center justify-center rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-wide transition',
+        'flex min-h-11 cursor-pointer items-center justify-center rounded-xl border px-2 text-xs font-semibold transition-colors',
         checked
           ? value === 'HIGH'
-            ? 'border-red-500 bg-red-100 text-red-700 dark:border-red-600 dark:bg-red-900/40 dark:text-red-300'
+            ? 'border-rose-500/50 bg-rose-500/10 text-rose-700 dark:text-rose-300'
             : value === 'MEDIUM'
-              ? 'border-amber-500 bg-amber-100 text-amber-700 dark:border-amber-600 dark:bg-amber-900/40 dark:text-amber-300'
-              : 'border-emerald-500 bg-emerald-100 text-emerald-700 dark:border-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300'
-          : 'border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)]'
+              ? 'border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+              : 'border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300'
+          : 'border-border bg-card text-muted-foreground'
       )}
     >
       <input
@@ -334,7 +455,43 @@ function UrgencyRadio({
         onChange={onChange}
         className="sr-only"
       />
+      {label}
+    </label>
+  );
+}
+
+function VisibilityRadio({
+  value,
+  label,
+  checked,
+  isDefault,
+  onChange,
+}: {
+  value: 'PUBLIC' | 'PRIVATE';
+  label: string;
+  checked: boolean;
+  isDefault: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={cn(
+        'flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition-colors',
+        checked
+          ? 'border-primary/50 bg-primary/10 text-foreground'
+          : 'border-border bg-card text-muted-foreground'
+      )}
+    >
+      <input
+        type="radio"
+        name="visibility"
+        value={value}
+        checked={checked}
+        onChange={onChange}
+        className="sr-only"
+      />
       <span>{label}</span>
+      {isDefault && <span className="text-[10px] font-normal text-muted-foreground">default</span>}
     </label>
   );
 }

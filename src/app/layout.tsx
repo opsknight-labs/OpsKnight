@@ -5,7 +5,6 @@ import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import LegalSourceNotice from '@/components/LegalSourceNotice';
 
-// Initialize fonts with explicit weights for better control
 const manrope = Manrope({
   variable: '--font-manrope',
   subsets: ['latin'],
@@ -41,7 +40,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0f172a',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+  ],
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',

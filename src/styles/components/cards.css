@@ -4,8 +4,9 @@
    ======================================== */
 
 .stats-card {
-   background: #fff;
-   border: 1px solid rgba(17, 24, 39, 0.08);
+   background: var(--bg-secondary);
+   color: var(--text-primary);
+   border: 1px solid var(--border);
    border-radius: 18px;
    padding: 1rem 1.25rem;
    box-shadow: var(--shadow-sm);
@@ -33,9 +34,10 @@
 }
 
 .panel {
-   background: #fff;
+   background: var(--bg-secondary);
+   color: var(--text-primary);
    border-radius: 12px;
-   border: 1px solid rgba(17, 24, 39, 0.08);
+   border: 1px solid var(--border);
    padding: 0.875rem;
    box-shadow: var(--shadow-sm);
    display: flex;
@@ -71,30 +73,16 @@
 }
 
 .directory-panel {
-   background: #fff;
-   border-color: rgba(17, 24, 39, 0.08);
-   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+   background: var(--bg-secondary);
+   color: var(--text-primary);
+   border-color: var(--border);
+   box-shadow: var(--shadow-sm);
    padding: 0.85rem 1rem;
 }
 
-/* ========================================
-   Card Dark Mode Protection
-   Prevents browser dark mode from affecting card colors
-   ======================================== */
-
-@media (prefers-color-scheme: dark) {
-   :is(.stats-card, .panel, .directory-panel, [class*="card"], .bg-white, .bg-background):not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
-      background-color: #ffffff !important;
-      color: var(--text-primary) !important;
-      filter: none !important;
-      -webkit-filter: none !important;
-   }
-
-   :is(.stats-label, .panel-eyebrow, .hero-eyebrow):not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
-      color: var(--text-muted) !important;
-   }
-
-   .stats-value:not(.status-page-surface, .status-page-surface *, .status-page-container, .status-page-container *, [data-status-page-root], [data-status-page-root] *) {
-      color: var(--text-primary) !important;
-   }
-}
+/*
+ * Do not add prefers-color-scheme overrides here. Browser/system preference is
+ * resolved by next-themes and semantic components render from the canonical
+ * token set. A browser media query must never force cards back to white while
+ * the application is intentionally in dark mode.
+ */

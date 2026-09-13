@@ -121,11 +121,13 @@ async function deleteSubscription(req: NextRequest) {
 
     let endpoint: string;
     try {
-      endpoint = (await normalizeWebPushSubscription({
-        endpoint: parsed.data.endpoint,
-        expirationTime: null,
-        keys: { p256dh: 'x'.repeat(16), auth: 'x'.repeat(8) },
-      })).endpoint;
+      endpoint = (
+        await normalizeWebPushSubscription({
+          endpoint: parsed.data.endpoint,
+          expirationTime: null,
+          keys: { p256dh: 'x'.repeat(16), auth: 'x'.repeat(8) },
+        })
+      ).endpoint;
     } catch {
       throw validationError('endpoint', 'A valid public HTTPS Web Push endpoint is required.');
     }

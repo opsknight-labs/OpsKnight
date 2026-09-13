@@ -22,7 +22,6 @@ export default function MobileListControls({
   const currentQuery = searchParams.get('q') || '';
   const activeFilter = searchParams.get('filter') || 'all';
   const activeSort = searchParams.get('sort') || sortOptions[0]?.value || 'created_desc';
-
   const [term, setTerm] = useState(currentQuery);
 
   useEffect(() => {
@@ -56,49 +55,42 @@ export default function MobileListControls({
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      if (term !== currentQuery) {
-        updateParams({ q: term });
-      }
+      if (term !== currentQuery) updateParams({ q: term });
     }, 400);
-
     return () => window.clearTimeout(handle);
   }, [term, currentQuery, updateParams]);
 
-  const handleFilterChange = (filterValue: string | null) => {
-    updateParams({ filter: filterValue });
-  };
-
-  const handleSortChange = (sortValue: string) => {
-    updateParams({ sort: sortValue });
-  };
-
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-3">
       <MobileSearch placeholder={placeholder} value={term} onChange={setTerm} />
 
-      <div className="flex flex-col gap-2">
-        <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none]">
+      <div className="flex min-w-0 flex-col gap-2">
+        <div
+          className="flex min-w-0 gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Filters"
+        >
           {filters.map(filter => (
             <MobileFilterChip
               key={filter.label}
               label={filter.label}
               active={activeFilter === (filter.value || 'all')}
-              onClick={() => handleFilterChange(filter.value)}
+              onClick={() => updateParams({ filter: filter.value })}
             />
           ))}
         </div>
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-[color:var(--border)] bg-[color:var(--bg-surface)] px-3 py-2">
+
+        <div className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 shadow-sm">
           <label
-            className="text-[0.7rem] font-semibold uppercase tracking-wider text-[color:var(--text-muted)]"
+            className="shrink-0 text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground"
             htmlFor="mobile-sort"
           >
             Sort
           </label>
           <select
             id="mobile-sort"
-            className="mobile-sort-select w-full flex-1 bg-transparent text-xs font-semibold text-[color:var(--text-primary)] focus:outline-none"
+            className="min-h-11 min-w-0 flex-1 bg-transparent text-right text-sm font-semibold text-foreground outline-none focus-visible:ring-0"
             value={activeSort}
-            onChange={event => handleSortChange(event.target.value)}
+            onChange={event => updateParams({ sort: event.target.value })}
           >
             {sortOptions.map(option => (
               <option key={option.value} value={option.value}>

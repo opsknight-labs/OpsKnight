@@ -1,12 +1,12 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { redirect, notFound } from 'next/navigation';
 import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { activeIncidentStatuses } from '@/lib/incident-status';
-import { getCurrentUser } from '@/lib/rbac';
+import { getRequestActorContext } from '@/lib/request-actor-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +16,8 @@ type PageProps = {
 
 export default async function MobileUserDetailPage({ params }: PageProps) {
   const { id } = await params;
-  await getCurrentUser();
+  const context = await getRequestActorContext();
+  if (!context) redirect(`/login?callbackUrl=/m/users/${id}`);
 
   const user = await prisma.user.findUnique({
     where: { id },

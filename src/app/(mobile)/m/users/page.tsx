@@ -1,12 +1,13 @@
-import React, { JSX } from 'react';
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import { MobileAvatar, MobileEmptyState } from '@/components/mobile/MobileUtils';
-import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
-import { getDefaultAvatar } from '@/lib/avatar';
-import MobileCard from '@/components/mobile/MobileCard';
-import { getCurrentUser } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
+import { ChevronRight, Users } from 'lucide-react';
+import { MobileAvatar } from '@/components/mobile/MobileUtils';
+import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
+import EmptyState from '@/components/ui/EmptyState';
+import { Card } from '@/components/ui/shadcn/card';
+import { getDefaultAvatar } from '@/lib/avatar';
+import { getRequestActorContext } from '@/lib/request-actor-context';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,15 +15,12 @@ export default async function MobileUsersPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string }>;
-}): Promise<JSX.Element> {
-  const params = await searchParams;
-  try {
-    await getCurrentUser();
-  } catch {
-    redirect('/m/login');
-  }
-  const query = params.q || '';
+}) {
+  const context = await getRequestActorContext();
+  if (!context) redirect('/login?callbackUrl=/m/users');
 
+  const params = await searchParams;
+  const query = params.q?.trim() || '';
   const users = await prisma.user.findMany({
     where: query
       ? {
@@ -32,7 +30,7 @@ export default async function MobileUsersPage({
           ],
         }
       : undefined,
-    orderBy: { name: 'asc' },
+    orderBy: [{ name: 'asc' }, { email: 'asc' }],
     select: {
       id: true,
       name: true,
@@ -44,71 +42,55 @@ export default async function MobileUsersPage({
   });
 
   return (
-    <div className="flex flex-col gap-4 p-4 pb-24">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight text-[color:var(--text-primary)]">Users</h1>
-        <p className="mt-1 text-xs font-medium text-[color:var(--text-muted)]">
-          {users.length} member{users.length !== 1 ? 's' : ''}
-        </p>
+    <div className="responsive-page space-y-4">
+      <div className="flex items-center justify-between gap-3 px-0.5 text-[11px] text-muted-foreground">
+        <span>{users.length} {users.length === 1 ? 'member' : 'members'}</span>
       </div>
 
-      {/* Search */}
-      <MobileSearchWithParams placeholder="Search users by name or email..." />
+      <MobileSearchWithParams placeholder="Search users" />
 
-      {/* User List */}
-      <div className="flex flex-col gap-3">
-        {users.length === 0 ? (
-          <MobileEmptyState
-            icon="!"
-            title="No users found"
-            description="Invite team members to get started"
-          />
-        ) : (
-          users.map(user => (
-            <Link key={user.id} href={`/m/users/${user.id}`} className="no-underline">
-              <MobileCard className="flex items-center gap-3">
-                <MobileAvatar
-                  name={user.name || user.email}
-                  src={user.avatarUrl || getDefaultAvatar(user.gender, user.id)}
-                />
-
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold text-[color:var(--text-primary)]">
-                    {user.name || 'Unknown'}
-                  </div>
-                  <div className="truncate text-xs text-[color:var(--text-secondary)]">
-                    {user.email}
-                  </div>
-                </div>
-
-                <div
-                  className={`rounded-lg px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
-                    user.role === 'ADMIN'
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                      : 'bg-[color:var(--bg-secondary)] text-[color:var(--text-secondary)]'
-                  }`}
-                >
-                  {user.role.toLowerCase()}
-                </div>
-
-                <span className="text-[color:var(--text-muted)]">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+      {users.length === 0 ? (
+        <EmptyState
+          icon={<Users aria-hidden="true" />}
+          title={query ? 'No matching users' : 'No users available'}
+          description={query ? `Nothing matches “${query}”.` : 'Users will appear here when they are available.'}
+          size="sm"
+        />
+      ) : (
+        <Card className="overflow-hidden rounded-xl border-border bg-card shadow-none">
+          {users.map((user, index) => (
+            <Link
+              key={user.id}
+              href={`/m/users/${user.id}`}
+              className={`flex min-h-[64px] min-w-0 items-center gap-3 px-3.5 py-2.5 text-card-foreground transition-colors hover:bg-accent/40 ${
+                index > 0 ? 'border-t border-border/70' : ''
+              }`}
+            >
+              <MobileAvatar
+                name={user.name || user.email}
+                src={user.avatarUrl || getDefaultAvatar(user.gender, user.id)}
+                size="sm"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold text-foreground">
+                  {user.name || 'Unknown'}
                 </span>
-              </MobileCard>
+                <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{user.email}</span>
+              </span>
+              <span
+                className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                  user.role === 'ADMIN'
+                    ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300'
+                    : 'border-border bg-muted text-muted-foreground'
+                }`}
+              >
+                {user.role.toLowerCase()}
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             </Link>
-          ))
-        )}
-      </div>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }
