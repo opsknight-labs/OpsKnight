@@ -10,10 +10,13 @@ import {
 import { logger } from '@/lib/logger';
 import { Prisma } from '@prisma/client';
 import {
-  announcementRevision,
   deriveAnnouncementNotificationPlan,
   type AnnouncementNotificationTiming,
 } from '@/lib/status-pages/announcement-notification-plan';
+import {
+  incrementAnnouncementNotificationGeneration,
+  readAnnouncementNotificationGeneration,
+} from '@/lib/status-pages/announcement-notification-generation';
 
 class InvalidDateError extends Error {
   constructor(public readonly fieldName: string) {
@@ -99,22 +102,6 @@ async function cancelPendingAnnouncementJobs(
   `;
 }
 
-async function hasActiveAnnouncementJob(
-  tx: Prisma.TransactionClient,
-  announcementId: string,
-  statusPageId: string
-) {
-  const rows = await tx.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
-    SELECT COUNT(*)::bigint AS "count"
-    FROM "BackgroundJob"
-    WHERE "type" = 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
-      AND ("payload"->>'announcementId') = ${announcementId}
-      AND ("payload"->>'statusPageId') = ${statusPageId}
-      AND "status" IN ('PENDING', 'PROCESSING')
-  `);
-  return Number(rows[0]?.count ?? 0) > 0;
-}
-
 async function suppressUndeliveredAnnouncementIntents(
   tx: Prisma.TransactionClient,
   announcementId: string,
@@ -141,7 +128,7 @@ async function createAnnouncementFanoutJob(
     announcementId: string;
     statusPageId: string;
     scheduledAt: Date;
-    revision: string;
+    generation: number;
   }
 ) {
   return tx.backgroundJob.create({
@@ -153,7 +140,7 @@ async function createAnnouncementFanoutJob(
       payload: {
         announcementId: input.announcementId,
         statusPageId: input.statusPageId,
-        notificationRevision: input.revision,
+        notificationGeneration: input.generation,
       },
     },
   });
@@ -220,8 +207,8 @@ export async function POST(req: NextRequest) {
       startDate: parsedStartDate,
     });
 
-    const announcement = await prisma.$transaction(async tx => {
-      const created = await tx.statusPageAnnouncement.create({
+    const result = await prisma.$transaction(async tx => {
+      const announcement = await tx.statusPageAnnouncement.create({
         data: {
           statusPageId,
           title: title.trim(),
@@ -240,27 +227,29 @@ export async function POST(req: NextRequest) {
               : (normalizedAffectedServiceIds as Prisma.InputJsonValue),
         },
       });
+      const generation =
+        (await readAnnouncementNotificationGeneration(announcement.id, statusPageId, tx)) ?? 0;
 
       if (plan.shouldNotify && plan.scheduledAt) {
         await createAnnouncementFanoutJob(tx, {
-          announcementId: created.id,
+          announcementId: announcement.id,
           statusPageId,
           scheduledAt: plan.scheduledAt,
-          revision: announcementRevision(created.updatedAt),
+          generation,
         });
       }
-      return created;
+      return { announcement, generation };
     });
 
     logger.info('api.status_page.announcement.created', {
-      announcementId: announcement.id,
+      announcementId: result.announcement.id,
       timeMode: effectiveTimeMode,
       publishAt: effectivePublishAt,
       notificationTiming: timing,
-      notificationRevision: announcementRevision(announcement.updatedAt),
+      notificationGeneration: result.generation,
       scheduledNotificationAt: plan.scheduledAt,
     });
-    return jsonOk({ announcement }, 200);
+    return jsonOk({ announcement: result.announcement }, 200);
   } catch (error: unknown) {
     if (error instanceof InvalidDateError || error instanceof AnnouncementInputError) {
       return jsonError(error.message, 400);
@@ -306,7 +295,7 @@ export async function PATCH(req: NextRequest) {
     } = parsed.data;
     const normalizedAffectedServiceIds = normalizeAffectedServiceIds(affectedServiceIds);
 
-    const updated = await prisma.$transaction(async tx => {
+    const result = await prisma.$transaction(async tx => {
       await lockAnnouncementMutation(tx, statusPageId, id);
 
       const existing = await tx.statusPageAnnouncement.findFirst({
@@ -318,7 +307,6 @@ export async function PATCH(req: NextRequest) {
           publishAt: true,
           isActive: true,
           notificationTiming: true,
-          updatedAt: true,
         },
       });
       if (!existing) throw new AnnouncementNotFoundError();
@@ -370,8 +358,6 @@ export async function PATCH(req: NextRequest) {
       const timing =
         notificationTiming ??
         ((existing.notificationTiming as AnnouncementNotificationTiming | null) ?? 'NONE');
-      const hadActiveJob = await hasActiveAnnouncementJob(tx, id, statusPageId);
-
       const nextPlan = deriveAnnouncementNotificationPlan({
         isActive: nextIsActive,
         notificationTiming: timing,
@@ -385,15 +371,16 @@ export async function PATCH(req: NextRequest) {
         publishAt !== undefined ||
         publishOption !== undefined ||
         isActive !== undefined;
+      const generationMutation = schedulingMutation || affectedServiceIds !== undefined;
 
       const reactivating = existing.isActive === false && nextIsActive === true;
       const enablingNotifications =
         existing.notificationTiming === 'NONE' && timing !== 'NONE';
       if (
+        generationMutation &&
         nextPlan.shouldNotify &&
         nextPlan.scheduledAt &&
         nextPlan.scheduledAt.getTime() < Date.now() - 30_000 &&
-        !hadActiveJob &&
         publishOption !== 'NOW' &&
         (reactivating || enablingNotifications || schedulingMutation)
       ) {
@@ -402,7 +389,7 @@ export async function PATCH(req: NextRequest) {
         );
       }
 
-      const result = await tx.statusPageAnnouncement.update({
+      const announcement = await tx.statusPageAnnouncement.update({
         where: { id },
         data: {
           ...(title !== undefined ? { title: title.trim() } : {}),
@@ -426,34 +413,38 @@ export async function PATCH(req: NextRequest) {
         },
       });
 
-      // Any committed mutation creates a new announcement revision. Pending jobs
-      // and undelivered intents from the previous revision are no longer valid.
-      await cancelPendingAnnouncementJobs(tx, id, statusPageId);
-      await suppressUndeliveredAnnouncementIntents(
-        tx,
-        id,
-        'Announcement was superseded by a newer admin revision.'
-      );
-
-      // Reconcile when delivery semantics changed, or when an existing campaign
-      // was still pending/processing and needs a replacement revision.
-      if ((schedulingMutation || hadActiveJob) && nextPlan.shouldNotify && nextPlan.scheduledAt) {
-        await createAnnouncementFanoutJob(tx, {
-          announcementId: id,
-          statusPageId,
-          scheduledAt: nextPlan.scheduledAt,
-          revision: announcementRevision(result.updatedAt),
-        });
+      let generation = await readAnnouncementNotificationGeneration(id, statusPageId, tx);
+      if (generation == null) {
+        throw new Error('Announcement notification generation is missing');
       }
 
-      return result;
+      if (generationMutation) {
+        generation = await incrementAnnouncementNotificationGeneration(id, statusPageId, tx);
+        await cancelPendingAnnouncementJobs(tx, id, statusPageId);
+        await suppressUndeliveredAnnouncementIntents(
+          tx,
+          id,
+          'Announcement notification policy was superseded by a newer generation.'
+        );
+
+        if (nextPlan.shouldNotify && nextPlan.scheduledAt) {
+          await createAnnouncementFanoutJob(tx, {
+            announcementId: id,
+            statusPageId,
+            scheduledAt: nextPlan.scheduledAt,
+            generation,
+          });
+        }
+      }
+
+      return { announcement, generation };
     });
 
     logger.info('api.status_page.announcement.updated', {
-      announcementId: updated.id,
-      notificationRevision: announcementRevision(updated.updatedAt),
+      announcementId: result.announcement.id,
+      notificationGeneration: result.generation,
     });
-    return jsonOk({ announcement: updated }, 200);
+    return jsonOk({ announcement: result.announcement }, 200);
   } catch (error: unknown) {
     if (error instanceof AnnouncementNotFoundError) {
       return jsonError(error.message, 404);
@@ -496,6 +487,7 @@ export async function DELETE(req: NextRequest) {
       });
       if (!existing) throw new AnnouncementNotFoundError();
 
+      await incrementAnnouncementNotificationGeneration(id, statusPageId, tx);
       await cancelPendingAnnouncementJobs(tx, id, statusPageId);
       await suppressUndeliveredAnnouncementIntents(
         tx,
