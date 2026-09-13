@@ -5,7 +5,7 @@ import { ZodError } from 'zod';
 import prisma from '@/lib/prisma';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { getBaseUrl } from '@/lib/env-validation';
-import { toPublicAppError } from '@/lib/errors';
+import { normalizeError, toPublicAppError } from '@/lib/errors';
 import { emitAuditEvent } from '@/lib/audit';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { enqueueChatOpsIntent, processInlineChatOpsIntent } from '@/lib/chatops/intents';
@@ -28,8 +28,11 @@ export type MicrosoftTeamsActionActivity = {
 
 function publicError(error: unknown): TeamsInvokeResponse {
   if (error instanceof ZodError) return teamsActionError(400, 'InvalidAction', 'This Teams action is invalid or outdated.');
-  const message = toPublicAppError(error).message;
-  return teamsActionError(403, 'ActionDenied', message || 'OpsKnight could not apply this action.');
+  const normalized = normalizeError(error);
+  const exposed = toPublicAppError(normalized);
+  const status = [400, 401, 403, 404, 409, 429, 503].includes(normalized.status) ? normalized.status : 500;
+  const code = status === 403 ? 'ActionDenied' : exposed.code;
+  return teamsActionError(status, code, exposed.message || 'OpsKnight could not apply this action.');
 }
 
 export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
@@ -109,7 +112,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
               incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incident.id}`,
               createdAt: incident.createdAt, acknowledgedAt: incident.acknowledgedAt, resolvedAt: incident.resolvedAt,
             }, eventType,
-          }, { disableActions: incident.status === 'RESOLVED', interactive: { destinationId, messageGeneration, capabilities } });
+          }, { disableActions: incident.status === 'RESOLVED', interactive: { destinationId, messageGeneration, capabilities, refreshUserIds: [providerUserId] } });
           result = teamsActionCard(card);
           break;
         }

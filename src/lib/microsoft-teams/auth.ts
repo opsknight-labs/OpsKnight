@@ -46,7 +46,6 @@ export async function isMicrosoftTeamsConfigured(): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 export type VerifiedTeamsIdentity = {
-  tenantId: string;
   serviceUrl: string | null;
   appId: string;
 };
@@ -148,12 +147,6 @@ async function verifyBotFrameworkToken(
       const rawAud = claims.aud;
       const aud = typeof rawAud === 'string' ? rawAud : Array.isArray(rawAud) ? String(rawAud[0] ?? '') : '';
       const iss = typeof claims.iss === 'string' ? claims.iss : '';
-      const tid =
-        typeof claims.tid === 'string'
-          ? (claims.tid as string)
-          : typeof (claims as Record<string, unknown>).tenantId === 'string'
-            ? String((claims as Record<string, unknown>).tenantId)
-            : '';
       const serviceUrl = typeof claims.serviceurl === 'string' ? (claims.serviceurl as string) : null;
 
       if (aud !== expectedAppId) {
@@ -228,7 +221,11 @@ async function verifyBotFrameworkToken(
         }
       }
 
-      return { tenantId: tid || '', serviceUrl, appId: aud };
+      // Connector authentication proves this is an authenticated Bot Framework
+      // activity for our app and service URL. The customer Entra tenant is a
+      // Teams activity attribute (`channelData.tenant.id`), not a required
+      // Connector JWT claim, and is validated only after authentication.
+      return { serviceUrl, appId: aud };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const isUnknownKid = /kid|JWK|signature|no applicable/i.test(msg);
@@ -249,7 +246,7 @@ export async function assertMicrosoftTeamsActivityAuth(
 ): Promise<VerifiedTeamsIdentity | null> {
   // Test harness bypass — only in non-production
   if (process.env.NODE_ENV !== 'production' && request.headers.get('x-opsknight-teams-test') === '1') {
-    return { tenantId: '__test__', serviceUrl: null, appId: '__test__' };
+    return { serviceUrl: null, appId: '__test__' };
   }
 
   const authHeader = request.headers.get('authorization') || request.headers.get('Authorization') || '';

@@ -112,7 +112,7 @@ export async function saveMicrosoftTeamsConfig(
         ...(encryptedSecret ? { clientSecret: encryptedSecret } : {}),
         tenantId: tenantId || null,
         tenantMode,
-        ...(enabledValue ? { enabled } : {}),
+        enabled,
         interactiveEnabled,
         updatedBy: actorId,
       },

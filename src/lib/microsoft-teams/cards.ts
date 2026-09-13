@@ -43,6 +43,7 @@ export type MicrosoftTeamsCardOptions = {
   interactive?: {
     destinationId: string;
     messageGeneration: number;
+    refreshUserIds?: string[];
     capabilities?: Partial<{
       canAcknowledge: boolean; canResolve: boolean; canAssignSelf: boolean;
       canAddNote: boolean; canSetPriority: boolean; canSnooze: boolean;
@@ -80,17 +81,17 @@ function interactiveActions(input: MicrosoftTeamsIncidentCardInput, options?: Mi
     }
   };
   const ctx = { v: 2, incidentId: input.incident.id, destinationId: interactive.destinationId, messageGeneration: interactive.messageGeneration };
-  const execute = (title: string, verb: string) => ({ type: 'Action.Execute', title, verb, associatedInputs: 'none', data: ctx });
+  const execute = (title: string, verb: string, mode?: 'secondary') => ({ type: 'Action.Execute', title, verb, associatedInputs: 'none', data: ctx, ...(mode ? { mode } : {}) });
   const actions: Array<Record<string, unknown>> = [];
   if (!input.incident.acknowledgedAt && allow('canAcknowledge')) actions.push(execute('Acknowledge', TEAMS_CHATOPS_VERBS.ACK));
-  if (input.incident.status !== 'RESOLVED' && allow('canResolve')) actions.push(execute('Resolve', TEAMS_CHATOPS_VERBS.RESOLVE));
+  if (input.incident.acknowledgedAt && input.incident.status !== 'RESOLVED' && allow('canResolve')) actions.push(execute('Resolve', TEAMS_CHATOPS_VERBS.RESOLVE));
   if (allow('canAssignSelf')) actions.push(execute('Assign to me', TEAMS_CHATOPS_VERBS.ASSIGN_SELF));
   if (allow('canEscalate')) actions.push(execute('Escalate', TEAMS_CHATOPS_VERBS.ESCALATE));
-  if (allow('canAddNote')) actions.push({ type: 'Action.ShowCard', title: 'Add note', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.Text', id: 'note', label: 'Incident note', isMultiline: true, isRequired: true, maxLength: 2000, errorMessage: 'Enter a note.' }], actions: [{ type: 'Action.Execute', title: 'Add note', verb: TEAMS_CHATOPS_VERBS.NOTE, associatedInputs: 'auto', data: ctx }] } });
-  if (allow('canSetPriority')) actions.push({ type: 'Action.ShowCard', title: 'Priority', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.ChoiceSet', id: 'priority', label: 'Priority', value: input.incident.priority ?? 'P3', choices: INCIDENT_PRIORITIES.map(priority => ({ title: `${priority} — ${getIncidentPriorityDefinition(priority).label}`, value: priority })) }], actions: [{ type: 'Action.Execute', title: 'Set priority', verb: TEAMS_CHATOPS_VERBS.PRIORITY, associatedInputs: 'auto', data: ctx }] } });
-  if (allow('canSnooze')) actions.push({ type: 'Action.ShowCard', title: 'Snooze', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.ChoiceSet', id: 'minutes', label: 'Duration', value: '30', choices: [{ title: '15 minutes', value: '15' }, { title: '30 minutes', value: '30' }, { title: '1 hour', value: '60' }, { title: '2 hours', value: '120' }] }, { type: 'Input.Text', id: 'reason', label: 'Reason (optional)', maxLength: 500 }], actions: [{ type: 'Action.Execute', title: 'Snooze', verb: TEAMS_CHATOPS_VERBS.SNOOZE, associatedInputs: 'auto', data: ctx }] } });
-  if (allow('canJoinResponder')) actions.push(execute('Join as responder', TEAMS_CHATOPS_VERBS.JOIN_RESPONDER));
-  if (allow('canRead')) actions.push(execute("Who's on call", TEAMS_CHATOPS_VERBS.WHO));
+  if (allow('canAddNote')) actions.push({ type: 'Action.ShowCard', title: 'Add note', mode: 'secondary', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.Text', id: 'note', label: 'Incident note', isMultiline: true, isRequired: true, maxLength: 2000, errorMessage: 'Enter a note.' }], actions: [{ type: 'Action.Execute', title: 'Add note', verb: TEAMS_CHATOPS_VERBS.NOTE, associatedInputs: 'auto', data: ctx }] } });
+  if (allow('canSetPriority')) actions.push({ type: 'Action.ShowCard', title: 'Priority', mode: 'secondary', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.ChoiceSet', id: 'priority', label: 'Priority', value: input.incident.priority ?? 'P3', choices: INCIDENT_PRIORITIES.map(priority => ({ title: `${priority} — ${getIncidentPriorityDefinition(priority).label}`, value: priority })) }], actions: [{ type: 'Action.Execute', title: 'Set priority', verb: TEAMS_CHATOPS_VERBS.PRIORITY, associatedInputs: 'auto', data: ctx }] } });
+  if (allow('canSnooze')) actions.push({ type: 'Action.ShowCard', title: 'Snooze', mode: 'secondary', card: { type: 'AdaptiveCard', version: '1.5', body: [{ type: 'Input.ChoiceSet', id: 'minutes', label: 'Duration', value: '30', choices: [{ title: '15 minutes', value: '15' }, { title: '30 minutes', value: '30' }, { title: '1 hour', value: '60' }, { title: '2 hours', value: '120' }] }, { type: 'Input.Text', id: 'reason', label: 'Reason (optional)', maxLength: 500 }], actions: [{ type: 'Action.Execute', title: 'Snooze', verb: TEAMS_CHATOPS_VERBS.SNOOZE, associatedInputs: 'auto', data: ctx }] } });
+  if (allow('canJoinResponder')) actions.push(execute('Join as responder', TEAMS_CHATOPS_VERBS.JOIN_RESPONDER, 'secondary'));
+  if (allow('canRead')) actions.push(execute('Current responders', TEAMS_CHATOPS_VERBS.WHO, 'secondary'));
   return actions;
 }
 
@@ -228,8 +229,8 @@ export function buildMicrosoftTeamsIncidentCard(
         ],
       },
     ],
-    actions: [...chatOpsActions, { type: 'Action.OpenUrl', title: 'View Incident ↗', url: safeUrl }],
-    ...(options?.interactive ? { refresh: { action: { type: 'Action.Execute', verb: TEAMS_CHATOPS_VERBS.REFRESH, data: { v: 2, incidentId: incident.id, destinationId: options.interactive.destinationId, messageGeneration: options.interactive.messageGeneration } } } } : {}),
+    actions: [...chatOpsActions, { type: 'Action.OpenUrl', title: 'View Incident ↗', url: safeUrl, ...(options?.interactive ? { mode: 'secondary' } : {}) }],
+    ...(options?.interactive ? { refresh: { action: { type: 'Action.Execute', verb: TEAMS_CHATOPS_VERBS.REFRESH, data: { v: 2, incidentId: incident.id, destinationId: options.interactive.destinationId, messageGeneration: options.interactive.messageGeneration } }, ...(options.interactive.refreshUserIds?.length ? { userIds: options.interactive.refreshUserIds.slice(0, 60) } : {}) } } : {}),
     // Phase 2 note: ACK/Resolve/Assign will use Action.Execute with verb `opsknight.ack` etc.
     // and route through POST /api/microsoft-teams/messages as `invoke` activity.
     // Intentionally omitted in Phase 1 per spec — prepare the architecture, not the buttons.

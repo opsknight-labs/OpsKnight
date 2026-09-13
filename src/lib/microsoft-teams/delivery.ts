@@ -391,28 +391,6 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
         } catch {}
         return null;
       }
-      // updatedAt drift also indicates retarget — compare as ISO string.
-      if (frozen.updatedAt && destination.updatedAt) {
-        const frozenMs = new Date(frozen.updatedAt).getTime();
-        const currentMs = (destination.updatedAt as Date).getTime();
-        if (Number.isFinite(frozenMs) && Number.isFinite(currentMs) && frozenMs !== currentMs) {
-          const reason = 'Teams destination was updated after enqueue — stale delivery suppressed';
-          await prisma.externalOperation.updateMany({
-            where: { id, status: 'PROCESSING', leaseToken },
-            data: { status: 'FAILED', lastError: reason, leaseToken: null, leaseExpiresAt: null },
-          });
-          try {
-            await emitAuditEvent({
-              action: 'microsoftTeams.delivery.superseded',
-              source: 'INTEGRATION',
-              target: { type: 'SERVICE', id: incident.serviceId ?? incidentId },
-              actor: { type: 'SYSTEM' },
-              metadata: { provider: 'MICROSOFT_TEAMS', incidentId, destinationId, eventType, reason, operationId: id },
-            });
-          } catch {}
-          return null;
-        }
-      }
     }
 
     // Lightweight SLA remaining — no DB helper needed; incident already carries frozen targets.
@@ -1201,7 +1179,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               conversationId: result.conversationId ?? null,
               createState: 'NONE',
               createOperationId: null,
-              ...(replacingCanonicalActivity ? { messageGeneration: { increment: 1 } } : {}),
+              messageGeneration: 1,
             },
             update: {
               messageId: result.providerMessageId!,
@@ -1211,6 +1189,7 @@ export async function processMicrosoftTeamsOperation(id: string): Promise<unknow
               conversationId: result.conversationId ?? undefined,
               createState: 'NONE',
               createOperationId: null,
+              ...(replacingCanonicalActivity ? { messageGeneration: { increment: 1 } } : {}),
             },
           } as never);
         });

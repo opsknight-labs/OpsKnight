@@ -36,7 +36,7 @@ export async function executeChatOpsCommand(input: ChatOpsCommandInput): Promise
     case 'JOIN_RESPONDER':
       return executeJoinResponder(provider, actor, command.incidentId, idempotency);
     case 'ESCALATE':
-      return executeEscalate(provider, actor, command.incidentId);
+      return executeEscalate(provider, actor, command.incidentId, idempotency);
     case 'POSTMORTEM':
       return executePostmortem(provider, actor, command.incidentId, command.channelName, idempotency);
     case 'READ':
@@ -129,10 +129,10 @@ async function executeNote(
   return executeChatOpsNote({ incidentId, actor, content, provider: p, ...(idempotency ? { idempotency } : {}) });
 }
 
-async function executeEscalate(provider: string, actor: ChatOpsActor, incidentId: string) {
+async function executeEscalate(provider: string, actor: ChatOpsActor, incidentId: string, idempotency: IdempotencyContext | undefined) {
   const { requestIncidentEscalation } = await import('@/lib/escalation/authorization');
   const source = provider === 'MICROSOFT_TEAMS' ? 'MICROSOFT_TEAMS' as const : 'SLACK' as const;
-  return requestIncidentEscalation({ incidentId, actor: { userId: actor.id, name: actor.name }, source });
+  return requestIncidentEscalation({ incidentId, actor: { userId: actor.id, name: actor.name }, source, ...(idempotency ? { idempotency } : {}) });
 }
 
 async function executePriority(provider: string, actor: ChatOpsActor, incidentId: string, priority: string, idempotency: IdempotencyContext | undefined) {

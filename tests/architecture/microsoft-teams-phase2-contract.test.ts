@@ -27,4 +27,28 @@ describe('Microsoft Teams Phase 2 architecture', () => {
     expect(cards).toContain('TEAMS_CHATOPS_VERBS');
     expect(cards).not.toContain("verb: 'opsknight.");
   });
+
+  it('derives the customer tenant from authenticated Teams channel data, not Connector JWT claims', () => {
+    const auth = fs.readFileSync('src/lib/microsoft-teams/auth.ts', 'utf8');
+    const route = fs.readFileSync('src/app/api/microsoft-teams/messages/route.ts', 'utf8');
+    expect(auth).not.toMatch(/claims\.(?:tid|tenantId)/);
+    expect(route).toContain("activity.channelData?.tenant?.id");
+    expect(route).toContain('enforceMicrosoftTeamsTenantAllowlist');
+  });
+
+  it('increments canonical generation on replacement update and never uses updatedAt as a route fence', () => {
+    const delivery = fs.readFileSync('src/lib/microsoft-teams/delivery.ts', 'utf8');
+    expect(delivery).toContain('messageGeneration: 1');
+    expect(delivery).toMatch(/update:\s*\{[\s\S]*replacingCanonicalActivity[\s\S]*messageGeneration: \{ increment: 1 \}/);
+    expect(delivery).not.toContain('Teams destination was updated after enqueue');
+  });
+
+  it('forwards transport idempotency into the manual escalation domain', () => {
+    const commands = fs.readFileSync('src/lib/chatops/commands.ts', 'utf8');
+    const escalation = fs.readFileSync('src/lib/escalation/authorization.ts', 'utf8');
+    expect(commands).toContain('executeEscalate(provider, actor, command.incidentId, idempotency)');
+    expect(escalation).toContain('MANUAL_ESCALATION_IDEMPOTENCY');
+    expect(escalation).toContain('generation: cursor.generation');
+    expect(escalation).toContain('stepIndex: cursor.stepIndex');
+  });
 });

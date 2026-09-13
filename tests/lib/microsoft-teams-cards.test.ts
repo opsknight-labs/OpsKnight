@@ -130,4 +130,18 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     expect(json).toContain('"messageGeneration":3');
     expect(card.refresh).toBeDefined();
   });
+
+  it('keeps at most three primary actions and scopes personalized refresh', () => {
+    const card = buildMicrosoftTeamsIncidentCard(
+      { incident: incident(), eventType: 'triggered' },
+      { interactive: { destinationId: 'dest-1', messageGeneration: 4, refreshUserIds: ['29:alice'], capabilities: {
+        canAcknowledge: true, canAssignSelf: true, canEscalate: true, canAddNote: true,
+        canSetPriority: true, canSnooze: true, canJoinResponder: true, canRead: true,
+      } } },
+    );
+    const actions = card.actions as Array<{ title: string; mode?: string }>;
+    expect(actions.filter(action => action.mode !== 'secondary')).toHaveLength(3);
+    expect(actions.find(action => action.title === 'Current responders')?.mode).toBe('secondary');
+    expect((card.refresh as { userIds: string[] }).userIds).toEqual(['29:alice']);
+  });
 });
