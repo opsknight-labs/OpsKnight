@@ -17,8 +17,9 @@
     font-weight: 600;
     letter-spacing: -0.003em;
     line-height: 1.5;
-    background: #fff;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .filter-input:focus,
@@ -29,8 +30,14 @@
 .form-select:focus,
 .bulk-actions-select:focus {
     outline: none;
-    border-color: rgba(148, 163, 184, 0.4);
-    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.12);
+    border-color: var(--border-hover);
+    box-shadow: 0 0 0 3px var(--border-focus);
+}
+
+.filter-input::placeholder,
+.form-input::placeholder,
+textarea::placeholder {
+    color: var(--text-muted);
 }
 
 .form-field {
