@@ -31,6 +31,7 @@ import {
   readAnnouncementNotificationGeneration,
 } from '@/lib/status-pages/announcement-notification-generation';
 import type { AnnouncementFanoutDeliveryMode } from '@/lib/status-pages/announcement-fanout-contract';
+import { selectAnnouncementRecipientsNeedingReplacement } from '@/lib/status-pages/announcement-recipient-reconciliation';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -726,8 +727,9 @@ export async function notifyStatusPageSubscribersAnnouncement(
             .map(item => item.recipientId)
             .filter((recipientId): recipientId is string => Boolean(recipientId))
         );
-        eligibleSubscriptions = subscriptions.filter(
-          subscription => !alreadyReachedProvider.has(subscription.id)
+        eligibleSubscriptions = selectAnnouncementRecipientsNeedingReplacement(
+          subscriptions,
+          alreadyReachedProvider
         );
       }
 
