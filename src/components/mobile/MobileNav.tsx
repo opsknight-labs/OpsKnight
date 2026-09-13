@@ -7,6 +7,16 @@ import { MOBILE_NAV_ITEMS, MOBILE_MORE_ROUTES } from '@/components/mobile/mobile
 import { haptics } from '@/lib/haptics';
 import { useNotificationStream } from '@/hooks/useNotificationStream';
 
+const FOCUSED_WORKFLOW_ROOTS = new Set([
+  'incidents',
+  'services',
+  'schedules',
+  'teams',
+  'users',
+  'policies',
+  'postmortems',
+]);
+
 export default function MobileNav() {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -61,6 +71,10 @@ export default function MobileNav() {
     };
   }, [fetchCount, usePolling]);
 
+  const segments = pathname.split('/').filter(Boolean);
+  const focusedWorkflow =
+    segments.length >= 3 && segments[0] === 'm' && FOCUSED_WORKFLOW_ROOTS.has(segments[1]);
+
   const directIndex = MOBILE_NAV_ITEMS.findIndex(item => {
     if (item.href === '/m') return pathname === '/m';
     return pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -72,6 +86,8 @@ export default function MobileNav() {
           MOBILE_MORE_ROUTES.some(route => pathname === route || pathname.startsWith(`${route}/`))
         ? moreIndex
         : -1;
+
+  if (focusedWorkflow) return null;
 
   return (
     <nav className="mobile-nav" aria-label="Primary mobile navigation">
