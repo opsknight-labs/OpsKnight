@@ -44,6 +44,9 @@ const DIRECT_RESPONSE_ALLOWLIST = new Set([
   'src/app/api/webhooks/notifications/twilio/route.ts',
   // Bot Framework activity endpoint: Bot Framework protocol response (invoke Adaptive Card) cannot use OpsKnight envelope.
   'src/app/api/microsoft-teams/messages/route.ts',
+  // Mobile/PWA responder check-ins keep a compact legacy payload and private no-store caching rather than the canonical envelope.
+  'src/app/api/mobile/refresh/route.ts',
+  'src/app/api/user/sessions/route.ts',
 ]);
 
 function isDirectJsonResponse(call: ts.CallExpression): boolean {

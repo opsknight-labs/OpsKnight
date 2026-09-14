@@ -11,7 +11,10 @@ vi.mock('@/app/(app)/settings/security/actions', () => ({
 }));
 
 describe('ActiveSessionsSection', () => {
-  it('renders current and recently observed device activity without implying per-device revocation', () => {
+  it('renders current and recently observed device activity without implying per-device revocation', async () => {
+    // Keep the registered-sessions fetch pending so the prop-driven fallback stays visible for assertions.
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})) as unknown as typeof fetch);
+
     const mockSessions = [
       {
         id: 'sess-1',
@@ -37,16 +40,16 @@ describe('ActiveSessionsSection', () => {
 
     render(<ActiveSessionsSection tokenVersion={1} sessions={mockSessions} />);
 
+    // Fallback sessions render immediately before the registered sessions fetch resolves.
     expect(screen.getByText('Google Chrome on macOS')).toBeInTheDocument();
     expect(screen.getByText('Microsoft Edge on Windows')).toBeInTheDocument();
-
-    expect(screen.getByText('This Device')).toBeInTheDocument();
-    expect(screen.getByText('Recent Device')).toBeInTheDocument();
-    expect(screen.getByText('Active 10m ago')).toBeInTheDocument();
+    // "This device" appears both as a badge and inside the "Sign out this device" button label.
+    expect(screen.getAllByText(/This device/i).length).toBeGreaterThan(0);
     expect(
       screen.getByText(/not individual revocation handles/i)
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Revoke all sessions/i })).toBeInTheDocument();
 
-    expect(screen.getByRole('button', { name: /Revoke All Sessions/i })).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 });

@@ -43,6 +43,7 @@ function useRealtimeConnection() {
   const [recentIncidents, setRecentIncidents] = useState<RealtimeIncident[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
+  const [revision, setRevision] = useState(0);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
@@ -50,34 +51,39 @@ function useRealtimeConnection() {
   const lastEventAt = useRef(0);
 
   useEffect(() => {
-    const handleOnline = () => {
-      // Reset attempts and reconnect immediately
-      if (authorizationRevoked.current) return;
-      reconnectAttempts.current = 0;
-      // Close existing connection and let the reconnect logic re-open it
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+    const disconnect = () => {
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
-      // Trigger reconnect by updating a counter state
+      setIsConnected(false);
+    };
+
+    const reconnect = () => {
+      if (authorizationRevoked.current || document.visibilityState === 'hidden') return;
+      reconnectAttempts.current = 0;
+      disconnect();
       setReconnectTrigger(prev => prev + 1);
     };
-    window.addEventListener('online', handleOnline);
+
+    const handleOnline = () => reconnect();
+    const handleOffline = () => disconnect();
     const handleVisibility = () => {
-      if (
-        document.visibilityState === 'visible' &&
-        (!eventSourceRef.current || Date.now() - lastEventAt.current >= 90_000)
-      ) {
-        handleOnline();
+      if (document.visibilityState === 'hidden') {
+        disconnect();
+        return;
       }
+      if (!eventSourceRef.current || Date.now() - lastEventAt.current >= 90_000) reconnect();
     };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
@@ -87,7 +93,14 @@ function useRealtimeConnection() {
     authorizationRevoked.current = false;
 
     const connect = () => {
-      if (!mounted) return;
+      if (
+        !mounted ||
+        authorizationRevoked.current ||
+        document.visibilityState === 'hidden' ||
+        !navigator.onLine
+      ) {
+        return;
+      }
 
       try {
         const eventSource = new EventSource('/api/realtime/stream');
@@ -114,12 +127,13 @@ function useRealtimeConnection() {
                 break;
               case 'incidents_updated':
                 setRecentIncidents(data.incidents);
+                setRevision(value => value + 1);
                 break;
               case 'metrics_updated':
                 setMetrics(data.metrics);
+                setRevision(value => value + 1);
                 break;
               case 'heartbeat':
-                // Keep connection alive
                 break;
               case 'error':
                 setError(data.message);
@@ -141,11 +155,12 @@ function useRealtimeConnection() {
           if (!mounted || authorizationRevoked.current) return;
           setIsConnected(false);
           eventSource.close();
+          if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
+          if (document.visibilityState === 'hidden' || !navigator.onLine) return;
 
-          // Attempt to reconnect with exponential backoff
-          const baseDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+          const baseDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30_000);
           const delay = Math.min(30_000, Math.round(baseDelay * (0.5 + Math.random())));
-          reconnectAttempts.current++;
+          reconnectAttempts.current += 1;
           reconnectTimeoutRef.current = setTimeout(() => {
             if (mounted) connect();
           }, delay);
@@ -160,12 +175,9 @@ function useRealtimeConnection() {
 
     return () => {
       mounted = false;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      eventSourceRef.current?.close();
+      eventSourceRef.current = null;
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
   }, [reconnectTrigger]);
 
@@ -174,6 +186,7 @@ function useRealtimeConnection() {
     metrics,
     recentIncidents,
     error,
+    revision,
   };
 }
 
@@ -187,9 +200,7 @@ function RealtimeRootProvider({ children }: { children: ReactNode }) {
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
   const existing = useContext(RealtimeContext);
-  if (existing) {
-    return createElement(Fragment, null, children);
-  }
+  if (existing) return createElement(Fragment, null, children);
   return createElement(RealtimeRootProvider, null, children);
 }
 

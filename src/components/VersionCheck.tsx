@@ -1,65 +1,83 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { logger } from '@/lib/logger';
 
+const CHECK_INTERVAL_MS = 5 * 60_000;
+
 /**
- * Periodically checks if the server version/instance has changed.
- * If a new deployment is detected (different instanceId), refreshes the page
- * to prevent Stale Server Action errors.
+ * Detects a new immutable deployment without confusing HA replicas for releases.
+ *
+ * A deployment change is advisory while the page is active: responder workflows
+ * must never be destroyed by a forced reload. PWA/update coordination may listen
+ * for `opsknight:deployment-update` and offer a safe user-controlled activation.
  */
 export default function VersionCheck() {
-    const [_instanceId, setInstanceId] = useState<string | null>(null);
+  const deploymentIdRef = useRef<string | null>(null);
 
-    useEffect(() => {
-        // Initial check
-        fetchVersion();
+  useEffect(() => {
+    let mounted = true;
+    let controller: AbortController | null = null;
 
-        // Check every 30 seconds
-        const interval = setInterval(fetchVersion, 30_000);
+    const fetchVersion = async () => {
+      if (!mounted || document.visibilityState === 'hidden' || !navigator.onLine) return;
+      controller?.abort();
+      controller = new AbortController();
+      const timeout = setTimeout(() => controller?.abort(), 8_000);
 
-        // Also check when window regains focus (user comes back to tab)
-        window.addEventListener('focus', fetchVersion);
+      try {
+        const res = await fetch(`/api/health?t=${Date.now()}`, {
+          headers: { 'Cache-Control': 'no-cache' },
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!res.ok || !mounted) return;
 
-        return () => {
-            clearInterval(interval);
-            window.removeEventListener('focus', fetchVersion);
-        };
+        const data = (await res.json()) as { deploymentId?: string; version?: string };
+        const nextId = data.deploymentId || data.version;
+        if (!nextId) return;
 
-        async function fetchVersion() {
-            try {
-                // Add timestamp to prevent caching
-                const res = await fetch(`/api/health?t=${Date.now()}`, {
-                    headers: { 'Cache-Control': 'no-cache' }
-                });
-
-                if (!res.ok) return;
-
-                const data = await res.json();
-                const newId = data.instanceId;
-
-                if (!newId) return;
-
-                setInstanceId(currentId => {
-                    // First load, just set it
-                    if (currentId === null) {
-                        return newId;
-                    }
-
-                    // If ID changed and we had a previous one, REFRESH!
-                    if (currentId !== newId) {
-                        logger.info('New deployment detected (Instance ID mismatch). Refreshing...');
-                        window.location.reload();
-                    }
-
-                    return currentId;
-                });
-            } catch (err) {
-                // Ignore network errors, retry next time
-                logger.debug('Version check failed', { error: err });
-            }
+        if (deploymentIdRef.current === null) {
+          deploymentIdRef.current = nextId;
+          return;
         }
-    }, []);
 
-    return null; // This component renders nothing
+        if (deploymentIdRef.current !== nextId) {
+          const previousId = deploymentIdRef.current;
+          deploymentIdRef.current = nextId;
+          logger.info('New deployment detected; deferring reload to safe update flow', {
+            previousDeploymentId: previousId,
+            deploymentId: nextId,
+          });
+          window.dispatchEvent(
+            new CustomEvent('opsknight:deployment-update', {
+              detail: { previousDeploymentId: previousId, deploymentId: nextId },
+            })
+          );
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        logger.debug('Version check failed', { error });
+      } finally {
+        clearTimeout(timeout);
+      }
+    };
+
+    void fetchVersion();
+    const interval = window.setInterval(() => void fetchVersion(), CHECK_INTERVAL_MS);
+    const onFocus = () => void fetchVersion();
+    const onOnline = () => void fetchVersion();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+
+    return () => {
+      mounted = false;
+      controller?.abort();
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
+    };
+  }, []);
+
+  return null;
 }

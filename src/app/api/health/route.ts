@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { APP_VERSION } from '@/lib/version';
+import { APP_VERSION, DEPLOYMENT_ID } from '@/lib/version';
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getOpsKnightProcessRole, getRuntimeResponsibilities } from '@/lib/runtime-role';
 
 import v8 from 'v8';
 
-// Generate a unique ID when the server process starts
+// Process identity is diagnostic only. Clients must use DEPLOYMENT_ID when
+// deciding whether the application build changed across an HA replica set.
 const SERVER_INSTANCE_ID = Date.now().toString();
 
 /**
@@ -29,7 +30,6 @@ export async function GET(request: NextRequest) {
 
   if (mode === 'readiness') {
     const responsibilities = getRuntimeResponsibilities(getOpsKnightProcessRole());
-    // Check database connection with timeout
     try {
       const dbStartTime = Date.now();
       let timerId: NodeJS.Timeout | undefined;
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       responsibilities.startScheduler && process.env.ENABLE_INTERNAL_CRON !== 'false';
     if (!schedulerExpected) {
       checks.scheduler = { status: 'disabled', expected: false };
-    } else
+    } else {
       try {
         const schedulerStartTime = Date.now();
         const maximumCadenceSeconds = Math.max(
@@ -69,11 +69,11 @@ export async function GET(request: NextRequest) {
         const [schedulerState] = await prisma.$queryRaw<
           Array<{ secondsSinceSuccess: number | null }>
         >`
-        SELECT EXTRACT(EPOCH FROM (NOW() - "lastSuccessAt"))::double precision AS "secondsSinceSuccess"
-        FROM "cron_scheduler_state"
-        WHERE "id" = 'singleton'
-        LIMIT 1
-      `;
+          SELECT EXTRACT(EPOCH FROM (NOW() - "lastSuccessAt"))::double precision AS "secondsSinceSuccess"
+          FROM "cron_scheduler_state"
+          WHERE "id" = 'singleton'
+          LIMIT 1
+        `;
         const stale =
           !schedulerState ||
           schedulerState.secondsSinceSuccess === null ||
@@ -86,6 +86,7 @@ export async function GET(request: NextRequest) {
       } catch (_) {
         checks.scheduler = { status: 'unhealthy', error: 'Scheduler state query failed' };
       }
+    }
 
     if (responsibilities.startJobWorker) {
       const worker = getJobWorkerStatus();
@@ -116,7 +117,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Check memory usage (evaluated against V8 max heap limit)
   try {
     const memUsage = process.memoryUsage();
     const heapStats = typeof v8.getHeapStatistics === 'function' ? v8.getHeapStatistics() : null;
@@ -150,9 +150,6 @@ export async function GET(request: NextRequest) {
       check.status === 'healthy' || check.status === 'disabled' || check.status === 'degraded'
   );
 
-  // For HTTP traffic readiness, database connectivity is the hard requirement.
-  // Auxiliary background worker, scheduler, or memory degradations report as 'degraded' (HTTP 200)
-  // so the pod continues serving web traffic and avoids CrashLoopBackOff.
   const criticalFailure =
     mode === 'readiness'
       ? checks.database?.status === 'unhealthy'
@@ -174,6 +171,7 @@ export async function GET(request: NextRequest) {
     checks,
     uptime: Math.round(process.uptime()),
     version: APP_VERSION,
+    deploymentId: DEPLOYMENT_ID,
     environment: process.env.NODE_ENV || 'development',
     instanceId: SERVER_INSTANCE_ID,
   };
@@ -187,7 +185,6 @@ export async function GET(request: NextRequest) {
           : 503
       : 200;
 
-  // Add cache control headers
   const headers = new Headers();
   headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   headers.set('Pragma', 'no-cache');

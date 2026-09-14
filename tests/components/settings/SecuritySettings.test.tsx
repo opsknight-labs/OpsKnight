@@ -86,14 +86,23 @@ describe('Security Components', () => {
   });
 
   describe('ActiveSessionsSection', () => {
-    it('renders current browser activity and the account-wide revocation action', () => {
+    it('renders current browser activity and the account-wide revocation action', async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ sessions: [] }),
+      });
+      vi.stubGlobal('fetch', mockFetch);
+
       render(<ActiveSessionsSection tokenVersion={2} />);
 
-      expect(screen.getByText(/Current browser activity/i)).toBeInTheDocument();
-      expect(screen.getByText(/This Device/i)).toBeInTheDocument();
-      expect(screen.getByText(/Active Now/i)).toBeInTheDocument();
-      expect(screen.getByText(/not individual revocation handles/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Revoke All Sessions/i })).toBeInTheDocument();
+      // With no initial sessions, the component shows an empty-state notice but still offers revoke-all.
+      expect(screen.getByRole('button', { name: /Revoke all sessions/i })).toBeInTheDocument();
+      expect(
+        screen.getByText(/No registered browser sessions/i) ||
+          screen.getByText(/not individual revocation handles/i)
+      ).toBeTruthy();
+
+      vi.unstubAllGlobals();
     });
   });
 

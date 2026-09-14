@@ -5,6 +5,7 @@ import { actorMetricReadScope } from '@/lib/authorization-filters';
 import { calculateActorSLAMetrics } from '@/lib/actor-metrics';
 import { getRealtimeChangeGeneration } from '@/lib/realtime-change-control-plane';
 import { logger } from '@/lib/logger';
+import { READ_MODEL_POLICY, type ReadModelPolicy } from '@/lib/read-model-policy';
 
 type Metrics = Awaited<ReturnType<typeof calculateActorSLAMetrics>>;
 
@@ -53,11 +54,6 @@ function cacheEpoch(key: string) {
   return cacheEpochs.get(key) ?? 0;
 }
 
-/**
- * Authorization/realtime generation changes are a hard cache boundary. In-flight work that
- * started before the boundary may finish for its original caller, but must never repopulate
- * the cache or be reused by callers after the boundary.
- */
 function invalidateAuthorizationBoundary(key: string) {
   cache.delete(key);
   cacheEpochs.set(key, cacheEpoch(key) + 1);
@@ -140,13 +136,21 @@ function project(entry: CacheEntry, freshness: 'fresh' | 'stale'): ResponderAnal
 
 export async function getResponderAnalyticsSnapshot(
   actor: AuthorizationActor,
-  windowDays: 7 | 30 | 90
+  windowDays: 7 | 30 | 90,
+  policy: ReadModelPolicy = READ_MODEL_POLICY.ALLOW_STALE
 ): Promise<ResponderAnalyticsSnapshot> {
   const now = Date.now();
   prune(now);
   const key = scopeKey(actor, windowDays);
-  const entry = cache.get(key);
 
+  if (policy === READ_MODEL_POLICY.REQUIRE_FRESH) {
+    invalidateAuthorizationBoundary(key);
+    const refresh = startCalculation(key, actor, windowDays);
+    if (!refresh) throw new Error('Responder analytics is temporarily busy');
+    return project(await refresh, 'fresh');
+  }
+
+  const entry = cache.get(key);
   if (entry) {
     const currentGeneration = await getRealtimeChangeGeneration().catch(() => null);
     const generationTrusted =
@@ -154,8 +158,6 @@ export async function getResponderAnalyticsSnapshot(
       entry.sourceGeneration !== null &&
       currentGeneration === entry.sourceGeneration;
 
-    // Never serve actor-scoped stale data if its authorization generation cannot be proven
-    // current. This includes both a known generation change and control-plane failure.
     if (!generationTrusted) {
       invalidateAuthorizationBoundary(key);
       const refresh = startCalculation(key, actor, windowDays);

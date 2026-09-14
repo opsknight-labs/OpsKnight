@@ -1,39 +1,117 @@
 'use client';
 
-import { useEffect, useRef, useState, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { haptics } from '@/lib/haptics';
 import { isInteractiveMobileTarget } from '@/lib/mobile-interactive';
+import { useMobileRefreshEpoch } from '@/components/mobile/MobileRefreshContext';
+
+const REFRESH_TIMEOUT_MS = 15_000;
 
 export default function PullToRefresh({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [pullChange, setPullChange] = useState<number>(0);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const refreshEpoch = useMobileRefreshEpoch();
+  const [pullChange, setPullChange] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef<number | null>(null);
   const startYRef = useRef<number | null>(null);
-  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshStartEpochRef = useRef<string | null>(null);
+  const completionRef = useRef<(() => void) | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const pullThreshold = 70;
   const maxPull = 100;
 
   useEffect(() => {
+    if (!refreshing || !refreshStartEpochRef.current) return;
+    if (refreshEpoch === refreshStartEpochRef.current) return;
+    completionRef.current?.();
+  }, [refreshEpoch, refreshing]);
+
+  useEffect(() => {
     return () => {
-      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+      abortRef.current?.abort();
+      completionRef.current = null;
     };
   }, []);
 
-  const initLoading = async () => {
-    setRefreshing(true);
-    haptics.success();
-    router.refresh();
+  const waitForServerRender = useCallback(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeoutId);
+          completionRef.current = null;
+          resolve();
+        };
+        const timeoutId = window.setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          completionRef.current = null;
+          reject(new Error('Fresh data did not finish loading. Check your connection and retry.'));
+        }, REFRESH_TIMEOUT_MS);
+        completionRef.current = finish;
+      }),
+    []
+  );
 
-    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
-    refreshTimeoutRef.current = setTimeout(() => {
+  const initLoading = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshError(null);
+    refreshStartEpochRef.current = refreshEpoch;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const fetchTimeout = window.setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch('/api/mobile/refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pathname,
+          search: searchParams.toString(),
+        }),
+        signal: controller.signal,
+      });
+
+      if (response.status === 401) {
+        throw new Error('Your session expired. Sign in again to refresh.');
+      }
+      if (!response.ok) {
+        throw new Error('Fresh data could not be loaded. Please retry.');
+      }
+
+      const renderCompletion = waitForServerRender();
+      router.refresh();
+      await renderCompletion;
+      haptics.success();
+    } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === 'AbortError'
+          ? 'Refresh timed out. Check your connection and retry.'
+          : error instanceof Error
+            ? error.message
+            : 'Refresh failed. Please retry.';
+      setRefreshError(message);
+      haptics.error();
+    } finally {
+      window.clearTimeout(fetchTimeout);
+      if (abortRef.current === controller) abortRef.current = null;
+      completionRef.current = null;
+      refreshStartEpochRef.current = null;
       setRefreshing(false);
       setPullChange(0);
-      refreshTimeoutRef.current = null;
-    }, 1200);
+    }
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -107,6 +185,7 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
       style={{ minHeight: '100%', position: 'relative' }}
     >
       <div
+        aria-live="polite"
         style={{
           height: pullChange > 0 || refreshing ? '70px' : '0',
           overflow: 'hidden',
@@ -132,26 +211,14 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
           }}
         >
           <div style={{ position: 'relative', width: '40px', height: '40px' }}>
-            <svg
-              width="40"
-              height="40"
-              viewBox="0 0 40 40"
-              style={{ position: 'absolute', top: 0, left: 0 }}
-            >
-              <circle
-                cx="20"
-                cy="20"
-                r="16"
-                fill="none"
-                stroke="hsl(var(--ui-border))"
-                strokeWidth="3"
-              />
+            <svg width="40" height="40" viewBox="0 0 40 40" style={{ position: 'absolute', top: 0, left: 0 }} aria-hidden="true">
+              <circle cx="20" cy="20" r="16" fill="none" stroke="hsl(var(--ui-border))" strokeWidth="3" />
             </svg>
-
             <svg
               width="40"
               height="40"
               viewBox="0 0 40 40"
+              aria-hidden="true"
               style={{
                 position: 'absolute',
                 top: 0,
@@ -172,8 +239,8 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
                 style={{ transition: 'stroke 0.2s ease' }}
               />
             </svg>
-
             <div
+              aria-hidden="true"
               style={{
                 position: 'absolute',
                 top: '50%',
@@ -186,25 +253,14 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
               }}
             >
               {refreshing ? (
-                <span aria-hidden="true" style={{ fontSize: '16px', color: accent }}>
-                  •
-                </span>
+                <span style={{ fontSize: '16px', color: accent }}>•</span>
               ) : (
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke={isReady ? accent : muted}
-                  strokeWidth="2.5"
-                  style={{ transition: 'stroke 0.2s ease' }}
-                >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isReady ? accent : muted} strokeWidth="2.5">
                   <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
             </div>
           </div>
-
           <span
             style={{
               fontSize: '0.7rem',
@@ -215,21 +271,26 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
               transition: 'color 0.2s ease',
             }}
           >
-            {refreshing ? 'Refreshing...' : isReady ? 'Release to refresh' : 'Pull to refresh'}
+            {refreshing ? 'Refreshing fresh data…' : isReady ? 'Release to refresh' : 'Pull to refresh'}
           </span>
         </div>
       </div>
+
+      {refreshError ? (
+        <div
+          role="alert"
+          className="mx-3 mb-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {refreshError}
+        </div>
+      ) : null}
 
       <div>{children}</div>
 
       <style jsx>{`
         @keyframes spin {
-          from {
-            transform: rotate(-90deg);
-          }
-          to {
-            transform: rotate(270deg);
-          }
+          from { transform: rotate(-90deg); }
+          to { transform: rotate(270deg); }
         }
       `}</style>
     </div>

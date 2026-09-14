@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Manrope, Playfair_Display } from 'next/font/google';
 import '@/styles/index.css';
+import './layers.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
 import LegalSourceNotice from '@/components/LegalSourceNotice';
@@ -40,10 +41,6 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
-    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
-  ],
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
@@ -54,6 +51,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         <meta name="color-scheme" content="light dark" />
+        <meta
+          id="opsknight-runtime-theme-color"
+          name="theme-color"
+          content="#f8fafc"
+          suppressHydrationWarning
+        />
         <meta name="darkreader-lock" />
       </head>
       <body

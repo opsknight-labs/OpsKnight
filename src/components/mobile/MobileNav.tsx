@@ -11,72 +11,80 @@ import { useNotificationStream } from '@/hooks/useNotificationStream';
 export default function MobileNav() {
   const pathname = usePathname() || '/m';
   const [unreadCount, setUnreadCount] = useState(0);
-  const [usePolling, setUsePolling] = useState(false);
+  const [pollingRequired, setPollingRequired] = useState(
+    () => typeof window !== 'undefined' && typeof EventSource === 'undefined'
+  );
   const moreIndex = MOBILE_NAV_ITEMS.findIndex(item => item.href === '/m/more');
-
   const focusedWorkflow = isFocusedMobileWorkflow(pathname);
 
-  // Synchronize shell geometry state and reset scroll position on page transition
   useEffect(() => {
     const appElement = document.querySelector<HTMLElement>('.mobile-app');
-    if (appElement) {
-      appElement.dataset.bottomNav = focusedWorkflow ? 'absent' : 'present';
-    }
+    if (appElement) appElement.dataset.bottomNav = focusedWorkflow ? 'absent' : 'present';
     const scrollContainer = document.querySelector<HTMLElement>('.mobile-content');
-    if (scrollContainer) {
-      scrollContainer.scrollTop = 0;
-    }
+    if (scrollContainer) scrollContainer.scrollTop = 0;
   }, [pathname, focusedWorkflow]);
 
   const fetchCount = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
     try {
-      const res = await fetch('/api/notifications?limit=1');
-      if (!res.ok) return;
-      const data = await res.json();
-      const unread = (data.notifications || []).filter(
-        (item: { unread: boolean }) => item.unread
-      ).length;
-      setUnreadCount(data.unreadCount || unread);
+      const response = await fetch('/api/notifications?limit=1', { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        notifications?: Array<{ unread?: boolean }>;
+        unreadCount?: number;
+      };
+      const fallback = (data.notifications ?? []).filter(item => item.unread).length;
+      setUnreadCount(Math.max(0, data.unreadCount ?? fallback));
     } catch {
-      // Navigation must remain usable if alert count refresh fails.
+      // Badge freshness must never make primary navigation unavailable.
     }
   }, []);
 
   useNotificationStream({
-    enabled: !usePolling,
     onUnreadCount: count => setUnreadCount(count),
-    onError: () => setUsePolling(true),
+    onError: error => {
+      // The shared stream reconnects itself after transient failures. Poll only
+      // on platforms that genuinely have no EventSource implementation.
+      if (/not supported/i.test(error.message)) setPollingRequired(true);
+    },
   });
 
   useEffect(() => {
+    // Badge count is polled external state: fetch once on mount and on filter
+    // changes; visibility/online handlers subsequently refresh it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- badge freshness is external polling
+    void fetchCount();
+  }, [fetchCount]);
+
+  useEffect(() => {
+    if (!pollingRequired) return;
     let interval: ReturnType<typeof setInterval> | null = null;
-    let initialTimer: ReturnType<typeof setTimeout> | null = null;
-    const startPolling = () => {
-      if (interval) return;
-      interval = setInterval(fetchCount, 30000);
+    const start = () => {
+      if (interval || document.hidden) return;
+      interval = setInterval(() => void fetchCount(), 30_000);
     };
-    const stopPolling = () => {
+    const stop = () => {
       if (!interval) return;
       clearInterval(interval);
       interval = null;
     };
-    const handleVisibility = () => {
-      if (document.hidden) stopPolling();
-      else if (usePolling) startPolling();
+    const visibility = () => {
+      if (document.hidden) stop();
+      else {
+        void fetchCount();
+        start();
+      }
     };
-
-    initialTimer = setTimeout(() => void fetchCount(), 0);
-    if (usePolling) {
-      startPolling();
-      document.addEventListener('visibilitychange', handleVisibility);
-    }
-
+    const online = () => void fetchCount();
+    start();
+    document.addEventListener('visibilitychange', visibility);
+    window.addEventListener('online', online);
     return () => {
-      stopPolling();
-      if (initialTimer) clearTimeout(initialTimer);
-      document.removeEventListener('visibilitychange', handleVisibility);
+      stop();
+      document.removeEventListener('visibilitychange', visibility);
+      window.removeEventListener('online', online);
     };
-  }, [fetchCount, usePolling]);
+  }, [fetchCount, pollingRequired]);
 
   const directIndex = MOBILE_NAV_ITEMS.findIndex(item => {
     if (item.href === '/m') return pathname === '/m';
@@ -94,11 +102,10 @@ export default function MobileNav() {
 
   const handleTabClick = (active: boolean) => {
     haptics.selection();
-    if (active) {
-      const scrollContainer = document.querySelector<HTMLElement>('.mobile-content');
-      if (scrollContainer && scrollContainer.scrollTop > 5) {
-        scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
-      }
+    if (!active) return;
+    const scrollContainer = document.querySelector<HTMLElement>('.mobile-content');
+    if (scrollContainer && scrollContainer.scrollTop > 5) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -118,11 +125,11 @@ export default function MobileNav() {
           >
             <span className="mobile-nav-icon">
               {active ? item.iconActive : item.icon}
-              {hasBadge && (
+              {hasBadge ? (
                 <span className="mobile-nav-badge" aria-hidden="true">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
-              )}
+              ) : null}
             </span>
             <span className="mobile-nav-label">{item.label}</span>
           </Link>

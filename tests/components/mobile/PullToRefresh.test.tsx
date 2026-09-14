@@ -5,6 +5,12 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('next/navigation', () => ({
     useRouter: vi.fn(),
+    usePathname: vi.fn().mockReturnValue('/m'),
+    useSearchParams: vi.fn().mockReturnValue({ toString: () => '' } as unknown as URLSearchParams),
+}));
+
+vi.mock('@/components/mobile/MobileRefreshContext', () => ({
+    useMobileRefreshEpoch: vi.fn().mockReturnValue('test-epoch'),
 }));
 
 describe('PullToRefresh', () => {
@@ -13,9 +19,10 @@ describe('PullToRefresh', () => {
     beforeEach(() => {
         refreshMock = vi.fn();
         (useRouter as any).mockReturnValue({ refresh: refreshMock });
+        global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) }) as unknown as typeof fetch;
     });
 
-    it('triggers refresh when pulled down sufficiently at top', () => {
+    it('triggers refresh when pulled down sufficiently at top', async () => {
         const { container } = render(
             <PullToRefresh>
                 <div>Test Content</div>
@@ -40,10 +47,11 @@ describe('PullToRefresh', () => {
             targetTouches: [{ clientY: 300 }]
         });
 
-        // 3. Touch End
+        // 3. Touch End — refresh is async (awaits /api/mobile/refresh then router.refresh)
         fireEvent.touchEnd(ptrDiv);
 
-        expect(refreshMock).toHaveBeenCalled();
+        const { waitFor } = await import('@testing-library/react');
+        await waitFor(() => expect(refreshMock).toHaveBeenCalled());
     });
 
     it('does NOT refresh if scrolled down', () => {

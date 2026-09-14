@@ -1,148 +1,143 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { Lock, Fingerprint } from 'lucide-react';
-import { logger } from '@/lib/logger';
+import { useCallback, useEffect, useState } from 'react';
+import { Fingerprint, Lock, ShieldAlert } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
+import { logger } from '@/lib/logger';
+import {
+  getAppLockCredentialDescriptor,
+  isAppLockEnabled,
+  isValidAppLockAssertion,
+  platformAuthenticatorAvailable,
+} from '@/lib/mobile-app-lock';
+import { purgeLegacyUnscopedMobileState } from '@/lib/mobile-principal-state';
 
-const BIOMETRIC_ENABLED_KEY = 'opsknight-biometric-enabled';
+const ASSERTION_TIMEOUT_MS = 60_000;
 
 export default function MobileBiometricGuard({ children }: { children: React.ReactNode }) {
   const [isLocked, setIsLocked] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
-  const [isProtecting, setIsProtecting] = useState(true); // Initial load protection state
+  const [isProtecting, setIsProtecting] = useState(true);
+  const [unlockError, setUnlockError] = useState('');
+  const [authenticating, setAuthenticating] = useState(false);
 
-  useEffect(() => {
-    // Check if biometric is enabled and supported
-    if (typeof window === 'undefined') return;
-
-    const enabled = window.localStorage.getItem(BIOMETRIC_ENABLED_KEY) === 'true';
-    const supported =
-      window.PublicKeyCredential &&
-      (
-        window.PublicKeyCredential as unknown as {
-          isUserVerifyingPlatformAuthenticatorAvailable: () => Promise<boolean>;
-        }
-      ).isUserVerifyingPlatformAuthenticatorAvailable;
-
-    if (supported) {
-      supported().then(setIsSupported);
-    }
-
-    if (enabled) {
-      setIsLocked(true);
-    } else {
-      setIsProtecting(false);
-    }
-  }, []);
-
-  const authenticate = async () => {
+  const authenticate = useCallback(async () => {
+    if (authenticating || !isSupported) return;
+    setAuthenticating(true);
+    setUnlockError('');
     try {
-      const challenge = new Uint8Array(32);
-      window.crypto.getRandomValues(challenge);
-      const storedCredId = window.localStorage.getItem('opsknight_biometric_credential_id');
-
-      let allowCredentials: PublicKeyCredentialDescriptor[] | undefined = undefined;
-      if (storedCredId) {
-        try {
-          const rawId = Uint8Array.from(
-            atob(storedCredId.replace(/-/g, '+').replace(/_/g, '/')),
-            c => c.charCodeAt(0)
-          );
-          allowCredentials = [{ id: rawId, type: 'public-key' }];
-        } catch {
-          // Ignore conversion error and fall back to broad search
-        }
-      }
-
-      await navigator.credentials.get({
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const assertion = await navigator.credentials.get({
         publicKey: {
           challenge,
-          timeout: 60000,
+          timeout: ASSERTION_TIMEOUT_MS,
           rpId: window.location.hostname,
-          userVerification: 'required', // This forces FaceID/TouchID/PIN
-          ...(allowCredentials ? { allowCredentials } : {}),
+          userVerification: 'required',
+          allowCredentials: getAppLockCredentialDescriptor(),
         },
       });
 
-      // If we get here, the OS successfully verified the user
+      if (!isValidAppLockAssertion(assertion)) {
+        throw new Error('The platform authenticator returned an invalid assertion.');
+      }
+
       setIsLocked(false);
       setIsProtecting(false);
     } catch (error) {
-      logger.warn('mobile.biometric.unlock_failed', { error });
-      // Remain locked
+      logger.warn('mobile.app_lock.unlock_failed', {
+        component: 'MobileBiometricGuard',
+        error,
+      });
+      setUnlockError('Verification was not completed. Try again to unlock OpsKnight.');
+    } finally {
+      setAuthenticating(false);
     }
-  };
+  }, [authenticating, isSupported]);
 
-  // Auto-trigger auth on mount if locked
   useEffect(() => {
-    if (isLocked && isSupported) {
-      authenticate();
-    }
-  }, [isLocked, isSupported]);
+    let cancelled = false;
+    purgeLegacyUnscopedMobileState();
+    void platformAuthenticatorAvailable().then(supported => {
+      if (cancelled) return;
+      setIsSupported(supported);
+      const enabled = isAppLockEnabled();
+      if (enabled && supported) {
+        setIsLocked(true);
+      } else {
+        setIsProtecting(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  // Handle visibility change (background/foreground)
+  useEffect(() => {
+    if (isLocked && isSupported && !authenticating) void authenticate();
+  }, [authenticate, authenticating, isLocked, isSupported]);
+
   useEffect(() => {
     const handleVisibility = () => {
-      if (typeof window === 'undefined') return;
-      const enabled = window.localStorage.getItem(BIOMETRIC_ENABLED_KEY) === 'true';
-
-      if (document.hidden && enabled) {
-        // Immediately lock when going to background to protect privacy
+      if (!isAppLockEnabled()) return;
+      if (document.hidden) {
         setIsLocked(true);
-      } else if (!document.hidden && enabled && isLocked) {
-        // When coming back, try to authenticate
-        authenticate();
+        setIsProtecting(true);
+        setUnlockError('');
+      } else if (isSupported) {
+        setIsLocked(true);
+        setIsProtecting(true);
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [isLocked]); // Re-bind if lock state changes isn't strictly necessary but safe
+  }, [isSupported]);
 
-  if (!isProtecting && !isLocked) {
-    return <>{children}</>;
-  }
+  if (!isProtecting && !isLocked) return <>{children}</>;
 
-  // Locked Overlay
   return (
     <>
       <div
         className={cn(
-          'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950/40 backdrop-blur-xl transition-all duration-300',
-          !isLocked ? 'pointer-events-none opacity-0' : 'opacity-100'
+          'fixed inset-0 z-[var(--z-critical-overlay,80)] flex flex-col items-center justify-center bg-background/95 px-6 backdrop-blur-xl',
+          !isLocked && 'pointer-events-none opacity-0'
         )}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-app-lock-title"
+        aria-describedby="mobile-app-lock-description"
       >
-        <div className="flex flex-col items-center gap-6 p-8 text-center animate-in zoom-in-95 duration-300">
-          <div className="relative">
-            <div className="absolute inset-0 animate-pulse rounded-full bg-primary/20 blur-xl" />
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-slate-900 shadow-2xl ring-1 ring-white/10">
-              <Lock className="h-8 w-8 text-white" />
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 text-center shadow-2xl">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-foreground text-background">
+            <Lock className="h-7 w-7" aria-hidden="true" />
+          </div>
+          <h2 id="mobile-app-lock-title" className="mt-5 text-xl font-bold tracking-tight text-foreground">
+            OpsKnight is locked
+          </h2>
+          <p id="mobile-app-lock-description" className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Verify with your device authenticator to reveal responder data. This local privacy lock does not replace your OpsKnight session or server authorization.
+          </p>
+
+          {unlockError ? (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-left text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200" role="alert">
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{unlockError}</span>
             </div>
-          </div>
+          ) : null}
 
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold tracking-tight text-white">App Locked</h2>
-            <p className="text-sm text-slate-300 max-w-[240px]">
-              Verify your identity to access OpsKnight
-            </p>
-          </div>
-
-          <button
-            onClick={authenticate}
-            className="group flex items-center gap-3 rounded-full bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur-md transition-all hover:bg-white/20 active:scale-95"
+          <Button
+            type="button"
+            className="mt-5 min-h-11 w-full gap-2"
+            onClick={() => void authenticate()}
+            disabled={!isSupported || authenticating}
           >
-            <Fingerprint className="h-5 w-5" />
-            <span>Unlock with FaceID</span>
-          </button>
+            <Fingerprint className="h-4 w-4" aria-hidden="true" />
+            {authenticating ? 'Verifying…' : isSupported ? 'Unlock with device verification' : 'Device verification unavailable'}
+          </Button>
         </div>
       </div>
 
-      {/* 
-        Hide underlying content from accessibility tree while locked 
-        to prevent screen readers from reading sensitive info 
-      */}
-      <div aria-hidden={isLocked} className={isLocked ? 'invisible' : ''}>
+      <div aria-hidden={isLocked || isProtecting} inert={isLocked || isProtecting ? true : undefined} className={isLocked || isProtecting ? 'invisible' : ''}>
         {children}
       </div>
     </>

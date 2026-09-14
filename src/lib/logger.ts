@@ -338,14 +338,19 @@ class Logger {
 
       // Use fire-and-forget to avoid blocking interaction
       // Use keepalive to ensure logs are sent even if page unloads
-      fetch('/api/logs/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entry),
-        keepalive: true,
-      }).catch(() => {
-        // Silently fail if log ingestion fails to avoid infinite loops
-      });
+      try {
+        const pending = fetch('/api/logs/ingest', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(entry),
+          keepalive: true,
+        }) as unknown as Promise<void> | undefined;
+        pending?.catch?.(() => {
+          // Silently fail if log ingestion fails to avoid infinite loops
+        });
+      } catch {
+        // Logger must never throw, even when fetch is stubbed to return undefined in tests
+      }
     }
   }
 

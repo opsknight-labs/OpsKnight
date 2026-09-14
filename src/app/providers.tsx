@@ -10,6 +10,11 @@ import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvide
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
 import ActivityTracker from '@/components/auth/ActivityTracker';
 
+const MOBILE_THEME_COLORS = {
+  light: '#f8fafc',
+  dark: '#09090b',
+} as const;
+
 function ThemeAttributeBridge() {
   const { resolvedTheme } = useTheme();
 
@@ -19,24 +24,22 @@ function ThemeAttributeBridge() {
     root.dataset.theme = effectiveTheme;
     root.style.colorScheme = effectiveTheme;
 
+    // This node is declared once by RootLayout and is exclusively reserved for
+    // the runtime browser-chrome color. Update its content only; never remove,
+    // replace, or create framework-owned head nodes from a client effect.
     // Keep browser/PWA chrome aligned with an explicit in-app theme override,
     // not only with the OS media query used during the initial HTML response.
-    const themeColor = effectiveTheme === 'dark' ? '#09090b' : '#f8fafc';
-    const existingMetaTags = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
-    if (existingMetaTags.length > 0) {
-      existingMetaTags.forEach((tag, index) => {
-        if (index === 0) {
-          tag.removeAttribute('media');
-          tag.content = themeColor;
-        } else {
-          tag.remove();
-        }
-      });
+    const nextThemeColor =
+      effectiveTheme === 'dark' ? MOBILE_THEME_COLORS.dark : MOBILE_THEME_COLORS.light;
+    const runtimeThemeColor = document.getElementById('opsknight-runtime-theme-color');
+    if (runtimeThemeColor instanceof HTMLMetaElement) {
+      runtimeThemeColor.content = nextThemeColor;
     } else {
-      const meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      meta.content = themeColor;
-      document.head.appendChild(meta);
+      // Fallback path retained for contract compatibility: query the canonical
+      // meta[name="theme-color"] node when the runtime node is absent.
+      const fallbackThemeColor =
+        document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+      if (fallbackThemeColor) fallbackThemeColor.content = nextThemeColor;
     }
   }, [resolvedTheme]);
 
@@ -47,8 +50,7 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
   // Mobile/PWA follows the user/system theme. Desktop intentionally remains
   // light until the authenticated desktop surface has completed its own dark
   // mode migration. The class attribute is canonical for Tailwind's dark:
-  // variant; ThemeAttributeBridge mirrors it to data-theme for legacy CSS that
-  // has not yet migrated to semantic utilities.
+  // variant; ThemeAttributeBridge mirrors it to data-theme for legacy CSS.
   const pathname = usePathname();
   const isMobileRoute = pathname?.startsWith('/m');
   const themeProps = isMobileRoute

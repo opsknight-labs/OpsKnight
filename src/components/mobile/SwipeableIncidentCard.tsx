@@ -48,9 +48,9 @@ export default function SwipeableIncidentCard({
     x,
     [-120, 0, 120],
     [
-      snoozeAction ? 'rgba(59,130,246,.12)' : 'transparent',
-      'transparent',
-      acknowledgeAction ? 'rgba(245,158,11,.12)' : 'transparent',
+      snoozeAction ? 'rgba(59,130,246,.12)' : 'rgba(0,0,0,0)',
+      'rgba(0,0,0,0)',
+      acknowledgeAction ? 'rgba(245,158,11,.12)' : 'rgba(0,0,0,0)',
     ]
   );
 
@@ -85,7 +85,11 @@ export default function SwipeableIncidentCard({
       e.preventDefault();
       return;
     }
-    haptics.soft();
+    try {
+      haptics.soft();
+    } catch {
+      // haptics is best-effort; never block navigation on vibrate failure
+    }
   };
 
   return (

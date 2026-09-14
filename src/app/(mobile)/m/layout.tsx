@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import MobileNav from '@/components/mobile/MobileNav';
 import MobileHeader from '@/components/mobile/MobileHeader';
@@ -7,6 +8,8 @@ import PullToRefresh from '@/components/mobile/PullToRefresh';
 import MobileSwipeNavigator from '@/components/mobile/MobileSwipeNavigator';
 import MobileNetworkBanner from '@/components/mobile/MobileNetworkBanner';
 import MobilePwaCoordinator from '@/components/mobile/MobilePwaCoordinator';
+import MobileRealtimeInvalidator from '@/components/mobile/MobileRealtimeInvalidator';
+import { MobileRefreshEpochProvider } from '@/components/mobile/MobileRefreshContext';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
 import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
@@ -38,6 +41,7 @@ export default async function MobileLayout({ children }: { children: React.React
   } catch {}
 
   const authGeneration = String(shell.user.tokenVersion);
+  const refreshEpoch = randomUUID();
 
   return (
     <TimezoneProvider initialTimeZone={shell.user.timeZone || 'UTC'}>
@@ -48,29 +52,32 @@ export default async function MobileLayout({ children }: { children: React.React
         currentUserName={shell.user.name || 'User'}
       >
         <RealtimeProvider>
-          <MobileBiometricGuard>
-            <div className="mobile-app" data-system-status={shell.systemStatus}>
-              <div
-                id={MOBILE_PRINCIPAL_MARKER_ID}
-                data-principal-id={shell.user.id}
-                data-auth-generation={authGeneration}
-                hidden
-                aria-hidden="true"
-              />
-              <MobileHeader systemStatus={shell.systemStatus} />
-              <main id="main-content" className="mobile-content">
-                <MobileNetworkBanner />
-                <MobileSwipeNavigator>
-                  <PullToRefresh>{children}</PullToRefresh>
-                </MobileSwipeNavigator>
-              </main>
-              <MobileNav />
-              <MobilePwaCoordinator
-                principalId={shell.user.id}
-                authGeneration={authGeneration}
-              />
-            </div>
-          </MobileBiometricGuard>
+          <MobileRefreshEpochProvider epoch={refreshEpoch}>
+            <MobileBiometricGuard>
+              <div className="mobile-app" data-system-status={shell.systemStatus}>
+                <div
+                  id={MOBILE_PRINCIPAL_MARKER_ID}
+                  data-principal-id={shell.user.id}
+                  data-auth-generation={authGeneration}
+                  hidden
+                  aria-hidden="true"
+                />
+                <MobileHeader systemStatus={shell.systemStatus} />
+                <main id="main-content" className="mobile-content">
+                  <MobileNetworkBanner />
+                  <MobileSwipeNavigator>
+                    <PullToRefresh>{children}</PullToRefresh>
+                  </MobileSwipeNavigator>
+                </main>
+                <MobileNav />
+                <MobilePwaCoordinator
+                  principalId={shell.user.id}
+                  authGeneration={authGeneration}
+                />
+                <MobileRealtimeInvalidator />
+              </div>
+            </MobileBiometricGuard>
+          </MobileRefreshEpochProvider>
         </RealtimeProvider>
       </UserAvatarProvider>
     </TimezoneProvider>
