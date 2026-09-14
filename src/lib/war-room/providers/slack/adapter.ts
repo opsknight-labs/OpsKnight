@@ -1,12 +1,4 @@
-import {
-  UnsupportedWarRoomProviderOperationError,
-  type WarRoomProviderAdapter,
-  type WarRoomIncidentEvent,
-} from '../../provider';
-
-function unsupported(operation: string): never {
-  throw new UnsupportedWarRoomProviderOperationError('SLACK', operation);
-}
+import type { WarRoomProviderAdapter, WarRoomIncidentEvent } from '../../provider';
 
 const expectedSkips = [
   'Incident not found',
@@ -47,31 +39,47 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
     return { ok: false as const, code: 'TRANSIENT' as const, message: result.code };
   }
 
-  const slack = await import('@/lib/chatops/war-room');
+  const lifecycle = await import('./lifecycle');
   let result: { success: boolean; error?: string };
   switch (event.kind) {
     case 'ARCHIVE':
-      result = await slack.archiveWarRoomChannel(event.incidentId);
+      result = await lifecycle.archiveSlackWarRoomChannel(event.incidentId);
       break;
     case 'LIFECYCLE': {
       const [message, topic] = await Promise.all([
-        slack.postWarRoomUpdate(event.incidentId, event.message),
-        slack.updateWarRoomTopic(event.incidentId, event.status),
+        lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message),
+        lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status),
       ]);
       result = !message.success ? message : topic;
+      // Also refresh the canonical card via durable projection so status/assignee
+      // changes are reflected provider-neutrally. Best-effort: do not fail lifecycle
+      // if projection queue is momentarily unavailable — the card will be
+      // reconciled on next incident change.
+      try {
+        const { requestSlackWarRoomProjectionForIncident } = await import('./projection');
+        await requestSlackWarRoomProjectionForIncident(event.incidentId);
+      } catch {}
       break;
     }
     case 'MESSAGE':
-      result = await slack.postWarRoomUpdate(event.incidentId, event.message);
+      result = await lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message);
+      try {
+        const { requestSlackWarRoomProjectionForIncident } = await import('./projection');
+        await requestSlackWarRoomProjectionForIncident(event.incidentId);
+      } catch {}
       break;
     case 'TOPIC':
-      result = await slack.updateWarRoomTopic(event.incidentId, event.status);
+      result = await lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status);
+      try {
+        const { requestSlackWarRoomProjectionForIncident } = await import('./projection');
+        await requestSlackWarRoomProjectionForIncident(event.incidentId);
+      } catch {}
       break;
     case 'INVITE_USER':
-      result = await slack.inviteUserToWarRoom(event.incidentId, event.userId);
+      result = await lifecycle.inviteUserToSlackWarRoom(event.incidentId, event.userId);
       break;
     case 'INVITE_TEAM':
-      result = await slack.inviteTeamToWarRoom(event.incidentId, event.teamId);
+      result = await lifecycle.inviteTeamToSlackWarRoom(event.incidentId, event.teamId);
       break;
     default:
       return { ok: true as const, value: undefined };
@@ -106,11 +114,17 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
     const { provisionSlackWarRoom } = await import('./provision');
     await provisionSlackWarRoom(warRoomId, provisioningToken);
   },
-  project: async () => unsupported('project'),
+  project: async (warRoomId, projectionVersion) => {
+    const { projectSlackWarRoomCard } = await import('./projection');
+    await projectSlackWarRoomCard(warRoomId, projectionVersion);
+  },
   syncParticipants: async warRoomId => {
     const { syncSlackWarRoomParticipants } = await import('../../slack-participants');
     await syncSlackWarRoomParticipants(warRoomId);
   },
-  settleProjectionFailure: async () => unsupported('settleProjectionFailure'),
+  settleProjectionFailure: async (warRoomId, projectionVersion) => {
+    const { settleSlackWarRoomProjectionFailure } = await import('./projection');
+    await settleSlackWarRoomProjectionFailure(warRoomId, projectionVersion);
+  },
   handleIncidentEvent,
 };

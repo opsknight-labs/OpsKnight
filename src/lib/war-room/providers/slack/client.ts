@@ -11,6 +11,8 @@ export async function slackApiCall(
   channel?: { id: string; name: string };
   channels?: Array<{ id: string; name: string }>;
   user?: { profile?: { email?: string } };
+  ts?: string;
+  message?: { ts?: string };
 }> {
   try {
     const response = await retryFetch(

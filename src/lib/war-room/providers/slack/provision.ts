@@ -5,12 +5,13 @@ import { runSerializableTransaction } from '@/lib/db-utils';
 import { getSlackBotToken } from '@/lib/slack';
 import { getBaseUrl } from '@/lib/env-validation';
 import { logger } from '@/lib/logger';
-import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { adoptWarRoomChannel, claimWarRoomProvisioning } from '../../repository';
 import { evaluateWarRoomPolicy } from '../../policy';
 import { projectSlackWarRoomToLegacyIncident } from '../../slack-compatibility';
 import { WarRoomRetryableError } from '../../errors';
 import { slackApiCall } from './client';
+import { generateBridgeUrl } from '../../bridge';
+import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
@@ -24,32 +25,6 @@ function slugify(name: string, maxLen = 40): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, maxLen);
-}
-
-export function generateBridgeUrl(
-  incidentId: string,
-  provider: string,
-  customTemplate?: string | null
-): string | null {
-  if (!provider || provider === 'NONE') return null;
-  const shortId = incidentId.slice(-8);
-  let formattedUrl: string | null = null;
-  if (customTemplate && customTemplate.trim()) {
-    let urlStr = customTemplate.trim();
-    if (!/^https?:\/\//i.test(urlStr)) urlStr = `https://${urlStr}`;
-    if (urlStr.includes('{incidentId}')) formattedUrl = urlStr.replace(/\{incidentId\}/g, incidentId);
-    else formattedUrl = urlStr;
-  }
-  switch (provider) {
-    case 'JITSI':
-      return formattedUrl || `https://meet.jit.si/opsknight-inc-${shortId}`;
-    case 'ZOOM':
-      return formattedUrl || null;
-    case 'GOOGLE_MEET':
-      return formattedUrl || `https://meet.google.com/lookup/opsknight-inc-${shortId}`;
-    default:
-      return formattedUrl || null;
-  }
 }
 
 function slackChannelName(config: { channelPrefix?: string | null }, serviceName: string, incidentId: string): string {
@@ -319,8 +294,12 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
         await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
         const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
         const { scheduleJob } = await import('@/lib/jobs/queue');
+        const { requestSlackWarRoomProjection } = await import('./projection');
         await projectIncidentWarRoomParticipants(room.id);
         await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+        await requestSlackWarRoomProjection(room.id).catch(err =>
+          logger.warn('[ChatOps] Failed to queue Slack projection after reconciliation', { error: err })
+        );
         await prisma.incidentEvent.create({
           data: { incidentId: incident.id, message: `War-room channel #${existing.name} reconciled` },
         }).catch(() => {});
@@ -415,8 +394,12 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
         await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
         const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
         const { scheduleJob } = await import('@/lib/jobs/queue');
+        const { requestSlackWarRoomProjection } = await import('./projection');
         await projectIncidentWarRoomParticipants(room.id);
         await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+        await requestSlackWarRoomProjection(room.id).catch(err =>
+          logger.warn('[ChatOps] Failed to queue Slack projection after fallback reconciliation', { error: err })
+        );
       }
       return;
     }
@@ -563,8 +546,12 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
   if (adoption === 'READY') {
     const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
     const { scheduleJob } = await import('@/lib/jobs/queue');
+    const { requestSlackWarRoomProjection } = await import('./projection');
     await projectIncidentWarRoomParticipants(room.id);
     await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+    await requestSlackWarRoomProjection(room.id).catch(err =>
+      logger.warn('[ChatOps] Failed to queue Slack projection', { error: err })
+    );
   }
 
   await prisma.incidentEvent
