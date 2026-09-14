@@ -28,6 +28,7 @@ SELECT
   1,
   CASE
     WHEN incident."warRoomArchivedAt" IS NOT NULL THEN 'ARCHIVED'::"WarRoomState"
+    WHEN incident."status" = 'RESOLVED' THEN 'CLOSED'::"WarRoomState"
     ELSE 'READY'::"WarRoomState"
   END,
   incident."slackWorkspaceId",
@@ -35,7 +36,11 @@ SELECT
   incident."slackChannelName",
   incident."warRoomUrl",
   incident."createdAt",
-  incident."warRoomArchivedAt",
+  CASE
+    WHEN incident."warRoomArchivedAt" IS NOT NULL THEN incident."warRoomArchivedAt"
+    WHEN incident."status" = 'RESOLVED' THEN incident."resolvedAt"
+    ELSE NULL
+  END,
   incident."warRoomArchivedAt",
   jsonb_build_object(
     'migration', 'unified-chatops-slack-backfill',

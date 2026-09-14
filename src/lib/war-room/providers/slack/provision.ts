@@ -9,9 +9,8 @@ import { adoptWarRoomChannel, claimWarRoomProvisioning } from '../../repository'
 import { evaluateWarRoomPolicy } from '../../policy';
 import { projectSlackWarRoomToLegacyIncident } from '../../slack-compatibility';
 import { WarRoomRetryableError } from '../../errors';
-import { slackApiCall } from './client';
+import { findExistingSlackChannel, findSlackChannelByMarker, slackApiCall, slackWarRoomMarker } from './client';
 import { generateBridgeUrl } from '../../bridge';
-import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
@@ -193,16 +192,14 @@ export async function requestSlackWarRoom(
 }
 
 async function findExistingChannel(botToken: string, channelName: string): Promise<{ id: string; name: string } | null> {
-  const result = await slackApiCall('conversations.list', botToken, {
-    exclude_archived: true,
-    limit: 1000,
-    types: 'public_channel,private_channel',
-  });
-  if (!result.ok) {
-    if (isSlackRetryableError(result.error)) throw new WarRoomRetryableError(result.error ?? 'Slack list failed');
-    return null;
-  }
-  return result.channels?.find(c => c.name === channelName) || null;
+  return findExistingSlackChannel(botToken, channelName);
+}
+
+function deterministicCollisionSuffix(provisioningToken: string, generation: number): string {
+  // Deterministic per-generation suffix so a lost-response retry reuses the same alternate name
+  // instead of creating an orphaned duplicate channel. 4 chars from token hash + generation.
+  const h = provisioningToken.replace(/-/g, '').slice(-4);
+  return `${h}${String(generation % 10)}`.slice(0, 4).padStart(4, '0');
 }
 
 /** Worker entry point. Every retry reconciles this same generation before POST. */
@@ -282,10 +279,16 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
   }
 
   const channelName = slackChannelName(config, incident.service.name, incident.id);
+  const marker = slackWarRoomMarker(incident.id, room.generation);
 
-  // 1) Reconcile deterministic name before POST
+  // 1) Reconcile by marker and deterministic name before POST — marker is ownership proof, name is discovery hint
   try {
-    const existing = await findExistingChannel(botToken, channelName);
+    // Prefer marker scan (topic/purpose) for precise ownership; fall back to name match
+    let existing: { id: string; name: string } | null = null;
+    try {
+      existing = await findSlackChannelByMarker(botToken, marker);
+    } catch {}
+    if (!existing) existing = await findExistingChannel(botToken, channelName);
     if (existing) {
       const warRoomUrl = generateBridgeUrl(
         incident.id,
@@ -317,12 +320,15 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
         }).catch(() => {});
       } else if (adoption === 'FENCED') {
         return;
+      } else if (adoption === 'CLOSED') {
+        // Resolve won the race while create was in flight — archive the late-created channel
+        await slackApiCall('conversations.archive', botToken, { channel: existing.id }).catch(() => {});
+        await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
       }
       return;
     }
   } catch (error) {
     if (error instanceof WarRoomRetryableError) throw error;
-    // Non-retryable list failure already handled in findExistingChannel (returns null), so continue to create
   }
 
   // 2) Ambiguous gate: if we already attempted create, never blind POST again — reconcile only
@@ -417,8 +423,37 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
     }
 
     if (createResult.error === 'name_taken') {
-      const suffix = Math.floor(Math.random() * 8999 + 1000).toString();
+      const suffix = deterministicCollisionSuffix(expectedProvisioningToken, room.generation);
       effectiveChannelName = `${channelName.slice(0, 74)}-${suffix}`;
+      // Check if deterministic alternate already exists (lost-response retry)
+      const altExisting = await findExistingChannel(botToken, effectiveChannelName).catch(() => null);
+      if (altExisting) {
+        const warRoomUrl = generateBridgeUrl(
+          incident.id,
+          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
+          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
+        );
+        const adoption = await runSerializableTransaction(tx =>
+          adoptWarRoomChannel(tx, {
+            warRoomId: room.id,
+            provisioningToken: expectedProvisioningToken,
+            providerTenantId: slackWorkspaceId,
+            channelId: altExisting.id,
+            channelName: altExisting.name,
+            channelUrl: warRoomUrl,
+          })
+        );
+        if (adoption === 'READY') {
+          await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
+          const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
+          const { scheduleJob } = await import('@/lib/jobs/queue');
+          const { requestSlackWarRoomProjection } = await import('./projection');
+          await projectIncidentWarRoomParticipants(room.id);
+          await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+          await requestSlackWarRoomProjection(room.id).catch(() => {});
+        }
+        return;
+      }
       createResult = await slackApiCall('conversations.create', botToken, {
         name: effectiveChannelName,
         is_private: false,
@@ -453,50 +488,28 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
     return;
   }
 
-  // Best-effort side effects (topic, bridge, cards) — do not fail provisioning if they fail
+  // Best-effort side effects (topic, bridge) — do not fail provisioning if they fail.
+  // The canonical command card is owned solely by WAR_ROOM_PROJECT (projection),
+  // not by provisioning, to avoid dual owners and duplicate cards on retry.
   const appUrl = getBaseUrl();
   const dashboardUrl = `${appUrl}/incidents/${incident.id}`;
-  const topic = `🚨 ${incident.title} | ${incident.urgency} | ${dashboardUrl}`;
+  const rawTopic = `🚨 ${incident.title} | ${incident.urgency} | ${dashboardUrl}`;
+  const topicWithMarker = `${rawTopic} ${marker}`.slice(0, 250);
   await slackApiCall('conversations.setTopic', botToken, {
     channel: channelId,
-    topic: topic.slice(0, 250),
+    topic: topicWithMarker,
   }).catch(err => logger.warn('[ChatOps] Failed to set channel topic', { error: err }));
+  // Also persist marker in purpose so marker scan can find the channel even if topic is edited.
+  await slackApiCall('conversations.setPurpose', botToken, {
+    channel: channelId,
+    purpose: marker,
+  }).catch(() => {});
 
   const videoBridge = incident.service.warRoomVideoBridge || config.defaultVideoBridge;
   const customUrl = incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate;
   const warRoomUrl = generateBridgeUrl(incident.id, videoBridge, customUrl);
 
-  await enqueueCentralNotification({
-    category: 'INCIDENT',
-    channel: 'SLACK',
-    recipientType: 'SLACK_CHANNEL',
-    recipientAddress: channelId,
-    incidentId: incident.id,
-    templateKey: 'chatops-war-room-command-card',
-    sourceType: 'INCIDENT',
-    sourceId: incident.id,
-    eventKey: `war-room:${channelId}:command-card`,
-    displayMessage: `War-room command card for ${incident.title}`,
-    priority: 1,
-    payload: {
-      kind: 'SLACK_CHANNEL',
-      channel: channelId,
-      incident: {
-        id: incident.id,
-        title: incident.title,
-        status: incident.status,
-        urgency: incident.urgency,
-        serviceName: incident.service.name,
-        assigneeName: incident.assignee?.name,
-      },
-      eventType: 'triggered',
-      includeInteractiveButtons: true,
-      serviceId: incident.serviceId,
-      additionalMessage: warRoomUrl ? `📹 Video Bridge: ${warRoomUrl}` : undefined,
-    },
-  }).catch(err => logger.warn('[ChatOps] Failed to queue command card', { error: err }));
-
-  // Welcome card
+  // Welcome message is separate from the canonical card (which is projected via WAR_ROOM_PROJECT).
   const welcomeBlocks = [
     { type: 'header', text: { type: 'plain_text', text: '👋 Welcome to your Incident War Room!', emoji: true } },
     { type: 'section', text: { type: 'mrkdwn', text: `This channel was automatically provisioned to coordinate resolution for *${incident.title}*.` } },
@@ -555,7 +568,12 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
   }
 
   await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
-  if (adoption === 'READY') {
+  if (adoption === 'CLOSED') {
+    // Resolve won the race while Graph was in flight — the channel exists
+    // provider-side but local state is CLOSED. Archive the late-created channel
+    // so Slack does not drift open while Incident=RESOLVED.
+    await slackApiCall('conversations.archive', botToken, { channel: channelId }).catch(() => {});
+  } else if (adoption === 'READY') {
     const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
     const { scheduleJob } = await import('@/lib/jobs/queue');
     const { requestSlackWarRoomProjection } = await import('./projection');

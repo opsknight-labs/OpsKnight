@@ -267,8 +267,21 @@ export async function projectSlackWarRoomCard(
 
   // Slack surfaces commandMessageId as the message ts of the canonical card.
   // commandConversationId stores the channel id (redundant with providerChannelId
-  // but kept for symmetry with Teams).
+  // but kept for symmetry with Teams). Use durable pre-POST fence so only a
+  // real network attempt marks the canonical create as attempted — mirrors Teams.
   if (!room.commandMessageId) {
+    // Durable pre-POST CAS: if another worker already armed the fence, do not POST.
+    const fenced = await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id, projectionLeaseToken: token, commandMessageId: null, commandCreateAttemptedAt: null },
+      data: { commandCreateAttemptedAt: new Date() },
+    });
+    if (fenced.count !== 1) {
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, projectionLeaseToken: token },
+        data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+      });
+      return;
+    }
     const created = await slackApiCall('chat.postMessage', botToken, {
       channel: room.providerChannelId,
       text: rendered.text,
@@ -276,20 +289,42 @@ export async function projectSlackWarRoomCard(
     });
     if (!created.ok) {
       const retryable = isRetryableSlackProjectionError(created.error);
+      const lowerErr = (created.error ?? '').toLowerCase();
+      const definitePrePostFailure =
+        lowerErr.includes('not_authed') ||
+        lowerErr.includes('invalid_auth') ||
+        lowerErr.includes('missing_scope') ||
+        lowerErr.includes('channel_not_found') ||
+        lowerErr.includes('is_archived');
       addOperationalMetric('opsknight_war_room_projection_total', 1, {
         provider: 'SLACK',
         result: retryable ? 'retryable' : 'failed',
       });
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, projectionLeaseToken: token },
-        data: { health: 'DEGRADED', lastErrorCode: 'CARD_CREATE_FAILED', lastError: created.error ?? 'Slack card create failed' },
+        data: { health: 'DEGRADED', lastErrorCode: definitePrePostFailure ? created.error?.toUpperCase() ?? 'CARD_CREATE_FAILED' : 'AMBIGUOUS_CARD_CREATE', lastError: created.error ?? 'Slack card create failed' },
       });
+      if (definitePrePostFailure) {
+        // Definite rejection before any side effect — clear fence so next retry can re-arm.
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, projectionLeaseToken: token },
+          data: { commandCreateAttemptedAt: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+        });
+        throw new WarRoomRetryableError(created.error ?? 'Slack card create failed');
+      }
       if (retryable) {
+        // Ambiguous — keep commandCreateAttemptedAt so next worker never blind-rePOSTs.
         await prisma.incidentWarRoom.updateMany({
           where: { id: room.id, projectionLeaseToken: token },
           data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
         });
-        throw new WarRoomRetryableError(created.error ?? 'Slack card create failed');
+        if (room.state === 'CLOSING') {
+          await prisma.incidentWarRoom.updateMany({
+            where: { id: room.id, projectionVersion, state: 'CLOSING' },
+            data: { state: 'CLOSED', closedAt: new Date() },
+          });
+        }
+        return;
       }
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, projectionLeaseToken: token },

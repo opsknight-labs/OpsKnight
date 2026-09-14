@@ -17,7 +17,9 @@ function classifySlackHealth(error?: string): 'MISSING' | 'PERMISSION_ERROR' | '
 }
 
 /**
- * Reconciles one Slack war room's health against the provider.
+ * Reconciles one Slack war room against the provider.
+ * - READY: verifies channel via conversations.info (health check).
+ * - AMBIGUOUS: marker/name scan to adopt a channel that may have been created (provisioning reconciliation).
  * Never throws on permission/MISSING — those are health states. Only throws
  * WarRoomRetryableError on rate-limited/transient so the queue can retry.
  */
@@ -27,6 +29,51 @@ export async function reconcileSlackWarRoom(warRoomId: string): Promise<void> {
     include: { incident: { select: { serviceId: true } } },
   });
   if (!room || room.provider !== 'SLACK' || !room.providerTenantId) return;
+
+  // AMBIGUOUS: provisioning reconciliation — scan by marker and adopt if found.
+  if (room.state === 'AMBIGUOUS') {
+    const svcId: string = (room.incident as { serviceId?: string }).serviceId ?? '';
+    const token = svcId ? await getSlackBotToken(svcId).catch(() => null) : null;
+    if (!token) {
+      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
+      return;
+    }
+    const { findSlackChannelByMarker, slackWarRoomMarker } = await import('./client');
+    const marker = slackWarRoomMarker(room.incidentId, room.generation);
+    let found: { id: string; name: string } | null = null;
+    try {
+      found = await findSlackChannelByMarker(token, marker);
+    } catch {}
+    if (!found) {
+      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
+      return;
+    }
+    if (found && room.provisioningToken) {
+      const { runSerializableTransaction } = await import('@/lib/db-utils');
+      const { adoptWarRoomChannel } = await import('../../repository');
+      const { generateBridgeUrl } = await import('../../bridge');
+      const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
+      let warRoomUrl: string | null = null;
+      try {
+        if (svcId) {
+          const svc = await prisma.service.findUnique({ where: { id: svcId }, select: { warRoomVideoBridge: true, warRoomCustomBridgeUrl: true } });
+          warRoomUrl = generateBridgeUrl(room.incidentId, svc?.warRoomVideoBridge ?? config?.defaultVideoBridge ?? 'NONE', svc?.warRoomCustomBridgeUrl ?? config?.customBridgeUrlTemplate ?? null);
+        }
+      } catch {}
+      await runSerializableTransaction(tx =>
+        adoptWarRoomChannel(tx, {
+          warRoomId: room.id,
+          provisioningToken: room.provisioningToken!,
+          providerTenantId: room.providerTenantId,
+          channelId: found!.id,
+          channelName: found!.name,
+          channelUrl: warRoomUrl,
+        })
+      ).catch(() => {});
+      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
+    }
+    return;
+  }
 
   // Only READY rooms have a provider channel to verify. Other states just stamp lastReconciledAt.
   if (room.state !== 'READY' || !room.providerChannelId) {

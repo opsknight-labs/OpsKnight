@@ -6,6 +6,12 @@ function actionLabel(action: WarRoomProjectionModel['actions'][number]): string 
   return 'Resolve';
 }
 
+function actionToSlackContract(action: WarRoomProjectionModel['actions'][number]): { actionId: string; actionValue: string } {
+  if (action === 'ACKNOWLEDGE') return { actionId: 'ack_incident', actionValue: 'ack' };
+  if (action === 'ASSIGN_TO_ME') return { actionId: 'assign_me_incident', actionValue: 'assign_me' };
+  return { actionId: 'resolve_incident', actionValue: 'resolve' };
+}
+
 export function renderSlackWarRoomProjection(model: WarRoomProjectionModel) {
   const summary = `*${model.incident.title}*\n${model.incident.serviceName} · ${model.incident.urgency}${model.incident.priority ? ` · ${model.incident.priority}` : ''}`;
   return {
@@ -25,12 +31,15 @@ export function renderSlackWarRoomProjection(model: WarRoomProjectionModel) {
         ? [
             {
               type: 'actions',
-              elements: model.actions.map(action => ({
-                type: 'button',
-                action_id: `incident_${action.toLowerCase()}`,
-                text: { type: 'plain_text', text: actionLabel(action) },
-                value: model.incident.id,
-              })),
+              elements: model.actions.map(action => {
+                const contract = actionToSlackContract(action);
+                return {
+                  type: 'button',
+                  action_id: contract.actionId,
+                  text: { type: 'plain_text', text: actionLabel(action) },
+                  value: JSON.stringify({ action: contract.actionValue, incidentId: model.incident.id }),
+                };
+              }),
             },
           ]
         : []),
