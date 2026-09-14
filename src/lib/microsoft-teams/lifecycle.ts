@@ -87,6 +87,11 @@ export async function revokeMicrosoftTeamsOperations(
  * transaction that removes its authority.  A create that has crossed the
  * network boundary is deliberately retained as AMBIGUOUS: treating it as a
  * failure would permit a later worker to duplicate a channel.
+ *
+ * Also fences collaboration jobs (WAR_ROOM_PROJECT / WAR_ROOM_PARTICIPANT_SYNC)
+ * for READY/CLOSING rooms whose authority was revoked: their in-flight Graph
+ * attempts are cancelled and their health is degraded so the queue retry path
+ * cannot leak a stale projection or member sync.
  */
 export async function revokeMicrosoftTeamsWarRoomProvisioning(
   tx: Prisma.TransactionClient,
@@ -119,10 +124,30 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
     });
   }
 
-  const roomIds = candidates.map(room => room.id);
+  // Collaboration surface: READY/CLOSING rooms that were routing through the
+  // revoked destination must not keep projecting cards or syncing members.
+  const collaborationRooms = await tx.incidentWarRoom.findMany({
+    where: { provider: 'MICROSOFT_TEAMS', state: { in: ['READY', 'CLOSING'] } },
+    select: { id: true, destinationId: true },
+  });
+  const collaborationCandidates = collaborationRooms.filter(room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId)));
+  if (collaborationCandidates.length > 0) {
+    await tx.incidentWarRoom.updateMany({
+      where: { id: { in: collaborationCandidates.map(room => room.id) } },
+      data: {
+        health: 'DEGRADED',
+        lastErrorCode: 'WAR_ROOM_AUTHORITY_REVOKED',
+        lastError: scope.reason,
+        projectionLeaseToken: null,
+        projectionLeaseExpiresAt: null,
+      },
+    });
+  }
+
+  const roomIds = [...candidates.map(room => room.id), ...collaborationCandidates.map(room => room.id)];
   if (roomIds.length === 0) return { warRoomIds: [], jobsCancelled: 0 };
   const jobs = await tx.backgroundJob.findMany({
-    where: { type: 'WAR_ROOM_PROVISION', status: { in: ['PENDING', 'PROCESSING'] } },
+    where: { type: { in: ['WAR_ROOM_PROVISION', 'WAR_ROOM_PROJECT', 'WAR_ROOM_PARTICIPANT_SYNC'] }, status: { in: ['PENDING', 'PROCESSING'] } },
     select: { id: true, payload: true },
   });
   const roomSet = new Set(roomIds);
@@ -136,7 +161,8 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
       data: { status: 'CANCELLED', completedAt: now, error: scope.reason },
     });
   }
-  return { warRoomIds: roomIds, jobsCancelled: jobIds.length };
+  // Deduplicate warRoomIds across provision + collaboration surfaces.
+  return { warRoomIds: [...new Set(roomIds)], jobsCancelled: jobIds.length };
 }
 
 export async function disconnectMicrosoftTeamsIntegration(actorId: string): Promise<void> {

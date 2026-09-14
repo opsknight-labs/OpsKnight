@@ -5,6 +5,7 @@ import { sendNotification as mockedSendNotification } from '@/lib/notifications'
 import { processEventSideEffect as mockedProcessEventSideEffect } from '@/lib/event-side-effects';
 import { processAutoUnsnoozeIncidentInternal } from '@/lib/unsnooze';
 import { provisionMicrosoftTeamsWarRoom } from '@/lib/war-room/microsoft-teams';
+import { syncMicrosoftTeamsWarRoomParticipants } from '@/lib/war-room/participants';
 
 type TestMock = ReturnType<typeof vi.fn>;
 
@@ -19,6 +20,7 @@ const sendNotificationMock = mockedSendNotification as unknown as TestMock;
 const processEventSideEffectMock = mockedProcessEventSideEffect as unknown as TestMock;
 const processAutoUnsnoozeIncidentMock = processAutoUnsnoozeIncidentInternal as unknown as TestMock;
 const provisionMicrosoftTeamsWarRoomMock = provisionMicrosoftTeamsWarRoom as unknown as TestMock;
+const syncMicrosoftTeamsWarRoomParticipantsMock = syncMicrosoftTeamsWarRoomParticipants as unknown as TestMock;
 
 vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
@@ -30,6 +32,7 @@ vi.mock('@/lib/notifications', () => ({ sendNotification: vi.fn() }));
 vi.mock('@/lib/event-side-effects', () => ({ processEventSideEffect: vi.fn() }));
 vi.mock('@/lib/unsnooze', () => ({ processAutoUnsnoozeIncidentInternal: vi.fn() }));
 vi.mock('@/lib/war-room/microsoft-teams', () => ({ provisionMicrosoftTeamsWarRoom: vi.fn() }));
+vi.mock('@/lib/war-room/participants', () => ({ syncMicrosoftTeamsWarRoomParticipants: vi.fn() }));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
@@ -163,6 +166,28 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
     });
     expect(result).toBe(false);
     expect(provisionMicrosoftTeamsWarRoomMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('queue.processJob WAR_ROOM_PARTICIPANT_SYNC', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaMock.backgroundJob.update.mockResolvedValue({});
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('runs participant synchronization only in the durable worker', async () => {
+    const result = await queue.processJob({
+      id: 'job-war-room-members', type: 'WAR_ROOM_PARTICIPANT_SYNC', status: 'PROCESSING',
+      payload: { warRoomId: 'room-1' }, attempts: 1, maxAttempts: 5,
+    });
+    expect(result).toBe(true);
+    expect(syncMicrosoftTeamsWarRoomParticipantsMock).toHaveBeenCalledWith('room-1');
+    // Fenced completion: must not resurrect a job cancelled while Graph was in flight.
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room-members', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'COMPLETED' }),
+    }));
   });
 });
 

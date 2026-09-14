@@ -43,6 +43,8 @@ export type MicrosoftTeamsCardOptions = {
   interactive?: {
     destinationId: string;
     messageGeneration: number;
+    /** A war-room card has a separate activity reference from destination cards. */
+    warRoomId?: string;
     refreshUserIds?: string[];
     capabilities?: Partial<{
       canAcknowledge: boolean; canResolve: boolean; canAssignSelf: boolean;
@@ -80,7 +82,7 @@ function interactiveActions(input: MicrosoftTeamsIncidentCardInput, options?: Mi
       case 'canRead': return caps.canRead === true;
     }
   };
-  const ctx = { v: 2, incidentId: input.incident.id, destinationId: interactive.destinationId, messageGeneration: interactive.messageGeneration };
+  const ctx = { v: 2, incidentId: input.incident.id, destinationId: interactive.destinationId, messageGeneration: interactive.messageGeneration, ...(interactive.warRoomId ? { warRoomId: interactive.warRoomId } : {}) };
   const execute = (title: string, verb: string, mode?: 'secondary') => ({ type: 'Action.Execute', title, verb, associatedInputs: 'none', data: ctx, ...(mode ? { mode } : {}) });
   const actions: Array<Record<string, unknown>> = [];
   if (!input.incident.acknowledgedAt && allow('canAcknowledge')) actions.push(execute('Acknowledge', TEAMS_CHATOPS_VERBS.ACK));
@@ -230,7 +232,7 @@ export function buildMicrosoftTeamsIncidentCard(
       },
     ],
     actions: [...chatOpsActions, { type: 'Action.OpenUrl', title: 'View Incident ↗', url: safeUrl, ...(options?.interactive ? { mode: 'secondary' } : {}) }],
-    ...(options?.interactive ? { refresh: { action: { type: 'Action.Execute', verb: TEAMS_CHATOPS_VERBS.REFRESH, data: { v: 2, incidentId: incident.id, destinationId: options.interactive.destinationId, messageGeneration: options.interactive.messageGeneration } }, ...(options.interactive.refreshUserIds?.length ? { userIds: options.interactive.refreshUserIds.slice(0, 60) } : {}) } } : {}),
+    ...(options?.interactive ? { refresh: { action: { type: 'Action.Execute', verb: TEAMS_CHATOPS_VERBS.REFRESH, data: { v: 2, incidentId: incident.id, destinationId: options.interactive.destinationId, messageGeneration: options.interactive.messageGeneration, ...(options.interactive.warRoomId ? { warRoomId: options.interactive.warRoomId } : {}) } }, ...(options.interactive.refreshUserIds?.length ? { userIds: options.interactive.refreshUserIds.slice(0, 60) } : {}) } } : {}),
     // Phase 2 note: ACK/Resolve/Assign will use Action.Execute with verb `opsknight.ack` etc.
     // and route through POST /api/microsoft-teams/messages as `invoke` activity.
     // Intentionally omitted in Phase 1 per spec — prepare the architecture, not the buttons.

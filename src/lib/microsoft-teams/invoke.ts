@@ -50,24 +50,44 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
       return teamsActionError(400, 'InvalidContext', 'Teams did not provide the required action context.');
     }
 
-    const { incidentId, destinationId, messageGeneration } = action.data;
+    const { incidentId, destinationId, messageGeneration, warRoomId } = action.data;
     const isRefresh = action.action.verb === TEAMS_CHATOPS_VERBS.REFRESH;
     const limit = await checkRateLimit(`chatops:teams:${isRefresh ? 'refresh' : 'mutation'}:${tenantId}:${providerUserId}`, isRefresh ? 120 : 30, 60_000);
     if (!limit.allowed) return teamsActionError(429, 'RateLimited', 'Too many Teams actions. Please retry shortly.');
-    const [config, destination, incident, canonical] = await Promise.all([
+    const [config, destination, incident, canonical, warRoom] = await Promise.all([
       prisma.microsoftTeamsConfig.findFirst({ where: { enabled: true, interactiveEnabled: true }, orderBy: { updatedAt: 'desc' } }),
       prisma.microsoftTeamsDestination.findUnique({ where: { id: destinationId }, include: { installation: true } }),
       prisma.incident.findUnique({ where: { id: incidentId }, include: { service: { select: { name: true } }, assignee: { select: { name: true } } } }),
       prisma.microsoftTeamsIncidentMessage.findUnique({ where: { incidentId_destinationId: { incidentId, destinationId } } }),
+      warRoomId ? prisma.incidentWarRoom.findFirst({ where: { id: warRoomId, incidentId, provider: 'MICROSOFT_TEAMS' } }) : Promise.resolve(null),
     ]);
-    if (!config || !destination?.enabled || !destination.interactiveEnabled || !destination.installation?.enabled) {
+    if (!config || !incident || !destination?.enabled || !destination.interactiveEnabled || !destination.installation?.enabled) {
       return teamsActionError(403, 'InteractiveDisabled', 'Microsoft Teams interactive actions are currently disabled.');
     }
-    const routeMatches = destination.tenantId === tenantId && destination.teamId === teamId
+    const destinationRouteMatches = destination.tenantId === tenantId && destination.teamId === teamId
       && destination.channelId === channelId && incident?.serviceId === destination.serviceId;
-    const messageMatches = canonical && canonical.messageGeneration === messageGeneration
-      && (!input.activity.conversation?.id || canonical.conversationId === input.activity.conversation.id)
-      && (!input.activity.replyToId || canonical.messageId === input.activity.replyToId);
+    // A war-room card must be bound to the exact destination that provisioned
+    // the room. Without this, a card from one service/destination could be
+    // replayed against a different war-room in the same Team/channel.
+    const warRoomDestinationBound = Boolean(
+      warRoom
+      && warRoom.destinationId === destinationId
+      && incident.serviceId === destination.serviceId
+      && (!warRoom.installationId || warRoom.installationId === destination.installationId)
+      && (!warRoom.providerTenantId || warRoom.providerTenantId === destination.tenantId)
+      && (!warRoom.providerContainerId || warRoom.providerContainerId === destination.teamId)
+    );
+    const warRoomRouteMatches = Boolean(warRoom && warRoom.state === 'READY' &&
+      warRoom.providerTenantId === tenantId && warRoom.providerContainerId === teamId && warRoom.providerChannelId === channelId
+      && warRoomDestinationBound);
+    const routeMatches = destinationRouteMatches || warRoomRouteMatches;
+    const messageMatches = warRoom
+      ? warRoom.messageGeneration === messageGeneration
+        && (!input.activity.conversation?.id || warRoom.commandConversationId === input.activity.conversation.id)
+        && (!input.activity.replyToId || warRoom.commandMessageId === input.activity.replyToId)
+      : canonical && canonical.messageGeneration === messageGeneration
+        && (!input.activity.conversation?.id || canonical.conversationId === input.activity.conversation.id)
+        && (!input.activity.replyToId || canonical.messageId === input.activity.replyToId);
     if (!routeMatches || !messageMatches) {
       return teamsActionError(409, 'StaleCard', 'This Teams card is no longer the active destination for this incident.');
     }
@@ -122,7 +142,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
               incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incident.id}`,
               createdAt: incident.createdAt, acknowledgedAt: incident.acknowledgedAt, resolvedAt: incident.resolvedAt,
             }, eventType,
-          }, { disableActions: incident.status === 'RESOLVED', interactive: { destinationId, messageGeneration, capabilities, refreshUserIds: [providerUserId] } });
+          }, { disableActions: incident.status === 'RESOLVED', interactive: { destinationId, messageGeneration, warRoomId, capabilities, refreshUserIds: [providerUserId] } });
           result = teamsActionCard(card);
           break;
         }

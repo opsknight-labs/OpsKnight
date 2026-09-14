@@ -36,6 +36,12 @@ vi.mock('@/lib/war-room/microsoft-teams', () => ({
   requestMicrosoftTeamsWarRoom: vi.fn().mockResolvedValue({ accepted: false, code: 'DISABLED' }),
   settleMicrosoftTeamsWarRoomsOnIncidentResolve: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock('@/lib/war-room/projection', () => ({
+  requestMicrosoftTeamsWarRoomProjectionForIncident: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/war-room/participants', () => ({
+  requestMicrosoftTeamsWarRoomParticipantSyncForIncident: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: { incident: { findUnique: vi.fn() } },

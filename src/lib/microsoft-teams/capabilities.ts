@@ -135,15 +135,35 @@ export async function getMicrosoftTeamsCapabilities(options?: {
   if (resolved.config.warRoomsEnabled && options?.teamId?.trim()) {
     try {
       const { getTeamsWarRoomRscGrantState } = await import('./client');
-      warRoomRsc = await getTeamsWarRoomRscGrantState({ tenantId, teamId: options.teamId.trim() });
+      const {
+        MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS,
+        MICROSOFT_TEAMS_WAR_ROOM_LIFECYCLE_RSC_PERMISSIONS,
+        MICROSOFT_TEAMS_WAR_ROOM_MEMBERSHIP_RSC_PERMISSIONS,
+      } = await import('./app-manifest');
+      warRoomRsc = await getTeamsWarRoomRscGrantState({
+        tenantId,
+        teamId: options.teamId.trim(),
+        requiredPermissions: [
+          ...MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS,
+          ...MICROSOFT_TEAMS_WAR_ROOM_LIFECYCLE_RSC_PERMISSIONS,
+          ...MICROSOFT_TEAMS_WAR_ROOM_MEMBERSHIP_RSC_PERMISSIONS,
+        ],
+      });
     } catch {
       warRoomRsc = { granted: null, missing: ['Channel.Create.Group'], unknown: true, error: 'WAR_ROOM_RSC_UNAVAILABLE', installations: [] };
     }
   }
-  const canCreateWarRooms = Boolean(
-    resolved.config.warRoomsEnabled && botInstalled && warRoomRsc &&
-    !warRoomRsc.unknown && warRoomRsc.missing.length === 0,
+  const hasWarRoomPermission = (permission: string) => Boolean(
+    warRoomRsc && !warRoomRsc.unknown && warRoomRsc.granted?.includes(permission),
   );
+  const canCreateWarRooms = Boolean(resolved.config.warRoomsEnabled && botInstalled && hasWarRoomPermission('Channel.Create.Group'));
+  const canManageWarRoomMembers = Boolean(
+    canCreateWarRooms &&
+    hasWarRoomPermission('TeamMember.Read.Group') &&
+    hasWarRoomPermission('ChannelMember.Read.Group') &&
+    hasWarRoomPermission('ChannelMember.ReadWrite.Group'),
+  );
+  const canUpdateWarRoom = Boolean(canCreateWarRooms && hasWarRoomPermission('ChannelSettings.ReadWrite.Group'));
   return {
     connected: true,
     botInstalled,
@@ -151,9 +171,9 @@ export async function getMicrosoftTeamsCapabilities(options?: {
     canUpdateCard,
     canCreateChannel: canCreateWarRooms,
     canCreateWarRooms,
-    canCreatePrivateWarRooms: false,
-    canManageWarRoomMembers: false,
-    canUpdateWarRoom: false,
+    canCreatePrivateWarRooms: canManageWarRoomMembers,
+    canManageWarRoomMembers,
+    canUpdateWarRoom,
     canArchiveWarRoom: false,
     canCreateMeeting: false,
     canManageMembers: false,
