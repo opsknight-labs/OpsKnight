@@ -171,6 +171,7 @@ function isOwnerRole(roles?: string[]): boolean {
  */
 async function ensurePrivateOwnerHandoff(input: {
   warRoomId: string;
+  authorityRoom: Parameters<typeof validateParticipantSyncAuthority>[0];
   tenantId: string;
   teamId: string;
   channelId: string;
@@ -217,6 +218,10 @@ async function ensurePrivateOwnerHandoff(input: {
       if (input.teamMembersByObjectId.has(oid) && !input.channelMembersByObjectId.has(oid)) {
         const fresh = await prisma.warRoomParticipant.findUnique({ where: { id: participant.id }, select: { state: true, desiredVersion: true } });
         if (!fresh || !['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state) || fresh.desiredVersion !== participant.desiredVersion) continue;
+        const authorityBeforeOwnerAdd = await validateParticipantSyncAuthority(input.authorityRoom);
+        if (!authorityBeforeOwnerAdd.allowed) {
+          return { ok: false, code: authorityBeforeOwnerAdd.code, message: authorityBeforeOwnerAdd.message };
+        }
         // Will be added as owner by the normal add path — promote by adding as owner
         const added = await addChannelMember({ tenantId: input.tenantId, teamId: input.teamId, channelId: input.channelId, userObjectId: oid, owner: true });
         if (added.ok || added.code === 'MEMBER_ALREADY_PRESENT') {
@@ -237,6 +242,10 @@ async function ensurePrivateOwnerHandoff(input: {
   const fresh = await prisma.warRoomParticipant.findUnique({ where: { id: candidateParticipant!.id }, select: { state: true, desiredVersion: true } });
   if (!fresh || !['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state) || fresh.desiredVersion !== candidateParticipant!.desiredVersion) {
     return { ok: false, code: 'OWNER_HANDOFF_REQUIRED', message: 'Replacement owner is no longer a desired responder.' };
+  }
+  const authorityBeforeOwnerPromote = await validateParticipantSyncAuthority(input.authorityRoom);
+  if (!authorityBeforeOwnerPromote.allowed) {
+    return { ok: false, code: authorityBeforeOwnerPromote.code, message: authorityBeforeOwnerPromote.message };
   }
 
   const promoted = await updateChannelMemberRoles({ tenantId: input.tenantId, teamId: input.teamId, channelId: input.channelId, membershipId: candidateMembershipId, roles: ['owner'] });
@@ -356,6 +365,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       // Private owner handoff: promote replacement owner before deleting current owner.
       const handoff = await ensurePrivateOwnerHandoff({
         warRoomId,
+        authorityRoom: room,
         tenantId: room.providerTenantId,
         teamId: room.providerContainerId,
         channelId: room.providerChannelId,

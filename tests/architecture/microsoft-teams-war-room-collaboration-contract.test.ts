@@ -56,6 +56,8 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     const projection = readFileSync('src/lib/war-room/projection.ts', 'utf8');
     const teams = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
     expect(participants).toContain("['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state)");
+    expect(participants).toContain('authorityBeforeOwnerPromote');
+    expect(participants).toContain('authorityBeforeOwnerAdd');
     expect(participants).toContain('afterPromote');
     expect(projection).toContain('[401, 403, 404].includes(result.statusCode ?? 0)');
     expect(projection).toContain('commandCreateAttemptedAt: null');
