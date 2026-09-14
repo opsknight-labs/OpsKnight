@@ -9,12 +9,11 @@
    top: calc(100% + 0.5rem);
    min-width: 280px;
    max-width: 320px;
-   background: #ffffff;
+   background: var(--bg-secondary);
+   color: var(--text-primary);
    border: 1px solid var(--border);
    border-radius: 12px;
-   box-shadow:
-      0 10px 15px -3px rgba(0, 0, 0, 0.1),
-      0 4px 6px -2px rgba(0, 0, 0, 0.05);
+   box-shadow: var(--shadow-lg);
    z-index: var(--z-user-menu);
    overflow: hidden;
    animation: dropdownFadeIn 0.2s ease-out;
@@ -36,7 +35,7 @@
 
 .user-menu-header {
    padding: 1rem;
-   background: var(--surface-hover);
+   background: var(--surface-hover, var(--bg-primary));
    border-radius: 8px;
    display: flex;
    align-items: center;
@@ -58,8 +57,8 @@
    font-size: 1.125rem;
    color: #ffffff;
    background: #0f172a;
-   border: 2px solid #ffffff;
-   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+   border: 2px solid var(--bg-secondary);
+   box-shadow: var(--shadow-sm);
    flex-shrink: 0;
 }
 
@@ -122,49 +121,6 @@
 }
 
 .user-menu-item:hover {
-   background: var(--surface-hover);
+   background: var(--surface-hover, var(--bg-primary));
    color: var(--text-primary);
-}
-
-/* ========================================
-   Dropdown Dark Mode Protection
-   Prevents browser dark mode from affecting dropdown colors
-   ======================================== */
-
-@media (prefers-color-scheme: dark) {
-   .user-menu-dropdown,
-   [class*="dropdown"],
-   [class*="popover"],
-   [class*="menu"],
-   [role="menu"],
-   [role="listbox"] {
-      background-color: #ffffff !important;
-      color: var(--text-primary) !important;
-      filter: none !important;
-      -webkit-filter: none !important;
-   }
-
-   .user-menu-header {
-      background: var(--surface-hover) !important;
-   }
-
-   .user-menu-name {
-      color: var(--text-primary) !important;
-   }
-
-   .user-menu-email {
-      color: var(--text-muted) !important;
-   }
-
-   .user-menu-item {
-      color: var(--text-primary) !important;
-   }
-
-   .user-menu-item:hover {
-      background: var(--surface-hover) !important;
-   }
-
-   .user-menu-divider {
-      background: var(--border) !important;
-   }
 }

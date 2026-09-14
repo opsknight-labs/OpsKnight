@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { haptics } from '@/lib/haptics';
+import { isInteractiveMobileTarget } from '@/lib/mobile-interactive';
 
 export default function PullToRefresh({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -16,32 +17,18 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
   const pullThreshold = 70;
   const maxPull = 100;
 
-  const isInteractiveTarget = (target: EventTarget | null) => {
-    if (!(target instanceof Element)) return false;
-    const closest = target.closest(
-      'input, textarea, select, button, [contenteditable="true"], [role="textbox"], [data-disable-pull]'
-    );
-    return closest instanceof Element;
-  };
-
   useEffect(() => {
     return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current);
-      }
+      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
     };
   }, []);
 
   const initLoading = async () => {
     setRefreshing(true);
     haptics.success();
-    // Trigger Next.js router refresh
     router.refresh();
 
-    // Keep indicator visible for smooth UX
-    if (refreshTimeoutRef.current) {
-      clearTimeout(refreshTimeoutRef.current);
-    }
+    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
     refreshTimeoutRef.current = setTimeout(() => {
       setRefreshing(false);
       setPullChange(0);
@@ -50,7 +37,7 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (isInteractiveTarget(e.target)) {
+    if (isInteractiveMobileTarget(e.target)) {
       startXRef.current = null;
       startYRef.current = null;
       return;
@@ -68,10 +55,8 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (isInteractiveTarget(e.target)) {
-      if (pullChange !== 0) {
-        setPullChange(0);
-      }
+    if (isInteractiveMobileTarget(e.target)) {
+      if (pullChange !== 0) setPullChange(0);
       startXRef.current = null;
       startYRef.current = null;
       return;
@@ -92,9 +77,7 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
     const diffY = touchY - startYRef.current;
 
     if (diffY > 0 && diffY > diffX * 1.5) {
-      // Rubber band resistance effect
-      const pull = Math.min(diffY * 0.45, maxPull);
-      setPullChange(pull);
+      setPullChange(Math.min(diffY * 0.45, maxPull));
     } else if (diffX > diffY && pullChange !== 0) {
       setPullChange(0);
     }
@@ -103,18 +86,17 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
   const handleTouchEnd = () => {
     if (startYRef.current === null) return;
 
-    if (pullChange > pullThreshold) {
-      initLoading();
-    } else {
-      setPullChange(0);
-    }
+    if (pullChange > pullThreshold) void initLoading();
+    else setPullChange(0);
+
     startXRef.current = null;
     startYRef.current = null;
   };
 
-  // Calculate progress for visual feedback
   const progress = Math.min(pullChange / pullThreshold, 1);
   const isReady = pullChange >= pullThreshold;
+  const accent = 'hsl(var(--ui-primary))';
+  const muted = 'hsl(var(--ui-muted-foreground))';
 
   return (
     <div
@@ -122,12 +104,8 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      style={{
-        minHeight: '100vh',
-        position: 'relative',
-      }}
+      style={{ minHeight: '100%', position: 'relative' }}
     >
-      {/* Pull-to-Refresh Indicator */}
       <div
         style={{
           height: pullChange > 0 || refreshing ? '70px' : '0',
@@ -153,25 +131,23 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
             transition: refreshing ? 'opacity 0.2s ease' : 'none',
           }}
         >
-          {/* Circular Progress / Spinner Container */}
-          <div
-            style={{
-              position: 'relative',
-              width: '40px',
-              height: '40px',
-            }}
-          >
-            {/* Background ring */}
+          <div style={{ position: 'relative', width: '40px', height: '40px' }}>
             <svg
               width="40"
               height="40"
               viewBox="0 0 40 40"
               style={{ position: 'absolute', top: 0, left: 0 }}
             >
-              <circle cx="20" cy="20" r="16" fill="none" stroke="var(--border)" strokeWidth="3" />
+              <circle
+                cx="20"
+                cy="20"
+                r="16"
+                fill="none"
+                stroke="hsl(var(--ui-border))"
+                strokeWidth="3"
+              />
             </svg>
 
-            {/* Progress ring */}
             <svg
               width="40"
               height="40"
@@ -189,17 +165,14 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
                 cy="20"
                 r="16"
                 fill="none"
-                stroke={isReady || refreshing ? 'var(--primary-color)' : 'var(--text-muted)'}
+                stroke={isReady || refreshing ? accent : muted}
                 strokeWidth="3"
                 strokeDasharray={`${progress * 100} 100`}
                 strokeLinecap="round"
-                style={{
-                  transition: 'stroke 0.2s ease',
-                }}
+                style={{ transition: 'stroke 0.2s ease' }}
               />
             </svg>
 
-            {/* Center icon */}
             <div
               style={{
                 position: 'absolute',
@@ -213,14 +186,16 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
               }}
             >
               {refreshing ? (
-                <span style={{ fontSize: '16px' }}>⚡</span>
+                <span aria-hidden="true" style={{ fontSize: '16px', color: accent }}>
+                  •
+                </span>
               ) : (
                 <svg
                   width="16"
                   height="16"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke={isReady ? 'var(--primary-color)' : 'var(--text-muted)'}
+                  stroke={isReady ? accent : muted}
                   strokeWidth="2.5"
                   style={{ transition: 'stroke 0.2s ease' }}
                 >
@@ -230,12 +205,11 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          {/* Status text */}
           <span
             style={{
               fontSize: '0.7rem',
               fontWeight: 600,
-              color: isReady || refreshing ? 'var(--primary-color)' : 'var(--text-muted)',
+              color: isReady || refreshing ? accent : muted,
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
               transition: 'color 0.2s ease',
@@ -246,7 +220,7 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <div style={{ transition: 'none' }}>{children}</div>
+      <div>{children}</div>
 
       <style jsx>{`
         @keyframes spin {

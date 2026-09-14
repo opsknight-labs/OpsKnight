@@ -16,9 +16,9 @@ type Room = {
   providerChannelName: string | null;
   providerChannelUrl: string | null;
   membershipType: string | null;
-  health: string;
-  lastErrorCode: string | null;
-  lastReconciledAt: Date | null;
+  health?: string;
+  lastErrorCode?: string | null;
+  lastReconciledAt?: Date | null;
   lastError: string | null;
   participants: Array<{ id: string; source: string; state: string; lastError: string | null; user: { name: string | null } | null }>;
 };
@@ -80,7 +80,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
                 {latest.providerChannelName ?? 'Open Teams channel'} <ExternalLink className="h-3 w-3" />
               </a>
             )}
-            {latest.health !== 'HEALTHY' && <Badge variant="outline" className="border-amber-300 text-amber-700">{latest.health.toLowerCase().replace('_', ' ')}</Badge>}
+            {latest.health && latest.health !== 'HEALTHY' && <Badge variant="outline" className="border-amber-300 text-amber-700">{latest.health.toLowerCase().replace('_', ' ')}</Badge>}
           </div>
           {latest.participants.length > 0 && <p className="text-xs text-muted-foreground">Responder projection: {latest.participants.map(participant => `${participant.user?.name ?? 'Unlinked responder'} (${participant.state.toLowerCase()})`).join(', ')}</p>}
           {latest.lastError && <p className="text-xs text-amber-700 dark:text-amber-300">{latest.lastError}</p>}

@@ -2,16 +2,13 @@ import { redirect } from 'next/navigation';
 import MobileNav from '@/components/mobile/MobileNav';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import '@/app/globals.css';
-import './mobile.css';
-import './mobile-premium.css';
-import './mobile-hardening.css';
+import './mobile-shell.css';
 import PullToRefresh from '@/components/mobile/PullToRefresh';
 import MobileSwipeNavigator from '@/components/mobile/MobileSwipeNavigator';
 import MobileNetworkBanner from '@/components/mobile/MobileNetworkBanner';
 import MobilePwaCoordinator from '@/components/mobile/MobilePwaCoordinator';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
-import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
 import { getAppShellContext } from '@/lib/app-shell-context';
 import { RealtimeProvider } from '@/hooks/useRealtime';
@@ -41,6 +38,7 @@ export default async function MobileLayout({ children }: { children: React.React
   } catch {}
 
   const authGeneration = String(shell.user.tokenVersion);
+
   return (
     <TimezoneProvider initialTimeZone={shell.user.timeZone || 'UTC'}>
       <UserAvatarProvider
@@ -49,9 +47,9 @@ export default async function MobileLayout({ children }: { children: React.React
         currentUserGender={shell.user.gender}
         currentUserName={shell.user.name || 'User'}
       >
-        <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
-          <RealtimeProvider>
-            <MobileBiometricGuard>
+        <RealtimeProvider>
+          <MobileBiometricGuard>
+            <div className="mobile-app" data-system-status={shell.systemStatus}>
               <div
                 id={MOBILE_PRINCIPAL_MARKER_ID}
                 data-principal-id={shell.user.id}
@@ -60,22 +58,20 @@ export default async function MobileLayout({ children }: { children: React.React
                 aria-hidden="true"
               />
               <MobileHeader systemStatus={shell.systemStatus} />
-              <div className="mobile-shell" data-status={shell.systemStatus}>
-                <main id="main-content" className="mobile-content">
-                  <MobileNetworkBanner />
-                  <MobileSwipeNavigator>
-                    <PullToRefresh>{children}</PullToRefresh>
-                  </MobileSwipeNavigator>
-                </main>
-              </div>
+              <main id="main-content" className="mobile-content">
+                <MobileNetworkBanner />
+                <MobileSwipeNavigator>
+                  <PullToRefresh>{children}</PullToRefresh>
+                </MobileSwipeNavigator>
+              </main>
               <MobileNav />
               <MobilePwaCoordinator
                 principalId={shell.user.id}
                 authGeneration={authGeneration}
               />
-            </MobileBiometricGuard>
-          </RealtimeProvider>
-        </ThemeProvider>
+            </div>
+          </MobileBiometricGuard>
+        </RealtimeProvider>
       </UserAvatarProvider>
     </TimezoneProvider>
   );

@@ -8,33 +8,32 @@ function safeSourceUrl(value: string | undefined): string {
     const parsed = new URL(value);
     if (parsed.protocol === 'https:' || parsed.protocol === 'http:') return parsed.toString();
   } catch {
-    // Fall back to the official source repository for invalid configuration.
+    // Invalid operator configuration must never remove the source affordance.
   }
 
   return UPSTREAM_REPOSITORY;
 }
 
 /**
- * Persistent legal/source affordance for every interactive OpsKnight surface.
+ * Persistent, low-profile AGPL/source affordance.
  *
- * Official container builds inject an immutable commit URL through
- * NEXT_PUBLIC_SOURCE_CODE_URL. Downstream operators that ship a modified build
- * must point this value at the Corresponding Source for the version they run.
+ * Official builds can inject an immutable deployed-version URL with
+ * NEXT_PUBLIC_SOURCE_CODE_URL. Modified network deployments should point that
+ * value at the Corresponding Source for the version they are serving.
  */
 export default function LegalSourceNotice() {
   const sourceUrl = safeSourceUrl(process.env.NEXT_PUBLIC_SOURCE_CODE_URL);
 
   return (
     <aside
-      aria-label="OpsKnight software license and source code"
-      className="fixed bottom-2 right-2 z-[1200] flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/90 px-2.5 py-1 text-[10px] font-medium text-slate-500 shadow-sm backdrop-blur dark:border-slate-700/80 dark:bg-slate-950/90 dark:text-slate-400"
-      title="OpsKnight Community is provided without warranty under AGPL-3.0-only. View the license and Corresponding Source."
+      aria-label="OpsKnight license and source code"
+      className="fixed bottom-20 right-3 z-[1100] flex items-center gap-1.5 rounded-md border border-border/70 bg-background/90 px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75 md:bottom-3"
     >
       <a
         href={AGPL_LICENSE_URL}
         target="_blank"
         rel="noopener noreferrer license"
-        className="hover:text-slate-900 hover:underline dark:hover:text-slate-100"
+        className="rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
         AGPL-3.0-only
       </a>
@@ -43,9 +42,9 @@ export default function LegalSourceNotice() {
         href={sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="hover:text-slate-900 hover:underline dark:hover:text-slate-100"
+        className="rounded-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
-        Source
+        Source code
       </a>
     </aside>
   );

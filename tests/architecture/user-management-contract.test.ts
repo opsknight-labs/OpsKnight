@@ -44,8 +44,8 @@ describe('user management security contract', () => {
     const list = readFileSync('src/app/(mobile)/m/users/page.tsx', 'utf8');
     const detail = readFileSync('src/app/(mobile)/m/users/[id]/page.tsx', 'utf8');
 
-    expect(list).toContain('await getCurrentUser()');
-    expect(detail).toContain('await getCurrentUser()');
+    expect(list).toContain('getRequestActorContext()');
+    expect(detail).toContain('getRequestActorContext()');
   });
 
   it('centralizes membership removal and last-admin serialization', () => {

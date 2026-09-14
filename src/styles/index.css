@@ -20,76 +20,65 @@
 /* Legacy - Import globals.css first (contains all styles) */
 @import '../app/globals.css';
 
-/* Shadcn/ui CSS Variables Layer */
+/*
+ * Canonical component/design-system tokens.
+ *
+ * Legacy CSS still owns unprefixed variables such as --primary, --border and
+ * --secondary and stores several of them as hex values. Tailwind/shadcn expects
+ * HSL channel values, so sharing those names made utilities such as bg-card,
+ * text-foreground and border-border invalid or browser-dependent. The --ui-*
+ * namespace is now the single contract for modern components.
+ */
 @layer base {
    :root {
-      --background: 0 0% 100%;
-      --foreground: 222.2 47.4% 11.2%;
-
-      --muted: 210 40% 96.1%;
-      --muted-foreground: 215.4 16.3% 46.9%;
-
-      --popover: 0 0% 100%;
-      --popover-foreground: 222.2 47.4% 11.2%;
-
-      --card: 0 0% 100%;
-      --card-foreground: 222.2 47.4% 11.2%;
-
-      --border: 214.3 28% 86%;
-      --input: 214.3 28% 86%;
-      --border-color: hsl(214.3 28% 86%);
-      --input-color: hsl(214.3 28% 86%);
-
-      --primary: 222.2 47.4% 11.2%;
-      --primary-foreground: 210 40% 98%;
-
-      --secondary: 210 40% 96.1%;
-      --secondary-foreground: 222.2 47.4% 11.2%;
-
-      --accent: 210 40% 96.1%;
-      --accent-foreground: 222.2 47.4% 11.2%;
-
-      --destructive: 0 84.2% 60.2%;
-      --destructive-foreground: 210 40% 98%;
-
-      --ring: 215 20.2% 65.1%;
-
-      --radius: 0.5rem;
+      --ui-background: 210 40% 98%;
+      --ui-foreground: 222.2 47.4% 11.2%;
+      --ui-muted: 210 40% 96.1%;
+      --ui-muted-foreground: 215.4 16.3% 46.9%;
+      --ui-popover: 0 0% 100%;
+      --ui-popover-foreground: 222.2 47.4% 11.2%;
+      --ui-card: 0 0% 100%;
+      --ui-card-foreground: 222.2 47.4% 11.2%;
+      --ui-border: 214.3 31.8% 91.4%;
+      --ui-input: 214.3 31.8% 91.4%;
+      --ui-primary: 215.3 25% 26.7%;
+      --ui-primary-foreground: 210 40% 98%;
+      --ui-secondary: 210 40% 96.1%;
+      --ui-secondary-foreground: 222.2 47.4% 11.2%;
+      --ui-accent: 210 40% 96.1%;
+      --ui-accent-foreground: 222.2 47.4% 11.2%;
+      --ui-destructive: 346.8 77.2% 49.8%;
+      --ui-destructive-foreground: 210 40% 98%;
+      --ui-ring: 215.3 25% 26.7%;
+      --ui-radius: 0.75rem;
    }
 
+   /*
+    * Dark mode intentionally stays neutral and low-chroma. Status/urgency
+    * colors remain semantic accents, but application chrome and surfaces use
+    * the original OpsKnight zinc treatment rather than a colorful dark theme.
+    */
+   .dark,
    [data-theme='dark'] {
-      --background: 240 10% 3.9%;
-      --foreground: 210 40% 98%;
-
-      --muted: 240 3.7% 15.9%;
-      --muted-foreground: 240 5% 64.9%;
-
-      --popover: 240 5.9% 7.5%;
-      --popover-foreground: 210 40% 98%;
-
-      --card: 240 5.9% 7.5%;
-      --card-foreground: 210 40% 98%;
-
-      --border: 240 3.7% 15.9%;
-      --input: 240 3.7% 15.9%;
-      --border-color: hsl(240 3.7% 15.9%);
-      --input-color: hsl(240 3.7% 15.9%);
-
-      --primary: 210 40% 98%;
-      --primary-foreground: 222.2 47.4% 1.2%;
-
-      --secondary: 240 3.7% 15.9%;
-      --secondary-foreground: 210 40% 98%;
-
-      --accent: 240 3.7% 15.9%;
-      --accent-foreground: 210 40% 98%;
-
-      --destructive: 0 63% 31%;
-      --destructive-foreground: 210 40% 98%;
-
-      --ring: 240 4.9% 83.9%;
-
-      --radius: 0.5rem;
+      --ui-background: 240 10% 3.9%;
+      --ui-foreground: 210 40% 98%;
+      --ui-muted: 240 3.7% 15.9%;
+      --ui-muted-foreground: 240 5% 64.9%;
+      --ui-popover: 240 5.9% 7.5%;
+      --ui-popover-foreground: 210 40% 98%;
+      --ui-card: 240 5.9% 7.5%;
+      --ui-card-foreground: 210 40% 98%;
+      --ui-border: 240 3.7% 15.9%;
+      --ui-input: 240 3.7% 15.9%;
+      --ui-primary: 210 40% 98%;
+      --ui-primary-foreground: 222.2 47.4% 11.2%;
+      --ui-secondary: 240 3.7% 15.9%;
+      --ui-secondary-foreground: 210 40% 98%;
+      --ui-accent: 240 3.7% 15.9%;
+      --ui-accent-foreground: 210 40% 98%;
+      --ui-destructive: 0 62.8% 30.6%;
+      --ui-destructive-foreground: 210 40% 98%;
+      --ui-ring: 240 4.9% 83.9%;
    }
 }
 
@@ -124,7 +113,6 @@
 @import './components/dropdowns.css';
 
 /* Pages Layer - Page-specific styles */
-
 @import './pages/mobile.css';
 @import './pages/schedule.css';
 @import './pages/analytics.css';

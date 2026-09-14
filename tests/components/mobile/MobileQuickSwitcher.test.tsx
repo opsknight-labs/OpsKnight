@@ -17,8 +17,8 @@ describe('MobileQuickSwitcher', () => {
 
   it('opens the quick switcher overlay', () => {
     render(<MobileQuickSwitcher />);
-    fireEvent.click(screen.getByLabelText('Open quick switcher'));
-    expect(screen.getByPlaceholderText('Type a command or search...')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Search OpsKnight'));
+    expect(screen.getByPlaceholderText('Search incidents, services, teams…')).toBeInTheDocument();
   });
 
   it('fetches and renders search results', async () => {
@@ -38,7 +38,7 @@ describe('MobileQuickSwitcher', () => {
     });
 
     render(<MobileQuickSwitcher />);
-    fireEvent.click(screen.getByLabelText('Open quick switcher'));
+    fireEvent.click(screen.getByLabelText('Search OpsKnight'));
 
     const input = screen.getByRole('combobox');
     fireEvent.change(input, { target: { value: 'ap' } });

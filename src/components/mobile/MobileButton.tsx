@@ -1,7 +1,8 @@
 'use client';
 
-import { ReactNode, ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import Link from 'next/link';
+import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
 
 type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'success' | 'warning' | 'ghost';
@@ -19,21 +20,55 @@ type MobileButtonProps = {
   className?: string;
 } & ButtonHTMLAttributes<HTMLButtonElement>;
 
-const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90',
-  secondary:
-    'border border-[color:var(--border)] bg-[color:var(--bg-surface)] text-[color:var(--text-secondary)] hover:bg-[color:var(--bg-secondary)]',
-  danger: 'bg-red-600 text-white hover:bg-red-700',
-  success: 'bg-emerald-600 text-white hover:bg-emerald-700',
-  warning: 'bg-amber-500 text-white hover:bg-amber-600',
-  ghost: 'bg-transparent text-[color:var(--text-secondary)] hover:bg-[color:var(--bg-secondary)]',
-};
+function getVariantConfig(variant: ButtonVariant) {
+  switch (variant) {
+    case 'secondary':
+      return { variant: 'outline' as const, className: '' };
+    case 'danger':
+      return { variant: 'destructive' as const, className: '' };
+    case 'success':
+      return {
+        variant: 'default' as const,
+        className:
+          'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500',
+      };
+    case 'warning':
+      return {
+        variant: 'default' as const,
+        className:
+          'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-500 dark:hover:bg-amber-400',
+      };
+    case 'ghost':
+      return { variant: 'ghost' as const, className: '' };
+    case 'primary':
+    default:
+      return { variant: 'default' as const, className: '' };
+  }
+}
 
-const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'px-3 py-1.5 text-xs rounded-lg',
-  md: 'px-4 py-2.5 text-sm rounded-xl',
-  lg: 'px-5 py-3 text-base rounded-2xl',
-};
+function getSizeConfig(size: ButtonSize) {
+  switch (size) {
+    case 'sm':
+      return { size: 'sm' as const, className: 'min-h-10 rounded-lg' };
+    case 'lg':
+      return { size: 'lg' as const, className: 'min-h-12 rounded-xl' };
+    case 'md':
+    default:
+      return { size: 'default' as const, className: 'min-h-11 rounded-xl' };
+  }
+}
+
+function getIconSize(size: ButtonSize) {
+  switch (size) {
+    case 'sm':
+      return 'h-10 w-10';
+    case 'lg':
+      return 'h-12 w-12';
+    case 'md':
+    default:
+      return 'h-11 w-11';
+  }
+}
 
 export default function MobileButton({
   children,
@@ -44,53 +79,63 @@ export default function MobileButton({
   iconPosition = 'left',
   loading = false,
   href,
-  className = '',
+  className,
   disabled,
   ...props
 }: MobileButtonProps) {
-  const baseClasses = cn(
-    'inline-flex items-center justify-center gap-2 font-semibold transition active:scale-[0.98]',
-    disabled || loading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+  const variantStyle = getVariantConfig(variant);
+  const sizeStyle = getSizeConfig(size);
+  const classes = cn(
+    'font-semibold active:scale-[0.98]',
+    variantStyle.className,
+    sizeStyle.className,
     fullWidth && 'w-full',
-    variantStyles[variant],
-    sizeStyles[size],
     className
   );
 
   const content = (
     <>
       {loading ? (
-        <span className="flex items-center">
-          <LoadingSpinner />
-        </span>
-      ) : (
-        <>
-          {icon && iconPosition === 'left' && <span className="flex">{icon}</span>}
-          <span>{children}</span>
-          {icon && iconPosition === 'right' && <span className="flex">{icon}</span>}
-        </>
-      )}
+        <LoadingSpinner />
+      ) : icon && iconPosition === 'left' ? (
+        <span className="flex">{icon}</span>
+      ) : null}
+      <span>{children}</span>
+      {!loading && icon && iconPosition === 'right' ? <span className="flex">{icon}</span> : null}
     </>
   );
 
-  if (href && !disabled) {
+  if (href && !disabled && !loading) {
     return (
-      <Link href={href} className={baseClasses}>
-        {content}
-      </Link>
+      <Button asChild variant={variantStyle.variant} size={sizeStyle.size} className={classes}>
+        <Link href={href}>{content}</Link>
+      </Button>
     );
   }
 
   return (
-    <button className={baseClasses} disabled={disabled || loading} {...props}>
+    <Button
+      variant={variantStyle.variant}
+      size={sizeStyle.size}
+      className={classes}
+      disabled={disabled || loading}
+      {...props}
+    >
       {content}
-    </button>
+    </Button>
   );
 }
 
 function LoadingSpinner() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="animate-spin">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      className="animate-spin"
+      aria-hidden="true"
+    >
       <circle
         cx="8"
         cy="8"
@@ -105,7 +150,6 @@ function LoadingSpinner() {
   );
 }
 
-// Icon Button variant
 export function MobileIconButton({
   icon,
   variant = 'ghost',
@@ -116,24 +160,18 @@ export function MobileIconButton({
   icon: ReactNode;
   badge?: number | string;
 } & Omit<MobileButtonProps, 'children'>) {
-  const iconSizes: Record<ButtonSize, string> = {
-    sm: 'h-9 w-9',
-    md: 'h-11 w-11',
-    lg: 'h-12 w-12',
-  };
-
   return (
     <div className="relative inline-flex">
       <MobileButton
         variant={variant}
         size={size}
-        className={cn('rounded-full p-0', iconSizes[size])}
+        className={cn('rounded-full p-0', getIconSize(size))}
         {...props}
       >
         {icon}
       </MobileButton>
       {badge !== undefined && (
-        <span className="absolute -right-1 -top-1 flex h-5 min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[0.6rem] font-bold text-white">
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[0.6rem] font-bold text-destructive-foreground">
           {badge}
         </span>
       )}
