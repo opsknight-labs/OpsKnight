@@ -4,8 +4,7 @@ import * as queue from '../jobs/queue';
 import { sendNotification as mockedSendNotification } from '@/lib/notifications';
 import { processEventSideEffect as mockedProcessEventSideEffect } from '@/lib/event-side-effects';
 import { processAutoUnsnoozeIncidentInternal } from '@/lib/unsnooze';
-import { provisionMicrosoftTeamsWarRoom } from '@/lib/war-room/microsoft-teams';
-import { syncMicrosoftTeamsWarRoomParticipants } from '@/lib/war-room/participants';
+import { provisionWarRoom, syncWarRoomParticipants } from '@/lib/war-room/engine';
 
 type TestMock = ReturnType<typeof vi.fn>;
 
@@ -19,8 +18,8 @@ const prismaMock = prisma as unknown as {
 const sendNotificationMock = mockedSendNotification as unknown as TestMock;
 const processEventSideEffectMock = mockedProcessEventSideEffect as unknown as TestMock;
 const processAutoUnsnoozeIncidentMock = processAutoUnsnoozeIncidentInternal as unknown as TestMock;
-const provisionMicrosoftTeamsWarRoomMock = provisionMicrosoftTeamsWarRoom as unknown as TestMock;
-const syncMicrosoftTeamsWarRoomParticipantsMock = syncMicrosoftTeamsWarRoomParticipants as unknown as TestMock;
+const provisionWarRoomMock = provisionWarRoom as unknown as TestMock;
+const syncWarRoomParticipantsMock = syncWarRoomParticipants as unknown as TestMock;
 
 vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
@@ -31,8 +30,12 @@ vi.mock('@/lib/status-page-webhooks', () => ({ triggerWebhooksForService: vi.fn(
 vi.mock('@/lib/notifications', () => ({ sendNotification: vi.fn() }));
 vi.mock('@/lib/event-side-effects', () => ({ processEventSideEffect: vi.fn() }));
 vi.mock('@/lib/unsnooze', () => ({ processAutoUnsnoozeIncidentInternal: vi.fn() }));
-vi.mock('@/lib/war-room/microsoft-teams', () => ({ provisionMicrosoftTeamsWarRoom: vi.fn() }));
-vi.mock('@/lib/war-room/participants', () => ({ syncMicrosoftTeamsWarRoomParticipants: vi.fn() }));
+vi.mock('@/lib/war-room/engine', () => ({
+  provisionWarRoom: vi.fn(),
+  projectWarRoom: vi.fn(),
+  syncWarRoomParticipants: vi.fn(),
+  settleWarRoomProjectionFailure: vi.fn(),
+}));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
@@ -54,20 +57,33 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
   it('delegates due jobs to the system lifecycle worker and completes only a real transition', async () => {
     processAutoUnsnoozeIncidentMock.mockResolvedValue({ outcome: 'changed' });
     const result = await queue.processJob({
-      id: 'job-1', type: 'AUTO_UNSNOOZE', status: 'PROCESSING', payload: { incidentId: 'inc-1' }, attempts: 1, maxAttempts: 3,
+      id: 'job-1',
+      type: 'AUTO_UNSNOOZE',
+      status: 'PROCESSING',
+      payload: { incidentId: 'inc-1' },
+      attempts: 1,
+      maxAttempts: 3,
     });
     expect(result).toBe(true);
     expect(processAutoUnsnoozeIncidentMock).toHaveBeenCalledWith('inc-1');
-    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-1' }, data: expect.objectContaining({ status: 'COMPLETED' }),
-    }));
+    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-1' },
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      })
+    );
   });
 
   it('requeues at the authoritative snooze deadline without consuming retries', async () => {
     const snoozedUntil = new Date('2026-08-28T08:30:00.000Z');
     processAutoUnsnoozeIncidentMock.mockResolvedValue({ outcome: 'not_due', snoozedUntil });
     const result = await queue.processJob({
-      id: 'job-early', type: 'AUTO_UNSNOOZE', status: 'PROCESSING', payload: { incidentId: 'inc-1' }, attempts: 2, maxAttempts: 3,
+      id: 'job-early',
+      type: 'AUTO_UNSNOOZE',
+      status: 'PROCESSING',
+      payload: { incidentId: 'inc-1' },
+      attempts: 2,
+      maxAttempts: 3,
     });
     expect(result).toBe(false);
     expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith({
@@ -79,12 +95,20 @@ describe('queue.processJob AUTO_UNSNOOZE', () => {
   it('cancels stale jobs when no lifecycle transition is required', async () => {
     processAutoUnsnoozeIncidentMock.mockResolvedValue({ outcome: 'noop' });
     const result = await queue.processJob({
-      id: 'job-stale', type: 'AUTO_UNSNOOZE', status: 'PROCESSING', payload: { incidentId: 'inc-1' }, attempts: 1, maxAttempts: 3,
+      id: 'job-stale',
+      type: 'AUTO_UNSNOOZE',
+      status: 'PROCESSING',
+      payload: { incidentId: 'inc-1' },
+      attempts: 1,
+      maxAttempts: 3,
     });
     expect(result).toBe(false);
-    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-stale' }, data: expect.objectContaining({ status: 'CANCELLED' }),
-    }));
+    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-stale' },
+        data: expect.objectContaining({ status: 'CANCELLED' }),
+      })
+    );
   });
 });
 
@@ -105,67 +129,100 @@ describe('queue.processJob WAR_ROOM_PROVISION', () => {
       maxAttempts: 6,
     });
     expect(result).toBe(true);
-    expect(provisionMicrosoftTeamsWarRoomMock).toHaveBeenCalledWith('room-1', 'lease-a');
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-war-room', status: 'PROCESSING' },
-      data: expect.objectContaining({ status: 'COMPLETED' }),
-    }));
+    expect(provisionWarRoomMock).toHaveBeenCalledWith('room-1', 'lease-a');
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-war-room', status: 'PROCESSING' },
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      })
+    );
   });
 
   it('does not revive a job cancelled while its Graph request was in flight', async () => {
     prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 0 });
     const result = await queue.processJob({
-      id: 'job-war-room-cancelled', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
-      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 1, maxAttempts: 6,
+      id: 'job-war-room-cancelled',
+      type: 'WAR_ROOM_PROVISION',
+      status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' },
+      attempts: 1,
+      maxAttempts: 6,
     });
     expect(result).toBe(false);
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-war-room-cancelled', status: 'PROCESSING' },
-      data: expect.objectContaining({ status: 'COMPLETED' }),
-    }));
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-war-room-cancelled', status: 'PROCESSING' },
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      })
+    );
   });
 
   it('keeps the retry budget intact while reconciling an ambiguous create marker', async () => {
     const error = Object.assign(new Error('marker reconciliation'), {
-      name: 'WarRoomRetryableError', retryAfterMs: 1_000, retryBudgetNeutral: true,
+      name: 'WarRoomRetryableError',
+      retryAfterMs: 1_000,
+      retryBudgetNeutral: true,
     });
-    provisionMicrosoftTeamsWarRoomMock.mockRejectedValueOnce(error);
+    provisionWarRoomMock.mockRejectedValueOnce(error);
     prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 1, maxAttempts: 6 });
     const result = await queue.processJob({
-      id: 'job-war-room-reconcile', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
-      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 1, maxAttempts: 6,
+      id: 'job-war-room-reconcile',
+      type: 'WAR_ROOM_PROVISION',
+      status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' },
+      attempts: 1,
+      maxAttempts: 6,
     });
     expect(result).toBe(false);
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-war-room-reconcile', status: 'PROCESSING' },
-      data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
-    }));
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-war-room-reconcile', status: 'PROCESSING' },
+        data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
+      })
+    );
   });
 
   it('continues marker-only reconciliation after ordinary create retries exhausted the budget', async () => {
     const error = Object.assign(new Error('marker reconciliation'), {
-      name: 'WarRoomRetryableError', retryAfterMs: 1_000, retryBudgetNeutral: true,
+      name: 'WarRoomRetryableError',
+      retryAfterMs: 1_000,
+      retryBudgetNeutral: true,
     });
-    provisionMicrosoftTeamsWarRoomMock.mockRejectedValueOnce(error);
+    provisionWarRoomMock.mockRejectedValueOnce(error);
     prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 6, maxAttempts: 6 });
     const result = await queue.processJob({
-      id: 'job-war-room-final-reconcile', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING',
-      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' }, attempts: 6, maxAttempts: 6,
+      id: 'job-war-room-final-reconcile',
+      type: 'WAR_ROOM_PROVISION',
+      status: 'PROCESSING',
+      payload: { warRoomId: 'room-1', provisioningToken: 'lease-a' },
+      attempts: 6,
+      maxAttempts: 6,
     });
     expect(result).toBe(false);
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-war-room-final-reconcile', status: 'PROCESSING' },
-      data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
-    }));
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-war-room-final-reconcile', status: 'PROCESSING' },
+        data: expect.objectContaining({ status: 'PENDING', attempts: { decrement: 1 } }),
+      })
+    );
   });
 
   it('rejects an unfenced provisioning job before it can call Graph', async () => {
-    prismaMock.backgroundJob.findUnique.mockResolvedValue({ attempts: 1, maxAttempts: 6, type: 'WAR_ROOM_PROVISION' });
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({
+      attempts: 1,
+      maxAttempts: 6,
+      type: 'WAR_ROOM_PROVISION',
+    });
     const result = await queue.processJob({
-      id: 'job-war-room-invalid', type: 'WAR_ROOM_PROVISION', status: 'PROCESSING', payload: { warRoomId: 'room-1' }, attempts: 1, maxAttempts: 6,
+      id: 'job-war-room-invalid',
+      type: 'WAR_ROOM_PROVISION',
+      status: 'PROCESSING',
+      payload: { warRoomId: 'room-1' },
+      attempts: 1,
+      maxAttempts: 6,
     });
     expect(result).toBe(false);
-    expect(provisionMicrosoftTeamsWarRoomMock).not.toHaveBeenCalled();
+    expect(provisionWarRoomMock).not.toHaveBeenCalled();
   });
 });
 
@@ -178,16 +235,22 @@ describe('queue.processJob WAR_ROOM_PARTICIPANT_SYNC', () => {
 
   it('runs participant synchronization only in the durable worker', async () => {
     const result = await queue.processJob({
-      id: 'job-war-room-members', type: 'WAR_ROOM_PARTICIPANT_SYNC', status: 'PROCESSING',
-      payload: { warRoomId: 'room-1' }, attempts: 1, maxAttempts: 5,
+      id: 'job-war-room-members',
+      type: 'WAR_ROOM_PARTICIPANT_SYNC',
+      status: 'PROCESSING',
+      payload: { warRoomId: 'room-1' },
+      attempts: 1,
+      maxAttempts: 5,
     });
     expect(result).toBe(true);
-    expect(syncMicrosoftTeamsWarRoomParticipantsMock).toHaveBeenCalledWith('room-1');
+    expect(syncWarRoomParticipantsMock).toHaveBeenCalledWith('room-1');
     // Fenced completion: must not resurrect a job cancelled while Graph was in flight.
-    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-war-room-members', status: 'PROCESSING' },
-      data: expect.objectContaining({ status: 'COMPLETED' }),
-    }));
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-war-room-members', status: 'PROCESSING' },
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      })
+    );
   });
 });
 
@@ -233,24 +296,40 @@ describe('queue.processJob SCHEDULED_TASK event side effects', () => {
     processEventSideEffectMock.mockResolvedValue(undefined);
     const payload = { task: 'EVENT_SIDE_EFFECT', effect: 'ACK_SLACK', incidentId: 'inc-1' };
     const result = await queue.processJob({
-      id: 'job-side-effect', type: 'SCHEDULED_TASK', status: 'PROCESSING', payload, attempts: 1, maxAttempts: 5,
+      id: 'job-side-effect',
+      type: 'SCHEDULED_TASK',
+      status: 'PROCESSING',
+      payload,
+      attempts: 1,
+      maxAttempts: 5,
     });
     expect(result).toBe(true);
     expect(processEventSideEffectMock).toHaveBeenCalledWith(payload);
-    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-side-effect' }, data: expect.objectContaining({ status: 'COMPLETED' }),
-    }));
+    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-side-effect' },
+        data: expect.objectContaining({ status: 'COMPLETED' }),
+      })
+    );
   });
 
   it('fails unknown scheduled tasks without executing a side effect', async () => {
     const result = await queue.processJob({
-      id: 'job-unknown', type: 'SCHEDULED_TASK', status: 'PROCESSING', payload: { task: 'UNKNOWN_TASK' }, attempts: 1, maxAttempts: 5,
+      id: 'job-unknown',
+      type: 'SCHEDULED_TASK',
+      status: 'PROCESSING',
+      payload: { task: 'UNKNOWN_TASK' },
+      attempts: 1,
+      maxAttempts: 5,
     });
     expect(result).toBe(false);
     expect(processEventSideEffectMock).not.toHaveBeenCalled();
-    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-unknown' }, data: expect.objectContaining({ status: 'FAILED' }),
-    }));
+    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'job-unknown' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      })
+    );
   });
 });
 
@@ -258,9 +337,15 @@ describe('queue bulk backpressure crash semantics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.backgroundJob.update.mockResolvedValue({});
-    prismaMock.backgroundJob.findUnique.mockResolvedValue({ type: 'STATUS_PAGE_NOTIFICATION' } as never);
-    (prisma as unknown as { $executeRaw: ReturnType<typeof vi.fn> }).$executeRaw?.mockResolvedValue?.(0);
-    (prisma as unknown as { $queryRaw: ReturnType<typeof vi.fn> }).$queryRaw?.mockResolvedValue?.([]);
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({
+      type: 'STATUS_PAGE_NOTIFICATION',
+    } as never);
+    (
+      prisma as unknown as { $executeRaw: ReturnType<typeof vi.fn> }
+    ).$executeRaw?.mockResolvedValue?.(0);
+    (prisma as unknown as { $queryRaw: ReturnType<typeof vi.fn> }).$queryRaw?.mockResolvedValue?.(
+      []
+    );
   });
 
   it('bulk claim does not increment attempts; backpressure defer leaves failure budget unchanged', async () => {
@@ -276,7 +361,10 @@ describe('queue bulk backpressure crash semantics', () => {
     expect(src).toContain('stale bulk');
     expect(src).toContain('attempts"+1>="maxAttempts"');
     // Backpressure reschedule should be PENDING+delay without attempts decrement/increment
-    const rescheduleBlock = src.slice(src.indexOf('await prisma.backgroundJob.update'), src.indexOf('await prisma.backgroundJob.update') + 500);
+    const rescheduleBlock = src.slice(
+      src.indexOf('await prisma.backgroundJob.update'),
+      src.indexOf('await prisma.backgroundJob.update') + 500
+    );
     expect(rescheduleBlock).toContain("status: 'PENDING'");
     // reschedule data must not include attempts field (only status/scheduledAt/startedAt/error/failedAt)
     expect(rescheduleBlock).not.toContain('"attempts"');
@@ -284,22 +372,49 @@ describe('queue bulk backpressure crash semantics', () => {
   });
 
   it('defective bulk job eventually FAILED after maxAttempts via markJobFailed', async () => {
-    prismaMock.backgroundJob.findUnique.mockResolvedValue({ id: 'bulk-defective', type: 'STATUS_PAGE_NOTIFICATION', attempts: 3, maxAttempts: 5, payload: {}, scheduledAt: new Date() } as never);
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({
+      id: 'bulk-defective',
+      type: 'STATUS_PAGE_NOTIFICATION',
+      attempts: 3,
+      maxAttempts: 5,
+      payload: {},
+      scheduledAt: new Date(),
+    } as never);
     await queue.markJobFailed('bulk-defective', 'provider 500');
-    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'bulk-defective' } }));
-    const data1 = (prismaMock.backgroundJob.update.mock.calls[0]?.[0] as { data: { status: string; attempts: number } })?.data;
+    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'bulk-defective' } })
+    );
+    const data1 = (
+      prismaMock.backgroundJob.update.mock.calls[0]?.[0] as {
+        data: { status: string; attempts: number };
+      }
+    )?.data;
     expect(data1.status).toBe('PENDING');
     expect(data1.attempts).toBe(4);
     vi.clearAllMocks();
-    prismaMock.backgroundJob.findUnique.mockResolvedValue({ id: 'bulk-defective', type: 'STATUS_PAGE_NOTIFICATION', attempts: 4, maxAttempts: 5, payload: {}, scheduledAt: new Date() } as never);
+    prismaMock.backgroundJob.findUnique.mockResolvedValue({
+      id: 'bulk-defective',
+      type: 'STATUS_PAGE_NOTIFICATION',
+      attempts: 4,
+      maxAttempts: 5,
+      payload: {},
+      scheduledAt: new Date(),
+    } as never);
     await queue.markJobFailed('bulk-defective', 'provider 500');
-    const data2 = (prismaMock.backgroundJob.update.mock.calls[0]?.[0] as { data: { status: string; attempts: number } })?.data;
+    const data2 = (
+      prismaMock.backgroundJob.update.mock.calls[0]?.[0] as {
+        data: { status: string; attempts: number };
+      }
+    )?.data;
     expect(data2.status).toBe('FAILED');
     expect(data2.attempts).toBe(5);
   });
 
   it('stale PROCESSING bulk lease without markJobFailed increments crash budget on reclaim', async () => {
-    const prismaRaw = prisma as unknown as { $executeRaw: ReturnType<typeof vi.fn>; $queryRaw: ReturnType<typeof vi.fn> };
+    const prismaRaw = prisma as unknown as {
+      $executeRaw: ReturnType<typeof vi.fn>;
+      $queryRaw: ReturnType<typeof vi.fn>;
+    };
     const executeCalls: unknown[] = [];
     prismaRaw.$executeRaw.mockImplementation(async (sql: unknown) => {
       executeCalls.push(sql);
@@ -307,13 +422,25 @@ describe('queue bulk backpressure crash semantics', () => {
     });
     // Simulate job: attempts=0 max=3, claimed PROCESSING, then OOM before any handler
     // claimPendingJobs first does stale-bulk UPDATE where attempts < maxAttempts => attempts+1 and PENDING, then sweeps FAILED
-    prismaRaw.$queryRaw.mockResolvedValue([{ id: 'bulk-crash-1', type: 'STATUS_PAGE_NOTIFICATION', status: 'PROCESSING', attempts: 0, maxAttempts: 3 }]);
+    prismaRaw.$queryRaw.mockResolvedValue([
+      {
+        id: 'bulk-crash-1',
+        type: 'STATUS_PAGE_NOTIFICATION',
+        status: 'PROCESSING',
+        attempts: 0,
+        maxAttempts: 3,
+      },
+    ]);
     await queue.claimPendingJobs(10);
-    const firstSql = String((executeCalls[0] as { strings?: string[] })?.strings?.join('') ?? String(executeCalls[0]));
+    const firstSql = String(
+      (executeCalls[0] as { strings?: string[] })?.strings?.join('') ?? String(executeCalls[0])
+    );
     expect(firstSql).toContain('attempts"+1');
     expect(firstSql).toContain('STATUS_PAGE_NOTIFICATION');
     // The second execute is generic sweep for attempts>=maxAttempts
-    const secondSql = String((executeCalls[1] as { strings?: string[] })?.strings?.join('') ?? String(executeCalls[1]));
+    const secondSql = String(
+      (executeCalls[1] as { strings?: string[] })?.strings?.join('') ?? String(executeCalls[1])
+    );
     expect(secondSql).toContain('exceeding maxAttempts');
     // Simulate 3 consecutive stale crashes: each reclaim would increment attempts
     // After 3 increments 0->1->2->3 the third should produce FAILED
@@ -326,14 +453,19 @@ describe('queue bulk backpressure crash semantics', () => {
     prismaMock.backgroundJob.update.mockResolvedValue({});
     const jobId = 'bulk-backpressure-1';
     for (let i = 0; i < 5; i += 1) {
-      await (queue as unknown as { rescheduleBulkBackpressuredJob?: (id: string) => Promise<void> }).rescheduleBulkBackpressuredJob?.(jobId).catch(() => undefined);
+      await (queue as unknown as { rescheduleBulkBackpressuredJob?: (id: string) => Promise<void> })
+        .rescheduleBulkBackpressuredJob?.(jobId)
+        .catch(() => undefined);
     }
     // If reschedule is not exported, verify via processJob path: bulk job throwing BulkQueueBackpressureError
     // should result in PENDING without attempts change. We test the SQL path directly via file inspection above,
     // plus verify that processJob's backpressure branch calls update without attempts.
     const fs = await import('node:fs');
     const src = fs.readFileSync('src/lib/jobs/queue.ts', 'utf8');
-    const block = src.slice(src.indexOf('isBulkNotificationJob(job.type'), src.indexOf('isBulkNotificationJob(job.type') + 600);
+    const block = src.slice(
+      src.indexOf('isBulkNotificationJob(job.type'),
+      src.indexOf('isBulkNotificationJob(job.type') + 600
+    );
     expect(block).toContain('rescheduleBulkBackpressuredJob');
   });
 });
