@@ -60,6 +60,9 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      - name: Performance architecture budgets
+        run: npm run perf:budgets
+
       - name: Enforce idempotent status platform indexes
         run: |
           npm run prisma:indexes:status-platform

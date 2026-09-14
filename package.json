@@ -43,6 +43,7 @@
     "test:ci:unit": "npx vitest run -c vitest.unit.config.ts --reporter=default --reporter=junit --outputFile=reports/junit-unit.xml",
     "test:ci:db": "npx vitest run -c vitest.int.config.ts --no-file-parallelism --maxWorkers=1 --reporter=default --reporter=junit --outputFile=reports/junit-db.xml",
     "test:all": "npm run lint:check && npm run test:run",
+    "perf:budgets": "node scripts/perf/check-performance-budgets.cjs",
     "OpsKnight": "node ./scripts/OpsKnight.mjs",
     "ops": "node ./scripts/OpsKnight.mjs",
     "build:scripts": "tsc scripts/auto-recover-migrations.ts --rootDir . --outDir scripts/dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck",

@@ -3,6 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { incidentReadWhere } from '@/lib/authorization-filters';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   getRequestActorContext,
   type AuthenticatedRequestActorContext,
@@ -25,6 +26,13 @@ export type AppShellContext = {
     low: number;
     active: number;
   };
+  statusPages: Array<{
+    id: string;
+    name: string;
+    slug: string | null;
+    isDefault: boolean;
+  }>;
+  isStatusPageAdmin: boolean;
   systemStatus: 'ok' | 'warning' | 'danger';
   statusLabel: string;
   statusDetail: string;
@@ -37,13 +45,20 @@ export async function getAppShellContext(
   const context = requestContext ?? (await getRequestActorContext());
   if (!context) return null;
 
-  const urgencyCounts = await prisma.incident.groupBy({
-    by: ['urgency'],
-    where: {
-      AND: [incidentReadWhere(context.actor), { status: { in: activeIncidentStatuses() } }],
-    },
-    _count: { _all: true },
-  });
+  const [urgencyCounts, statusPages] = await Promise.all([
+    prisma.incident.groupBy({
+      by: ['urgency'],
+      where: {
+        AND: [incidentReadWhere(context.actor), { status: { in: activeIncidentStatuses() } }],
+      },
+      _count: { _all: true },
+    }),
+    prisma.statusPage.findMany({
+      where: { enabled: true },
+      select: { id: true, name: true, slug: true, isDefault: true },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    }),
+  ]);
 
   let high = 0;
   let medium = 0;
@@ -84,6 +99,8 @@ export async function getAppShellContext(
       tokenVersion: context.user.tokenVersion,
     },
     incidentCounts: { high, medium, low, active },
+    statusPages,
+    isStatusPageAdmin: hasCapability(context.actor.role, CAPABILITIES.ADMIN_MANAGE),
     systemStatus,
     statusLabel,
     statusDetail,

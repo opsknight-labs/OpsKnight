@@ -8,6 +8,7 @@ import { AppError, isAppError } from '@/lib/errors';
 import { validatePasswordStrength } from '@/lib/passwords';
 import { authPrivacyDigest, consumeAuthRateLimit } from '@/lib/auth-abuse';
 import { acquireAdvisoryLock } from '@/lib/db-locks';
+import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
 
 const GENERIC_RESET_MESSAGE =
   'If an account exists with this email, you will receive password reset instructions.';
@@ -454,6 +455,7 @@ export async function completePasswordReset(
         data: { revokedAt: now },
       });
     });
+    invalidateSessionSecurityProjection(user.id);
 
     await auditRecoveryEvent({
       action: 'auth.password_reset.completed',

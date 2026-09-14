@@ -35,17 +35,38 @@ function rolePoolSize(): string | undefined {
 
 const prismaClientSingleton = () => {
   // Log configuration for debugging
-  const logLevel: Array<'error' | 'warn'> = ['error', 'warn'];
   const datasourceUrl = configurePrismaDatasource(
     process.env.DATABASE_URL,
     rolePoolSize() ?? process.env.DATABASE_POOL_SIZE
   );
 
-  return new PrismaClient({
-    log: logLevel,
+  const client = new PrismaClient({
+    log: [
+      { emit: 'stdout', level: 'error' },
+      { emit: 'stdout', level: 'warn' },
+      { emit: 'event', level: 'query' },
+    ],
     // Datasource configuration can be overridden via env
     datasourceUrl,
   });
+  const slowQueryMs = Math.max(
+    1,
+    Number.parseInt(process.env.PRISMA_SLOW_QUERY_MS ?? '500', 10) || 500
+  );
+  client.$on('query', event => {
+    if (event.duration < slowQueryMs) return;
+    // Never log query parameters: they may contain credentials or user data.
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        event: 'prisma.slow_query',
+        durationMs: event.duration,
+        target: event.target,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  });
+  return client;
 };
 
 declare global {

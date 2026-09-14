@@ -3,9 +3,7 @@ import prisma from './prisma';
 import { incidentNotificationPriority } from './notification-priority';
 import { logger } from './logger';
 import { enqueueCentralNotification } from './notification-control-plane';
-import { formatWebhookPayloadByType, generateIncidentWebhookPayload } from './webhooks';
 import { getBaseUrl } from './env-validation';
-import { enqueueMicrosoftTeamsDelivery } from './microsoft-teams/delivery';
 
 export type ServiceNotificationEventType = 'triggered' | 'acknowledged' | 'resolved' | 'updated';
 
@@ -215,7 +213,13 @@ export async function sendServiceNotifications(
     }
 
     if (serviceChannels.includes('MICROSOFT_TEAMS' as never)) {
-      const teamsDestination = await (prisma as unknown as { microsoftTeamsDestination: { findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null> } }).microsoftTeamsDestination.findFirst({
+      const teamsDestination = await (
+        prisma as unknown as {
+          microsoftTeamsDestination: {
+            findFirst: (a: unknown) => Promise<{ id: string; enabled: boolean } | null>;
+          };
+        }
+      ).microsoftTeamsDestination.findFirst({
         where: { serviceId: service.id, enabled: true },
         orderBy: { updatedAt: 'desc' },
       } as never);
@@ -235,6 +239,7 @@ export async function sendServiceNotifications(
                 ? (incident.resolvedAt ?? incident.updatedAt)
                 : incident.updatedAt);
         const result = await persistIntent(async () => {
+          const { enqueueMicrosoftTeamsDelivery } = await import('./microsoft-teams/delivery');
           await enqueueMicrosoftTeamsDelivery({
             incidentId,
             destinationId: teamsDestination.id,
@@ -252,7 +257,10 @@ export async function sendServiceNotifications(
       const results = await Promise.all(
         service.webhookIntegrations.map(async webhook => {
           const result = await persistIntent(async () => {
-            const { decryptStoredSecret } = await import('./encryption');
+            const [{ decryptStoredSecret }, { formatWebhookPayloadByType }] = await Promise.all([
+              import('./encryption'),
+              import('./webhooks'),
+            ]);
             await enqueueCentralNotification({
               category: 'INCIDENT',
               channel: 'WEBHOOK',
@@ -299,8 +307,9 @@ export async function sendServiceNotifications(
     }
 
     if (service.webhookUrl && !serviceChannels.includes('WEBHOOK')) {
-      const result = await persistIntent(() =>
-        enqueueCentralNotification({
+      const result = await persistIntent(async () => {
+        const { generateIncidentWebhookPayload } = await import('./webhooks');
+        await enqueueCentralNotification({
           category: 'INCIDENT',
           channel: 'WEBHOOK',
           recipientType: 'WEBHOOK',
@@ -328,8 +337,8 @@ export async function sendServiceNotifications(
               targetAddress: service.webhookUrl!,
             },
           },
-        }).then(() => undefined)
-      );
+        });
+      });
       if (!result.success) errors.push(`Legacy webhook failed: ${result.error || 'Unknown error'}`);
     }
 

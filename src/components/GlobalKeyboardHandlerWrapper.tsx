@@ -1,31 +1,32 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import GlobalKeyboardHandler from './GlobalKeyboardHandler';
-import KeyboardShortcuts from './KeyboardShortcuts';
+
+const KeyboardShortcuts = dynamic(() => import('./KeyboardShortcuts'), { ssr: false });
 
 export default function GlobalKeyboardHandlerWrapper() {
-    const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-    // Memoize toggle handlers to prevent unnecessary re-renders
-    const handleToggle = useCallback(() => {
-        setShortcutsOpen(prev => !prev);
-    }, []);
+  // Memoize toggle handlers to prevent unnecessary re-renders
+  const handleToggle = useCallback(() => {
+    setShortcutsOpen(prev => !prev);
+  }, []);
 
-    const handleClose = useCallback(() => {
-        setShortcutsOpen(false);
-    }, []);
+  const handleClose = useCallback(() => {
+    setShortcutsOpen(false);
+  }, []);
 
-    useEffect(() => {
-        window.addEventListener('toggleKeyboardShortcuts', handleToggle);
-        return () => window.removeEventListener('toggleKeyboardShortcuts', handleToggle);
-    }, [handleToggle]);
+  useEffect(() => {
+    window.addEventListener('toggleKeyboardShortcuts', handleToggle);
+    return () => window.removeEventListener('toggleKeyboardShortcuts', handleToggle);
+  }, [handleToggle]);
 
-    return (
-        <>
-            <GlobalKeyboardHandler onShortcutsToggle={handleToggle} />
-            <KeyboardShortcuts isOpen={shortcutsOpen} onClose={handleClose} />
-        </>
-    );
+  return (
+    <>
+      <GlobalKeyboardHandler onShortcutsToggle={handleToggle} />
+      {shortcutsOpen && <KeyboardShortcuts isOpen onClose={handleClose} />}
+    </>
+  );
 }
-

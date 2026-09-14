@@ -16,6 +16,7 @@ import {
 import { authPrivacyDigest } from '@/lib/auth-abuse';
 import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
 
 export type SetPasswordState = {
   error?: string | null;
@@ -222,6 +223,8 @@ export async function setPassword(
     });
     return { error: 'Unable to activate the account right now. Please try again.' };
   }
+
+  invalidateSessionSecurityProjection(user.id);
 
   await logAudit({
     action: 'user.active',

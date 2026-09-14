@@ -6,6 +6,17 @@ import { SidebarProvider } from '@/contexts/SidebarContext';
 import BrandLockup from '@/components/layout/BrandLockup';
 import SidebarTrigger from '@/components/layout/SidebarTrigger';
 
+const mockRealtimeMetrics = vi.hoisted(() => ({ current: null as { active?: number } | null }));
+
+vi.mock('@/hooks/useRealtime', () => ({
+  useRealtime: () => ({
+    isConnected: true,
+    metrics: mockRealtimeMetrics.current,
+    recentIncidents: [],
+    error: null,
+  }),
+}));
+
 const mockMatchMedia = (matches: boolean) => {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -45,6 +56,7 @@ const renderWithProvider = (ui: React.ReactElement) => {
 
 describe('Sidebar', () => {
   beforeEach(() => {
+    mockRealtimeMetrics.current = null;
     mockMatchMedia(false);
     mockFetch();
     localStorage.clear();
@@ -154,5 +166,29 @@ describe('Sidebar', () => {
     );
 
     expect(screen.getByText('42')).toBeInTheDocument();
+  });
+
+  it('never fetches sidebar data on render', () => {
+    renderWithProvider(
+      <Sidebar userName="Alex Doe" userEmail="alex@example.com" userRole="ADMIN" />
+    );
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('renders status-page metadata supplied by the server shell', () => {
+    renderWithProvider(
+      <Sidebar
+        userName="Alex Doe"
+        userEmail="alex@example.com"
+        userRole="ADMIN"
+        initialStatusPages={[
+          { id: 'status-1', name: 'Public Status', slug: 'public', isDefault: false },
+        ]}
+        initialIsStatusPageAdmin
+      />
+    );
+
+    expect(screen.getByText('Public Status')).toBeInTheDocument();
   });
 });

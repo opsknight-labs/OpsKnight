@@ -322,7 +322,7 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('jwt callback refreshes security state even inside the historical TTL window', async () => {
+  it('jwt callback refreshes only the minimal security projection', async () => {
     const jwt = await getJwtCallback();
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       name: 'Updated User',
@@ -345,7 +345,11 @@ describe('Auth JWT + OIDC callback contract', () => {
 
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
     expect(token.role).toBe('ADMIN');
-    expect(token.email).toBe('updated@example.com');
+    expect(token.email).toBeUndefined();
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      select: { id: true, tokenVersion: true, status: true, role: true },
+    });
   });
 
   it('expires an OIDC session after the configured idle timeout', async () => {

@@ -1,9 +1,10 @@
 import 'server-only';
 
 import prisma from '@/lib/prisma';
+import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
 
 export async function removeTeamMembership(memberId: string) {
-  return prisma.$transaction(
+  const member = await prisma.$transaction(
     async tx => {
       const member = await tx.teamMember.findUnique({
         where: { id: memberId },
@@ -38,4 +39,6 @@ export async function removeTeamMembership(memberId: string) {
     },
     { isolationLevel: 'Serializable' }
   );
+  invalidateSessionSecurityProjection(member.userId);
+  return member;
 }

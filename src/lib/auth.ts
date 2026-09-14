@@ -27,15 +27,11 @@ import {
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
-
-/**
- * Security-sensitive user state is intentionally refreshed on every server-side
- * session evaluation. Password resets, deprovisioning and administrative
- * revocations must take effect immediately instead of inheriting a cache window.
- */
-function getJwtUserRefreshTtlMs() {
-  return 0;
-}
+import {
+  getSessionSecurityProjection,
+  invalidateSessionSecurityProjection,
+  resetSessionSecurityProjectionCache,
+} from '@/lib/session-security-projection';
 
 // Augmented types to avoid 'any' usage
 type AugmentedJWT = JWT & {
@@ -591,80 +587,58 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           if (token.sub && typeof token.sub === 'string') {
             const currentTokenVersion = (token as AugmentedJWT).tokenVersion;
-            const lastFetchedAt = (token as AugmentedJWT).userFetchedAt;
-            const ttlMs = getJwtUserRefreshTtlMs();
+            try {
+              const dbUser = await getSessionSecurityProjection(token.sub);
 
-            if (trigger !== 'update' && lastFetchedAt && Date.now() - lastFetchedAt < ttlMs) {
-              // Cached.
-            } else {
-              try {
-                const dbUser = await prisma.user.findUnique({
-                  where: { id: token.sub },
-                  select: {
-                    name: true,
-                    email: true,
-                    role: true,
-                    tokenVersion: true,
-                    status: true,
-                    avatarUrl: true,
-                    gender: true,
-                  },
+              if (dbUser) {
+                delete (token as AugmentedJWT).error;
+                const dbTokenVersion =
+                  typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
+                logger.debug('[Auth-Debug] User Check', {
+                  component: 'auth:jwt',
+                  dbId: token.sub,
+                  dbVer: dbTokenVersion,
+                  tokenVer: currentTokenVersion,
                 });
 
-                if (dbUser) {
-                  delete (token as AugmentedJWT).error;
-                  const dbTokenVersion =
-                    typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
-                  logger.debug('[Auth-Debug] User Check', {
-                    component: 'auth:jwt',
-                    dbId: token.sub,
-                    dbVer: dbTokenVersion,
-                    tokenVer: currentTokenVersion,
-                  });
-
-                  if (dbUser.status === 'DISABLED') {
-                    return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
-                  }
-
-                  if (
-                    typeof currentTokenVersion === 'number' &&
-                    dbTokenVersion !== currentTokenVersion
-                  ) {
-                    logger.warn('[Auth-Debug] REVOKING SESSION: Version Mismatch', {
-                      component: 'auth:jwt',
-                      db: dbTokenVersion,
-                      token: currentTokenVersion,
-                    });
-                    return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
-                  }
-
-                  token.name = dbUser.name;
-                  token.email = dbUser.email;
-                  token.role = dbUser.role;
-                  token.avatarUrl = dbUser.avatarUrl;
-                  token.gender = dbUser.gender;
-                  (token as AugmentedJWT).tokenVersion = dbTokenVersion;
-                } else {
-                  logger.warn('[Auth] User NOT FOUND in database; invalidating session', {
-                    component: 'auth:jwt',
-                    id: token.sub,
-                  });
-                  return clearSessionToken(token as AugmentedJWT, 'USER_NOT_FOUND');
+                if (dbUser.status === 'DISABLED') {
+                  return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
                 }
-              } catch (error) {
-                logger.error('[Auth] User DB verification failed; failing closed', {
+
+                if (
+                  typeof currentTokenVersion === 'number' &&
+                  dbTokenVersion !== currentTokenVersion
+                ) {
+                  logger.warn('[Auth-Debug] REVOKING SESSION: Version Mismatch', {
+                    component: 'auth:jwt',
+                    db: dbTokenVersion,
+                    token: currentTokenVersion,
+                  });
+                  return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
+                }
+
+                token.role = dbUser.role;
+                (token as AugmentedJWT).tokenVersion = dbTokenVersion;
+              } else {
+                logger.warn('[Auth] User NOT FOUND in database; invalidating session', {
                   component: 'auth:jwt',
                   id: token.sub,
-                  error,
                 });
-                // Availability tradeoff: Flag error so protected requests fail closed (session.user is cleared),
-                // but preserve token.sub and credentials so temporary DB connectivity glitches don't permanently
-                // overwrite the user's cookie and destroy valid sessions.
-                (token as AugmentedJWT).error = 'SECURITY_LOOKUP_UNAVAILABLE';
-                return token;
+                return clearSessionToken(token as AugmentedJWT, 'USER_NOT_FOUND');
               }
-              (token as AugmentedJWT).userFetchedAt = Date.now();
+            } catch (error) {
+              logger.error('[Auth] User DB verification failed; failing closed', {
+                component: 'auth:jwt',
+                id: token.sub,
+                error,
+              });
+              // Availability tradeoff: Flag error so protected requests fail closed (session.user is cleared),
+              // but preserve token.sub and credentials so temporary DB connectivity glitches don't permanently
+              // overwrite the user's cookie and destroy valid sessions.
+              (token as AugmentedJWT).error = 'SECURITY_LOOKUP_UNAVAILABLE';
+              return token;
             }
+            (token as AugmentedJWT).userFetchedAt = Date.now();
           } else {
             logger.debug('[Auth-Debug] No token.sub found!', { component: 'auth:jwt', token });
           }
@@ -962,10 +936,12 @@ export async function revokeUserSessions(userId: string) {
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
   });
+  invalidateSessionSecurityProjection(userId);
 }
 
 /** Internal helper to reset the auth options cache. Intended for tests only. */
 export function resetAuthOptionsCache() {
   authOptionsCache = undefined;
   authOptionsInFlight = undefined;
+  resetSessionSecurityProjectionCache();
 }

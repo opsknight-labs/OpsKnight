@@ -217,6 +217,14 @@ export async function getCachedDashboardMetrics(
           (group.status === 'OPEN' || group.status === 'ACKNOWLEDGED') && group.urgency === 'HIGH'
       )
       .reduce((sum, group) => sum + group._count._all, 0);
+    const urgencyCount = (urgency: string) =>
+      statusGroups
+        .filter(
+          group =>
+            (group.status === 'OPEN' || group.status === 'ACKNOWLEDGED') &&
+            group.urgency === urgency
+        )
+        .reduce((sum, group) => sum + group._count._all, 0);
     const unassigned = await prisma.incident.count({
       where: { AND: [scope, { status: { in: ['OPEN', 'ACKNOWLEDGED'] }, assigneeId: null }] },
     });
@@ -226,6 +234,8 @@ export async function getCachedDashboardMetrics(
       acknowledged,
       resolved: resolved24h,
       critical,
+      mediumUrgency: urgencyCount('MEDIUM'),
+      lowUrgency: urgencyCount('LOW'),
       active,
       snoozed,
       suppressed,
