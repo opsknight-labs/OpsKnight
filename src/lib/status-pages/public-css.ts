@@ -1558,38 +1558,22 @@ ${R} .status-v3-hero__stats .status-stat__label {
   font-size: .62rem; font-weight: 650; letter-spacing: .07em; text-transform: uppercase;
   color: var(--status-text-subtle); line-height: 1.2; margin: 0;
 }
-${R} .status-v3-hero__stats .status-stat__value-row {
-  display: inline-flex; align-items: baseline; gap: .5rem; margin: 0; flex-wrap: wrap;
-}
 ${R} .status-v3-hero__stats .status-stat__value {
   font-family: 'Space Grotesk', Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: 1.35rem; font-weight: 700; letter-spacing: -.03em;
   font-variant-numeric: tabular-nums; color: var(--status-text-strong); line-height: 1.15; margin: 0;
 }
-${R} .status-v3-hero__stats .status-stat__badge {
-  display: inline-flex; align-items: center; gap: .3rem;
-  padding: .15rem .5rem; border-radius: 999px;
-  font-size: .6875rem; font-weight: 600; line-height: 1.2;
-  background: color-mix(in srgb, var(--status-text-muted) 12%, transparent);
-  color: var(--status-text-muted);
-}
-${R} .status-v3-hero__stats .status-stat__badge-dot {
-  inline-size: .375rem; block-size: .375rem; border-radius: 999px; background: currentColor; flex: none;
-}
-${R} .status-v3-hero__stats .status-stat__badge--danger {
-  background: color-mix(in srgb, var(--status-major, #ef4444) 12%, transparent);
+${R} .status-v3-hero__stats .status-stat--danger .status-stat__label {
   color: var(--status-major, #ef4444);
-  border: 1px solid color-mix(in srgb, var(--status-major, #ef4444) 25%, transparent);
 }
-${R} .status-v3-hero__stats .status-stat__badge--warning {
-  background: color-mix(in srgb, var(--status-maintenance, #f59e0b) 12%, transparent);
+${R} .status-v3-hero__stats .status-stat--danger .status-stat__value {
+  color: var(--status-major, #ef4444);
+}
+${R} .status-v3-hero__stats .status-stat--warning .status-stat__label {
   color: var(--status-maintenance, #f59e0b);
-  border: 1px solid color-mix(in srgb, var(--status-maintenance, #f59e0b) 25%, transparent);
 }
-${R} .status-v3-hero__stats .status-stat__badge--success {
-  background: color-mix(in srgb, var(--status-operational, #10b981) 12%, transparent);
-  color: var(--status-operational, #10b981);
-  border: 1px solid color-mix(in srgb, var(--status-operational, #10b981) 25%, transparent);
+${R} .status-v3-hero__stats .status-stat--warning .status-stat__value {
+  color: var(--status-maintenance, #f59e0b);
 }
 ${R} .status-v3-hero__stats .status-stat__hint { font-size: .72rem; color: var(--status-text-muted); }
 @media (min-width: 52rem) {

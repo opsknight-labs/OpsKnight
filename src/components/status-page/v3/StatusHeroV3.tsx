@@ -25,14 +25,17 @@ export default function StatusHeroV3({
     {
       label: 'Services',
       value: overall.totalServiceCount,
-      hint:
-        impacted != null
-          ? impacted === 0
-            ? 'all operational'
-            : `${impacted} affected`
-          : undefined,
-      tone: impacted != null ? (impacted > 0 ? 'danger' : 'success') : 'default',
+      tone: 'default',
     },
+    ...(impacted != null && impacted > 0
+      ? [
+          {
+            label: impacted === 1 ? 'Affected service' : 'Affected services',
+            value: impacted,
+            tone: 'danger' as const,
+          },
+        ]
+      : []),
     {
       label: 'Active incidents',
       value: overall.activeIncidentCount,
@@ -87,21 +90,15 @@ export default function StatusHeroV3({
       {visibleStats.length > 0 && (
         <dl className="status-v3-hero__stats">
           {visibleStats.map(stat => (
-            <div key={stat.label} className="status-stat">
+            <div
+              key={stat.label}
+              className={`status-stat${
+                stat.tone && stat.tone !== 'default' ? ` status-stat--${stat.tone}` : ''
+              }`}
+            >
               <dt className="status-stat__label">{stat.label}</dt>
-              <dd className="status-stat__value-row">
-                <span className="status-stat__value">{stat.value}</span>
-                {stat.hint && (
-                  <span
-                    className={`status-stat__badge ${
-                      stat.tone ? `status-stat__badge--${stat.tone}` : ''
-                    }`}
-                  >
-                    <span className="status-stat__badge-dot" aria-hidden="true" />
-                    {stat.hint}
-                  </span>
-                )}
-              </dd>
+              <dd className="status-stat__value">{stat.value}</dd>
+              {stat.hint && <dd className="status-stat__hint">{stat.hint}</dd>}
             </div>
           ))}
         </dl>
