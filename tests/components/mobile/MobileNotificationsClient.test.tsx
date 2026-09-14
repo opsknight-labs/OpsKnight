@@ -40,7 +40,8 @@ describe('MobileNotificationsClient', () => {
     expect(await screen.findByText('API Down')).toBeInTheDocument();
     expect(screen.getByText('Payments service is down.')).toBeInTheDocument();
     expect(screen.getByText('Today')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open API Down' })).toBeInTheDocument();
+    // MobileNotificationsClient now renders a Link to the incident detail instead of a button
+    expect(screen.getByRole('link', { name: /API Down/i })).toBeInTheDocument();
   });
 
   it('marks all notifications as read', async () => {
@@ -109,7 +110,8 @@ describe('MobileNotificationsClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Unread' }));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenLastCalledWith('/api/notifications?unreadOnly=true');
+      const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+      expect(lastCall[0]).toBe('/api/notifications?unreadOnly=true');
     });
   });
 

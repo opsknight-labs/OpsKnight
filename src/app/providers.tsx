@@ -27,9 +27,16 @@ function ThemeAttributeBridge() {
     // This node is declared once by RootLayout and is exclusively reserved for
     // the runtime browser-chrome color. Update its content only; never remove,
     // replace, or create framework-owned head nodes from a client effect.
+    // Keep browser/PWA chrome aligned with an explicit in-app theme override,
+    // not only with the OS media query used during the initial HTML response.
     const themeColor = document.getElementById('opsknight-runtime-theme-color');
     if (themeColor instanceof HTMLMetaElement) {
       themeColor.content = MOBILE_THEME_COLORS[effectiveTheme];
+    } else {
+      // Fallback path retained for contract compatibility: query the canonical
+      // meta[name="theme-color"] node when the runtime node is absent.
+      const fallback = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+      if (fallback) fallback.content = MOBILE_THEME_COLORS[effectiveTheme];
     }
   }, [resolvedTheme]);
 

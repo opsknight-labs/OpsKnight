@@ -42,7 +42,7 @@ export default function MobileBiometricToggle() {
           challenge: crypto.getRandomValues(new Uint8Array(32)),
           rp: { name: 'OpsKnight' },
           user: {
-            id: getOrCreateAppLockUserHandle(),
+            id: getOrCreateAppLockUserHandle() as unknown as BufferSource,
             name: 'opsknight-responder',
             displayName: 'OpsKnight responder',
           },
