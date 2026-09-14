@@ -1,7 +1,12 @@
 import crypto from 'node:crypto';
 import { Prisma, type NotificationChannel, type NotificationTrafficClass } from '@prisma/client';
 import prisma from './prisma';
-import { getEffectiveCapacity, recordCapacityPressure } from './notification-capacity/resolver';
+import { defaultRate, defaultInFlight } from './notification-capacity/defaults';
+import {
+  getEffectiveCapacity,
+  recordCapacityPressure,
+  type EffectiveCapacityConfig,
+} from './notification-capacity/resolver';
 import { usesBulkCapacity } from './provider-capacity';
 import { logger } from './logger';
 
@@ -238,10 +243,33 @@ export async function acquireProviderAdmission(
   if (cooldown?.expiresAt && cooldown.expiresAt > now) {
     return { allowed: false, retryAt: cooldown.expiresAt, reason: 'RATE_LIMITED' };
   }
-  const capacity = await getEffectiveCapacity({
-    channel: scope as unknown as NotificationChannel,
-    provider: providerKey,
-  });
+  let capacity: EffectiveCapacityConfig;
+  try {
+    capacity = await getEffectiveCapacity({
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+    });
+  } catch (capError) {
+    const cause = capError instanceof Error ? capError.message : String(capError);
+    if (!isProviderAdmissionTestEnv()) {
+      return tryEmergencyRateAdmission(scope, providerKey, now, trafficClass, cause);
+    }
+    capacity = {
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+      mode: 'AUTO',
+      source: 'DEFAULT',
+      configuredRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+      effectiveRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+      bulkRatePerSecond: 1,
+      maxInFlight: defaultInFlight(scope as unknown as NotificationChannel),
+      bulkMaxInFlight: 1,
+      adaptiveBackpressure: false,
+      quotaBlockSize: 100,
+      bulkShare: 0.8,
+      revision: null,
+    };
+  }
   const bulk = usesBulkCapacity(trafficClass);
   const cacheKey = `${bucket}:${bulk ? 'bulk' : 'global'}`;
   const cached = localQuota.get(cacheKey);
@@ -359,16 +387,64 @@ export async function acquireProviderConcurrency(
   now: Date = new Date(),
   trafficClass?: NotificationTrafficClass
 ): Promise<ProviderConcurrencyResult> {
-  sweepExpiredConcurrencyClaims(now.getTime());
-  const config = await getEffectiveCapacity({
-    channel: scope as unknown as NotificationChannel,
-    provider: providerKey,
-  });
   const bulk = usesBulkCapacity(trafficClass);
   const lane = bulk ? 'bulk' : 'reserved';
   const physicalPoolKey = `${scope}:${providerKey}`;
   const poolKey = `${physicalPoolKey}:${lane}`;
   const leaseOwner = `${WORKER_ID}:${lane}`.slice(0, 240);
+
+  let config: EffectiveCapacityConfig;
+  try {
+    config = await getEffectiveCapacity({
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+    });
+  } catch (capError) {
+    const cause = capError instanceof Error ? capError.message : String(capError);
+    if (isProviderAdmissionTestEnv()) {
+      config = {
+        channel: scope as unknown as NotificationChannel,
+        provider: providerKey,
+        mode: 'AUTO',
+        source: 'DEFAULT',
+        configuredRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+        effectiveRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+        bulkRatePerSecond: 1,
+        maxInFlight: defaultInFlight(scope as unknown as NotificationChannel),
+        bulkMaxInFlight: 1,
+        adaptiveBackpressure: false,
+        quotaBlockSize: 100,
+        bulkShare: 0.8,
+        revision: null,
+      };
+    } else {
+      const emergencySlots = bulk ? 0 : (EMERGENCY_CONCURRENCY[scope] ?? 1);
+      logger.error('provider_admission.capacity_resolution_db_failed', {
+        scope,
+        providerKey,
+        cause,
+        emergencySlots,
+      });
+      if (emergencySlots === 0) {
+        return {
+          allowed: false,
+          retryAt: new Date(now.getTime() + 5_000),
+          reason: 'CONTROL_PLANE_UNAVAILABLE',
+          cause: `Capacity resolution DB failed: ${cause}`,
+        };
+      }
+      local = {
+        reserved: emergencySlots,
+        active: 0,
+        expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+      };
+      localConcurrency.set(poolKey, local);
+      local.active += 1;
+      const leaseKey = `${poolKey}:${crypto.randomUUID()}`;
+      concurrencyClaims.set(leaseKey, { poolKey, expiresAt: now.getTime() + PROVIDER_LEASE_MS });
+      return { allowed: true, leaseKey };
+    }
+  }
   const laneCeiling = bulk ? config.bulkMaxInFlight : config.maxInFlight;
 
   let local = localConcurrency.get(poolKey);
@@ -491,6 +567,58 @@ export async function acquireProviderConcurrency(
   // admitting against the old, larger reserved value for up to PROVIDER_LEASE_MS.
   // DB rows expire conservatively; the local check shrinks immediately.
   local.reserved = Math.min(local.reserved, laneCeiling);
+
+  // Concurrency expansion (Gate 6):
+  // If active demand has exhausted the current reservation but laneCeiling allows more,
+  // attempt to expand the lease immediately rather than stalling until lease expiration.
+  if (local.active >= local.reserved && local.reserved < laneCeiling) {
+    const concQuery = safePrisma.$queryRaw;
+    if (concQuery && !isProviderAdmissionTestEnv()) {
+      try {
+        const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
+        const expandRequested = Math.min(laneCeiling, local.active + 2);
+        const rows = (await concQuery(Prisma.sql`
+          WITH lock AS (
+            SELECT pg_advisory_xact_lock(hashtextextended(${`provider-slots:${physicalPoolKey}`}, 0))
+          ), available AS (
+            SELECT GREATEST(0, ${laneCeiling} - COALESCE(SUM("reservedSlots"), 0))::integer AS slots
+            FROM "ProviderWorkerLease", lock
+            WHERE "providerKey" = ${providerKey} AND "channel" = ${scope}
+              AND "expiresAt" > ${now} AND "workerId" <> ${leaseOwner}
+          )
+          INSERT INTO "ProviderWorkerLease"
+            ("id", "workerId", "providerKey", "channel", "reservedSlots", "expiresAt", "heartbeatAt", "updatedAt")
+          SELECT ${id}, ${leaseOwner}, ${providerKey}, ${scope}, LEAST(${expandRequested}, slots),
+                 ${new Date(now.getTime() + PROVIDER_LEASE_MS)}, ${now}, ${now}
+          FROM available
+          ON CONFLICT ("id") DO UPDATE SET
+            "reservedSlots" = EXCLUDED."reservedSlots",
+            "expiresAt" = EXCLUDED."expiresAt",
+            "heartbeatAt" = EXCLUDED."heartbeatAt",
+            "updatedAt" = EXCLUDED."updatedAt"
+          RETURNING "reservedSlots" AS reserved;
+        `)) as Array<{ reserved: number | null }> | null;
+        const expanded = rows?.[0]?.reserved ?? 0;
+        if (expanded > local.reserved) {
+          local.reserved = expanded;
+          local.expiresAt = now.getTime() + PROVIDER_LEASE_MS;
+          logger.debug('provider_admission.concurrency_expanded', {
+            scope,
+            providerKey,
+            newReserved: expanded,
+            laneCeiling,
+          });
+        }
+      } catch (err) {
+        logger.warn('provider_admission.concurrency_expansion_failed', {
+          scope,
+          providerKey,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
   if (local.active >= local.reserved) {
     return {
       allowed: false,

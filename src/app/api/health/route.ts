@@ -64,12 +64,12 @@ export async function GET(request: NextRequest) {
         latency: Date.now() - certStartTime,
       };
     } catch (certError) {
+      logger.error('health.notification_control_plane_unhealthy', {
+        error: certError instanceof Error ? certError.message : String(certError),
+      });
       checks.notificationControlPlane = {
         status: 'unhealthy',
-        error:
-          certError instanceof Error
-            ? certError.message
-            : 'Control-plane tables missing or unmigrated',
+        error: 'Notification control plane unavailable',
       };
     }
 
@@ -170,7 +170,9 @@ export async function GET(request: NextRequest) {
 
   const criticalFailure =
     mode === 'readiness'
-      ? checks.database?.status === 'unhealthy'
+      ? checks.database?.status === 'unhealthy' ||
+        (Boolean(responsibilities.startJobWorker) &&
+          checks.notificationControlPlane?.status === 'unhealthy')
       : readinessChecks.some(check => check.status === 'unhealthy');
 
   const anyDegraded = readinessChecks.some(check => check.status === 'degraded');

@@ -93,7 +93,7 @@ jobs:
 
       - name: Run Android and iPhone browser contracts
         run: >-
-          npx playwright test tests/e2e/mobile-pwa.spec.ts
+          npx playwright test tests/e2e/mobile-pwa.spec.ts tests/e2e/mobile-responsive-matrix.spec.ts
           --project=mobile-chromium
           --project=mobile-webkit
 

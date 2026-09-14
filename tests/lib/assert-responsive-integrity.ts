@@ -200,7 +200,11 @@ export async function checkResponsiveIntegrity(
         const isInteractive =
           tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT';
         const isHeading = /^H[1-6]$/.test(tag);
-        return isInteractive || isHeading;
+        const isTextOrBadge =
+          tag === 'P' ||
+          (tag === 'SPAN' && (el.classList.contains('badge') || el.hasAttribute('role'))) ||
+          el.hasAttribute('data-badge');
+        return isInteractive || isHeading || isTextOrBadge;
       });
 
       for (let i = 0; i < collisionCandidates.length; i++) {

@@ -131,14 +131,17 @@ describe('API Route - Notifications Test Push', () => {
   it('returns retryable provider unavailable when delivery fails but subscription remains', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
-    vi.mocked(prisma.userDevice.count).mockResolvedValue(1);
+    vi.mocked(prisma.userDevice.findFirst).mockResolvedValue({
+      id: 'dev-1',
+      deviceId: 'key:https://example.com/push/abc',
+    } as never);
     vi.mocked(enqueueCentralNotification).mockResolvedValue({
       id: 'notification_test',
       created: true,
       delivered: false,
     });
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest({ endpoint: 'https://example.com/push/abc' }));
     const body = await res.json();
 
     expect(res.status).toBe(503);
@@ -146,20 +149,25 @@ describe('API Route - Notifications Test Push', () => {
     expect(body.retryable).toBe(true);
   });
 
-  it('returns non-retryable validation when a failed send removes the expired subscription', async () => {
+  it('returns 410 non-retryable validation when a failed send removes the expired subscription', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
-    vi.mocked(prisma.userDevice.count).mockResolvedValueOnce(1).mockResolvedValueOnce(0);
+    vi.mocked(prisma.userDevice.findFirst)
+      .mockResolvedValueOnce({
+        id: 'dev-1',
+        deviceId: 'key:https://example.com/push/abc',
+      } as never)
+      .mockResolvedValueOnce(null);
     vi.mocked(enqueueCentralNotification).mockResolvedValue({
       id: 'notification_test',
       created: true,
       delivered: false,
     });
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest({ endpoint: 'https://example.com/push/abc' }));
     const body = await res.json();
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(410);
     expect(body.code).toBe('VALIDATION_FAILED');
     expect(body.retryable).toBe(false);
   });

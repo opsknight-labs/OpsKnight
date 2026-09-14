@@ -341,23 +341,37 @@ export default function PushNotificationToggle() {
         REQUEST_TIMEOUT_MS
       );
       if (!response.ok) {
-        const errorData = (await response.json().catch(() => null)) as {
-          error?: { code?: string; userMessage?: string; details?: { reason?: string } };
-        } | null;
-        const reason = errorData?.error?.details?.reason;
+        const rawText = await response.text().catch(() => '');
+        let errorData: Record<string, unknown> | null = null;
+        try {
+          errorData = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : null;
+        } catch {}
+        const reason =
+          (typeof errorData?.reason === 'string' ? errorData.reason : undefined) ??
+          (typeof (errorData?.details as Record<string, unknown> | undefined)?.reason === 'string'
+            ? (errorData?.details as Record<string, unknown>).reason
+            : undefined);
+        const code = typeof errorData?.code === 'string' ? errorData.code : undefined;
+        const message =
+          (typeof errorData?.error === 'string' ? errorData.error : undefined) ??
+          (typeof errorData?.message === 'string' ? errorData.message : undefined) ??
+          'Failed to send test Push.';
+
         if (
           response.status === 410 ||
+          response.status === 404 ||
           reason === 'PUSH_SUBSCRIPTION_EXPIRED' ||
-          reason === 'PUSH_NO_SUBSCRIPTION'
+          reason === 'PUSH_NO_SUBSCRIPTION' ||
+          code === 'RESOURCE_NOT_FOUND'
         ) {
           setPushState('REPAIR_REQUIRED');
           setError('Push subscription on this device has expired. Tap Repair to restore.');
           return;
         }
-        throw await errorFromResponse(response, 'Failed to send test Push.');
+        throw new Error(message);
       }
-      const data = (await response.json()) as { message?: string };
-      setTestMessage(data.message || 'Test Push sent successfully to this device.');
+      const data = (await response.json().catch(() => null)) as { message?: string } | null;
+      setTestMessage(data?.message || 'Test Push sent successfully to this device.');
     } catch (testError) {
       logger.warn('push.test_failed', { component: 'PushNotificationToggle', error: testError });
       setTestMessage(displayError(testError, 'Failed to send test Push.'));

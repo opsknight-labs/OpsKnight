@@ -178,18 +178,24 @@ export async function POST(request: Request) {
     });
 
     if (!result.delivered) {
-      const remainingDevices = await prisma.userDevice.count({
-        where: { userId: user.id, platform: 'web' },
+      const targetDeviceStillExists = await prisma.userDevice.findFirst({
+        where: { userId: user.id, deviceId: targetDeviceId, platform: 'web' },
+        select: { id: true },
       });
-      if (remainingDevices === 0) {
+      if (!targetDeviceStillExists) {
         return jsonError(
           new AppError({
             code: 'VALIDATION_FAILED',
-            userMessage: 'The saved push subscription is no longer valid.',
+            userMessage: 'The saved push subscription on this device has expired.',
             action: 'Enable push notifications again on this device and retry.',
             retryable: false,
-            details: { provider: 'web-push', reason: 'PUSH_SUBSCRIPTION_EXPIRED' },
-          })
+            details: {
+              provider: 'web-push',
+              reason: 'PUSH_SUBSCRIPTION_EXPIRED',
+              targetDeviceId,
+            },
+          }),
+          410
         );
       }
 

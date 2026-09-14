@@ -249,4 +249,41 @@ describe('sendPush', () => {
       expect.objectContaining({ targetId: 'device-2', deliveryKey: 'intent-1' })
     );
   });
+
+  it('preserves provider Retry-After from WebPushProviderError', async () => {
+    vi.mocked(getPushConfig).mockResolvedValue({
+      enabled: true,
+      provider: 'web-push',
+      vapidPublicKey: 'public-key',
+      vapidPrivateKey: 'private-key',
+      vapidSubject: 'mailto:test@example.com',
+    });
+    vi.mocked(prisma.userDevice.findMany).mockResolvedValue([
+      {
+        id: 'device-1',
+        deviceId: 'device-1',
+        token: JSON.stringify({
+          endpoint: 'https://example.com/device-1',
+          keys: { p256dh: 'p256', auth: 'auth' },
+        }),
+        platform: 'web',
+      },
+    ] as unknown as Awaited<ReturnType<typeof prisma.userDevice.findMany>>);
+
+    // Provider returns 429 with explicit Retry-After: "7"
+    vi.mocked(sendWebPushSafely).mockRejectedValueOnce(
+      new WebPushProviderError('Too Many Requests', 429, '7')
+    );
+
+    const res = await sendPush({
+      userId: 'user-1',
+      title: 'Incident',
+      body: 'Rate limited test',
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.statusCode).toBe(429);
+    expect(res.retryAfterMs).toBe(7000);
+    expect(res.failures?.[0]?.retryAfterMs).toBe(7000);
+  });
 });

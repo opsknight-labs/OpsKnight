@@ -39,6 +39,7 @@ interface JobWorkerSharedState {
   startedAt: Date | null;
   lastError: string | null;
   workerLane: JobWorkerLane;
+  controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
 }
 
 declare global {
@@ -55,6 +56,7 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   startedAt: null,
   lastError: null,
   workerLane: 'all',
+  controlPlaneState: 'UNINITIALIZED',
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -167,6 +169,12 @@ async function runOnce(): Promise<void> {
     }
 
     if (workerState.workerLane === 'bulk') {
+      if (workerState.controlPlaneState === 'EMERGENCY_LOCAL') {
+        logger.warn('[JobWorker] Bulk lane paused during EMERGENCY_LOCAL control plane state');
+        workerState.lastError = 'Bulk lane paused: control plane in EMERGENCY_LOCAL state';
+        scheduleNextRun(withIdleJitter(workerState.workerConfig.idlePollMs));
+        return;
+      }
       const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
       if (await isBulkNotificationDeliveryPaused()) {
         workerState.lastSuccessAt = new Date();
@@ -325,21 +333,26 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
     lane: workerState.workerLane,
   });
 
-  // Certify notification control-plane tables at worker boot
+  // Certify notification control-plane tables at worker boot before polling
   void (async () => {
     try {
       const { certifyNotificationControlPlane } = await import('./provider-admission');
       await certifyNotificationControlPlane();
+      workerState.controlPlaneState = 'HEALTHY';
       logger.info('[JobWorker] Control plane startup certification passed');
+      scheduleNextRun(0);
     } catch (certError) {
       const msg = certError instanceof Error ? certError.message : String(certError);
+      workerState.controlPlaneState = 'EMERGENCY_LOCAL';
       workerState.lastError = `Control plane startup certification failed: ${msg}`;
-      logger.error('[JobWorker] Control plane startup certification failed', { error: msg });
+      logger.error(
+        '[JobWorker] Control plane startup certification failed; entering EMERGENCY_LOCAL mode',
+        { error: msg }
+      );
+      // In EMERGENCY_LOCAL mode, avoid immediate hot polling; start with idle jitter
+      scheduleNextRun(withIdleJitter(workerState.workerConfig?.idlePollMs ?? 5_000));
     }
   })();
-
-  // Start immediately. Subsequent iterations are paced based on queue activity.
-  scheduleNextRun(0);
 }
 
 /**
@@ -381,5 +394,6 @@ export function getJobWorkerStatus() {
     lastError: workerState.lastError,
     config: workerState.workerConfig ? { ...workerState.workerConfig } : null,
     lane: workerState.workerLane,
+    controlPlaneState: workerState.controlPlaneState,
   };
 }

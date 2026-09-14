@@ -303,4 +303,53 @@ describe('P0: provider concurrency control-plane', () => {
       expect(admission.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
     }
   });
+
+  // ─── Test 13 ───────────────────────────────────────────────────────────────
+  // GATE 1: Complete PostgreSQL outage: when capacityFindUnique, runtimeFindUnique,
+  // and $queryRaw all throw (e.g. total database partition after cache expiry),
+  // TRANSACTIONAL traffic must STILL successfully enter emergency mode without crashing.
+  it('[P0-13] Full DB outage: emergency mode entered even when getEffectiveCapacity and $queryRaw both fail', async () => {
+    resetCapacityResolverForTests();
+    resetProviderAdmissionForTests();
+    forceProductionModeForTests();
+
+    // Total database outage: all Prisma reads throw
+    const dbOutageError = new Error("Can't reach database server at postgres:5432");
+    mocks.capacityFindUnique.mockRejectedValue(dbOutageError);
+    mocks.runtimeFindUnique.mockRejectedValue(dbOutageError);
+    mocks.queryRaw.mockRejectedValue(dbOutageError);
+
+    // 1. acquireProviderAdmission for TRANSACTIONAL must gracefully admit under emergency rate limit
+    const admission = await acquireProviderAdmission(
+      'PUSH',
+      'web-push',
+      new Date(),
+      'TRANSACTIONAL'
+    );
+    expect(admission.allowed).toBe(true);
+
+    // 2. acquireProviderConcurrency for TRANSACTIONAL must gracefully admit under emergency concurrency slots
+    const concurrency = await acquireProviderConcurrency(
+      'PUSH',
+      'web-push',
+      new Date(),
+      'TRANSACTIONAL'
+    );
+    expect(concurrency.allowed).toBe(true);
+    expect(concurrency.leaseKey).toBeDefined();
+
+    // 3. BULK traffic must pause closed under full outage
+    const bulkAdmission = await acquireProviderAdmission('PUSH', 'web-push', new Date(), 'BULK');
+    expect(bulkAdmission.allowed).toBe(false);
+    expect(bulkAdmission.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+
+    const bulkConcurrency = await acquireProviderConcurrency(
+      'PUSH',
+      'web-push',
+      new Date(),
+      'BULK'
+    );
+    expect(bulkConcurrency.allowed).toBe(false);
+    expect(bulkConcurrency.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+  });
 });

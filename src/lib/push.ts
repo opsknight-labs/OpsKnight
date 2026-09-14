@@ -92,6 +92,21 @@ function statusCode(error: unknown) {
   return error instanceof WebPushProviderError ? error.statusCode : undefined;
 }
 
+function parseRetryAfterMs(raw: unknown): number | undefined {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  const trimmed = raw.trim();
+  const deltaSec = Number(trimmed);
+  if (Number.isFinite(deltaSec) && deltaSec > 0) {
+    return deltaSec * 1000;
+  }
+  const dateMs = Date.parse(trimmed);
+  if (!Number.isNaN(dateMs)) {
+    const remainingMs = dateMs - Date.now();
+    return Math.max(1000, remainingMs);
+  }
+  return undefined;
+}
+
 function isRestrictedDestinationError(error: unknown) {
   return /restricted network|HTTPS is required|credentials are not allowed/i.test(
     errorMessage(error)
@@ -374,17 +389,21 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
                   : isTimeout
                     ? 'PUSH_DELIVERY_TIMEOUT'
                     : 'PUSH_NETWORK_FAILURE';
-            const headerVal =
-              typeof (error as { headers?: { get?: (h: string) => string | null } })?.headers
-                ?.get === 'function'
-                ? (error as { headers: { get: (h: string) => string | null } }).headers.get(
-                    'retry-after'
-                  )
-                : undefined;
-            const parsedSec = headerVal ? Number(headerVal) : NaN;
+            const rawRetryAfter =
+              error instanceof WebPushProviderError
+                ? error.retryAfter
+                : typeof (error as { retryAfter?: string | null })?.retryAfter === 'string'
+                  ? (error as { retryAfter: string }).retryAfter
+                  : typeof (error as { headers?: { get?: (h: string) => string | null } })?.headers
+                        ?.get === 'function'
+                    ? (error as { headers: { get: (h: string) => string | null } }).headers.get(
+                        'retry-after'
+                      )
+                    : undefined;
+            const parsedRetryAfterMs = parseRetryAfterMs(rawRetryAfter);
             const providerRetryAfterMs =
-              Number.isFinite(parsedSec) && parsedSec > 0
-                ? parsedSec * 1000
+              parsedRetryAfterMs !== undefined
+                ? parsedRetryAfterMs
                 : code === 429
                   ? 60_000
                   : undefined;
