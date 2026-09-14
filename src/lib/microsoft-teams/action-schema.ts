@@ -20,6 +20,7 @@ const context = z.object({
   incidentId: z.string().trim().min(1).max(191),
   destinationId: z.string().trim().min(1).max(191),
   messageGeneration: z.coerce.number().int().positive(),
+  warRoomId: z.string().trim().min(1).max(191).optional(),
 }).strict();
 
 const schemas = {
