@@ -140,12 +140,7 @@ const ServiceRow = memo(function ServiceRow({
         </div>
         <div className="status-v3-service__badges">
           {slaGrade && (
-            <StatusBadge
-              status={slaGrade}
-              label={slaGradeLabel(slaGrade)}
-              size="xs"
-              showDot
-            />
+            <StatusBadge status={slaGrade} label={slaGradeLabel(slaGrade)} size="xs" showDot />
           )}
           <StatusBadge
             status={service.status}
@@ -183,7 +178,12 @@ const ServiceList = memo(function ServiceList({
   return (
     <div className="status-v3-services__list" role="list">
       {services.map(service => (
-        <ServiceRow key={service.id} service={service} timeZone={timeZone} showUptime={showUptime} />
+        <ServiceRow
+          key={service.id}
+          service={service}
+          timeZone={timeZone}
+          showUptime={showUptime}
+        />
       ))}
     </div>
   );
@@ -266,17 +266,12 @@ export default function ServiceHealthV3({
     <section className="status-v3-services" aria-labelledby="status-v3-services-heading">
       <div className="status-v3-services__top-row">
         <div className="status-v3-services__title-group">
-          <h2 id="status-v3-services-heading" className="status-section-title status-v3-services__title">
+          <h2
+            id="status-v3-services-heading"
+            className="status-section-title status-v3-services__title"
+          >
             Services
           </h2>
-          <span
-            className="status-v3-services__tally-pill"
-            aria-label={`${filtered.length} of ${services.length} services`}
-          >
-            {filtered.length === services.length
-              ? `${services.length} total`
-              : `${filtered.length} of ${services.length}`}
-          </span>
         </div>
 
         <div className="status-v3-services__right-group">
@@ -300,53 +295,11 @@ export default function ServiceHealthV3({
             <input
               type="search"
               placeholder="Search services"
+              aria-label={`Search ${services.length} services`}
               value={query}
               onChange={event => setQuery(event.target.value)}
             />
           </div>
-
-          <label htmlFor="status-v3-sort-select" className="sr-only">
-            Sort services
-          </label>
-          <select
-            id="status-v3-sort-select"
-            className="status-v3-services__sort-select"
-            aria-label="Sort services"
-            value={sortMode}
-            onChange={event => setSortMode(event.target.value as SortMode)}
-          >
-            <option value="configured">Configured order (default)</option>
-            <option value="issues">Issues first</option>
-            <option value="alphabetical">Alphabetical</option>
-          </select>
-
-          {canGroup && (
-            <button
-              type="button"
-              className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
-              aria-label="Group by region"
-              aria-pressed={groupRegions}
-              onClick={() => setGroupRegions(open => !open)}
-            >
-              <svg
-                className="status-v3-services__group-icon"
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-                <path d="M2 12h20" />
-              </svg>
-              <span>{groupRegions ? 'Grouped by region' : 'Group by region'}</span>
-            </button>
-          )}
 
           <label htmlFor="status-v3-filter-select" className="sr-only">
             Filter by status
@@ -394,7 +347,93 @@ export default function ServiceHealthV3({
 
           <span className="status-v3-services__legend-divider" aria-hidden="true" />
 
+          {canGroup && (
+            <button
+              type="button"
+              className={`status-v3-services__group-btn${groupRegions ? ' status-v3-services__group-btn--active' : ''}`}
+              aria-label="Group by region"
+              aria-pressed={groupRegions}
+              onClick={() => setGroupRegions(open => !open)}
+            >
+              <svg
+                className="status-v3-services__group-icon"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                <path d="M2 12h20" />
+              </svg>
+              <span>{groupRegions ? 'Grouped by region' : 'Group by region'}</span>
+            </button>
+          )}
+
+          <div className="status-v3-services__sort-wrap">
+            <svg
+              className="status-v3-services__sort-icon"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m3 16 4 4 4-4" />
+              <path d="M7 20V4" />
+              <path d="m21 8-4-4-4 4" />
+              <path d="M17 4v16" />
+            </svg>
+            <label htmlFor="status-v3-sort-select" className="sr-only">
+              Sort services
+            </label>
+            <select
+              id="status-v3-sort-select"
+              className="status-v3-services__sort-select"
+              aria-label="Sort services"
+              value={sortMode}
+              onChange={event => setSortMode(event.target.value as SortMode)}
+            >
+              <option value="configured">Configured order</option>
+              <option value="issues">Issues first</option>
+              <option value="alphabetical">Alphabetical</option>
+            </select>
+            <svg
+              className="status-v3-services__sort-chevron"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+
+          <span className="status-v3-services__legend-divider" aria-hidden="true" />
+
           <div className="status-v3-services__legend-window">
+            <span className="status-v3-services__legend-count">
+              {filtered.length === services.length
+                ? `${services.length} services`
+                : `${filtered.length} of ${services.length}`}
+            </span>
+            <span className="status-v3-services__legend-dot" aria-hidden="true">
+              ·
+            </span>
             <svg
               className="status-v3-legend-clock"
               width="12"
@@ -454,7 +493,9 @@ export default function ServiceHealthV3({
         </div>
       ) : groups ? (
         groups.map(group => {
-          const impacted = group.services.filter(service => service.status !== 'OPERATIONAL').length;
+          const impacted = group.services.filter(
+            service => service.status !== 'OPERATIONAL'
+          ).length;
           const healthy = impacted === 0;
           return (
             <div key={group.region} className="status-v3-group">
@@ -483,7 +524,10 @@ export default function ServiceHealthV3({
                     {group.services.length} service{group.services.length === 1 ? '' : 's'}
                   </span>
                 </div>
-                <div className="status-v3-group__tally" aria-label={`${healthy ? 'All' : impacted} of ${group.services.length} services ${healthy ? 'operational' : 'affected'}`}>
+                <div
+                  className="status-v3-group__tally"
+                  aria-label={`${healthy ? 'All' : impacted} of ${group.services.length} services ${healthy ? 'operational' : 'affected'}`}
+                >
                   {healthy ? (
                     <span className="status-v3-group__tally-pill status-v3-group__tally-pill--healthy">
                       <span className="status-v3-group__dot" aria-hidden="true" />

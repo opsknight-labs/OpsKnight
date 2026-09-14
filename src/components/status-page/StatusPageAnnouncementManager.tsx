@@ -65,9 +65,9 @@ export interface AnnouncementItem {
 
 interface StatusPageAnnouncementManagerProps {
   statusPageId: string;
-  announcements: AnnouncementItem[];
+  announcements?: AnnouncementItem[];
   setAnnouncements: React.Dispatch<React.SetStateAction<AnnouncementItem[]>>;
-  allServices: AnnouncementService[];
+  allServices?: AnnouncementService[];
   browserTimeZone: string;
 }
 
@@ -178,9 +178,9 @@ function formatDuration(start: Date, end: Date): string {
 
 export default function StatusPageAnnouncementManager({
   statusPageId,
-  announcements,
+  announcements = [],
   setAnnouncements,
-  allServices,
+  allServices = [],
   browserTimeZone,
 }: StatusPageAnnouncementManagerProps) {
   const [isPending, startTransition] = useTransition();
@@ -220,7 +220,9 @@ export default function StatusPageAnnouncementManager({
   // Service ID map for fast lookup
   const serviceMap = useMemo(() => {
     const map = new Map<string, AnnouncementService>();
-    allServices.forEach(s => map.set(s.id, s));
+    (allServices ?? []).forEach(s => {
+      if (s?.id) map.set(s.id, s);
+    });
     return map;
   }, [allServices]);
 
@@ -297,8 +299,10 @@ export default function StatusPageAnnouncementManager({
     let scheduled = 0;
     let concluded = 0;
     let draft = 0;
+    const list = announcements ?? [];
 
-    announcements.forEach(a => {
+    list.forEach(a => {
+      if (!a) return;
       const lifecycle = deriveAnnouncementLifecycle({
         isActive: a.isActive,
         startDate: a.startDate,
@@ -317,7 +321,7 @@ export default function StatusPageAnnouncementManager({
       }
     });
 
-    return { total: announcements.length, active, scheduled, concluded, draft };
+    return { total: list.length, active, scheduled, concluded, draft };
   }, [announcements]);
 
   // Filter existing announcements
@@ -325,7 +329,8 @@ export default function StatusPageAnnouncementManager({
     const q = searchQuery.toLowerCase().trim();
     const now = new Date();
 
-    return announcements.filter(a => {
+    return (announcements ?? []).filter(a => {
+      if (!a) return false;
       const lifecycle = deriveAnnouncementLifecycle({
         isActive: a.isActive,
         startDate: a.startDate,
@@ -342,9 +347,9 @@ export default function StatusPageAnnouncementManager({
 
       // Search Query
       if (q) {
-        const matchesTitle = a.title.toLowerCase().includes(q);
-        const matchesMsg = a.message.toLowerCase().includes(q);
-        const matchesType = a.type.toLowerCase().includes(q);
+        const matchesTitle = a.title?.toLowerCase().includes(q);
+        const matchesMsg = a.message?.toLowerCase().includes(q);
+        const matchesType = a.type?.toLowerCase().includes(q);
         if (!matchesTitle && !matchesMsg && !matchesType) return false;
       }
 
@@ -487,9 +492,13 @@ export default function StatusPageAnnouncementManager({
           if (lifecycle.isDraft) {
             notify.success('Announcement saved as draft.');
           } else if (lifecycle.isScheduledForPublication) {
-            const publishTime = formatDateTime(created.publishAt ?? created.startDate, browserTimeZone, {
-              format: 'datetime',
-            });
+            const publishTime = formatDateTime(
+              created.publishAt ?? created.startDate,
+              browserTimeZone,
+              {
+                format: 'datetime',
+              }
+            );
             notify.success(`Announcement scheduled to publish ${publishTime}.`);
           } else if (lifecycle.isPublishedUpcoming) {
             const startTimeLabel = formatDateTime(created.startDate, browserTimeZone, {
@@ -509,7 +518,7 @@ export default function StatusPageAnnouncementManager({
     });
   };
 
-  const handleDelete = async (id: string): Promise<boolean> => {
+  const handleDelete = async (id: string): Promise<{ success: boolean; error?: string }> => {
     setAnnouncementError(null);
     try {
       const response = await fetch('/api/settings/status-page/announcements', {
@@ -520,17 +529,27 @@ export default function StatusPageAnnouncementManager({
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to delete announcement');
+        if (response.status === 404) {
+          // Announcement already removed on server; clean up local UI state
+          setAnnouncements(current => current.filter(item => item.id !== id));
+          notify.info('Announcement already removed.');
+          return { success: true };
+        }
+        const serverError = data.error || data.message || `Server error (${response.status})`;
+        throw new Error(serverError);
       }
 
       setAnnouncements(current => current.filter(item => item.id !== id));
       notify.success('Announcement deleted');
-      return true;
+      return { success: true };
     } catch (err) {
-      const msg = getUserFacingErrorMessage(err) || 'Failed to delete announcement';
+      const rawMsg = getUserFacingErrorMessage(err) || 'Failed to delete announcement';
+      const msg = rawMsg.toLowerCase().includes('failed to delete announcement')
+        ? rawMsg
+        : `Failed to delete announcement: ${rawMsg}`;
       setAnnouncementError(msg);
       notify.error(msg);
-      return false;
+      return { success: false, error: msg };
     }
   };
 
@@ -552,7 +571,11 @@ export default function StatusPageAnnouncementManager({
           </Button>
         }
       >
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" role="tablist" aria-label="Announcement filter metrics">
+        <div
+          className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+          role="tablist"
+          aria-label="Announcement filter metrics"
+        >
           <button
             type="button"
             role="tab"
@@ -780,7 +803,9 @@ export default function StatusPageAnnouncementManager({
 
             const durationLabel = eDate && eDate > sDate ? formatDuration(sDate, eDate) : null;
 
-            const affectedServices = (announcement.affectedServiceIds ?? [])
+            const affectedServices = (
+              Array.isArray(announcement.affectedServiceIds) ? announcement.affectedServiceIds : []
+            )
               .map(id => serviceMap.get(id))
               .filter((service): service is AnnouncementService => Boolean(service));
 
@@ -865,12 +890,17 @@ export default function StatusPageAnnouncementManager({
                         <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
                         <span>
                           <strong className="text-foreground">Schedule:</strong> All day ·{' '}
-                          {new Date(announcement.startDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            timeZone: 'UTC',
-                          })}
+                          {(() => {
+                            const d = new Date(announcement.startDate);
+                            return !isNaN(d.getTime())
+                              ? d.toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                  timeZone: 'UTC',
+                                })
+                              : 'All day';
+                          })()}
                         </span>
                       </div>
                     ) : (
@@ -1280,7 +1310,11 @@ export default function StatusPageAnnouncementManager({
                       <Radio className="w-3.5 h-3.5 text-primary" />
                       Publish Timing
                     </label>
-                    <div className="grid grid-cols-2 gap-2 text-xs" role="radiogroup" aria-label="Publish Timing">
+                    <div
+                      className="grid grid-cols-2 gap-2 text-xs"
+                      role="radiogroup"
+                      aria-label="Publish Timing"
+                    >
                       <button
                         type="button"
                         role="radio"
@@ -1323,7 +1357,11 @@ export default function StatusPageAnnouncementManager({
                       <Bell className="w-3.5 h-3.5 text-primary" />
                       Notify Subscribers
                     </label>
-                    <div className="grid grid-cols-3 gap-2 text-xs" role="radiogroup" aria-label="Notify Subscribers">
+                    <div
+                      className="grid grid-cols-3 gap-2 text-xs"
+                      role="radiogroup"
+                      aria-label="Notify Subscribers"
+                    >
                       <button
                         type="button"
                         role="radio"
@@ -1416,18 +1454,22 @@ export default function StatusPageAnnouncementManager({
               Delete announcement?
             </DialogTitle>
             <DialogDescription className="pt-2 text-sm text-foreground">
-              Are you sure you want to delete &ldquo;<strong>{deletingAnnouncement?.title}</strong>&rdquo;?
+              Are you sure you want to delete &ldquo;<strong>{deletingAnnouncement?.title}</strong>
+              &rdquo;?
             </DialogDescription>
           </DialogHeader>
 
           <div className="p-3.5 rounded-lg border border-border/80 bg-muted/30 text-xs text-muted-foreground space-y-1.5">
             <p>
-              This will remove the announcement from the public status page and cancel any subscriber notification that has not yet reached the provider.
+              This will remove the announcement from the public status page and cancel any
+              subscriber notification that has not yet reached the provider.
             </p>
             {deletingAnnouncement && (
               <p className="font-medium text-foreground">
                 Scheduled:{' '}
-                {formatDateTime(deletingAnnouncement.startDate, browserTimeZone, { format: 'datetime' })}
+                {formatDateTime(deletingAnnouncement.startDate, browserTimeZone, {
+                  format: 'datetime',
+                })}
               </p>
             )}
           </div>
@@ -1460,12 +1502,15 @@ export default function StatusPageAnnouncementManager({
                 const id = deletingAnnouncement.id;
                 setIsDeleting(true);
                 setDeleteError(null);
-                const success = await handleDelete(id);
+                const result = await handleDelete(id);
                 setIsDeleting(false);
-                if (success) {
+                if (result.success) {
                   setDeletingAnnouncement(null);
                 } else {
-                  setDeleteError('Failed to delete announcement. Please check your connection and try again.');
+                  setDeleteError(
+                    result.error ||
+                      'Failed to delete announcement. Please check your connection and try again.'
+                  );
                 }
               }}
             >

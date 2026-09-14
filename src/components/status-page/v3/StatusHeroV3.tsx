@@ -16,19 +16,36 @@ export default function StatusHeroV3({
   const token = statusPresentation(overall.status).token;
   const presentation = statusPresentation(overall.status);
   const impacted = overall.impactedServiceCount;
-  const stats: Array<{ label: string; value: number | undefined; hint?: string }> = [
+  const stats: Array<{
+    label: string;
+    value: number | undefined;
+    hint?: string;
+    tone?: 'default' | 'danger' | 'warning' | 'success';
+  }> = [
     {
       label: 'Services',
       value: overall.totalServiceCount,
-      hint:
-        impacted != null
-          ? impacted === 0
-            ? 'all operational'
-            : `${impacted} affected`
-          : undefined,
+      tone: 'default',
     },
-    { label: 'Active incidents', value: overall.activeIncidentCount },
-    { label: 'Active maintenance', value: overall.maintenanceCount },
+    ...(impacted != null && impacted > 0
+      ? [
+          {
+            label: impacted === 1 ? 'Affected service' : 'Affected services',
+            value: impacted,
+            tone: 'danger' as const,
+          },
+        ]
+      : []),
+    {
+      label: 'Active incidents',
+      value: overall.activeIncidentCount,
+      tone: (overall.activeIncidentCount ?? 0) > 0 ? 'danger' : 'default',
+    },
+    {
+      label: 'Active maintenance',
+      value: overall.maintenanceCount,
+      tone: (overall.maintenanceCount ?? 0) > 0 ? 'warning' : 'default',
+    },
   ];
   const visibleStats = stats.filter(stat => stat.value != null);
 
@@ -73,7 +90,12 @@ export default function StatusHeroV3({
       {visibleStats.length > 0 && (
         <dl className="status-v3-hero__stats">
           {visibleStats.map(stat => (
-            <div key={stat.label} className="status-stat">
+            <div
+              key={stat.label}
+              className={`status-stat${
+                stat.tone && stat.tone !== 'default' ? ` status-stat--${stat.tone}` : ''
+              }`}
+            >
               <dt className="status-stat__label">{stat.label}</dt>
               <dd className="status-stat__value">{stat.value}</dd>
               {stat.hint && <dd className="status-stat__hint">{stat.hint}</dd>}

@@ -89,9 +89,9 @@ async function lockAnnouncementMutation(
   announcementId: string
 ) {
   const lockKey = `${statusPageId}:${announcementId}`;
-  await tx.$queryRaw(Prisma.sql`
+  await tx.$executeRaw`
     SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))
-  `);
+  `;
 }
 
 async function cancelPendingAnnouncementJobs(
@@ -541,6 +541,9 @@ export async function DELETE(req: NextRequest) {
     logger.error('api.status_page.announcement.delete_error', {
       error: error instanceof Error ? error.message : String(error),
     });
-    return jsonError('Failed to delete announcement', 500);
+    return jsonError(
+      error instanceof Error && error.message ? error.message : 'Failed to delete announcement',
+      500
+    );
   }
 }

@@ -500,6 +500,7 @@ export function compileStatusPageThemeCss(themeId: unknown, densityValue?: unkno
   --status-text: ${preview.text};
   --status-text-strong: ${preview.text};
   --status-text-muted: color-mix(in srgb, ${preview.text} 72%, ${preview.surface} 28%);
+  --status-text-subtle: color-mix(in srgb, ${preview.text} 56%, ${preview.surface} 44%);
   --status-primary: var(--sp-theme-accent);
   --status-primary-hover: color-mix(in srgb, var(--sp-theme-accent) 82%, #000000 18%);
   --primary: var(--sp-theme-accent);
