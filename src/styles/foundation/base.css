@@ -24,6 +24,8 @@ html {
     -ms-high-contrast-adjust: none;
     /* Default / Mobile: 16px standard to avoid iOS Safari input auto-zoom */
     font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 /* 13"-14" Laptops & standard compact desktop viewports:

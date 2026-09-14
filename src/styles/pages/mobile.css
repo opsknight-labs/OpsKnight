@@ -1,6 +1,8 @@
 /* ========================================
    Mobile Page Styles & Responsive Overrides
-   Extracted from globals.css
+   Extracted from globals.css for desktop viewports.
+   Note: Modern PWA routes (/m) are governed strictly
+   by mobile-shell.css and canonical --ui-* tokens.
    ======================================== */
 
 /* Mobile menu button visibility */

@@ -30,6 +30,11 @@
  * namespace is now the single contract for modern components.
  */
 @layer base {
+   html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+   }
+
    :root {
       --ui-background: 210 40% 98%;
       --ui-foreground: 222.2 47.4% 11.2%;
