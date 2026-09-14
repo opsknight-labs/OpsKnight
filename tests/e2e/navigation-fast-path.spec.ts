@@ -28,6 +28,10 @@ async function ensureTestUser() {
   });
 }
 
+function sidebarLink(page: Page, name: string) {
+  return page.locator('#app-sidebar').getByRole('link', { name, exact: true });
+}
+
 async function login(page: Page) {
   await ensureTestUser();
   await page.goto('/login');
@@ -35,7 +39,7 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').fill(password);
   await page.locator('form button[type="submit"]').click();
   await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
-  await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible({ timeout: 30_000 });
+  await expect(sidebarLink(page, 'Dashboard')).toBeVisible({ timeout: 30_000 });
 }
 
 async function navigationRequests(page: Page) {
@@ -64,7 +68,7 @@ test.describe.serial('authenticated navigation fast path', () => {
     page,
   }) => {
     const requests = await navigationRequests(page);
-    await page.getByRole('link', { name: /Incidents/ }).click();
+    await sidebarLink(page, 'Incidents').click();
     await expect(page).toHaveURL(/\/incidents/);
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible();
 
@@ -79,7 +83,7 @@ test.describe.serial('authenticated navigation fast path', () => {
     await page.waitForTimeout(0);
 
     const requests = await navigationRequests(page);
-    await page.getByRole('link', { name: /Services/ }).click();
+    await sidebarLink(page, 'Services').click();
     await expect(page).toHaveURL(/\/services/);
     await expect(page.getByRole('heading', { level: 1, name: 'Services' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).not.toBeVisible();
@@ -89,18 +93,18 @@ test.describe.serial('authenticated navigation fast path', () => {
   test('returning to the tab does not couple focus validation to navigation', async ({ page }) => {
     const requests = await navigationRequests(page);
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    await page.getByRole('link', { name: /Teams/ }).click();
+    await sidebarLink(page, 'Teams').click();
     await expect(page).toHaveURL(/\/teams/);
     await expect(page.getByRole('heading', { level: 1, name: 'Teams' })).toBeVisible();
     expect(requests.filter(path => path === '/api/sidebar-stats')).toHaveLength(0);
   });
 
   test('Back and Forward each commit exactly once with UI synchronization', async ({ page }) => {
-    await page.getByRole('link', { name: /Incidents/ }).click();
+    await sidebarLink(page, 'Incidents').click();
     await expect(page).toHaveURL(/\/incidents/);
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible();
 
-    await page.getByRole('link', { name: /Services/ }).click();
+    await sidebarLink(page, 'Services').click();
     await expect(page).toHaveURL(/\/services/);
     await expect(page.getByRole('heading', { level: 1, name: 'Services' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).not.toBeVisible();
@@ -117,9 +121,9 @@ test.describe.serial('authenticated navigation fast path', () => {
   });
 
   test('rapid navigation commits the final requested destination', async ({ page }) => {
-    await page.getByRole('link', { name: /Incidents/ }).click({ noWaitAfter: true });
-    await page.getByRole('link', { name: /Services/ }).click({ noWaitAfter: true });
-    await page.getByRole('link', { name: /Analytics/ }).click();
+    await sidebarLink(page, 'Incidents').click({ noWaitAfter: true });
+    await sidebarLink(page, 'Services').click({ noWaitAfter: true });
+    await sidebarLink(page, 'Analytics').click();
     await expect(page).toHaveURL(/\/analytics/);
     await expect(page.getByRole('heading', { level: 1, name: 'Analytics' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Services' })).not.toBeVisible();
@@ -136,7 +140,7 @@ test.describe.serial('authenticated navigation fast path', () => {
       await route.continue();
     });
 
-    const link = page.getByRole('link', { name: /Incidents/ });
+    const link = sidebarLink(page, 'Incidents');
     await link.click({ noWaitAfter: true });
     await expect(link.locator('[data-navigation-pending="true"]')).toBeVisible({ timeout: 100 });
     await expect(page).toHaveURL(/\/incidents/);
@@ -147,7 +151,7 @@ test.describe.serial('authenticated navigation fast path', () => {
     page,
   }) => {
     const requests = await navigationRequests(page);
-    await page.getByRole('link', { name: /Incidents/ }).click();
+    await sidebarLink(page, 'Incidents').click();
     await expect(page).toHaveURL(/\/incidents/);
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible();
 
@@ -159,7 +163,7 @@ test.describe.serial('authenticated navigation fast path', () => {
   test('navigation remains available while SSE is disconnected', async ({ page }) => {
     await page.route('**/api/realtime/stream', route => route.abort());
     await page.reload();
-    await page.getByRole('link', { name: /Services/ }).click();
+    await sidebarLink(page, 'Services').click();
     await expect(page).toHaveURL(/\/services/);
     await expect(page.getByRole('heading', { level: 1, name: 'Services' })).toBeVisible();
   });
@@ -168,11 +172,11 @@ test.describe.serial('authenticated navigation fast path', () => {
     test.slow();
     const requests = await navigationRequests(page);
     for (let index = 0; index < 25; index += 1) {
-      await page.getByRole('link', { name: /Incidents/ }).click();
+      await sidebarLink(page, 'Incidents').click();
       await expect(page).toHaveURL(/\/incidents/);
       await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible();
 
-      await page.getByRole('link', { name: /Services/ }).click();
+      await sidebarLink(page, 'Services').click();
       await expect(page).toHaveURL(/\/services/);
       await expect(page.getByRole('heading', { level: 1, name: 'Services' })).toBeVisible();
     }
