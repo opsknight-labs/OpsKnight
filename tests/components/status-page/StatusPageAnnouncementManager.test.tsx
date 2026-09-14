@@ -34,14 +34,16 @@ const mockServices = [
 
 describe('StatusPageAnnouncementManager Component', () => {
   let announcements: AnnouncementItem[];
-  let setAnnouncements: any;
+  let setAnnouncements: React.Dispatch<React.SetStateAction<AnnouncementItem[]>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     announcements = [...mockAnnouncements];
     setAnnouncements = vi.fn(updater => {
       if (typeof updater === 'function') {
-        announcements = updater(announcements);
+        announcements = (updater as (prevState: AnnouncementItem[]) => AnnouncementItem[])(
+          announcements
+        );
       } else {
         announcements = updater;
       }
@@ -151,7 +153,7 @@ describe('StatusPageAnnouncementManager Component', () => {
   });
 
   it('successfully creates an announcement with exact ISO datetime and updates state', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         announcement: {
@@ -164,7 +166,7 @@ describe('StatusPageAnnouncementManager Component', () => {
           isActive: true,
         },
       }),
-    });
+    } as unknown as Response);
 
     renderManager();
 
@@ -193,10 +195,10 @@ describe('StatusPageAnnouncementManager Component', () => {
   });
 
   it('deletes an announcement when delete button is clicked and confirmed in dialog', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ success: true }),
-    });
+    } as unknown as Response);
 
     renderManager();
 
@@ -227,10 +229,10 @@ describe('StatusPageAnnouncementManager Component', () => {
   });
 
   it('displays error message and keeps modal open when delete request fails', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: 'Database connection failed' }),
-    });
+    } as unknown as Response);
 
     renderManager();
 
@@ -269,7 +271,7 @@ describe('StatusPageAnnouncementManager Component', () => {
   });
 
   it('allows retrospective notices with past start dates when Publish Now is selected', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         announcement: {
@@ -282,7 +284,7 @@ describe('StatusPageAnnouncementManager Component', () => {
           isActive: false,
         },
       }),
-    });
+    } as unknown as Response);
 
     renderManager();
 
