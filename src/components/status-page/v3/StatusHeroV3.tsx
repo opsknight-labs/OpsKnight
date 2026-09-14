@@ -16,7 +16,12 @@ export default function StatusHeroV3({
   const token = statusPresentation(overall.status).token;
   const presentation = statusPresentation(overall.status);
   const impacted = overall.impactedServiceCount;
-  const stats: Array<{ label: string; value: number | undefined; hint?: string }> = [
+  const stats: Array<{
+    label: string;
+    value: number | undefined;
+    hint?: string;
+    tone?: 'default' | 'danger' | 'warning' | 'success';
+  }> = [
     {
       label: 'Services',
       value: overall.totalServiceCount,
@@ -26,9 +31,18 @@ export default function StatusHeroV3({
             ? 'all operational'
             : `${impacted} affected`
           : undefined,
+      tone: impacted != null ? (impacted > 0 ? 'danger' : 'success') : 'default',
     },
-    { label: 'Active incidents', value: overall.activeIncidentCount },
-    { label: 'Active maintenance', value: overall.maintenanceCount },
+    {
+      label: 'Active incidents',
+      value: overall.activeIncidentCount,
+      tone: (overall.activeIncidentCount ?? 0) > 0 ? 'danger' : 'default',
+    },
+    {
+      label: 'Active maintenance',
+      value: overall.maintenanceCount,
+      tone: (overall.maintenanceCount ?? 0) > 0 ? 'warning' : 'default',
+    },
   ];
   const visibleStats = stats.filter(stat => stat.value != null);
 
@@ -75,8 +89,19 @@ export default function StatusHeroV3({
           {visibleStats.map(stat => (
             <div key={stat.label} className="status-stat">
               <dt className="status-stat__label">{stat.label}</dt>
-              <dd className="status-stat__value">{stat.value}</dd>
-              {stat.hint && <dd className="status-stat__hint">{stat.hint}</dd>}
+              <dd className="status-stat__value-row">
+                <span className="status-stat__value">{stat.value}</span>
+                {stat.hint && (
+                  <span
+                    className={`status-stat__badge ${
+                      stat.tone ? `status-stat__badge--${stat.tone}` : ''
+                    }`}
+                  >
+                    <span className="status-stat__badge-dot" aria-hidden="true" />
+                    {stat.hint}
+                  </span>
+                )}
+              </dd>
             </div>
           ))}
         </dl>

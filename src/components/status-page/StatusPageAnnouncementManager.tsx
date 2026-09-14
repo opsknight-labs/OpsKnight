@@ -509,7 +509,7 @@ export default function StatusPageAnnouncementManager({
     });
   };
 
-  const handleDelete = async (id: string): Promise<boolean> => {
+  const handleDelete = async (id: string): Promise<{ success: boolean; error?: string }> => {
     setAnnouncementError(null);
     try {
       const response = await fetch('/api/settings/status-page/announcements', {
@@ -520,17 +520,27 @@ export default function StatusPageAnnouncementManager({
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to delete announcement');
+        if (response.status === 404) {
+          // Announcement already removed on server; clean up local UI state
+          setAnnouncements(current => current.filter(item => item.id !== id));
+          notify.info('Announcement already removed.');
+          return { success: true };
+        }
+        const serverError = data.error || data.message || `Server error (${response.status})`;
+        throw new Error(serverError);
       }
 
       setAnnouncements(current => current.filter(item => item.id !== id));
       notify.success('Announcement deleted');
-      return true;
+      return { success: true };
     } catch (err) {
-      const msg = getUserFacingErrorMessage(err) || 'Failed to delete announcement';
+      const rawMsg = getUserFacingErrorMessage(err) || 'Failed to delete announcement';
+      const msg = rawMsg.toLowerCase().includes('failed to delete announcement')
+        ? rawMsg
+        : `Failed to delete announcement: ${rawMsg}`;
       setAnnouncementError(msg);
       notify.error(msg);
-      return false;
+      return { success: false, error: msg };
     }
   };
 
@@ -1460,12 +1470,12 @@ export default function StatusPageAnnouncementManager({
                 const id = deletingAnnouncement.id;
                 setIsDeleting(true);
                 setDeleteError(null);
-                const success = await handleDelete(id);
+                const result = await handleDelete(id);
                 setIsDeleting(false);
-                if (success) {
+                if (result.success) {
                   setDeletingAnnouncement(null);
                 } else {
-                  setDeleteError('Failed to delete announcement. Please check your connection and try again.');
+                  setDeleteError(result.error || 'Failed to delete announcement. Please check your connection and try again.');
                 }
               }}
             >
