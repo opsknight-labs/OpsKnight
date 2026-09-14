@@ -263,8 +263,25 @@ export default function StatusPageAnnouncementManager({
         return 'End date and time must be after start date and time.';
       }
     }
+    if (publishOption === 'AT_START' && parsedStartDate) {
+      if (parsedStartDate.getTime() <= Date.now()) {
+        return 'Scheduled publication start time must be in the future. Select "Publish Now" if this notice is already active or retrospective.';
+      }
+    }
+    if (notificationTiming === 'AT_START' && parsedStartDate) {
+      if (parsedStartDate.getTime() <= Date.now()) {
+        return 'Subscriber notification "At Start Time" cannot be scheduled in the past. Select "On Publish" or a future start time.';
+      }
+    }
     return null;
-  }, [parsedStartResult, parsedStartDate, parsedEndResult, parsedEndDate]);
+  }, [
+    parsedStartResult,
+    parsedStartDate,
+    parsedEndResult,
+    parsedEndDate,
+    publishOption,
+    notificationTiming,
+  ]);
 
   const calculatedDuration = useMemo(() => {
     if (parsedStartDate && parsedEndDate && parsedEndDate > parsedStartDate) {
@@ -1051,6 +1068,11 @@ export default function StatusPageAnnouncementManager({
                       <input
                         type="date"
                         value={startDate}
+                        min={
+                          publishOption === 'AT_START'
+                            ? getLocalDateString(new Date(), browserTimeZone)
+                            : undefined
+                        }
                         onChange={e => {
                           const nextD = e.target.value;
                           setStartDate(nextD);
@@ -1169,7 +1191,11 @@ export default function StatusPageAnnouncementManager({
                       )}
                     </span>
                     <span className="font-mono text-xs">
-                      {parsedStartDate && parsedStartDate.getTime() > Date.now() ? (
+                      {parsedEndDate && parsedEndDate.getTime() < Date.now() ? (
+                        <span className="text-muted-foreground font-medium">
+                          ● Concluded historical notice
+                        </span>
+                      ) : parsedStartDate && parsedStartDate.getTime() > Date.now() ? (
                         <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
                           ● Scheduled
                         </span>

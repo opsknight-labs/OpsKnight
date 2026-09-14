@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import StatusPageAnnouncementManager, {
   type AnnouncementItem,
@@ -244,4 +244,81 @@ describe('StatusPageAnnouncementManager Component', () => {
       expect(screen.getByText(/Failed to delete announcement/i)).toBeDefined();
     });
   });
+
+  it('prevents scheduling publication at start time if start date is in the past', () => {
+    renderManager();
+
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+
+    // Select "At Start Time" publication option inside Publish Timing radiogroup
+    const publishTimingGroup = screen.getByRole('radiogroup', { name: /Publish Timing/i });
+    const atStartRadio = within(publishTimingGroup).getByRole('radio', { name: /At Start Time/i });
+    fireEvent.click(atStartRadio);
+
+    // Set a past start date
+    const dateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    fireEvent.change(dateInputs[0], { target: { value: '2020-01-01' } });
+
+    expect(
+      screen.getByText(/Scheduled publication start time must be in the future/i)
+    ).toBeDefined();
+
+    const submitBtn = screen.getByRole('button', { name: /Add Announcement/i });
+    expect(submitBtn.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('allows retrospective notices with past start dates when Publish Now is selected', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        announcement: {
+          id: 'ann-retro',
+          title: 'Resolved Database Incident',
+          message: 'Post-mortem retrospective announcement',
+          type: 'INCIDENT',
+          startDate: '2020-01-01T10:00:00.000Z',
+          endDate: '2020-01-01T12:00:00.000Z',
+          isActive: false,
+        },
+      }),
+    });
+
+    renderManager();
+
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+
+    const titleInput = screen.getByPlaceholderText(/Scheduled Database Maintenance Window/i);
+    const messageInput = screen.getByPlaceholderText(/Describe the scope/i);
+
+    fireEvent.change(titleInput, { target: { value: 'Resolved Database Incident' } });
+    fireEvent.change(messageInput, { target: { value: 'Post-mortem retrospective announcement' } });
+
+    // Set past dates
+    const dateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    fireEvent.change(dateInputs[0], { target: { value: '2020-01-01' } });
+
+    // Quick window +1h sets end date
+    const add1hBtn = screen.getByRole('button', { name: '+1h' });
+    fireEvent.click(add1hBtn);
+
+    // Notice preview should show concluded notice
+    expect(screen.getByText(/Concluded historical notice/i)).toBeDefined();
+
+    // Submit button should NOT be disabled
+    const submitBtn = screen.getByRole('button', { name: /Add Announcement/i });
+    expect(submitBtn.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/settings/status-page/announcements',
+        expect.objectContaining({
+          method: 'POST',
+        })
+      );
+    });
+  });
 });
+
