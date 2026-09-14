@@ -225,4 +225,23 @@ describe('StatusPageAnnouncementManager Component', () => {
       expect(setAnnouncements).toHaveBeenCalled();
     });
   });
+
+  it('displays error message and keeps modal open when delete request fails', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'Database connection failed' }),
+    });
+
+    renderManager();
+
+    const deleteButtons = screen.getAllByTitle('Delete Announcement');
+    fireEvent.click(deleteButtons[0]);
+
+    const confirmDeleteBtn = screen.getByRole('button', { name: 'Delete Announcement' });
+    fireEvent.click(confirmDeleteBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to delete announcement/i)).toBeDefined();
+    });
+  });
 });

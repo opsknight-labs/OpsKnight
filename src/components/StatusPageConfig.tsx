@@ -947,19 +947,25 @@ export default function StatusPageConfig({
                   type={!item.link ? 'button' : undefined}
                   href={item.link}
                   onClick={() => !item.link && setActiveSection(item.id)}
-                  className={`status-page-config-tab ${isActive ? 'is-active' : ''}`}
+                  className={cn(
+                    'status-page-config-tab inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 cursor-pointer select-none whitespace-nowrap border',
+                    isActive
+                      ? 'is-active bg-primary text-primary-foreground border-primary shadow-xs font-semibold'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/70 border-transparent'
+                  )}
                 >
-                  {item.icon && <span className="status-page-config-tab-icon">{item.icon}</span>}
+                  {item.icon && <span className="status-page-config-tab-icon inline-flex items-center justify-center shrink-0">{item.icon}</span>}
                   <span>{item.label}</span>
                   {item.badge ? (
                     <Badge
                       variant={isActive ? 'default' : 'neutral'}
                       size="xs"
-                      className={`ml-1 px-1.5 py-0 text-[10px] font-bold ${
+                      className={cn(
+                        'ml-1 px-1.5 py-0 text-[10px] font-bold rounded-full',
                         isActive
-                          ? 'bg-primary-foreground text-primary'
+                          ? 'bg-primary-foreground/20 text-primary-foreground'
                           : 'bg-muted text-muted-foreground'
-                      }`}
+                      )}
                     >
                       {item.badge}
                     </Badge>
@@ -1496,12 +1502,12 @@ export default function StatusPageConfig({
                                   padding: '8px 12px',
                                   borderRadius: 'var(--radius-md)',
                                   border: isActive
-                                    ? '2px solid hsl(var(--primary))'
-                                    : '1px solid hsl(var(--border))',
+                                    ? '2px solid hsl(var(--ui-primary, 215.3 25% 26.7%))'
+                                    : '1px solid hsl(var(--ui-border, 214.3 31.8% 91.4%))',
                                   background: isActive
-                                    ? 'hsl(var(--primary) / 0.08)'
-                                    : 'hsl(var(--card))',
-                                  color: isActive ? 'hsl(var(--primary))' : 'inherit',
+                                    ? 'hsl(var(--ui-primary, 215.3 25% 26.7%) / 0.08)'
+                                    : 'hsl(var(--ui-card, 0 0% 100%))',
+                                  color: isActive ? 'hsl(var(--ui-primary, 215.3 25% 26.7%))' : 'inherit',
                                   cursor: 'pointer',
                                   textAlign: 'left',
                                   transition: 'all 0.15s ease',
@@ -2236,6 +2242,7 @@ export default function StatusPageConfig({
                                     padding: 'var(--spacing-3)',
                                     borderRadius: 'var(--radius-md)',
                                     border: '1px solid #e5e7eb',
+                                    background: '#f9fafb',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'space-between',
@@ -2544,8 +2551,8 @@ export default function StatusPageConfig({
                 flexDirection: 'column',
                 overflow: 'hidden',
                 minWidth: 0,
-                borderLeft: '1px solid hsl(var(--border))',
-                background: 'hsl(var(--card))',
+                borderLeft: '1px solid hsl(var(--ui-border, 214.3 31.8% 91.4%))',
+                background: 'hsl(var(--ui-card, 0 0% 100%))',
               }}
             >
               <StatusPageLivePreview

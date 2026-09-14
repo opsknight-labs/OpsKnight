@@ -38,4 +38,13 @@ describe('status page design settings & styling contracts', () => {
     expect(workspace).not.toContain("workspace === 'design'");
     expect(workspace).toContain('<StatusPageConfig {...props} />');
   });
+
+  it('ensures status page config tabs use isolated --ui-* tokens to avoid white-on-white text', () => {
+    const statusPageCss = readFileSync('src/styles/pages/status-page.css', 'utf8');
+    // Ensure tabs styling uses the isolated --ui-* tokens, not raw RGB tokens wrapped in hsl()
+    expect(statusPageCss).toContain('--ui-muted-foreground');
+    expect(statusPageCss).toContain('--ui-primary');
+    expect(statusPageCss).not.toContain('color: hsl(var(--muted-foreground');
+    expect(statusPageCss).not.toContain('background: hsl(var(--primary,');
+  });
 });
