@@ -8,16 +8,21 @@ export const TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD = 5;
 const RETRY_DELAYS = [10, 25, 50, 100, 200];
 
 function isRetryableTransactionError(error: unknown): boolean {
-  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+  const code =
+    error && typeof error === 'object' && 'code' in error
+      ? String(error.code)
+      : null;
+  if (error instanceof Prisma.PrismaClientKnownRequestError || code !== null) {
     // P2034 = Transaction failed due to write conflict or deadlock
     // P2002 = Unique constraint violation (can be retryable in race conditions)
     // P2028 = Transaction API error
-    return error.code === 'P2034' || error.code === 'P2002' || error.code === 'P2028';
+    return code === 'P2034' || code === 'P2002' || code === 'P2028';
   }
   const message = error instanceof Error ? error.message : '';
   return (
     message.includes('Serialization') ||
     message.includes('deadlock') ||
+    message.includes('write conflict') ||
     message.includes('could not serialize') ||
     message.includes('concurrent update')
   );

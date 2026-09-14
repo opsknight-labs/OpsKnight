@@ -4,6 +4,16 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { ExternalLink, Loader2, RefreshCw, SquareX } from 'lucide-react';
 import { errorFromResponse } from '@/lib/client-error';
@@ -16,6 +26,9 @@ type Room = {
   providerChannelName: string | null;
   providerChannelUrl: string | null;
   membershipType: string | null;
+  health?: string;
+  lastErrorCode?: string | null;
+  lastReconciledAt?: Date | null;
   lastError: string | null;
   participants: Array<{ id: string; source: string; state: string; lastError: string | null; user: { name: string | null } | null }>;
 };
@@ -31,6 +44,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const latest = rooms[0] ?? null;
 
   const run = (path: string, body?: unknown) => {
@@ -51,6 +65,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
 
   const active = latest?.state === 'READY';
   const ambiguous = latest?.state === 'AMBIGUOUS';
+  const hasAmbiguousCard = active && latest?.lastErrorCode === 'AMBIGUOUS_CARD_CREATE';
 
   return (
     <section className="rounded-xl border bg-card p-5 shadow-sm space-y-4" aria-label="Microsoft Teams war rooms">
@@ -77,6 +92,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
                 {latest.providerChannelName ?? 'Open Teams channel'} <ExternalLink className="h-3 w-3" />
               </a>
             )}
+            {latest.health && latest.health !== 'HEALTHY' && <Badge variant="outline" className="border-amber-300 text-amber-700">{latest.health.toLowerCase().replace('_', ' ')}</Badge>}
           </div>
           {latest.participants.length > 0 && <p className="text-xs text-muted-foreground">Responder projection: {latest.participants.map(participant => `${participant.user?.name ?? 'Unlinked responder'} (${participant.state.toLowerCase()})`).join(', ')}</p>}
           {latest.lastError && <p className="text-xs text-amber-700 dark:text-amber-300">{latest.lastError}</p>}
@@ -87,14 +103,37 @@ export default function MicrosoftTeamsWarRoomsPanel({
       {canManage && (
         <div className="flex flex-wrap gap-2">
           {!active && !ambiguous && enabled && <Button size="sm" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/microsoft-teams`)}>{pending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <MicrosoftTeamsLogo className="mr-1 h-3.5 w-3.5" />}{latest ? 'Create new generation' : 'Create Teams war room'}</Button>}
+          {ambiguous && <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/reconcile`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Reconcile Teams channel</Button>}
           {active && <>
             <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/sync`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh responder plan</Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/project`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh command card</Button>
+            {hasAmbiguousCard && <Button size="sm" variant="outline" disabled={pending} onClick={() => setShowAbandonConfirm(true)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Create replacement card</Button>}
             <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/close`)}><SquareX className="mr-1 h-3.5 w-3.5" />Close room</Button>
           </>}
           {!enabled && !latest && <span className="text-xs text-muted-foreground">{unavailableReason ?? 'Teams war-room creation is unavailable for this service.'}</span>}
         </div>
       )}
+      <AlertDialog open={showAbandonConfirm} onOpenChange={setShowAbandonConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Create replacement card?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Teams may already contain the original card. Creating a replacement can result in a duplicate card in the channel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={pending} onClick={() => {
+              setShowAbandonConfirm(false);
+              if (latest) run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/abandon`);
+            }}>
+              Create replacement card
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {error && <p className="text-xs text-destructive">{error}</p>}
+      {rooms.length > 1 && <details className="rounded-lg border p-3 text-xs text-muted-foreground"><summary className="cursor-pointer font-medium text-foreground">War-room history ({rooms.length} generations)</summary><ul className="mt-2 space-y-1">{rooms.slice(1).map(room => <li key={room.id}>Generation {room.generation}: {room.state}{room.providerChannelName ? ` · ${room.providerChannelName}` : ''}</li>)}</ul></details>}
     </section>
   );
 }

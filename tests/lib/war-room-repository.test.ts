@@ -71,11 +71,12 @@ describe('war-room generation lifecycle', () => {
           incidentId: 'incident-1',
           provider: 'MICROSOFT_TEAMS',
         }),
-        data: expect.objectContaining({ state: 'CLOSED', provisioningToken: null }),
+        data: expect.objectContaining({ state: 'CLOSED', provisioningToken: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null }),
       })
     );
     const where = updateMany.mock.calls[0][0].where;
     expect(where.state.in).not.toContain('AMBIGUOUS');
+    expect(where.state.in).toContain('CLOSING');
   });
 
   it('adopts a channel as READY only while the incident remains active', async () => {

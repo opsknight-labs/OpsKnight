@@ -41,7 +41,9 @@ export type JobType =
   | 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'
   | 'CHATOPS_INTENT'
   | 'EXTERNAL_OPERATION'
-  | 'WAR_ROOM_PROVISION';
+  | 'WAR_ROOM_PROVISION'
+  | 'WAR_ROOM_PARTICIPANT_SYNC'
+  | 'WAR_ROOM_PROJECT';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -50,7 +52,6 @@ export type JobStatus =
   | 'COMPLETED'
   | 'FAILED'
   | 'CANCELLED';
-
 interface JobPayload {
   incidentId?: string;
   stepIndex?: number;
@@ -134,6 +135,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.warRoomId;
     case 'provisioningToken':
       return values.provisioningToken;
+    case 'projectionVersion':
+      return values.projectionVersion;
     default:
       return undefined;
   }
@@ -385,6 +388,14 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
         : undefined,
     },
   });
+  if (!shouldRetry && job.type === 'WAR_ROOM_PROJECT') {
+    const versionValue = payloadValue(job.payload, 'projectionVersion');
+    const warRoomIdValue = payloadValue(job.payload, 'warRoomId');
+    if (typeof warRoomIdValue === 'string' && typeof versionValue === 'number' && Number.isInteger(versionValue)) {
+      const { settleWarRoomProjectionFailure } = await import('../war-room/projection');
+      await settleWarRoomProjectionFailure(warRoomIdValue, versionValue);
+    }
+  }
 }
 
 export async function markJobFailed(jobId: string, error: string): Promise<void> {
@@ -503,6 +514,21 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           requiredPayloadString(job.payload, 'warRoomId'),
           requiredPayloadString(job.payload, 'provisioningToken')
         );
+        return markWarRoomJobCompleted(job.id);
+      }
+      case 'WAR_ROOM_PARTICIPANT_SYNC': {
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
+          throw new Error('War-room participant sync job is missing warRoomId');
+        const { syncMicrosoftTeamsWarRoomParticipants } = await import('../war-room/participants');
+        await syncMicrosoftTeamsWarRoomParticipants(requiredPayloadString(job.payload, 'warRoomId'));
+        return markWarRoomJobCompleted(job.id);
+      }
+      case 'WAR_ROOM_PROJECT': {
+        const version = payloadValue(job.payload, 'projectionVersion');
+        if (typeof version !== 'number' || !Number.isInteger(version))
+          throw new Error('War-room projection job is missing projectionVersion');
+        const { projectMicrosoftTeamsWarRoomCard } = await import('../war-room/projection');
+        await projectMicrosoftTeamsWarRoomCard(requiredPayloadString(job.payload, 'warRoomId'), version);
         return markWarRoomJobCompleted(job.id);
       }
       case 'EXTERNAL_OPERATION': {
@@ -722,11 +748,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
     }
   } catch (error) {
-    if (
-      job.type === 'WAR_ROOM_PROVISION' &&
-      error instanceof Error &&
-      error.name === 'WarRoomRetryableError'
-    ) {
+    const isWarRoomJob = job.type === 'WAR_ROOM_PROVISION' || job.type === 'WAR_ROOM_PROJECT' || job.type === 'WAR_ROOM_PARTICIPANT_SYNC';
+    if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
       const retryBudgetNeutral =
         (error as Error & { retryBudgetNeutral?: unknown }).retryBudgetNeutral === true;
@@ -752,7 +775,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
       }
     }
-    if (job.type === 'WAR_ROOM_PROVISION') {
+    if (isWarRoomJob) {
       await markWarRoomJobFailed(job, error instanceof Error ? error.message : 'Unknown error');
       return false;
     }

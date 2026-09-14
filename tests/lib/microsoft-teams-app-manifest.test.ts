@@ -75,6 +75,20 @@ describe('Microsoft Teams app manifest', () => {
     for (const perm of [...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS, 'TeamSettings.Read.Group', 'Channel.Create.Group']) {
       expect(allNames).toContain(perm);
     }
+    const collaboration = buildMicrosoftTeamsAppManifest({
+      appUrl: BASE,
+      botId: BOT_ID,
+      includeWarRoomPermissions: true,
+      includeWarRoomCollaborationPermissions: true,
+    });
+    const collaborationNames = (collaboration.authorization.permissions.resourceSpecific as Array<{ name: string }>).map(p => p.name);
+    expect(collaborationNames).toEqual(expect.arrayContaining([
+      'Channel.Create.Group',
+      'ChannelSettings.ReadWrite.Group',
+      'TeamMember.Read.Group',
+      'ChannelMember.Read.Group',
+      'ChannelMember.ReadWrite.Group',
+    ]));
   });
 
   it('always emits webApplicationInfo and permits an Entra Application ID URI override', () => {

@@ -128,11 +128,20 @@ enum WarRoomParticipantSource {
 
 enum WarRoomParticipantState {
   DESIRED
+  // Retained for rolling deploy compatibility with foundation workers.
   PROCESSING
+  PENDING
   PRESENT
   SKIPPED
   FAILED
   REMOVED
+}
+
+enum WarRoomHealthState {
+  HEALTHY
+  DEGRADED
+  MISSING
+  PERMISSION_ERROR
 }
 
 enum NotificationTrafficClass {
@@ -768,7 +777,12 @@ model IncidentWarRoom {
   membershipType        WarRoomMembershipType?
   commandMessageId      String?
   commandConversationId String?
+  commandCreateAttemptedAt DateTime?
   messageGeneration     Int                   @default(1)
+  projectionVersion     Int                   @default(0)
+  lastProjectedAt       DateTime?
+  projectionLeaseToken  String?
+  projectionLeaseExpiresAt DateTime?
   provisioningToken     String?
   provisioningStartedAt DateTime?
   createAttemptedAt     DateTime?
@@ -778,6 +792,8 @@ model IncidentWarRoom {
   archivedAt            DateTime?
   lastError             String?
   lastErrorCode         String?
+  health                WarRoomHealthState    @default(HEALTHY)
+  lastReconciledAt      DateTime?
   metadata              Json?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
@@ -787,6 +803,7 @@ model IncidentWarRoom {
   @@index([incidentId, provider, state])
   @@index([provider, providerTenantId, providerContainerId, providerChannelId])
   @@index([state, provisioningStartedAt])
+  @@index([provider, health, lastReconciledAt])
 }
 
 model WarRoomParticipant {
@@ -797,7 +814,10 @@ model WarRoomParticipant {
   providerObjectId String?
   source           WarRoomParticipantSource
   state            WarRoomParticipantState @default(DESIRED)
+  desiredVersion   Int                     @default(0)
+  lastSyncAt       DateTime?
   lastError        String?
+  lastErrorCode    String?
   addedAt          DateTime?
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
@@ -1603,6 +1623,8 @@ enum JobType {
   CHATOPS_INTENT
   EXTERNAL_OPERATION
   WAR_ROOM_PROVISION
+  WAR_ROOM_PARTICIPANT_SYNC
+  WAR_ROOM_PROJECT
 }
 
 enum JobStatus {

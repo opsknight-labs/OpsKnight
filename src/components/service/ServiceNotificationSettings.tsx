@@ -700,7 +700,7 @@ export default function ServiceNotificationSettings({
         </Card>
       )}
 
-      {/* Microsoft Teams — per-service channel picker (Phase 1: one Teams channel per service) */}
+      {/* Microsoft Teams — one managed destination channel per service */}
       {channels.includes('MICROSOFT_TEAMS') && (
         <Card>
           <CardHeader>

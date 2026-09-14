@@ -9,10 +9,12 @@ import { adoptWarRoomChannel, claimWarRoomProvisioning, closeWarRoom } from './r
 import {
   createChannel,
   findWarRoomChannel,
+  getChannelById,
   warRoomChannelName,
   warRoomMarker,
 } from '@/lib/microsoft-teams/graph/channels';
 import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
+import { findTeamMember } from '@/lib/microsoft-teams/graph/members';
 
 type RequestResult =
   | { accepted: true; warRoomId: string; state: string }
@@ -39,7 +41,7 @@ export async function requestMicrosoftTeamsWarRoom(
   return runSerializableTransaction(async tx => {
     const incident = await tx.incident.findUnique({
       where: { id: incidentId },
-      include: { service: { select: { microsoftTeamsWarRoomAutoCreate: true } } },
+      include: { service: { select: { microsoftTeamsWarRoomAutoCreate: true, team: { select: { teamLeadId: true } } } } },
     });
     if (!incident) return { accepted: false, code: 'INCIDENT_NOT_FOUND' };
     if (!['OPEN', 'ACKNOWLEDGED'].includes(incident.status))
@@ -88,8 +90,20 @@ export async function requestMicrosoftTeamsWarRoom(
         accepted: false,
         code: decision.allowed ? 'DESTINATION_UNAVAILABLE' : decision.code,
       };
-    if (decision.membershipType === 'PRIVATE')
-      return { accepted: false, code: 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED' };
+    let privateOwner: { userId: string; objectId: string } | null = null;
+    if (decision.membershipType === 'PRIVATE') {
+      const candidateUserIds = [incident.assigneeId, incident.service.team?.teamLeadId].filter((id): id is string => Boolean(id));
+      const links = candidateUserIds.length === 0 ? [] : await tx.chatIdentityLink.findMany({
+        where: { provider: 'MICROSOFT_TEAMS', providerTenantId: destination.tenantId, revokedAt: null, userId: { in: candidateUserIds } },
+        select: { userId: true, providerUserId: true, providerObjectId: true },
+      });
+      for (const userId of candidateUserIds) {
+        const link = links.find(candidate => candidate.userId === userId);
+        const objectId = link?.providerObjectId ?? link?.providerUserId;
+        if (objectId) { privateOwner = { userId, objectId }; break; }
+      }
+      if (!privateOwner) return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
+    }
 
     const claimed = await claimWarRoomProvisioning(tx, {
       incidentId,
@@ -106,6 +120,7 @@ export async function requestMicrosoftTeamsWarRoom(
           providerTenantId: destination.tenantId,
           providerContainerId: destination.teamId,
           membershipType: decision.membershipType,
+          ...(privateOwner ? { metadata: { privateOwnerUserId: privateOwner.userId, privateOwnerObjectId: privateOwner.objectId } } : {}),
         },
       });
       await tx.backgroundJob.create({
@@ -134,6 +149,116 @@ export async function closeMicrosoftTeamsWarRoom(
     closeWarRoom(tx, { incidentId, warRoomId, provider: 'MICROSOFT_TEAMS' })
   );
   return { closed };
+}
+
+/**
+ * Operator-initiated abandon of an ambiguous canonical card. Clears the
+ * commandCreateAttemptedAt fence and commandMessageId so the next projection
+ * generation creates a fresh card. Intentionally does NOT delete the
+ * potentially-orphaned card; it warns the operator that a duplicate may exist.
+ */
+export async function abandonAmbiguousMicrosoftTeamsCard(
+  incidentId: string,
+  warRoomId: string
+): Promise<{ abandoned: boolean; warning: string }> {
+  const room = await prisma.incidentWarRoom.findFirst({ where: { id: warRoomId, incidentId, provider: 'MICROSOFT_TEAMS' }, select: { state: true } });
+  if (!room) return { abandoned: false, warning: 'War room was not found.' };
+  if (room.state === 'CLOSED') return { abandoned: false, warning: 'War room is closed; no replacement card can be projected.' };
+  const now = new Date();
+  const changed = await prisma.incidentWarRoom.updateMany({
+    where: {
+      id: warRoomId,
+      incidentId,
+      provider: 'MICROSOFT_TEAMS',
+      health: 'DEGRADED',
+      lastErrorCode: 'AMBIGUOUS_CARD_CREATE',
+    },
+    data: {
+      commandCreateAttemptedAt: null,
+      commandMessageId: null,
+      commandConversationId: null,
+      health: 'HEALTHY',
+      lastErrorCode: null,
+      lastError: null,
+      projectionLeaseToken: null,
+      projectionLeaseExpiresAt: null,
+      updatedAt: now,
+    },
+  });
+  if (changed.count !== 1) return { abandoned: false, warning: 'War room is not in an ambiguous card state.' };
+  // Queue a projection so the next card is created fresh.
+  const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+  await requestMicrosoftTeamsWarRoomProjection(warRoomId);
+  return { abandoned: true, warning: 'Ambiguous card abandoned. A duplicate card may still exist in the Teams channel; delete it manually if so.' };
+}
+
+/**
+ * Explicit operator recovery for an uncertain Graph create. This only queues
+ * the marker scan guarded by the original fencing token; provisioning refuses
+ * to POST once createAttemptedAt is set.
+ */
+export async function reconcileMicrosoftTeamsWarRoom(incidentId: string, warRoomId: string): Promise<{ queued: boolean }> {
+  return prisma.$transaction(async tx => {
+    const room = await tx.incidentWarRoom.findFirst({
+      where: { id: warRoomId, incidentId, provider: 'MICROSOFT_TEAMS', state: 'AMBIGUOUS', NOT: { createAttemptedAt: { equals: null } } },
+      select: { id: true, provisioningToken: true },
+    });
+    if (!room?.provisioningToken) return { queued: false };
+    const existing = await tx.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_PROVISION', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+      select: { id: true },
+    });
+    if (existing) return { queued: true };
+    await tx.backgroundJob.create({
+      data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: room.id, provisioningToken: room.provisioningToken, reconciliationOnly: true } },
+    });
+    return { queued: true };
+  });
+}
+
+/** Bounded, marker-only drift sweep run by the scheduler; it never creates channels. */
+export async function reconcileMicrosoftTeamsWarRoomHealth(limit = 20): Promise<{ checked: number; healthy: number; degraded: number }> {
+  const rooms = await prisma.incidentWarRoom.findMany({
+    where: { provider: 'MICROSOFT_TEAMS', state: 'READY', providerTenantId: { not: null }, providerContainerId: { not: null } },
+    orderBy: { lastReconciledAt: 'asc' }, take: Math.max(1, Math.min(limit, 100)),
+    include: { incident: { select: { id: true } } },
+  });
+  let healthy = 0;
+  for (const room of rooms) {
+    // Fast path: READY rooms have a durable providerChannelId — verify that
+    // single channel directly instead of paginating the entire channel list.
+    // Fall back to the marker scan only when the direct probe is inconclusive.
+    let result: Awaited<ReturnType<typeof getChannelById>> | Awaited<ReturnType<typeof findWarRoomChannel>>;
+    if (room.providerChannelId) {
+      const direct = await getChannelById({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: room.providerChannelId });
+      if (!direct.ok) {
+        // PERMISSION / TRANSIENT / rate-limit — surface directly, no scan needed.
+        result = direct;
+      } else if (direct.value) {
+        const hasMarker = direct.value.description?.includes(warRoomMarker(room.incident.id, room.generation));
+        if (hasMarker) {
+          result = direct; // HEALTHY — single GET, no pagination.
+        } else {
+          // Channel exists but marker missing (edited away or replaced). Scan
+          // by marker to avoid false HEALTHY.
+          result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+        }
+      } else {
+        // Channel id no longer resolves — scan by marker to distinguish deletion
+        // from transient Graph listing quirks.
+        result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+      }
+    } else {
+      result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+    }
+    const health = result.ok && result.value ? 'HEALTHY' : !result.ok && result.code === 'MISSING_PERMISSION' ? 'PERMISSION_ERROR' : result.ok ? 'MISSING' : 'DEGRADED';
+    await prisma.incidentWarRoom.update({
+      where: { id: room.id },
+      data: { health, lastReconciledAt: new Date(), ...(health === 'HEALTHY' ? {} : { lastErrorCode: result.ok ? 'CHANNEL_MISSING' : result.code, lastError: result.ok ? 'The Teams war-room marker was not found during health reconciliation.' : result.message }) },
+    });
+    if (health === 'HEALTHY') healthy++;
+  }
+  return { checked: rooms.length, healthy, degraded: rooms.length - healthy };
 }
 
 /**
@@ -198,7 +323,9 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
     });
     await tx.incidentWarRoom.updateMany({
       where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
-      data: { state: 'CLOSED', closedAt: now, provisioningToken: null },
+      // Keep the card reference alive long enough to render the terminal,
+      // action-disabled state. The projection worker closes it only on success.
+      data: { state: 'CLOSING', provisioningToken: null },
     });
 
     const rooms = await tx.incidentWarRoom.findMany({
@@ -285,6 +412,11 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
       });
     }
   });
+  const closing = await prisma.incidentWarRoom.findMany({
+    where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'CLOSING' }, select: { id: true },
+  });
+  const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+  await Promise.all(closing.map(room => requestMicrosoftTeamsWarRoomProjection(room.id)));
 }
 
 async function adoptProviderChannel(
@@ -344,8 +476,10 @@ export async function provisionMicrosoftTeamsWarRoom(
   if (existing.ok && existing.value) {
     const adoption = await adoptProviderChannel(room, expectedProvisioningToken, existing.value);
     if (adoption === 'READY') {
-      const { projectMicrosoftTeamsWarRoomParticipants } = await import('./participants');
-      await projectMicrosoftTeamsWarRoomParticipants(room.id);
+      const { scheduleJob } = await import('@/lib/jobs/queue');
+      await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+      const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+      await requestMicrosoftTeamsWarRoomProjection(room.id);
     }
     return;
   }
@@ -407,13 +541,55 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
 
-  if (room.membershipType !== 'STANDARD')
-    return markFailed(
-      room.id,
-      expectedProvisioningToken,
-      'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED',
-      'Private Teams war rooms require an owner and initial members.'
-    );
+  const metadata = room.metadata as { privateOwnerObjectId?: unknown; privateOwnerUserId?: unknown } | null;
+  let privateOwnerObjectId = typeof metadata?.privateOwnerObjectId === 'string' ? metadata.privateOwnerObjectId : null;
+  if (room.membershipType === 'PRIVATE') {
+    if (!privateOwnerObjectId) return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_OWNER_UNAVAILABLE', 'Private Teams war rooms require a verified owner.');
+    let owner = await findTeamMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, userObjectId: privateOwnerObjectId });
+    if (!owner.ok) {
+      if (owner.code === 'RATE_LIMITED' || owner.code === 'TRANSIENT_READ' || owner.code === 'GRAPH_TOKEN_FAILED') throw new WarRoomRetryableError(owner.message, owner.retryAfterMs);
+      return markFailed(room.id, expectedProvisioningToken, owner.code, owner.message);
+    }
+    if (!owner.value) {
+      // Fallback: the durable snapshot owner may have left the Team since the
+      // request boundary. Re-resolve from incident assignee / team-lead links
+      // and try the next verified candidate that is actually in the Team.
+      const incidentForFallback = await prisma.incident.findUnique({
+        where: { id: room.incident.id },
+        select: { assigneeId: true, service: { select: { team: { select: { teamLeadId: true } } } } },
+      });
+      const fallbackCandidates = [incidentForFallback?.assigneeId, incidentForFallback?.service.team?.teamLeadId].filter(
+        (id): id is string => Boolean(id)
+      );
+      if (fallbackCandidates.length > 0) {
+        const destinationTenant = room.providerTenantId;
+        const fallbackLinks = await prisma.chatIdentityLink.findMany({
+          where: { provider: 'MICROSOFT_TEAMS', providerTenantId: destinationTenant, revokedAt: null, userId: { in: fallbackCandidates } },
+          select: { userId: true, providerUserId: true, providerObjectId: true },
+        });
+        for (const userId of fallbackCandidates) {
+          if (userId === (metadata?.privateOwnerUserId as string | undefined)) continue;
+          const link = fallbackLinks.find(candidate => candidate.userId === userId);
+          const objectId = link?.providerObjectId ?? link?.providerUserId ?? null;
+          if (!objectId) continue;
+          const candidateOwner = await findTeamMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, userObjectId: objectId });
+          if (!candidateOwner.ok) {
+            if (candidateOwner.code === 'RATE_LIMITED' || candidateOwner.code === 'TRANSIENT_READ' || candidateOwner.code === 'GRAPH_TOKEN_FAILED') throw new WarRoomRetryableError(candidateOwner.message, candidateOwner.retryAfterMs);
+            return markFailed(room.id, expectedProvisioningToken, candidateOwner.code, candidateOwner.message);
+          }
+          if (!candidateOwner.value) continue;
+          await prisma.incidentWarRoom.updateMany({
+            where: { id: room.id, provisioningToken: expectedProvisioningToken },
+            data: { metadata: { privateOwnerUserId: userId, privateOwnerObjectId: objectId } },
+          });
+          privateOwnerObjectId = objectId;
+          owner = candidateOwner;
+          break;
+        }
+      }
+      if (!owner.value) return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_OWNER_NOT_IN_TEAM', 'The selected private-room owner is not a member of the parent Team.');
+    }
+  }
 
   const current = await prisma.incidentWarRoom.findUnique({
     where: { id: room.id },
@@ -453,7 +629,8 @@ export async function provisionMicrosoftTeamsWarRoom(
     teamId: room.providerContainerId,
     displayName: warRoomChannelName(room.incident.id, room.generation, room.incident.title),
     description: marker,
-    membershipType: 'STANDARD',
+    membershipType: room.membershipType,
+    ...(room.membershipType === 'PRIVATE' ? { ownerObjectId: privateOwnerObjectId! } : {}),
   });
 
   if (!created.ok) {
@@ -475,8 +652,10 @@ export async function provisionMicrosoftTeamsWarRoom(
   }
   const adoption = await adoptProviderChannel(room, expectedProvisioningToken, created.value);
   if (adoption === 'READY') {
-    const { projectMicrosoftTeamsWarRoomParticipants } = await import('./participants');
-    await projectMicrosoftTeamsWarRoomParticipants(room.id);
+    const { scheduleJob } = await import('@/lib/jobs/queue');
+    await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+    const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+    await requestMicrosoftTeamsWarRoomProjection(room.id);
   }
   if (adoption === 'FENCED')
     await prisma.incidentWarRoom.updateMany({
@@ -519,6 +698,7 @@ async function validateWarRoomProvisioningAuthority(room: {
   installationId: string | null;
   providerTenantId: string | null;
   providerContainerId: string | null;
+  membershipType: 'STANDARD' | 'PRIVATE' | null;
   incident: { id: string; status: string };
 }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
   const currentIncident = await prisma.incident.findUnique({
@@ -578,6 +758,12 @@ async function validateWarRoomProvisioningAuthority(room: {
       code: 'WAR_ROOM_CAPABILITY_UNAVAILABLE',
       message:
         capabilities.failureReason ?? 'Microsoft Teams channel-create capability is unavailable.',
+    };
+  if (room.membershipType === 'PRIVATE' && !capabilities.canCreatePrivateWarRooms)
+    return {
+      allowed: false,
+      code: 'PRIVATE_WAR_ROOM_CAPABILITY_UNAVAILABLE',
+      message: 'Microsoft Teams private war rooms require verified member-management consent for this Team.',
     };
   return { allowed: true };
 }

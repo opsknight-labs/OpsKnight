@@ -17,7 +17,7 @@
 export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
   'ChannelSettings.Read.Group', // List teams / channels for destination picker (Graph)
 ] as const;
-export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.2.0';
+export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.3.0';
 
 export const MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',
@@ -65,6 +65,8 @@ export interface MicrosoftTeamsManifestOptions {
   /** Legacy alias for TeamSettings.Read.Group only. */
   includeOptionalPermissions?: boolean;
   includeTeamSettingsPermissions?: boolean;
+  /** Enables lifecycle and participant-management permissions in addition to channel creation. */
+  includeWarRoomCollaborationPermissions?: boolean;
   includeWarRoomPermissions?: boolean;
 }
 
@@ -105,12 +107,17 @@ export function buildMicrosoftTeamsAppManifest({
   includeOptionalPermissions = false,
   includeTeamSettingsPermissions = includeOptionalPermissions,
   includeWarRoomPermissions = false,
+  includeWarRoomCollaborationPermissions = false,
 }: MicrosoftTeamsManifestOptions): MicrosoftTeamsAppManifest {
   const origin = appUrl.replace(/\/+$/, '');
   const rscPermissions = [
     ...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS,
     ...(includeTeamSettingsPermissions ? MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS : []),
     ...(includeWarRoomPermissions ? MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS : []),
+    ...(includeWarRoomCollaborationPermissions ? [
+      ...MICROSOFT_TEAMS_WAR_ROOM_LIFECYCLE_RSC_PERMISSIONS,
+      ...MICROSOFT_TEAMS_WAR_ROOM_MEMBERSHIP_RSC_PERMISSIONS,
+    ] : []),
   ];
   const manifest: MicrosoftTeamsAppManifest = {
     $schema: 'https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json',

@@ -471,8 +471,10 @@ export type TeamsRscInstallationState = {
 export async function getTeamsWarRoomRscGrantState(input: {
   tenantId: string;
   teamId: string;
+  /** Exact operation permissions to inspect for this Team installation. */
+  requiredPermissions?: readonly string[];
 }): Promise<TeamsRscGrantState> {
-  const required = ['Channel.Create.Group'];
+  const required = [...(input.requiredPermissions ?? ['Channel.Create.Group'])];
   const resolved = await getMicrosoftTeamsConfig();
   const tenantId = input.tenantId.trim();
   const teamId = input.teamId.trim();

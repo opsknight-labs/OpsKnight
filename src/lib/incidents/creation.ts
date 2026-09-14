@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { IncidentUrgency, IncidentVisibility, Prisma } from '@prisma/client';
-import { runSerializableTransaction } from '@/lib/db-utils';
+import { runSerializableTransaction, TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD } from '@/lib/db-utils';
 import { AppError } from '@/lib/errors';
 import { validateCustomFieldValue } from '@/lib/custom-fields';
 import { IncidentCreateSchema } from '@/lib/validation';
@@ -440,7 +440,13 @@ export async function applyIncidentCreation(
 export async function executeIncidentCreation(
   input: IncidentCreationInput
 ): Promise<IncidentCreationResult> {
-  const result = await runSerializableTransaction(tx => applyIncidentCreation(tx, input));
+  // Concurrent alerts for the same dedup key are expected to contend; use the
+  // high-load retry budget so the losing serializable transaction can observe
+  // and merge into the winner rather than surfacing a transient P2034.
+  const result = await runSerializableTransaction(
+    tx => applyIncidentCreation(tx, input),
+    TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD
+  );
   const { telemetry, ...publicResult } = result;
   if (telemetry) {
     addOperationalMetric('opsknight_incident_classification_total', 1, {
