@@ -429,7 +429,7 @@ export default function IncidentsV3({
       <section className="status-v3-incidents-inline" id="incidents" aria-labelledby="status-v3-incidents-heading">
         <div className="status-v3-incidents-inline__head">
           <div className="status-v3-incidents-inline__title-wrap">
-            <h2 id="status-v3-incidents-heading" className="status-v3-incidents-inline__title">
+            <h2 id="status-v3-incidents-heading" className="status-section-title status-v3-incidents-inline__title">
               Incidents
             </h2>
             <span className="status-v3-incidents-inline__subtitle">Active & recent</span>
@@ -452,7 +452,7 @@ export default function IncidentsV3({
     <section className="status-v3-incidents-inline" id="incidents" aria-labelledby="status-v3-incidents-heading">
       <div className="status-v3-incidents-inline__head">
         <div className="status-v3-incidents-inline__title-wrap">
-          <h2 id="status-v3-incidents-heading" className="status-v3-incidents-inline__title">
+          <h2 id="status-v3-incidents-heading" className="status-section-title status-v3-incidents-inline__title">
             Incidents
           </h2>
           <span className="status-v3-incidents-inline__subtitle">

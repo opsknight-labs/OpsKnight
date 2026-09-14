@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import StatusPageAnnouncementManager, {
   type AnnouncementItem,
@@ -34,14 +34,16 @@ const mockServices = [
 
 describe('StatusPageAnnouncementManager Component', () => {
   let announcements: AnnouncementItem[];
-  let setAnnouncements: any;
+  let setAnnouncements: React.Dispatch<React.SetStateAction<AnnouncementItem[]>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     announcements = [...mockAnnouncements];
     setAnnouncements = vi.fn(updater => {
       if (typeof updater === 'function') {
-        announcements = updater(announcements);
+        announcements = (updater as (prevState: AnnouncementItem[]) => AnnouncementItem[])(
+          announcements
+        );
       } else {
         announcements = updater;
       }
@@ -81,18 +83,23 @@ describe('StatusPageAnnouncementManager Component', () => {
     fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
 
     // Default is Exact Time
-    const exactBtn = screen.getByRole('button', { name: /Exact Time/i });
-    const allDayBtn = screen.getByRole('button', { name: /All Day \/ Date Only/i });
+    const exactBtn = screen.getByRole('radio', { name: /Exact Time/i });
+    const allDayBtn = screen.getByRole('radio', { name: /All Day \/ Date Only/i });
     expect(exactBtn).toBeDefined();
     expect(allDayBtn).toBeDefined();
+    expect(exactBtn.getAttribute('aria-checked')).toBe('true');
+    expect(allDayBtn.getAttribute('aria-checked')).toBe('false');
 
     // Click All Day
     fireEvent.click(allDayBtn);
+    expect(exactBtn.getAttribute('aria-checked')).toBe('false');
+    expect(allDayBtn.getAttribute('aria-checked')).toBe('true');
     // Time input should no longer be present
     expect(screen.queryByDisplayValue(/\d{2}:\d{2}/)).toBeNull();
 
     // Click Exact Time back
     fireEvent.click(exactBtn);
+    expect(exactBtn.getAttribute('aria-checked')).toBe('true');
     expect(screen.getByText(/Set to Now/i)).toBeDefined();
   });
 
@@ -146,7 +153,7 @@ describe('StatusPageAnnouncementManager Component', () => {
   });
 
   it('successfully creates an announcement with exact ISO datetime and updates state', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+    vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         announcement: {
@@ -159,7 +166,7 @@ describe('StatusPageAnnouncementManager Component', () => {
           isActive: true,
         },
       }),
-    });
+    } as unknown as Response);
 
     renderManager();
 
@@ -187,18 +194,27 @@ describe('StatusPageAnnouncementManager Component', () => {
     });
   });
 
-  it('deletes an announcement when delete button is clicked', async () => {
-    (global.fetch as any).mockResolvedValueOnce({
+  it('deletes an announcement when delete button is clicked and confirmed in dialog', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({ success: true }),
-    });
+    } as unknown as Response);
 
     renderManager();
 
     const deleteButtons = screen.getAllByTitle('Delete Announcement');
     expect(deleteButtons.length).toBeGreaterThan(0);
 
+    // Clicking trigger opens confirmation modal
     fireEvent.click(deleteButtons[0]);
+
+    // Verify modal dialog appeared
+    expect(screen.getByText('Delete announcement?')).toBeDefined();
+    const confirmDeleteBtn = screen.getByRole('button', { name: 'Delete Announcement' });
+    expect(confirmDeleteBtn).toBeDefined();
+
+    // Click confirm
+    fireEvent.click(confirmDeleteBtn);
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
@@ -211,4 +227,100 @@ describe('StatusPageAnnouncementManager Component', () => {
       expect(setAnnouncements).toHaveBeenCalled();
     });
   });
+
+  it('displays error message and keeps modal open when delete request fails', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ error: 'Database connection failed' }),
+    } as unknown as Response);
+
+    renderManager();
+
+    const deleteButtons = screen.getAllByTitle('Delete Announcement');
+    fireEvent.click(deleteButtons[0]);
+
+    const confirmDeleteBtn = screen.getByRole('button', { name: 'Delete Announcement' });
+    fireEvent.click(confirmDeleteBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to delete announcement/i)).toBeDefined();
+    });
+  });
+
+  it('prevents scheduling publication at start time if start date is in the past', () => {
+    renderManager();
+
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+
+    // Select "At Start Time" publication option inside Publish Timing radiogroup
+    const publishTimingGroup = screen.getByRole('radiogroup', { name: /Publish Timing/i });
+    const atStartRadio = within(publishTimingGroup).getByRole('radio', { name: /At Start Time/i });
+    fireEvent.click(atStartRadio);
+
+    // Set a past start date
+    const dateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    fireEvent.change(dateInputs[0], { target: { value: '2020-01-01' } });
+
+    expect(
+      screen.getByText(/Scheduled publication start time must be in the future/i)
+    ).toBeDefined();
+
+    const submitBtn = screen.getByRole('button', { name: /Add Announcement/i });
+    expect(submitBtn.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('allows retrospective notices with past start dates when Publish Now is selected', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        announcement: {
+          id: 'ann-retro',
+          title: 'Resolved Database Incident',
+          message: 'Post-mortem retrospective announcement',
+          type: 'INCIDENT',
+          startDate: '2020-01-01T10:00:00.000Z',
+          endDate: '2020-01-01T12:00:00.000Z',
+          isActive: false,
+        },
+      }),
+    } as unknown as Response);
+
+    renderManager();
+
+    // Open composer modal
+    fireEvent.click(screen.getByRole('button', { name: /New Announcement/i }));
+
+    const titleInput = screen.getByPlaceholderText(/Scheduled Database Maintenance Window/i);
+    const messageInput = screen.getByPlaceholderText(/Describe the scope/i);
+
+    fireEvent.change(titleInput, { target: { value: 'Resolved Database Incident' } });
+    fireEvent.change(messageInput, { target: { value: 'Post-mortem retrospective announcement' } });
+
+    // Set past dates
+    const dateInputs = screen.getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+    fireEvent.change(dateInputs[0], { target: { value: '2020-01-01' } });
+
+    // Quick window +1h sets end date
+    const add1hBtn = screen.getByRole('button', { name: '+1h' });
+    fireEvent.click(add1hBtn);
+
+    // Notice preview should show concluded notice
+    expect(screen.getByText(/Concluded historical notice/i)).toBeDefined();
+
+    // Submit button should NOT be disabled
+    const submitBtn = screen.getByRole('button', { name: /Add Announcement/i });
+    expect(submitBtn.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(submitBtn);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/settings/status-page/announcements',
+        expect.objectContaining({
+          method: 'POST',
+        })
+      );
+    });
+  });
 });
+

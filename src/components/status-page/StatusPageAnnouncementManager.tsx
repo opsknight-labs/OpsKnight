@@ -10,14 +10,11 @@ import {
   CheckCircle2,
   Trash2,
   Sparkles,
-  Info,
   Layers,
-  Search,
   X,
   Plus,
   Radio,
   History,
-  Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button, FormField } from '@/components/ui';
@@ -39,6 +36,7 @@ import {
 } from '@/lib/timezone';
 import { notify } from '@/lib/toast';
 import { getUserFacingErrorMessage } from '@/lib/user-facing-error';
+import { deriveAnnouncementLifecycle } from '@/lib/status-pages/announcement-lifecycle';
 
 export const ANNOUNCEMENT_TYPES = [
   { value: 'INCIDENT', label: 'Incident', color: '#ef4444', background: '#fee2e2' },
@@ -48,26 +46,28 @@ export const ANNOUNCEMENT_TYPES = [
   { value: 'INFO', label: 'Information', color: '#64748b', background: '#f1f5f9' },
 ];
 
+type AnnouncementService = { id: string; name: string; region?: string | null };
+
 export interface AnnouncementItem {
   id: string;
   title: string;
   message: string;
   type: string;
-  startDate: string | Date;
-  endDate?: string | Date | null;
+  startDate: string;
+  endDate?: string | null;
   allDay?: boolean;
   timeMode?: string;
-  publishAt?: string | Date;
+  publishAt?: string;
   isActive: boolean;
-  affectedServiceIds?: string[] | any;
-  createdAt?: string | Date;
+  affectedServiceIds?: string[] | null;
+  createdAt?: string;
 }
 
 interface StatusPageAnnouncementManagerProps {
   statusPageId: string;
   announcements: AnnouncementItem[];
-  setAnnouncements: React.Dispatch<React.SetStateAction<any[]>>;
-  allServices: Array<{ id: string; name: string; region?: string | null }>;
+  setAnnouncements: React.Dispatch<React.SetStateAction<AnnouncementItem[]>>;
+  allServices: AnnouncementService[];
   browserTimeZone: string;
 }
 
@@ -204,7 +204,6 @@ export default function StatusPageAnnouncementManager({
   const [endTime, setEndTime] = useState('');
 
   const [isActive, setIsActive] = useState(true);
-  const [notifySubscribers, setNotifySubscribers] = useState(true);
   const [publishOption, setPublishOption] = useState<'NOW' | 'AT_START'>('NOW');
   const [notificationTiming, setNotificationTiming] = useState<'ON_PUBLISH' | 'AT_START' | 'NONE'>(
     'ON_PUBLISH'
@@ -214,10 +213,13 @@ export default function StatusPageAnnouncementManager({
   // Search & Filter Tabs
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [deletingAnnouncement, setDeletingAnnouncement] = useState<AnnouncementItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Service ID map for fast lookup
   const serviceMap = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; region?: string | null }>();
+    const map = new Map<string, AnnouncementService>();
     allServices.forEach(s => map.set(s.id, s));
     return map;
   }, [allServices]);
@@ -261,8 +263,25 @@ export default function StatusPageAnnouncementManager({
         return 'End date and time must be after start date and time.';
       }
     }
+    if (publishOption === 'AT_START' && parsedStartDate) {
+      if (parsedStartDate.getTime() <= Date.now()) {
+        return 'Scheduled publication start time must be in the future. Select "Publish Now" if this notice is already active or retrospective.';
+      }
+    }
+    if (notificationTiming === 'AT_START' && parsedStartDate) {
+      if (parsedStartDate.getTime() <= Date.now()) {
+        return 'Subscriber notification "At Start Time" cannot be scheduled in the past. Select "On Publish" or a future start time.';
+      }
+    }
     return null;
-  }, [parsedStartResult, parsedStartDate, parsedEndResult, parsedEndDate]);
+  }, [
+    parsedStartResult,
+    parsedStartDate,
+    parsedEndResult,
+    parsedEndDate,
+    publishOption,
+    notificationTiming,
+  ]);
 
   const calculatedDuration = useMemo(() => {
     if (parsedStartDate && parsedEndDate && parsedEndDate > parsedStartDate) {
@@ -280,17 +299,18 @@ export default function StatusPageAnnouncementManager({
     let draft = 0;
 
     announcements.forEach(a => {
-      if (!a.isActive) {
+      const lifecycle = deriveAnnouncementLifecycle({
+        isActive: a.isActive,
+        startDate: a.startDate,
+        endDate: a.endDate,
+        publishAt: a.publishAt,
+        now,
+      });
+      if (lifecycle.isDraft) {
         draft++;
-        return;
-      }
-      const s = new Date(a.startDate);
-      const e = a.endDate ? new Date(a.endDate) : null;
-      const pub = a.publishAt ? new Date(a.publishAt) : null;
-      const isScheduled = pub ? pub > now : s > now;
-      if (isScheduled) {
+      } else if (lifecycle.isScheduled) {
         scheduled++;
-      } else if (e && e < now) {
+      } else if (lifecycle.isConcluded) {
         concluded++;
       } else {
         active++;
@@ -306,18 +326,19 @@ export default function StatusPageAnnouncementManager({
     const now = new Date();
 
     return announcements.filter(a => {
-      const s = new Date(a.startDate);
-      const e = a.endDate ? new Date(a.endDate) : null;
-      const pub = a.publishAt ? new Date(a.publishAt) : null;
-      const isUpcoming = pub ? pub > now : s > now;
-      const isEnded = e ? e < now : false;
-      const isOngoing = !isUpcoming && !isEnded && a.isActive;
+      const lifecycle = deriveAnnouncementLifecycle({
+        isActive: a.isActive,
+        startDate: a.startDate,
+        endDate: a.endDate,
+        publishAt: a.publishAt,
+        now,
+      });
 
       // Filter Tab
-      if (activeTab === 'active' && !isOngoing) return false;
-      if (activeTab === 'scheduled' && (!isUpcoming || !a.isActive)) return false;
-      if (activeTab === 'concluded' && (!isEnded || !a.isActive)) return false;
-      if (activeTab === 'draft' && a.isActive) return false;
+      if (activeTab === 'active' && !lifecycle.isActive) return false;
+      if (activeTab === 'scheduled' && !lifecycle.isScheduled) return false;
+      if (activeTab === 'concluded' && !lifecycle.isConcluded) return false;
+      if (activeTab === 'draft' && !lifecycle.isDraft) return false;
 
       // Search Query
       if (q) {
@@ -392,7 +413,6 @@ export default function StatusPageAnnouncementManager({
     setEndTime('');
     setAffectedServiceIds([]);
     setIsActive(true);
-    setNotifySubscribers(true);
     setPublishOption('NOW');
     setNotificationTiming('ON_PUBLISH');
     setAnnouncementError(null);
@@ -405,6 +425,7 @@ export default function StatusPageAnnouncementManager({
 
   const handleCreate = async (e: React.FormEvent | React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setAnnouncementError(null);
 
     const trimmedTitle = title.trim();
@@ -425,7 +446,6 @@ export default function StatusPageAnnouncementManager({
       return;
     }
 
-    // Convert local dates to ISO strings
     const startIso = parsedStartDate.toISOString();
     const endIso = parsedEndDate ? parsedEndDate.toISOString() : null;
 
@@ -446,7 +466,6 @@ export default function StatusPageAnnouncementManager({
             publishOption,
             notificationTiming,
             isActive: publishOption === 'NOW' ? isActive : true,
-            notifySubscribers: notificationTiming !== 'NONE',
             affectedServiceIds: affectedServiceIds.length > 0 ? affectedServiceIds : null,
           }),
         });
@@ -456,9 +475,30 @@ export default function StatusPageAnnouncementManager({
           throw new Error(data.error || 'Failed to create announcement');
         }
 
-        if (data?.announcement) {
-          setAnnouncements(current => [data.announcement, ...current]);
-          notify.success('Announcement published successfully');
+        const created = data?.announcement as AnnouncementItem | undefined;
+        if (created) {
+          setAnnouncements(current => [created, ...current]);
+          const lifecycle = deriveAnnouncementLifecycle({
+            isActive: created.isActive,
+            startDate: created.startDate,
+            endDate: created.endDate,
+            publishAt: created.publishAt,
+          });
+          if (lifecycle.isDraft) {
+            notify.success('Announcement saved as draft.');
+          } else if (lifecycle.isScheduledForPublication) {
+            const publishTime = formatDateTime(created.publishAt ?? created.startDate, browserTimeZone, {
+              format: 'datetime',
+            });
+            notify.success(`Announcement scheduled to publish ${publishTime}.`);
+          } else if (lifecycle.isPublishedUpcoming) {
+            const startTimeLabel = formatDateTime(created.startDate, browserTimeZone, {
+              format: 'datetime',
+            });
+            notify.success(`Announcement published. Event starts ${startTimeLabel}.`);
+          } else {
+            notify.success('Announcement published.');
+          }
         }
 
         setIsCreateOpen(false);
@@ -469,32 +509,33 @@ export default function StatusPageAnnouncementManager({
     });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string): Promise<boolean> => {
     setAnnouncementError(null);
-    startTransition(async () => {
-      try {
-        const response = await fetch('/api/settings/status-page/announcements', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ statusPageId, id }),
-        });
+    try {
+      const response = await fetch('/api/settings/status-page/announcements', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusPageId, id }),
+      });
 
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to delete announcement');
-        }
-
-        setAnnouncements(current => current.filter(item => item.id !== id));
-        notify.success('Announcement deleted');
-      } catch (err) {
-        setAnnouncementError(getUserFacingErrorMessage(err) || 'Failed to delete announcement');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete announcement');
       }
-    });
+
+      setAnnouncements(current => current.filter(item => item.id !== id));
+      notify.success('Announcement deleted');
+      return true;
+    } catch (err) {
+      const msg = getUserFacingErrorMessage(err) || 'Failed to delete announcement';
+      setAnnouncementError(msg);
+      notify.error(msg);
+      return false;
+    }
   };
 
   return (
     <div className="flex flex-col gap-6">
-      {/* 1. Header & Metrics Bar */}
       <StatusPageSectionCard
         title="Status Page Announcements"
         description="Communicate scheduled maintenance windows, active incidents, and service updates to subscribers and visitors."
@@ -511,12 +552,14 @@ export default function StatusPageAnnouncementManager({
           </Button>
         }
       >
-        {/* Metric Cards Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" role="tablist" aria-label="Announcement filter metrics">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'all'}
             onClick={() => setActiveTab('all')}
             className={cn(
-              'p-3 rounded-xl border transition-all cursor-pointer select-none',
+              'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'all'
                 ? 'bg-primary/10 border-primary shadow-xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
@@ -529,12 +572,15 @@ export default function StatusPageAnnouncementManager({
               <span className="text-xl font-bold text-foreground">{counts.total}</span>
               <Bell className="w-4 h-4 text-muted-foreground" />
             </div>
-          </div>
+          </button>
 
-          <div
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'active'}
             onClick={() => setActiveTab('active')}
             className={cn(
-              'p-3 rounded-xl border transition-all cursor-pointer select-none',
+              'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'active'
                 ? 'bg-emerald-500/10 border-emerald-500 shadow-xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
@@ -554,12 +600,15 @@ export default function StatusPageAnnouncementManager({
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
               </span>
             </div>
-          </div>
+          </button>
 
-          <div
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'scheduled'}
             onClick={() => setActiveTab('scheduled')}
             className={cn(
-              'p-3 rounded-xl border transition-all cursor-pointer select-none',
+              'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'scheduled'
                 ? 'bg-indigo-500/10 border-indigo-500 shadow-xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
@@ -574,12 +623,15 @@ export default function StatusPageAnnouncementManager({
               </span>
               <Clock className="w-4 h-4 text-indigo-500" />
             </div>
-          </div>
+          </button>
 
-          <div
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'concluded'}
             onClick={() => setActiveTab('concluded')}
             className={cn(
-              'p-3 rounded-xl border transition-all cursor-pointer select-none',
+              'p-3 rounded-xl border text-left transition-all cursor-pointer select-none w-full',
               activeTab === 'concluded'
                 ? 'bg-muted border-border shadow-xs'
                 : 'bg-card border-border/80 hover:bg-muted/30'
@@ -592,12 +644,10 @@ export default function StatusPageAnnouncementManager({
               <span className="text-xl font-bold text-muted-foreground">{counts.concluded}</span>
               <History className="w-4 h-4 text-muted-foreground" />
             </div>
-          </div>
+          </button>
         </div>
 
-        {/* Filter Tabs & Search Bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-          {/* Tab Controls */}
           <div className="flex items-center gap-1 overflow-x-auto p-1 bg-muted/50 rounded-lg border border-border/70 text-xs">
             <button
               type="button"
@@ -665,7 +715,6 @@ export default function StatusPageAnnouncementManager({
             )}
           </div>
 
-          {/* Search Input (No Icon) */}
           <div className="relative min-w-[240px]">
             <input
               type="text"
@@ -687,7 +736,6 @@ export default function StatusPageAnnouncementManager({
         </div>
       </StatusPageSectionCard>
 
-      {/* 2. Full-Width Announcements List */}
       <div className="space-y-3.5">
         {filteredAnnouncements.length === 0 ? (
           <div className="py-14 px-6 text-center rounded-xl border border-dashed border-border/80 bg-card">
@@ -722,23 +770,25 @@ export default function StatusPageAnnouncementManager({
             const eDate = announcement.endDate ? new Date(announcement.endDate) : null;
             const now = new Date();
 
-            const isUpcoming = sDate > now;
-            const isEnded = eDate ? eDate < now : false;
-            const isOngoing = !isUpcoming && !isEnded && announcement.isActive;
+            const lifecycle = deriveAnnouncementLifecycle({
+              isActive: announcement.isActive,
+              startDate: announcement.startDate,
+              endDate: announcement.endDate,
+              publishAt: announcement.publishAt,
+              now,
+            });
 
             const durationLabel = eDate && eDate > sDate ? formatDuration(sDate, eDate) : null;
 
-            // Resolve affected service names
-            const affectedServices = (announcement.affectedServiceIds || [])
-              .map((id: string) => serviceMap.get(id))
-              .filter(Boolean);
+            const affectedServices = (announcement.affectedServiceIds ?? [])
+              .map(id => serviceMap.get(id))
+              .filter((service): service is AnnouncementService => Boolean(service));
 
             return (
               <div
                 key={announcement.id}
                 className="p-4 sm:p-5 rounded-xl border border-border/80 bg-card hover:border-border transition-all shadow-2xs space-y-3"
               >
-                {/* Header: Type Badge, Status Pill, Duration & Delete */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
@@ -751,17 +801,16 @@ export default function StatusPageAnnouncementManager({
                       {typeConfig.label}
                     </span>
 
-                    {/* Status Pill */}
-                    {!announcement.isActive ? (
+                    {lifecycle.isDraft ? (
                       <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-muted text-muted-foreground">
                         Draft / Inactive
                       </span>
-                    ) : isUpcoming ? (
+                    ) : lifecycle.isScheduled ? (
                       <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center gap-1.5">
                         <Clock className="w-3 h-3" />
-                        Upcoming
+                        {lifecycle.isScheduledForPublication ? 'Scheduled to Publish' : 'Upcoming'}
                       </span>
-                    ) : isOngoing ? (
+                    ) : lifecycle.isActive ? (
                       <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         Active Now
@@ -787,8 +836,11 @@ export default function StatusPageAnnouncementManager({
                       variant="ghost"
                       size="sm"
                       className="h-8 px-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition-colors"
-                      onClick={() => handleDelete(announcement.id)}
-                      disabled={isPending}
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeletingAnnouncement(announcement);
+                      }}
+                      disabled={isPending || isDeleting}
                       title="Delete Announcement"
                     >
                       <Trash2 className="w-4 h-4 mr-1" />
@@ -797,7 +849,6 @@ export default function StatusPageAnnouncementManager({
                   </div>
                 </div>
 
-                {/* Content Section */}
                 <div>
                   <h4 className="text-sm sm:text-base font-semibold text-foreground tracking-tight">
                     {announcement.title}
@@ -807,10 +858,9 @@ export default function StatusPageAnnouncementManager({
                   </p>
                 </div>
 
-                {/* Footer Metadata: Schedule Timestamps & Affected Services */}
                 <div className="pt-3 border-t border-border/60 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs text-muted-foreground">
                   <div className="flex flex-wrap items-center gap-4">
-                    {announcement.allDay || (announcement as any).timeMode === 'ALL_DAY' ? (
+                    {announcement.allDay || announcement.timeMode === 'ALL_DAY' ? (
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-3.5 h-3.5 text-primary shrink-0" />
                         <span>
@@ -852,14 +902,13 @@ export default function StatusPageAnnouncementManager({
                     )}
                   </div>
 
-                  {/* Affected Services Badges */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <Layers className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                     <span className="font-medium text-foreground">Services:</span>
                     {affectedServices.length > 0 ? (
-                      affectedServices.slice(0, 4).map((s: any) => (
-                        <Badge key={s.id} variant="secondary" size="xs">
-                          {s.name}
+                      affectedServices.slice(0, 4).map(service => (
+                        <Badge key={service.id} variant="secondary" size="xs">
+                          {service.name}
                         </Badge>
                       ))
                     ) : (
@@ -880,7 +929,6 @@ export default function StatusPageAnnouncementManager({
         )}
       </div>
 
-      {/* 3. Dedicated Focused Modal Composer */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col p-6 overflow-hidden">
           <DialogHeader className="shrink-0 pb-2">
@@ -901,7 +949,6 @@ export default function StatusPageAnnouncementManager({
 
           <form onSubmit={handleCreate} className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto pr-1 space-y-5 py-2">
-              {/* Section 1: Notice Info */}
               <div className="space-y-3.5">
                 <FormField
                   type="input"
@@ -941,9 +988,15 @@ export default function StatusPageAnnouncementManager({
                       </span>
                     </div>
 
-                    <div className="inline-flex w-full items-center bg-muted/60 p-1 rounded-lg border border-border/80 text-xs font-medium">
+                    <div
+                      className="inline-flex w-full items-center bg-muted/60 p-1 rounded-lg border border-border/80 text-xs font-medium"
+                      role="radiogroup"
+                      aria-label="Time Precision"
+                    >
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={specifyTime}
                         onClick={() => setSpecifyTime(true)}
                         className={cn(
                           'flex-1 py-1.5 rounded-md transition-all text-center font-semibold',
@@ -956,6 +1009,8 @@ export default function StatusPageAnnouncementManager({
                       </button>
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={!specifyTime}
                         onClick={() => setSpecifyTime(false)}
                         className={cn(
                           'flex-1 py-1.5 rounded-md transition-all text-center font-semibold',
@@ -981,7 +1036,6 @@ export default function StatusPageAnnouncementManager({
                 />
               </div>
 
-              {/* Section 2: Schedule & Timing Window */}
               <div className="p-4 rounded-xl border border-border/80 bg-muted/20 space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-foreground flex items-center gap-1.5">
@@ -993,7 +1047,6 @@ export default function StatusPageAnnouncementManager({
                   </span>
                 </div>
 
-                {/* Start Date & Time */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-semibold text-foreground">
@@ -1015,7 +1068,18 @@ export default function StatusPageAnnouncementManager({
                       <input
                         type="date"
                         value={startDate}
-                        onChange={e => setStartDate(e.target.value)}
+                        min={
+                          publishOption === 'AT_START'
+                            ? getLocalDateString(new Date(), browserTimeZone)
+                            : undefined
+                        }
+                        onChange={e => {
+                          const nextD = e.target.value;
+                          setStartDate(nextD);
+                          if (endDate && endDate < nextD) {
+                            setEndDate(nextD);
+                          }
+                        }}
                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                         required
                       />
@@ -1025,7 +1089,13 @@ export default function StatusPageAnnouncementManager({
                         <input
                           type="time"
                           value={startTime}
-                          onChange={e => setStartTime(e.target.value)}
+                          onChange={e => {
+                            const nextT = e.target.value;
+                            setStartTime(nextT);
+                            if (endDate === startDate && endTime && endTime <= nextT) {
+                              setEndTime('');
+                            }
+                          }}
                           className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary"
                           required
                         />
@@ -1034,7 +1104,6 @@ export default function StatusPageAnnouncementManager({
                   </div>
                 </div>
 
-                {/* End Date & Time */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-semibold text-foreground">
@@ -1057,6 +1126,7 @@ export default function StatusPageAnnouncementManager({
                       <input
                         type="date"
                         value={endDate}
+                        min={startDate}
                         onChange={e => setEndDate(e.target.value)}
                         placeholder="Open-ended"
                         className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -1067,6 +1137,7 @@ export default function StatusPageAnnouncementManager({
                         <input
                           type="time"
                           value={endTime}
+                          min={endDate === startDate && specifyTime ? startTime : undefined}
                           onChange={e => setEndTime(e.target.value)}
                           disabled={!endDate}
                           className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
@@ -1075,39 +1146,20 @@ export default function StatusPageAnnouncementManager({
                     )}
                   </div>
 
-                  {/* Duration Presets */}
                   <div className="flex items-center gap-1.5 flex-wrap mt-2.5 pt-2.5 border-t border-border/50">
                     <span className="text-[10px] uppercase font-semibold text-muted-foreground mr-1">
                       Quick Window:
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleAddDuration(1)}
-                      className="px-2.5 py-1 text-xs font-medium bg-background border border-border rounded-md hover:bg-muted text-foreground transition-colors"
-                    >
-                      +1h
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddDuration(2)}
-                      className="px-2.5 py-1 text-xs font-medium bg-background border border-border rounded-md hover:bg-muted text-foreground transition-colors"
-                    >
-                      +2h
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddDuration(4)}
-                      className="px-2.5 py-1 text-xs font-medium bg-background border border-border rounded-md hover:bg-muted text-foreground transition-colors"
-                    >
-                      +4h
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAddDuration(24)}
-                      className="px-2.5 py-1 text-xs font-medium bg-background border border-border rounded-md hover:bg-muted text-foreground transition-colors"
-                    >
-                      +24h
-                    </button>
+                    {[1, 2, 4, 24].map(hours => (
+                      <button
+                        key={hours}
+                        type="button"
+                        onClick={() => handleAddDuration(hours)}
+                        className="px-2.5 py-1 text-xs font-medium bg-background border border-border rounded-md hover:bg-muted text-foreground transition-colors"
+                      >
+                        +{hours}h
+                      </button>
+                    ))}
                     {endDate && (
                       <button
                         type="button"
@@ -1120,7 +1172,6 @@ export default function StatusPageAnnouncementManager({
                   </div>
                 </div>
 
-                {/* Real-time Duration & Status Pill */}
                 {timeValidationError ? (
                   <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -1140,7 +1191,11 @@ export default function StatusPageAnnouncementManager({
                       )}
                     </span>
                     <span className="font-mono text-xs">
-                      {parsedStartDate && parsedStartDate.getTime() > Date.now() ? (
+                      {parsedEndDate && parsedEndDate.getTime() < Date.now() ? (
+                        <span className="text-muted-foreground font-medium">
+                          ● Concluded historical notice
+                        </span>
+                      ) : parsedStartDate && parsedStartDate.getTime() > Date.now() ? (
                         <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
                           ● Scheduled
                         </span>
@@ -1154,7 +1209,6 @@ export default function StatusPageAnnouncementManager({
                 )}
               </div>
 
-              {/* Section 3: Affected Services & Notifications */}
               <div className="space-y-3 pt-1">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
@@ -1220,16 +1274,17 @@ export default function StatusPageAnnouncementManager({
                   </div>
                 )}
 
-                {/* Publication & Notification Timing Controls */}
                 <div className="space-y-3 pt-2 border-t border-border/60">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                       <Radio className="w-3.5 h-3.5 text-primary" />
                       Publish Timing
                     </label>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-2 gap-2 text-xs" role="radiogroup" aria-label="Publish Timing">
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={publishOption === 'NOW'}
                         onClick={() => setPublishOption('NOW')}
                         className={cn(
                           'p-2.5 rounded-lg border text-left transition-all',
@@ -1245,6 +1300,8 @@ export default function StatusPageAnnouncementManager({
                       </button>
                       <button
                         type="button"
+                        role="radio"
+                        aria-checked={publishOption === 'AT_START'}
                         onClick={() => setPublishOption('AT_START')}
                         className={cn(
                           'p-2.5 rounded-lg border text-left transition-all',
@@ -1266,13 +1323,12 @@ export default function StatusPageAnnouncementManager({
                       <Bell className="w-3.5 h-3.5 text-primary" />
                       Notify Subscribers
                     </label>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="grid grid-cols-3 gap-2 text-xs" role="radiogroup" aria-label="Notify Subscribers">
                       <button
                         type="button"
-                        onClick={() => {
-                          setNotificationTiming('ON_PUBLISH');
-                          setNotifySubscribers(true);
-                        }}
+                        role="radio"
+                        aria-checked={notificationTiming === 'ON_PUBLISH'}
+                        onClick={() => setNotificationTiming('ON_PUBLISH')}
                         className={cn(
                           'p-2 rounded-lg border text-center transition-all',
                           notificationTiming === 'ON_PUBLISH'
@@ -1284,10 +1340,9 @@ export default function StatusPageAnnouncementManager({
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNotificationTiming('AT_START');
-                          setNotifySubscribers(true);
-                        }}
+                        role="radio"
+                        aria-checked={notificationTiming === 'AT_START'}
+                        onClick={() => setNotificationTiming('AT_START')}
                         className={cn(
                           'p-2 rounded-lg border text-center transition-all',
                           notificationTiming === 'AT_START'
@@ -1299,10 +1354,9 @@ export default function StatusPageAnnouncementManager({
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setNotificationTiming('NONE');
-                          setNotifySubscribers(false);
-                        }}
+                        role="radio"
+                        aria-checked={notificationTiming === 'NONE'}
+                        onClick={() => setNotificationTiming('NONE')}
                         className={cn(
                           'p-2 rounded-lg border text-center transition-all',
                           notificationTiming === 'NONE'
@@ -1317,7 +1371,6 @@ export default function StatusPageAnnouncementManager({
                 </div>
               </div>
 
-              {/* Error Message */}
               {announcementError && (
                 <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium">
                   {announcementError}
@@ -1325,7 +1378,6 @@ export default function StatusPageAnnouncementManager({
               )}
             </div>
 
-            {/* Footer / Submit */}
             <DialogFooter className="pt-3 gap-2 shrink-0 border-t border-border">
               <Button
                 type="button"
@@ -1345,6 +1397,81 @@ export default function StatusPageAnnouncementManager({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deletingAnnouncement)}
+        onOpenChange={open => {
+          if (!open && !isDeleting) {
+            setDeletingAnnouncement(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Delete announcement?
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-sm text-foreground">
+              Are you sure you want to delete &ldquo;<strong>{deletingAnnouncement?.title}</strong>&rdquo;?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3.5 rounded-lg border border-border/80 bg-muted/30 text-xs text-muted-foreground space-y-1.5">
+            <p>
+              This will remove the announcement from the public status page and cancel any subscriber notification that has not yet reached the provider.
+            </p>
+            {deletingAnnouncement && (
+              <p className="font-medium text-foreground">
+                Scheduled:{' '}
+                {formatDateTime(deletingAnnouncement.startDate, browserTimeZone, { format: 'datetime' })}
+              </p>
+            )}
+          </div>
+
+          {deleteError && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium">
+              {deleteError}
+            </div>
+          )}
+
+          <DialogFooter className="pt-3 gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setDeletingAnnouncement(null);
+                setDeleteError(null);
+              }}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              isLoading={isDeleting}
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!deletingAnnouncement || isDeleting) return;
+                const id = deletingAnnouncement.id;
+                setIsDeleting(true);
+                setDeleteError(null);
+                const success = await handleDelete(id);
+                setIsDeleting(false);
+                if (success) {
+                  setDeletingAnnouncement(null);
+                } else {
+                  setDeleteError('Failed to delete announcement. Please check your connection and try again.');
+                }
+              }}
+            >
+              Delete Announcement
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

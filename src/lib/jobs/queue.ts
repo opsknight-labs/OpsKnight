@@ -3,13 +3,19 @@ import { Prisma } from '@prisma/client';
 import type { EventSideEffectPayload } from '../event-outbox';
 import { logger } from '../logger';
 import prisma from '../prisma';
+import {
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1,
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
+  STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PROCESSING,
+  isAnnouncementFanoutDeliveryMode,
+  type AnnouncementFanoutDeliveryMode,
+} from '../status-pages/announcement-fanout-contract';
 
 const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 const PROCESSING_LEASE_HEARTBEAT_MS = 60 * 1000;
 
 function isNonRetryableBackgroundJobError(error: string): boolean {
-  // Slack's free-workspace message cap and an empty responder configuration
-  // require an operator change, not five identical retries.
   return /message_limit_exceeded|user has not enabled any notification channels/i.test(error);
 }
 
@@ -19,52 +25,10 @@ function isBulkQueueBackpressureError(error: unknown): boolean {
   return e.name === 'BulkQueueBackpressureError' || (typeof e.message === 'string' && e.message.includes('high watermark'));
 }
 
-/**
- * Durable backpressure: reschedule without consuming a retry attempt. The
- * fanout's cursor+fanout rows persist materialized progress; polling resumes
- * the same job with a short delay until the queue drains below the low
- * watermark. This avoids exhausting maxAttempts=5 while draining ~55min for
- * 20k targets at ~6s/page under queue saturation.
- *
- * Crash semantics: bulk fanout jobs do NOT consume attempts on claim
- * (see claimPendingJobs — attempts increments only for non-bulk jobs).
- * - A caught handler failure increments attempts via markJobFailed.
- * - A successful backpressure defer just sets PENDING+delay, no increment,
- *   so 100 defers leave the failure budget unchanged and a SIGKILL
- *   between claim and defer is reclaimable without a stale increment
- *   only if the defer committed; otherwise the stale lease is treated
- *   as an abnormal termination and the reclaim increments attempts.
- * - A stale PROCESSING bulk lease (OOM/SIGKILL, 10m) increments attempts
- *   on reclaim (PENDING unless attempts+1>=maxAttempts then FAILED),
- *   so N consecutive crashes eventually fail the campaign instead of
- *   retrying forever.
- */
 function bulkBackpressureDelayMs(): number {
-  // Base 6s + jitter 0-2s avoids thundering-herd when 100 campaigns are
-  // simultaneously backpressured (all wake ~6s). Future improvement: adaptive
-  // 6s/10s/15s/30s with reset on low-watermark crossing.
   const baseMs = 6_000;
   const jitterMs = Math.floor(Math.random() * 2_000);
   return baseMs + jitterMs;
-}
-
-async function rescheduleBulkBackpressuredJob(jobId: string): Promise<void> {
-  const delayMs = bulkBackpressureDelayMs();
-  // Backpressure is not a failure — just defer without consuming attempts.
-  // No payload marker needed; claim did not increment attempts so a crash
-  // before this commit leaves PROCESSING with attempts < maxAttempts and the
-  // next claimPendingJobs will naturally reclaim it via the
-  // (PROCESSING AND startedAt < NOW-10m) branch.
-  await prisma.backgroundJob.update({
-    where: { id: jobId },
-    data: {
-      status: 'PENDING',
-      scheduledAt: new Date(Date.now() + delayMs),
-      startedAt: null,
-      error: null,
-      failedAt: null,
-    },
-  });
 }
 
 export type JobType =
@@ -74,12 +38,20 @@ export type JobType =
   | 'SCHEDULED_TASK'
   | 'STATUS_PAGE_NOTIFICATION'
   | 'STATUS_PAGE_ANNOUNCEMENT_FANOUT'
+  | 'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'
   | 'CHATOPS_INTENT'
   | 'EXTERNAL_OPERATION'
   | 'WAR_ROOM_PROVISION'
   | 'WAR_ROOM_PARTICIPANT_SYNC'
   | 'WAR_ROOM_PROJECT';
-export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+export type JobStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'PENDING_V2'
+  | 'PROCESSING_V2'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'CANCELLED';
 interface JobPayload {
   incidentId?: string;
   stepIndex?: number;
@@ -97,16 +69,56 @@ export interface QueuedJob {
   maxAttempts: number;
 }
 
+function isAnnouncementFanoutV2(type: string): boolean {
+  return type === STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2;
+}
+
+function pendingStatusForJobType(type: string): JobStatus {
+  return isAnnouncementFanoutV2(type) ? STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING : 'PENDING';
+}
+
+function processingStatusForJobType(type: string): JobStatus {
+  return isAnnouncementFanoutV2(type)
+    ? STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PROCESSING
+    : 'PROCESSING';
+}
+
+async function rescheduleBulkBackpressuredJob(job: QueuedJob): Promise<void> {
+  const delayMs = bulkBackpressureDelayMs();
+  await prisma.backgroundJob.update({
+    where: { id: job.id },
+    data: isAnnouncementFanoutV2(job.type)
+      ? {
+          status: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
+          scheduledAt: new Date(Date.now() + delayMs),
+          startedAt: null,
+          error: null,
+          failedAt: null,
+        }
+      : {
+          status: 'PENDING',
+          scheduledAt: new Date(Date.now() + delayMs),
+          startedAt: null,
+          error: null,
+          failedAt: null,
+        },
+  });
+}
+
 function payloadValue(payload: unknown, key: string): unknown {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return undefined;
   const values = payload as Record<string, unknown>;
   switch (key) {
     case 'announcementId':
       return values.announcementId;
+    case 'deliveryMode':
+      return values.deliveryMode;
     case 'eventType':
       return values.eventType;
     case 'generation':
       return values.generation;
+    case 'notificationGeneration':
+      return values.notificationGeneration;
     case 'incidentId':
       return values.incidentId;
     case 'intentId':
@@ -137,8 +149,28 @@ function requiredPayloadString(payload: unknown, key: string): string {
   return value;
 }
 
+function requiredPayloadGeneration(payload: unknown): number {
+  const value = payloadValue(payload, 'notificationGeneration');
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error('Background job payload is missing a valid notificationGeneration');
+  }
+  return value;
+}
+
+function requiredAnnouncementDeliveryMode(payload: unknown): AnnouncementFanoutDeliveryMode {
+  const value = payloadValue(payload, 'deliveryMode');
+  if (!isAnnouncementFanoutDeliveryMode(value)) {
+    throw new Error('Background job payload is missing a valid announcement deliveryMode');
+  }
+  return value;
+}
+
 function isBulkNotificationJob(type: JobType): boolean {
-  return type === 'STATUS_PAGE_NOTIFICATION' || type === 'STATUS_PAGE_ANNOUNCEMENT_FANOUT';
+  return (
+    type === 'STATUS_PAGE_NOTIFICATION' ||
+    type === STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1 ||
+    type === STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2
+  );
 }
 
 async function bulkDeliveryPaused(): Promise<boolean> {
@@ -152,6 +184,9 @@ export async function scheduleJob(
   payload: JobPayload,
   maxAttempts: number = 3
 ): Promise<string> {
+  if (type === STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2) {
+    throw new Error('V2 announcement fan-out must use scheduleStatusPageAnnouncementFanout');
+  }
   const job = await prisma.backgroundJob.create({
     data: {
       type,
@@ -163,32 +198,51 @@ export async function scheduleJob(
   });
   return job.id;
 }
+
 export async function scheduleStatusPageNotification(
   incidentId: string,
   eventType: string
 ): Promise<string> {
   return scheduleJob('STATUS_PAGE_NOTIFICATION', new Date(), { incidentId, eventType }, 5);
 }
+
 export async function scheduleStatusPageAnnouncementFanout(
   announcementId: string,
-  statusPageId: string
+  statusPageId: string,
+  notificationGeneration: number,
+  deliveryMode: AnnouncementFanoutDeliveryMode = 'ALL_ELIGIBLE',
+  scheduledAt: Date = new Date()
 ): Promise<string> {
-  return scheduleJob(
-    'STATUS_PAGE_ANNOUNCEMENT_FANOUT',
-    new Date(),
-    { announcementId, statusPageId },
-    5
-  );
+  if (!Number.isSafeInteger(notificationGeneration) || notificationGeneration < 0) {
+    throw new Error('A valid announcement notification generation is required');
+  }
+  const job = await prisma.backgroundJob.create({
+    data: {
+      type: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
+      status: STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING,
+      scheduledAt,
+      payload: {
+        announcementId,
+        statusPageId,
+        notificationGeneration,
+        deliveryMode,
+      },
+      maxAttempts: 5,
+    },
+  });
+  return job.id;
 }
+
 export async function scheduleAutoUnsnooze(
   incidentId: string,
   snoozedUntil: Date
 ): Promise<string> {
   return scheduleJob('AUTO_UNSNOOZE', snoozedUntil, { incidentId });
 }
+
 export async function getPendingJobs(limit: number = 50): Promise<unknown[]> {
   return prisma.backgroundJob.findMany({
-    where: { status: 'PENDING', scheduledAt: { lte: new Date() } },
+    where: { status: { in: ['PENDING', STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING] }, scheduledAt: { lte: new Date() } },
     orderBy: { scheduledAt: 'asc' },
     take: limit,
   });
@@ -199,20 +253,25 @@ export async function claimPendingJobs(
   type?: JobType,
   excludeTypes: readonly JobType[] = []
 ): Promise<QueuedJob[]> {
-  // Bulk jobs do not increment attempts on claim (structural backpressure
-  // retry-neutrality). Stale bulk PROCESSING therefore would never reach
-  // attempts>=maxAttempts and would be reclaimable forever on OOM/sigkill.
-  // Increment a crash budget when reclaiming stale bulk execution: a real
-  // process crash burns one attempt; a successful backpressure defer is
-  // PENDING (not stale) and never hits this path, so 100 defers stay free.
   await prisma
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING state after exceeding maxAttempts' ELSE NULL END WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`
     )
-    .catch(err => logger.warn('[Queue] Failed to account stale bulk processing jobs', { error: err }));
+    .catch(err => logger.warn('[Queue] Failed to account stale bulk processing jobs (V1)', { error: err }));
+
+  await prisma
+    .$executeRaw(
+      Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING_V2'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING_V2 state after exceeding maxAttempts' ELSE NULL END WHERE "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" AND "status"='PROCESSING_V2'::"JobStatus" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts";`
+    )
+    .catch(err => logger.warn('[Queue] Failed to account stale V2 fan-out jobs', { error: err }));
+
   await prisma.$executeRaw(
     Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
   ).catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
+  await prisma.$executeRaw(
+    Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING_V2 state after exceeding maxAttempts',"failedAt"=NOW() WHERE "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" AND "status"='PROCESSING_V2'::"JobStatus" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
+  ).catch(err => logger.warn('[Queue] Failed to sweep zombie V2 fan-out jobs', { error: err }));
+
   const typeFilter = type
     ? Prisma.sql`AND candidate."type"=${type}::"JobType"`
     : Prisma.empty;
@@ -224,7 +283,29 @@ export async function claimPendingJobs(
   return prisma.$queryRaw<QueuedJob[]>(Prisma.sql`
     WITH cte AS (
       SELECT candidate."id" FROM "BackgroundJob" AS candidate
-      WHERE (candidate."status"='PENDING' OR (candidate."status"='PROCESSING' AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-INTERVAL '10 minutes')))
+      WHERE (
+          (
+            candidate."type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            AND (
+              candidate."status"='PENDING_V2'::"JobStatus"
+              OR (
+                candidate."status"='PROCESSING_V2'::"JobStatus"
+                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-INTERVAL '10 minutes')
+              )
+            )
+          )
+          OR
+          (
+            candidate."type"<>'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType"
+            AND (
+              candidate."status"='PENDING'::"JobStatus"
+              OR (
+                candidate."status"='PROCESSING'::"JobStatus"
+                AND (candidate."startedAt" IS NULL OR candidate."startedAt"<NOW()-INTERVAL '10 minutes')
+              )
+            )
+          )
+        )
         AND candidate."scheduledAt"<=NOW() AND candidate."attempts"<candidate."maxAttempts" ${typeFilter} ${excludedTypeFilter}
         AND (
           candidate."type"<>'SCHEDULED_TASK'::"JobType"
@@ -251,25 +332,34 @@ export async function claimPendingJobs(
       ORDER BY candidate."scheduledAt" ASC, candidate."createdAt" ASC, candidate."id" ASC
       FOR UPDATE OF candidate SKIP LOCKED LIMIT ${limit}
     )
-    UPDATE "BackgroundJob" SET "status"='PROCESSING',"startedAt"=NOW(),"attempts"=CASE WHEN "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType") THEN "attempts" ELSE "attempts"+1 END WHERE "id" IN (SELECT "id" FROM cte) RETURNING *;
+    UPDATE "BackgroundJob"
+    SET "status"=CASE
+          WHEN "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" THEN 'PROCESSING_V2'::"JobStatus"
+          ELSE 'PROCESSING'::"JobStatus"
+        END,
+        "startedAt"=NOW(),
+        "attempts"=CASE WHEN "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType") THEN "attempts" ELSE "attempts"+1 END
+    WHERE "id" IN (SELECT "id" FROM cte)
+    RETURNING *;
   `);
 }
 
 export async function markJobProcessing(jobId: string): Promise<void> {
-  // Bulk fanout jobs track failures via markJobFailed, not via claim.
-  // Keeping attempts stable on claim (see claimPendingJobs CASE) makes a
-  // SIGKILL between claim and backpressure defer retry-neutral.
-  // Mirror that here: if this helper is used as a fallback claim for a bulk
-  // job (job.status !== PROCESSING path in processJob), do not burn attempts.
-  const existing = await prisma.backgroundJob.findUnique({ where: { id: jobId }, select: { type: true } });
-  const isBulk = existing?.type === 'STATUS_PAGE_NOTIFICATION' || existing?.type === 'STATUS_PAGE_ANNOUNCEMENT_FANOUT';
+  const existing = await prisma.backgroundJob.findUnique({
+    where: { id: jobId },
+    select: { type: true },
+  });
+  if (!existing) return;
+  const type = existing.type as JobType;
+  const isBulk = isBulkNotificationJob(type);
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: isBulk
-      ? { status: 'PROCESSING', startedAt: new Date() }
+      ? { status: processingStatusForJobType(type), startedAt: new Date() }
       : { status: 'PROCESSING', startedAt: new Date(), attempts: { increment: 1 } },
   });
 }
+
 export async function markJobCompleted(jobId: string): Promise<void> {
   await prisma.backgroundJob.update({
     where: { id: jobId },
@@ -277,11 +367,6 @@ export async function markJobCompleted(jobId: string): Promise<void> {
   });
 }
 
-/**
- * A revoked war-room job must never be resurrected after an in-flight Graph
- * request returns.  Unlike ordinary jobs, its completion is therefore fenced
- * on the worker lease still being active.
- */
 async function markWarRoomJobCompleted(jobId: string): Promise<boolean> {
   const result = await prisma.backgroundJob.updateMany({
     where: { id: jobId, status: 'PROCESSING' },
@@ -304,20 +389,23 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
     },
   });
 }
+
 export async function markJobFailed(jobId: string, error: string): Promise<void> {
   const job = await prisma.backgroundJob.findUnique({ where: { id: jobId } });
   if (!job) return;
-  const isBulk = (job as unknown as { type?: string }).type === 'STATUS_PAGE_NOTIFICATION' || (job as unknown as { type?: string }).type === 'STATUS_PAGE_ANNOUNCEMENT_FANOUT';
+  const type = job.type as JobType;
+  const isBulk = isBulkNotificationJob(type);
   if (isBulk) {
     const nextAttempts = job.attempts + 1;
     const shouldRetry = nextAttempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
     await prisma.backgroundJob.update({
       where: { id: jobId },
       data: {
-        status: shouldRetry ? 'PENDING' : 'FAILED',
+        status: shouldRetry ? pendingStatusForJobType(type) : 'FAILED',
         attempts: nextAttempts,
         failedAt: shouldRetry ? null : new Date(),
         error: shouldRetry ? null : error,
+        startedAt: null,
         scheduledAt: shouldRetry
           ? new Date(
               Date.now() +
@@ -356,11 +444,12 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
   if (!job) return false;
   let leaseHeartbeat: NodeJS.Timeout | null = null;
   try {
-    if (job.status !== 'PROCESSING') await markJobProcessing(job.id);
+    const expectedProcessingStatus = processingStatusForJobType(job.type);
+    if (job.status !== expectedProcessingStatus) await markJobProcessing(job.id);
     leaseHeartbeat = setInterval(() => {
       void prisma.backgroundJob
         .updateMany({
-          where: { id: job.id, status: 'PROCESSING' },
+          where: { id: job.id, status: expectedProcessingStatus },
           data: { startedAt: new Date() },
         })
         .catch(error =>
@@ -370,6 +459,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           })
         );
     }, PROCESSING_LEASE_HEARTBEAT_MS);
+
     switch (job.type) {
       case 'ESCALATION': {
         const { executeEscalation } = await import('../escalation');
@@ -379,11 +469,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         const incidentId = requiredPayloadString(job.payload, 'incidentId');
         const stepIndexValue = payloadValue(job.payload, 'stepIndex');
         const stepIndex = typeof stepIndexValue === 'number' ? stepIndexValue : undefined;
-        const result = await executeEscalation(incidentId, stepIndex, {
-          generation,
-        });
-        // The engine's typed outcome is authoritative. Only a retryable
-        // infrastructure failure leaves escalation state unadvanced.
+        const result = await executeEscalation(incidentId, stepIndex, { generation });
         if (escalationJobIsSettled(result.outcome)) {
           await markJobCompleted(job.id);
           return true;
@@ -410,10 +496,16 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return true;
       }
       case 'WAR_ROOM_PROVISION': {
-        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string' || typeof payloadValue(job.payload, 'provisioningToken') !== 'string')
+        if (
+          typeof payloadValue(job.payload, 'warRoomId') !== 'string' ||
+          typeof payloadValue(job.payload, 'provisioningToken') !== 'string'
+        )
           throw new Error('War-room provision job is missing warRoomId or provisioningToken');
         const { provisionMicrosoftTeamsWarRoom } = await import('../war-room/microsoft-teams');
-        await provisionMicrosoftTeamsWarRoom(requiredPayloadString(job.payload, 'warRoomId'), requiredPayloadString(job.payload, 'provisioningToken'));
+        await provisionMicrosoftTeamsWarRoom(
+          requiredPayloadString(job.payload, 'warRoomId'),
+          requiredPayloadString(job.payload, 'provisioningToken')
+        );
         return markWarRoomJobCompleted(job.id);
       }
       case 'WAR_ROOM_PARTICIPANT_SYNC': {
@@ -442,34 +534,56 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         } catch (error) {
           processingError = error;
         }
-        // ExternalOperation owns retry policy and timing. The BackgroundJob is
-        // only its wake-up mechanism and must mirror that authoritative state.
         const operation = await prisma.externalOperation.findUnique({
           where: { id: operationId },
-          select: { provider: true, status: true, nextAttemptAt: true, leaseExpiresAt: true, lastError: true },
+          select: {
+            provider: true,
+            status: true,
+            nextAttemptAt: true,
+            leaseExpiresAt: true,
+            lastError: true,
+          },
         });
         if (!operation) throw processingError ?? new Error('External operation no longer exists');
-        const jiraNeedsReconciliation = operation.provider === 'JIRA' && operation.status === 'AMBIGUOUS';
-        if (operation.status === 'PENDING' || operation.status === 'PROCESSING' || jiraNeedsReconciliation) {
-          const scheduledAt = operation.status === 'PENDING' || jiraNeedsReconciliation
-            ? operation.nextAttemptAt
-            : operation.leaseExpiresAt ?? new Date(Date.now() + 30_000);
+        const jiraNeedsReconciliation =
+          operation.provider === 'JIRA' && operation.status === 'AMBIGUOUS';
+        if (
+          operation.status === 'PENDING' ||
+          operation.status === 'PROCESSING' ||
+          jiraNeedsReconciliation
+        ) {
+          const scheduledAt =
+            operation.status === 'PENDING' || jiraNeedsReconciliation
+              ? operation.nextAttemptAt
+              : operation.leaseExpiresAt ?? new Date(Date.now() + 30_000);
           await prisma.backgroundJob.update({
             where: { id: job.id },
             data: { status: 'PENDING', scheduledAt, startedAt: null, attempts: 0, error: null },
           });
           return false;
         }
-        // Teams AMBIGUOUS is terminal pending explicit operator reconciliation;
-        // Jira AMBIGUOUS is a retryable/reconcilable state owned by its provider.
-        // COMPLETED and FAILED are settled for every provider.
         await markJobCompleted(job.id);
         return operation.status === 'COMPLETED';
       }
       case 'STATUS_PAGE_NOTIFICATION': {
         const { notifyStatusPageSubscribers } = await import('../status-page-notifications');
         const eventType = requiredPayloadString(job.payload, 'eventType');
-        if (!['resolved', 'completed', 'triggered', 'acknowledged', 'scheduled', 'inprogress', 'check', 'investigating', 'identified', 'monitoring', 'snoozed', 'suppressed'].includes(eventType))
+        if (
+          ![
+            'resolved',
+            'completed',
+            'triggered',
+            'acknowledged',
+            'scheduled',
+            'inprogress',
+            'check',
+            'investigating',
+            'identified',
+            'monitoring',
+            'snoozed',
+            'suppressed',
+          ].includes(eventType)
+        )
           throw new Error(`Unsupported status page notification event: ${eventType}`);
         const subscriberResult = await notifyStatusPageSubscribers(
           requiredPayloadString(job.payload, 'incidentId'),
@@ -526,18 +640,52 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         await markJobCompleted(job.id);
         return true;
       }
-      case 'STATUS_PAGE_ANNOUNCEMENT_FANOUT': {
+      case STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1:
+      case STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2: {
         if (
           typeof payloadValue(job.payload, 'announcementId') !== 'string' ||
           typeof payloadValue(job.payload, 'statusPageId') !== 'string'
         )
           throw new Error('Status page announcement fan-out job payload is invalid');
-        const { notifyStatusPageSubscribersAnnouncement } =
-          await import('../status-page-notifications');
-        const result = await notifyStatusPageSubscribersAnnouncement(
+        const notificationGeneration = requiredPayloadGeneration(job.payload);
+        const deliveryMode =
+          job.type === STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2
+            ? requiredAnnouncementDeliveryMode(job.payload)
+            : 'ALL_ELIGIBLE';
+        const { executeAnnouncementNotificationFanout } =
+          await import('../status-pages/announcement-notification-execution');
+        const result = await executeAnnouncementNotificationFanout(
           requiredPayloadString(job.payload, 'announcementId'),
-          requiredPayloadString(job.payload, 'statusPageId')
+          requiredPayloadString(job.payload, 'statusPageId'),
+          notificationGeneration,
+          deliveryMode
         );
+
+        if (result.status === 'STALE') {
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'CANCELLED',
+              completedAt: new Date(),
+              startedAt: null,
+              error: result.reason,
+            },
+          });
+          return true;
+        }
+        if (result.status === 'NOT_DUE') {
+          await prisma.backgroundJob.update({
+            where: { id: job.id },
+            data: {
+              status: pendingStatusForJobType(job.type),
+              scheduledAt: result.retryAt,
+              startedAt: null,
+              failedAt: null,
+              error: null,
+            },
+          });
+          return false;
+        }
         if (result.failed > 0)
           throw new Error(`Status page announcement fan-out failed (${result.failed})`);
         await markJobCompleted(job.id);
@@ -595,19 +743,24 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
     const isWarRoomJob = job.type === 'WAR_ROOM_PROVISION' || job.type === 'WAR_ROOM_PROJECT' || job.type === 'WAR_ROOM_PARTICIPANT_SYNC';
     if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
-      const retryBudgetNeutral = (error as Error & { retryBudgetNeutral?: unknown }).retryBudgetNeutral === true;
-      const delay = typeof retryAfterMs === 'number' && retryAfterMs > 0
-        ? retryAfterMs
-        : Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS);
-      const current = await prisma.backgroundJob.findUnique({ where: { id: job.id }, select: { attempts: true, maxAttempts: true } });
+      const retryBudgetNeutral =
+        (error as Error & { retryBudgetNeutral?: unknown }).retryBudgetNeutral === true;
+      const delay =
+        typeof retryAfterMs === 'number' && retryAfterMs > 0
+          ? retryAfterMs
+          : Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS);
+      const current = await prisma.backgroundJob.findUnique({
+        where: { id: job.id },
+        select: { attempts: true, maxAttempts: true },
+      });
       if (current && (retryBudgetNeutral || current.attempts < current.maxAttempts)) {
         await prisma.backgroundJob.updateMany({
           where: { id: job.id, status: 'PROCESSING' },
           data: {
-            status: 'PENDING', scheduledAt: new Date(Date.now() + delay), startedAt: null, error: null,
-            // Marker-only reconciliation has no new side effect and must be
-            // allowed to cover its bounded consistency window. Provider/crash
-            // failures continue to consume the normal retry budget.
+            status: 'PENDING',
+            scheduledAt: new Date(Date.now() + delay),
+            startedAt: null,
+            error: null,
             ...(retryBudgetNeutral ? { attempts: { decrement: 1 } } : {}),
           },
         });
@@ -618,10 +771,9 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
       await markWarRoomJobFailed(job, error instanceof Error ? error.message : 'Unknown error');
       return false;
     }
-    // Backpressure never consumes maxAttempts — reschedule until queue drains.
     if (isBulkNotificationJob(job.type as JobType) && isBulkQueueBackpressureError(error)) {
       try {
-        await rescheduleBulkBackpressuredJob(job.id);
+        await rescheduleBulkBackpressuredJob(job);
       } catch (rescheduleError) {
         logger.warn('jobs.bulk_backpressure_reschedule_failed', {
           jobId: job.id,
@@ -643,7 +795,11 @@ export async function processPendingJobs(
   concurrency: number = 10
 ): Promise<{ processed: number; failed: number; total: number }> {
   const excludeTypes: JobType[] = (await bulkDeliveryPaused())
-    ? ['STATUS_PAGE_NOTIFICATION', 'STATUS_PAGE_ANNOUNCEMENT_FANOUT']
+    ? [
+        'STATUS_PAGE_NOTIFICATION',
+        STATUS_PAGE_ANNOUNCEMENT_FANOUT_V1,
+        STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2,
+      ]
     : [];
   const pendingJobs = await claimPendingJobs(limit, undefined, excludeTypes);
   let processed = 0;
@@ -659,6 +815,7 @@ export async function processPendingJobs(
   }
   return { processed, failed, total: pendingJobs.length };
 }
+
 export async function processPendingJobsByType(
   type: JobType,
   limit: number = 50,
@@ -681,6 +838,7 @@ export async function processPendingJobsByType(
   }
   return { processed, failed, total: pendingJobs.length };
 }
+
 export async function cleanupOldJobs(olderThanDays: number = 7): Promise<number> {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
@@ -694,6 +852,7 @@ export async function cleanupOldJobs(olderThanDays: number = 7): Promise<number>
   });
   return result.count;
 }
+
 export async function getJobStats(): Promise<{
   pending: number;
   processing: number;
@@ -701,8 +860,12 @@ export async function getJobStats(): Promise<{
   failed: number;
 }> {
   const [pending, processing, completed, failed] = await Promise.all([
-    prisma.backgroundJob.count({ where: { status: 'PENDING' } }),
-    prisma.backgroundJob.count({ where: { status: 'PROCESSING' } }),
+    prisma.backgroundJob.count({
+      where: { status: { in: ['PENDING', STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING] } },
+    }),
+    prisma.backgroundJob.count({
+      where: { status: { in: ['PROCESSING', STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PROCESSING] } },
+    }),
     prisma.backgroundJob.count({ where: { status: 'COMPLETED' } }),
     prisma.backgroundJob.count({ where: { status: 'FAILED' } }),
   ]);

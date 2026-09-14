@@ -10,6 +10,20 @@ import { cn } from '@/lib/utils';
 import { Globe, Layers, Users, Megaphone, Key, ExternalLink } from 'lucide-react';
 import StatusPageWorkspace from '@/components/status-page/StatusPageWorkspace';
 import { getStatusPageSnapshot, buildStatusPageSnapshot } from '@/lib/status-pages/snapshot';
+import type { StatusAnnouncementType } from '@/lib/validation';
+
+function normalizeAnnouncementType(value: string): StatusAnnouncementType {
+  switch (value) {
+    case 'INCIDENT':
+    case 'MAINTENANCE':
+    case 'UPDATE':
+    case 'WARNING':
+    case 'INFO':
+      return value;
+    default:
+      return 'INFO';
+  }
+}
 
 export default async function StatusPageWorkspacePage({
   params,
@@ -55,6 +69,7 @@ export default async function StatusPageWorkspacePage({
       : [],
     announcements: statusPage.announcements.map(announcement => ({
       ...announcement,
+      type: normalizeAnnouncementType(announcement.type),
       startDate: announcement.startDate.toISOString(),
       endDate: announcement.endDate?.toISOString() || null,
       affectedServiceIds: Array.isArray(announcement.affectedServiceIds)

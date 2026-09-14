@@ -26,6 +26,12 @@ import {
   recordFanoutPage,
 } from '@/lib/notification-fanout';
 import { formatDateTime, isValidTimeZone } from '@/lib/timezone';
+import {
+  announcementGenerationEventKey,
+  readAnnouncementNotificationGeneration,
+} from '@/lib/status-pages/announcement-notification-generation';
+import type { AnnouncementFanoutDeliveryMode } from '@/lib/status-pages/announcement-fanout-contract';
+import { selectAnnouncementRecipientsNeedingReplacement } from '@/lib/status-pages/announcement-recipient-reconciliation';
 
 export async function notifyStatusPageSubscribers(
   incidentId: string,
@@ -47,7 +53,6 @@ export async function notifyStatusPageSubscribers(
   let totalSent = 0;
   let totalFailed = 0;
   try {
-    // 1. Get incident details with service
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },
       include: {
@@ -69,7 +74,6 @@ export async function notifyStatusPageSubscribers(
 
     const effectiveDeliveryKey = incidentSubscriberDeliveryKey(incident, eventType, deliveryKey);
 
-    // 2. Find all status pages that include this service
     const statusPages = await prisma.statusPage.findMany({
       where: {
         enabled: true,
@@ -93,14 +97,11 @@ export async function notifyStatusPageSubscribers(
     logger.info(`Found ${statusPages.length} status pages for incident ${incidentId}`);
 
     const appBaseUrl = getBaseUrl();
-
-    // 3. Batch fetch all email configs upfront (avoids N+1 query pattern)
     const emailConfigEntries = await Promise.all(
       statusPages.map(async page => [page.id, await getStatusPageEmailConfig(page.id)] as const)
     );
     const emailConfigMap = new Map(emailConfigEntries);
 
-    // 4. Send notifications for each status page
     for (const page of statusPages) {
       const emailConfig = emailConfigMap.get(page.id);
       if (!emailConfig?.enabled) {
@@ -108,7 +109,7 @@ export async function notifyStatusPageSubscribers(
         continue;
       }
 
-      const displayName = (page as any).organizationName || page.name; // eslint-disable-line @typescript-eslint/no-explicit-any
+      const displayName = page.organizationName || page.name;
       const branding =
         page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
           ? (page.branding as Record<string, unknown>)
@@ -157,9 +158,6 @@ export async function notifyStatusPageSubscribers(
         if (!(await bulkQueueHasCapacity())) {
           throw new BulkQueueBackpressureError();
         }
-        // Indexed fanout: `StatusPageSubscriptionService(serviceId)` carries the
-        // selective scope. Scrubbed JSON remains for rolling-deploy compat but
-        // is no longer scanned in Node. `selectedServices none` = "all services".
         const subscriptions: Array<{ id: string; email: string; token: string }> =
           await prisma.statusPageSubscription.findMany({
             where: {
@@ -275,9 +273,6 @@ export async function notifyStatusPageSubscribers(
     if (error instanceof BulkQueueBackpressureError) {
       addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
     }
-    // Defer durable backpressure (reschedules without consuming maxAttempts).
-    // Plain failures still return success:false so the job retries via markJobFailed
-    // but the TypedError lets callers distinguish the two signals.
     logger.error('Failed to notify status page subscribers', {
       error: error instanceof Error ? error.message : 'Unknown error',
       incidentId,
@@ -488,12 +483,13 @@ function formatEmailBody(
 
 export async function notifyStatusPageSubscribersAnnouncement(
   announcementId: string,
-  statusPageId: string
+  statusPageId: string,
+  notificationGeneration: number,
+  deliveryMode: AnnouncementFanoutDeliveryMode = 'ALL_ELIGIBLE'
 ): Promise<{ sent: number; failed: number; skipped?: boolean }> {
   try {
-    // 1. Get announcement details
-    const announcement = await prisma.statusPageAnnouncement.findUnique({
-      where: { id: announcementId },
+    const announcement = await prisma.statusPageAnnouncement.findFirst({
+      where: { id: announcementId, statusPageId },
     });
 
     if (!announcement) {
@@ -501,7 +497,30 @@ export async function notifyStatusPageSubscribersAnnouncement(
       return { sent: 0, failed: 0, skipped: true };
     }
 
-    // 2. Load page configuration only. Subscribers are keyset-paginated below.
+    const currentGeneration = await readAnnouncementNotificationGeneration(
+      announcementId,
+      statusPageId
+    );
+    if (currentGeneration !== notificationGeneration) {
+      logger.info('status_page.announcement_fanout_stale_generation', {
+        announcementId,
+        statusPageId,
+        expectedGeneration: notificationGeneration,
+        currentGeneration,
+      });
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
+    if (!announcement.isActive || announcement.notificationTiming === 'NONE') {
+      logger.info(`Announcement ${announcementId} is inactive/withdrawn; skipping notification fan-out`);
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
+    if (announcement.publishAt && announcement.publishAt.getTime() > Date.now()) {
+      logger.info(`Announcement ${announcementId} publishAt is in the future; skipping notification fan-out`);
+      return { sent: 0, failed: 0, skipped: true };
+    }
+
     const page = await prisma.statusPage.findUnique({
       where: { id: statusPageId },
     });
@@ -512,16 +531,13 @@ export async function notifyStatusPageSubscribersAnnouncement(
     }
 
     const appBaseUrl = getBaseUrl();
-
-    // 3. Get email config
     const emailConfig = await getStatusPageEmailConfig(page.id);
     if (!emailConfig.enabled) {
       logger.warn(`Email not configured for status page ${page.name} (${page.id})`);
       return { sent: 0, failed: 1 };
     }
 
-    // 4. Prepare email content
-    const displayName = (page as any).organizationName || page.name; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const displayName = page.organizationName || page.name;
     const branding =
       page.branding && typeof page.branding === 'object' && !Array.isArray(page.branding)
         ? (page.branding as Record<string, unknown>)
@@ -556,8 +572,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     const theme = themes[announcement.type as string] || themes['INFO'];
     const subject = `[${displayName}] ${theme.label}: ${announcement.title}`;
-
-    let html = '';
 
     const announcementHeader = SubscriberEmailHeader(
       safeDisplayName,
@@ -602,16 +616,16 @@ export async function notifyStatusPageSubscribersAnnouncement(
 
     const body = EmailContent(contentBody);
     const footer = SubscriberEmailFooter('{{unsubscribe_url}}', safeDisplayName);
-
-    html = EmailContainer(announcementHeader + body + footer);
+    const html = EmailContainer(announcementHeader + body + footer);
 
     const PAGE_SIZE = 500;
     const trafficClass = 'BULK' as const;
+    const eventKey = announcementGenerationEventKey(notificationGeneration);
     const fanout = await beginNotificationFanout({
       statusPageId,
       sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
       sourceId: announcement.id,
-      eventKey: announcement.updatedAt.toISOString(),
+      eventKey,
       trafficClass,
       providerKey: emailConfig.provider || undefined,
       subject,
@@ -621,8 +635,6 @@ export async function notifyStatusPageSubscribersAnnouncement(
     let failed = 0;
     let cursor: string | undefined = fanout.cursor ?? undefined;
 
-    // Respect selected-service preferences for scoped announcements.
-    // A null/empty affectedServiceIds means global -> all ACTIVE subscribers.
     const rawAffected = announcement.affectedServiceIds;
     const affectedIds: string[] = Array.isArray(rawAffected)
       ? rawAffected.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
@@ -633,6 +645,36 @@ export async function notifyStatusPageSubscribersAnnouncement(
       if (!(await bulkQueueHasCapacity())) {
         throw new BulkQueueBackpressureError();
       }
+
+      const [currentAnn, liveGeneration] = await Promise.all([
+        prisma.statusPageAnnouncement.findFirst({
+          where: { id: announcement.id, statusPageId },
+          select: { isActive: true, publishAt: true, notificationTiming: true },
+        }),
+        readAnnouncementNotificationGeneration(announcement.id, statusPageId),
+      ]);
+      if (
+        !currentAnn ||
+        !currentAnn.isActive ||
+        currentAnn.notificationTiming === 'NONE' ||
+        (currentAnn.publishAt && currentAnn.publishAt.getTime() > Date.now()) ||
+        liveGeneration !== notificationGeneration
+      ) {
+        logger.info('status_page.announcement_fanout_stale_generation', {
+          announcementId: announcement.id,
+          statusPageId,
+          expectedGeneration: notificationGeneration,
+          currentGeneration: liveGeneration,
+        });
+        await recordFanoutPage(fanout.id, {
+          cursor,
+          materialized: 0,
+          failed: 0,
+          complete: true,
+        });
+        return { sent, failed, skipped: true };
+      }
+
       const subscriptions = await prisma.statusPageSubscription.findMany({
         where: hasScopedServices
           ? {
@@ -660,98 +702,141 @@ export async function notifyStatusPageSubscribersAnnouncement(
         });
         break;
       }
-      const unsubscribeTokens = await issueUnsubscribeTokensBatch(
-        subscriptions.map(subscription => subscription.id)
-      );
+
+      let eligibleSubscriptions = subscriptions;
+      if (deliveryMode === 'UNDELIVERED_ONLY') {
+        const historical = await prisma.notification.findMany({
+          where: {
+            sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+            sourceId: announcement.id,
+            recipientType: 'SUBSCRIBER',
+            recipientId: { in: subscriptions.map(subscription => subscription.id) },
+            OR: [
+              { status: { in: ['SENT', 'DELIVERED'] } },
+              {
+                deliveryAttempts: {
+                  some: { outcome: { in: ['ACCEPTED', 'AMBIGUOUS'] } },
+                },
+              },
+            ],
+          },
+          select: { recipientId: true },
+        });
+        const alreadyReachedProvider = new Set(
+          historical
+            .map(item => item.recipientId)
+            .filter((recipientId): recipientId is string => Boolean(recipientId))
+        );
+        eligibleSubscriptions = selectAnnouncementRecipientsNeedingReplacement(
+          subscriptions,
+          alreadyReachedProvider
+        );
+      }
+
+      const unsubscribeTokens =
+        eligibleSubscriptions.length > 0
+          ? await issueUnsubscribeTokensBatch(
+              eligibleSubscriptions.map(subscription => subscription.id)
+            )
+          : new Map<string, string>();
       let pageSent = 0;
       let pageFailed = 0;
       let pageError: unknown;
 
-      const isAllDay = announcement.allDay || (announcement as any).timeMode === 'ALL_DAY';
+      const isAllDay = announcement.allDay || announcement.timeMode === 'ALL_DAY';
 
-      try {
-        const result = await createCentralNotificationIntentsBatch(
-          subscriptions.map(sub => {
-            const rawTz = sub.timezone || (sub.preferences as any)?.timezone;
-            const subTz =
-              typeof rawTz === 'string' && isValidTimeZone(rawTz.trim()) ? rawTz.trim() : 'UTC';
+      if (eligibleSubscriptions.length > 0) {
+        try {
+          const result = await createCentralNotificationIntentsBatch(
+            eligibleSubscriptions.map(sub => {
+              const preferences =
+                sub.preferences && typeof sub.preferences === 'object' && !Array.isArray(sub.preferences)
+                  ? (sub.preferences as Record<string, unknown>)
+                  : null;
+              const rawTz = sub.timezone || preferences?.timezone;
+              const subTz =
+                typeof rawTz === 'string' && isValidTimeZone(rawTz.trim()) ? rawTz.trim() : 'UTC';
 
-            let startTimeForSub: string;
-            let endTimeSectionForSub = '';
+              let startTimeForSub: string;
+              let endTimeSectionForSub = '';
 
-            if (isAllDay) {
-              startTimeForSub = `All day · ${new Date(announcement.startDate).toLocaleDateString(
-                'en-US',
-                {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                  timeZone: 'UTC',
-                }
-              )}`;
-            } else {
-              startTimeForSub = formatDateTime(announcement.startDate, subTz, {
-                format: 'datetime',
-                includeTimeZone: true,
-              });
-              if (announcement.endDate) {
-                const endFormatted = formatDateTime(announcement.endDate, subTz, {
+              if (isAllDay) {
+                startTimeForSub = `All day · ${new Date(announcement.startDate).toLocaleDateString(
+                  'en-US',
+                  {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    timeZone: 'UTC',
+                  }
+                )}`;
+              } else {
+                startTimeForSub = formatDateTime(announcement.startDate, subTz, {
                   format: 'datetime',
                   includeTimeZone: true,
                 });
-                endTimeSectionForSub = `<div><span style="font-weight: 600; color: ${theme.color};">End:</span> ${endFormatted}</div>`;
+                if (announcement.endDate) {
+                  const endFormatted = formatDateTime(announcement.endDate, subTz, {
+                    format: 'datetime',
+                    includeTimeZone: true,
+                  });
+                  endTimeSectionForSub = `<div><span style="font-weight: 600; color: ${theme.color};">End:</span> ${endFormatted}</div>`;
+                }
               }
-            }
 
-            const postedAtFormatted = formatDateTime(announcement.createdAt || new Date(), subTz, {
-              format: 'datetime',
-              includeTimeZone: true,
-            });
-            const postedAtSectionForSub = `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">Posted on ${postedAtFormatted}</p>`;
+              const postedAtFormatted = formatDateTime(announcement.createdAt || new Date(), subTz, {
+                format: 'datetime',
+                includeTimeZone: true,
+              });
+              const postedAtSectionForSub = `<p style="font-size: 14px; color: #9ca3af; margin-top: 16px; font-style: italic;">Posted on ${postedAtFormatted}</p>`;
 
-            return {
-              category: 'STATUS_PAGE',
-              channel: 'EMAIL',
-              recipientType: 'SUBSCRIBER',
-              recipientId: sub.id,
-              recipientAddress: sub.email,
-              templateKey: 'status-page-announcement',
-              sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
-              sourceId: announcement.id,
-              eventKey: announcement.updatedAt.toISOString(),
-              displayMessage: subject,
-              trafficClass,
-              priority:
-                announcement.type === 'INCIDENT'
-                  ? NOTIFICATION_PRIORITY.STATUS_INCIDENT_ANNOUNCEMENT
-                  : NOTIFICATION_PRIORITY.STATUS_ANNOUNCEMENT,
-              contentId: fanout.contentId,
-              fanoutId: fanout.id,
-              payload: {
-                kind: 'EMAIL',
-                providerKey: emailConfig.provider || undefined,
-                to: sub.email,
-                subject,
+              return {
+                category: 'STATUS_PAGE',
+                channel: 'EMAIL',
+                recipientType: 'SUBSCRIBER',
+                recipientId: sub.id,
+                recipientAddress: sub.email,
+                templateKey: 'status-page-announcement',
+                sourceType: 'STATUS_PAGE_ANNOUNCEMENT',
+                sourceId: announcement.id,
+                eventKey: fanout.eventKey,
+                displayMessage: subject,
+                trafficClass,
+                priority:
+                  announcement.type === 'INCIDENT'
+                    ? NOTIFICATION_PRIORITY.STATUS_INCIDENT_ANNOUNCEMENT
+                    : NOTIFICATION_PRIORITY.STATUS_ANNOUNCEMENT,
                 contentId: fanout.contentId,
-                unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
-                startTime: startTimeForSub,
-                endTimeSection: endTimeSectionForSub,
-                postedAtSection: postedAtSectionForSub,
-                providerScope: { statusPageId: page.id, subscriptionId: sub.id },
-              },
-            };
-          })
-        );
-        pageSent = result.created;
-      } catch (error) {
-        pageFailed = subscriptions.length;
-        pageError = error;
-        logger.error('status_page.announcement_fanout_page_failed', {
-          statusPageId: page.id,
-          announcementId: announcement.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
+                fanoutId: fanout.id,
+                payload: {
+                  kind: 'EMAIL',
+                  providerKey: emailConfig.provider || undefined,
+                  to: sub.email,
+                  subject,
+                  contentId: fanout.contentId,
+                  unsubscribeUrl: `${statusPageUrl}/unsubscribe/${unsubscribeTokens.get(sub.id)}`,
+                  startTime: startTimeForSub,
+                  endTimeSection: endTimeSectionForSub,
+                  postedAtSection: postedAtSectionForSub,
+                  providerScope: { statusPageId: page.id, subscriptionId: sub.id },
+                },
+              };
+            })
+          );
+          pageSent = result.created;
+        } catch (error) {
+          pageFailed = eligibleSubscriptions.length;
+          pageError = error;
+          logger.error('status_page.announcement_fanout_page_failed', {
+            statusPageId: page.id,
+            announcementId: announcement.id,
+            notificationGeneration,
+            deliveryMode,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
+
       sent += pageSent;
       failed += pageFailed;
       if (pageFailed > 0) {
@@ -771,7 +856,14 @@ export async function notifyStatusPageSubscribersAnnouncement(
       if (subscriptions.length < PAGE_SIZE || !cursor) break;
     }
 
-    logger.info(`Status announcement notifications enqueued: ${sent} success, ${failed} failed`);
+    logger.info('status_page.announcement_fanout_enqueued', {
+      statusPageId,
+      announcementId,
+      notificationGeneration,
+      deliveryMode,
+      sent,
+      failed,
+    });
     addOperationalMetric('opsknight_status_page_fanout_total', sent, {
       event: 'announcement',
       outcome: 'enqueued',
@@ -780,7 +872,7 @@ export async function notifyStatusPageSubscribersAnnouncement(
       event: 'announcement',
       outcome: 'failed',
     });
-    return { sent, failed, skipped: sent === 0 && failed === 0 };
+    return { sent, failed };
   } catch (error) {
     if (error instanceof BulkQueueBackpressureError) {
       addOperationalMetric('opsknight_status_fanout_campaign_total', 1, { outcome: 'backpressured' });
@@ -789,6 +881,9 @@ export async function notifyStatusPageSubscribersAnnouncement(
     logger.error('Failed to notify status page subscribers about announcement', {
       error: error instanceof Error ? error.message : 'Unknown error',
       announcementId,
+      statusPageId,
+      notificationGeneration,
+      deliveryMode,
     });
     addOperationalMetric('opsknight_status_page_fanout_total', 1, {
       event: 'announcement',
