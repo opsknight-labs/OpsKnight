@@ -45,6 +45,10 @@ export const OPERATIONAL_METRICS = [
     kind: 'counter', labels: ['provider', 'verb'], scope: 'counter', estimatedMaxSeries: 24,
   },
   {
+    name: 'opsknight_war_room_reconciliation_total', help: 'War-room reconciliation requests and outcomes',
+    kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
+  },
+  {
     name: 'opsknight_dashboard_shell_duration_seconds',
     help: 'Time spent loading the bounded operational dashboard shell',
     kind: 'histogram',
