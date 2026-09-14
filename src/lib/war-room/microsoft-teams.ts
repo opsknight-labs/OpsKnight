@@ -570,6 +570,7 @@ async function validateWarRoomProvisioningAuthority(room: {
   installationId: string | null;
   providerTenantId: string | null;
   providerContainerId: string | null;
+  membershipType: 'STANDARD' | 'PRIVATE' | null;
   incident: { id: string; status: string };
 }): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
   const currentIncident = await prisma.incident.findUnique({
@@ -629,6 +630,12 @@ async function validateWarRoomProvisioningAuthority(room: {
       code: 'WAR_ROOM_CAPABILITY_UNAVAILABLE',
       message:
         capabilities.failureReason ?? 'Microsoft Teams channel-create capability is unavailable.',
+    };
+  if (room.membershipType === 'PRIVATE' && !capabilities.canCreatePrivateWarRooms)
+    return {
+      allowed: false,
+      code: 'PRIVATE_WAR_ROOM_CAPABILITY_UNAVAILABLE',
+      message: 'Microsoft Teams private war rooms require verified member-management consent for this Team.',
     };
   return { allowed: true };
 }
