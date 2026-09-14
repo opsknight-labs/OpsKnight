@@ -192,7 +192,7 @@ export async function POST(request: Request) {
       if (!targetDeviceStillExists) {
         return jsonError(
           new AppError({
-            code: 'VALIDATION_FAILED',
+            code: 'PUSH_SUBSCRIPTION_EXPIRED',
             userMessage: 'The saved push subscription on this device has expired.',
             action: 'Enable push notifications again on this device and retry.',
             retryable: false,
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
               targetDeviceId,
             },
           }),
-          410,
+          undefined,
           {
             provider: 'web-push',
             reason: 'PUSH_SUBSCRIPTION_EXPIRED',

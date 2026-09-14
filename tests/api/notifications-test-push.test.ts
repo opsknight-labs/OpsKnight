@@ -168,7 +168,7 @@ describe('API Route - Notifications Test Push', () => {
     const body = await res.json();
 
     expect(res.status).toBe(410);
-    expect(body.code).toBe('VALIDATION_FAILED');
+    expect(body.code).toBe('PUSH_SUBSCRIPTION_EXPIRED');
     expect(body.retryable).toBe(false);
   });
 

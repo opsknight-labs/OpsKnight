@@ -170,7 +170,7 @@ export function jsonError(
         requestId: context.requestId,
         timestamp: context.timestamp,
       },
-      { status: status ?? error.status, headers: responseHeaders(context, headers) }
+      { status: error.status, headers: responseHeaders(context, headers) }
     );
   }
 

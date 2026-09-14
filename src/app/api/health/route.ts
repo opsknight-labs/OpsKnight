@@ -173,12 +173,12 @@ export async function GET(request: NextRequest) {
 
   const criticalFailure =
     mode === 'readiness'
-      ? checks.database?.status === 'unhealthy' ||
-        (Boolean(responsibilities?.startJobWorker) &&
-          checks.notificationControlPlane?.status === 'unhealthy')
+      ? checks.database?.status === 'unhealthy'
       : readinessChecks.some(check => check.status === 'unhealthy');
 
-  const anyDegraded = readinessChecks.some(check => check.status === 'degraded');
+  const anyDegraded =
+    readinessChecks.some(check => check.status === 'degraded') ||
+    checks.notificationControlPlane?.status === 'unhealthy';
   const overallStatus = criticalFailure
     ? 'unhealthy'
     : anyDegraded
