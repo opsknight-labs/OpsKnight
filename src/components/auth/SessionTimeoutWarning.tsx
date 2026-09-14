@@ -10,6 +10,9 @@ interface SessionTimeoutWarningProps {
   onExtend?: () => void;
 }
 
+/** Tolerance window in seconds for comparing sessionExpiresAt vs absoluteExpiresAt. */
+const HARD_CAP_TOLERANCE_S = 60;
+
 export default function SessionTimeoutWarning({
   warningMinutes = 5,
   onExtend,
@@ -17,6 +20,19 @@ export default function SessionTimeoutWarning({
   const { data: session, update } = useSession();
   const [showWarning, setShowWarning] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
+
+  /**
+   * True when the session is a Remember-Me session that has reached (or is within
+   * HARD_CAP_TOLERANCE_S of) its 90-day absolute expiry.  In this state calling
+   * extendSession will have no effect, so we must not show "Stay Signed In".
+   */
+  const isAtHardCap = (() => {
+    if (!session?.absoluteExpiresAt || !session?.expires) return false;
+    const sessionExpiresAtS = new Date(session.expires).getTime() / 1000;
+    return (
+      Math.abs(sessionExpiresAtS - session.absoluteExpiresAt) <= HARD_CAP_TOLERANCE_S
+    );
+  })();
 
   const handleExtendSession = useCallback(async () => {
     try {
@@ -30,6 +46,10 @@ export default function SessionTimeoutWarning({
   }, [update, onExtend]);
 
   const handleLogout = useCallback(async () => {
+    await signOut({ callbackUrl: '/login' });
+  }, []);
+
+  const handleReauthenticate = useCallback(async () => {
     await signOut({ callbackUrl: '/login' });
   }, []);
 
@@ -128,11 +148,23 @@ export default function SessionTimeoutWarning({
               <h2 id="session-warning-title" className="text-xl font-semibold text-slate-900">
                 Session Expiring Soon
               </h2>
-              <p id="session-warning-description" className="mt-2 text-sm text-slate-500">
-                Your session will expire in{' '}
-                <span className="font-semibold text-amber-600">{timeDisplay}</span>. Would you like
-                to stay signed in?
-              </p>
+
+              {isAtHardCap ? (
+                /* Hard-cap mode: renewal would be a no-op — direct the user to sign in again */
+                <p id="session-warning-description" className="mt-2 text-sm text-slate-500">
+                  Your session expires in{' '}
+                  <span className="font-semibold text-amber-600">{timeDisplay}</span>. For
+                  security, this trusted session has reached its maximum lifetime. Please sign in
+                  again to continue.
+                </p>
+              ) : (
+                /* Normal mode: renewal is possible */
+                <p id="session-warning-description" className="mt-2 text-sm text-slate-500">
+                  Your session will expire in{' '}
+                  <span className="font-semibold text-amber-600">{timeDisplay}</span>. Would you
+                  like to stay signed in?
+                </p>
+              )}
             </div>
 
             {/* Actions */}
@@ -143,18 +175,31 @@ export default function SessionTimeoutWarning({
               >
                 Sign Out
               </button>
-              <button
-                onClick={handleExtendSession}
-                className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-                autoFocus
-              >
-                Stay Signed In
-              </button>
+
+              {isAtHardCap ? (
+                <button
+                  onClick={handleReauthenticate}
+                  className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  autoFocus
+                >
+                  Sign In Again
+                </button>
+              ) : (
+                <button
+                  onClick={handleExtendSession}
+                  className="flex-1 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  autoFocus
+                >
+                  Stay Signed In
+                </button>
+              )}
             </div>
 
             {/* Security note */}
             <p className="mt-4 text-center text-xs text-slate-400">
-              For security, inactive sessions are automatically ended.
+              {isAtHardCap
+                ? 'Trusted device sessions have a 90-day security limit.'
+                : 'For security, inactive sessions are automatically ended.'}
             </p>
           </div>
         </div>

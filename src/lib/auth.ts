@@ -748,6 +748,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             ).toISOString();
           }
 
+          if (typeof (token as AugmentedJWT)?.absoluteExpiresAt === 'number') {
+            session.absoluteExpiresAt = (token as AugmentedJWT).absoluteExpiresAt;
+          }
+
           return session;
         },
         async signIn({ user, account, profile }) {

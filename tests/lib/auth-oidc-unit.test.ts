@@ -687,6 +687,86 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(secondUpdate.absoluteExpiresAt).toBe(derivedAbsolute);
   });
 
+  it('Remember-Me at hard cap: extendSession leaves sessionExpiresAt unchanged', async () => {
+    // Reviewer scenario:
+    //   sessionExpiresAt == absoluteExpiresAt  (at 90-day cap)
+    //   5 minutes remaining
+    //   extendSession: true is called
+    //   → expiry must NOT change → UI should show "Sign In Again", not "Stay Signed In"
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u-hardcap',
+      email: 'hardcap@example.com',
+      name: 'Hard Cap User',
+      role: 'USER',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    // Session is exactly at its absolute cap with 5 minutes left
+    const hardCapSec = nowSec + 300;
+
+    const updatedToken = await jwt({
+      token: {
+        sub: 'u-hardcap',
+        sessionExpiresAt: hardCapSec,
+        absoluteExpiresAt: hardCapSec, // sessionExpiresAt == absoluteExpiresAt → at hard cap
+        lastActivityAt: Date.now() - 60_000,
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'update',
+      session: { activity: true, extendSession: true },
+    });
+
+    // sessionExpiresAt must be unchanged — renewal is impossible at the hard cap
+    expect(updatedToken.sessionExpiresAt).toBe(hardCapSec);
+    // absoluteExpiresAt must also remain identical
+    expect(updatedToken.absoluteExpiresAt).toBe(hardCapSec);
+  });
+
+  it('session callback exposes absoluteExpiresAt on the session object', async () => {
+    const authOptions = await getAuthOptions();
+    const sessionCallback = authOptions.callbacks?.session as unknown as (args: {
+      session: { user?: Record<string, unknown>; expires?: string };
+      token: Record<string, unknown>;
+    }) => Promise<{ user?: Record<string, unknown>; expires: string; absoluteExpiresAt?: number }>;
+
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u-expose',
+      email: 'expose@example.com',
+      name: 'Expose User',
+      role: 'USER',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const sessionExpires = nowSec + 300;
+    const absoluteExpires = nowSec + 7_776_000; // 90 days
+
+    const result = await sessionCallback({
+      session: { user: { name: 'Expose User' } },
+      token: {
+        sub: 'u-expose',
+        sessionExpiresAt: sessionExpires,
+        absoluteExpiresAt: absoluteExpires,
+      },
+    });
+
+    // absoluteExpiresAt must be surfaced on the session for the UI hard-cap detection
+    expect(result.absoluteExpiresAt).toBe(absoluteExpires);
+    // expires ISO string must still reflect sessionExpiresAt
+    expect(new Date(result.expires).getTime()).toBe(sessionExpires * 1000);
+  });
+
   it('revokeUserSessions increments tokenVersion', async () => {
     await revokeUserSessions('u1');
     expect(prisma.user.update).toHaveBeenCalledWith({
