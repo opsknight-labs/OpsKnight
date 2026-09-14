@@ -152,6 +152,44 @@ export async function closeMicrosoftTeamsWarRoom(
 }
 
 /**
+ * Operator-initiated abandon of an ambiguous canonical card. Clears the
+ * commandCreateAttemptedAt fence and commandMessageId so the next projection
+ * generation creates a fresh card. Intentionally does NOT delete the
+ * potentially-orphaned card; it warns the operator that a duplicate may exist.
+ */
+export async function abandonAmbiguousMicrosoftTeamsCard(
+  incidentId: string,
+  warRoomId: string
+): Promise<{ abandoned: boolean; warning: string }> {
+  const now = new Date();
+  const changed = await prisma.incidentWarRoom.updateMany({
+    where: {
+      id: warRoomId,
+      incidentId,
+      provider: 'MICROSOFT_TEAMS',
+      health: 'DEGRADED',
+      lastErrorCode: 'AMBIGUOUS_CARD_CREATE',
+    },
+    data: {
+      commandCreateAttemptedAt: null,
+      commandMessageId: null,
+      commandConversationId: null,
+      health: 'HEALTHY',
+      lastErrorCode: null,
+      lastError: null,
+      projectionLeaseToken: null,
+      projectionLeaseExpiresAt: null,
+      updatedAt: now,
+    },
+  });
+  if (changed.count !== 1) return { abandoned: false, warning: 'War room is not in an ambiguous card state.' };
+  // Queue a projection so the next card is created fresh.
+  const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+  await requestMicrosoftTeamsWarRoomProjection(warRoomId);
+  return { abandoned: true, warning: 'Ambiguous card abandoned. A duplicate card may still exist in the Teams channel; delete it manually if so.' };
+}
+
+/**
  * Explicit operator recovery for an uncertain Graph create. This only queues
  * the marker scan guarded by the original fencing token; provisioning refuses
  * to POST once createAttemptedAt is set.

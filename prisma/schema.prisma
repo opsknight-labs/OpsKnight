@@ -814,6 +814,7 @@ model WarRoomParticipant {
   providerObjectId String?
   source           WarRoomParticipantSource
   state            WarRoomParticipantState @default(DESIRED)
+  desiredVersion   Int                     @default(0)
   lastSyncAt       DateTime?
   lastError        String?
   lastErrorCode    String?

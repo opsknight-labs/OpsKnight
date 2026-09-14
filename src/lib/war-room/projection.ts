@@ -35,6 +35,33 @@ function isAmbiguousCardCreateResult(result: { errorCode?: string; success: bool
   return false;
 }
 
+/**
+ * Terminal settlement for WAR_ROOM_PROJECT jobs whose retry budget is
+ * exhausted while the room is in CLOSING state. Clears leases and closes
+ * locally so the room never hangs in CLOSING forever.
+ */
+export async function settleWarRoomProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void> {
+  const changed = await prisma.incidentWarRoom.updateMany({
+    where: { id: warRoomId, projectionVersion, state: 'CLOSING' },
+    data: {
+      state: 'CLOSED',
+      closedAt: new Date(),
+      health: 'DEGRADED',
+      lastErrorCode: 'PROJECTION_RETRIES_EXHAUSTED',
+      lastError: 'War-room card projection exhausted its retry budget while closing; closed locally.',
+      projectionLeaseToken: null,
+      projectionLeaseExpiresAt: null,
+    },
+  });
+  if (changed.count === 0) {
+    // Even when already CLOSED or not CLOSING, clear a stale lease for this version.
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: warRoomId, projectionVersion, projectionLeaseToken: { not: null } },
+      data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null, health: 'DEGRADED', lastErrorCode: 'PROJECTION_RETRIES_EXHAUSTED', lastError: 'War-room projection exhausted its retry budget; health marked degraded.' },
+    });
+  }
+}
+
 /** Coalesces incident changes into one ordered, durable card-projection job. */
 export async function requestMicrosoftTeamsWarRoomProjection(warRoomId: string): Promise<number | null> {
   return prisma.$transaction(async tx => {

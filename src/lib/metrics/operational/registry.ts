@@ -49,7 +49,15 @@ export const OPERATIONAL_METRICS = [
     kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
   },
   {
-    name: 'opsknight_war_room_projection_total', help: 'War-room canonical card projection outcomes',
+    name: 'opsknight_war_room_ambiguous_card_abandon_total', help: 'Operator abandonment of ambiguous war-room cards',
+    kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
+  },
+  {
+    name: 'opsknight_war_room_projection_total', help: 'War-room projection outcomes',
+    kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
+  },
+  {
+    name: 'opsknight_war_room_participant_sync_total', help: 'War-room participant sync outcomes',
     kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
   },
   {

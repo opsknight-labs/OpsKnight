@@ -128,6 +128,26 @@ export async function addChannelMember(input: {
 }
 
 /**
+ * Promotes/demotes a private channel member by patching their roles.
+ * Used for owner handoff before removing the last owner.
+ */
+export async function updateChannelMemberRoles(input: {
+  tenantId: string;
+  teamId: string;
+  channelId: string;
+  membershipId: string;
+  roles: string[];
+}): Promise<WarRoomGraphResult<null>> {
+  const result = await microsoftTeamsGraphRequest(
+    input.tenantId,
+    `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/members/${encodeURIComponent(input.membershipId)}`,
+    { method: 'PATCH', body: JSON.stringify({ roles: input.roles }) },
+    'MEMBER_UPDATE',
+  );
+  return result.ok ? { ok: true, value: null } : result;
+}
+
+/**
  * Removes a member from a private channel. The caller must supply the
  * channel membership id (not the Entra object id) obtained from
  * findChannelMember. Idempotent: 404 is treated as already removed.

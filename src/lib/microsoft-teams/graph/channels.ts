@@ -3,7 +3,7 @@ import type { WarRoomGraphResult } from '@/lib/war-room/types';
 
 type Channel = { id: string; displayName: string; description?: string | null; webUrl?: string | null };
 
-type GraphOperation = 'READ' | 'CREATE' | 'UPDATE' | 'MEMBER_ADD' | 'MEMBER_REMOVE';
+type GraphOperation = 'READ' | 'CREATE' | 'UPDATE' | 'MEMBER_ADD' | 'MEMBER_REMOVE' | 'MEMBER_UPDATE';
 
 function failure(status: number, body: string, retryAfter: string | null, operation: GraphOperation): WarRoomGraphResult<never> {
   if (status === 429) return { ok: false, code: 'RATE_LIMITED', message: 'Microsoft Teams rate limited the request.', retryAfterMs: Number(retryAfter) > 0 ? Number(retryAfter) * 1000 : undefined };

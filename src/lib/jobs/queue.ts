@@ -388,6 +388,14 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
         : undefined,
     },
   });
+  if (!shouldRetry && job.type === 'WAR_ROOM_PROJECT') {
+    const versionValue = payloadValue(job.payload, 'projectionVersion');
+    const warRoomIdValue = payloadValue(job.payload, 'warRoomId');
+    if (typeof warRoomIdValue === 'string' && typeof versionValue === 'number' && Number.isInteger(versionValue)) {
+      const { settleWarRoomProjectionFailure } = await import('../war-room/projection');
+      await settleWarRoomProjectionFailure(warRoomIdValue, versionValue);
+    }
+  }
 }
 
 export async function markJobFailed(jobId: string, error: string): Promise<void> {
