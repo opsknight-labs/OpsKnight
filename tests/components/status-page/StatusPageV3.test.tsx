@@ -113,6 +113,9 @@ describe('StatusPageV3', () => {
         ])}
       />
     );
+    fireEvent.change(screen.getByRole('combobox', { name: /Sort services/i }), {
+      target: { value: 'issues' },
+    });
     const names = screen.getAllByText(/Alpha API|Zeta Gateway/).map(node => node.textContent);
     expect(names.indexOf('Zeta Gateway')).toBeLessThan(names.indexOf('Alpha API'));
   });

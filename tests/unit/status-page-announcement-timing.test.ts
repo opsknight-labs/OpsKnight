@@ -105,6 +105,45 @@ describe('Enterprise Announcement Timing & Timezone Flow', () => {
         expect(contradictory2.error.issues[0].message).toContain('Contradictory time options');
       }
     });
+
+    it('rejects malformed non-ISO date strings with validation issues rather than parser exceptions', () => {
+      const parsed = StatusAnnouncementCreateSchema.safeParse({
+        statusPageId: 'page-123',
+        title: 'Malformed Date',
+        message: 'Testing bad dates',
+        startDate: 'not-a-valid-date',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0].message).toContain('startDate must be a valid ISO date string');
+      }
+    });
+
+    it('rejects invalid announcement types not in the enum contract', () => {
+      const parsed = StatusAnnouncementCreateSchema.safeParse({
+        statusPageId: 'page-123',
+        title: 'Bad Type',
+        message: 'Testing bad type',
+        startDate: '2026-09-20T04:30:00.000Z',
+        type: 'CUSTOM_UNSUPPORTED_TYPE',
+      });
+      expect(parsed.success).toBe(false);
+    });
+
+    it('rejects publishAt occurring after endDate', () => {
+      const parsed = StatusAnnouncementCreateSchema.safeParse({
+        statusPageId: 'page-123',
+        title: 'Publish after End',
+        message: 'Testing publishAt > endDate',
+        startDate: '2026-09-20T04:00:00.000Z',
+        endDate: '2026-09-20T06:00:00.000Z',
+        publishAt: '2026-09-20T07:00:00.000Z',
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0].message).toContain('Publish date cannot be after end date');
+      }
+    });
   });
 
   describe('Public feed queries with publishAt contract', () => {

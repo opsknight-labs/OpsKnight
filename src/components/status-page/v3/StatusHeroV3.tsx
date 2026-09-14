@@ -28,7 +28,7 @@ export default function StatusHeroV3({
           : undefined,
     },
     { label: 'Active incidents', value: overall.activeIncidentCount },
-    { label: 'In maintenance', value: overall.maintenanceCount },
+    { label: 'Active maintenance', value: overall.maintenanceCount },
   ];
   const visibleStats = stats.filter(stat => stat.value != null);
 

@@ -578,9 +578,6 @@ ${darkSurfaceLayer}
 .status-page-container .status-v3-incidents__list {
   gap: var(--sp-theme-service-gap);
 }
-.status-page-container section {
-  margin-block: var(--sp-theme-section-gap);
-}
 ${headerLayout}
 ${serviceLayout}
 ${incidentLayout}

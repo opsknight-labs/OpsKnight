@@ -48,7 +48,7 @@ function MaintenanceV3({
     >
       <div className="status-v3-maintenance-inline__head">
         <div className="status-v3-maintenance-inline__title-wrap">
-          <h2 id="status-v3-maintenance-heading" className="status-v3-maintenance-inline__title">
+          <h2 id="status-v3-maintenance-heading" className="status-section-title status-v3-maintenance-inline__title">
             Maintenance
           </h2>
           <span className="status-v3-maintenance-inline__subtitle">Scheduled & active windows</span>
