@@ -278,7 +278,7 @@ export default function StatusPageConfig({
   });
 
   const [formData, setFormData] = useState(getInitialFormData);
-  const [announcements, setAnnouncements] = useState(statusPage.announcements);
+  const [announcements, setAnnouncements] = useState(() => statusPage.announcements ?? []);
   const [apiTokens, setApiTokens] = useState(statusPage.apiTokens ?? []);
   const [apiTokenName, setApiTokenName] = useState('');
   const [apiTokenValue, setApiTokenValue] = useState<string | null>(null);
@@ -515,7 +515,9 @@ export default function StatusPageConfig({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(activeSection)) {
+    if (
+      ['announcements', 'integrations', 'subscribers', 'email-delivery'].includes(activeSection)
+    ) {
       return;
     }
     setError(null);
@@ -954,7 +956,11 @@ export default function StatusPageConfig({
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/70 border-transparent'
                   )}
                 >
-                  {item.icon && <span className="status-page-config-tab-icon inline-flex items-center justify-center shrink-0">{item.icon}</span>}
+                  {item.icon && (
+                    <span className="status-page-config-tab-icon inline-flex items-center justify-center shrink-0">
+                      {item.icon}
+                    </span>
+                  )}
                   <span>{item.label}</span>
                   {item.badge ? (
                     <Badge
@@ -1033,56 +1039,63 @@ export default function StatusPageConfig({
                     className="status-page-config-settings-inner"
                     style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
                   >
-{/* Announcements */}
-                {activeSection === 'announcements' && (
-                  <StatusPageAnnouncementManager
-                    statusPageId={statusPage.id}
-                    announcements={announcements}
-                    setAnnouncements={setAnnouncements}
-                    allServices={announcementServiceOptions}
-                    browserTimeZone={browserTimeZone}
-                  />
-                )}
-
-                {/* Integrations */}
-                {activeSection === 'integrations' && (
-                  <StatusPageWebhooksSettings statusPageId={statusPage.id} />
-                )}
-
-                {/* Subscribers */}
-                {activeSection === 'subscribers' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Subscribers"
-                      description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription."
-                      icon={<Users className="w-5 h-5 text-primary" />}
-                    >
-                      <StatusPageSubscribers statusPageId={statusPage.id} />
-                    </StatusPageSectionCard>
-                  </div>
-                )}
-
-                {/* Email Delivery */}
-                {activeSection === 'email-delivery' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Email Delivery"
-                      description="Configure which email provider to use for subscription verification and status page notification alerts."
-                      icon={<Mail className="w-5 h-5 text-primary" />}
-                    >
-                      <StatusPageEmailConfig
+                    {/* Announcements */}
+                    {activeSection === 'announcements' && (
+                      <StatusPageAnnouncementManager
                         statusPageId={statusPage.id}
-                        currentProvider={statusPage.emailProvider}
+                        announcements={announcements ?? []}
+                        setAnnouncements={setAnnouncements}
+                        allServices={announcementServiceOptions ?? []}
+                        browserTimeZone={browserTimeZone}
                       />
-                    </StatusPageSectionCard>
-                  </div>
-                )}
+                    )}
 
-                                  </div>
+                    {/* Integrations */}
+                    {activeSection === 'integrations' && (
+                      <StatusPageWebhooksSettings statusPageId={statusPage.id} />
+                    )}
+
+                    {/* Subscribers */}
+                    {activeSection === 'subscribers' && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 'var(--spacing-6)',
+                        }}
+                      >
+                        <StatusPageSectionCard
+                          title="Subscribers"
+                          description="Manage your subscriber audience, search emails, view verification status, and perform bulk unsubscription."
+                          icon={<Users className="w-5 h-5 text-primary" />}
+                        >
+                          <StatusPageSubscribers statusPageId={statusPage.id} />
+                        </StatusPageSectionCard>
+                      </div>
+                    )}
+
+                    {/* Email Delivery */}
+                    {activeSection === 'email-delivery' && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 'var(--spacing-6)',
+                        }}
+                      >
+                        <StatusPageSectionCard
+                          title="Email Delivery"
+                          description="Configure which email provider to use for subscription verification and status page notification alerts."
+                          icon={<Mail className="w-5 h-5 text-primary" />}
+                        >
+                          <StatusPageEmailConfig
+                            statusPageId={statusPage.id}
+                            currentProvider={statusPage.emailProvider}
+                          />
+                        </StatusPageSectionCard>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <form
                     id="status-page-section-form"
@@ -1093,1393 +1106,1462 @@ export default function StatusPageConfig({
                       className="status-page-config-settings-inner"
                       style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
                     >
-
-                {/* General Settings */}
-                {activeSection === 'general' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-4)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Basic Settings"
-                      description="Define the identity and presentation name displayed on your public status page."
-                      icon={<Globe className="h-4 w-4" />}
-                      footer={
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 w-full">
-                          <div className="text-xs text-muted-foreground">
-                            <span className="font-semibold text-foreground">Default routing:</span>{' '}
-                            {statusPage.isDefault
-                              ? 'This page serves /status and the legacy /api/status endpoint. It does not provide settings to other pages.'
-                              : 'This page is independent. Make it the default only to route legacy /status requests here.'}
-                          </div>
-                          {!statusPage.isDefault && (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={handleMakeDefault}
-                            >
-                              Make default
-                            </Button>
-                          )}
-                        </div>
-                      }
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          type="input"
-                          label="Status Page Name"
-                          value={formData.name}
-                          onChange={e => setFormData({ ...formData, name: e.target.value })}
-                          required
-                          helperText="The name displayed at the top of your status page"
-                        />
-
-                        <FormField
-                          type="input"
-                          label="Organization Name"
-                          value={formData.organizationName}
-                          onChange={e =>
-                            setFormData({ ...formData, organizationName: e.target.value })
-                          }
-                          helperText="Used in subscriber emails, email branding, and footer copyright."
-                          placeholder="e.g. OpsKnight"
-                        />
-                      </div>
-
-                      <FormField
-                        type="input"
-                        label="Public URL Slug"
-                        value={formData.slug}
-                        onChange={e =>
-                          setFormData({
-                            ...formData,
-                            slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
-                          })
-                        }
-                        placeholder="public-status"
-                        helperText="Optional for the default page; required for a dedicated /status/your-slug URL."
-                      />
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Access & Visibility"
-                      description="Control who can access the status page and when it is publicly visible."
-                      icon={<Shield className="h-4 w-4" />}
-                    >
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                          <Switch
-                            checked={formData.enabled}
-                            onChange={checked =>
-                              setFormData(prev => ({ ...prev, enabled: checked }))
-                            }
-                            label="Enable Status Page"
-                            helperText="Make the status page accessible to users."
-                          />
-                        </div>
-
-                        {formData.enabled ? (
-                          <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                            <Switch
-                              checked={!privacySettings.requireAuth}
-                              onChange={checked =>
-                                setPrivacySettings(prev => ({ ...prev, requireAuth: !checked }))
-                              }
-                              label="Public Access"
-                              helperText="Anyone can view without logging in."
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Domain Configuration"
-                      description="Configure subdomains and custom domains to host your status page."
-                      icon={<Link2 className="h-4 w-4" />}
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          type="input"
-                          label="Subdomain"
-                          value={formData.subdomain}
-                          onChange={e => setFormData({ ...formData, subdomain: e.target.value })}
-                          placeholder="status"
-                          helperText="e.g., status (for status.yourcompany.com)."
-                        />
-
-                        <FormField
-                          type="input"
-                          label="Custom Domain"
-                          value={formData.customDomain}
-                          onChange={e => setFormData({ ...formData, customDomain: e.target.value })}
-                          placeholder="status.yourcompany.com"
-                          helperText="Full custom domain pointing to your status page."
-                        />
-                      </div>
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Contact Information"
-                      description="Public contact email and support portal URL for visitor inquiries."
-                      icon={<Mail className="h-4 w-4" />}
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          type="input"
-                          inputType="email"
-                          label="Contact Email"
-                          value={formData.contactEmail}
-                          onChange={e => setFormData({ ...formData, contactEmail: e.target.value })}
-                          placeholder="support@yourcompany.com"
-                          helperText="Email address for users to contact you"
-                        />
-
-                        <FormField
-                          type="input"
-                          inputType="url"
-                          label="Contact URL"
-                          value={formData.contactUrl}
-                          onChange={e => setFormData({ ...formData, contactUrl: e.target.value })}
-                          placeholder="https://yourcompany.com/contact"
-                          helperText="URL for contact page or support portal"
-                        />
-                      </div>
-                    </StatusPageSectionCard>
-                  </div>
-                )}
-
-                {/* Appearance Settings */}
-                {activeSection === 'appearance' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Branding & Logo"
-                      description="Upload your company logo and set the browser favicon for your status page."
-                      icon={<ImageIcon className="w-5 h-5 text-primary" />}
-                      action={
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => setFormData({ ...formData, logoUrl: '/logo.svg' })}
-                        >
-                          Use default app logo
-                        </Button>
-                      }
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                          <FormField
-                            type="input"
-                            inputType="text"
-                            label="Logo URL"
-                            value={formData.logoUrl}
-                            onChange={e => setFormData({ ...formData, logoUrl: e.target.value })}
-                            placeholder="https://yourcompany.com/logo.png"
-                            helperText="Full URL or relative path (e.g., /logo.svg). Recommended: 200x50px."
-                            required={false}
-                          />
-                          <div>
-                            <label className="block text-xs font-semibold text-foreground mb-1.5">
-                              Upload Logo File
-                            </label>
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                              onChange={e => handleLogoUpload(e.target.files?.[0] || null)}
-                              className="w-full text-xs text-muted-foreground file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                            />
-                            <div className="text-[11px] text-muted-foreground mt-1">
-                              Uploads stored as data URLs. Max size 2MB.
-                            </div>
-                            {logoUploadError && (
-                              <div className="text-[11px] text-destructive mt-1 font-medium">
-                                {logoUploadError}
-                              </div>
-                            )}
-                          </div>
-                          {formData.logoUrl && (
-                            <div className="p-3 rounded-lg bg-muted/40 border border-border">
-                              <div className="text-xs font-semibold text-foreground mb-2">
-                                Logo Preview:
-                              </div>
-                              <div className="p-2.5 bg-background border border-border/80 rounded-md inline-block">
-                                <img
-                                  src={formData.logoUrl}
-                                  alt="Logo preview"
-                                  className="h-10 max-w-[180px] object-contain"
-                                  onError={e => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                    const parent = (e.target as HTMLImageElement).parentElement;
-                                    if (parent) {
-                                      parent.innerHTML =
-                                        '<div class="p-2 text-destructive text-xs">Failed to load image.</div>';
-                                    }
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="space-y-3">
-                          <FormField
-                            type="input"
-                            inputType="url"
-                            label="Favicon URL"
-                            value={formData.faviconUrl}
-                            onChange={e => setFormData({ ...formData, faviconUrl: e.target.value })}
-                            placeholder="https://yourcompany.com/favicon.ico"
-                            helperText="Recommended: 16x16 or 32x32px, ICO or PNG format."
-                          />
-                          {formData.faviconUrl && (
-                            <div className="p-3 rounded-lg bg-muted/40 border border-border">
-                              <div className="text-xs font-semibold text-foreground mb-2">
-                                Favicon Preview:
-                              </div>
-                              <div className="p-2 bg-background border border-border/80 rounded-md inline-block">
-                                <img
-                                  src={formData.faviconUrl}
-                                  alt="Favicon preview"
-                                  className="w-8 h-8 object-contain"
-                                  onError={e => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                    const parent = (e.target as HTMLImageElement).parentElement;
-                                    if (parent) {
-                                      parent.innerHTML =
-                                        '<div class="p-2 text-destructive text-xs">Failed to load favicon.</div>';
-                                    }
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Typography & Font Family"
-                      description="Choose typography that matches your brand identity across all status page elements."
-                      icon={<Type className="w-5 h-5 text-primary" />}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-4)',
-                        }}
-                      >
-                        <FormField
-                          type="select"
-                          label="Primary Font Family"
-                          value={formData.fontFamily || 'default'}
-                          onChange={e => setFormData({ ...formData, fontFamily: e.target.value })}
-                          options={STATUS_PAGE_FONTS.map(f => ({
-                            value: f.id,
-                            label: `${f.name} (${f.category})`,
-                          }))}
-                          helperText="Applies clean typography to the header, incident reports, service metrics, and subscriber forms."
-                        />
+                      {/* General Settings */}
+                      {activeSection === 'general' && (
                         <div
                           style={{
-                            padding: 'var(--spacing-4)',
-                            borderRadius: 'var(--radius-md)',
-                            border: '1px solid #e2e8f0',
-                            background: '#ffffff',
                             display: 'flex',
                             flexDirection: 'column',
-                            gap: '6px',
+                            gap: 'var(--spacing-4)',
                           }}
                         >
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.08em',
-                              color: 'var(--text-muted)',
-                              fontWeight: '600',
-                            }}
-                          >
-                            Live Font Preview
-                          </div>
-                          <div
-                            style={{
-                              fontFamily:
-                                STATUS_PAGE_FONTS.find(
-                                  f => f.id === (formData.fontFamily || 'default')
-                                )?.fontFamily || 'inherit',
-                              fontSize: '1.125rem',
-                              fontWeight: '700',
-                              color: '#0f172a',
-                            }}
-                          >
-                            All Systems Operational — 99.98% 30-Day Uptime
-                          </div>
-                          <div
-                            style={{
-                              fontFamily:
-                                STATUS_PAGE_FONTS.find(
-                                  f => f.id === (formData.fontFamily || 'default')
-                                )?.fontFamily || 'inherit',
-                              fontSize: '0.875rem',
-                              color: '#475569',
-                            }}
-                          >
-                            Incident communication, automated health telemetry, and service status
-                            tracking.
-                          </div>
-                        </div>
-                      </div>
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Color theme"
-                      description="Start with an accessible preset, then adjust individual brand colors if needed. The preview uses the same color engine as the public page."
-                      icon={<Palette className="w-5 h-5 text-primary" />}
-                      action={
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={() =>
-                            setFormData({
-                              ...formData,
-                              primaryColor: STATUS_PAGE_COLOR_PRESETS[0].primary,
-                              backgroundColor: STATUS_PAGE_COLOR_PRESETS[0].background,
-                              textColor: STATUS_PAGE_COLOR_PRESETS[0].text,
-                            })
-                          }
-                          className="text-xs gap-1.5 h-8 px-2.5 shadow-xs"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>Reset to default</span>
-                        </Button>
-                      }
-                    >
-                      {/* Quick Presets */}
-                      <div style={{ marginBottom: 'var(--spacing-5)' }}>
-                        <label
-                          style={{
-                            display: 'block',
-                            marginBottom: 'var(--spacing-2)',
-                            fontSize: 'var(--font-size-sm)',
-                            fontWeight: '600',
-                          }}
-                        >
-                          Theme presets
-                        </label>
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                            gap: 'var(--spacing-2)',
-                          }}
-                        >
-                          {STATUS_PAGE_COLOR_PRESETS.map(preset => {
-                            const isActive =
-                              formData.primaryColor === preset.primary &&
-                              formData.backgroundColor === preset.background &&
-                              formData.textColor === preset.text;
-                            return (
-                              <button
-                                key={preset.id}
-                                type="button"
-                                onClick={() =>
-                                  setFormData({
-                                    ...formData,
-                                    primaryColor: preset.primary,
-                                    backgroundColor: preset.background,
-                                    textColor: preset.text,
-                                  })
-                                }
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  padding: '8px 12px',
-                                  borderRadius: 'var(--radius-md)',
-                                  border: isActive
-                                    ? '2px solid hsl(var(--ui-primary, 215.3 25% 26.7%))'
-                                    : '1px solid hsl(var(--ui-border, 214.3 31.8% 91.4%))',
-                                  background: isActive
-                                    ? 'hsl(var(--ui-primary, 215.3 25% 26.7%) / 0.08)'
-                                    : 'hsl(var(--ui-card, 0 0% 100%))',
-                                  color: isActive ? 'hsl(var(--ui-primary, 215.3 25% 26.7%))' : 'inherit',
-                                  cursor: 'pointer',
-                                  textAlign: 'left',
-                                  transition: 'all 0.15s ease',
-                                }}
-                              >
-                                <div style={{ display: 'flex', gap: '3px' }}>
-                                  <span
-                                    style={{
-                                      width: '12px',
-                                      height: '12px',
-                                      borderRadius: '999px',
-                                      background: preset.primary,
-                                    }}
-                                  />
-                                  <span
-                                    style={{
-                                      width: '12px',
-                                      height: '12px',
-                                      borderRadius: '999px',
-                                      background: preset.background,
-                                      border: '1px solid #cbd5e1',
-                                    }}
-                                  />
-                                  <span
-                                    style={{
-                                      width: '12px',
-                                      height: '12px',
-                                      borderRadius: '999px',
-                                      background: preset.text,
-                                    }}
-                                  />
+                          <StatusPageSectionCard
+                            title="Basic Settings"
+                            description="Define the identity and presentation name displayed on your public status page."
+                            icon={<Globe className="h-4 w-4" />}
+                            footer={
+                              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 w-full">
+                                <div className="text-xs text-muted-foreground">
+                                  <span className="font-semibold text-foreground">
+                                    Default routing:
+                                  </span>{' '}
+                                  {statusPage.isDefault
+                                    ? 'This page serves /status and the legacy /api/status endpoint. It does not provide settings to other pages.'
+                                    : 'This page is independent. Make it the default only to route legacy /status requests here.'}
                                 </div>
-                                <span
-                                  style={{
-                                    fontSize: 'var(--font-size-xs)',
-                                    fontWeight: isActive ? '700' : '500',
-                                  }}
-                                >
-                                  {preset.name}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <h3
-                        style={{
-                          margin: '0 0 var(--spacing-3)',
-                          fontSize: 'var(--font-size-sm)',
-                          fontWeight: '600',
-                        }}
-                      >
-                        Custom colors
-                      </h3>
-
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                          gap: 'var(--spacing-4)',
-                        }}
-                      >
-                        <div>
-                          <label
-                            style={{
-                              display: 'block',
-                              marginBottom: 'var(--spacing-2)',
-                              fontSize: 'var(--font-size-sm)',
-                              fontWeight: '500',
-                            }}
-                          >
-                            Primary Color
-                          </label>
-                          <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
-                            <input
-                              type="color"
-                              value={formData.primaryColor}
-                              onChange={e =>
-                                setFormData({ ...formData, primaryColor: e.target.value })
-                              }
-                              style={{
-                                width: '60px',
-                                height: '40px',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 'var(--radius-md)',
-                                cursor: 'pointer',
-                              }}
-                            />
-                            <FormField
-                              type="input"
-                              inputType="text"
-                              label="Primary Color"
-                              value={formData.primaryColor}
-                              onChange={e =>
-                                setFormData({ ...formData, primaryColor: e.target.value })
-                              }
-                              placeholder="#667eea"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              display: 'block',
-                              marginBottom: 'var(--spacing-2)',
-                              fontSize: 'var(--font-size-sm)',
-                              fontWeight: '500',
-                            }}
-                          >
-                            Background Color
-                          </label>
-                          <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
-                            <input
-                              type="color"
-                              value={formData.backgroundColor}
-                              onChange={e =>
-                                setFormData({ ...formData, backgroundColor: e.target.value })
-                              }
-                              style={{
-                                width: '60px',
-                                height: '40px',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 'var(--radius-md)',
-                                cursor: 'pointer',
-                              }}
-                            />
-                            <FormField
-                              type="input"
-                              inputType="text"
-                              label="Background Color"
-                              value={formData.backgroundColor}
-                              onChange={e =>
-                                setFormData({ ...formData, backgroundColor: e.target.value })
-                              }
-                              placeholder="#ffffff"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label
-                            style={{
-                              display: 'block',
-                              marginBottom: 'var(--spacing-2)',
-                              fontSize: 'var(--font-size-sm)',
-                              fontWeight: '500',
-                            }}
-                          >
-                            Text Color
-                          </label>
-                          <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
-                            <input
-                              type="color"
-                              value={formData.textColor}
-                              onChange={e =>
-                                setFormData({ ...formData, textColor: e.target.value })
-                              }
-                              style={{
-                                width: '60px',
-                                height: '40px',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 'var(--radius-md)',
-                                cursor: 'pointer',
-                              }}
-                            />
-                            <FormField
-                              type="input"
-                              inputType="text"
-                              label="Text Color"
-                              value={formData.textColor}
-                              onChange={e =>
-                                setFormData({ ...formData, textColor: e.target.value })
-                              }
-                              placeholder="#111827"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div
-                        role="status"
-                        className={cn(
-                          'mt-4 p-3 rounded-lg text-xs leading-relaxed border',
-                          textContrastAdjusted
-                            ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
-                            : 'bg-primary/5 border-primary/20 text-foreground'
-                        )}
-                      >
-                        {textContrastAdjusted
-                          ? `Readable contrast applied: public text will render as ${effectiveColorTheme.textColor}.`
-                          : 'Contrast check passed. These colors will render unchanged on the public page.'}
-                      </div>
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Layout Options"
-                      description="Configure maximum page width and header/footer visibility."
-                      icon={<Layout className="w-5 h-5 text-primary" />}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-3)',
-                        }}
-                      >
-                        <FormField
-                          type="select"
-                          label="Content Width"
-                          value={formData.layout}
-                          onChange={e => setFormData({ ...formData, layout: e.target.value })}
-                          options={[
-                            { value: 'compact', label: 'Compact (~900px)' },
-                            { value: 'default', label: 'Standard (~1280px)' },
-                            { value: 'wide', label: 'Wide (~1600px)' },
-                          ]}
-                          helperText="Controls maximum page width on large displays."
-                        />
-                        <Switch
-                          checked={formData.showHeader}
-                          onChange={checked => setFormData({ ...formData, showHeader: checked })}
-                          label="Show Header"
-                          helperText={
-                            formData.showHeader
-                              ? 'Display the top navigation bar with logo and page title.'
-                              : 'When hidden, subscribe and API links remain accessible via the footer (if footer is enabled).'
-                          }
-                        />
-                        <Switch
-                          checked={formData.showFooter}
-                          onChange={checked => setFormData({ ...formData, showFooter: checked })}
-                          label="Show Footer"
-                          helperText="Display the footer with support links, API links, and copyright."
-                        />
-                      </div>
-                    </StatusPageSectionCard>
-                  </div>
-                )}
-
-                {/* Design Settings */}
-                {activeSection === 'design' && (
-                  <StatusPageDesignSection
-                    themeId={formData.themeId}
-                    density={formData.themeDensity}
-                    customCss={formData.customCss}
-                    onThemeChange={themeId => setFormData(prev => ({ ...prev, themeId }))}
-                    onDensityChange={themeDensity =>
-                      setFormData(prev => ({ ...prev, themeDensity }))
-                    }
-                    onCustomCssChange={customCss => setFormData(prev => ({ ...prev, customCss }))}
-                  />
-                )}
-
-                {/* Services Configuration */}
-                {activeSection === 'services' && (
-                  <StatusPageServicesManager
-                    allServices={allServices}
-                    selectedServices={selectedServices}
-                    setSelectedServices={setSelectedServices}
-                    serviceConfigs={serviceConfigs}
-                    updateServiceConfig={updateServiceConfig}
-                    formData={formData}
-                    setFormData={setFormData}
-                    privacySettings={privacySettings}
-                    hasSelectedRegions={hasSelectedRegions}
-                  />
-                )}
-
-                {/* Privacy Settings */}
-                {activeSection === 'privacy' && (
-                  <StatusPagePrivacySettings
-                    settings={privacySettings}
-                    onChange={settings => setPrivacySettings(settings)}
-                  />
-                )}
-
-                {/* Content Settings */}
-                {activeSection === 'content' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Display Options"
-                      description="Toggle which sections and metrics are shown to visitors on your status page."
-                      icon={<Sliders className="w-5 h-5 text-primary" />}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-3)',
-                        }}
-                      >
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                            <Switch
-                              checked={formData.showServices}
-                              onChange={checked =>
-                                setFormData({ ...formData, showServices: checked })
-                              }
-                              label="Show Services"
-                              helperText="Display service status list"
-                            />
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                            <Switch
-                              checked={formData.showIncidents}
-                              onChange={checked => {
-                                setFormData({ ...formData, showIncidents: checked });
-                                if (checked && privacySettings.showRecentIncidents === false) {
-                                  setPrivacySettings(prev => ({
-                                    ...prev,
-                                    showRecentIncidents: true,
-                                  }));
-                                }
-                              }}
-                              label="Show Incidents"
-                              helperText="Display incidents section and timeline"
-                            />
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                            <Switch
-                              checked={formData.showMetrics}
-                              onChange={checked => {
-                                setFormData({ ...formData, showMetrics: checked });
-                                if (checked && privacySettings.showServiceMetrics === false) {
-                                  setPrivacySettings(prev => ({
-                                    ...prev,
-                                    showServiceMetrics: true,
-                                  }));
-                                }
-                              }}
-                              label="Show Uptime & Availability"
-                              helperText="Display service uptime metrics and history"
-                            />
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                            <Switch
-                              checked={formData.showSubscribe}
-                              onChange={checked =>
-                                setFormData({ ...formData, showSubscribe: checked })
-                              }
-                              label="Show Subscribe to Updates"
-                              helperText="Display email subscription section"
-                            />
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                            <Switch
-                              checked={formData.showChangelog}
-                              onChange={checked =>
-                                setFormData({ ...formData, showChangelog: checked })
-                              }
-                              label="Show Changelog"
-                              helperText="Display recent update announcements"
-                            />
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
-                            <Switch
-                              checked={formData.showRegionHeatmap}
-                              onChange={checked =>
-                                setFormData({ ...formData, showRegionHeatmap: checked })
-                              }
-                              label="Show Region Heatmap"
-                              helperText={
-                                privacySettings.showServiceRegions === false
-                                  ? 'Requires Service regions in Privacy settings'
-                                  : 'Display a compact region impact grid'
-                              }
-                              disabled={privacySettings.showServiceRegions === false}
-                            />
-                          </div>
-                          <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors md:col-span-2">
-                            <Switch
-                              checked={formData.showPostIncidentReview}
-                              onChange={checked =>
-                                setFormData({ ...formData, showPostIncidentReview: checked })
-                              }
-                              label="Show Post-Incident Reviews"
-                              helperText="Show links to published postmortems on resolved incidents"
-                            />
-                          </div>
-                        </div>
-
-                        {formData.showMetrics && (
-                          <div
-                            style={{
-                              marginTop: 'var(--spacing-4)',
-                              padding: 'var(--spacing-4)',
-                              background: '#f9fafb',
-                              borderRadius: 'var(--radius-md)',
-                              border: '1px solid #e5e7eb',
-                            }}
-                          >
-                            <h4
-                              style={{
-                                fontSize: 'var(--font-size-sm)',
-                                fontWeight: '600',
-                                marginBottom: 'var(--spacing-3)',
-                                color: '#374151',
-                              }}
-                            >
-                              Uptime Thresholds
-                            </h4>
-                            <p
-                              style={{
-                                fontSize: 'var(--font-size-xs)',
-                                color: '#6b7280',
-                                marginBottom: 'var(--spacing-3)',
-                              }}
-                            >
-                              Configure SLA thresholds for color-coding uptime metrics
-                            </p>
-                            <div
-                              style={{
-                                display: 'grid',
-                                gap: 'var(--spacing-3)',
-                                gridTemplateColumns: '1fr 1fr',
-                              }}
-                            >
-                              <FormField
-                                type="input"
-                                label="Excellent Threshold (%)"
-                                value={String(formData.uptimeExcellentThreshold)}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                  const val = parseFloat(e.target.value);
-                                  if (!isNaN(val) && val >= 0 && val <= 100) {
-                                    setFormData({ ...formData, uptimeExcellentThreshold: val });
-                                  }
-                                }}
-                                helperText="Green: uptime ≥ this value (default: 99.9%)"
-                              />
-                              <FormField
-                                type="input"
-                                label="Good Threshold (%)"
-                                value={String(formData.uptimeGoodThreshold)}
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                  const val = parseFloat(e.target.value);
-                                  if (!isNaN(val) && val >= 0 && val <= 100) {
-                                    setFormData({ ...formData, uptimeGoodThreshold: val });
-                                  }
-                                }}
-                                helperText="Yellow: uptime ≥ this value (default: 99.0%)"
-                              />
-                            </div>
-                            {formData.uptimeGoodThreshold > formData.uptimeExcellentThreshold && (
-                              <div className="mt-3 px-3 py-2 rounded-md text-xs font-medium bg-destructive/10 border border-destructive/25 text-destructive">
-                                ⚠️ Good threshold must be less than or equal to Excellent threshold
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Footer"
-                      description="Set custom footer text and copyright notices for your status page."
-                      icon={<FileText className="w-5 h-5 text-primary" />}
-                    >
-                      <FormField
-                        type="textarea"
-                        label="Footer Text"
-                        rows={3}
-                        value={formData.footerText}
-                        onChange={e => setFormData({ ...formData, footerText: e.target.value })}
-                        placeholder="(c) 2024 Your Company. All rights reserved."
-                        helperText="Text to display at the bottom of the status page"
-                      />
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="SEO Settings"
-                      description="Search engine metadata and previews for public sharing."
-                      icon={<Globe className="w-5 h-5 text-primary" />}
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                          type="input"
-                          label="Meta Title"
-                          value={formData.metaTitle}
-                          onChange={e => setFormData({ ...formData, metaTitle: e.target.value })}
-                          placeholder={statusPage.name}
-                          helperText="Recommended: 50-60 characters"
-                        />
-                        <FormField
-                          type="textarea"
-                          label="Meta Description"
-                          rows={2}
-                          value={formData.metaDescription}
-                          onChange={e =>
-                            setFormData({ ...formData, metaDescription: e.target.value })
-                          }
-                          placeholder={`Status page for ${statusPage.name}`}
-                          helperText="Recommended: 150-160 characters"
-                        />
-                      </div>
-                    </StatusPageSectionCard>
-                  </div>
-                )}
-
-                {/* Advanced Settings */}
-                {activeSection === 'advanced' && (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-6)' }}
-                  >
-                    <StatusPageSectionCard
-                      title="Live Updates & Feeds"
-                      description="Configure client-side polling intervals and public RSS/JSON feed discovery."
-                      icon={<RefreshCw className="w-5 h-5 text-primary" />}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-4)',
-                        }}
-                      >
-                        <Switch
-                          checked={formData.autoRefresh}
-                          onChange={checked => setFormData({ ...formData, autoRefresh: checked })}
-                          label="Enable Auto-Refresh"
-                          helperText="Automatically refresh the status page at regular intervals"
-                        />
-                        {formData.autoRefresh && (
-                          <FormField
-                            type="input"
-                            label="Refresh Interval (seconds)"
-                            value={formData.refreshInterval.toString()}
-                            onChange={e =>
-                              setFormData({
-                                ...formData,
-                                refreshInterval: parseInt(e.target.value) || 60,
-                              })
-                            }
-                            placeholder="60"
-                            helperText="How often to refresh the page (minimum: 30 seconds)"
-                          />
-                        )}
-                        <div
-                          style={{
-                            borderTop: '1px solid #e5e7eb',
-                            paddingTop: 'var(--spacing-3)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 'var(--spacing-3)',
-                          }}
-                        >
-                          <Switch
-                            checked={formData.showRssLink}
-                            onChange={checked => setFormData({ ...formData, showRssLink: checked })}
-                            label="Show RSS Feed Link"
-                            helperText="Display link to RSS feed in footer"
-                          />
-                          <Switch
-                            checked={formData.showApiLink}
-                            onChange={checked => setFormData({ ...formData, showApiLink: checked })}
-                            label="Show JSON API Link"
-                            helperText="Display link to JSON API in footer"
-                          />
-                        </div>
-                      </div>
-                    </StatusPageSectionCard>
-
-                    <StatusPageSectionCard
-                      title="Status API Access & Security"
-                      description="Token authentication and rate limiting for JSON and RSS endpoints."
-                      icon={<Key className="w-5 h-5 text-primary" />}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 'var(--spacing-4)',
-                        }}
-                      >
-                        <Switch
-                          checked={formData.statusApiRequireToken}
-                          onChange={checked =>
-                            setFormData({ ...formData, statusApiRequireToken: checked })
-                          }
-                          label="Require API token"
-                          helperText="Require a token for JSON and RSS endpoints."
-                        />
-                        <Switch
-                          checked={formData.statusApiRateLimitEnabled}
-                          onChange={checked =>
-                            setFormData({ ...formData, statusApiRateLimitEnabled: checked })
-                          }
-                          label="Enable rate limiting"
-                          helperText="Throttle API access to protect the status page."
-                        />
-                        {formData.statusApiRateLimitEnabled && (
-                          <div
-                            style={{
-                              display: 'grid',
-                              gap: 'var(--spacing-3)',
-                              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                            }}
-                          >
-                            <FormField
-                              type="input"
-                              label="Max requests"
-                              value={String(formData.statusApiRateLimitMax)}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!Number.isNaN(val)) {
-                                  setFormData({ ...formData, statusApiRateLimitMax: val });
-                                }
-                              }}
-                              helperText="Requests per window"
-                            />
-                            <FormField
-                              type="input"
-                              label="Window (seconds)"
-                              value={String(formData.statusApiRateLimitWindowSec)}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                                const val = parseInt(e.target.value, 10);
-                                if (!Number.isNaN(val)) {
-                                  setFormData({ ...formData, statusApiRateLimitWindowSec: val });
-                                }
-                              }}
-                              helperText="Minimum 10 seconds"
-                            />
-                          </div>
-                        )}
-                        <div
-                          style={{
-                            borderTop: '1px solid #e5e7eb',
-                            paddingTop: 'var(--spacing-4)',
-                          }}
-                        >
-                          <h3
-                            style={{
-                              fontSize: 'var(--font-size-base)',
-                              fontWeight: '600',
-                              marginBottom: 'var(--spacing-3)',
-                            }}
-                          >
-                            API tokens
-                          </h3>
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 'var(--spacing-3)',
-                              alignItems: 'flex-end',
-                            }}
-                          >
-                            <div
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  handleCreateApiToken(e);
-                                }
-                              }}
-                            >
-                              <FormField
-                                type="input"
-                                label="Token name"
-                                value={apiTokenName}
-                                onChange={e => setApiTokenName(e.target.value)}
-                                placeholder="e.g. External status monitor"
-                                required
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              variant="primary"
-                              isLoading={apiTokenPending}
-                              onClick={handleCreateApiToken}
-                            >
-                              Create token
-                            </Button>
-                          </div>
-                          {apiTokenError && (
-                            <div
-                              style={{
-                                marginTop: 'var(--spacing-2)',
-                                fontSize: 'var(--font-size-sm)',
-                                color: 'var(--color-error-dark)',
-                              }}
-                            >
-                              {apiTokenError}
-                            </div>
-                          )}
-                          {apiTokenValue && (
-                            <div
-                              style={{
-                                marginTop: 'var(--spacing-3)',
-                                padding: 'var(--spacing-3)',
-                                borderRadius: 'var(--radius-md)',
-                                background: '#ecfdf5',
-                                border: '1px solid #a7f3d0',
-                                color: '#065f46',
-                                fontSize: 'var(--font-size-sm)',
-                              }}
-                            >
-                              Copy this token now. You will not be able to view it again.
-                              <div
-                                style={{
-                                  marginTop: 'var(--spacing-2)',
-                                  fontFamily: 'monospace',
-                                  wordBreak: 'break-all',
-                                }}
-                              >
-                                {apiTokenValue}
-                              </div>
-                            </div>
-                          )}
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 'var(--spacing-2)',
-                              marginTop: 'var(--spacing-4)',
-                            }}
-                          >
-                            {apiTokens.length === 0 ? (
-                              <p
-                                style={{
-                                  fontSize: 'var(--font-size-sm)',
-                                  color: 'var(--text-muted)',
-                                }}
-                              >
-                                No API tokens created yet.
-                              </p>
-                            ) : (
-                              apiTokens.map(token => (
-                                <div
-                                  key={token.id}
-                                  style={{
-                                    padding: 'var(--spacing-3)',
-                                    borderRadius: 'var(--radius-md)',
-                                    border: '1px solid #e5e7eb',
-                                    background: '#f9fafb',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    gap: 'var(--spacing-3)',
-                                    flexWrap: 'wrap',
-                                  }}
-                                >
-                                  <div>
-                                    <div style={{ fontWeight: '600' }}>{token.name}</div>
-                                    <div
-                                      style={{
-                                        fontSize: 'var(--font-size-xs)',
-                                        color: 'var(--text-muted)',
-                                      }}
-                                    >
-                                      Prefix: {token.prefix} · Created{' '}
-                                      {formatDateTime(token.createdAt, browserTimeZone, {
-                                        format: 'date',
-                                      })}
-                                    </div>
-                                    {token.lastUsedAt && (
-                                      <div
-                                        style={{
-                                          fontSize: 'var(--font-size-xs)',
-                                          color: 'var(--text-muted)',
-                                        }}
-                                      >
-                                        Last used{' '}
-                                        {formatDateTime(token.lastUsedAt, browserTimeZone, {
-                                          format: 'date',
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
+                                {!statusPage.isDefault && (
                                   <Button
                                     type="button"
                                     variant="secondary"
-                                    onClick={() => handleRevokeApiToken(token.id)}
-                                    isLoading={apiTokenPending}
-                                    disabled={Boolean(token.revokedAt)}
+                                    size="sm"
+                                    onClick={handleMakeDefault}
                                   >
-                                    {token.revokedAt ? 'Revoked' : 'Revoke'}
+                                    Make default
                                   </Button>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </StatusPageSectionCard>
+                                )}
+                              </div>
+                            }
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                type="input"
+                                label="Status Page Name"
+                                value={formData.name}
+                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                required
+                                helperText="The name displayed at the top of your status page"
+                              />
 
-                    <StatusPageSectionCard
-                      title="Uptime Reports & Endpoints"
-                      description="Public uptime report downloads and external feed endpoints."
-                      icon={<Rss className="w-5 h-5 text-primary" />}
-                    >
-                      <Switch
-                        checked={formData.enableUptimeExports}
-                        onChange={checked =>
-                          setFormData({ ...formData, enableUptimeExports: checked })
-                        }
-                        label="Enable public uptime exports"
-                        helperText="Allow visitors and admins to download monthly uptime reports (CSV/PDF) directly from the Status Page."
-                      />
-                      {formData.enableUptimeExports && (
-                        <div
-                          style={{
-                            marginTop: 'var(--spacing-4)',
-                            padding: 'var(--spacing-3)',
-                            borderRadius: 'var(--radius-md)',
-                            border: '1px solid #e5e7eb',
-                            background: '#f9fafb',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 'var(--spacing-3)',
-                          }}
-                        >
-                          <div
-                            style={{
-                              fontSize: 'var(--font-size-sm)',
-                              color: 'var(--text-muted)',
-                            }}
+                              <FormField
+                                type="input"
+                                label="Organization Name"
+                                value={formData.organizationName}
+                                onChange={e =>
+                                  setFormData({ ...formData, organizationName: e.target.value })
+                                }
+                                helperText="Used in subscriber emails, email branding, and footer copyright."
+                                placeholder="e.g. OpsKnight"
+                              />
+                            </div>
+
+                            <FormField
+                              type="input"
+                              label="Public URL Slug"
+                              value={formData.slug}
+                              onChange={e =>
+                                setFormData({
+                                  ...formData,
+                                  slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                                })
+                              }
+                              placeholder="public-status"
+                              helperText="Optional for the default page; required for a dedicated /status/your-slug URL."
+                            />
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Access & Visibility"
+                            description="Control who can access the status page and when it is publicly visible."
+                            icon={<Shield className="h-4 w-4" />}
                           >
-                            Download the latest uptime export directly from the status API.
-                          </div>
-                          <div
-                            style={{ display: 'flex', gap: 'var(--spacing-2)', flexWrap: 'wrap' }}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                <Switch
+                                  checked={formData.enabled}
+                                  onChange={checked =>
+                                    setFormData(prev => ({ ...prev, enabled: checked }))
+                                  }
+                                  label="Enable Status Page"
+                                  helperText="Make the status page accessible to users."
+                                />
+                              </div>
+
+                              {formData.enabled ? (
+                                <div className="p-3.5 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={!privacySettings.requireAuth}
+                                    onChange={checked =>
+                                      setPrivacySettings(prev => ({
+                                        ...prev,
+                                        requireAuth: !checked,
+                                      }))
+                                    }
+                                    label="Public Access"
+                                    helperText="Anyone can view without logging in."
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Domain Configuration"
+                            description="Configure subdomains and custom domains to host your status page."
+                            icon={<Link2 className="h-4 w-4" />}
                           >
-                            <a
-                              href={`/api/status/uptime-export?format=csv&statusPageId=${statusPage.id}`}
-                              className="glass-button"
-                              style={{ padding: '0.5rem 1rem', textDecoration: 'none' }}
-                            >
-                              Download CSV
-                            </a>
-                            <a
-                              href={`/api/status/uptime-export?format=pdf&statusPageId=${statusPage.id}`}
-                              className="glass-button"
-                              style={{ padding: '0.5rem 1rem', textDecoration: 'none' }}
-                            >
-                              Download PDF
-                            </a>
-                          </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                type="input"
+                                label="Subdomain"
+                                value={formData.subdomain}
+                                onChange={e =>
+                                  setFormData({ ...formData, subdomain: e.target.value })
+                                }
+                                placeholder="status"
+                                helperText="e.g., status (for status.yourcompany.com)."
+                              />
+
+                              <FormField
+                                type="input"
+                                label="Custom Domain"
+                                value={formData.customDomain}
+                                onChange={e =>
+                                  setFormData({ ...formData, customDomain: e.target.value })
+                                }
+                                placeholder="status.yourcompany.com"
+                                helperText="Full custom domain pointing to your status page."
+                              />
+                            </div>
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Contact Information"
+                            description="Public contact email and support portal URL for visitor inquiries."
+                            icon={<Mail className="h-4 w-4" />}
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                type="input"
+                                inputType="email"
+                                label="Contact Email"
+                                value={formData.contactEmail}
+                                onChange={e =>
+                                  setFormData({ ...formData, contactEmail: e.target.value })
+                                }
+                                placeholder="support@yourcompany.com"
+                                helperText="Email address for users to contact you"
+                              />
+
+                              <FormField
+                                type="input"
+                                inputType="url"
+                                label="Contact URL"
+                                value={formData.contactUrl}
+                                onChange={e =>
+                                  setFormData({ ...formData, contactUrl: e.target.value })
+                                }
+                                placeholder="https://yourcompany.com/contact"
+                                helperText="URL for contact page or support portal"
+                              />
+                            </div>
+                          </StatusPageSectionCard>
                         </div>
                       )}
 
-                      <div
-                        style={{
-                          marginTop: 'var(--spacing-5)',
-                          borderTop: '1px solid #e5e7eb',
-                          paddingTop: 'var(--spacing-4)',
-                        }}
-                      >
-                        <h4
-                          style={{
-                            fontSize: 'var(--font-size-sm)',
-                            fontWeight: '600',
-                            marginBottom: 'var(--spacing-3)',
-                          }}
-                        >
-                          API & Feed URLs
-                        </h4>
+                      {/* Appearance Settings */}
+                      {activeSection === 'appearance' && (
                         <div
                           style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                            gap: 'var(--spacing-3)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--spacing-6)',
                           }}
                         >
-                          <div
-                            style={{
-                              padding: 'var(--spacing-3)',
-                              background: '#f9fafb',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: 'var(--radius-md)',
-                            }}
+                          <StatusPageSectionCard
+                            title="Branding & Logo"
+                            description="Upload your company logo and set the browser favicon for your status page."
+                            icon={<ImageIcon className="w-5 h-5 text-primary" />}
+                            action={
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setFormData({ ...formData, logoUrl: '/logo.svg' })}
+                              >
+                                Use default app logo
+                              </Button>
+                            }
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className="space-y-3">
+                                <FormField
+                                  type="input"
+                                  inputType="text"
+                                  label="Logo URL"
+                                  value={formData.logoUrl}
+                                  onChange={e =>
+                                    setFormData({ ...formData, logoUrl: e.target.value })
+                                  }
+                                  placeholder="https://yourcompany.com/logo.png"
+                                  helperText="Full URL or relative path (e.g., /logo.svg). Recommended: 200x50px."
+                                  required={false}
+                                />
+                                <div>
+                                  <label className="block text-xs font-semibold text-foreground mb-1.5">
+                                    Upload Logo File
+                                  </label>
+                                  <input
+                                    type="file"
+                                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                                    onChange={e => handleLogoUpload(e.target.files?.[0] || null)}
+                                    className="w-full text-xs text-muted-foreground file:mr-3 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+                                  />
+                                  <div className="text-[11px] text-muted-foreground mt-1">
+                                    Uploads stored as data URLs. Max size 2MB.
+                                  </div>
+                                  {logoUploadError && (
+                                    <div className="text-[11px] text-destructive mt-1 font-medium">
+                                      {logoUploadError}
+                                    </div>
+                                  )}
+                                </div>
+                                {formData.logoUrl && (
+                                  <div className="p-3 rounded-lg bg-muted/40 border border-border">
+                                    <div className="text-xs font-semibold text-foreground mb-2">
+                                      Logo Preview:
+                                    </div>
+                                    <div className="p-2.5 bg-background border border-border/80 rounded-md inline-block">
+                                      <img
+                                        src={formData.logoUrl}
+                                        alt="Logo preview"
+                                        className="h-10 max-w-[180px] object-contain"
+                                        onError={e => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                          const parent = (e.target as HTMLImageElement)
+                                            .parentElement;
+                                          if (parent) {
+                                            parent.innerHTML =
+                                              '<div class="p-2 text-destructive text-xs">Failed to load image.</div>';
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="space-y-3">
+                                <FormField
+                                  type="input"
+                                  inputType="url"
+                                  label="Favicon URL"
+                                  value={formData.faviconUrl}
+                                  onChange={e =>
+                                    setFormData({ ...formData, faviconUrl: e.target.value })
+                                  }
+                                  placeholder="https://yourcompany.com/favicon.ico"
+                                  helperText="Recommended: 16x16 or 32x32px, ICO or PNG format."
+                                />
+                                {formData.faviconUrl && (
+                                  <div className="p-3 rounded-lg bg-muted/40 border border-border">
+                                    <div className="text-xs font-semibold text-foreground mb-2">
+                                      Favicon Preview:
+                                    </div>
+                                    <div className="p-2 bg-background border border-border/80 rounded-md inline-block">
+                                      <img
+                                        src={formData.faviconUrl}
+                                        alt="Favicon preview"
+                                        className="w-8 h-8 object-contain"
+                                        onError={e => {
+                                          (e.target as HTMLImageElement).style.display = 'none';
+                                          const parent = (e.target as HTMLImageElement)
+                                            .parentElement;
+                                          if (parent) {
+                                            parent.innerHTML =
+                                              '<div class="p-2 text-destructive text-xs">Failed to load favicon.</div>';
+                                          }
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Typography & Font Family"
+                            description="Choose typography that matches your brand identity across all status page elements."
+                            icon={<Type className="w-5 h-5 text-primary" />}
                           >
                             <div
                               style={{
-                                fontSize: 'var(--font-size-xs)',
-                                color: 'var(--text-muted)',
-                                marginBottom: 'var(--spacing-1)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--spacing-4)',
                               }}
                             >
-                              JSON API
+                              <FormField
+                                type="select"
+                                label="Primary Font Family"
+                                value={formData.fontFamily || 'default'}
+                                onChange={e =>
+                                  setFormData({ ...formData, fontFamily: e.target.value })
+                                }
+                                options={STATUS_PAGE_FONTS.map(f => ({
+                                  value: f.id,
+                                  label: `${f.name} (${f.category})`,
+                                }))}
+                                helperText="Applies clean typography to the header, incident reports, service metrics, and subscriber forms."
+                              />
+                              <div
+                                style={{
+                                  padding: 'var(--spacing-4)',
+                                  borderRadius: 'var(--radius-md)',
+                                  border: '1px solid #e2e8f0',
+                                  background: '#ffffff',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: '6px',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: '11px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.08em',
+                                    color: 'var(--text-muted)',
+                                    fontWeight: '600',
+                                  }}
+                                >
+                                  Live Font Preview
+                                </div>
+                                <div
+                                  style={{
+                                    fontFamily:
+                                      STATUS_PAGE_FONTS.find(
+                                        f => f.id === (formData.fontFamily || 'default')
+                                      )?.fontFamily || 'inherit',
+                                    fontSize: '1.125rem',
+                                    fontWeight: '700',
+                                    color: '#0f172a',
+                                  }}
+                                >
+                                  All Systems Operational — 99.98% 30-Day Uptime
+                                </div>
+                                <div
+                                  style={{
+                                    fontFamily:
+                                      STATUS_PAGE_FONTS.find(
+                                        f => f.id === (formData.fontFamily || 'default')
+                                      )?.fontFamily || 'inherit',
+                                    fontSize: '0.875rem',
+                                    color: '#475569',
+                                  }}
+                                >
+                                  Incident communication, automated health telemetry, and service
+                                  status tracking.
+                                </div>
+                              </div>
                             </div>
-                            <code
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Color theme"
+                            description="Start with an accessible preset, then adjust individual brand colors if needed. The preview uses the same color engine as the public page."
+                            icon={<Palette className="w-5 h-5 text-primary" />}
+                            action={
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() =>
+                                  setFormData({
+                                    ...formData,
+                                    primaryColor: STATUS_PAGE_COLOR_PRESETS[0].primary,
+                                    backgroundColor: STATUS_PAGE_COLOR_PRESETS[0].background,
+                                    textColor: STATUS_PAGE_COLOR_PRESETS[0].text,
+                                  })
+                                }
+                                className="text-xs gap-1.5 h-8 px-2.5 shadow-xs"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                <span>Reset to default</span>
+                              </Button>
+                            }
+                          >
+                            {/* Quick Presets */}
+                            <div style={{ marginBottom: 'var(--spacing-5)' }}>
+                              <label
+                                style={{
+                                  display: 'block',
+                                  marginBottom: 'var(--spacing-2)',
+                                  fontSize: 'var(--font-size-sm)',
+                                  fontWeight: '600',
+                                }}
+                              >
+                                Theme presets
+                              </label>
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                                  gap: 'var(--spacing-2)',
+                                }}
+                              >
+                                {STATUS_PAGE_COLOR_PRESETS.map(preset => {
+                                  const isActive =
+                                    formData.primaryColor === preset.primary &&
+                                    formData.backgroundColor === preset.background &&
+                                    formData.textColor === preset.text;
+                                  return (
+                                    <button
+                                      key={preset.id}
+                                      type="button"
+                                      onClick={() =>
+                                        setFormData({
+                                          ...formData,
+                                          primaryColor: preset.primary,
+                                          backgroundColor: preset.background,
+                                          textColor: preset.text,
+                                        })
+                                      }
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '8px 12px',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: isActive
+                                          ? '2px solid hsl(var(--ui-primary, 215.3 25% 26.7%))'
+                                          : '1px solid hsl(var(--ui-border, 214.3 31.8% 91.4%))',
+                                        background: isActive
+                                          ? 'hsl(var(--ui-primary, 215.3 25% 26.7%) / 0.08)'
+                                          : 'hsl(var(--ui-card, 0 0% 100%))',
+                                        color: isActive
+                                          ? 'hsl(var(--ui-primary, 215.3 25% 26.7%))'
+                                          : 'inherit',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'all 0.15s ease',
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', gap: '3px' }}>
+                                        <span
+                                          style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            borderRadius: '999px',
+                                            background: preset.primary,
+                                          }}
+                                        />
+                                        <span
+                                          style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            borderRadius: '999px',
+                                            background: preset.background,
+                                            border: '1px solid #cbd5e1',
+                                          }}
+                                        />
+                                        <span
+                                          style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            borderRadius: '999px',
+                                            background: preset.text,
+                                          }}
+                                        />
+                                      </div>
+                                      <span
+                                        style={{
+                                          fontSize: 'var(--font-size-xs)',
+                                          fontWeight: isActive ? '700' : '500',
+                                        }}
+                                      >
+                                        {preset.name}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            <h3
                               style={{
+                                margin: '0 0 var(--spacing-3)',
                                 fontSize: 'var(--font-size-sm)',
-                                color: 'var(--text-primary)',
+                                fontWeight: '600',
                               }}
                             >
-                              {typeof window !== 'undefined' ? window.location.origin : ''}
-                              /api/status
-                            </code>
-                          </div>
-                          <div
-                            style={{
-                              padding: 'var(--spacing-3)',
-                              background: '#f9fafb',
-                              border: '1px solid #e5e7eb',
-                              borderRadius: 'var(--radius-md)',
-                            }}
+                              Custom colors
+                            </h3>
+
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                                gap: 'var(--spacing-4)',
+                              }}
+                            >
+                              <div>
+                                <label
+                                  style={{
+                                    display: 'block',
+                                    marginBottom: 'var(--spacing-2)',
+                                    fontSize: 'var(--font-size-sm)',
+                                    fontWeight: '500',
+                                  }}
+                                >
+                                  Primary Color
+                                </label>
+                                <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
+                                  <input
+                                    type="color"
+                                    value={formData.primaryColor}
+                                    onChange={e =>
+                                      setFormData({ ...formData, primaryColor: e.target.value })
+                                    }
+                                    style={{
+                                      width: '60px',
+                                      height: '40px',
+                                      border: '1px solid #e5e7eb',
+                                      borderRadius: 'var(--radius-md)',
+                                      cursor: 'pointer',
+                                    }}
+                                  />
+                                  <FormField
+                                    type="input"
+                                    inputType="text"
+                                    label="Primary Color"
+                                    value={formData.primaryColor}
+                                    onChange={e =>
+                                      setFormData({ ...formData, primaryColor: e.target.value })
+                                    }
+                                    placeholder="#667eea"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label
+                                  style={{
+                                    display: 'block',
+                                    marginBottom: 'var(--spacing-2)',
+                                    fontSize: 'var(--font-size-sm)',
+                                    fontWeight: '500',
+                                  }}
+                                >
+                                  Background Color
+                                </label>
+                                <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
+                                  <input
+                                    type="color"
+                                    value={formData.backgroundColor}
+                                    onChange={e =>
+                                      setFormData({ ...formData, backgroundColor: e.target.value })
+                                    }
+                                    style={{
+                                      width: '60px',
+                                      height: '40px',
+                                      border: '1px solid #e5e7eb',
+                                      borderRadius: 'var(--radius-md)',
+                                      cursor: 'pointer',
+                                    }}
+                                  />
+                                  <FormField
+                                    type="input"
+                                    inputType="text"
+                                    label="Background Color"
+                                    value={formData.backgroundColor}
+                                    onChange={e =>
+                                      setFormData({ ...formData, backgroundColor: e.target.value })
+                                    }
+                                    placeholder="#ffffff"
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <label
+                                  style={{
+                                    display: 'block',
+                                    marginBottom: 'var(--spacing-2)',
+                                    fontSize: 'var(--font-size-sm)',
+                                    fontWeight: '500',
+                                  }}
+                                >
+                                  Text Color
+                                </label>
+                                <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
+                                  <input
+                                    type="color"
+                                    value={formData.textColor}
+                                    onChange={e =>
+                                      setFormData({ ...formData, textColor: e.target.value })
+                                    }
+                                    style={{
+                                      width: '60px',
+                                      height: '40px',
+                                      border: '1px solid #e5e7eb',
+                                      borderRadius: 'var(--radius-md)',
+                                      cursor: 'pointer',
+                                    }}
+                                  />
+                                  <FormField
+                                    type="input"
+                                    inputType="text"
+                                    label="Text Color"
+                                    value={formData.textColor}
+                                    onChange={e =>
+                                      setFormData({ ...formData, textColor: e.target.value })
+                                    }
+                                    placeholder="#111827"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <div
+                              role="status"
+                              className={cn(
+                                'mt-4 p-3 rounded-lg text-xs leading-relaxed border',
+                                textContrastAdjusted
+                                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
+                                  : 'bg-primary/5 border-primary/20 text-foreground'
+                              )}
+                            >
+                              {textContrastAdjusted
+                                ? `Readable contrast applied: public text will render as ${effectiveColorTheme.textColor}.`
+                                : 'Contrast check passed. These colors will render unchanged on the public page.'}
+                            </div>
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Layout Options"
+                            description="Configure maximum page width and header/footer visibility."
+                            icon={<Layout className="w-5 h-5 text-primary" />}
                           >
                             <div
                               style={{
-                                fontSize: 'var(--font-size-xs)',
-                                color: 'var(--text-muted)',
-                                marginBottom: 'var(--spacing-1)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--spacing-3)',
                               }}
                             >
-                              RSS Feed
+                              <FormField
+                                type="select"
+                                label="Content Width"
+                                value={formData.layout}
+                                onChange={e => setFormData({ ...formData, layout: e.target.value })}
+                                options={[
+                                  { value: 'compact', label: 'Compact (~900px)' },
+                                  { value: 'default', label: 'Standard (~1280px)' },
+                                  { value: 'wide', label: 'Wide (~1600px)' },
+                                ]}
+                                helperText="Controls maximum page width on large displays."
+                              />
+                              <Switch
+                                checked={formData.showHeader}
+                                onChange={checked =>
+                                  setFormData({ ...formData, showHeader: checked })
+                                }
+                                label="Show Header"
+                                helperText={
+                                  formData.showHeader
+                                    ? 'Display the top navigation bar with logo and page title.'
+                                    : 'When hidden, subscribe and API links remain accessible via the footer (if footer is enabled).'
+                                }
+                              />
+                              <Switch
+                                checked={formData.showFooter}
+                                onChange={checked =>
+                                  setFormData({ ...formData, showFooter: checked })
+                                }
+                                label="Show Footer"
+                                helperText="Display the footer with support links, API links, and copyright."
+                              />
                             </div>
-                            <code
-                              style={{
-                                fontSize: 'var(--font-size-sm)',
-                                color: 'var(--text-primary)',
-                              }}
-                            >
-                              {typeof window !== 'undefined' ? window.location.origin : ''}
-                              /api/status/rss
-                            </code>
-                          </div>
+                          </StatusPageSectionCard>
                         </div>
-                      </div>
-                    </StatusPageSectionCard>
-                  </div>
-                )}
+                      )}
 
-                {/* Publication state is reported separately from save state: settings can
+                      {/* Design Settings */}
+                      {activeSection === 'design' && (
+                        <StatusPageDesignSection
+                          themeId={formData.themeId}
+                          density={formData.themeDensity}
+                          customCss={formData.customCss}
+                          onThemeChange={themeId => setFormData(prev => ({ ...prev, themeId }))}
+                          onDensityChange={themeDensity =>
+                            setFormData(prev => ({ ...prev, themeDensity }))
+                          }
+                          onCustomCssChange={customCss =>
+                            setFormData(prev => ({ ...prev, customCss }))
+                          }
+                        />
+                      )}
+
+                      {/* Services Configuration */}
+                      {activeSection === 'services' && (
+                        <StatusPageServicesManager
+                          allServices={allServices}
+                          selectedServices={selectedServices}
+                          setSelectedServices={setSelectedServices}
+                          serviceConfigs={serviceConfigs}
+                          updateServiceConfig={updateServiceConfig}
+                          formData={formData}
+                          setFormData={setFormData}
+                          privacySettings={privacySettings}
+                          hasSelectedRegions={hasSelectedRegions}
+                        />
+                      )}
+
+                      {/* Privacy Settings */}
+                      {activeSection === 'privacy' && (
+                        <StatusPagePrivacySettings
+                          settings={privacySettings}
+                          onChange={settings => setPrivacySettings(settings)}
+                        />
+                      )}
+
+                      {/* Content Settings */}
+                      {activeSection === 'content' && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--spacing-6)',
+                          }}
+                        >
+                          <StatusPageSectionCard
+                            title="Display Options"
+                            description="Toggle which sections and metrics are shown to visitors on your status page."
+                            icon={<Sliders className="w-5 h-5 text-primary" />}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--spacing-3)',
+                              }}
+                            >
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showServices}
+                                    onChange={checked =>
+                                      setFormData({ ...formData, showServices: checked })
+                                    }
+                                    label="Show Services"
+                                    helperText="Display service status list"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showIncidents}
+                                    onChange={checked => {
+                                      setFormData({ ...formData, showIncidents: checked });
+                                      if (
+                                        checked &&
+                                        privacySettings.showRecentIncidents === false
+                                      ) {
+                                        setPrivacySettings(prev => ({
+                                          ...prev,
+                                          showRecentIncidents: true,
+                                        }));
+                                      }
+                                    }}
+                                    label="Show Incidents"
+                                    helperText="Display incidents section and timeline"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showMetrics}
+                                    onChange={checked => {
+                                      setFormData({ ...formData, showMetrics: checked });
+                                      if (checked && privacySettings.showServiceMetrics === false) {
+                                        setPrivacySettings(prev => ({
+                                          ...prev,
+                                          showServiceMetrics: true,
+                                        }));
+                                      }
+                                    }}
+                                    label="Show Uptime & Availability"
+                                    helperText="Display service uptime metrics and history"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showSubscribe}
+                                    onChange={checked =>
+                                      setFormData({ ...formData, showSubscribe: checked })
+                                    }
+                                    label="Show Subscribe to Updates"
+                                    helperText="Display email subscription section"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showChangelog}
+                                    onChange={checked =>
+                                      setFormData({ ...formData, showChangelog: checked })
+                                    }
+                                    label="Show Changelog"
+                                    helperText="Display recent update announcements"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showRegionHeatmap}
+                                    onChange={checked =>
+                                      setFormData({ ...formData, showRegionHeatmap: checked })
+                                    }
+                                    label="Show Region Heatmap"
+                                    helperText={
+                                      privacySettings.showServiceRegions === false
+                                        ? 'Requires Service regions in Privacy settings'
+                                        : 'Display a compact region impact grid'
+                                    }
+                                    disabled={privacySettings.showServiceRegions === false}
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors md:col-span-2">
+                                  <Switch
+                                    checked={formData.showPostIncidentReview}
+                                    onChange={checked =>
+                                      setFormData({ ...formData, showPostIncidentReview: checked })
+                                    }
+                                    label="Show Post-Incident Reviews"
+                                    helperText="Show links to published postmortems on resolved incidents"
+                                  />
+                                </div>
+                              </div>
+
+                              {formData.showMetrics && (
+                                <div
+                                  style={{
+                                    marginTop: 'var(--spacing-4)',
+                                    padding: 'var(--spacing-4)',
+                                    background: '#f9fafb',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: '1px solid #e5e7eb',
+                                  }}
+                                >
+                                  <h4
+                                    style={{
+                                      fontSize: 'var(--font-size-sm)',
+                                      fontWeight: '600',
+                                      marginBottom: 'var(--spacing-3)',
+                                      color: '#374151',
+                                    }}
+                                  >
+                                    Uptime Thresholds
+                                  </h4>
+                                  <p
+                                    style={{
+                                      fontSize: 'var(--font-size-xs)',
+                                      color: '#6b7280',
+                                      marginBottom: 'var(--spacing-3)',
+                                    }}
+                                  >
+                                    Configure SLA thresholds for color-coding uptime metrics
+                                  </p>
+                                  <div
+                                    style={{
+                                      display: 'grid',
+                                      gap: 'var(--spacing-3)',
+                                      gridTemplateColumns: '1fr 1fr',
+                                    }}
+                                  >
+                                    <FormField
+                                      type="input"
+                                      label="Excellent Threshold (%)"
+                                      value={String(formData.uptimeExcellentThreshold)}
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const val = parseFloat(e.target.value);
+                                        if (!isNaN(val) && val >= 0 && val <= 100) {
+                                          setFormData({
+                                            ...formData,
+                                            uptimeExcellentThreshold: val,
+                                          });
+                                        }
+                                      }}
+                                      helperText="Green: uptime ≥ this value (default: 99.9%)"
+                                    />
+                                    <FormField
+                                      type="input"
+                                      label="Good Threshold (%)"
+                                      value={String(formData.uptimeGoodThreshold)}
+                                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                        const val = parseFloat(e.target.value);
+                                        if (!isNaN(val) && val >= 0 && val <= 100) {
+                                          setFormData({ ...formData, uptimeGoodThreshold: val });
+                                        }
+                                      }}
+                                      helperText="Yellow: uptime ≥ this value (default: 99.0%)"
+                                    />
+                                  </div>
+                                  {formData.uptimeGoodThreshold >
+                                    formData.uptimeExcellentThreshold && (
+                                    <div className="mt-3 px-3 py-2 rounded-md text-xs font-medium bg-destructive/10 border border-destructive/25 text-destructive">
+                                      ⚠️ Good threshold must be less than or equal to Excellent
+                                      threshold
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Footer"
+                            description="Set custom footer text and copyright notices for your status page."
+                            icon={<FileText className="w-5 h-5 text-primary" />}
+                          >
+                            <FormField
+                              type="textarea"
+                              label="Footer Text"
+                              rows={3}
+                              value={formData.footerText}
+                              onChange={e =>
+                                setFormData({ ...formData, footerText: e.target.value })
+                              }
+                              placeholder="(c) 2024 Your Company. All rights reserved."
+                              helperText="Text to display at the bottom of the status page"
+                            />
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="SEO Settings"
+                            description="Search engine metadata and previews for public sharing."
+                            icon={<Globe className="w-5 h-5 text-primary" />}
+                          >
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                type="input"
+                                label="Meta Title"
+                                value={formData.metaTitle}
+                                onChange={e =>
+                                  setFormData({ ...formData, metaTitle: e.target.value })
+                                }
+                                placeholder={statusPage.name}
+                                helperText="Recommended: 50-60 characters"
+                              />
+                              <FormField
+                                type="textarea"
+                                label="Meta Description"
+                                rows={2}
+                                value={formData.metaDescription}
+                                onChange={e =>
+                                  setFormData({ ...formData, metaDescription: e.target.value })
+                                }
+                                placeholder={`Status page for ${statusPage.name}`}
+                                helperText="Recommended: 150-160 characters"
+                              />
+                            </div>
+                          </StatusPageSectionCard>
+                        </div>
+                      )}
+
+                      {/* Advanced Settings */}
+                      {activeSection === 'advanced' && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 'var(--spacing-6)',
+                          }}
+                        >
+                          <StatusPageSectionCard
+                            title="Live Updates & Feeds"
+                            description="Configure client-side polling intervals and public RSS/JSON feed discovery."
+                            icon={<RefreshCw className="w-5 h-5 text-primary" />}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--spacing-4)',
+                              }}
+                            >
+                              <Switch
+                                checked={formData.autoRefresh}
+                                onChange={checked =>
+                                  setFormData({ ...formData, autoRefresh: checked })
+                                }
+                                label="Enable Auto-Refresh"
+                                helperText="Automatically refresh the status page at regular intervals"
+                              />
+                              {formData.autoRefresh && (
+                                <FormField
+                                  type="input"
+                                  label="Refresh Interval (seconds)"
+                                  value={formData.refreshInterval.toString()}
+                                  onChange={e =>
+                                    setFormData({
+                                      ...formData,
+                                      refreshInterval: parseInt(e.target.value) || 60,
+                                    })
+                                  }
+                                  placeholder="60"
+                                  helperText="How often to refresh the page (minimum: 30 seconds)"
+                                />
+                              )}
+                              <div
+                                style={{
+                                  borderTop: '1px solid #e5e7eb',
+                                  paddingTop: 'var(--spacing-3)',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 'var(--spacing-3)',
+                                }}
+                              >
+                                <Switch
+                                  checked={formData.showRssLink}
+                                  onChange={checked =>
+                                    setFormData({ ...formData, showRssLink: checked })
+                                  }
+                                  label="Show RSS Feed Link"
+                                  helperText="Display link to RSS feed in footer"
+                                />
+                                <Switch
+                                  checked={formData.showApiLink}
+                                  onChange={checked =>
+                                    setFormData({ ...formData, showApiLink: checked })
+                                  }
+                                  label="Show JSON API Link"
+                                  helperText="Display link to JSON API in footer"
+                                />
+                              </div>
+                            </div>
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Status API Access & Security"
+                            description="Token authentication and rate limiting for JSON and RSS endpoints."
+                            icon={<Key className="w-5 h-5 text-primary" />}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 'var(--spacing-4)',
+                              }}
+                            >
+                              <Switch
+                                checked={formData.statusApiRequireToken}
+                                onChange={checked =>
+                                  setFormData({ ...formData, statusApiRequireToken: checked })
+                                }
+                                label="Require API token"
+                                helperText="Require a token for JSON and RSS endpoints."
+                              />
+                              <Switch
+                                checked={formData.statusApiRateLimitEnabled}
+                                onChange={checked =>
+                                  setFormData({ ...formData, statusApiRateLimitEnabled: checked })
+                                }
+                                label="Enable rate limiting"
+                                helperText="Throttle API access to protect the status page."
+                              />
+                              {formData.statusApiRateLimitEnabled && (
+                                <div
+                                  style={{
+                                    display: 'grid',
+                                    gap: 'var(--spacing-3)',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                                  }}
+                                >
+                                  <FormField
+                                    type="input"
+                                    label="Max requests"
+                                    value={String(formData.statusApiRateLimitMax)}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (!Number.isNaN(val)) {
+                                        setFormData({ ...formData, statusApiRateLimitMax: val });
+                                      }
+                                    }}
+                                    helperText="Requests per window"
+                                  />
+                                  <FormField
+                                    type="input"
+                                    label="Window (seconds)"
+                                    value={String(formData.statusApiRateLimitWindowSec)}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (!Number.isNaN(val)) {
+                                        setFormData({
+                                          ...formData,
+                                          statusApiRateLimitWindowSec: val,
+                                        });
+                                      }
+                                    }}
+                                    helperText="Minimum 10 seconds"
+                                  />
+                                </div>
+                              )}
+                              <div
+                                style={{
+                                  borderTop: '1px solid #e5e7eb',
+                                  paddingTop: 'var(--spacing-4)',
+                                }}
+                              >
+                                <h3
+                                  style={{
+                                    fontSize: 'var(--font-size-base)',
+                                    fontWeight: '600',
+                                    marginBottom: 'var(--spacing-3)',
+                                  }}
+                                >
+                                  API tokens
+                                </h3>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: 'var(--spacing-3)',
+                                    alignItems: 'flex-end',
+                                  }}
+                                >
+                                  <div
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleCreateApiToken(e);
+                                      }
+                                    }}
+                                  >
+                                    <FormField
+                                      type="input"
+                                      label="Token name"
+                                      value={apiTokenName}
+                                      onChange={e => setApiTokenName(e.target.value)}
+                                      placeholder="e.g. External status monitor"
+                                      required
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="primary"
+                                    isLoading={apiTokenPending}
+                                    onClick={handleCreateApiToken}
+                                  >
+                                    Create token
+                                  </Button>
+                                </div>
+                                {apiTokenError && (
+                                  <div
+                                    style={{
+                                      marginTop: 'var(--spacing-2)',
+                                      fontSize: 'var(--font-size-sm)',
+                                      color: 'var(--color-error-dark)',
+                                    }}
+                                  >
+                                    {apiTokenError}
+                                  </div>
+                                )}
+                                {apiTokenValue && (
+                                  <div
+                                    style={{
+                                      marginTop: 'var(--spacing-3)',
+                                      padding: 'var(--spacing-3)',
+                                      borderRadius: 'var(--radius-md)',
+                                      background: '#ecfdf5',
+                                      border: '1px solid #a7f3d0',
+                                      color: '#065f46',
+                                      fontSize: 'var(--font-size-sm)',
+                                    }}
+                                  >
+                                    Copy this token now. You will not be able to view it again.
+                                    <div
+                                      style={{
+                                        marginTop: 'var(--spacing-2)',
+                                        fontFamily: 'monospace',
+                                        wordBreak: 'break-all',
+                                      }}
+                                    >
+                                      {apiTokenValue}
+                                    </div>
+                                  </div>
+                                )}
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 'var(--spacing-2)',
+                                    marginTop: 'var(--spacing-4)',
+                                  }}
+                                >
+                                  {apiTokens.length === 0 ? (
+                                    <p
+                                      style={{
+                                        fontSize: 'var(--font-size-sm)',
+                                        color: 'var(--text-muted)',
+                                      }}
+                                    >
+                                      No API tokens created yet.
+                                    </p>
+                                  ) : (
+                                    apiTokens.map(token => (
+                                      <div
+                                        key={token.id}
+                                        style={{
+                                          padding: 'var(--spacing-3)',
+                                          borderRadius: 'var(--radius-md)',
+                                          border: '1px solid #e5e7eb',
+                                          background: '#f9fafb',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'space-between',
+                                          gap: 'var(--spacing-3)',
+                                          flexWrap: 'wrap',
+                                        }}
+                                      >
+                                        <div>
+                                          <div style={{ fontWeight: '600' }}>{token.name}</div>
+                                          <div
+                                            style={{
+                                              fontSize: 'var(--font-size-xs)',
+                                              color: 'var(--text-muted)',
+                                            }}
+                                          >
+                                            Prefix: {token.prefix} · Created{' '}
+                                            {formatDateTime(token.createdAt, browserTimeZone, {
+                                              format: 'date',
+                                            })}
+                                          </div>
+                                          {token.lastUsedAt && (
+                                            <div
+                                              style={{
+                                                fontSize: 'var(--font-size-xs)',
+                                                color: 'var(--text-muted)',
+                                              }}
+                                            >
+                                              Last used{' '}
+                                              {formatDateTime(token.lastUsedAt, browserTimeZone, {
+                                                format: 'date',
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          onClick={() => handleRevokeApiToken(token.id)}
+                                          isLoading={apiTokenPending}
+                                          disabled={Boolean(token.revokedAt)}
+                                        >
+                                          {token.revokedAt ? 'Revoked' : 'Revoke'}
+                                        </Button>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </StatusPageSectionCard>
+
+                          <StatusPageSectionCard
+                            title="Uptime Reports & Endpoints"
+                            description="Public uptime report downloads and external feed endpoints."
+                            icon={<Rss className="w-5 h-5 text-primary" />}
+                          >
+                            <Switch
+                              checked={formData.enableUptimeExports}
+                              onChange={checked =>
+                                setFormData({ ...formData, enableUptimeExports: checked })
+                              }
+                              label="Enable public uptime exports"
+                              helperText="Allow visitors and admins to download monthly uptime reports (CSV/PDF) directly from the Status Page."
+                            />
+                            {formData.enableUptimeExports && (
+                              <div
+                                style={{
+                                  marginTop: 'var(--spacing-4)',
+                                  padding: 'var(--spacing-3)',
+                                  borderRadius: 'var(--radius-md)',
+                                  border: '1px solid #e5e7eb',
+                                  background: '#f9fafb',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 'var(--spacing-3)',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: 'var(--font-size-sm)',
+                                    color: 'var(--text-muted)',
+                                  }}
+                                >
+                                  Download the latest uptime export directly from the status API.
+                                </div>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    gap: 'var(--spacing-2)',
+                                    flexWrap: 'wrap',
+                                  }}
+                                >
+                                  <a
+                                    href={`/api/status/uptime-export?format=csv&statusPageId=${statusPage.id}`}
+                                    className="glass-button"
+                                    style={{ padding: '0.5rem 1rem', textDecoration: 'none' }}
+                                  >
+                                    Download CSV
+                                  </a>
+                                  <a
+                                    href={`/api/status/uptime-export?format=pdf&statusPageId=${statusPage.id}`}
+                                    className="glass-button"
+                                    style={{ padding: '0.5rem 1rem', textDecoration: 'none' }}
+                                  >
+                                    Download PDF
+                                  </a>
+                                </div>
+                              </div>
+                            )}
+
+                            <div
+                              style={{
+                                marginTop: 'var(--spacing-5)',
+                                borderTop: '1px solid #e5e7eb',
+                                paddingTop: 'var(--spacing-4)',
+                              }}
+                            >
+                              <h4
+                                style={{
+                                  fontSize: 'var(--font-size-sm)',
+                                  fontWeight: '600',
+                                  marginBottom: 'var(--spacing-3)',
+                                }}
+                              >
+                                API & Feed URLs
+                              </h4>
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                                  gap: 'var(--spacing-3)',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    padding: 'var(--spacing-3)',
+                                    background: '#f9fafb',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: 'var(--radius-md)',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 'var(--font-size-xs)',
+                                      color: 'var(--text-muted)',
+                                      marginBottom: 'var(--spacing-1)',
+                                    }}
+                                  >
+                                    JSON API
+                                  </div>
+                                  <code
+                                    style={{
+                                      fontSize: 'var(--font-size-sm)',
+                                      color: 'var(--text-primary)',
+                                    }}
+                                  >
+                                    {typeof window !== 'undefined' ? window.location.origin : ''}
+                                    /api/status
+                                  </code>
+                                </div>
+                                <div
+                                  style={{
+                                    padding: 'var(--spacing-3)',
+                                    background: '#f9fafb',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: 'var(--radius-md)',
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      fontSize: 'var(--font-size-xs)',
+                                      color: 'var(--text-muted)',
+                                      marginBottom: 'var(--spacing-1)',
+                                    }}
+                                  >
+                                    RSS Feed
+                                  </div>
+                                  <code
+                                    style={{
+                                      fontSize: 'var(--font-size-sm)',
+                                      color: 'var(--text-primary)',
+                                    }}
+                                  >
+                                    {typeof window !== 'undefined' ? window.location.origin : ''}
+                                    /api/status/rss
+                                  </code>
+                                </div>
+                              </div>
+                            </div>
+                          </StatusPageSectionCard>
+                        </div>
+                      )}
+
+                      {/* Publication state is reported separately from save state: settings can
                     persist while publishing them to the public page fails. */}
-                {publication && publication.status !== 'LIVE' && (
-                  <div
-                    role={publication.status === 'FAILED' ? 'alert' : 'status'}
-                    className={cn(
-                      'mb-4 p-3 rounded-lg border flex items-start justify-between gap-3 flex-wrap text-sm',
-                      publication.status === 'FAILED'
-                        ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
-                        : 'bg-primary/5 border-primary/20 text-foreground'
-                    )}
-                  >
-                    <div>
-                      <strong className="block mb-0.5">
-                        {publication.status === 'FAILED'
-                          ? '⚠ Publication failed'
-                          : publication.status === 'PUBLISHING'
-                            ? '◐ Publishing'
-                            : '○ Disabled'}
-                      </strong>
-                      <span className="text-xs text-muted-foreground">
-                        {publication.status === 'FAILED'
-                          ? 'Your settings were saved but could not be published.' +
-                            (publication.stale
-                              ? ' Visitors are still seeing the last published version.'
-                              : ' The public page is unavailable until this succeeds.')
-                          : publication.status === 'PUBLISHING'
-                            ? 'The public page is being rebuilt and will update shortly.'
-                            : 'This status page is turned off, so its public URL is unavailable.'}
-                      </span>
-                    </div>
-                    {publication.status === 'FAILED' && (
-                      <Button
-                        variant="secondary"
-                        onClick={handleRetryPublication}
-                        disabled={retryingPublication}
-                      >
-                        {retryingPublication ? 'Retrying…' : 'Retry publication'}
-                      </Button>
-                    )}
-                  </div>
-                )}
+                      {publication && publication.status !== 'LIVE' && (
+                        <div
+                          role={publication.status === 'FAILED' ? 'alert' : 'status'}
+                          className={cn(
+                            'mb-4 p-3 rounded-lg border flex items-start justify-between gap-3 flex-wrap text-sm',
+                            publication.status === 'FAILED'
+                              ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
+                              : 'bg-primary/5 border-primary/20 text-foreground'
+                          )}
+                        >
+                          <div>
+                            <strong className="block mb-0.5">
+                              {publication.status === 'FAILED'
+                                ? '⚠ Publication failed'
+                                : publication.status === 'PUBLISHING'
+                                  ? '◐ Publishing'
+                                  : '○ Disabled'}
+                            </strong>
+                            <span className="text-xs text-muted-foreground">
+                              {publication.status === 'FAILED'
+                                ? 'Your settings were saved but could not be published.' +
+                                  (publication.stale
+                                    ? ' Visitors are still seeing the last published version.'
+                                    : ' The public page is unavailable until this succeeds.')
+                                : publication.status === 'PUBLISHING'
+                                  ? 'The public page is being rebuilt and will update shortly.'
+                                  : 'This status page is turned off, so its public URL is unavailable.'}
+                            </span>
+                          </div>
+                          {publication.status === 'FAILED' && (
+                            <Button
+                              variant="secondary"
+                              onClick={handleRetryPublication}
+                              disabled={retryingPublication}
+                            >
+                              {retryingPublication ? 'Retrying…' : 'Retry publication'}
+                            </Button>
+                          )}
+                        </div>
+                      )}
 
-                {error && (
-                  <InlineNotice tone="error" className="mb-4">
-                    {error}
-                  </InlineNotice>
-                )}
+                      {error && (
+                        <InlineNotice tone="error" className="mb-4">
+                          {error}
+                        </InlineNotice>
+                      )}
                     </div>
                   </form>
                 )}

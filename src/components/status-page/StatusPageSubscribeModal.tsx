@@ -8,6 +8,7 @@ interface StatusPageSubscribeModalProps {
   statusPageId: string;
   services: Array<{ id: string; name: string }>;
   rssHref?: string | null;
+  apiHref?: string | null;
   onClose: () => void;
 }
 
@@ -16,6 +17,7 @@ export default function StatusPageSubscribeModal({
   statusPageId,
   services,
   rssHref,
+  apiHref,
   onClose,
 }: StatusPageSubscribeModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -151,6 +153,7 @@ export default function StatusPageSubscribeModal({
             services={services}
             variant="modal"
             rssHref={rssHref}
+            apiHref={apiHref}
             onSuccess={() => {
               // Keep modal open to show success; user can dismiss via Done/Escape/overlay
             }}

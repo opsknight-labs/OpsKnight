@@ -67,11 +67,14 @@ export default async function StatusPageWorkspacePage({
     allowedCustomFields: Array.isArray(statusPage.allowedCustomFields)
       ? statusPage.allowedCustomFields.filter((value): value is string => typeof value === 'string')
       : [],
-    announcements: statusPage.announcements.map(announcement => ({
+    announcements: (statusPage.announcements ?? []).map(announcement => ({
       ...announcement,
       type: normalizeAnnouncementType(announcement.type),
       startDate: announcement.startDate.toISOString(),
       endDate: announcement.endDate?.toISOString() || null,
+      publishAt: announcement.publishAt?.toISOString() || null,
+      createdAt: announcement.createdAt?.toISOString() || null,
+      updatedAt: announcement.updatedAt?.toISOString() || null,
       affectedServiceIds: Array.isArray(announcement.affectedServiceIds)
         ? (announcement.affectedServiceIds as string[])
         : null,

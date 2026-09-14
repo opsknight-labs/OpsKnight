@@ -247,6 +247,27 @@ describe('StatusPageAnnouncementManager Component', () => {
     });
   });
 
+  it('cleans up announcement from state and closes dialog when delete returns 404 (already deleted)', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({ error: 'Announcement not found.' }),
+    } as unknown as Response);
+
+    renderManager();
+
+    const deleteButtons = screen.getAllByTitle('Delete Announcement');
+    fireEvent.click(deleteButtons[0]);
+
+    const confirmDeleteBtn = screen.getByRole('button', { name: 'Delete Announcement' });
+    fireEvent.click(confirmDeleteBtn);
+
+    await waitFor(() => {
+      expect(setAnnouncements).toHaveBeenCalled();
+      expect(screen.queryByText('Delete announcement?')).toBeNull();
+    });
+  });
+
   it('prevents scheduling publication at start time if start date is in the past', () => {
     renderManager();
 
