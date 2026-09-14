@@ -39,7 +39,7 @@ export async function requestMicrosoftTeamsWarRoom(
   return runSerializableTransaction(async tx => {
     const incident = await tx.incident.findUnique({
       where: { id: incidentId },
-      include: { service: { select: { microsoftTeamsWarRoomAutoCreate: true } } },
+      include: { service: { select: { microsoftTeamsWarRoomAutoCreate: true, team: { select: { teamLeadId: true } } } } },
     });
     if (!incident) return { accepted: false, code: 'INCIDENT_NOT_FOUND' };
     if (!['OPEN', 'ACKNOWLEDGED'].includes(incident.status))
@@ -88,8 +88,20 @@ export async function requestMicrosoftTeamsWarRoom(
         accepted: false,
         code: decision.allowed ? 'DESTINATION_UNAVAILABLE' : decision.code,
       };
-    if (decision.membershipType === 'PRIVATE')
-      return { accepted: false, code: 'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED' };
+    let privateOwner: { userId: string; objectId: string } | null = null;
+    if (decision.membershipType === 'PRIVATE') {
+      const candidateUserIds = [incident.assigneeId, incident.service.team?.teamLeadId].filter((id): id is string => Boolean(id));
+      const links = candidateUserIds.length === 0 ? [] : await tx.chatIdentityLink.findMany({
+        where: { provider: 'MICROSOFT_TEAMS', providerTenantId: destination.tenantId, revokedAt: null, userId: { in: candidateUserIds } },
+        select: { userId: true, providerUserId: true, providerObjectId: true },
+      });
+      for (const userId of candidateUserIds) {
+        const link = links.find(candidate => candidate.userId === userId);
+        const objectId = link?.providerObjectId ?? link?.providerUserId;
+        if (objectId) { privateOwner = { userId, objectId }; break; }
+      }
+      if (!privateOwner) return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
+    }
 
     const claimed = await claimWarRoomProvisioning(tx, {
       incidentId,
@@ -106,6 +118,7 @@ export async function requestMicrosoftTeamsWarRoom(
           providerTenantId: destination.tenantId,
           providerContainerId: destination.teamId,
           membershipType: decision.membershipType,
+          ...(privateOwner ? { metadata: { privateOwnerUserId: privateOwner.userId, privateOwnerObjectId: privateOwner.objectId } } : {}),
         },
       });
       await tx.backgroundJob.create({
