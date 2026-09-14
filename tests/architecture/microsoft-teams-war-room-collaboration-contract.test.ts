@@ -36,4 +36,30 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     const { MICROSOFT_TEAMS_MANIFEST_VERSION } = await import('@/lib/microsoft-teams/app-manifest');
     expect(MICROSOFT_TEAMS_MANIFEST_VERSION).toBe('1.3.0');
   });
+
+  it('fences post-provider participant outcomes by desiredVersion and compensates races', () => {
+    const participants = readFileSync('src/lib/war-room/participants.ts', 'utf8');
+    expect(participants).toContain('expectedDesiredVersion?: number');
+    expect(participants).toContain('desiredVersion: input.expectedDesiredVersion');
+    expect(participants).toMatch(
+      /state: 'REMOVED',[\s\S]{0,100}expectedDesiredVersion: snapshotDesiredVersion/
+    );
+    expect(participants).toMatch(
+      /state: 'PRESENT',[\s\S]{0,100}expectedDesiredVersion: snapshotDesiredVersion/
+    );
+    expect(participants).toContain('await ensureCompensationScheduled(warRoomId)');
+    expect(participants).not.toContain('pending-${userObjectId}');
+  });
+
+  it('revalidates private owner candidates and leaves definite card rejections recoverable', () => {
+    const participants = readFileSync('src/lib/war-room/participants.ts', 'utf8');
+    const projection = readFileSync('src/lib/war-room/projection.ts', 'utf8');
+    const teams = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
+    expect(participants).toContain("['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state)");
+    expect(participants).toContain('afterPromote');
+    expect(projection).toContain('[401, 403, 404].includes(result.statusCode ?? 0)');
+    expect(projection).toContain('commandCreateAttemptedAt: null');
+    expect(teams).toContain("if (room.state === 'CLOSED')");
+    expect(teams).toContain('no replacement card can be projected');
+  });
 });

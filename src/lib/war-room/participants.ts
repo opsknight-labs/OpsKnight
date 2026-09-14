@@ -106,6 +106,7 @@ export async function projectMicrosoftTeamsWarRoomParticipants(warRoomId: string
 
 async function persistParticipantOutcome(input: {
   id: string;
+  expectedDesiredVersion?: number;
   state: 'PENDING' | 'PRESENT' | 'SKIPPED' | 'FAILED' | 'REMOVED';
   code?: string | null;
   message?: string | null;
@@ -126,7 +127,7 @@ async function persistParticipantOutcome(input: {
           ? (['DESIRED', 'PENDING', 'FAILED', 'PRESENT', 'REMOVED', 'PROCESSING'] as const)
           : (['DESIRED', 'PENDING', 'FAILED', 'PRESENT'] as const);
   const changed = await prisma.warRoomParticipant.updateMany({
-    where: { id: input.id, state: { in: [...allowedPrior] } } as never,
+    where: { id: input.id, state: { in: [...allowedPrior] }, ...(typeof input.expectedDesiredVersion === 'number' ? { desiredVersion: input.expectedDesiredVersion } : {}) } as never,
     data: {
       state: input.state,
       lastSyncAt: now,
@@ -169,13 +170,14 @@ function isOwnerRole(roles?: string[]): boolean {
  * Returns true if handoff succeeded or was unnecessary, false if no candidate.
  */
 async function ensurePrivateOwnerHandoff(input: {
+  warRoomId: string;
   tenantId: string;
   teamId: string;
   channelId: string;
   channelMembersByObjectId: Map<string, { id?: string; userId?: string; roles?: string[] }>;
   teamMembersByObjectId: Map<string, { id?: string; userId?: string; roles?: string[] }>;
   targetUserObjectId: string;
-  participants: Array<{ providerObjectId: string | null; providerUserId: string | null; state: string }>;
+  participants: Array<{ id: string; providerObjectId: string | null; providerUserId: string | null; state: string; desiredVersion: number }>;
 }): Promise<{ ok: boolean; code?: string; message?: string }> {
   const targetMember = input.channelMembersByObjectId.get(input.targetUserObjectId);
   const isTargetOwner = isOwnerRole(targetMember?.roles);
@@ -191,6 +193,7 @@ async function ensurePrivateOwnerHandoff(input: {
   // Last owner — need replacement. Prefer a PRESENT participant already in channel, else any Team member that is desired.
   let candidateObjectId: string | null = null;
   let candidateMembershipId: string | null = null;
+  let candidateParticipant: (typeof input.participants)[number] | null = null;
 
   // First, look for channel members who are not the target and correspond to a desired participant
   for (const participant of input.participants) {
@@ -201,6 +204,7 @@ async function ensurePrivateOwnerHandoff(input: {
     if (cm && cm.id && !isOwnerRole(cm.roles)) {
       candidateObjectId = oid;
       candidateMembershipId = cm.id;
+      candidateParticipant = participant;
       break;
     }
   }
@@ -211,9 +215,13 @@ async function ensurePrivateOwnerHandoff(input: {
       if (!oid || oid === input.targetUserObjectId) continue;
       if (!['DESIRED', 'PENDING', 'PRESENT', 'FAILED'].includes(participant.state)) continue;
       if (input.teamMembersByObjectId.has(oid) && !input.channelMembersByObjectId.has(oid)) {
+        const fresh = await prisma.warRoomParticipant.findUnique({ where: { id: participant.id }, select: { state: true, desiredVersion: true } });
+        if (!fresh || !['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state) || fresh.desiredVersion !== participant.desiredVersion) continue;
         // Will be added as owner by the normal add path — promote by adding as owner
         const added = await addChannelMember({ tenantId: input.tenantId, teamId: input.teamId, channelId: input.channelId, userObjectId: oid, owner: true });
         if (added.ok || added.code === 'MEMBER_ALREADY_PRESENT') {
+          const afterAdd = await prisma.warRoomParticipant.findUnique({ where: { id: participant.id }, select: { state: true, desiredVersion: true } });
+          if (!afterAdd || !['DESIRED', 'PENDING', 'PRESENT'].includes(afterAdd.state) || afterAdd.desiredVersion !== participant.desiredVersion) await ensureCompensationScheduled(input.warRoomId);
           return { ok: true };
         }
         if (isRetryableMemberGraphCode(added.code)) throw new WarRoomRetryableError(added.message, added.retryAfterMs);
@@ -226,6 +234,11 @@ async function ensurePrivateOwnerHandoff(input: {
     return { ok: false, code: 'OWNER_HANDOFF_REQUIRED', message: 'Cannot remove the last private-channel owner without another verified member to promote.' };
   }
 
+  const fresh = await prisma.warRoomParticipant.findUnique({ where: { id: candidateParticipant!.id }, select: { state: true, desiredVersion: true } });
+  if (!fresh || !['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state) || fresh.desiredVersion !== candidateParticipant!.desiredVersion) {
+    return { ok: false, code: 'OWNER_HANDOFF_REQUIRED', message: 'Replacement owner is no longer a desired responder.' };
+  }
+
   const promoted = await updateChannelMemberRoles({ tenantId: input.tenantId, teamId: input.teamId, channelId: input.channelId, membershipId: candidateMembershipId, roles: ['owner'] });
   if (!promoted.ok) {
     if (isRetryableMemberGraphCode(promoted.code)) throw new WarRoomRetryableError(promoted.message, promoted.retryAfterMs);
@@ -234,6 +247,8 @@ async function ensurePrivateOwnerHandoff(input: {
   // Update local map so subsequent removals see new owner
   const existing = input.channelMembersByObjectId.get(candidateObjectId);
   if (existing) existing.roles = ['owner'];
+  const afterPromote = await prisma.warRoomParticipant.findUnique({ where: { id: candidateParticipant!.id }, select: { state: true, desiredVersion: true } });
+  if (!afterPromote || !['DESIRED', 'PENDING', 'PRESENT'].includes(afterPromote.state) || afterPromote.desiredVersion !== candidateParticipant!.desiredVersion) await ensureCompensationScheduled(input.warRoomId);
   return { ok: true };
 }
 
@@ -340,6 +355,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       }
       // Private owner handoff: promote replacement owner before deleting current owner.
       const handoff = await ensurePrivateOwnerHandoff({
+        warRoomId,
         tenantId: room.providerTenantId,
         teamId: room.providerContainerId,
         channelId: room.providerChannelId,
@@ -371,10 +387,10 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
         throwIfRetryableMemberGraph(removed);
         // Removal failed — surface FAILED so UI can show "Removal requested —
         // Teams removal failed" instead of silently leaving REMOVED with null error.
-        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: removed.code, message: removed.message });
+        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: removed.code, message: removed.message, expectedDesiredVersion: snapshotDesiredVersion });
         continue;
       }
-      const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'REMOVED' });
+      const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'REMOVED', expectedDesiredVersion: snapshotDesiredVersion });
       // Compensation: if desiredVersion changed while the DELETE was in flight, the
       // provider side effect is now stale (we removed someone who was re-added).
       // Detect via version bump and enqueue immediate reconciliation.
@@ -404,7 +420,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     // CAS transition DESIRED/FAILED -> PENDING so a concurrent removal is not
     // clobbered by this PENDING write. If fenced, the row was concurrently
     // marked REMOVED — skip Graph work.
-    const claimed = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PENDING' });
+    const claimed = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PENDING', expectedDesiredVersion: snapshotDesiredVersion });
     if (!claimed) continue;
     // Re-check desired freshness after acquiring PENDING — if projection
     // raced and updated the row between our PENDING write and now, the CAS
@@ -422,7 +438,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       continue;
     }
     if (room.membershipType === 'STANDARD') {
-      const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PRESENT', added: true });
+      const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PRESENT', added: true, expectedDesiredVersion: snapshotDesiredVersion });
       if (!persisted) await ensureCompensationScheduled(warRoomId);
       else {
         const afterPresent = await prisma.warRoomParticipant.findUnique({ where: { id: snapshotParticipant.id }, select: { desiredVersion: true } });
@@ -436,7 +452,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     }
     const channelMember = channelMembersByObjectId.get(userObjectId) ?? null;
     if (channelMember) {
-      const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PRESENT', added: true });
+      const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PRESENT', added: true, expectedDesiredVersion: snapshotDesiredVersion });
       if (!persisted) await ensureCompensationScheduled(warRoomId);
       else {
         const afterPresent = await prisma.warRoomParticipant.findUnique({ where: { id: snapshotParticipant.id }, select: { desiredVersion: true } });
@@ -455,10 +471,10 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     const added = await addChannelMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId, userObjectId });
     if (!added.ok && added.code !== 'MEMBER_ALREADY_PRESENT') {
       throwIfRetryableMemberGraph(added);
-      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: added.code, message: added.message });
+      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: added.code, message: added.message, expectedDesiredVersion: snapshotDesiredVersion });
       continue;
     }
-    const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PRESENT', added: true });
+    const persisted = await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'PRESENT', added: true, expectedDesiredVersion: snapshotDesiredVersion });
     if (!persisted) {
       // CAS fenced after provider side effect — we added a member who is now REMOVED. Compensate by scheduling immediate removal.
       await ensureCompensationScheduled(warRoomId);
@@ -474,7 +490,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       }
     }
     // Update local map
-    if (added.ok) channelMembersByObjectId.set(userObjectId, { id: `pending-${userObjectId}`, userId: userObjectId, roles: [] });
+    // Do not synthesize a Graph membership ID; a later owner promotion must use a real Graph ID.
   }
 }
 

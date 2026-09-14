@@ -15,6 +15,8 @@ function isRetryableTeamsProjectionError(result: { errorCode?: string; statusCod
   if (code === 'AMBIGUOUS_SIDE_EFFECT' || code === 'AMBIGUOUS_CARD_CREATE') return false;
   if (result.statusCode != null && result.statusCode >= 500 && result.statusCode <= 599) return true;
   if (result.statusCode === 429) return true;
+  if ([401, 403, 404].includes(result.statusCode ?? 0)) return true;
+  if (['HTTP_401', 'HTTP_403', 'HTTP_404'].includes(code)) return true;
   if (/^http_5\d{2}$/i.test(code)) return true;
   return false;
 }

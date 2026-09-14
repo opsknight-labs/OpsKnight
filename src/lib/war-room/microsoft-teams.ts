@@ -161,6 +161,9 @@ export async function abandonAmbiguousMicrosoftTeamsCard(
   incidentId: string,
   warRoomId: string
 ): Promise<{ abandoned: boolean; warning: string }> {
+  const room = await prisma.incidentWarRoom.findFirst({ where: { id: warRoomId, incidentId, provider: 'MICROSOFT_TEAMS' }, select: { state: true } });
+  if (!room) return { abandoned: false, warning: 'War room was not found.' };
+  if (room.state === 'CLOSED') return { abandoned: false, warning: 'War room is closed; no replacement card can be projected.' };
   const now = new Date();
   const changed = await prisma.incidentWarRoom.updateMany({
     where: {
