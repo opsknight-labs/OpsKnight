@@ -570,11 +570,15 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         await postWarRoomUpdate(payload.incidentId, payload.warRoom.message),
         'war-room message'
       );
+      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
+      await requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
       return;
     }
     case 'WAR_ROOM_TOPIC': {
       const { updateWarRoomTopic } = await import('./chatops/war-room');
       requireWarRoomDelivery(await updateWarRoomTopic(payload.incidentId), 'war-room topic');
+      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
+      await requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
       return;
     }
     case 'WAR_ROOM_INVITE_USER': {
@@ -584,6 +588,8 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         await inviteUserToWarRoom(payload.incidentId, payload.warRoom.userId),
         'war-room user invite'
       );
+      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
+      await requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
       return;
     }
     case 'WAR_ROOM_INVITE_TEAM': {
@@ -593,6 +599,8 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         await inviteTeamToWarRoom(payload.incidentId, payload.warRoom.teamId),
         'war-room team invite'
       );
+      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
+      await requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
       return;
     }
   }
