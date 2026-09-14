@@ -120,7 +120,7 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
       where: { incidentId: id, provider: 'MICROSOFT_TEAMS' }, orderBy: { generation: 'desc' },
       select: {
         id: true, generation: true, state: true, providerChannelName: true, providerChannelUrl: true,
-        membershipType: true, lastError: true,
+        membershipType: true, lastError: true, lastErrorCode: true, health: true, lastReconciledAt: true,
         participants: { orderBy: { createdAt: 'asc' }, select: { id: true, source: true, state: true, lastError: true, user: { select: { name: true } } } },
       },
     }),

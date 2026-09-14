@@ -16,6 +16,9 @@ type Room = {
   providerChannelName: string | null;
   providerChannelUrl: string | null;
   membershipType: string | null;
+  health: string;
+  lastErrorCode: string | null;
+  lastReconciledAt: Date | null;
   lastError: string | null;
   participants: Array<{ id: string; source: string; state: string; lastError: string | null; user: { name: string | null } | null }>;
 };
@@ -77,6 +80,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
                 {latest.providerChannelName ?? 'Open Teams channel'} <ExternalLink className="h-3 w-3" />
               </a>
             )}
+            {latest.health !== 'HEALTHY' && <Badge variant="outline" className="border-amber-300 text-amber-700">{latest.health.toLowerCase().replace('_', ' ')}</Badge>}
           </div>
           {latest.participants.length > 0 && <p className="text-xs text-muted-foreground">Responder projection: {latest.participants.map(participant => `${participant.user?.name ?? 'Unlinked responder'} (${participant.state.toLowerCase()})`).join(', ')}</p>}
           {latest.lastError && <p className="text-xs text-amber-700 dark:text-amber-300">{latest.lastError}</p>}
@@ -89,6 +93,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
           {!active && !ambiguous && enabled && <Button size="sm" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/microsoft-teams`)}>{pending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <MicrosoftTeamsLogo className="mr-1 h-3.5 w-3.5" />}{latest ? 'Create new generation' : 'Create Teams war room'}</Button>}
           {active && <>
             <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/sync`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh responder plan</Button>
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/project`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh command card</Button>
             <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/close`)}><SquareX className="mr-1 h-3.5 w-3.5" />Close room</Button>
           </>}
           {!enabled && !latest && <span className="text-xs text-muted-foreground">{unavailableReason ?? 'Teams war-room creation is unavailable for this service.'}</span>}
