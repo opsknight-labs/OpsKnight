@@ -19,6 +19,16 @@ function isRetryableTeamsProjectionError(result: { errorCode?: string; statusCod
   return false;
 }
 
+/** 429 / RATE_LIMITED is a definite rejection before a resource was created — safe to retry after clearing the marker. */
+function isDefiniteCreateRetryableError(result: { errorCode?: string; statusCode?: number }): boolean {
+  const code = (result.errorCode ?? '').toUpperCase();
+  if (code === 'RATE_LIMITED') return true;
+  if (result.statusCode === 429) return true;
+  // Token acquisition happens before the POST; no side effect could have been created.
+  if (code === 'GRAPH_TOKEN_FAILED' || code === 'TRANSIENT_READ') return true;
+  return false;
+}
+
 function isAmbiguousCardCreateResult(result: { errorCode?: string; success: boolean; providerMessageId?: string; conversationId?: string }): boolean {
   if (!result.success && result.errorCode === 'AMBIGUOUS_SIDE_EFFECT') return true;
   if (result.success && (!result.providerMessageId || !result.conversationId)) return true;
@@ -74,7 +84,7 @@ export async function completeMicrosoftTeamsWarRoomProjection(warRoomId: string,
   });
   if (changed.count === 1) {
     await prisma.incidentWarRoom.updateMany({
-      where: { id: warRoomId, projectionVersion, state: 'CLOSING', projectionLeaseToken: null },
+      where: { id: warRoomId, projectionVersion, state: 'CLOSING' },
       data: { state: 'CLOSED', closedAt: new Date() },
     });
   }
@@ -88,22 +98,29 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
   });
-  if (!room?.destinationId || !room.providerTenantId || !room.providerContainerId || !room.providerChannelId) return;
+  if (!room?.destinationId || !room.providerTenantId || !room.providerContainerId || !room.providerChannelId) {
+    if (!room) return;
+    const missingTerminal = room.state === 'CLOSING';
+    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+    if (missingTerminal) {
+      await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date(), health: 'DEGRADED', lastErrorCode: 'WAR_ROOM_ROUTING_MISSING', lastError: 'War-room routing snapshot was missing during terminal projection; closed locally.' } });
+    }
+    return;
+  }
 
   // Authority must be checked before any Graph side effect, so a destination/
   // integration that was revoked while this job was queued cannot leak an update.
   const authority = await validateWarRoomCollaborationAuthority(room);
   if (!authority.allowed) {
     addOperationalMetric('opsknight_war_room_projection_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'authority_revoked' });
-    // Mark degraded but still release the lease so the CLOSING -> CLOSED transition
-    // can proceed away from the authority check once resolved separately.
     await prisma.incidentWarRoom.updateMany({
       where: { id: room.id, projectionLeaseToken: token },
       data: { health: 'DEGRADED', lastErrorCode: authority.code, lastError: authority.message },
     });
-    // Do not throw: authority revocation is terminal for this generation, not a transient retry.
-    // Release lease without CLOSED promotion; caller will decide completion.
     await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+    if (room.state === 'CLOSING') {
+      await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
+    }
     return;
   }
 
@@ -111,7 +128,13 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
     where: { id: room.incidentId },
     include: { service: { select: { name: true } }, assignee: { select: { name: true } } },
   });
-  if (!incidentRecord) return;
+  if (!incidentRecord) {
+    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+    if (room.state === 'CLOSING') {
+      await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date(), health: 'DEGRADED', lastErrorCode: 'INCIDENT_NOT_FOUND', lastError: 'Incident no longer exists during terminal projection; closed locally.' } });
+    }
+    return;
+  }
   const incident = {
     id: incidentRecord.id, title: incidentRecord.title, description: incidentRecord.description,
     status: incidentRecord.status, urgency: incidentRecord.urgency, priority: incidentRecord.priority,
@@ -125,17 +148,28 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
     // Use the durable pre-POST hook so only a real network attempt marks the
     // canonical create as attempted. A token/serviceUrl failure before the POST
     // must remain retryable; an ambiguous POST must never be retried.
-    const created = await sendMicrosoftTeamsIncidentCard({
-      tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId,
-      incident, eventType, disableActions: eventType === 'resolved', interactive,
-      beforeCreateAttempt: async () => {
-        const marked = await prisma.incidentWarRoom.updateMany({
-          where: { id: room.id, projectionLeaseToken: token, commandMessageId: null, commandCreateAttemptedAt: null },
-          data: { commandCreateAttemptedAt: new Date() },
-        });
-        if (marked.count !== 1) throw new Error('CANONICAL_CARD_CREATE_FENCED');
-      },
-    });
+    let created: Awaited<ReturnType<typeof sendMicrosoftTeamsIncidentCard>>;
+    try {
+      created = await sendMicrosoftTeamsIncidentCard({
+        tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId,
+        incident, eventType, disableActions: eventType === 'resolved', interactive,
+        beforeCreateAttempt: async () => {
+          const marked = await prisma.incidentWarRoom.updateMany({
+            where: { id: room.id, projectionLeaseToken: token, commandMessageId: null, commandCreateAttemptedAt: null },
+            data: { commandCreateAttemptedAt: new Date() },
+          });
+          if (marked.count !== 1) throw new Error('CANONICAL_CARD_CREATE_FENCED');
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === 'CANONICAL_CARD_CREATE_FENCED') {
+        // Stale lease or a concurrent worker already armed the marker — do not
+        // retry; the next projection generation owns the card.
+        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+        return;
+      }
+      throw error;
+    }
     if (isAmbiguousCardCreateResult(created as never)) {
       addOperationalMetric('opsknight_war_room_projection_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'ambiguous' });
       await prisma.incidentWarRoom.updateMany({
@@ -144,30 +178,47 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
       });
       // Ambiguous POST must never be auto-retried blindly.
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+      if (room.state === 'CLOSING') {
+        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
+      }
       return;
     }
     if (!created.success || !created.providerMessageId || !created.conversationId) {
       const retryable = isRetryableTeamsProjectionError(created as never);
+      const definite = isDefiniteCreateRetryableError(created as never);
       addOperationalMetric('opsknight_war_room_projection_total', 1, { provider: 'MICROSOFT_TEAMS', result: retryable ? 'retryable' : 'failed' });
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, projectionLeaseToken: token },
         data: { health: 'DEGRADED', lastErrorCode: (created as { errorCode?: string }).errorCode ?? 'CARD_CREATE_FAILED', lastError: (created as { error: string }).error },
       });
-      // For retryable cases, release lease partially and throw through the queue's retry path.
-      // We must still clear the pre-attempt marker if it was set but no POST occurred.
-      // The beforeCreateAttempt hook only marks when POST is about to happen; for early
-      // failures (token/serviceUrl), the marker remains null and remains retryable.
-      // For POST 5xx/429 we keep DEGRADED but allow retry via exception.
-      if (retryable) {
-        // Check if we set commandCreateAttemptedAt but actually had a retryable POST failure —
-        // distinguish by whether we reached the hook. If hook threw FENCED, we are stale.
-        // Otherwise, if errorCode indicates POST reached network and failed retryably,
-        // the marker is already set correctly (ambiguous vs retryable boundary handled above).
-        // For clean re-queue, release lease without completing.
-        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+      if (definite) {
+        // Definite rejection before any side effect was created (429 / RATE_LIMITED
+        // or token acquisition before the POST). Clear the pre-POST marker under
+        // the same lease so the next retry can re-arm the hook.
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, projectionLeaseToken: token },
+          data: { commandCreateAttemptedAt: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+        });
         throw new WarRoomRetryableError((created as { error: string }).error, (created as { retryAfterMs?: number }).retryAfterMs);
       }
+      if (retryable) {
+        // Uncertain outcome (5xx / timeout) — the POST may have mutating side
+        // effect. Keep commandCreateAttemptedAt set so the next worker never
+        // blindly re-POSTs; reconciliationOnly path must be used.
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, projectionLeaseToken: token },
+          data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_CARD_CREATE', lastError: (created as { error: string }).error },
+        });
+        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+        if (room.state === 'CLOSING') {
+          await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
+        }
+        return;
+      }
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+      if (room.state === 'CLOSING') {
+        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
+      }
       return;
     }
     await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { commandMessageId: created.providerMessageId, commandConversationId: created.conversationId, health: 'HEALTHY', lastError: null, lastErrorCode: null } });
@@ -182,6 +233,9 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
         throw new WarRoomRetryableError(updated.error, updated.retryAfterMs);
       }
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+      if (room.state === 'CLOSING') {
+        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
+      }
       return;
     }
     // Successful update clears health degradation.

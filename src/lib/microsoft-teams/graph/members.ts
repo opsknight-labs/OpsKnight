@@ -52,6 +52,54 @@ export function findChannelMember(input: {
 }
 
 /**
+ * Batched membership resolver — lists the entire Team/channel once so
+ * N participants do not each paginate independently. Callers should
+ * still treat individual add/remove as per-member mutations fenced
+ * by the participant CAS.
+ */
+async function listAllMembers(input: {
+  tenantId: string;
+  teamId: string;
+  channelId?: string;
+}): Promise<WarRoomGraphResult<Map<string, ConversationMember>>> {
+  const root = input.channelId
+    ? `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/members`
+    : `/teams/${encodeURIComponent(input.teamId)}/members`;
+  let next: string | null = `${root}?$top=100&$select=id,userId,roles`;
+  const map = new Map<string, ConversationMember>();
+  for (let page = 0; next && page < 100; page += 1) {
+    const result = await microsoftTeamsGraphRequest(input.tenantId, next, { method: 'GET' }, 'READ');
+    if (!result.ok) return result as WarRoomGraphResult<Map<string, ConversationMember>>;
+    const body = (await result.value.json().catch(() => null)) as
+      | { value?: ConversationMember[]; '@odata.nextLink'?: string }
+      | null;
+    if (!Array.isArray(body?.value)) {
+      return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph returned an invalid Teams member listing.' };
+    }
+    for (const member of body.value) {
+      if (member.userId) map.set(member.userId, member);
+    }
+    next = typeof body['@odata.nextLink'] === 'string' ? body['@odata.nextLink'] : null;
+  }
+  if (next) {
+    return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph member pagination exceeded its safety limit.' };
+  }
+  return { ok: true, value: map };
+}
+
+export function listTeamMembers(input: { tenantId: string; teamId: string }): Promise<WarRoomGraphResult<Map<string, ConversationMember>>> {
+  return listAllMembers(input);
+}
+
+export function listChannelMembers(input: {
+  tenantId: string;
+  teamId: string;
+  channelId: string;
+}): Promise<WarRoomGraphResult<Map<string, ConversationMember>>> {
+  return listAllMembers(input);
+}
+
+/**
  * Adds a previously verified parent-Team member to a private channel. The
  * caller must first check the channel membership to make retries idempotent.
  */
