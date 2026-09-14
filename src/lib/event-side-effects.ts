@@ -33,25 +33,6 @@ function requireWebhookDelivery(result: { failed: number } | undefined, label: s
   if (result && result.failed > 0)
     throw new Error(`${label} failed for ${result.failed} delivery target(s)`);
 }
-const EXPECTED_WAR_ROOM_SKIPS = [
-  'Incident not found',
-  'ChatOps is not enabled',
-  'auto-creation disabled',
-  'does not meet urgency/priority threshold',
-  'No war-room channel',
-  'No active war-room channel',
-  'War-room channel is archived',
-  'Archive on resolve is disabled',
-  'No Slack bot token',
-  'not configured',
-  'already_archived',
-  'channel_not_found',
-];
-function requireWarRoomDelivery(result: { success: boolean; error?: string }, label: string): void {
-  if (result.success || EXPECTED_WAR_ROOM_SKIPS.some(reason => result.error?.includes(reason)))
-    return;
-  throw new Error(`${label} failed: ${result.error || 'unknown error'}`);
-}
 
 /**
  * Decides whether the escalation policy already owns responder routing for a
@@ -322,7 +303,6 @@ async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<vo
   const lifecycle = lifecycleContext(payload);
   if (lifecycle.status === 'RESOLVED')
     throw new Error('Resolved lifecycle transitions must use the archive effect');
-  const { postWarRoomUpdate, updateWarRoomTopic } = await import('./chatops/war-room');
   const emoji =
     lifecycle.status === 'ACKNOWLEDGED'
       ? '👀'
@@ -331,27 +311,13 @@ async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<vo
         : lifecycle.status === 'SNOOZED'
           ? '😴'
           : '🔇';
-  // Teams projection is independently durable — start it before Slack so a
-  // transient Slack failure does not prevent the Teams card from being queued.
-  const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
-  const teamsProjection = requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
-  let slackFailure: unknown;
-  try {
-    const [postResult, topicResult] = await Promise.all([
-      postWarRoomUpdate(payload.incidentId, `${emoji} *Status updated to ${lifecycle.status}*`),
-      updateWarRoomTopic(payload.incidentId, lifecycle.status),
-    ]);
-    requireWarRoomDelivery(postResult, 'war-room status update');
-    requireWarRoomDelivery(topicResult, 'war-room topic update');
-  } catch (error) {
-    slackFailure = error;
-  }
-  const teamsResult = await teamsProjection.catch(error => {
-    if (slackFailure) throw slackFailure;
-    throw error;
+  const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+  await handleIncidentWarRoomEvent({
+    kind: 'LIFECYCLE',
+    incidentId: payload.incidentId,
+    status: lifecycle.status,
+    message: `${emoji} *Status updated to ${lifecycle.status}*`,
   });
-  void teamsResult;
-  if (slackFailure) throw slackFailure;
 }
 async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<void> {
   const lifecycle = lifecycleContext(payload);
@@ -362,21 +328,9 @@ async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<
     select: { status: true },
   });
   if (!incident || incident.status !== 'OPEN') return;
-  const { requestMicrosoftTeamsWarRoom } = await import('./war-room/microsoft-teams');
-  const teamsRequest = requestMicrosoftTeamsWarRoom(payload.incidentId, { manual: false, allowNewGeneration: true });
-  let slackFailure: unknown;
-  try {
-    const { createIncidentWarRoom } = await import('./chatops/war-room');
-    const result = await createIncidentWarRoom(payload.incidentId);
-    if (!result.success) requireWarRoomDelivery(result, 'war-room ensure');
-    else await syncLifecycleWarRoom(payload);
-  } catch (error) {
-    slackFailure = error;
-  }
-  // Teams provisioning is independently durable. Always enqueue it even if a
-  // transient Slack failure needs this outbox effect replayed.
-  await teamsRequest;
-  if (slackFailure) throw slackFailure;
+  const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+  await handleIncidentWarRoomEvent({ kind: 'ENSURE', incidentId: payload.incidentId });
+  await syncLifecycleWarRoom(payload);
 }
 async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): Promise<void> {
   const lifecycle = payload.lifecycle;
@@ -390,14 +344,8 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
     incident.resolvedAt?.toISOString() !== lifecycle.transitionAt
   )
     return;
-  const { settleMicrosoftTeamsWarRoomsOnIncidentResolve } = await import('./war-room/microsoft-teams');
-  const [slack, teams] = await Promise.allSettled([
-    import('./chatops/war-room').then(({ archiveWarRoomChannel }) => archiveWarRoomChannel(payload.incidentId)),
-    settleMicrosoftTeamsWarRoomsOnIncidentResolve(payload.incidentId),
-  ]);
-  if (teams.status === 'rejected') throw teams.reason;
-  if (slack.status === 'rejected') throw slack.reason;
-  requireWarRoomDelivery(slack.value, 'war-room archive');
+  const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+  await handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: payload.incidentId });
 }
 
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
@@ -421,14 +369,8 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       await sendTriggerServiceNotification(payload);
       return;
     case 'TRIGGER_WAR_ROOM': {
-      const { requestMicrosoftTeamsWarRoom } = await import('./war-room/microsoft-teams');
-      const [slack, teams] = await Promise.allSettled([
-        import('./chatops/war-room').then(({ createIncidentWarRoom }) => createIncidentWarRoom(payload.incidentId)),
-        requestMicrosoftTeamsWarRoom(payload.incidentId, { manual: false, allowNewGeneration: false }),
-      ]);
-      if (teams.status === 'rejected') throw teams.reason;
-      if (slack.status === 'rejected') throw slack.reason;
-      requireWarRoomDelivery(slack.value, 'war-room creation');
+      const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      await handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: payload.incidentId });
       return;
     }
     case 'TRIGGER_STATUS_PAGE':
@@ -566,11 +508,12 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       await ensureLifecycleWarRoom(payload);
       return;
     case 'LIFECYCLE_WAR_ROOM_TOPIC': {
-      const { updateWarRoomTopic } = await import('./chatops/war-room');
-      requireWarRoomDelivery(
-        await updateWarRoomTopic(payload.incidentId, lifecycleContext(payload).status),
-        'war-room topic update'
-      );
+      const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      await handleIncidentWarRoomEvent({
+        kind: 'TOPIC',
+        incidentId: payload.incidentId,
+        status: lifecycleContext(payload).status,
+      });
       return;
     }
     case 'LIFECYCLE_WAR_ROOM_ARCHIVE':
@@ -578,90 +521,37 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'WAR_ROOM_MESSAGE': {
       if (!payload.warRoom?.message) throw new Error('War-room message payload is missing');
-      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
-      const teamsProjection = requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
-      let slackFailure: unknown;
-      try {
-        const { postWarRoomUpdate } = await import('./chatops/war-room');
-        requireWarRoomDelivery(
-          await postWarRoomUpdate(payload.incidentId, payload.warRoom.message),
-          'war-room message'
-        );
-      } catch (error) {
-        slackFailure = error;
-      }
-      await teamsProjection.catch(error => {
-        if (slackFailure) throw slackFailure;
-        throw error;
+      const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      await handleIncidentWarRoomEvent({
+        kind: 'MESSAGE',
+        incidentId: payload.incidentId,
+        message: payload.warRoom.message,
       });
-      if (slackFailure) throw slackFailure;
       return;
     }
     case 'WAR_ROOM_TOPIC': {
-      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
-      const teamsProjection = requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
-      let slackFailure: unknown;
-      try {
-        const { updateWarRoomTopic } = await import('./chatops/war-room');
-        requireWarRoomDelivery(await updateWarRoomTopic(payload.incidentId), 'war-room topic');
-      } catch (error) {
-        slackFailure = error;
-      }
-      await teamsProjection.catch(error => {
-        if (slackFailure) throw slackFailure;
-        throw error;
-      });
-      if (slackFailure) throw slackFailure;
+      const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      await handleIncidentWarRoomEvent({ kind: 'TOPIC', incidentId: payload.incidentId });
       return;
     }
     case 'WAR_ROOM_INVITE_USER': {
       if (!payload.warRoom?.userId) throw new Error('War-room user payload is missing');
-      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
-      const { requestMicrosoftTeamsWarRoomParticipantSyncForIncident } = await import('./war-room/participants');
-      const teamsProjection = requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
-      const teamsSync = requestMicrosoftTeamsWarRoomParticipantSyncForIncident(payload.incidentId);
-      let slackFailure: unknown;
-      try {
-        const { inviteUserToWarRoom } = await import('./chatops/war-room');
-        requireWarRoomDelivery(
-          await inviteUserToWarRoom(payload.incidentId, payload.warRoom.userId),
-          'war-room user invite'
-        );
-      } catch (error) {
-        slackFailure = error;
-      }
-      const teamsResults = await Promise.allSettled([teamsProjection, teamsSync]);
-      const teamsError = teamsResults.find(result => result.status === 'rejected') as PromiseRejectedResult | undefined;
-      if (teamsError) {
-        if (slackFailure) throw slackFailure;
-        throw teamsError.reason;
-      }
-      if (slackFailure) throw slackFailure;
+      const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      await handleIncidentWarRoomEvent({
+        kind: 'INVITE_USER',
+        incidentId: payload.incidentId,
+        userId: payload.warRoom.userId,
+      });
       return;
     }
     case 'WAR_ROOM_INVITE_TEAM': {
       if (!payload.warRoom?.teamId) throw new Error('War-room team payload is missing');
-      const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
-      const { requestMicrosoftTeamsWarRoomParticipantSyncForIncident } = await import('./war-room/participants');
-      const teamsProjection = requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
-      const teamsSync = requestMicrosoftTeamsWarRoomParticipantSyncForIncident(payload.incidentId);
-      let slackFailure: unknown;
-      try {
-        const { inviteTeamToWarRoom } = await import('./chatops/war-room');
-        requireWarRoomDelivery(
-          await inviteTeamToWarRoom(payload.incidentId, payload.warRoom.teamId),
-          'war-room team invite'
-        );
-      } catch (error) {
-        slackFailure = error;
-      }
-      const teamsResults = await Promise.allSettled([teamsProjection, teamsSync]);
-      const teamsError = teamsResults.find(result => result.status === 'rejected') as PromiseRejectedResult | undefined;
-      if (teamsError) {
-        if (slackFailure) throw slackFailure;
-        throw teamsError.reason;
-      }
-      if (slackFailure) throw slackFailure;
+      const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+      await handleIncidentWarRoomEvent({
+        kind: 'INVITE_TEAM',
+        incidentId: payload.incidentId,
+        teamId: payload.warRoom.teamId,
+      });
       return;
     }
   }
