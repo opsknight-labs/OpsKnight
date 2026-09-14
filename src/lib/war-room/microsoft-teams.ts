@@ -174,6 +174,26 @@ export async function reconcileMicrosoftTeamsWarRoom(incidentId: string, warRoom
   });
 }
 
+/** Bounded, marker-only drift sweep run by the scheduler; it never creates channels. */
+export async function reconcileMicrosoftTeamsWarRoomHealth(limit = 20): Promise<{ checked: number; healthy: number; degraded: number }> {
+  const rooms = await prisma.incidentWarRoom.findMany({
+    where: { provider: 'MICROSOFT_TEAMS', state: 'READY', providerTenantId: { not: null }, providerContainerId: { not: null } },
+    orderBy: { lastReconciledAt: 'asc' }, take: Math.max(1, Math.min(limit, 100)),
+    include: { incident: { select: { id: true } } },
+  });
+  let healthy = 0;
+  for (const room of rooms) {
+    const result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+    const health = result.ok && result.value ? 'HEALTHY' : !result.ok && result.code === 'MISSING_PERMISSION' ? 'PERMISSION_ERROR' : result.ok ? 'MISSING' : 'DEGRADED';
+    await prisma.incidentWarRoom.update({
+      where: { id: room.id },
+      data: { health, lastReconciledAt: new Date(), ...(health === 'HEALTHY' ? {} : { lastErrorCode: result.ok ? 'CHANNEL_MISSING' : result.code, lastError: result.ok ? 'The Teams war-room marker was not found during health reconciliation.' : result.message }) },
+    });
+    if (health === 'HEALTHY') healthy++;
+  }
+  return { checked: rooms.length, healthy, degraded: rooms.length - healthy };
+}
+
 /**
  * Resolve settles ready/pre-create rooms immediately. If a Graph create may
  * already be in flight, rotate the fencing token and enqueue a marker-only
