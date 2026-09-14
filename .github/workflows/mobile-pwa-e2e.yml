@@ -92,7 +92,10 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
 
       - name: Run Android and iPhone browser contracts
-        run: echo "Mobile browser contracts temporarily bypassed"
+        run: >-
+          npx playwright test tests/e2e/mobile-pwa.spec.ts
+          --project=mobile-chromium
+          --project=mobile-webkit
 
       - name: Upload browser Playwright report
         if: failure()

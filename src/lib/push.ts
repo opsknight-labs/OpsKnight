@@ -373,14 +373,27 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
                   : isTimeout
                     ? 'PUSH_DELIVERY_TIMEOUT'
                     : 'PUSH_NETWORK_FAILURE';
-            const msg = `Device ${safeDeviceRef}: delivery failed${code ? ` (HTTP ${code})` : ''}`;
+            const headerVal =
+              typeof (error as { headers?: { get?: (h: string) => string | null } })?.headers
+                ?.get === 'function'
+                ? (error as { headers: { get: (h: string) => string | null } }).headers.get(
+                    'retry-after'
+                  )
+                : undefined;
+            const parsedSec = headerVal ? Number(headerVal) : NaN;
+            const providerRetryAfterMs =
+              Number.isFinite(parsedSec) && parsedSec > 0
+                ? parsedSec * 1000
+                : code === 429
+                  ? 60_000
+                  : undefined;
             errors.push(msg);
             failures.push({
               deviceId: safeDeviceRef,
               reason,
               error: msg,
               statusCode: code,
-              retryAfterMs: code === 429 ? 60_000 : undefined,
+              retryAfterMs: providerRetryAfterMs,
             });
             return;
           }
@@ -441,16 +454,35 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
     }
 
     if (totalDelivered > 0) {
-      const hasFailures = retryableFailureCount > 0 || terminalCount > 0;
+      const hasRetryableFailures = retryableFailureCount > 0;
+      if (hasRetryableFailures) {
+        // IMPORTANT (Gate 5):
+        // When some devices were delivered but retryable devices remain,
+        // success MUST be false with outcome 'PARTIAL'.
+        // This keeps the notification retryable in the central queue.
+        // Checkpointed devices will be skipped on subsequent attempts.
+        return {
+          success: false,
+          outcome: 'PARTIAL',
+          reason: 'PUSH_DELIVERY_PARTIAL',
+          code: 'DELIVERY_PARTIAL',
+          error: `Delivered to ${totalDelivered} device(s), but ${retryableFailureCount} device(s) failed retryably`,
+          deliveredCount: successCount,
+          checkpointedCount,
+          failedCount: retryableFailureCount,
+          removedCount: terminalCount,
+          failures,
+        };
+      }
+
       return {
         success: true,
-        outcome: hasFailures ? 'PARTIAL' : 'DELIVERED',
-        reason: hasFailures ? 'PUSH_DELIVERY_PARTIAL' : 'DELIVERED',
+        outcome: 'DELIVERED',
+        reason: 'DELIVERED',
         deliveredCount: successCount,
         checkpointedCount,
-        failedCount: retryableFailureCount,
+        failedCount: 0,
         removedCount: terminalCount,
-        failures: hasFailures ? failures : undefined,
       };
     }
 

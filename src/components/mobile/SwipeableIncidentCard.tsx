@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Check, Clock3 } from 'lucide-react';
 import { motion, useAnimation, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ export default function SwipeableIncidentCard({
   isUpdating = false,
 }: SwipeableIncidentCardProps) {
   const { userTimeZone } = useTimezone();
+  const router = useRouter();
   const controls = useAnimation();
   const x = useMotionValue(0);
   const isDraggingRef = useRef(false);
@@ -92,6 +94,16 @@ export default function SwipeableIncidentCard({
     }
   };
 
+  const handleTapFallback = () => {
+    if (isUpdating || isDraggingRef.current || dragDistanceRef.current > 15) return;
+    try {
+      haptics.soft();
+    } catch {
+      // best-effort
+    }
+    router.push(`/m/incidents/${incident.id}`);
+  };
+
   return (
     <div className="relative min-w-0 overflow-hidden rounded-xl" data-swipe-ignore="true">
       <motion.div
@@ -111,8 +123,10 @@ export default function SwipeableIncidentCard({
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.55}
+        dragMomentum={false}
         onDrag={handleDrag}
         onDragEnd={handleDragEnd}
+        onTap={handleTapFallback}
         animate={controls}
         style={{ x }}
         className={cn(

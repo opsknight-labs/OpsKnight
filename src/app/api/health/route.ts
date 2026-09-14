@@ -55,6 +55,24 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    try {
+      const certStartTime = Date.now();
+      const { certifyNotificationControlPlane } = await import('@/lib/provider-admission');
+      await certifyNotificationControlPlane();
+      checks.notificationControlPlane = {
+        status: 'healthy',
+        latency: Date.now() - certStartTime,
+      };
+    } catch (certError) {
+      checks.notificationControlPlane = {
+        status: 'unhealthy',
+        error:
+          certError instanceof Error
+            ? certError.message
+            : 'Control-plane tables missing or unmigrated',
+      };
+    }
+
     const schedulerExpected =
       responsibilities.startScheduler && process.env.ENABLE_INTERNAL_CRON !== 'false';
     if (!schedulerExpected) {

@@ -49,11 +49,12 @@ function mockCurrentUser() {
   } as never);
 }
 
-function makeRequest(body?: Record<string, unknown>): Request {
+function makeRequest(body?: Record<string, unknown> | null): Request {
+  const payload = body === undefined ? { endpoint: 'https://example.com/push/default' } : body;
   return new Request('http://localhost/api/notifications/test-push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: payload !== null ? JSON.stringify(payload) : undefined,
   });
 }
 
@@ -67,7 +68,10 @@ describe('API Route - Notifications Test Push', () => {
       vapidPrivateKey: 'private-key',
     });
     vi.mocked(prisma.userDevice.count).mockResolvedValue(1);
-    vi.mocked(prisma.userDevice.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.userDevice.findFirst).mockResolvedValue({
+      id: 'dev-1',
+      deviceId: 'key:https://example.com/push/default',
+    } as never);
     vi.mocked(enqueueCentralNotification).mockResolvedValue({
       id: 'notification_test',
       created: true,
@@ -160,31 +164,23 @@ describe('API Route - Notifications Test Push', () => {
     expect(body.retryable).toBe(false);
   });
 
-  it('returns 200 with targetedDevice=all when no endpoint provided', async () => {
+  it('returns 400 when no endpoint is provided', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
 
-    const res = await POST(makeRequest());
+    const res = await POST(makeRequest(null));
     const body = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(body.targetedDevice).toBe('all');
-    expect(enqueueCentralNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        category: 'SYSTEM',
-        channel: 'PUSH',
-        userId: 'user-1',
-        trafficClass: 'TRANSACTIONAL',
-        priority: 1,
-        payload: expect.objectContaining({ targetDeviceId: undefined }),
-      })
-    );
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('VALIDATION_FAILED');
+    expect(enqueueCentralNotification).not.toHaveBeenCalled();
   });
 
   it('dispatches to the specific device when a valid endpoint is provided', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
     vi.mocked(prisma.userDevice.findFirst).mockResolvedValue({
+      id: 'dev-1',
       deviceId: 'key:https://example.com/push/abc',
     } as never);
 
@@ -217,7 +213,7 @@ describe('API Route - Notifications Test Push', () => {
     expect(enqueueCentralNotification).not.toHaveBeenCalled();
   });
 
-  it('proceeds with all-device dispatch when body JSON is unparseable', async () => {
+  it('returns 400 INVALID_JSON when body JSON is unparseable', async () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     mockCurrentUser();
 
@@ -230,7 +226,8 @@ describe('API Route - Notifications Test Push', () => {
     const res = await POST(req);
     const body = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(body.targetedDevice).toBe('all');
+    expect(res.status).toBe(400);
+    expect(body.code).toBe('INVALID_JSON');
+    expect(enqueueCentralNotification).not.toHaveBeenCalled();
   });
 });

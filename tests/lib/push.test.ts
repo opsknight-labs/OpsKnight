@@ -219,7 +219,8 @@ describe('sendPush', () => {
     });
 
     expect(first).toMatchObject({
-      success: true, // partial success: at least one device delivered
+      success: false, // partial delivery with retryable failures remains retryable
+      outcome: 'PARTIAL',
       deliveredCount: 1,
       failedCount: 1,
     });

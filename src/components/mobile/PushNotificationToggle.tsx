@@ -66,7 +66,7 @@ function detectPlatform(): 'ios' | 'android' | 'desktop' {
 function standaloneMode() {
   return Boolean(
     window.matchMedia?.('(display-mode: standalone)')?.matches ||
-      (navigator as Navigator & { standalone?: boolean }).standalone
+    (navigator as Navigator & { standalone?: boolean }).standalone
   );
 }
 
@@ -108,7 +108,11 @@ export default function PushNotificationToggle() {
       setPushState('INSTALL_REQUIRED');
       return;
     }
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    if (
+      !('serviceWorker' in navigator) ||
+      !('PushManager' in window) ||
+      !('Notification' in window)
+    ) {
       setPushState('UNSUPPORTED');
       return;
     }
@@ -150,7 +154,9 @@ export default function PushNotificationToggle() {
       }
       if (!response.ok) {
         setPushState('ERROR');
-        setError('Push status could not be verified. Your browser subscription was left unchanged.');
+        setError(
+          'Push status could not be verified. Your browser subscription was left unchanged.'
+        );
         return;
       }
       const data = (await response.json()) as {
@@ -208,7 +214,8 @@ export default function PushNotificationToggle() {
         { cache: 'no-store' },
         REQUEST_TIMEOUT_MS
       );
-      if (!keyResponse.ok) throw await errorFromResponse(keyResponse, 'Push configuration is unavailable.');
+      if (!keyResponse.ok)
+        throw await errorFromResponse(keyResponse, 'Push configuration is unavailable.');
       const { key: vapidKey } = (await keyResponse.json()) as { key?: string };
       const normalized = normalizeVapidKey(String(vapidKey || ''));
       if (!normalized.key) throw new Error(normalized.error || 'Push public key is invalid.');
@@ -237,7 +244,8 @@ export default function PushNotificationToggle() {
         setPushState('AUTH_REQUIRED');
         return;
       }
-      if (!saveResponse.ok) throw await errorFromResponse(saveResponse, 'Failed to save Push subscription.');
+      if (!saveResponse.ok)
+        throw await errorFromResponse(saveResponse, 'Failed to save Push subscription.');
       setPushState('REGISTERED');
       haptics.success();
     } catch (subscribeError) {
@@ -291,7 +299,9 @@ export default function PushNotificationToggle() {
       const browserRemoved = await subscription.unsubscribe();
       if (!browserRemoved) {
         setPushState('REPAIR_REQUIRED');
-        setError('Server delivery is disabled, but the browser subscription needs cleanup. Use Repair when online.');
+        setError(
+          'Server delivery is disabled, but the browser subscription needs cleanup. Use Repair when online.'
+        );
         return;
       }
       setPushState('PERMISSION_REQUIRED');
@@ -313,14 +323,41 @@ export default function PushNotificationToggle() {
     setIsTesting(true);
     setTestMessage('');
     try {
+      const registration = await ensureServiceWorker();
+      const subscription = await registration.pushManager.getSubscription();
+      if (!subscription?.endpoint) {
+        setPushState('REPAIR_REQUIRED');
+        setError('No active push subscription on this device. Tap Repair to restore.');
+        return;
+      }
       const response = await fetchWithTimeout(
         '/api/notifications/test-push',
-        { method: 'POST', credentials: 'include' },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+          credentials: 'include',
+        },
         REQUEST_TIMEOUT_MS
       );
-      if (!response.ok) throw await errorFromResponse(response, 'Failed to send test Push.');
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => null)) as {
+          error?: { code?: string; userMessage?: string; details?: { reason?: string } };
+        } | null;
+        const reason = errorData?.error?.details?.reason;
+        if (
+          response.status === 410 ||
+          reason === 'PUSH_SUBSCRIPTION_EXPIRED' ||
+          reason === 'PUSH_NO_SUBSCRIPTION'
+        ) {
+          setPushState('REPAIR_REQUIRED');
+          setError('Push subscription on this device has expired. Tap Repair to restore.');
+          return;
+        }
+        throw await errorFromResponse(response, 'Failed to send test Push.');
+      }
       const data = (await response.json()) as { message?: string };
-      setTestMessage(data.message || 'Test Push accepted for delivery.');
+      setTestMessage(data.message || 'Test Push sent successfully to this device.');
     } catch (testError) {
       logger.warn('push.test_failed', { component: 'PushNotificationToggle', error: testError });
       setTestMessage(displayError(testError, 'Failed to send test Push.'));
@@ -347,21 +384,30 @@ export default function PushNotificationToggle() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
-            {pushState === 'REGISTERED' ? <Bell className="h-5 w-5" aria-hidden="true" /> : <BellOff className="h-5 w-5" aria-hidden="true" />}
+            {pushState === 'REGISTERED' ? (
+              <Bell className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <BellOff className="h-5 w-5" aria-hidden="true" />
+            )}
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-foreground">Push notifications</h3>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</p>
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              Push delivery is registered per device and remains separate from the lifetime of your interactive login session.
+              Push delivery is registered per device and remains separate from the lifetime of your
+              interactive login session.
             </p>
           </div>
         </div>
         <div className="shrink-0">
           {pushState === 'INSTALL_REQUIRED' ? (
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">Install first</span>
+            <span className="inline-flex min-h-9 items-center rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              Install first
+            </span>
           ) : pushState === 'PERMISSION_DENIED' ? (
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-rose-300 bg-rose-50 px-2.5 text-xs font-semibold text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">Blocked</span>
+            <span className="inline-flex min-h-9 items-center rounded-lg border border-rose-300 bg-rose-50 px-2.5 text-xs font-semibold text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
+              Blocked
+            </span>
           ) : pushState === 'AUTH_REQUIRED' ? (
             <Button
               type="button"
@@ -381,9 +427,13 @@ export default function PushNotificationToggle() {
               variant={pushState === 'REGISTERED' ? 'outline' : 'default'}
               className="min-h-11 gap-1.5"
               disabled={loading || pushState === 'REGISTERING'}
-              onClick={() => void (pushState === 'REGISTERED' ? unsubscribe() : subscribeOrRepair())}
+              onClick={() =>
+                void (pushState === 'REGISTERED' ? unsubscribe() : subscribeOrRepair())
+              }
             >
-              {pushState === 'REPAIR_REQUIRED' ? <Wrench className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+              {pushState === 'REPAIR_REQUIRED' ? (
+                <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : null}
               {loading || pushState === 'REGISTERING'
                 ? 'Working…'
                 : pushState === 'REGISTERED'
@@ -397,7 +447,10 @@ export default function PushNotificationToggle() {
       </div>
 
       {error ? (
-        <div role="alert" className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200">
+        <div
+          role="alert"
+          className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
+        >
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
@@ -415,7 +468,11 @@ export default function PushNotificationToggle() {
           <Send className="h-4 w-4" aria-hidden="true" />
           {isTesting ? 'Sending test…' : 'Send test Push'}
         </Button>
-        {testMessage ? <p className="mt-2 text-center text-xs text-muted-foreground" role="status">{testMessage}</p> : null}
+        {testMessage ? (
+          <p className="mt-2 text-center text-xs text-muted-foreground" role="status">
+            {testMessage}
+          </p>
+        ) : null}
       </div>
     </Card>
   );

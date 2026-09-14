@@ -40,6 +40,7 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 import {
+  acquireProviderAdmission,
   acquireProviderConcurrency,
   certifyNotificationControlPlane,
   forceProductionModeForTests,
@@ -259,5 +260,47 @@ describe('P0: provider concurrency control-plane', () => {
       'provider_admission.startup_certification_failed',
       expect.objectContaining({ table: expect.any(String) })
     );
+  });
+
+  // ─── Test 11 ───────────────────────────────────────────────────────────────
+  // GATE 1: Unified emergency mode: when DB fails, rate/quota admission must
+  // allow CRITICAL / TRANSACTIONAL pushes at bounded process-local rates.
+  it('[P0-11] Unified emergency admission: rate limit allows TRANSACTIONAL traffic when DB quota window fails', async () => {
+    mocks.queryRaw.mockRejectedValue(new Error('relation ProviderQuotaWindow does not exist'));
+    resetProviderAdmissionForTests();
+    forceProductionModeForTests();
+
+    // With DB quota failing, TRANSACTIONAL push must still be admitted locally (emergency rate = 5/s)
+    const admission = await acquireProviderAdmission(
+      'PUSH',
+      'web-push',
+      new Date(),
+      'TRANSACTIONAL'
+    );
+    expect(admission.allowed).toBe(true);
+
+    // Concurrency also allows under emergency limiter (2 slots)
+    const concurrency = await acquireProviderConcurrency(
+      'PUSH',
+      'web-push',
+      new Date(),
+      'TRANSACTIONAL'
+    );
+    expect(concurrency.allowed).toBe(true);
+  });
+
+  // ─── Test 12 ───────────────────────────────────────────────────────────────
+  // GATE 1: Bulk traffic must be paused under rate admission when DB is unreachable.
+  it('[P0-12] Unified emergency admission: rate limit pauses BULK traffic when DB quota window fails', async () => {
+    mocks.queryRaw.mockRejectedValue(new Error('relation ProviderQuotaWindow does not exist'));
+    resetProviderAdmissionForTests();
+    forceProductionModeForTests();
+
+    // BULK traffic fails closed as CONTROL_PLANE_UNAVAILABLE
+    const admission = await acquireProviderAdmission('PUSH', 'web-push', new Date(), 'BULK');
+    expect(admission.allowed).toBe(false);
+    if (!admission.allowed) {
+      expect(admission.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+    }
   });
 });

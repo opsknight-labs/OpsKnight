@@ -325,6 +325,19 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
     lane: workerState.workerLane,
   });
 
+  // Certify notification control-plane tables at worker boot
+  void (async () => {
+    try {
+      const { certifyNotificationControlPlane } = await import('./provider-admission');
+      await certifyNotificationControlPlane();
+      logger.info('[JobWorker] Control plane startup certification passed');
+    } catch (certError) {
+      const msg = certError instanceof Error ? certError.message : String(certError);
+      workerState.lastError = `Control plane startup certification failed: ${msg}`;
+      logger.error('[JobWorker] Control plane startup certification failed', { error: msg });
+    }
+  })();
+
   // Start immediately. Subsequent iterations are paced based on queue activity.
   scheduleNextRun(0);
 }

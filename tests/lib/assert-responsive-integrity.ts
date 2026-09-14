@@ -192,6 +192,50 @@ export async function checkResponsiveIntegrity(
         }
       }
 
+      // F. Element collision/overlap detection:
+      // Compares visible unnested interactive/heading elements for unexpected bounding box intersections.
+      const collisionCandidates = allElements.filter(el => {
+        if (!isVisible(el)) return false;
+        const tag = el.tagName;
+        const isInteractive =
+          tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT';
+        const isHeading = /^H[1-6]$/.test(tag);
+        return isInteractive || isHeading;
+      });
+
+      for (let i = 0; i < collisionCandidates.length; i++) {
+        const elA = collisionCandidates[i];
+        const rectA = elA.getBoundingClientRect();
+        for (let j = i + 1; j < collisionCandidates.length; j++) {
+          const elB = collisionCandidates[j];
+          if (elA.contains(elB) || elB.contains(elA)) continue;
+
+          const rectB = elB.getBoundingClientRect();
+          const overlapX = Math.max(
+            0,
+            Math.min(rectA.right, rectB.right) - Math.max(rectA.left, rectB.left)
+          );
+          const overlapY = Math.max(
+            0,
+            Math.min(rectA.bottom, rectB.bottom) - Math.max(rectA.top, rectB.top)
+          );
+
+          if (overlapX > 6 && overlapY > 6) {
+            const styleA = window.getComputedStyle(elA);
+            const styleB = window.getComputedStyle(elB);
+            if (styleA.pointerEvents === 'none' || styleB.pointerEvents === 'none') continue;
+            if (styleA.position === 'fixed' || styleB.position === 'fixed') continue;
+
+            violations.push({
+              type: 'COLLISION_OVERLAP',
+              selector: `${getPath(elA)} collides with ${getPath(elB)}`,
+              details: `Visible elements overlap by ${Math.round(overlapX)}x${Math.round(overlapY)}px`,
+              rect: { x: rectA.x, y: rectA.y, width: rectA.width, height: rectA.height },
+            });
+          }
+        }
+      }
+
       return violations;
     },
     {

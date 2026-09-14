@@ -10,7 +10,7 @@ import { logger } from './logger';
  * These are intentionally conservative to avoid flooding providers.
  * Bulk traffic is paused entirely (0) so CRITICAL/TRANSACTIONAL still drain.
  */
-const EMERGENCY_CONCURRENCY: Record<string, number> = {
+export const EMERGENCY_CONCURRENCY: Record<string, number> = {
   PUSH: 2,
   EMAIL: 1,
   SMS: 1,
@@ -19,8 +19,26 @@ const EMERGENCY_CONCURRENCY: Record<string, number> = {
   WHATSAPP: 1,
   MICROSOFT_TEAMS: 1,
 };
+
+/**
+ * Emergency process-local rate limit per second when the control-plane DB is unreachable.
+ * Bounded rates ensure critical/transactional alerts continue draining without overwhelming providers.
+ */
+export const EMERGENCY_RATE_PER_SECOND: Record<string, number> = {
+  PUSH: 5,
+  EMAIL: 2,
+  SMS: 5,
+  SLACK: 1,
+  WEBHOOK: 5,
+  WHATSAPP: 5,
+  MICROSOFT_TEAMS: 2,
+};
+
+/** Process-local emergency rate tracking per 1s window (key: `${scope}:${providerKey}`) */
+const localEmergencyRate = new Map<string, { count: number; windowStartSec: number }>();
+
 /** Maximum slots a single worker may claim from a provider pool (fairness cap). */
-const MAX_SLOTS_PER_WORKER = 5;
+export const MAX_SLOTS_PER_WORKER = 5;
 
 export type ProviderAdmissionScope =
   | 'EMAIL'
@@ -33,12 +51,23 @@ export type ProviderAdmissionScope =
 
 export type ProviderAdmissionResult =
   | { allowed: true }
-  | { allowed: false; retryAt: Date; reason: 'RATE_LIMITED' };
+  | { allowed: false; retryAt: Date; reason: 'RATE_LIMITED' }
+  | { allowed: false; retryAt: Date; reason: 'CONTROL_PLANE_UNAVAILABLE'; cause?: string };
 
 export type ProviderConcurrencyResult =
   | { allowed: true; leaseKey: string }
   | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' }
   | { allowed: false; retryAt: Date; reason: 'CONTROL_PLANE_UNAVAILABLE'; cause: string };
+
+type PrismaClientWithModels = typeof prisma & {
+  rateLimit?: typeof prisma.rateLimit;
+  providerAdmission?: typeof prisma.providerAdmission;
+  $queryRaw?: typeof prisma.$queryRaw;
+  $executeRaw?: typeof prisma.$executeRaw;
+  $transaction?: typeof prisma.$transaction;
+};
+
+const safePrisma = prisma as unknown as PrismaClientWithModels;
 
 export const PROVIDER_LEASE_MS = 30_000;
 const WORKER_ID = process.env.OPSKNIGHT_WORKER_ID?.trim() || crypto.randomUUID();
@@ -63,11 +92,78 @@ export function resetProviderAdmissionForTests() {
   localConcurrency.clear();
   concurrencyClaims.clear();
   localCooldown.clear();
+  localEmergencyRate.clear();
   _testProductionOverride = false;
 }
 
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
+}
+
+/**
+ * Bounded process-local emergency rate admission when the control plane is unreachable.
+ * CRITICAL / TRANSACTIONAL lanes continue at bounded rates (e.g. 5/s for PUSH, 2/s for EMAIL),
+ * while PUBLIC_INCIDENT / BULK lanes fail closed as CONTROL_PLANE_UNAVAILABLE to avoid flood storms.
+ */
+function tryEmergencyRateAdmission(
+  scope: ProviderAdmissionScope,
+  providerKey: string,
+  now: Date,
+  trafficClass?: NotificationTrafficClass,
+  cause?: string
+): ProviderAdmissionResult {
+  const bulk = usesBulkCapacity(trafficClass);
+  if (bulk) {
+    logger.warn('provider_admission.bulk_paused_db_unavailable', {
+      scope,
+      providerKey,
+      trafficClass,
+      cause,
+    });
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 5_000),
+      reason: 'CONTROL_PLANE_UNAVAILABLE',
+      cause: cause ?? 'Control-plane DB unavailable; bulk traffic paused',
+    };
+  }
+
+  const emergencyRate = EMERGENCY_RATE_PER_SECOND[scope] ?? 1;
+  const nowSec = Math.floor(now.getTime() / 1_000);
+  const emergencyKey = `${scope}:${providerKey}`;
+  const current = localEmergencyRate.get(emergencyKey);
+
+  if (!current || current.windowStartSec !== nowSec) {
+    localEmergencyRate.set(emergencyKey, { count: 1, windowStartSec: nowSec });
+    logger.warn('provider_admission.emergency_rate_admitted', {
+      scope,
+      providerKey,
+      trafficClass,
+      admittedInSecond: 1,
+      emergencyRateCeiling: emergencyRate,
+      cause,
+    });
+    return { allowed: true };
+  }
+
+  if (current.count < emergencyRate) {
+    current.count += 1;
+    logger.warn('provider_admission.emergency_rate_admitted', {
+      scope,
+      providerKey,
+      trafficClass,
+      admittedInSecond: current.count,
+      emergencyRateCeiling: emergencyRate,
+      cause,
+    });
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    retryAt: new Date((nowSec + 1) * 1_000),
+    reason: 'RATE_LIMITED',
+  };
 }
 
 /** Lifted by resetProviderAdmissionForTests(); set by forceProductionModeForTests() */
@@ -105,12 +201,7 @@ export async function acquireProviderAdmission(
   now: Date = new Date(),
   trafficClass?: NotificationTrafficClass
 ): Promise<ProviderAdmissionResult> {
-  // Defensive: per-file vi.mock('@/lib/prisma') overrides often omit capacity/
-  // admission models. In unit tests missing models should degrade to
-  // "allowed" (no DB) rather than throwing unhandled TypeError.
-  const rateLimitModel = (prisma as unknown as Record<string, unknown>).rateLimit as
-    | { findUnique: (args: unknown) => Promise<unknown> }
-    | undefined;
+  const rateLimitModel = safePrisma.rateLimit;
   const bucket = bucketKey(scope, providerKey);
   // Process-local cooldown is authoritative if DB read fails; also fast-path
   // when deferProviderAdmission persisted locally but DB not yet visible.
@@ -132,15 +223,14 @@ export async function acquireProviderAdmission(
         // Cache durable cooldown locally so a subsequent read failure still fails closed
         localCooldown.set(bucket, cooldown.expiresAt);
       }
-    } catch {
+    } catch (dbError) {
       const fallback = localCooldown.get(bucket);
       if (fallback && fallback > now) {
         return { allowed: false, retryAt: fallback, reason: 'RATE_LIMITED' };
       }
       if (!isProviderAdmissionTestEnv()) {
-        const conservativeRetryAt = new Date(now.getTime() + 1_000);
-        localCooldown.set(bucket, conservativeRetryAt);
-        return { allowed: false, retryAt: conservativeRetryAt, reason: 'RATE_LIMITED' };
+        const cause = dbError instanceof Error ? dbError.message : String(dbError);
+        return tryEmergencyRateAdmission(scope, providerKey, now, trafficClass, cause);
       }
       cooldown = null;
     }
@@ -172,15 +262,17 @@ export async function acquireProviderAdmission(
   );
   // DB quota window is best-effort. Per-file vi.mock('@/lib/prisma') often omits
   // $executeRaw/$queryRaw — degrade to in-memory allow rather than unhandled throw.
-  const rawExecute = (prisma as unknown as Record<string, unknown>).$executeRaw as
-    | ((...args: unknown[]) => Promise<unknown>)
-    | undefined;
-  const rawQuery = (prisma as unknown as Record<string, unknown>).$queryRaw as
-    | ((...args: unknown[]) => Promise<unknown>)
-    | undefined;
+  const rawExecute = safePrisma.$executeRaw;
+  const rawQuery = safePrisma.$queryRaw;
   if (!rawExecute || !rawQuery) {
     if (isProviderAdmissionTestEnv()) return { allowed: true };
-    return { allowed: false, retryAt: new Date(now.getTime() + 1_000), reason: 'RATE_LIMITED' };
+    return tryEmergencyRateAdmission(
+      scope,
+      providerKey,
+      now,
+      trafficClass,
+      'Raw execute/query not available on Prisma client'
+    );
   }
   try {
     await rawExecute(Prisma.sql`
@@ -213,9 +305,10 @@ export async function acquireProviderAdmission(
       return { allowed: true };
     }
     return { allowed: false, retryAt: expiresAt, reason: 'RATE_LIMITED' };
-  } catch {
+  } catch (quotaError) {
     if (isProviderAdmissionTestEnv()) return { allowed: true };
-    return { allowed: false, retryAt: new Date(now.getTime() + 1_000), reason: 'RATE_LIMITED' };
+    const cause = quotaError instanceof Error ? quotaError.message : String(quotaError);
+    return tryEmergencyRateAdmission(scope, providerKey, now, trafficClass, cause);
   }
 }
 
@@ -234,9 +327,7 @@ export async function deferProviderAdmission(
   // throttles this replica and fail-closed reads can honor it.
   const existing = localCooldown.get(key);
   if (!existing || retryAt > existing) localCooldown.set(key, retryAt);
-  const deferRaw = (prisma as unknown as Record<string, unknown>).$executeRaw as
-    | ((...args: unknown[]) => Promise<unknown>)
-    | undefined;
+  const deferRaw = safePrisma.$executeRaw;
   if (deferRaw) {
     try {
       await deferRaw(Prisma.sql`
@@ -280,17 +371,19 @@ export async function acquireProviderConcurrency(
   const leaseOwner = `${WORKER_ID}:${lane}`.slice(0, 240);
   const laneCeiling = bulk ? config.bulkMaxInFlight : config.maxInFlight;
 
-  // Fairness cap: no single worker may monopolize the pool.
-  // Clamp requested slots to the smaller of the pool ceiling and per-worker cap.
-  const fairnessLimit = Math.min(MAX_SLOTS_PER_WORKER, laneCeiling);
-
   let local = localConcurrency.get(poolKey);
   if (!local || local.expiresAt <= now.getTime()) {
     const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
-    const requested = Math.min(fairnessLimit, laneCeiling);
-    const concQuery = (prisma as unknown as Record<string, unknown>).$queryRaw as
-      | ((...args: unknown[]) => Promise<unknown>)
-      | undefined;
+    // Demand-aware reservation: reserve based on active demand + headroom,
+    // bounded by laneCeiling. This allows single-worker setups to scale up to full
+    // capacity under load while preventing multi-worker idle monopolization.
+    const currentActive = local?.active ?? 0;
+    const demandSlots = Math.max(1, currentActive + 2);
+    const requested = Math.min(
+      laneCeiling,
+      Math.max(demandSlots, Math.min(MAX_SLOTS_PER_WORKER, laneCeiling))
+    );
+    const concQuery = safePrisma.$queryRaw;
     if (!concQuery) {
       // Missing Prisma method — only acceptable in unit tests
       if (isProviderAdmissionTestEnv()) {
@@ -397,8 +490,7 @@ export async function acquireProviderConcurrency(
   // If admin lowered maxInFlight, an existing local reservation must not keep
   // admitting against the old, larger reserved value for up to PROVIDER_LEASE_MS.
   // DB rows expire conservatively; the local check shrinks immediately.
-  // Also honour the fairness cap in case config changed since last DB refresh.
-  local.reserved = Math.min(local.reserved, laneCeiling, fairnessLimit);
+  local.reserved = Math.min(local.reserved, laneCeiling);
   if (local.active >= local.reserved) {
     return {
       allowed: false,
@@ -431,9 +523,7 @@ export class ProviderCooldownError extends Error {
 }
 
 export async function assertProviderAdmitted(key: string, now = new Date()): Promise<void> {
-  const admissionModel = (prisma as unknown as Record<string, unknown>).providerAdmission as
-    | { findUnique: (args: unknown) => Promise<unknown> }
-    | undefined;
+  const admissionModel = safePrisma.providerAdmission;
   if (!admissionModel?.findUnique) return;
   try {
     const admission = (await admissionModel.findUnique({ where: { key } })) as {
@@ -448,9 +538,7 @@ export async function assertProviderAdmitted(key: string, now = new Date()): Pro
 }
 
 export async function recordProviderSuccess(key: string): Promise<void> {
-  const successModel = (prisma as unknown as Record<string, unknown>).providerAdmission as
-    | { upsert: (args: unknown) => Promise<unknown> }
-    | undefined;
+  const successModel = safePrisma.providerAdmission;
   if (!successModel?.upsert) return;
   try {
     await successModel.upsert({
@@ -534,9 +622,7 @@ export async function recordProviderFailure(
     });
   };
 
-  const admTx = (prisma as unknown as Record<string, unknown>).providerAdmission as
-    | { findUnique: unknown; upsert: unknown }
-    | undefined;
+  const admTx = safePrisma.providerAdmission;
   if (!admTx?.findUnique || !admTx?.upsert) return;
   try {
     if (typeof prisma.$transaction === 'function') {

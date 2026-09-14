@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { assertResponsiveIntegrity } from '../lib/assert-responsive-integrity';
-import { ALL_VIEWPORTS, VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
+import { VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
 
 const prisma = new PrismaClient();
 const FIXTURE_EMAIL = 'mobile-matrix-fixture@example.invalid';
@@ -106,11 +106,16 @@ test.describe('mobile responsive visual integrity matrix', () => {
     });
   }
 
-  // Authenticated pages checked across key viewports
+  // Authenticated pages checked across key viewports (Gate 7)
   for (const vp of [
     VIEWPORT_MATRIX.verySmallPhone,
+    VIEWPORT_MATRIX.compactAndroid,
     VIEWPORT_MATRIX.iphoneCompact,
+    VIEWPORT_MATRIX.modernIphone390,
+    VIEWPORT_MATRIX.modernIphone393,
+    VIEWPORT_MATRIX.mediumPhone,
     VIEWPORT_MATRIX.largePhone,
+    VIEWPORT_MATRIX.phoneLandscape,
   ]) {
     test(`dashboard and core pages maintain integrity at ${vp.width}px (${vp.name})`, async ({
       page,

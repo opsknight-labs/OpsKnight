@@ -1660,6 +1660,19 @@ export async function deliverCentralNotification(
   }
   if (!admission.allowed) {
     await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+    const isControlPlane = admission.reason === 'CONTROL_PLANE_UNAVAILABLE';
+    const deferMsg = isControlPlane
+      ? `Control-plane DB unavailable (${(admission as { cause?: string }).cause || 'rate admission'}); notification deferred until ${admission.retryAt.toISOString()}`
+      : `Provider admission deferred until ${admission.retryAt.toISOString()}`;
+    if (isControlPlane) {
+      logger.warn('notification.control_plane_admission_deferral', {
+        notificationId: candidate.id,
+        channel: payload.kind,
+        trafficClass: candidate.trafficClass,
+        retryAt: admission.retryAt.toISOString(),
+        cause: (admission as { cause?: string }).cause,
+      });
+    }
     await prisma.notification.updateMany({
       where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
       data: {
@@ -1667,7 +1680,7 @@ export async function deliverCentralNotification(
         failedAt: null,
         lastAttemptAt: null,
         nextAttemptAt: admission.retryAt,
-        errorMsg: `Provider admission deferred until ${admission.retryAt.toISOString()}`,
+        errorMsg: deferMsg,
       },
     });
     return { success: false, claimed: true };
