@@ -1700,24 +1700,64 @@ ${R} .status-v3-services__right-group {
   max-inline-size: 100%;
 }
 
-${R} .status-v3-services__sort-select {
+${R} .status-v3-services__sort-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   height: 26px;
   box-sizing: border-box;
-  padding: 0 0.45rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--status-panel-border);
   border-radius: 4px;
+  background: var(--status-panel-bg);
+  color: var(--status-text-muted);
   font-size: 0.75rem;
   font-weight: 500;
-  border: 1px solid var(--status-panel-border);
-  background: var(--status-panel-bg);
-  color: var(--status-text);
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  white-space: nowrap;
   line-height: 1;
 }
 
-${R} .status-v3-services__sort-select:focus-visible {
-  outline: none;
+${R} .status-v3-services__sort-wrap:hover {
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--status-panel-border));
+  color: var(--status-text-strong);
+}
+
+${R} .status-v3-services__sort-wrap:focus-within {
   border-color: var(--primary);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+${R} .status-v3-services__sort-wrap .status-v3-services__sort-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: inherit;
+  cursor: pointer;
+  padding: 0 0.15rem 0 0;
+  margin: 0;
+  outline: none;
+  height: 100%;
+  line-height: 24px;
+}
+
+${R} .status-v3-services__sort-wrap .status-v3-services__sort-icon {
+  pointer-events: none;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+${R} .status-v3-services__sort-wrap .status-v3-services__sort-chevron {
+  pointer-events: none;
+  flex-shrink: 0;
+  opacity: 0.65;
+  margin-inline-start: -0.1rem;
 }
 
 /* Micro search input */
@@ -1805,6 +1845,17 @@ ${R} .status-v3-services__legend-window {
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--status-text-subtle);
+  white-space: nowrap;
+}
+
+${R} .status-v3-services__legend-count {
+  font-weight: 600;
+  color: var(--status-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+${R} .status-v3-services__legend-dot {
+  opacity: 0.5;
 }
 
 ${R} .status-v3-legend-clock {

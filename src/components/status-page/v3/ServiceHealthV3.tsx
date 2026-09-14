@@ -272,14 +272,6 @@ export default function ServiceHealthV3({
           >
             Services
           </h2>
-          <span
-            className="status-v3-services__tally-pill"
-            aria-label={`${filtered.length} of ${services.length} services`}
-          >
-            {filtered.length === services.length
-              ? `${services.length} total`
-              : `${filtered.length} of ${services.length}`}
-          </span>
         </div>
 
         <div className="status-v3-services__right-group">
@@ -302,7 +294,7 @@ export default function ServiceHealthV3({
             </svg>
             <input
               type="search"
-              placeholder="Search services"
+              placeholder={`Search ${services.length} services...`}
               value={query}
               onChange={event => setQuery(event.target.value)}
             />
@@ -382,24 +374,65 @@ export default function ServiceHealthV3({
             </button>
           )}
 
-          <label htmlFor="status-v3-sort-select" className="sr-only">
-            Sort services
-          </label>
-          <select
-            id="status-v3-sort-select"
-            className="status-v3-services__sort-select"
-            aria-label="Sort services"
-            value={sortMode}
-            onChange={event => setSortMode(event.target.value as SortMode)}
-          >
-            <option value="configured">Configured order (default)</option>
-            <option value="issues">Issues first</option>
-            <option value="alphabetical">Alphabetical</option>
-          </select>
+          <div className="status-v3-services__sort-wrap">
+            <svg
+              className="status-v3-services__sort-icon"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="m3 16 4 4 4-4" />
+              <path d="M7 20V4" />
+              <path d="m21 8-4-4-4 4" />
+              <path d="M17 4v16" />
+            </svg>
+            <label htmlFor="status-v3-sort-select" className="sr-only">
+              Sort services
+            </label>
+            <select
+              id="status-v3-sort-select"
+              className="status-v3-services__sort-select"
+              aria-label="Sort services"
+              value={sortMode}
+              onChange={event => setSortMode(event.target.value as SortMode)}
+            >
+              <option value="configured">Configured order</option>
+              <option value="issues">Issues first</option>
+              <option value="alphabetical">Alphabetical</option>
+            </select>
+            <svg
+              className="status-v3-services__sort-chevron"
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
 
           <span className="status-v3-services__legend-divider" aria-hidden="true" />
 
           <div className="status-v3-services__legend-window">
+            <span className="status-v3-services__legend-count">
+              {filtered.length === services.length
+                ? `${services.length} services`
+                : `${filtered.length} of ${services.length}`}
+            </span>
+            <span className="status-v3-services__legend-dot" aria-hidden="true">
+              ·
+            </span>
             <svg
               className="status-v3-legend-clock"
               width="12"
