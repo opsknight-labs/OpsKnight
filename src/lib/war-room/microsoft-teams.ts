@@ -13,6 +13,7 @@ import {
   warRoomMarker,
 } from '@/lib/microsoft-teams/graph/channels';
 import { getMicrosoftTeamsCapabilities } from '@/lib/microsoft-teams/capabilities';
+import { findTeamMember } from '@/lib/microsoft-teams/graph/members';
 
 type RequestResult =
   | { accepted: true; warRoomId: string; state: string }
@@ -453,13 +454,14 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
 
-  if (room.membershipType !== 'STANDARD')
-    return markFailed(
-      room.id,
-      expectedProvisioningToken,
-      'PRIVATE_WAR_ROOM_NOT_IMPLEMENTED',
-      'Private Teams war rooms require an owner and initial members.'
-    );
+  const metadata = room.metadata as { privateOwnerObjectId?: unknown } | null;
+  const privateOwnerObjectId = typeof metadata?.privateOwnerObjectId === 'string' ? metadata.privateOwnerObjectId : null;
+  if (room.membershipType === 'PRIVATE') {
+    if (!privateOwnerObjectId) return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_OWNER_UNAVAILABLE', 'Private Teams war rooms require a verified owner.');
+    const owner = await findTeamMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, userObjectId: privateOwnerObjectId });
+    if (!owner.ok) return markFailed(room.id, expectedProvisioningToken, owner.code, owner.message);
+    if (!owner.value) return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_OWNER_NOT_IN_TEAM', 'The selected private-room owner is not a member of the parent Team.');
+  }
 
   const current = await prisma.incidentWarRoom.findUnique({
     where: { id: room.id },
@@ -499,7 +501,8 @@ export async function provisionMicrosoftTeamsWarRoom(
     teamId: room.providerContainerId,
     displayName: warRoomChannelName(room.incident.id, room.generation, room.incident.title),
     description: marker,
-    membershipType: 'STANDARD',
+    membershipType: room.membershipType,
+    ...(room.membershipType === 'PRIVATE' ? { ownerObjectId: privateOwnerObjectId! } : {}),
   });
 
   if (!created.ok) {

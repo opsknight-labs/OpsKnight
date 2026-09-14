@@ -49,8 +49,17 @@ export function warRoomMarker(incidentId: string, generation: number): string {
   return `[OKWR:${incidentId}:g${generation}]`;
 }
 
-export async function createChannel(input: { tenantId: string; teamId: string; displayName: string; description: string; membershipType: 'STANDARD' }): Promise<WarRoomGraphResult<Channel>> {
-  const result = await microsoftTeamsGraphRequest(input.tenantId, `/teams/${encodeURIComponent(input.teamId)}/channels`, { method: 'POST', body: JSON.stringify({ displayName: input.displayName, description: input.description, membershipType: 'standard' }) }, 'CREATE');
+export async function createChannel(input: { tenantId: string; teamId: string; displayName: string; description: string; membershipType: 'STANDARD' | 'PRIVATE'; ownerObjectId?: string }): Promise<WarRoomGraphResult<Channel>> {
+  const privateRoom = input.membershipType === 'PRIVATE';
+  if (privateRoom && !input.ownerObjectId) return { ok: false, code: 'MEMBER_NOT_IN_TEAM', message: 'A private Teams channel requires a verified owner.' };
+  const escapedOwnerId = input.ownerObjectId?.replace(/'/g, "''");
+  const body = {
+    displayName: input.displayName,
+    description: input.description,
+    membershipType: privateRoom ? 'private' : 'standard',
+    ...(privateRoom ? { members: [{ '@odata.type': '#microsoft.graph.aadUserConversationMember', roles: ['owner'], 'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${escapedOwnerId}')` }] } : {}),
+  };
+  const result = await microsoftTeamsGraphRequest(input.tenantId, `/teams/${encodeURIComponent(input.teamId)}/channels`, { method: 'POST', body: JSON.stringify(body) }, 'CREATE');
   if (!result.ok) return result;
   const channel = await result.value.json().catch(() => null) as Channel | null;
   return channel?.id && channel.displayName ? { ok: true, value: channel } : { ok: false, code: 'AMBIGUOUS_CREATE', message: 'Microsoft Graph created a channel but returned an incomplete response.' };
