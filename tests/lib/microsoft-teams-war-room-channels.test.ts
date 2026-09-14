@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { findWarRoomChannel, warRoomChannelName, warRoomMarker } from '@/lib/microsoft-teams/graph/channels';
+import { createChannel, findWarRoomChannel, warRoomChannelName, warRoomMarker } from '@/lib/microsoft-teams/graph/channels';
 
 vi.mock('@/lib/microsoft-teams/client', () => ({
   getMicrosoftTeamsGraphAccessToken: vi.fn().mockResolvedValue('graph-token'),
@@ -50,5 +50,24 @@ describe('Teams war-room channel identity', () => {
     await expect(findWarRoomChannel({ tenantId: 'tenant-1', teamId: 'team-1', marker: 'marker' }))
       .resolves.toEqual({ ok: true, value: null });
     expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('creates a private channel with the verified owner in the initial request', async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: 'channel-1', displayName: 'incident-room' }), { status: 201 })) as typeof fetch;
+    await expect(createChannel({
+      tenantId: 'tenant-1', teamId: 'team-1', displayName: 'incident-room', description: 'marker',
+      membershipType: 'PRIVATE', ownerObjectId: "owner'o",
+    })).resolves.toMatchObject({ ok: true, value: { id: 'channel-1' } });
+    const request = (global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    const body = JSON.parse(String(request?.[1]?.body));
+    expect(body.membershipType).toBe('private');
+    expect(body.members).toEqual([expect.objectContaining({ roles: ['owner'], 'user@odata.bind': "https://graph.microsoft.com/v1.0/users('owner''o')" })]);
+  });
+
+  it('rejects a private create without a verified owner before calling Graph', async () => {
+    global.fetch = vi.fn() as typeof fetch;
+    await expect(createChannel({ tenantId: 'tenant-1', teamId: 'team-1', displayName: 'incident-room', description: 'marker', membershipType: 'PRIVATE' }))
+      .resolves.toMatchObject({ ok: false, code: 'MEMBER_NOT_IN_TEAM' });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 });
