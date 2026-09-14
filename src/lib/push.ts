@@ -37,7 +37,8 @@ export type PushFailureCode =
   | 'PROVIDER_NOT_CONFIGURED'
   | 'VAPID_NOT_CONFIGURED'
   | 'RECIPIENT_NOT_FOUND'
-  | 'DELIVERY_FAILED';
+  | 'DELIVERY_FAILED'
+  | 'DELIVERY_PARTIAL';
 
 export type PushOutcome =
   | 'DELIVERED'
@@ -387,6 +388,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
                 : code === 429
                   ? 60_000
                   : undefined;
+            const msg = `Device ${safeDeviceRef}: ${lastProviderError}`;
             errors.push(msg);
             failures.push({
               deviceId: safeDeviceRef,
