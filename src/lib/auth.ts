@@ -587,13 +587,16 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
                   ? rememberMeMaxAgeSeconds
                   : credentialSessionMaxAgeSeconds;
 
-              const absoluteCap =
-                augmentedToken.absoluteExpiresAt ??
-                (isOidc && augmentedToken.oidcAuthenticatedAt
-                  ? Math.floor((augmentedToken.oidcAuthenticatedAt + oidcReauthenticateAfterMs) / 1000)
-                  : remember
-                    ? currentTimeSec + rememberMeMaxAgeSeconds
-                    : currentTimeSec + credentialSessionMaxAgeSeconds * 4);
+              let absoluteCap = augmentedToken.absoluteExpiresAt;
+              if (typeof absoluteCap !== 'number') {
+                absoluteCap =
+                  isOidc && augmentedToken.oidcAuthenticatedAt
+                    ? Math.floor((augmentedToken.oidcAuthenticatedAt + oidcReauthenticateAfterMs) / 1000)
+                    : remember
+                      ? currentTimeSec + rememberMeMaxAgeSeconds
+                      : currentTimeSec + credentialSessionMaxAgeSeconds * 4;
+                augmentedToken.absoluteExpiresAt = absoluteCap;
+              }
 
               const renewedExpiresAt = currentTimeSec + renewalWindowSeconds;
               const effectiveExpiresAt = Math.min(absoluteCap, renewedExpiresAt);
@@ -601,7 +604,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               if (effectiveExpiresAt > augmentedToken.sessionExpiresAt) {
                 augmentedToken.sessionExpiresAt = effectiveExpiresAt;
               }
-              token.exp = Math.max(token.exp ?? 0, augmentedToken.sessionExpiresAt);
+              const currentExp = typeof token.exp === 'number' ? token.exp : 0;
+              token.exp = Math.max(currentExp, augmentedToken.sessionExpiresAt);
             }
             if (updatePayload?.profileRefresh || updatePayload?.force) {
               isProfileRefresh = true;

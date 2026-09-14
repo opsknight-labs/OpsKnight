@@ -637,6 +637,56 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(newExpiresMs - Date.now()).toBeGreaterThan(5 * 60 * 1000);
   });
 
+  it('establishes absoluteExpiresAt once for legacy credential sessions without rolling forward', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u-legacy',
+      email: 'legacy@example.com',
+      name: 'Legacy User',
+      role: 'USER',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    // Legacy session token without absoluteExpiresAt
+    const legacyToken: Record<string, unknown> = {
+      sub: 'u-legacy',
+      sessionExpiresAt: nowSec + 300,
+      lastActivityAt: Date.now() - 60_000,
+    };
+
+    const firstUpdate = await jwt({
+      token: legacyToken,
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'update',
+      session: { activity: true, extendSession: true },
+    });
+
+    const derivedAbsolute = firstUpdate.absoluteExpiresAt;
+    expect(typeof derivedAbsolute).toBe('number');
+    expect(derivedAbsolute).toBeGreaterThan(nowSec);
+
+    // Second extendSession update (simulating subsequent renewal)
+    const secondUpdate = await jwt({
+      token: firstUpdate,
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'update',
+      session: { activity: true, extendSession: true },
+    });
+
+    // The absoluteExpiresAt must remain strictly identical to the initial derived cap
+    expect(secondUpdate.absoluteExpiresAt).toBe(derivedAbsolute);
+  });
+
   it('revokeUserSessions increments tokenVersion', async () => {
     await revokeUserSessions('u1');
     expect(prisma.user.update).toHaveBeenCalledWith({
