@@ -91,6 +91,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
       {canManage && (
         <div className="flex flex-wrap gap-2">
           {!active && !ambiguous && enabled && <Button size="sm" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/microsoft-teams`)}>{pending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <MicrosoftTeamsLogo className="mr-1 h-3.5 w-3.5" />}{latest ? 'Create new generation' : 'Create Teams war room'}</Button>}
+          {ambiguous && <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/reconcile`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Reconcile Teams channel</Button>}
           {active && <>
             <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/sync`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh responder plan</Button>
             <Button size="sm" variant="outline" disabled={pending} onClick={() => run(`/api/incidents/${incidentId}/war-rooms/${latest.id}/project`)}><RefreshCw className="mr-1 h-3.5 w-3.5" />Refresh command card</Button>

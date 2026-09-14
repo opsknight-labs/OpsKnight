@@ -137,6 +137,30 @@ export async function closeMicrosoftTeamsWarRoom(
 }
 
 /**
+ * Explicit operator recovery for an uncertain Graph create. This only queues
+ * the marker scan guarded by the original fencing token; provisioning refuses
+ * to POST once createAttemptedAt is set.
+ */
+export async function reconcileMicrosoftTeamsWarRoom(incidentId: string, warRoomId: string): Promise<{ queued: boolean }> {
+  return prisma.$transaction(async tx => {
+    const room = await tx.incidentWarRoom.findFirst({
+      where: { id: warRoomId, incidentId, provider: 'MICROSOFT_TEAMS', state: 'AMBIGUOUS', createAttemptedAt: { not: null } },
+      select: { id: true, provisioningToken: true },
+    });
+    if (!room?.provisioningToken) return { queued: false };
+    const existing = await tx.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_PROVISION', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+      select: { id: true },
+    });
+    if (existing) return { queued: true };
+    await tx.backgroundJob.create({
+      data: { type: 'WAR_ROOM_PROVISION', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 6, payload: { warRoomId: room.id, provisioningToken: room.provisioningToken, reconciliationOnly: true } },
+    });
+    return { queued: true };
+  });
+}
+
+/**
  * Resolve settles ready/pre-create rooms immediately. If a Graph create may
  * already be in flight, rotate the fencing token and enqueue a marker-only
  * reconciliation job. The old create worker is cancelled/fenced and the new
