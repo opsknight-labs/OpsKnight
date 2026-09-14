@@ -28,6 +28,7 @@ export type PushOptions = {
   data?: Record<string, unknown>;
   badge?: number;
   deliveryKey?: string;
+  targetDeviceId?: string;
 };
 
 export type PushFailureCode =
@@ -38,15 +39,48 @@ export type PushFailureCode =
   | 'RECIPIENT_NOT_FOUND'
   | 'DELIVERY_FAILED';
 
-export type PushResult = {
-  success: boolean;
-  error?: string;
-  code?: PushFailureCode;
-  deliveredCount?: number;
-  checkpointedCount?: number;
-  failedCount?: number;
+export type PushOutcome =
+  | 'DELIVERED'
+  | 'PARTIAL'
+  | 'NO_ACTIVE_DEVICE'
+  | 'RETRYABLE_FAILURE'
+  | 'TERMINAL_FAILURE';
+
+export type PushDeliveryReason =
+  | 'DELIVERED'
+  | 'PUSH_NO_SUBSCRIPTION'
+  | 'PUSH_SUBSCRIPTION_EXPIRED'
+  | 'PUSH_PERMISSION_REVOKED'
+  | 'PUSH_VAPID_NOT_CONFIGURED'
+  | 'PUSH_VAPID_REJECTED'
+  | 'PUSH_PROVIDER_RATE_LIMITED'
+  | 'PUSH_PROVIDER_UNAVAILABLE'
+  | 'PUSH_NETWORK_FAILURE'
+  | 'PUSH_DELIVERY_TIMEOUT'
+  | 'PUSH_SERVER_CAPACITY'
+  | 'PUSH_DELIVERY_PARTIAL';
+
+export type PushDeviceFailure = {
+  deviceId: string;
+  reason: PushDeliveryReason;
+  error: string;
   statusCode?: number;
   retryAfterMs?: number;
+};
+
+export type PushResult = {
+  success: boolean;
+  outcome: PushOutcome;
+  error?: string;
+  code?: PushFailureCode;
+  reason?: PushDeliveryReason;
+  deliveredCount: number;
+  checkpointedCount: number;
+  failedCount: number;
+  removedCount: number;
+  statusCode?: number;
+  retryAfterMs?: number;
+  failures?: PushDeviceFailure[];
 };
 
 function errorMessage(error: unknown) {
@@ -58,7 +92,9 @@ function statusCode(error: unknown) {
 }
 
 function isRestrictedDestinationError(error: unknown) {
-  return /restricted network|HTTPS is required|credentials are not allowed/i.test(errorMessage(error));
+  return /restricted network|HTTPS is required|credentials are not allowed/i.test(
+    errorMessage(error)
+  );
 }
 
 export async function sendPush(options: PushOptions): Promise<PushResult> {
@@ -69,7 +105,17 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
       orderBy: { lastUsed: 'desc' },
     });
     if (devices.length === 0) {
-      return { success: false, code: 'NO_DEVICE_TOKENS', error: 'No device tokens found for user' };
+      return {
+        success: false,
+        outcome: 'NO_ACTIVE_DEVICE',
+        code: 'NO_DEVICE_TOKENS',
+        reason: 'PUSH_NO_SUBSCRIPTION',
+        error: 'No device tokens found for user',
+        deliveredCount: 0,
+        checkpointedCount: 0,
+        failedCount: 0,
+        removedCount: 0,
+      };
     }
     if (!pushConfig.enabled) {
       logger.warn('Push notification skipped - provider not configured', {
@@ -78,8 +124,14 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
       });
       return {
         success: false,
+        outcome: 'TERMINAL_FAILURE',
         code: 'PROVIDER_NOT_CONFIGURED',
+        reason: 'PUSH_VAPID_NOT_CONFIGURED',
         error: 'Push notifications are not enabled or configured',
+        deliveredCount: 0,
+        checkpointedCount: 0,
+        failedCount: 0,
+        removedCount: 0,
       };
     }
 
@@ -131,20 +183,50 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
     if (pushConfig.provider !== 'web-push') {
       return {
         success: false,
+        outcome: 'TERMINAL_FAILURE',
         code: 'PROVIDER_NOT_CONFIGURED',
+        reason: 'PUSH_VAPID_NOT_CONFIGURED',
         error: 'No push notification provider configured',
+        deliveredCount: 0,
+        checkpointedCount: 0,
+        failedCount: 0,
+        removedCount: 0,
       };
     }
-    const webDevices = devices.filter(device => device.platform === 'web');
+    const webDevices = devices.filter((device: (typeof devices)[number]) => {
+      if (device.platform !== 'web') return false;
+      if (options.targetDeviceId) {
+        return device.id === options.targetDeviceId || device.deviceId === options.targetDeviceId;
+      }
+      return true;
+    });
     if (webDevices.length === 0) {
       return {
         success: false,
+        outcome: 'NO_ACTIVE_DEVICE',
         code: 'NO_WEB_SUBSCRIPTIONS',
-        error: 'No web push subscriptions found for user',
+        reason: 'PUSH_NO_SUBSCRIPTION',
+        error: options.targetDeviceId
+          ? 'Specified target device web push subscription not found'
+          : 'No web push subscriptions found for user',
+        deliveredCount: 0,
+        checkpointedCount: 0,
+        failedCount: 0,
+        removedCount: 0,
       };
     }
     if (vapidDetailsList.length === 0) {
-      return { success: false, code: 'VAPID_NOT_CONFIGURED', error: 'VAPID keys not configured' };
+      return {
+        success: false,
+        outcome: 'TERMINAL_FAILURE',
+        code: 'VAPID_NOT_CONFIGURED',
+        reason: 'PUSH_VAPID_NOT_CONFIGURED',
+        error: 'VAPID keys not configured',
+        deliveredCount: 0,
+        checkpointedCount: 0,
+        failedCount: 0,
+        removedCount: 0,
+      };
     }
 
     let successCount = 0;
@@ -153,6 +235,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
     let retryableFailureCount = 0;
     let rateLimited = false;
     const errors: string[] = [];
+    const failures: PushDeviceFailure[] = [];
 
     const removeDevice = async (deviceId: string) => {
       await prisma.userDevice.deleteMany({ where: { id: deviceId } });
@@ -183,7 +266,14 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
       } catch {
         await removeDevice(device.id);
         terminalCount += 1;
-        errors.push(`Device ${safeDeviceRef}: corrupted subscription removed`);
+        const msg = `Device ${safeDeviceRef}: corrupted subscription removed`;
+        errors.push(msg);
+        failures.push({
+          deviceId: safeDeviceRef,
+          reason: 'PUSH_SUBSCRIPTION_EXPIRED',
+          error: msg,
+          statusCode: 410,
+        });
         return;
       }
 
@@ -198,9 +288,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         }
       }
       const badge =
-        typeof options.data?.badge === 'string'
-          ? options.data.badge
-          : '/icons/app-icon-192.png';
+        typeof options.data?.badge === 'string' ? options.data.badge : '/icons/app-icon-192.png';
       const url = typeof options.data?.url === 'string' ? options.data.url : '/m';
       const urgency = options.data?.urgency === 'HIGH' ? 'HIGH' : 'NORMAL';
       const payload = JSON.stringify({
@@ -254,61 +342,135 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
           if (expired || restrictedDestination) {
             await removeDevice(device.id);
             terminalCount += 1;
-            errors.push(
-              `Device ${safeDeviceRef}: ${
-                restrictedDestination ? 'unsafe destination rejected' : 'subscription expired and removed'
-              }`
-            );
+            const reason: PushDeliveryReason = restrictedDestination
+              ? 'PUSH_NETWORK_FAILURE'
+              : 'PUSH_SUBSCRIPTION_EXPIRED';
+            const msg = `Device ${safeDeviceRef}: ${
+              restrictedDestination
+                ? 'unsafe destination rejected'
+                : 'subscription expired and removed'
+            }`;
+            errors.push(msg);
+            failures.push({
+              deviceId: safeDeviceRef,
+              reason,
+              error: msg,
+              statusCode: code || 410,
+            });
             return;
           }
 
           const tryHistoricalVapid =
-            code === 401 ||
-            code === 403 ||
-            /vapid|authorization/i.test(errorMessage(error));
+            code === 401 || code === 403 || /vapid|authorization/i.test(errorMessage(error));
           if (!tryHistoricalVapid) {
             retryableFailureCount += 1;
-            errors.push(
-              `Device ${safeDeviceRef}: delivery failed${code ? ` (HTTP ${code})` : ''}`
-            );
+            const isTimeout = /timeout|timed out|abort/i.test(lastProviderError);
+            const reason: PushDeliveryReason =
+              code === 429
+                ? 'PUSH_PROVIDER_RATE_LIMITED'
+                : code && code >= 500
+                  ? 'PUSH_PROVIDER_UNAVAILABLE'
+                  : isTimeout
+                    ? 'PUSH_DELIVERY_TIMEOUT'
+                    : 'PUSH_NETWORK_FAILURE';
+            const msg = `Device ${safeDeviceRef}: delivery failed${code ? ` (HTTP ${code})` : ''}`;
+            errors.push(msg);
+            failures.push({
+              deviceId: safeDeviceRef,
+              reason,
+              error: msg,
+              statusCode: code,
+              retryAfterMs: code === 429 ? 60_000 : undefined,
+            });
             return;
           }
         }
       }
 
       retryableFailureCount += 1;
-      errors.push(`Device ${safeDeviceRef}: ${lastProviderError}`);
+      const isVapidAuth = /vapid|authorization/i.test(lastProviderError);
+      const reason: PushDeliveryReason = isVapidAuth
+        ? 'PUSH_VAPID_REJECTED'
+        : 'PUSH_PROVIDER_UNAVAILABLE';
+      const msg = `Device ${safeDeviceRef}: ${lastProviderError}`;
+      errors.push(msg);
+      failures.push({
+        deviceId: safeDeviceRef,
+        reason,
+        error: msg,
+        statusCode: isVapidAuth ? 502 : 503,
+      });
     };
 
     await Promise.allSettled(webDevices.map(sendToDevice));
 
-    if (retryableFailureCount > 0) {
+    const totalDelivered = successCount + checkpointedCount;
+    const isSingleTarget = Boolean(options.targetDeviceId) || webDevices.length === 1;
+
+    if (isSingleTarget) {
+      if (totalDelivered > 0) {
+        return {
+          success: true,
+          outcome: 'DELIVERED',
+          reason: 'DELIVERED',
+          deliveredCount: successCount,
+          checkpointedCount,
+          failedCount: 0,
+          removedCount: terminalCount,
+        };
+      }
+      const primaryFailure = failures[0];
+      const outcome: PushOutcome = terminalCount > 0 ? 'TERMINAL_FAILURE' : 'RETRYABLE_FAILURE';
       return {
         success: false,
-        code: 'DELIVERY_FAILED',
-        error: errors.join('; ') || 'Failed to send to one or more devices',
+        outcome,
+        code: terminalCount > 0 ? 'NO_WEB_SUBSCRIPTIONS' : 'DELIVERY_FAILED',
+        reason:
+          primaryFailure?.reason ||
+          (terminalCount > 0 ? 'PUSH_SUBSCRIPTION_EXPIRED' : 'PUSH_PROVIDER_UNAVAILABLE'),
+        error: primaryFailure?.error || errors.join('; ') || 'Push delivery failed',
+        deliveredCount: 0,
+        checkpointedCount: 0,
+        failedCount: retryableFailureCount,
+        removedCount: terminalCount,
+        statusCode:
+          primaryFailure?.statusCode || (rateLimited ? 429 : terminalCount > 0 ? 410 : 503),
+        retryAfterMs: primaryFailure?.retryAfterMs || (rateLimited ? 60_000 : undefined),
+        failures,
+      };
+    }
+
+    if (totalDelivered > 0) {
+      const hasFailures = retryableFailureCount > 0 || terminalCount > 0;
+      return {
+        success: true,
+        outcome: hasFailures ? 'PARTIAL' : 'DELIVERED',
+        reason: hasFailures ? 'PUSH_DELIVERY_PARTIAL' : 'DELIVERED',
         deliveredCount: successCount,
         checkpointedCount,
         failedCount: retryableFailureCount,
-        statusCode: rateLimited ? 429 : undefined,
-        retryAfterMs: rateLimited ? 60_000 : undefined,
+        removedCount: terminalCount,
+        failures: hasFailures ? failures : undefined,
       };
     }
-    if (successCount + checkpointedCount > 0) {
-      return {
-        success: true,
-        deliveredCount: successCount,
-        checkpointedCount,
-        failedCount: 0,
-      };
-    }
+
+    const outcome: PushOutcome =
+      terminalCount > 0 && retryableFailureCount === 0 ? 'TERMINAL_FAILURE' : 'RETRYABLE_FAILURE';
     return {
       success: false,
+      outcome,
       code: terminalCount > 0 ? 'NO_WEB_SUBSCRIPTIONS' : 'DELIVERY_FAILED',
-      error: errors.join('; ') || 'No active web push subscriptions remain',
+      reason:
+        failures[0]?.reason ||
+        (terminalCount > 0 ? 'PUSH_SUBSCRIPTION_EXPIRED' : 'PUSH_PROVIDER_UNAVAILABLE'),
+      error: errors.join('; ') || 'All devices failed to receive push notification',
       deliveredCount: 0,
       checkpointedCount: 0,
-      failedCount: 0,
+      failedCount: retryableFailureCount,
+      removedCount: terminalCount,
+      statusCode: rateLimited ? 429 : terminalCount > 0 ? 410 : 503,
+      retryAfterMs: rateLimited ? 60_000 : undefined,
+      failures,
     };
   } catch (error) {
     logger.error('push.send_failed', {
@@ -316,7 +478,17 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
       userId: options.userId,
       error: errorMessage(error),
     });
-    return { success: false, code: 'DELIVERY_FAILED', error: 'Push delivery failed' };
+    return {
+      success: false,
+      outcome: 'RETRYABLE_FAILURE',
+      code: 'DELIVERY_FAILED',
+      reason: 'PUSH_PROVIDER_UNAVAILABLE',
+      error: 'Push delivery failed',
+      deliveredCount: 0,
+      checkpointedCount: 0,
+      failedCount: 1,
+      removedCount: 0,
+    };
   }
 }
 
@@ -336,8 +508,14 @@ export async function sendIncidentPush(
     if (!user || !incident) {
       return {
         success: false,
+        outcome: 'TERMINAL_FAILURE',
         code: 'RECIPIENT_NOT_FOUND',
+        reason: 'PUSH_NO_SUBSCRIPTION',
         error: 'User or incident not found',
+        deliveredCount: 0,
+        checkpointedCount: 0,
+        failedCount: 0,
+        removedCount: 0,
       };
     }
 
@@ -347,10 +525,8 @@ export async function sendIncidentPush(
     let titleEmoji = '';
     let badge = '/icons/app-icon-192.png';
     if (eventType === 'triggered') {
-      titleEmoji =
-        incident.urgency === 'HIGH' ? '🔴' : incident.urgency === 'MEDIUM' ? '🟡' : '🔵';
-      badge =
-        incident.urgency === 'HIGH' ? '/icons/badge-critical.png' : '/icons/badge-info.png';
+      titleEmoji = incident.urgency === 'HIGH' ? '🔴' : incident.urgency === 'MEDIUM' ? '🟡' : '🔵';
+      badge = incident.urgency === 'HIGH' ? '/icons/badge-critical.png' : '/icons/badge-info.png';
     } else if (eventType === 'acknowledged') titleEmoji = '✅';
     else titleEmoji = '✓';
 
@@ -423,6 +599,16 @@ export async function sendIncidentPush(
       eventType,
       error: errorMessage(error),
     });
-    return { success: false, code: 'DELIVERY_FAILED', error: 'Incident push delivery failed' };
+    return {
+      success: false,
+      outcome: 'RETRYABLE_FAILURE',
+      code: 'DELIVERY_FAILED',
+      reason: 'PUSH_PROVIDER_UNAVAILABLE',
+      error: 'Incident push delivery failed',
+      deliveredCount: 0,
+      checkpointedCount: 0,
+      failedCount: 1,
+      removedCount: 0,
+    };
   }
 }

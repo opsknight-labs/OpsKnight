@@ -8,9 +8,10 @@ import prisma from '@/lib/prisma';
 import { notificationProviderUnavailable } from '@/lib/provider-errors';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { webPushDeviceKey } from '@/lib/web-push-subscription';
 import { getServerSession } from 'next-auth';
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session?.user?.email) {
@@ -44,6 +45,16 @@ export async function POST() {
       );
     }
 
+    // Optionally accept the calling device's push endpoint so the test targets
+    // exactly that device rather than any of the user's saved subscriptions.
+    let body: { endpoint?: string } = {};
+    try {
+      const text = await request.text();
+      if (text) body = JSON.parse(text) as { endpoint?: string };
+    } catch {
+      // Ignore parse errors — endpoint is optional
+    }
+
     const [pushConfig, deviceCount] = await Promise.all([
       getPushConfig(),
       prisma.userDevice.count({ where: { userId: user.id, platform: 'web' } }),
@@ -73,6 +84,33 @@ export async function POST() {
       );
     }
 
+    // If the caller supplied an endpoint, validate it belongs to this user
+    // and use it as the exclusive delivery target (device-scoped test push).
+    let targetDeviceId: string | undefined;
+    if (body.endpoint) {
+      const deviceKey = webPushDeviceKey(body.endpoint);
+      const device = await prisma.userDevice.findFirst({
+        where: { userId: user.id, deviceId: deviceKey, platform: 'web' },
+        select: { deviceId: true },
+      });
+      if (!device) {
+        logger.warn('api.test_push.device_not_found', {
+          userId: user.id,
+          deviceKey,
+        });
+        return jsonError(
+          new AppError({
+            code: 'RESOURCE_NOT_FOUND',
+            userMessage: 'The specified push subscription does not belong to this account.',
+            action: 'Reload the page and try again.',
+            retryable: false,
+            details: { reason: 'device_not_found' },
+          })
+        );
+      }
+      targetDeviceId = device.deviceId;
+    }
+
     const result = await enqueueCentralNotification({
       category: 'SYSTEM',
       channel: 'PUSH',
@@ -86,7 +124,10 @@ export async function POST() {
       // Each rate-limited user action is intentionally a distinct delivery request.
       eventKey: `manual-test:${crypto.randomUUID()}`,
       displayMessage: 'Test push notification',
-      priority: 2,
+      // TRANSACTIONAL: bypass bulk queues so a test push is never deferred by
+      // thousands of queued bulk notifications. Priority 1 = highest urgency.
+      trafficClass: 'TRANSACTIONAL',
+      priority: 1,
       expiresAt: new Date(Date.now() + 10 * 60_000),
       payload: {
         kind: 'PUSH',
@@ -98,6 +139,7 @@ export async function POST() {
           type: 'test',
         },
         badge: 1,
+        targetDeviceId,
       },
     });
 
@@ -127,7 +169,11 @@ export async function POST() {
     }
 
     return jsonOk(
-      { success: true, message: 'Test notification sent successfully! Check your device.' },
+      {
+        success: true,
+        message: 'Test notification sent successfully! Check your device.',
+        targetedDevice: targetDeviceId ?? 'all',
+      },
       200
     );
   } catch (error) {
