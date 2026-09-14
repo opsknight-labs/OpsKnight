@@ -356,14 +356,13 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
     lane: workerState.workerLane,
   });
 
-  // Certify notification control-plane tables at worker boot before polling
+  // Certify notification control-plane tables at worker boot
   void (async () => {
     try {
       const { certifyNotificationControlPlane } = await import('./provider-admission');
       await certifyNotificationControlPlane();
       workerState.controlPlaneState = 'HEALTHY';
       logger.info('[JobWorker] Control plane startup certification passed');
-      scheduleNextRun(0);
     } catch (certError) {
       const msg = certError instanceof Error ? certError.message : String(certError);
       workerState.controlPlaneState = 'EMERGENCY_LOCAL';
@@ -372,10 +371,11 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
         '[JobWorker] Control plane startup certification failed; entering EMERGENCY_LOCAL mode',
         { error: msg }
       );
-      // In EMERGENCY_LOCAL mode, avoid immediate hot polling; start with idle jitter
-      scheduleNextRun(withIdleJitter(workerState.workerConfig?.idlePollMs ?? 5_000));
     }
   })();
+
+  // Start immediately. Subsequent iterations are paced based on queue activity.
+  scheduleNextRun(0);
 }
 
 /**
