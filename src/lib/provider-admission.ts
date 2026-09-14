@@ -130,7 +130,9 @@ function tryEmergencyRateAdmission(
     };
   }
 
-  if (trafficClass !== 'TRANSACTIONAL') {
+  const isEmergencyClass =
+    trafficClass === 'TRANSACTIONAL' || (trafficClass as string) === 'CRITICAL';
+  if (!isEmergencyClass) {
     return {
       allowed: false,
       retryAt: new Date(now.getTime() + 250),
@@ -239,7 +241,8 @@ export async function acquireProviderAdmission(
         return { allowed: false, retryAt: fallback, reason: 'RATE_LIMITED' };
       }
       if (!isProviderAdmissionTestEnv()) {
-        return { allowed: false, retryAt: new Date(now.getTime() + 1_000), reason: 'RATE_LIMITED' };
+        const cause = dbError instanceof Error ? dbError.message : String(dbError);
+        return tryEmergencyRateAdmission(scope, providerKey, now, trafficClass, cause);
       }
       cooldown = null;
     }

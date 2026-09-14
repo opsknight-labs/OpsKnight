@@ -25,6 +25,7 @@ import {
   acquireProviderAdmission,
   acquireProviderConcurrency,
   deferProviderAdmission,
+  forceProductionModeForTests,
   releaseProviderConcurrency,
   resetProviderAdmissionForTests,
 } from '@/lib/provider-admission';
@@ -107,7 +108,10 @@ describe('provider admission control', () => {
     delete process.env.VITEST_WORKER_ID;
     mocks.findUnique.mockRejectedValue(new Error('db down'));
     const now = new Date('2026-08-30T12:00:00.000Z');
-    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({ allowed: false, reason: 'RATE_LIMITED' });
+    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({
+      allowed: false,
+      reason: 'RATE_LIMITED',
+    });
     (process.env as unknown as Record<string, string>).NODE_ENV = origEnv as string;
     if (origVitest !== undefined) process.env.VITEST = origVitest;
     else delete process.env.VITEST;
@@ -126,7 +130,10 @@ describe('provider admission control', () => {
     mocks.queryRaw.mockRejectedValue(new Error('db down'));
     mocks.executeRaw.mockRejectedValue(new Error('db down'));
     const now = new Date('2026-08-30T12:00:00.000Z');
-    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({ allowed: false, reason: 'RATE_LIMITED' });
+    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({
+      allowed: false,
+      reason: 'RATE_LIMITED',
+    });
     (process.env as unknown as Record<string, string>).NODE_ENV = origEnv as string;
     if (origVitest !== undefined) process.env.VITEST = origVitest;
     else delete process.env.VITEST;
@@ -141,7 +148,10 @@ describe('provider admission control', () => {
     await deferProviderAdmission('EMAIL', 'default', retryAt);
     mocks.findUnique.mockRejectedValue(new Error('db down again'));
     const now = new Date('2026-08-30T12:04:00.000Z');
-    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({ allowed: false, reason: 'RATE_LIMITED' });
+    await expect(acquireProviderAdmission('EMAIL', 'default', now)).resolves.toMatchObject({
+      allowed: false,
+      reason: 'RATE_LIMITED',
+    });
     mocks.findUnique.mockResolvedValue(null);
     mocks.executeRaw.mockResolvedValue(0);
   });
@@ -150,9 +160,44 @@ describe('provider admission control', () => {
     // admisssion scope for aws-sns must be SMS; ensure quota/cooldown keys use sms scope
     mocks.queryRaw.mockResolvedValue([{ granted: 1 }]);
     const now = new Date('2026-08-30T12:00:00.000Z');
-    await expect(acquireProviderAdmission('SMS', 'aws-sns', now)).resolves.toEqual({ allowed: true });
+    await expect(acquireProviderAdmission('SMS', 'aws-sns', now)).resolves.toEqual({
+      allowed: true,
+    });
     // verify the SMS bucket was used (key contains sms, not email)
-    const lastQuotaCall = mocks.queryRaw.mock.calls[mocks.queryRaw.mock.calls.length - 1]?.[0] as { strings?: string[] } | undefined;
+    const lastQuotaCall = mocks.queryRaw.mock.calls[mocks.queryRaw.mock.calls.length - 1]?.[0] as
+      | { strings?: string[] }
+      | undefined;
     expect(lastQuotaCall).toBeDefined();
+  });
+
+  it('routes RateLimit.findUnique outage to emergency admission for CRITICAL/TRANSACTIONAL and fails closed for BULK', async () => {
+    forceProductionModeForTests();
+    const dbError = new Error('RateLimit table unavailable');
+    mocks.findUnique.mockRejectedValue(dbError);
+    mocks.queryRaw.mockRejectedValue(dbError);
+
+    const now = new Date('2026-08-30T12:00:00.000Z');
+
+    // CRITICAL receives bounded emergency admission
+    const critical = await acquireProviderAdmission('PUSH', 'default', now, 'CRITICAL' as any);
+    expect(critical.allowed).toBe(true);
+
+    // TRANSACTIONAL receives bounded emergency admission
+    const transactional = await acquireProviderAdmission('PUSH', 'default', now, 'TRANSACTIONAL');
+    expect(transactional.allowed).toBe(true);
+
+    // BULK fails closed as CONTROL_PLANE_UNAVAILABLE
+    const bulk = await acquireProviderAdmission('PUSH', 'default', now, 'BULK');
+    expect(bulk.allowed).toBe(false);
+    if (!bulk.allowed) {
+      expect(bulk.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+    }
+
+    // Undefined / non-emergency traffic fails closed as RATE_LIMITED
+    const general = await acquireProviderAdmission('PUSH', 'default', now, undefined);
+    expect(general.allowed).toBe(false);
+    if (!general.allowed) {
+      expect(general.reason).toBe('RATE_LIMITED');
+    }
   });
 });

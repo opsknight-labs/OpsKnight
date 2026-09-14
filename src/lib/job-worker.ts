@@ -192,9 +192,14 @@ async function runOnce(): Promise<void> {
     }
 
     if (workerState.workerLane === 'bulk') {
-      if (workerState.controlPlaneState === 'EMERGENCY_LOCAL') {
-        logger.warn('[JobWorker] Bulk lane paused during EMERGENCY_LOCAL control plane state');
-        workerState.lastError = 'Bulk lane paused: control plane in EMERGENCY_LOCAL state';
+      if (
+        workerState.controlPlaneState === 'EMERGENCY_LOCAL' ||
+        workerState.controlPlaneState === 'UNINITIALIZED'
+      ) {
+        logger.warn(
+          `[JobWorker] Bulk lane paused during ${workerState.controlPlaneState} control plane state`
+        );
+        workerState.lastError = `Bulk lane paused: control plane in ${workerState.controlPlaneState} state`;
         scheduleNextRun(withIdleJitter(workerState.workerConfig.idlePollMs));
         return;
       }
@@ -347,6 +352,8 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
   workerState.lastSuccessAt = null;
   workerState.startedAt = new Date();
   workerState.lastError = null;
+  workerState.controlPlaneState = 'UNINITIALIZED';
+  workerState.lastControlPlaneProbeAt = Date.now();
 
   logger.info('[JobWorker] Starting', {
     batchSize: workerState.workerConfig.batchSize,
@@ -401,6 +408,8 @@ export async function stopJobWorker(): Promise<void> {
 
   workerState.workerConfig = null;
   workerState.startedAt = null;
+  workerState.controlPlaneState = 'UNINITIALIZED';
+  workerState.lastControlPlaneProbeAt = 0;
 
   if (wasRunning) {
     logger.info('[JobWorker] Stopped');
