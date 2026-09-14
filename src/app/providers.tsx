@@ -18,26 +18,6 @@ function ThemeAttributeBridge() {
     const effectiveTheme = resolvedTheme === 'dark' ? 'dark' : 'light';
     root.dataset.theme = effectiveTheme;
     root.style.colorScheme = effectiveTheme;
-
-    // Keep browser/PWA chrome aligned with an explicit in-app theme override,
-    // not only with the OS media query used during the initial HTML response.
-    const themeColor = effectiveTheme === 'dark' ? '#09090b' : '#f8fafc';
-    const existingMetaTags = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
-    if (existingMetaTags.length > 0) {
-      existingMetaTags.forEach((tag, index) => {
-        if (index === 0) {
-          tag.removeAttribute('media');
-          tag.content = themeColor;
-        } else {
-          tag.remove();
-        }
-      });
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      meta.content = themeColor;
-      document.head.appendChild(meta);
-    }
   }, [resolvedTheme]);
 
   return null;
@@ -47,8 +27,11 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
   // Mobile/PWA follows the user/system theme. Desktop intentionally remains
   // light until the authenticated desktop surface has completed its own dark
   // mode migration. The class attribute is canonical for Tailwind's dark:
-  // variant; ThemeAttributeBridge mirrors it to data-theme for legacy CSS that
-  // has not yet migrated to semantic utilities.
+  // variant; ThemeAttributeBridge mirrors it to data-theme for legacy CSS.
+  //
+  // Browser theme-color metadata remains declaratively owned by Next in the
+  // root layout. Never remove/create framework-owned <head> nodes from effects:
+  // doing so can invalidate React's reconciliation bookkeeping during navigation.
   const pathname = usePathname();
   const isMobileRoute = pathname?.startsWith('/m');
   const themeProps = isMobileRoute

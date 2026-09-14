@@ -11,6 +11,7 @@ import {
   setOperationalGauge,
 } from '@/lib/metrics/operational/registry';
 import { logger } from '@/lib/logger';
+import { READ_MODEL_POLICY, type ReadModelPolicy } from '@/lib/read-model-policy';
 
 export type ResponderDashboardSnapshot = {
   openIncidents: number;
@@ -69,6 +70,7 @@ const MAX_ENTRIES = 500;
 const MAX_CONCURRENT_CALCULATIONS = 4;
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<CacheEntry>>();
+const cacheEpochs = new Map<string, number>();
 let activeCalculations = 0;
 
 function normalizedScopeKey(actor: AuthorizationActor) {
@@ -94,7 +96,21 @@ function prune(now: number) {
   while (cache.size > MAX_ENTRIES) cache.delete(cache.keys().next().value as string);
 }
 
-async function calculate(key: string, actor: AuthorizationActor): Promise<CacheEntry> {
+function cacheEpoch(key: string) {
+  return cacheEpochs.get(key) ?? 0;
+}
+
+function invalidateBoundary(key: string) {
+  cache.delete(key);
+  cacheEpochs.set(key, cacheEpoch(key) + 1);
+  inFlight.delete(key);
+}
+
+async function calculate(
+  key: string,
+  actor: AuthorizationActor,
+  epoch: number
+): Promise<CacheEntry> {
   activeCalculations += 1;
   setOperationalGauge('opsknight_responder_dashboard_inflight', activeCalculations);
   const startedAt = Date.now();
@@ -105,8 +121,6 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
         windowDays: 90,
         includeAllTime: false,
         includeActiveIncidents: true,
-        // The dashboard renders only five items; cap the detailed incident projection
-        // while aggregate metrics continue to cover the complete authorized window.
         incidentLimit: 25,
         includeDescription: false,
       }),
@@ -152,8 +166,11 @@ async function calculate(key: string, actor: AuthorizationActor): Promise<CacheE
       freshUntil: now + FRESH_TTL_MS,
       staleUntil: now + STALE_TTL_MS,
     };
-    cache.delete(key);
-    cache.set(key, entry);
+
+    if (cacheEpoch(key) === epoch) {
+      cache.delete(key);
+      cache.set(key, entry);
+    }
     observeOperationalHistogram(
       'opsknight_responder_dashboard_duration_seconds',
       (Date.now() - startedAt) / 1000
@@ -177,7 +194,8 @@ function startCalculation(key: string, actor: AuthorizationActor) {
   const existing = inFlight.get(key);
   if (existing) return existing;
   if (activeCalculations >= MAX_CONCURRENT_CALCULATIONS) return null;
-  const request = calculate(key, actor).finally(() => {
+  const epoch = cacheEpoch(key);
+  const request = calculate(key, actor, epoch).finally(() => {
     if (inFlight.get(key) === request) inFlight.delete(key);
   });
   inFlight.set(key, request);
@@ -209,33 +227,57 @@ function projectForUser(
 }
 
 /**
- * Actor-scoped, stale-while-revalidate read model used by responder surfaces.
- * It bounds detailed incident reads, single-flights identical work and reacts to
- * the shared realtime generation so incident changes invalidate quickly.
+ * Actor-scoped responder read model.
+ *
+ * Normal navigation may use stale-while-revalidate only while the realtime
+ * generation is proven unchanged. Generation changes, generation-control-plane
+ * uncertainty, and explicit manual refreshes are hard freshness boundaries and
+ * synchronously await the canonical calculation.
  */
 export async function getResponderDashboardSnapshot(
   actor: AuthorizationActor,
-  userId?: string
+  userId?: string,
+  policy: ReadModelPolicy = READ_MODEL_POLICY.ALLOW_STALE
 ): Promise<ResponderDashboardSnapshot> {
   const now = Date.now();
   prune(now);
   const key = normalizedScopeKey(actor);
-  const entry = cache.get(key);
-  const currentGeneration = entry ? await getRealtimeChangeGeneration().catch(() => null) : null;
-  const generationChanged = Boolean(
-    entry && currentGeneration && currentGeneration !== entry.snapshot.sourceGeneration
-  );
 
-  if (entry && entry.freshUntil > now && !generationChanged) {
-    addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'fresh' });
-    return projectForUser(entry.snapshot, userId, 'fresh');
+  if (policy === READ_MODEL_POLICY.REQUIRE_FRESH) {
+    invalidateBoundary(key);
+    const refresh = startCalculation(key, actor);
+    if (!refresh) throw new ResponderDashboardUnavailableError();
+    const calculated = await refresh;
+    return projectForUser(calculated.snapshot, userId, 'fresh');
   }
 
-  if (entry && entry.staleUntil > now) {
-    addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'stale' });
-    const refresh = startCalculation(key, actor);
-    if (refresh) void refresh.catch(() => undefined);
-    return projectForUser(entry.snapshot, userId, 'stale');
+  const entry = cache.get(key);
+  if (entry) {
+    const currentGeneration = await getRealtimeChangeGeneration().catch(() => null);
+    const generationTrusted =
+      currentGeneration !== null &&
+      entry.snapshot.sourceGeneration !== null &&
+      currentGeneration === entry.snapshot.sourceGeneration;
+
+    if (!generationTrusted) {
+      invalidateBoundary(key);
+      const refresh = startCalculation(key, actor);
+      if (!refresh) throw new ResponderDashboardUnavailableError();
+      const calculated = await refresh;
+      return projectForUser(calculated.snapshot, userId, 'fresh');
+    }
+
+    if (entry.freshUntil > now) {
+      addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'fresh' });
+      return projectForUser(entry.snapshot, userId, 'fresh');
+    }
+
+    if (entry.staleUntil > now) {
+      addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'stale' });
+      const refresh = startCalculation(key, actor);
+      if (refresh) void refresh.catch(() => undefined);
+      return projectForUser(entry.snapshot, userId, 'stale');
+    }
   }
 
   addOperationalMetric('opsknight_responder_dashboard_cache_hits_total', 1, { state: 'miss' });
@@ -248,6 +290,7 @@ export async function getResponderDashboardSnapshot(
 export function resetResponderDashboardCacheForTests() {
   cache.clear();
   inFlight.clear();
+  cacheEpochs.clear();
   activeCalculations = 0;
   setOperationalGauge('opsknight_responder_dashboard_inflight', 0);
 }

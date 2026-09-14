@@ -13,6 +13,7 @@ import { getServiceDynamicStatus } from '@/lib/service-status';
 import { getExternalStatusLabel } from '@/lib/sla-server';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { READ_MODEL_POLICY, type ReadModelPolicy } from '@/lib/read-model-policy';
 
 export type InternalOperationalStatusSnapshot = {
   name: string;
@@ -97,11 +98,6 @@ function cacheEpoch(key: string) {
   return cacheEpochs.get(key) ?? 0;
 }
 
-/**
- * A realtime generation change can represent an authorization visibility change. Treat it as
- * a hard boundary: discard the cached projection and detach pre-boundary in-flight work. The
- * epoch guard below prevents detached work from publishing stale authorized data afterward.
- */
 function invalidateAuthorizationBoundary(key: string) {
   cache.delete(key);
   cacheEpochs.set(key, cacheEpoch(key) + 1);
@@ -331,13 +327,21 @@ function project(
 }
 
 export async function getInternalOperationalStatusSnapshot(
-  actor: AuthorizationActor
+  actor: AuthorizationActor,
+  policy: ReadModelPolicy = READ_MODEL_POLICY.ALLOW_STALE
 ): Promise<InternalOperationalStatusSnapshot> {
   const now = Date.now();
   prune(now);
   const key = scopeKey(actor);
-  const entry = cache.get(key);
 
+  if (policy === READ_MODEL_POLICY.REQUIRE_FRESH) {
+    invalidateAuthorizationBoundary(key);
+    const refresh = startCalculation(key, actor);
+    if (!refresh) throw new Error('Operational status is temporarily busy');
+    return project(await refresh, 'fresh');
+  }
+
+  const entry = cache.get(key);
   if (entry) {
     const currentGeneration = await getRealtimeChangeGeneration().catch(() => null);
     const generationTrusted =
@@ -345,8 +349,6 @@ export async function getInternalOperationalStatusSnapshot(
       entry.sourceGeneration !== null &&
       currentGeneration === entry.sourceGeneration;
 
-    // Never serve actor-scoped stale data if the authorization generation changed or cannot
-    // be validated. Recalculate from the canonical actor-scoped read model instead.
     if (!generationTrusted) {
       invalidateAuthorizationBoundary(key);
       const refresh = startCalculation(key, actor);
