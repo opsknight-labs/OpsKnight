@@ -101,6 +101,7 @@ export default function MicrosoftTeamsWarRoomsPanel({
         </div>
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
+      {rooms.length > 1 && <details className="rounded-lg border p-3 text-xs text-muted-foreground"><summary className="cursor-pointer font-medium text-foreground">War-room history ({rooms.length} generations)</summary><ul className="mt-2 space-y-1">{rooms.slice(1).map(room => <li key={room.id}>Generation {room.generation}: {room.state}{room.providerChannelName ? ` · ${room.providerChannelName}` : ''}</li>)}</ul></details>}
     </section>
   );
 }

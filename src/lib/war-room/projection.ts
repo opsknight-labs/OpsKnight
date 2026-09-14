@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import prisma from '@/lib/prisma';
 import { sendMicrosoftTeamsIncidentCard, updateMicrosoftTeamsIncidentCard } from '@/lib/microsoft-teams/client';
 import { getBaseUrl } from '@/lib/env-validation';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
 const PROJECTION_LEASE_MS = 2 * 60_000;
 
@@ -94,6 +95,7 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
     if (attempted.count !== 1) return;
     const created = await sendMicrosoftTeamsIncidentCard({ tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId, incident, eventType, disableActions: eventType === 'resolved', interactive });
     if (!created.success || !created.providerMessageId || !created.conversationId) {
+      addOperationalMetric('opsknight_war_room_projection_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'failed' });
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { health: 'DEGRADED', lastErrorCode: created.success ? 'AMBIGUOUS_CARD_CREATE' : created.errorCode ?? 'CARD_CREATE_FAILED', lastError: created.success ? 'Teams returned an incomplete command-card reference.' : created.error } });
       return;
     }
@@ -101,9 +103,11 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
   } else {
     const updated = await updateMicrosoftTeamsIncidentCard({ tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId, messageId: room.commandMessageId, conversationId: room.commandConversationId, incident, eventType, disableActions: eventType === 'resolved', interactive });
     if (!updated.success) {
+      addOperationalMetric('opsknight_war_room_projection_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'failed' });
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { health: 'DEGRADED', lastErrorCode: updated.errorCode ?? 'CARD_UPDATE_FAILED', lastError: updated.error } });
       return;
     }
   }
   await completeMicrosoftTeamsWarRoomProjection(room.id, projectionVersion, token);
+  addOperationalMetric('opsknight_war_room_projection_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'success' });
 }
