@@ -3,6 +3,14 @@
    Extracted from globals.css
    ======================================== */
 
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 .settings-shell {
     max-width: min(1400px, 95vw);
     width: 100%;

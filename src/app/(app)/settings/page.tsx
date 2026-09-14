@@ -55,6 +55,49 @@ type ItemLiveStatus = {
   connected: boolean;
 };
 
+const itemThemes: Record<string, { bg: string; text: string }> = {
+  profile: { bg: 'bg-sky-500/10 dark:bg-sky-500/20', text: 'text-sky-600 dark:text-sky-400' },
+  security: {
+    bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
+  'incident-sla': {
+    bg: 'bg-rose-500/10 dark:bg-rose-500/20',
+    text: 'text-rose-600 dark:text-rose-400',
+  },
+  'custom-fields': {
+    bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+    text: 'text-indigo-600 dark:text-indigo-400',
+  },
+  'status-page': {
+    bg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
+    text: 'text-cyan-600 dark:text-cyan-400',
+  },
+  'api-keys': {
+    bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+    text: 'text-amber-600 dark:text-amber-400',
+  },
+  'audit-logs': {
+    bg: 'bg-slate-500/10 dark:bg-slate-500/20',
+    text: 'text-slate-600 dark:text-slate-400',
+  },
+  'security-compliance': {
+    bg: 'bg-teal-500/10 dark:bg-teal-500/20',
+    text: 'text-teal-600 dark:text-teal-400',
+  },
+  integrations: {
+    bg: 'bg-purple-500/10 dark:bg-purple-500/20',
+    text: 'text-purple-600 dark:text-purple-400',
+  },
+  slack: { bg: 'bg-[#4A154B]/10 dark:bg-[#4A154B]/20', text: 'text-[#ECB22E]' },
+  'microsoft-teams': { bg: 'bg-[#505AC9]/10 dark:bg-[#505AC9]/20', text: 'text-[#7B83EB]' },
+  chatops: { bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', text: 'text-emerald-500' },
+  jira: { bg: 'bg-[#0052CC]/10 dark:bg-[#0052CC]/20', text: 'text-[#2684FF]' },
+  system: { bg: 'bg-violet-500/10 dark:bg-violet-500/20', text: 'text-violet-500' },
+  'notifications-admin': { bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-500' },
+  'health-center': { bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', text: 'text-emerald-500' },
+};
+
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
@@ -168,49 +211,60 @@ export default async function SettingsOverviewPage() {
   const sectionGroups = SETTINGS_NAV_SECTIONS.filter(section => section.id !== 'overview');
 
   return (
-    <div className="space-y-6 pb-12 w-full">
-      {/* Compact Overview Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card shadow-xs">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+    <div className="space-y-8 pb-12 w-full">
+      {/* Modern Metric Capsules */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-primary/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform shrink-0">
             <Puzzle className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground">Integrations</p>
-            <p className="text-sm font-semibold text-foreground truncate">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Integrations
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
               {activeIntegrationsCount} Active
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card shadow-xs">
-          <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-emerald-500/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
             <KeyRound className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground">API Keys</p>
-            <p className="text-sm font-semibold text-foreground truncate">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              API Keys
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
               {activeApiKeysCount} Active
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card shadow-xs">
-          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
+
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-indigo-500/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
             <SlidersHorizontal className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground">Custom Fields</p>
-            <p className="text-sm font-semibold text-foreground truncate">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Custom Fields
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
               {customFieldsCount} Defined
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 p-3.5 rounded-xl border border-border/70 bg-card shadow-xs">
-          <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 shrink-0">
+
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-cyan-500/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0">
             <Globe className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground">Status Page</p>
-            <p className="text-sm font-semibold text-foreground truncate">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Status Page
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
               {statusPage?.enabled
                 ? statusPage.privacyMode === 'PUBLIC'
                   ? 'Public'
@@ -232,18 +286,25 @@ export default async function SettingsOverviewPage() {
           return (
             <div key={section.id} className="space-y-3">
               {/* Section Header */}
-              <div className="flex items-center gap-2.5 px-1">
-                <div className="p-1.5 rounded-md bg-primary/10 text-primary">
-                  <SectionIcon className="h-4 w-4" />
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-muted text-foreground/80 border border-border/40 shrink-0">
+                    <SectionIcon className="h-4 w-4" />
+                  </div>
+                  <div className="flex flex-wrap items-baseline gap-x-2 min-w-0">
+                    <span className="text-sm font-bold text-foreground tracking-tight">
+                      {section.label}
+                    </span>
+                    {section.description && (
+                      <span className="text-xs text-muted-foreground truncate">
+                        — {section.description}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-sm font-bold text-foreground tracking-tight">
-                    {section.label}
-                  </h2>
-                  {section.description && (
-                    <p className="text-xs text-muted-foreground">{section.description}</p>
-                  )}
-                </div>
+                <span className="text-[11px] font-medium text-muted-foreground/70 bg-muted/50 px-2 py-0.5 rounded-full border border-border/40 shrink-0 ml-2">
+                  {visibleItems.length} {visibleItems.length === 1 ? 'item' : 'items'}
+                </span>
               </div>
 
               {/* Grouped Rows Container */}
@@ -251,15 +312,25 @@ export default async function SettingsOverviewPage() {
                 {visibleItems.map(item => {
                   const ItemIcon = itemIcons[item.id] || Settings;
                   const status = itemStatuses[item.id];
+                  const theme = itemThemes[item.id] || {
+                    bg: 'bg-muted text-muted-foreground',
+                    text: 'text-muted-foreground',
+                  };
 
                   return (
                     <Link
                       key={item.id}
                       href={item.href}
-                      className="group flex items-center justify-between p-3.5 sm:px-4 hover:bg-accent/40 transition-colors"
+                      className="group flex items-center justify-between p-3.5 sm:px-4 hover:bg-muted/40 transition-colors duration-150"
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="p-2 rounded-lg bg-muted text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors shrink-0">
+                        <div
+                          className={cn(
+                            'p-2.5 rounded-xl shrink-0 transition-transform duration-150 group-hover:scale-105',
+                            theme.bg,
+                            theme.text
+                          )}
+                        >
                           <ItemIcon className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">
@@ -270,7 +341,7 @@ export default async function SettingsOverviewPage() {
                             {item.badge && (
                               <Badge
                                 variant="outline"
-                                className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border text-muted-foreground"
+                                className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border/70 text-muted-foreground bg-muted/40"
                               >
                                 {item.badge}
                               </Badge>
@@ -304,7 +375,7 @@ export default async function SettingsOverviewPage() {
                             <span className="truncate max-w-[140px]">{status.label}</span>
                           </Badge>
                         )}
-                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/60 group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
                       </div>
                     </Link>
                   );
