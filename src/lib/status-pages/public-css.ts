@@ -1650,59 +1650,68 @@ ${R} .status-v3-services__tally-pill {
   white-space: nowrap;
 }
 
-${R} .status-v3-services__group-btn {
+${R} .status-v3-services__group-btn,
+${R} .status-v3-filter-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.2rem 0.55rem;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 0.5rem;
   border: 1px solid var(--status-panel-border);
   border-radius: 4px;
   background: var(--status-panel-bg);
   color: var(--status-text-muted);
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
   white-space: nowrap;
+  line-height: 1;
 }
 
-${R} .status-v3-services__group-btn:hover {
+${R} .status-v3-services__group-btn:hover,
+${R} .status-v3-filter-chip:hover {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--status-panel-border));
   color: var(--status-text-strong);
 }
 
 ${R} .status-v3-services__group-btn--active,
-${R} .status-v3-services__group-btn[aria-pressed="true"] {
+${R} .status-v3-services__group-btn[aria-pressed="true"],
+${R} .status-v3-filter-chip--active,
+${R} .status-v3-filter-chip[aria-pressed="true"] {
   color: var(--primary);
   border-color: color-mix(in srgb, var(--primary) 45%, var(--status-panel-border));
-  background: color-mix(in srgb, var(--primary) 10%, var(--status-panel-bg));
-  font-weight: 650;
+  background: color-mix(in srgb, var(--primary) 12%, var(--status-panel-bg));
+  font-weight: 600;
 }
 
 ${R} .status-v3-services__group-icon {
   flex-shrink: 0;
-  opacity: 0.75;
+  opacity: 0.85;
 }
 
 ${R} .status-v3-services__right-group {
   display: flex;
   align-items: center;
-  gap: 0.65rem 0.9rem;
+  gap: 0.45rem;
   flex-wrap: wrap;
   min-inline-size: 0;
   max-inline-size: 100%;
 }
 
 ${R} .status-v3-services__sort-select {
-  height: 28px;
-  padding: 0 0.5rem;
+  height: 26px;
+  box-sizing: border-box;
+  padding: 0 0.45rem;
   border-radius: 4px;
-  font-size: 0.76rem;
+  font-size: 0.75rem;
   font-weight: 500;
   border: 1px solid var(--status-panel-border);
   background: var(--status-panel-bg);
   color: var(--status-text);
   cursor: pointer;
+  line-height: 1;
 }
 
 ${R} .status-v3-services__sort-select:focus-visible {
@@ -1729,14 +1738,16 @@ ${R} .status-v3-search__icon {
 
 ${R} .status-v3-services .status-v3-search input {
   width: 100%;
-  height: 28px;
+  height: 26px;
+  box-sizing: border-box;
   padding: 0 0.55rem 0 1.65rem;
   border-radius: 4px;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   border: 1px solid var(--status-panel-border);
   background: var(--status-panel-bg);
   color: var(--status-text-strong);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  line-height: 1;
 }
 
 ${R} .status-v3-services .status-v3-search input:focus {
@@ -1751,36 +1762,6 @@ ${R} .status-v3-filters {
   align-items: center;
   gap: 0.35rem;
   flex-wrap: wrap;
-}
-
-${R} .status-v3-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--status-panel-border);
-  border-radius: 4px;
-  background: var(--status-panel-bg);
-  color: var(--status-text-muted);
-  font-size: 0.76rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
-  white-space: nowrap;
-  line-height: 1.25;
-}
-
-${R} .status-v3-filter-chip:hover {
-  border-color: color-mix(in srgb, var(--primary) 35%, var(--status-panel-border));
-  color: var(--status-text-strong);
-}
-
-${R} .status-v3-filter-chip--active,
-${R} .status-v3-filter-chip[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--primary) 12%, var(--status-panel-bg));
-  border-color: color-mix(in srgb, var(--primary) 50%, var(--status-panel-border));
-  color: var(--primary);
-  font-weight: 650;
 }
 
 ${R} .status-v3-legend-indicator {
@@ -1809,9 +1790,12 @@ ${R} .status-v3-legend-indicator--maintenance {
 
 ${R} .status-v3-services__legend-divider {
   width: 1px;
-  height: 11px;
+  height: 16px;
   background: var(--status-panel-border);
   display: inline-block;
+  align-self: center;
+  flex-shrink: 0;
+  margin: 0 0.2rem;
 }
 
 ${R} .status-v3-services__legend-window {
