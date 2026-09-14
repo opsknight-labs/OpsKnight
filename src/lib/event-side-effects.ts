@@ -590,6 +590,8 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       );
       const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
       await requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
+      const { requestMicrosoftTeamsWarRoomParticipantSyncForIncident } = await import('./war-room/participants');
+      await requestMicrosoftTeamsWarRoomParticipantSyncForIncident(payload.incidentId);
       return;
     }
     case 'WAR_ROOM_INVITE_TEAM': {
@@ -601,6 +603,8 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       );
       const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
       await requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
+      const { requestMicrosoftTeamsWarRoomParticipantSyncForIncident } = await import('./war-room/participants');
+      await requestMicrosoftTeamsWarRoomParticipantSyncForIncident(payload.incidentId);
       return;
     }
   }

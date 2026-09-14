@@ -2,6 +2,7 @@ import 'server-only';
 
 import prisma from '@/lib/prisma';
 import { addChannelMember, findChannelMember, findTeamMember } from '@/lib/microsoft-teams/graph/members';
+import { scheduleJob } from '@/lib/jobs/queue';
 
 type ResponderSource = 'ASSIGNEE' | 'WATCHER';
 
@@ -129,4 +130,12 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     }
     await persistParticipantOutcome({ id: participant.id, state: 'PRESENT', added: true });
   }
+}
+
+/** Queues responder reconciliation for every active Teams room on an incident. */
+export async function requestMicrosoftTeamsWarRoomParticipantSyncForIncident(incidentId: string): Promise<void> {
+  const rooms = await prisma.incidentWarRoom.findMany({
+    where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' }, select: { id: true },
+  });
+  await Promise.all(rooms.map(room => scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5)));
 }
