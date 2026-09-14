@@ -17,6 +17,7 @@ export default async function SecurityCompliancePage({
 }: {
   searchParams: Promise<{ userId?: string; q?: string; page?: string; tab?: string }>;
 }) {
+  // Read-only readiness diagnostics — not certification or legal conclusions
   const permissions = await getUserPermissions();
   if (!permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)) redirect('/settings');
 
