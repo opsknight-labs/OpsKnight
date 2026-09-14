@@ -9,36 +9,40 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('SettingsTopNav', () => {
-  it('renders all domain tabs and contextual integration sub-pills for admin', () => {
+  it('renders all single-tier tabs and search trigger for admin', () => {
     render(<SettingsTopNav isAdmin={true} isAuditor={false} isResponderOrAbove={true} />);
 
-    // Primary domain tabs
+    // Single-tier tabs
     expect(screen.getByRole('link', { name: /^overview$/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^account$/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^workspace$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^profile$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^security & access$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^incident slas$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^custom fields$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^status pages$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^api keys$/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^integrations$/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /^platform$/i })).toBeInTheDocument();
-
-    // Contextual sub-pills for integrations (active domain)
-    expect(screen.getByRole('link', { name: /slack workspace/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /microsoft teams/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /chatops war-rooms/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /jira issue tracking/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^audit logs$/i })).toBeInTheDocument();
 
     // Search trigger
     expect(screen.getByTitle(/search settings/i)).toBeInTheDocument();
   });
 
-  it('hides admin-only domain tabs when user is not admin', () => {
+  it('hides admin-only tabs when user is not admin', () => {
     render(<SettingsTopNav isAdmin={false} isAuditor={false} isResponderOrAbove={false} />);
 
-    // Overview, Account, and Workspace are visible
+    // Non-admin accessible tabs
     expect(screen.getByRole('link', { name: /^overview$/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^account$/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /^workspace$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^profile$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^security & access$/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /^api keys$/i })).toBeInTheDocument();
 
-    // Integrations and Platform require admin
+    // Admin-only tabs should not be rendered
+    expect(screen.queryByRole('link', { name: /^incident slas$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^custom fields$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^status pages$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^integrations$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /^platform$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^audit logs$/i })).not.toBeInTheDocument();
   });
 });

@@ -6,22 +6,18 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutGrid,
   User,
-  Building2,
-  Puzzle,
-  Settings,
-  Search,
-  KeyRound,
+  ShieldCheck,
+  Activity,
   SlidersHorizontal,
   Globe,
-  ShieldCheck,
+  KeyRound,
+  Puzzle,
+  Settings,
   ClipboardList,
-  MessageSquare,
-  Activity,
-  Bell,
-  Sliders,
+  Search,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { CommandPalette } from '@/components/settings/layout/CommandPalette';
 
 type Props = {
@@ -30,190 +26,93 @@ type Props = {
   isResponderOrAbove?: boolean;
 };
 
-type SubItem = {
+export type SettingsTab = {
   id: string;
   label: string;
   href: string;
-  icon?: React.ComponentType<{ className?: string }>;
-  requiresAdmin?: boolean;
-  requiresAdminOrAuditor?: boolean;
-  requiresResponder?: boolean;
-  badge?: string;
-};
-
-type DomainTab = {
-  id: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  primaryHref: string;
+  icon: LucideIcon | React.ComponentType<{ className?: string }>;
   matchPrefixes: string[];
   requiresAdmin?: boolean;
-  items: SubItem[];
+  requiresAuditor?: boolean;
+  requiresResponder?: boolean;
 };
 
-const DOMAIN_TABS: DomainTab[] = [
+export const SETTINGS_TABS: SettingsTab[] = [
   {
     id: 'overview',
     label: 'Overview',
+    href: '/settings',
     icon: LayoutGrid,
-    primaryHref: '/settings',
     matchPrefixes: ['/settings'],
-    items: [],
   },
   {
-    id: 'account',
-    label: 'Account',
+    id: 'profile',
+    label: 'Profile',
+    href: '/settings/profile',
     icon: User,
-    primaryHref: '/settings/profile',
-    matchPrefixes: ['/settings/profile', '/settings/security'],
-    items: [
-      { id: 'profile', label: 'Profile & Preferences', href: '/settings/profile', icon: User },
-      {
-        id: 'security',
-        label: 'Security & Sessions',
-        href: '/settings/security',
-        icon: ShieldCheck,
-      },
-    ],
+    matchPrefixes: ['/settings/profile'],
   },
   {
-    id: 'workspace',
-    label: 'Workspace',
-    icon: Building2,
-    primaryHref: '/settings/incident-sla',
-    matchPrefixes: [
-      '/settings/incident-sla',
-      '/settings/custom-fields',
-      '/settings/status-pages',
-      '/settings/status-page',
-      '/settings/api-keys',
-      '/settings/security-compliance',
-    ],
-    items: [
-      {
-        id: 'incident-sla',
-        label: 'Incident SLA Policy',
-        href: '/settings/incident-sla',
-        icon: Activity,
-        requiresAdmin: true,
-      },
-      {
-        id: 'custom-fields',
-        label: 'Custom Fields',
-        href: '/settings/custom-fields',
-        icon: SlidersHorizontal,
-        requiresAdmin: true,
-      },
-      {
-        id: 'status-page',
-        label: 'Public Status Page',
-        href: '/settings/status-pages',
-        icon: Globe,
-        requiresAdmin: true,
-      },
-      {
-        id: 'api-keys',
-        label: 'API Keys & Tokens',
-        href: '/settings/api-keys',
-        icon: KeyRound,
-      },
-      {
-        id: 'security-compliance',
-        label: 'Security & Compliance',
-        href: '/settings/security-compliance',
-        icon: ShieldCheck,
-        requiresAdmin: true,
-      },
-      {
-        id: 'audit-logs',
-        label: 'Audit Log Stream',
-        href: '/audit',
-        icon: ClipboardList,
-        requiresAdmin: true,
-      },
-    ],
+    id: 'security',
+    label: 'Security & Access',
+    href: '/settings/security',
+    icon: ShieldCheck,
+    matchPrefixes: ['/settings/security'],
+  },
+  {
+    id: 'incident-sla',
+    label: 'Incident SLAs',
+    href: '/settings/incident-sla',
+    icon: Activity,
+    matchPrefixes: ['/settings/incident-sla'],
+    requiresAdmin: true,
+  },
+  {
+    id: 'custom-fields',
+    label: 'Custom Fields',
+    href: '/settings/custom-fields',
+    icon: SlidersHorizontal,
+    matchPrefixes: ['/settings/custom-fields'],
+    requiresAdmin: true,
+  },
+  {
+    id: 'status-pages',
+    label: 'Status Pages',
+    href: '/settings/status-pages',
+    icon: Globe,
+    matchPrefixes: ['/settings/status-pages', '/settings/status-page'],
+    requiresAdmin: true,
+  },
+  {
+    id: 'api-keys',
+    label: 'API Keys',
+    href: '/settings/api-keys',
+    icon: KeyRound,
+    matchPrefixes: ['/settings/api-keys'],
   },
   {
     id: 'integrations',
     label: 'Integrations',
+    href: '/settings/integrations/slack',
     icon: Puzzle,
-    primaryHref: '/settings/integrations/slack',
     matchPrefixes: ['/settings/integrations', '/settings/slack-oauth'],
     requiresAdmin: true,
-    items: [
-      {
-        id: 'slack',
-        label: 'Slack Workspace',
-        href: '/settings/integrations/slack',
-        icon: SlackLogo,
-        requiresAdmin: true,
-      },
-      {
-        id: 'microsoft-teams',
-        label: 'Microsoft Teams',
-        href: '/settings/integrations/microsoft-teams',
-        icon: MicrosoftTeamsLogo,
-        requiresAdmin: true,
-      },
-      {
-        id: 'chatops',
-        label: 'ChatOps War-Rooms',
-        href: '/settings/integrations/chatops',
-        icon: MessageSquare,
-        requiresAdmin: true,
-      },
-      {
-        id: 'jira',
-        label: 'Jira Issue Tracking',
-        href: '/settings/integrations/jira',
-        icon: JiraLogo,
-        requiresAdmin: true,
-      },
-    ],
   },
   {
-    id: 'system',
+    id: 'platform',
     label: 'Platform',
-    icon: Sliders,
-    primaryHref: '/settings/system',
+    href: '/settings/system',
+    icon: Settings,
     matchPrefixes: ['/settings/system', '/settings/notifications'],
     requiresAdmin: true,
-    items: [
-      {
-        id: 'system',
-        label: 'Platform Settings',
-        href: '/settings/system',
-        icon: Settings,
-        requiresAdmin: true,
-      },
-      {
-        id: 'health-center',
-        label: 'Health Center',
-        href: '/settings/system/health',
-        icon: Activity,
-        requiresAdmin: true,
-      },
-      {
-        id: 'notifications-admin',
-        label: 'Notification Providers',
-        href: '/settings/notifications',
-        icon: Bell,
-        requiresAdmin: true,
-      },
-      {
-        id: 'notification-operations',
-        label: 'Delivery Operations',
-        href: '/settings/notifications/operations',
-        icon: Activity,
-        requiresAdminOrAuditor: true,
-      },
-      {
-        id: 'notification-history',
-        label: 'Delivery Logs',
-        href: '/settings/notifications/history',
-        icon: Bell,
-      },
-    ],
+  },
+  {
+    id: 'audit',
+    label: 'Audit Logs',
+    href: '/audit',
+    icon: ClipboardList,
+    matchPrefixes: ['/audit'],
+    requiresAdmin: true,
   },
 ];
 
@@ -224,70 +123,40 @@ export default function SettingsTopNav({
 }: Props) {
   const pathname = usePathname();
 
-  const canAccess = (item: {
-    requiresAdmin?: boolean;
-    requiresAdminOrAuditor?: boolean;
-    requiresResponder?: boolean;
-  }) => {
-    if (item.requiresAdmin && !isAdmin) return false;
-    if (item.requiresAdminOrAuditor && !isAdmin && !isAuditor) return false;
-    if (item.requiresResponder && !isResponderOrAbove) return false;
+  const canAccess = (tab: SettingsTab) => {
+    if (tab.requiresAdmin && !isAdmin) return false;
+    if (tab.requiresAuditor && !isAdmin && !isAuditor) return false;
+    if (tab.requiresResponder && !isResponderOrAbove) return false;
     return true;
   };
 
-  // Determine active domain
-  const activeDomain =
-    DOMAIN_TABS.find(domain => {
-      if (domain.id === 'overview') {
+  const visibleTabs = SETTINGS_TABS.filter(canAccess);
+
+  // Determine active tab
+  const activeTab =
+    visibleTabs.find(tab => {
+      if (tab.id === 'overview') {
         return pathname === '/settings';
       }
-      return domain.matchPrefixes.some(
-        prefix => pathname === prefix || pathname.startsWith(`${prefix}/`)
+      return tab.matchPrefixes.some(
+        prefix =>
+          prefix !== '/settings' && (pathname === prefix || pathname.startsWith(`${prefix}/`))
       );
-    }) || (pathname.startsWith('/settings') ? DOMAIN_TABS[0] : null);
-
-  const visibleDomains = DOMAIN_TABS.filter(domain => {
-    if (domain.requiresAdmin && !isAdmin) return false;
-    return true;
-  });
-
-  const visibleSubItems =
-    activeDomain && activeDomain.items ? activeDomain.items.filter(canAccess) : [];
+    }) || (pathname.startsWith('/settings') ? visibleTabs[0] : null);
 
   return (
-    <div className="space-y-3 mb-6">
-      {/* Top Domain Bar */}
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 pb-3 flex-wrap">
-        {/* Navigation Tabs */}
-        <div className="flex items-center gap-1.5 p-1 bg-muted/40 rounded-xl border border-border/50">
-          {visibleDomains.map(domain => {
-            const isActive = activeDomain?.id === domain.id;
-            const Icon = domain.icon;
-
-            return (
-              <Link
-                key={domain.id}
-                href={domain.primaryHref}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all select-none',
-                  isActive
-                    ? 'bg-background text-foreground shadow-xs font-semibold ring-1 ring-border/80'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-background/40'
-                )}
-              >
-                <Icon
-                  className={cn(
-                    'h-3.5 w-3.5 transition-colors',
-                    isActive ? 'text-primary' : 'text-muted-foreground'
-                  )}
-                />
-                <span>{domain.label}</span>
-              </Link>
-            );
-          })}
+    <div className="space-y-4">
+      {/* Unified Settings Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Manage your personal account, workspace configuration, integrations, and platform
+            operations.
+          </p>
         </div>
 
-        {/* Quick Search Button */}
+        {/* Quick Search Button (⌘K) */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -299,52 +168,49 @@ export default function SettingsTopNav({
               });
               document.dispatchEvent(event);
             }}
-            className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border/60 bg-card hover:bg-accent/60 text-xs text-muted-foreground hover:text-foreground transition-all shadow-2xs"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border/70 bg-card hover:bg-accent/60 text-xs text-muted-foreground hover:text-foreground transition-all shadow-xs"
             title="Search settings (⌘K)"
           >
             <Search className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Search Settings...</span>
-            <kbd className="pointer-events-none hidden sm:inline-flex h-4 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+            <span>Search Settings...</span>
+            <kbd className="pointer-events-none ml-1 inline-flex h-4 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               ⌘K
             </kbd>
           </button>
         </div>
       </div>
 
-      {/* Secondary Contextual Sub-Pills (Shown when inside a domain) */}
-      {visibleSubItems.length > 0 && activeDomain?.id !== 'overview' && (
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {visibleSubItems.map(item => {
-            const isSubActive =
-              pathname === item.href ||
-              (item.href !== '/settings' && pathname.startsWith(`${item.href}/`));
-            const SubIcon = item.icon;
+      {/* Clean Single-Tier Tab Bar (Vercel / GitHub Repos style) */}
+      <nav
+        className="flex items-center gap-1 overflow-x-auto border-b border-border/60 pb-px scrollbar-none"
+        aria-label="Settings Navigation"
+      >
+        {visibleTabs.map(tab => {
+          const isActive = activeTab?.id === tab.id;
+          const Icon = tab.icon;
 
-            return (
-              <Link
-                key={item.id}
-                href={item.href}
+          return (
+            <Link
+              key={tab.id}
+              href={tab.href}
+              className={cn(
+                '-mb-px flex items-center gap-2 border-b-2 px-3.5 pb-2.5 pt-1.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-all select-none',
+                isActive
+                  ? 'border-primary text-foreground font-semibold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border/70'
+              )}
+            >
+              <Icon
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all shrink-0',
-                  isSubActive
-                    ? 'bg-primary/10 text-primary border border-primary/30 font-semibold shadow-2xs'
-                    : 'border border-border/50 bg-background/60 text-muted-foreground hover:text-foreground hover:border-border'
+                  'h-4 w-4 shrink-0 transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground'
                 )}
-              >
-                {SubIcon && (
-                  <SubIcon
-                    className={cn(
-                      'h-3.5 w-3.5 shrink-0',
-                      isSubActive ? 'text-primary' : 'text-muted-foreground'
-                    )}
-                  />
-                )}
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+              />
+              <span>{tab.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* Embedded Command Palette */}
       <CommandPalette />

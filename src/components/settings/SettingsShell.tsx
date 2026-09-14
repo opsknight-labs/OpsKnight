@@ -21,7 +21,7 @@ export default function SettingsShell({
         isAuditor={isAuditor}
         isResponderOrAbove={isResponderOrAbove}
       />
-      <main className="w-full">{children}</main>
+      <main className="w-full mt-6">{children}</main>
     </div>
   );
 }
