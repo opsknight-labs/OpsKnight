@@ -12,6 +12,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
       <SettingsShell
         isAdmin={permissions.isAdmin}
         isResponderOrAbove={permissions.isResponderOrAbove}
+        isAuditor={permissions.isAuditor}
       >
         {children}
       </SettingsShell>

@@ -45,7 +45,7 @@
     border-radius: 12px;
     border: 1px solid var(--border);
     padding: 0.85rem 0.9rem;
-    background: #fff;
+    background: hsl(var(--card));
     display: grid;
     gap: 0.3rem;
     color: var(--text-primary);
@@ -84,7 +84,7 @@
 }
 
 .settings-panel {
-    background: #ffffff;
+    background: hsl(var(--card));
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 1.25rem;
@@ -106,13 +106,13 @@
     padding: 0.5rem 0.625rem;
     border-radius: 8px;
     border: 1px solid var(--border);
-    background: #fff;
+    background: hsl(var(--card));
     color: var(--text-primary);
     font-size: clamp(0.82rem, 1.05vw, 0.9rem);
 }
 
 .settings-field input[readonly] {
-    background: #f8fafc;
+    background: hsl(var(--muted) / 0.5);
 }
 
 .settings-note {
@@ -200,7 +200,7 @@
     border-radius: 12px;
     padding: 1rem;
     color: var(--text-muted);
-    background: #f9fafb;
+    background: hsl(var(--muted) / 0.5);
 }
 
 .settings-overview h2 {
@@ -220,7 +220,7 @@
 }
 
 .settings-card {
-    background: #fff;
+    background: hsl(var(--card));
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 1.2rem;
@@ -266,7 +266,7 @@
     padding: 0.15rem 0.45rem;
     border-radius: 999px;
     border: 1px solid var(--border);
-    background: #f9fafb;
+    background: hsl(var(--muted) / 0.5);
 }
 
 /* ============================================
@@ -277,7 +277,7 @@
     display: grid;
     gap: 1.25rem;
     padding: clamp(1rem, 2.5vw, 1.5rem);
-    background: #ffffff;
+    background: hsl(var(--card));
     border: 1px solid var(--border);
     border-radius: 12px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -326,7 +326,7 @@
     padding: clamp(0.5rem, 1vw, 0.65rem) clamp(0.6rem, 1.2vw, 0.75rem);
     border-radius: 10px;
     border: 1px solid transparent;
-    background: #ffffff;
+    background: hsl(var(--card));
     color: var(--text-secondary);
     text-decoration: none;
     transition: all 0.2s ease;
@@ -334,14 +334,14 @@
 }
 
 .settings-nav-item:hover {
-    background: #f9fafb;
+    background: hsl(var(--muted) / 0.5);
     border-color: #e2e8f0;
     color: var(--text-primary);
     transform: translateY(-1px);
 }
 
 .settings-nav-item-active {
-    background: #f8fafc;
+    background: hsl(var(--muted) / 0.5);
     border-color: #e2e8f0;
     color: var(--text-primary);
     box-shadow: inset 0 0 0 1px #f1f5f9;
@@ -350,13 +350,13 @@
 .settings-nav-item-disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    background: #f9fafb;
+    background: hsl(var(--muted) / 0.5);
     border-color: #e5e7eb;
 }
 
 .settings-nav-item-disabled:hover {
     transform: none;
-    background: #f9fafb;
+    background: hsl(var(--muted) / 0.5);
     border-color: #e5e7eb;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
@@ -491,7 +491,7 @@
 }
 
 .settings-section {
-    background: #ffffff;
+    background: hsl(var(--card));
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: clamp(1.5rem, 3vw, 2.5rem);
@@ -525,7 +525,7 @@
 }
 
 .settings-panel {
-    background: #f8fafc;
+    background: hsl(var(--muted) / 0.5);
     border: 1px solid rgba(0, 0, 0, 0.06);
     border-radius: 10px;
     padding: 1.5rem;
@@ -551,7 +551,7 @@
     padding: 0.75rem;
     border-radius: 8px;
     border: 1px solid rgba(0, 0, 0, 0.12);
-    background: #ffffff;
+    background: hsl(var(--card));
     color: var(--text-primary);
     font-size: clamp(0.85rem, 1.1vw, 0.95rem);
     transition: all 0.2s ease;
@@ -576,7 +576,7 @@
     color: var(--text-muted);
     line-height: 1.5;
     padding: 1rem;
-    background: #f8fafc;
+    background: hsl(var(--muted) / 0.5);
     border-radius: 8px;
     border-left: 3px solid var(--primary-color);
 }
@@ -648,7 +648,7 @@
 }
 
 .settings-card {
-    background: #ffffff;
+    background: hsl(var(--card));
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 12px;
     padding: 1.5rem;
@@ -871,7 +871,7 @@ a:hover {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 0.45rem 0.75rem;
-    background: #fff;
+    background: hsl(var(--card));
     gap: var(--spacing-2);
 }
 
@@ -900,7 +900,7 @@ a:hover {
     top: calc(100% + 0.5rem);
     left: 0;
     right: 0;
-    background: #fff;
+    background: hsl(var(--card));
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);
@@ -922,7 +922,7 @@ a:hover {
 
 .settings-search-item.is-active,
 .settings-search-item:hover {
-    background: #f9fafb;
+    background: hsl(var(--muted) / 0.5);
 }
 
 .settings-search-item span {
@@ -1045,7 +1045,7 @@ a:hover {
     border: 1px solid var(--border);
     border-radius: var(--radius-full);
     padding: 0.45rem 1rem;
-    background: #ffffff;
+    background: hsl(var(--card));
     transition: var(--transition-base) var(--ease-out);
     /* UI: refined secondary action chip */
 }
@@ -1162,7 +1162,7 @@ a:hover {
     border-radius: var(--radius-sm);
     padding: 0.6rem 0.75rem;
     font-size: clamp(0.8rem, 1.05vw, 0.875rem);
-    background: #fff;
+    background: hsl(var(--card));
     transition: border-color 0.15s var(--ease-out), box-shadow 0.15s var(--ease-out);
     /* UI: premium focus/hover polish */
 }
@@ -1356,7 +1356,7 @@ a:hover {
 .settings-subsection {
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    background: #fff;
+    background: hsl(var(--card));
     overflow: hidden;
     box-shadow: var(--shadow-xs);
 }
@@ -1439,7 +1439,7 @@ a:hover {
 }
 
 .system-settings-meta-card {
-    background: #ffffff;
+    background: hsl(var(--card));
     border: 1px solid var(--border, #e2e8f0);
     border-radius: var(--radius-md, 8px);
     padding: var(--spacing-4, 1rem);
@@ -1531,7 +1531,7 @@ a:hover {
 
 /* Settings Card */
 .system-settings-card {
-    background: #ffffff;
+    background: hsl(var(--card));
     border: 1px solid var(--border, #e2e8f0);
     border-radius: var(--radius-lg, 12px);
     box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
@@ -1560,7 +1560,7 @@ a:hover {
 
 /* Helper Text */
 .system-settings-helper {
-    background: #f8fafc;
+    background: hsl(var(--muted) / 0.5);
     border: 1px solid #e2e8f0;
     border-radius: var(--radius-md, 8px);
     padding: var(--spacing-3, 0.75rem);
@@ -1593,7 +1593,7 @@ a:hover {
     text-align: center;
     max-width: 400px;
     padding: var(--spacing-6, 1.5rem);
-    background: #ffffff;
+    background: hsl(var(--card));
     border: 1px solid var(--border, #e2e8f0);
     border-radius: var(--radius-lg, 12px);
 }

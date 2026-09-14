@@ -28,7 +28,8 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
-import { SlackLogo, JiraLogo } from '@/components/common/BrandLogos';
+import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 
 const sectionIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
   account: User,
@@ -48,6 +49,7 @@ const itemIcons: Record<string, LucideIcon | React.ComponentType<{ className?: s
   'security-compliance': ShieldCheck,
   integrations: Puzzle,
   slack: SlackLogo,
+  'microsoft-teams': MicrosoftTeamsLogo,
   chatops: MessageSquare,
   jira: JiraLogo,
   'health-center': Activity,
@@ -69,6 +71,7 @@ export default async function SettingsOverviewPage() {
     slackIntegration,
     jiraConfig,
     chatOpsConfig,
+    teamsConfig,
     activeApiKeysCount,
     notificationProvidersCount,
     statusPage,
@@ -89,6 +92,11 @@ export default async function SettingsOverviewPage() {
     prisma.chatOpsConfig
       .findUnique({
         where: { id: 'default' },
+        select: { enabled: true },
+      })
+      .catch(() => null),
+    prisma.microsoftTeamsConfig
+      .findFirst({
         select: { enabled: true },
       })
       .catch(() => null),
@@ -122,6 +130,9 @@ export default async function SettingsOverviewPage() {
     jira: jiraConfig?.enabled
       ? { label: 'Connected', connected: true }
       : { label: 'Not Connected', connected: false },
+    'microsoft-teams': teamsConfig?.enabled
+      ? { label: 'Connected', connected: true }
+      : { label: 'Not Connected', connected: false },
     chatops: chatOpsConfig?.enabled
       ? { label: 'Active', connected: true }
       : { label: 'Disabled', connected: false },
@@ -146,6 +157,12 @@ export default async function SettingsOverviewPage() {
     },
   };
 
+  const activeIntegrationsCount =
+    (slackIntegration?.enabled ? 1 : 0) +
+    (jiraConfig?.enabled ? 1 : 0) +
+    (chatOpsConfig?.enabled ? 1 : 0) +
+    (teamsConfig?.enabled ? 1 : 0);
+
   const canAccess = (item: {
     requiresAdmin?: boolean;
     requiresAdminOrAuditor?: boolean;
@@ -164,15 +181,40 @@ export default async function SettingsOverviewPage() {
   );
 
   return (
-    <div className="space-y-8 pb-12 w-full">
-      {/* Header */}
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your personal preferences, workspace configuration, alert integrations, and system
-          diagnostics in one place.
-        </p>
-      </div>
+    <div className="space-y-6 pb-12 w-full">
+      {/* Centralized DetailHeroBanner matching OpsKnight design system */}
+      <DetailHeroBanner
+        tag="WORKSPACE SETTINGS"
+        title="Settings & Workspace"
+        subtitle="Manage your personal preferences, workspace policies, alert integrations, and platform diagnostics."
+        breadcrumb={{ label: 'Home', href: '/', current: 'Settings' }}
+        stats={[
+          {
+            label: 'Integrations',
+            value: `${activeIntegrationsCount} Active`,
+            icon: <Puzzle className="h-3.5 w-3.5 text-primary" />,
+          },
+          {
+            label: 'API Keys',
+            value: activeApiKeysCount,
+            icon: <KeyRound className="h-3.5 w-3.5 text-emerald-400" />,
+          },
+          {
+            label: 'Custom Fields',
+            value: customFieldsCount,
+            icon: <SlidersHorizontal className="h-3.5 w-3.5 text-indigo-400" />,
+          },
+          {
+            label: 'Status Page',
+            value: statusPage?.enabled
+              ? statusPage.privacyMode === 'PUBLIC'
+                ? 'Public'
+                : 'Active'
+              : 'Disabled',
+            icon: <Globe className="h-3.5 w-3.5 text-cyan-400" />,
+          },
+        ]}
+      />
 
       {/* Search & Quick Access Section */}
       <Card className="border-border bg-card shadow-xs w-full">
