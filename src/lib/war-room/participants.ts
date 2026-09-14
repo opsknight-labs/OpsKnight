@@ -305,7 +305,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     // Non-retryable listing failure — mark all pending participants as FAILED.
     for (const participant of room.participants) {
       if (['DESIRED', 'PENDING', 'FAILED'].includes(participant.state)) {
-        await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: teamMembersResult.code, message: teamMembersResult.message });
+        await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: teamMembersResult.code, message: teamMembersResult.message, expectedDesiredVersion: participant.desiredVersion });
       }
     }
     return;
@@ -319,7 +319,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       throwIfRetryableMemberGraph(channelMembersResult);
       for (const participant of room.participants) {
         if (['DESIRED', 'PENDING', 'FAILED', 'REMOVED'].includes(participant.state) && room.membershipType === 'PRIVATE') {
-          await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: channelMembersResult.code, message: channelMembersResult.message });
+          await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: channelMembersResult.code, message: channelMembersResult.message, expectedDesiredVersion: participant.desiredVersion });
         }
       }
       return;
@@ -348,18 +348,18 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       if (room.membershipType !== 'PRIVATE' || !room.providerChannelId || !channelMembersByObjectId) continue;
       const userObjectId = snapshotParticipant.providerObjectId ?? snapshotParticipant.providerUserId;
       if (!userObjectId) {
-        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'REMOVED' });
+        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'REMOVED', expectedDesiredVersion: snapshotDesiredVersion });
         continue;
       }
       const channelMember = channelMembersByObjectId.get(userObjectId) ?? null;
       if (!channelMember) {
         // Already removed — keep REMOVED stable and refresh lastSyncAt.
-        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'REMOVED' });
+        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'REMOVED', expectedDesiredVersion: snapshotDesiredVersion });
         continue;
       }
       const membershipId = (channelMember as { id?: string }).id;
       if (!membershipId) {
-        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: 'MEMBER_NOT_FOUND', message: 'Channel membership record is missing its identifier.' });
+        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: 'MEMBER_NOT_FOUND', message: 'Channel membership record is missing its identifier.', expectedDesiredVersion: snapshotDesiredVersion });
         continue;
       }
       // Private owner handoff: promote replacement owner before deleting current owner.
@@ -376,17 +376,17 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       });
       if (!handoff.ok) {
         if (handoff.code === 'OWNER_HANDOFF_REQUIRED') {
-          await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: handoff.code, message: handoff.message });
+          await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: handoff.code, message: handoff.message, expectedDesiredVersion: snapshotDesiredVersion });
           continue;
         }
         throwIfRetryableMemberGraph({ ok: false, code: handoff.code!, message: handoff.message! });
-        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: handoff.code, message: handoff.message });
+        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: handoff.code, message: handoff.message, expectedDesiredVersion: snapshotDesiredVersion });
         continue;
       }
       // Re-check authority immediately before the mutating DELETE.
       const authorityBeforeMutate = await validateParticipantSyncAuthority(room);
       if (!authorityBeforeMutate.allowed) {
-        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: authorityBeforeMutate.code, message: authorityBeforeMutate.message });
+        await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: authorityBeforeMutate.code, message: authorityBeforeMutate.message, expectedDesiredVersion: snapshotDesiredVersion });
         continue;
       }
       // Final freshness fence right before the provider mutation — check both state and desiredVersion.
@@ -424,7 +424,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     if (!['DESIRED', 'PENDING', 'FAILED'].includes(effectiveState)) continue;
     const userObjectId = snapshotParticipant.providerObjectId ?? snapshotParticipant.providerUserId;
     if (!userObjectId) {
-      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'SKIPPED', code: 'IDENTITY_NOT_LINKED', message: 'No verified Microsoft Teams identity is linked to this responder.' });
+      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'SKIPPED', code: 'IDENTITY_NOT_LINKED', message: 'No verified Microsoft Teams identity is linked to this responder.', expectedDesiredVersion: snapshotDesiredVersion });
       continue;
     }
     // CAS transition DESIRED/FAILED -> PENDING so a concurrent removal is not
@@ -444,7 +444,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
 
     const teamMember = teamMembersByObjectId.get(userObjectId) ?? null;
     if (!teamMember) {
-      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'SKIPPED', code: 'MEMBER_NOT_IN_TEAM', message: 'The linked Microsoft Teams identity is not a member of the parent Team.' });
+      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'SKIPPED', code: 'MEMBER_NOT_IN_TEAM', message: 'The linked Microsoft Teams identity is not a member of the parent Team.', expectedDesiredVersion: snapshotDesiredVersion });
       continue;
     }
     if (room.membershipType === 'STANDARD') {
@@ -457,7 +457,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
       continue;
     }
     if (!room.providerChannelId || !channelMembersByObjectId) {
-      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: 'CHANNEL_NOT_FOUND', message: 'The private Microsoft Teams channel is not available for participant sync.' });
+      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: 'CHANNEL_NOT_FOUND', message: 'The private Microsoft Teams channel is not available for participant sync.', expectedDesiredVersion: snapshotDesiredVersion });
       continue;
     }
     const channelMember = channelMembersByObjectId.get(userObjectId) ?? null;
@@ -473,7 +473,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     // Re-check authority and freshness before the mutating POST.
     const authorityBeforeAdd = await validateParticipantSyncAuthority(room);
     if (!authorityBeforeAdd.allowed) {
-      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: authorityBeforeAdd.code, message: authorityBeforeAdd.message });
+      await persistParticipantOutcome({ id: snapshotParticipant.id, state: 'FAILED', code: authorityBeforeAdd.code, message: authorityBeforeAdd.message, expectedDesiredVersion: snapshotDesiredVersion });
       continue;
     }
     const freshBeforeAdd = await prisma.warRoomParticipant.findUnique({ where: { id: snapshotParticipant.id }, select: { state: true, desiredVersion: true } });

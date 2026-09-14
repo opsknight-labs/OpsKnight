@@ -59,7 +59,8 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     expect(participants).toContain('authorityBeforeOwnerPromote');
     expect(participants).toContain('authorityBeforeOwnerAdd');
     expect(participants).toContain('afterPromote');
-    expect(projection).toContain('[401, 403, 404].includes(result.statusCode ?? 0)');
+    expect(projection.match(/\[401, 403, 404\]\.includes\(result\.statusCode \?\? 0\)/g)).toHaveLength(2);
+    expect(projection.match(/HTTP_401', 'HTTP_403', 'HTTP_404/g)).toHaveLength(2);
     expect(projection).toContain('commandCreateAttemptedAt: null');
     expect(teams).toContain("if (room.state === 'CLOSED')");
     expect(teams).toContain('no replacement card can be projected');

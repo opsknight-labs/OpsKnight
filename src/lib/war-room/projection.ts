@@ -21,11 +21,15 @@ function isRetryableTeamsProjectionError(result: { errorCode?: string; statusCod
   return false;
 }
 
-/** 429 / RATE_LIMITED is a definite rejection before a resource was created — safe to retry after clearing the marker. */
+/** Definite pre-side-effect rejections are safe to retry after clearing the marker. */
 function isDefiniteCreateRetryableError(result: { errorCode?: string; statusCode?: number }): boolean {
   const code = (result.errorCode ?? '').toUpperCase();
   if (code === 'RATE_LIMITED') return true;
   if (result.statusCode === 429) return true;
+  // Authentication, authorization, and routing rejection means Graph did not
+  // accept the POST, so no canonical card could have been created.
+  if ([401, 403, 404].includes(result.statusCode ?? 0)) return true;
+  if (['HTTP_401', 'HTTP_403', 'HTTP_404'].includes(code)) return true;
   // Token acquisition happens before the POST; no side effect could have been created.
   if (code === 'GRAPH_TOKEN_FAILED' || code === 'TRANSIENT_READ') return true;
   return false;
