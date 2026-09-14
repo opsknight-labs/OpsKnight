@@ -346,6 +346,8 @@ export async function provisionMicrosoftTeamsWarRoom(
     if (adoption === 'READY') {
       const { scheduleJob } = await import('@/lib/jobs/queue');
       await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+      const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+      await requestMicrosoftTeamsWarRoomProjection(room.id);
     }
     return;
   }
@@ -477,6 +479,8 @@ export async function provisionMicrosoftTeamsWarRoom(
   if (adoption === 'READY') {
     const { scheduleJob } = await import('@/lib/jobs/queue');
     await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+    const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+    await requestMicrosoftTeamsWarRoomProjection(room.id);
   }
   if (adoption === 'FENCED')
     await prisma.incidentWarRoom.updateMany({

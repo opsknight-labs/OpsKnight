@@ -77,7 +77,8 @@ export type JobType =
   | 'CHATOPS_INTENT'
   | 'EXTERNAL_OPERATION'
   | 'WAR_ROOM_PROVISION'
-  | 'WAR_ROOM_PARTICIPANT_SYNC';
+  | 'WAR_ROOM_PARTICIPANT_SYNC'
+  | 'WAR_ROOM_PROJECT';
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
 interface JobPayload {
   incidentId?: string;
@@ -122,6 +123,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.warRoomId;
     case 'provisioningToken':
       return values.provisioningToken;
+    case 'projectionVersion':
+      return values.projectionVersion;
     default:
       return undefined;
   }
@@ -418,6 +421,15 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           throw new Error('War-room participant sync job is missing warRoomId');
         const { syncMicrosoftTeamsWarRoomParticipants } = await import('../war-room/participants');
         await syncMicrosoftTeamsWarRoomParticipants(requiredPayloadString(job.payload, 'warRoomId'));
+        await markJobCompleted(job.id);
+        return true;
+      }
+      case 'WAR_ROOM_PROJECT': {
+        const version = payloadValue(job.payload, 'projectionVersion');
+        if (typeof version !== 'number' || !Number.isInteger(version))
+          throw new Error('War-room projection job is missing projectionVersion');
+        const { projectMicrosoftTeamsWarRoomCard } = await import('../war-room/projection');
+        await projectMicrosoftTeamsWarRoomCard(requiredPayloadString(job.payload, 'warRoomId'), version);
         await markJobCompleted(job.id);
         return true;
       }

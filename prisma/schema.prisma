@@ -846,9 +846,12 @@ model IncidentWarRoom {
   membershipType        WarRoomMembershipType?
   commandMessageId      String?
   commandConversationId String?
+  commandCreateAttemptedAt DateTime?
   messageGeneration     Int                   @default(1)
   projectionVersion     Int                   @default(0)
   lastProjectedAt       DateTime?
+  projectionLeaseToken  String?
+  projectionLeaseExpiresAt DateTime?
   provisioningToken     String?
   provisioningStartedAt DateTime?
   createAttemptedAt     DateTime?
@@ -1781,6 +1784,7 @@ enum JobType {
   EXTERNAL_OPERATION
   WAR_ROOM_PROVISION
   WAR_ROOM_PARTICIPANT_SYNC
+  WAR_ROOM_PROJECT
 }
 
 enum JobStatus {
