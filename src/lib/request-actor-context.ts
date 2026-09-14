@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { cache } from 'react';
-import { getServerSession } from 'next-auth';
+import { getServerSession, type Session } from 'next-auth';
 
 import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
@@ -10,8 +10,6 @@ import {
   type UserActorSource,
 } from '@/lib/authorization-actors';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
-
-import type { Session } from 'next-auth';
 
 export type AuthenticatedRequestActorContext = {
   session: Session;

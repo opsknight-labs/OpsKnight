@@ -4,7 +4,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/s
 import { AlertTriangle, ShieldCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { useRealtime, type RealtimeMetrics } from '@/hooks/useRealtime';
+import { useOptionalRealtime } from '@/hooks/useRealtime';
 
 type Props = {
   // Optional props for fallback or override
@@ -24,13 +24,8 @@ export default function OperationalStatus({
   mediumCount = 0,
   lowCount = 0,
 }: Props) {
-  let realtimeMetrics: RealtimeMetrics | null = null;
-  try {
-    const realtime = useRealtime();
-    realtimeMetrics = realtime.metrics;
-  } catch {
-    // Graceful fallback when rendered outside RealtimeProvider (e.g. unit tests)
-  }
+  const realtime = useOptionalRealtime();
+  const realtimeMetrics = realtime?.metrics ?? null;
 
   const hasLiveStats = realtimeMetrics !== null;
 

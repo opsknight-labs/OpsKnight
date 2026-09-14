@@ -29,6 +29,7 @@ import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
 import {
   getSessionSecurityProjection,
+  getSessionProfileProjection,
   invalidateSessionSecurityProjection,
   resetSessionSecurityProjectionCache,
 } from '@/lib/session-security-projection';
@@ -543,9 +544,12 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           const augmentedToken = token as AugmentedJWT;
+          let isProfileRefresh = false;
 
           if (trigger === 'update') {
-            const updatePayload = session as { activity?: boolean; extendSession?: boolean } | undefined;
+            const updatePayload = session as
+              | { activity?: boolean; extendSession?: boolean; profileRefresh?: boolean; force?: boolean }
+              | undefined;
             const currentTime = Date.now();
             if (updatePayload?.activity || updatePayload?.extendSession) {
               augmentedToken.lastActivityAt = currentTime;
@@ -561,6 +565,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               const newExpiresAt = Math.floor(currentTime / 1000) + ttlSeconds;
               token.exp = newExpiresAt;
               augmentedToken.sessionExpiresAt = newExpiresAt;
+            }
+            if (updatePayload?.profileRefresh || updatePayload?.force) {
+              isProfileRefresh = true;
             }
           }
 
@@ -594,6 +601,19 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           if (token.sub && typeof token.sub === 'string') {
             const currentTokenVersion = (token as AugmentedJWT).tokenVersion;
             try {
+              if (isProfileRefresh) {
+                const profileUser = await getSessionProfileProjection(token.sub);
+                if (profileUser) {
+                  delete (token as AugmentedJWT).error;
+                  token.name = profileUser.name;
+                  token.email = profileUser.email;
+                  token.role = profileUser.role;
+                  token.avatarUrl = profileUser.avatarUrl;
+                  token.gender = profileUser.gender;
+                  (token as AugmentedJWT).tokenVersion = profileUser.tokenVersion;
+                }
+              }
+
               const dbUser = await getSessionSecurityProjection(token.sub);
 
               if (dbUser) {

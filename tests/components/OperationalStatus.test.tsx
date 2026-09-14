@@ -21,6 +21,12 @@ vi.mock('@/hooks/useRealtime', () => ({
     recentIncidents: [],
     error: null,
   }),
+  useOptionalRealtime: () => ({
+    isConnected: true,
+    metrics: mockRealtimeMetrics.current,
+    recentIncidents: [],
+    error: null,
+  }),
 }));
 
 describe('OperationalStatus', () => {

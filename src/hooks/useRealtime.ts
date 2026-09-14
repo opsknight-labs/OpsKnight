@@ -220,3 +220,8 @@ export function useRealtime(): RealtimeContextValue {
   if (!value) throw new Error('useRealtime must be used within RealtimeProvider');
   return value;
 }
+
+/** Optionally consume the realtime connection if inside RealtimeProvider; returns null otherwise. */
+export function useOptionalRealtime(): RealtimeContextValue | null {
+  return useContext(RealtimeContext);
+}

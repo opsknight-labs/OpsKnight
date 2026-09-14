@@ -84,16 +84,23 @@ assertBudget(
 assertBudget(size('src/app/globals.css') <= 96_000, 'legacy global CSS exceeds 96 KB');
 assertBudget(size('src/styles/index.css') <= 8_000, 'root CSS entry exceeds 8 KB');
 
-const buildManifestPath = path.join(root, '.next/app-build-manifest.json');
-if (!fs.existsSync(buildManifestPath)) {
+const appBuildManifestPath = path.join(root, '.next/app-build-manifest.json');
+const buildManifestPath = path.join(root, '.next/build-manifest.json');
+const manifestPath = fs.existsSync(appBuildManifestPath)
+  ? appBuildManifestPath
+  : fs.existsSync(buildManifestPath)
+    ? buildManifestPath
+    : null;
+
+if (!manifestPath) {
   if (process.env.CI) {
     assertBudget(
       false,
-      '.next/app-build-manifest.json missing. Run `npm run build` before checking performance budgets in CI.'
+      '.next build manifest missing. Run `npm run build` before checking performance budgets in CI.'
     );
   }
 } else {
-  const manifest = JSON.parse(fs.readFileSync(buildManifestPath, 'utf8'));
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const staticRoot = path.join(root, '.next');
   for (const [route, assets] of Object.entries(manifest.pages ?? {})) {
     const totals = { js: 0, css: 0 };

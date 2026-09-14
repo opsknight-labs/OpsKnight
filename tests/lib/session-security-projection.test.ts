@@ -86,18 +86,26 @@ describe('session security projection', () => {
     // T1: admin revokes user-1 and invalidates projection while T0 is in flight
     invalidateSessionSecurityProjection('user-1');
 
-    // T2: old T0 database lookup completes with stale tokenVersion = 4
+    // T2: request B arrives while T0 is STILL IN FLIGHT.
+    // It must NOT reuse T0; it must trigger a new lookup.
+    const requestBPromise = getSessionSecurityProjection('user-1');
+
+    // T3: old T0 database lookup completes with stale tokenVersion = 4
     resolveStaleLookup({
       id: 'user-1',
       tokenVersion: 4,
       status: 'ACTIVE',
       role: 'USER',
     });
-    await inFlightPromise;
 
-    // T3: next read must NOT receive stale tokenVersion 4 from cache; it must trigger a fresh lookup
-    const freshResult = await getSessionSecurityProjection('user-1');
-    expect(freshResult).toMatchObject({ tokenVersion: 5, status: 'DISABLED' });
+    const [t0Result, t1Result] = await Promise.all([inFlightPromise, requestBPromise]);
+    expect(t0Result).toMatchObject({ tokenVersion: 4, status: 'ACTIVE' });
+    expect(t1Result).toMatchObject({ tokenVersion: 5, status: 'DISABLED' });
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+
+    // T4: subsequent read uses cache of fresh result
+    const cachedResult = await getSessionSecurityProjection('user-1');
+    expect(cachedResult).toMatchObject({ tokenVersion: 5, status: 'DISABLED' });
     expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
   });
 });

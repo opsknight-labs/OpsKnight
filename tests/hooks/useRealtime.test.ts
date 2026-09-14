@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
-import { RealtimeProvider, useRealtime } from '@/hooks/useRealtime';
+import { RealtimeProvider, useRealtime, useOptionalRealtime } from '@/hooks/useRealtime';
 import { createElement, type ReactNode } from 'react';
 
 type MockEventSource = {
@@ -155,5 +155,18 @@ describe('useRealtime', () => {
     unmount();
 
     expect(eventSourceInstance.close).toHaveBeenCalled();
+  });
+
+  describe('useOptionalRealtime', () => {
+    it('returns null when called outside RealtimeProvider without throwing', () => {
+      const { result } = renderHook(() => useOptionalRealtime());
+      expect(result.current).toBeNull();
+    });
+
+    it('returns context value when called inside RealtimeProvider', () => {
+      const { result } = renderHook(() => useOptionalRealtime(), { wrapper });
+      expect(result.current).not.toBeNull();
+      expect(result.current?.isConnected).toBe(false);
+    });
   });
 });

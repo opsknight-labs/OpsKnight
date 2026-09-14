@@ -10,13 +10,29 @@ export type SessionSecurityProjection = {
   role: Role;
 };
 
+export type SessionProfileProjection = {
+  userId: string;
+  tokenVersion: number;
+  status: UserStatus;
+  role: Role;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+  gender: string | null;
+};
+
 type CacheEntry = {
   value: SessionSecurityProjection | null;
   expiresAt: number;
 };
 
+type InFlightEntry = {
+  epoch: number;
+  promise: Promise<SessionSecurityProjection | null>;
+};
+
 const projectionCache = new Map<string, CacheEntry>();
-const inFlight = new Map<string, Promise<SessionSecurityProjection | null>>();
+const inFlight = new Map<string, InFlightEntry>();
 const userEpoch = new Map<string, number>();
 
 function projectionTtlMs() {
@@ -35,37 +51,89 @@ export async function getSessionSecurityProjection(
   const cached = projectionCache.get(userId);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
+  const currentEpoch = userEpoch.get(userId) ?? 0;
   const pending = inFlight.get(userId);
-  if (pending) return pending;
+  if (pending && pending.epoch === currentEpoch) {
+    return pending.promise;
+  }
 
-  const capturedEpoch = userEpoch.get(userId) ?? 0;
+  const inFlightRef: InFlightEntry = {
+    epoch: currentEpoch,
+    promise: prisma.user
+      .findUnique({
+        where: { id: userId },
+        select: { id: true, tokenVersion: true, status: true, role: true },
+      })
+      .then(user => {
+        const value = user
+          ? {
+              userId: user.id,
+              tokenVersion: user.tokenVersion ?? 0,
+              status: user.status,
+              role: user.role,
+            }
+          : null;
+        // Discard stale in-flight results if invalidation occurred while resolving
+        if ((userEpoch.get(userId) ?? 0) === currentEpoch) {
+          projectionCache.set(userId, { value, expiresAt: Date.now() + projectionTtlMs() });
+        }
+        return value;
+      })
+      .finally(() => {
+        if (inFlight.get(userId) === inFlightRef) {
+          inFlight.delete(userId);
+        }
+      }),
+  };
 
-  const lookup = prisma.user
-    .findUnique({
-      where: { id: userId },
-      select: { id: true, tokenVersion: true, status: true, role: true },
-    })
-    .then(user => {
-      const value = user
-        ? {
-            userId: user.id,
-            tokenVersion: user.tokenVersion ?? 0,
-            status: user.status,
-            role: user.role,
-          }
-        : null;
-      // Discard stale in-flight results if invalidation occurred while resolving
-      if ((userEpoch.get(userId) ?? 0) === capturedEpoch) {
-        projectionCache.set(userId, { value, expiresAt: Date.now() + projectionTtlMs() });
-      }
-      return value;
-    })
-    .finally(() => {
-      inFlight.delete(userId);
-    });
+  inFlight.set(userId, inFlightRef);
+  return inFlightRef.promise;
+}
 
-  inFlight.set(userId, lookup);
-  return lookup;
+/**
+ * Explicit profile projection read used only when profile data is refreshed
+ * (e.g. after avatar, name, or settings update). Also updates the security
+ * projection cache with the latest tokenVersion/status/role.
+ */
+export async function getSessionProfileProjection(
+  userId: string
+): Promise<SessionProfileProjection | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      tokenVersion: true,
+      status: true,
+      role: true,
+      name: true,
+      email: true,
+      avatarUrl: true,
+      gender: true,
+    },
+  });
+
+  if (!user) return null;
+
+  const securityValue: SessionSecurityProjection = {
+    userId: user.id,
+    tokenVersion: user.tokenVersion ?? 0,
+    status: user.status,
+    role: user.role,
+  };
+
+  // Populate or refresh security projection cache so following fast-path checks stay warm
+  projectionCache.set(userId, {
+    value: securityValue,
+    expiresAt: Date.now() + projectionTtlMs(),
+  });
+
+  return {
+    ...securityValue,
+    name: user.name,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    gender: user.gender,
+  };
 }
 
 export function invalidateSessionSecurityProjection(userId: string) {
