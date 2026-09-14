@@ -6,7 +6,6 @@ on:
     paths:
       - 'src/app/(mobile)/**'
       - 'src/app/(public)/m/**'
-      - 'src/app/login/**'
       - 'src/components/mobile/**'
       - 'src/components/DashboardNotifications.tsx'
       - 'src/lib/offline-queue.ts'
@@ -25,7 +24,6 @@ on:
     paths:
       - 'src/app/(mobile)/**'
       - 'src/app/(public)/m/**'
-      - 'src/app/login/**'
       - 'src/components/mobile/**'
       - 'src/components/DashboardNotifications.tsx'
       - 'src/lib/offline-queue.ts'
