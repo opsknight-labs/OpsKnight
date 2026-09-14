@@ -166,12 +166,6 @@ export function jsonError(
         action: publicError.action,
         retryable: publicError.retryable,
         fields: publicError.fields,
-        details: error.exposure !== 'internal' ? error.details : undefined,
-        reason:
-          error.exposure !== 'internal' &&
-          typeof (error.details as Record<string, unknown> | undefined)?.reason === 'string'
-            ? (error.details as Record<string, unknown>).reason
-            : undefined,
         meta,
         requestId: context.requestId,
         timestamp: context.timestamp,

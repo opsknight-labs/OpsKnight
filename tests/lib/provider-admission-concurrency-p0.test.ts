@@ -336,12 +336,16 @@ describe('P0: provider concurrency control-plane', () => {
       'TRANSACTIONAL'
     );
     expect(concurrency.allowed).toBe(true);
-    expect(concurrency.leaseKey).toBeDefined();
+    if (concurrency.allowed) {
+      expect(concurrency.leaseKey).toBeDefined();
+    }
 
     // 3. BULK traffic must pause closed under full outage
     const bulkAdmission = await acquireProviderAdmission('PUSH', 'web-push', new Date(), 'BULK');
     expect(bulkAdmission.allowed).toBe(false);
-    expect(bulkAdmission.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+    if (!bulkAdmission.allowed) {
+      expect(bulkAdmission.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+    }
 
     const bulkConcurrency = await acquireProviderConcurrency(
       'PUSH',
@@ -350,6 +354,8 @@ describe('P0: provider concurrency control-plane', () => {
       'BULK'
     );
     expect(bulkConcurrency.allowed).toBe(false);
-    expect(bulkConcurrency.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+    if (!bulkConcurrency.allowed) {
+      expect(bulkConcurrency.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+    }
   });
 });

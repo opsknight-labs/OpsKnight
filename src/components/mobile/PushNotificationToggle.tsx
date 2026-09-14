@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Bell, BellOff, CircleAlert, Send, Wrench } from 'lucide-react';
 import { Card } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
-import { errorFromResponse } from '@/lib/client-error';
+import { errorFromResponse, toClientAppError } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
 import { logger } from '@/lib/logger';
 import { haptics } from '@/lib/haptics';
@@ -348,6 +348,9 @@ export default function PushNotificationToggle() {
         } catch {}
         const reason =
           (typeof errorData?.reason === 'string' ? errorData.reason : undefined) ??
+          (typeof (errorData?.meta as Record<string, unknown> | undefined)?.reason === 'string'
+            ? (errorData?.meta as Record<string, unknown>).reason
+            : undefined) ??
           (typeof (errorData?.details as Record<string, unknown> | undefined)?.reason === 'string'
             ? (errorData?.details as Record<string, unknown>).reason
             : undefined);
@@ -368,7 +371,7 @@ export default function PushNotificationToggle() {
           setError('Push subscription on this device has expired. Tap Repair to restore.');
           return;
         }
-        throw new Error(message);
+        throw toClientAppError(errorData, message);
       }
       const data = (await response.json().catch(() => null)) as { message?: string } | null;
       setTestMessage(data?.message || 'Test Push sent successfully to this device.');

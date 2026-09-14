@@ -71,7 +71,8 @@ export async function POST(request: Request) {
           retryable: false,
           details: { reason: 'PUSH_NO_SUBSCRIPTION' },
         }),
-        400
+        400,
+        { reason: 'PUSH_NO_SUBSCRIPTION' }
       );
     }
 
@@ -88,7 +89,8 @@ export async function POST(request: Request) {
           retryable: false,
           details: { reason: 'PUSH_NO_SUBSCRIPTION' },
         }),
-        400
+        400,
+        { reason: 'PUSH_NO_SUBSCRIPTION' }
       );
     }
 
@@ -105,7 +107,9 @@ export async function POST(request: Request) {
           action: 'Configure Web Push before sending a test notification.',
           retryable: false,
           details: { provider: 'web-push', reason: 'PUSH_VAPID_NOT_CONFIGURED' },
-        })
+        }),
+        400,
+        { provider: 'web-push', reason: 'PUSH_VAPID_NOT_CONFIGURED' }
       );
     }
 
@@ -117,7 +121,9 @@ export async function POST(request: Request) {
           action: 'Enable push notifications on a device, then try again.',
           retryable: false,
           details: { provider: 'web-push', reason: 'PUSH_NO_SUBSCRIPTION' },
-        })
+        }),
+        400,
+        { provider: 'web-push', reason: 'PUSH_NO_SUBSCRIPTION' }
       );
     }
 
@@ -140,7 +146,8 @@ export async function POST(request: Request) {
           retryable: false,
           details: { reason: 'PUSH_NO_SUBSCRIPTION' },
         }),
-        404
+        404,
+        { reason: 'PUSH_NO_SUBSCRIPTION' }
       );
     }
     const targetDeviceId = device.deviceId;
@@ -195,7 +202,12 @@ export async function POST(request: Request) {
               targetDeviceId,
             },
           }),
-          410
+          410,
+          {
+            provider: 'web-push',
+            reason: 'PUSH_SUBSCRIPTION_EXPIRED',
+            targetDeviceId,
+          }
         );
       }
 
@@ -210,7 +222,13 @@ export async function POST(request: Request) {
             reason: 'PUSH_PROVIDER_UNAVAILABLE',
             targetedDevice: targetDeviceId,
           },
-        })
+        }),
+        503,
+        {
+          provider: 'web-push',
+          reason: 'PUSH_PROVIDER_UNAVAILABLE',
+          targetedDevice: targetDeviceId,
+        }
       );
     }
 

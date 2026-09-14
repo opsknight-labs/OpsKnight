@@ -40,6 +40,7 @@ interface JobWorkerSharedState {
   lastError: string | null;
   workerLane: JobWorkerLane;
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
+  lastControlPlaneProbeAt: number;
 }
 
 declare global {
@@ -57,6 +58,7 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   lastError: null,
   workerLane: 'all',
   controlPlaneState: 'UNINITIALIZED',
+  lastControlPlaneProbeAt: 0,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -153,6 +155,27 @@ async function runOnce(): Promise<void> {
 
   workerState.lastRunAt = new Date();
   const batchStartedAt = Date.now();
+
+  // If currently degraded in EMERGENCY_LOCAL, attempt a periodic re-certification probe every 30s
+  if (workerState.controlPlaneState === 'EMERGENCY_LOCAL') {
+    const now = Date.now();
+    if (now - workerState.lastControlPlaneProbeAt >= 30_000) {
+      workerState.lastControlPlaneProbeAt = now;
+      try {
+        const { certifyNotificationControlPlane } = await import('./provider-admission');
+        await certifyNotificationControlPlane();
+        workerState.controlPlaneState = 'HEALTHY';
+        workerState.lastError = null;
+        logger.info('[JobWorker] Control plane recovered from EMERGENCY_LOCAL to HEALTHY');
+      } catch (probeError) {
+        const msg = probeError instanceof Error ? probeError.message : String(probeError);
+        logger.warn(
+          '[JobWorker] Control plane re-certification probe failed, remaining in EMERGENCY_LOCAL',
+          { error: msg }
+        );
+      }
+    }
+  }
 
   try {
     if (workerState.workerLane === 'projector') {

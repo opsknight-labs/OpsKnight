@@ -806,7 +806,7 @@ async function dispatchPayload(
         );
         return result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS'
           ? { ...result, success: true, skipped: true }
-          : result;
+          : { ...result, errorCode: result.reason ?? result.code };
       });
     }
     case 'INCIDENT_WHATSAPP': {
@@ -937,8 +937,8 @@ async function dispatchPayload(
             error: `Pinned Push provider ${payload.providerKey} is unavailable`,
           };
       }
-      return executeProvider(CircuitBreakers.push(), () =>
-        sendPush({
+      return executeProvider(CircuitBreakers.push(), async () => {
+        const result = await sendPush({
           userId: payload.userId,
           title: payload.title,
           body: payload.body,
@@ -946,8 +946,12 @@ async function dispatchPayload(
           badge: payload.badge,
           deliveryKey: notificationId,
           targetDeviceId: payload.targetDeviceId,
-        })
-      );
+        });
+        return {
+          ...result,
+          errorCode: result.reason ?? result.code,
+        };
+      });
     }
     case 'SLACK_CHANNEL': {
       const { sendSlackMessageToChannel } = await import('./slack');

@@ -115,12 +115,13 @@ async function resolveRuntimeSettingsCached(nowMs: number): Promise<RuntimeSetti
     const record = (await runtimeModel.findUnique({
       where: { id: 'default' },
     })) as RuntimeSettingsRow;
+    // Cache null (no row yet) as negative cache so fanout doesn't hammer Postgres before first admin save.
     runtimeCache.set('runtime', record as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
     return record;
-  } catch {
-    // Database unreachable: cache null to prevent hot query loop and fall back safely
-    runtimeCache.set('runtime', null as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
-    return null;
+  } catch (err) {
+    throw new Error(
+      `Failed to resolve runtime settings: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 }
 
@@ -237,7 +238,6 @@ export async function getEffectiveCapacity(input: {
     return cached;
   }
 
-  const runtimePromise = resolveRuntimeSettingsCached(nowMs);
   type CapacityRow = {
     provider: string;
     channel: string;
@@ -252,23 +252,33 @@ export async function getEffectiveCapacity(input: {
     .notificationProviderCapacity as
     | { findUnique: (args: unknown) => Promise<unknown> }
     | undefined;
+
   let stored: CapacityRow = null;
-  if (capacityModel?.findUnique) {
-    try {
-      stored = (await capacityModel.findUnique({
-        where: { provider_channel: { provider, channel } },
-      })) as CapacityRow;
-      if (!stored && (channel === 'WEBHOOK' || channel === 'SLACK') && provider !== 'default') {
-        stored = (await capacityModel.findUnique({
-          where: { provider_channel: { provider: 'default', channel } },
+  let runtime: RuntimeSettingsRow = null;
+
+  try {
+    const [storedResult, runtimeResult] = await Promise.all([
+      (async () => {
+        if (!capacityModel?.findUnique) return null;
+        let res = (await capacityModel.findUnique({
+          where: { provider_channel: { provider, channel } },
         })) as CapacityRow;
-      }
-    } catch {
-      // Database unreachable: proceed with env or default capacity safely
-      stored = null;
-    }
+        if (!res && (channel === 'WEBHOOK' || channel === 'SLACK') && provider !== 'default') {
+          res = (await capacityModel.findUnique({
+            where: { provider_channel: { provider: 'default', channel } },
+          })) as CapacityRow;
+        }
+        return res;
+      })(),
+      resolveRuntimeSettingsCached(nowMs),
+    ]);
+    stored = storedResult;
+    runtime = runtimeResult;
+  } catch (err) {
+    throw new Error(
+      `Failed to resolve capacity from database: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
-  const runtime = await runtimePromise;
 
   const runtimeBulkShare = runtime ? runtime.defaultBulkSharePercent / 100 : DEFAULT_BULK_SHARE;
   const envCapacity = resolveEnvCapacity(channel, provider, env);

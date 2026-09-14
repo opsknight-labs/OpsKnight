@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { APP_VERSION, DEPLOYMENT_ID } from '@/lib/version';
 import { getJobWorkerStatus } from '@/lib/job-worker';
 import { getOpsKnightProcessRole, getRuntimeResponsibilities } from '@/lib/runtime-role';
+import { logger } from '@/lib/logger';
 
 import v8 from 'v8';
 
@@ -18,6 +19,8 @@ const SERVER_INSTANCE_ID = Date.now().toString();
  */
 export async function GET(request: NextRequest) {
   const mode = request.nextUrl.searchParams.get('mode') || 'liveness';
+  const responsibilities =
+    mode === 'readiness' ? getRuntimeResponsibilities(getOpsKnightProcessRole()) : null;
   const checks: Record<
     string,
     {
@@ -29,7 +32,6 @@ export async function GET(request: NextRequest) {
   > = {};
 
   if (mode === 'readiness') {
-    const responsibilities = getRuntimeResponsibilities(getOpsKnightProcessRole());
     try {
       const dbStartTime = Date.now();
       let timerId: NodeJS.Timeout | undefined;
@@ -73,8 +75,9 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const schedulerExpected =
-      responsibilities.startScheduler && process.env.ENABLE_INTERNAL_CRON !== 'false';
+    const schedulerExpected = Boolean(
+      responsibilities?.startScheduler && process.env.ENABLE_INTERNAL_CRON !== 'false'
+    );
     if (!schedulerExpected) {
       checks.scheduler = { status: 'disabled', expected: false };
     } else {
@@ -106,7 +109,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (responsibilities.startJobWorker) {
+    if (responsibilities?.startJobWorker) {
       const worker = getJobWorkerStatus();
       const nowMs = Date.now();
       const idlePollMs = worker.config?.idlePollMs ?? 5_000;
@@ -171,7 +174,7 @@ export async function GET(request: NextRequest) {
   const criticalFailure =
     mode === 'readiness'
       ? checks.database?.status === 'unhealthy' ||
-        (Boolean(responsibilities.startJobWorker) &&
+        (Boolean(responsibilities?.startJobWorker) &&
           checks.notificationControlPlane?.status === 'unhealthy')
       : readinessChecks.some(check => check.status === 'unhealthy');
 

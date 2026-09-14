@@ -2,11 +2,8 @@ import crypto from 'node:crypto';
 import { Prisma, type NotificationChannel, type NotificationTrafficClass } from '@prisma/client';
 import prisma from './prisma';
 import { defaultRate, defaultInFlight } from './notification-capacity/defaults';
-import {
-  getEffectiveCapacity,
-  recordCapacityPressure,
-  type EffectiveCapacityConfig,
-} from './notification-capacity/resolver';
+import { getEffectiveCapacity, recordCapacityPressure } from './notification-capacity/resolver';
+import type { EffectiveCapacityConfig } from './notification-capacity/types';
 import { usesBulkCapacity } from './provider-capacity';
 import { logger } from './logger';
 
@@ -387,11 +384,13 @@ export async function acquireProviderConcurrency(
   now: Date = new Date(),
   trafficClass?: NotificationTrafficClass
 ): Promise<ProviderConcurrencyResult> {
+  sweepExpiredConcurrencyClaims(now.getTime());
   const bulk = usesBulkCapacity(trafficClass);
   const lane = bulk ? 'bulk' : 'reserved';
   const physicalPoolKey = `${scope}:${providerKey}`;
   const poolKey = `${physicalPoolKey}:${lane}`;
   const leaseOwner = `${WORKER_ID}:${lane}`.slice(0, 240);
+  let local = localConcurrency.get(poolKey);
 
   let config: EffectiveCapacityConfig;
   try {
@@ -447,7 +446,6 @@ export async function acquireProviderConcurrency(
   }
   const laneCeiling = bulk ? config.bulkMaxInFlight : config.maxInFlight;
 
-  let local = localConcurrency.get(poolKey);
   if (!local || local.expiresAt <= now.getTime()) {
     const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
     // Demand-aware reservation: reserve based on active demand + headroom,
@@ -571,12 +569,14 @@ export async function acquireProviderConcurrency(
   // Concurrency expansion (Gate 6):
   // If active demand has exhausted the current reservation but laneCeiling allows more,
   // attempt to expand the lease immediately rather than stalling until lease expiration.
-  if (local.active >= local.reserved && local.reserved < laneCeiling) {
+  // Expansion is strictly bounded by MAX_SLOTS_PER_WORKER to preserve multi-worker fairness.
+  const workerCap = Math.min(MAX_SLOTS_PER_WORKER, laneCeiling);
+  if (local.active >= local.reserved && local.reserved < workerCap) {
     const concQuery = safePrisma.$queryRaw;
     if (concQuery && !isProviderAdmissionTestEnv()) {
       try {
         const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
-        const expandRequested = Math.min(laneCeiling, local.active + 2);
+        const expandRequested = Math.min(workerCap, local.active + 2);
         const rows = (await concQuery(Prisma.sql`
           WITH lock AS (
             SELECT pg_advisory_xact_lock(hashtextextended(${`provider-slots:${physicalPoolKey}`}, 0))
@@ -600,12 +600,13 @@ export async function acquireProviderConcurrency(
         `)) as Array<{ reserved: number | null }> | null;
         const expanded = rows?.[0]?.reserved ?? 0;
         if (expanded > local.reserved) {
-          local.reserved = expanded;
+          local.reserved = Math.min(workerCap, expanded);
           local.expiresAt = now.getTime() + PROVIDER_LEASE_MS;
           logger.debug('provider_admission.concurrency_expanded', {
             scope,
             providerKey,
-            newReserved: expanded,
+            newReserved: local.reserved,
+            workerCap,
             laneCeiling,
           });
         }
@@ -637,7 +638,9 @@ export async function releaseProviderConcurrency(leaseKey: string): Promise<void
   if (!claim) return;
   concurrencyClaims.delete(leaseKey);
   const local = localConcurrency.get(claim.poolKey);
-  if (local) local.active = Math.max(0, local.active - 1);
+  if (local && local.expiresAt > Date.now()) {
+    local.active = Math.max(0, local.active - 1);
+  }
 }
 
 export class ProviderCooldownError extends Error {

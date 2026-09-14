@@ -482,6 +482,16 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         // success MUST be false with outcome 'PARTIAL'.
         // This keeps the notification retryable in the central queue.
         // Checkpointed devices will be skipped on subsequent attempts.
+        const retryAfterCandidates = failures
+          .map(f => f.retryAfterMs)
+          .filter((ms): ms is number => typeof ms === 'number' && ms > 0);
+        const maxRetryAfterMs =
+          retryAfterCandidates.length > 0
+            ? Math.max(...retryAfterCandidates)
+            : rateLimited
+              ? 60_000
+              : undefined;
+
         return {
           success: false,
           outcome: 'PARTIAL',
@@ -492,6 +502,8 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
           checkpointedCount,
           failedCount: retryableFailureCount,
           removedCount: terminalCount,
+          statusCode: rateLimited ? 429 : 503,
+          retryAfterMs: maxRetryAfterMs,
           failures,
         };
       }
@@ -506,6 +518,16 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
         removedCount: terminalCount,
       };
     }
+
+    const retryAfterCandidates = failures
+      .map(f => f.retryAfterMs)
+      .filter((ms): ms is number => typeof ms === 'number' && ms > 0);
+    const maxRetryAfterMs =
+      retryAfterCandidates.length > 0
+        ? Math.max(...retryAfterCandidates)
+        : rateLimited
+          ? 60_000
+          : undefined;
 
     const outcome: PushOutcome =
       terminalCount > 0 && retryableFailureCount === 0 ? 'TERMINAL_FAILURE' : 'RETRYABLE_FAILURE';
@@ -522,7 +544,7 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
       failedCount: retryableFailureCount,
       removedCount: terminalCount,
       statusCode: rateLimited ? 429 : terminalCount > 0 ? 410 : 503,
-      retryAfterMs: rateLimited ? 60_000 : undefined,
+      retryAfterMs: maxRetryAfterMs,
       failures,
     };
   } catch (error) {
