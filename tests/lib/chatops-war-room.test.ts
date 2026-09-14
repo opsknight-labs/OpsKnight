@@ -10,6 +10,11 @@ import {
 } from '@/lib/chatops/war-room';
 import prisma from '@/lib/prisma';
 import * as retryModule from '@/lib/retry';
+import { adoptWarRoomChannel, claimWarRoomProvisioning } from '@/lib/war-room/repository';
+import {
+  findSlackWarRoomAuthority,
+  projectSlackWarRoomToLegacyIncident,
+} from '@/lib/war-room/slack-compatibility';
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -27,6 +32,9 @@ vi.mock('@/lib/prisma', () => ({
     incidentEvent: {
       create: vi.fn(),
     },
+    incidentWarRoom: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
     slackPinnedMessage: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -43,6 +51,20 @@ vi.mock('@/lib/prisma', () => ({
       findMany: vi.fn(),
     },
   },
+}));
+
+vi.mock('@/lib/db-utils', () => ({
+  runSerializableTransaction: vi.fn((callback: (tx: object) => unknown) => callback({})),
+}));
+
+vi.mock('@/lib/war-room/repository', () => ({
+  claimWarRoomProvisioning: vi.fn(),
+  adoptWarRoomChannel: vi.fn(),
+}));
+
+vi.mock('@/lib/war-room/slack-compatibility', () => ({
+  findSlackWarRoomAuthority: vi.fn(),
+  projectSlackWarRoomToLegacyIncident: vi.fn(),
 }));
 
 vi.mock('@/lib/escalation', () => ({
@@ -71,8 +93,28 @@ vi.mock('@/lib/retry', () => ({
 }));
 
 describe('ChatOps War-Room Engine', () => {
+  const activeSlackRoom = {
+    id: 'slack-room-1',
+    state: 'READY',
+    providerChannelId: 'C123',
+    providerChannelName: 'inc-104-payments',
+    providerChannelUrl: null,
+  } as any;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(null);
+    vi.mocked(projectSlackWarRoomToLegacyIncident).mockResolvedValue(undefined);
+    vi.mocked(claimWarRoomProvisioning).mockResolvedValue({
+      claimed: true,
+      warRoom: {
+        id: 'slack-room-1',
+        state: 'PROVISIONING',
+        provisioningToken: 'slack-lease-1',
+      },
+    } as any);
+    vi.mocked(adoptWarRoomChannel).mockResolvedValue('READY');
+    vi.mocked(prisma.incidentWarRoom.updateMany).mockResolvedValue({ count: 1 });
   });
 
   describe('generateBridgeUrl', () => {
@@ -163,9 +205,11 @@ describe('ChatOps War-Room Engine', () => {
 
       expect(result.success).toBe(true);
       expect(result.channelId).toBe('C-NEW');
-      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
+      expect(adoptWarRoomChannel).toHaveBeenCalledWith(
+        expect.anything(),
         expect.objectContaining({
-          data: expect.objectContaining({ slackChannelId: 'C-NEW', warRoomArchivedAt: null }),
+          warRoomId: 'slack-room-1',
+          channelId: 'C-NEW',
         })
       );
     });
@@ -173,9 +217,14 @@ describe('ChatOps War-Room Engine', () => {
     it('should return existing war-room if already created', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-104',
-        slackChannelId: 'C123456',
-        slackChannelName: 'inc-104-payments',
         service: { id: 'srv-1', name: 'Payments API' },
+      } as any);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        id: 'slack-room-existing',
+        state: 'READY',
+        providerChannelId: 'C123456',
+        providerChannelName: 'inc-104-payments',
+        providerChannelUrl: null,
       } as any);
 
       const result = await createIncidentWarRoom('inc-104');
@@ -342,12 +391,11 @@ describe('ChatOps War-Room Engine', () => {
       expect(result.success).toBe(true);
       expect(result.channelId).toBe('C999888');
       expect(result.warRoomUrl).toBe('https://meet.jit.si/opsknight-inc-ef123456');
-      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
+      expect(adoptWarRoomChannel).toHaveBeenCalledWith(
+        expect.anything(),
         expect.objectContaining({
-          where: expect.objectContaining({ id: 'inc-abcdef123456' }),
-          data: expect.objectContaining({
-            slackChannelId: 'C999888',
-          }),
+          warRoomId: 'slack-room-1',
+          channelId: 'C999888',
         })
       );
     });
@@ -433,14 +481,20 @@ describe('ChatOps War-Room Engine', () => {
   });
 
   describe('postWarRoomUpdate', () => {
+    beforeEach(() => {
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(activeSlackRoom);
+    });
+
     it('should refuse to post into an archived channel', async () => {
       // The channel id is retained after archiving, so presence alone is not
       // enough — posting there sends updates where nobody will read them.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-        slackChannelId: 'C123',
         serviceId: 'srv-1',
-        warRoomArchivedAt: new Date('2026-08-16T10:00:00Z'),
       } as any);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        ...activeSlackRoom,
+        state: 'ARCHIVED',
+      });
 
       const result = await postWarRoomUpdate('inc-104', 'Status update');
       expect(result.success).toBe(false);
@@ -451,6 +505,7 @@ describe('ChatOps War-Room Engine', () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: null,
       } as any);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(null);
 
       const result = await postWarRoomUpdate('inc-104', 'Test note');
       expect(result.success).toBe(false);
@@ -473,10 +528,15 @@ describe('ChatOps War-Room Engine', () => {
   });
 
   describe('archiveWarRoomChannel', () => {
+    beforeEach(() => {
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(activeSlackRoom);
+    });
+
     it('should return error if no channel exists', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: null,
       } as any);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(null);
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(false);
@@ -519,7 +579,7 @@ describe('ChatOps War-Room Engine', () => {
       expect(result.error).toBe('Archive on resolve is disabled');
     });
 
-    it('should stamp warRoomArchivedAt so the channel stops reading as live', async () => {
+    it('should archive the neutral authority so the channel stops reading as live', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
@@ -536,10 +596,10 @@ describe('ChatOps War-Room Engine', () => {
 
       await archiveWarRoomChannel('inc-104');
 
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incidentWarRoom.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-104' },
-          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: 'slack-room-1' }),
+          data: expect.objectContaining({ state: 'ARCHIVED', archivedAt: expect.any(Date) }),
         })
       );
     });
@@ -566,7 +626,7 @@ describe('ChatOps War-Room Engine', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should treat already_archived as idempotent success and stamp warRoomArchivedAt', async () => {
+    it('should treat already_archived as idempotent success and archive neutral authority', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
@@ -583,15 +643,15 @@ describe('ChatOps War-Room Engine', () => {
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(true);
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incidentWarRoom.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-104' },
-          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: 'slack-room-1' }),
+          data: expect.objectContaining({ state: 'ARCHIVED', archivedAt: expect.any(Date) }),
         })
       );
     });
 
-    it('should treat channel_not_found as idempotent success and stamp warRoomArchivedAt', async () => {
+    it('should treat channel_not_found as idempotent success and archive neutral authority', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
@@ -608,10 +668,10 @@ describe('ChatOps War-Room Engine', () => {
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(true);
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incidentWarRoom.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-104' },
-          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: 'slack-room-1' }),
+          data: expect.objectContaining({ state: 'ARCHIVED', archivedAt: expect.any(Date) }),
         })
       );
     });
@@ -622,11 +682,12 @@ describe('ChatOps War-Room Engine', () => {
       // Reassigning an incident after its channel was archived must not drag
       // people into a dead channel.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-        slackChannelId: 'C123',
-        slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-        warRoomArchivedAt: new Date('2026-08-16T10:00:00Z'),
       } as any);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        ...activeSlackRoom,
+        state: 'ARCHIVED',
+      });
 
       const result = await inviteUserToWarRoom('inc-104', 'usr-1');
       expect(result.success).toBe(false);
@@ -638,11 +699,12 @@ describe('ChatOps War-Room Engine', () => {
       // Resolve can reach archiving from the server action, bulk resolve and the
       // Slack button; without this the farewell message posts more than once.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-        slackChannelId: 'C123',
-        slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-        warRoomArchivedAt: new Date('2026-08-16T10:00:00Z'),
       } as any);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        ...activeSlackRoom,
+        state: 'ARCHIVED',
+      });
       vi.mocked(retryModule.retryFetch).mockReset();
 
       const result = await archiveWarRoomChannel('inc-104');

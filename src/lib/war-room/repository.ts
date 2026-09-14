@@ -100,8 +100,12 @@ export async function adoptWarRoomChannel(
   input: {
     warRoomId: string;
     provisioningToken: string;
-    tenantId: string;
-    teamId: string;
+    providerTenantId?: string | null;
+    providerContainerId?: string | null;
+    /** @deprecated Use providerTenantId. */
+    tenantId?: string | null;
+    /** @deprecated Use providerContainerId. */
+    teamId?: string | null;
     channelId: string;
     channelName: string;
     channelUrl?: string | null;
@@ -133,8 +137,8 @@ export async function adoptWarRoomChannel(
     },
     data: {
       state: resolved ? 'CLOSED' : 'READY',
-      providerTenantId: input.tenantId,
-      providerContainerId: input.teamId,
+      providerTenantId: input.providerTenantId ?? input.tenantId ?? null,
+      providerContainerId: input.providerContainerId ?? input.teamId ?? null,
       providerChannelId: input.channelId,
       providerChannelName: input.channelName,
       providerChannelUrl: input.channelUrl ?? null,

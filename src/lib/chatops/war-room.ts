@@ -11,9 +11,12 @@ import { getSlackBotToken } from '@/lib/slack';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { getBaseUrl } from '@/lib/env-validation';
 import { retryFetch } from '@/lib/retry';
-import crypto from 'crypto';
-
-const PROVISIONING_LEASE_MS = 5 * 60 * 1000;
+import { runSerializableTransaction } from '@/lib/db-utils';
+import { adoptWarRoomChannel, claimWarRoomProvisioning } from '@/lib/war-room/repository';
+import {
+  findSlackWarRoomAuthority,
+  projectSlackWarRoomToLegacyIncident,
+} from '@/lib/war-room/slack-compatibility';
 
 type WarRoomResult = {
   success: boolean;
@@ -215,13 +218,15 @@ export async function createIncidentWarRoom(
       return { success: false, error: 'Incident not found' };
     }
 
-    // Already has a live war-room. An archived one does not count — reopening an
-    // incident should be able to provision a fresh channel.
-    if (incident.slackChannelId && !incident.warRoomArchivedAt) {
+    // IncidentWarRoom is authoritative. The legacy Incident columns are only
+    // maintained as a rolling-deploy compatibility projection.
+    const currentRoom = await findSlackWarRoomAuthority(incidentId, { activeOnly: true });
+    if (currentRoom?.state === 'READY' && currentRoom.providerChannelId) {
       return {
         success: true,
-        channelId: incident.slackChannelId,
-        channelName: incident.slackChannelName || undefined,
+        channelId: currentRoom.providerChannelId,
+        channelName: currentRoom.providerChannelName || undefined,
+        warRoomUrl: currentRoom.providerChannelUrl,
       };
     }
 
@@ -284,47 +289,45 @@ export async function createIncidentWarRoom(
         .replace(/^[-_]+|[-_]+$/g, '') || 'incident';
     const channelName = `${safePrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
 
-    // Claim before making an external call. A failed worker may be reclaimed
-    // after its lease expires, but stale workers can never attach their result.
-    const provisioningToken = crypto.randomUUID();
-    const claimed = await prisma.incident.updateMany({
-      where: {
-        id: incidentId,
-        slackChannelId: null,
-        OR: [
-          { warRoomProvisioningStatus: { in: ['NONE', 'FAILED'] } },
-          {
-            warRoomProvisioningStatus: 'PROVISIONING',
-            warRoomProvisioningAt: { lt: new Date(Date.now() - PROVISIONING_LEASE_MS) },
-          },
-        ],
-      },
-      data: {
-        warRoomProvisioningStatus: 'PROVISIONING',
-        warRoomProvisioningToken: provisioningToken,
-        warRoomProvisioningAt: new Date(),
-      },
-    });
-    if (claimed.count !== 1) {
-      const current = await prisma.incident.findUnique({
-        where: { id: incidentId },
-        select: { slackChannelId: true, slackChannelName: true, warRoomUrl: true },
-      });
-      if (current?.slackChannelId) {
+    // Claim the neutral lifecycle row before external I/O. Reopened incidents
+    // receive a new generation; concurrent workers share the same lease.
+    const claim = await runSerializableTransaction(tx =>
+      claimWarRoomProvisioning(tx, {
+        incidentId,
+        provider: 'SLACK',
+        reopen: ['OPEN', 'ACKNOWLEDGED'].includes(incident.status),
+      })
+    );
+    if (!claim.claimed) {
+      if (claim.warRoom.state === 'READY' && claim.warRoom.providerChannelId) {
         return {
           success: true,
-          channelId: current.slackChannelId,
-          channelName: current.slackChannelName || undefined,
-          warRoomUrl: current.warRoomUrl,
+          channelId: claim.warRoom.providerChannelId,
+          channelName: claim.warRoom.providerChannelName || undefined,
+          warRoomUrl: claim.warRoom.providerChannelUrl,
         };
       }
       return { success: false, error: 'War-room provisioning is already in progress' };
     }
+    const warRoomId = claim.warRoom.id;
+    const provisioningToken = claim.warRoom.provisioningToken!;
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: warRoomId, provisioningToken, state: 'PROVISIONING' },
+      data: { providerTenantId: slackWorkspaceId },
+    });
+    await projectSlackWarRoomToLegacyIncident(warRoomId);
+
     const failProvisioning = async (error: string) => {
-      await prisma.incident.updateMany({
-        where: { id: incidentId, warRoomProvisioningToken: provisioningToken },
-        data: { warRoomProvisioningStatus: 'FAILED', warRoomProvisioningToken: null },
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: warRoomId, provisioningToken, state: 'PROVISIONING' },
+        data: {
+          state: 'FAILED',
+          lastErrorCode: 'SLACK_PROVISION_FAILED',
+          lastError: error.slice(0, 1000),
+          provisioningToken: null,
+        },
       });
+      await projectSlackWarRoomToLegacyIncident(warRoomId);
       return { success: false, error } satisfies WarRoomResult;
     };
 
@@ -552,26 +555,24 @@ export async function createIncidentWarRoom(
       logger.warn('[ChatOps] Failed to post welcome card', { error: err })
     );
 
-    // Update incident with war-room metadata
-    const attached = await prisma.incident.updateMany({
-      where: { id: incidentId, warRoomProvisioningToken: provisioningToken },
-      data: {
-        slackChannelId: channelId,
-        slackChannelName: effectiveChannelName,
-        slackWorkspaceId,
-        warRoomUrl,
-        warRoomArchivedAt: null,
-        warRoomProvisioningStatus: 'READY',
-        warRoomProvisioningToken: null,
-      },
-    });
-    if (attached.count !== 1) {
+    const adoption = await runSerializableTransaction(tx =>
+      adoptWarRoomChannel(tx, {
+        warRoomId,
+        provisioningToken,
+        providerTenantId: slackWorkspaceId,
+        channelId,
+        channelName: effectiveChannelName,
+        channelUrl: warRoomUrl,
+      })
+    );
+    if (adoption === 'FENCED') {
       logger.warn('[ChatOps] War-room completion lease was lost', { incidentId, channelId });
       return {
         success: false,
         error: 'War-room provisioning lease was lost; reconciliation will adopt the channel',
       };
     }
+    await projectSlackWarRoomToLegacyIncident(warRoomId);
 
     // Log timeline event
     await prisma.incidentEvent.create({
@@ -604,17 +605,24 @@ export async function postWarRoomUpdate(
   message: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const incident = await prisma.incident.findUnique({
-      where: { id: incidentId },
-      select: { slackChannelId: true, serviceId: true, warRoomArchivedAt: true },
-    });
+    const [incident, room] = await Promise.all([
+      prisma.incident.findUnique({
+        where: { id: incidentId },
+        select: { serviceId: true },
+      }),
+      findSlackWarRoomAuthority(incidentId),
+    ]);
 
-    if (!incident?.slackChannelId) {
+    if (!room?.providerChannelId) {
       return { success: false, error: 'No war-room channel for this incident' };
     }
 
-    if (incident.warRoomArchivedAt) {
+    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') {
       return { success: false, error: 'War-room channel is archived' };
+    }
+
+    if (!incident) {
+      return { success: false, error: 'Incident not found' };
     }
 
     const botToken = await getSlackBotToken(incident.serviceId);
@@ -623,7 +631,7 @@ export async function postWarRoomUpdate(
     }
 
     const result = await slackApiCall('chat.postMessage', botToken, {
-      channel: incident.slackChannelId,
+      channel: room.providerChannelId,
       text: message,
       unfurl_links: false,
     });
@@ -652,24 +660,24 @@ export async function archiveWarRoomChannel(
   options: { force?: boolean } = {}
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const incident = await prisma.incident.findUnique({
-      where: { id: incidentId },
-      select: {
-        slackChannelId: true,
-        slackChannelName: true,
-        serviceId: true,
-        warRoomArchivedAt: true,
-      },
-    });
+    const [incident, room] = await Promise.all([
+      prisma.incident.findUnique({
+        where: { id: incidentId },
+        select: {
+          serviceId: true,
+        },
+      }),
+      findSlackWarRoomAuthority(incidentId),
+    ]);
 
-    if (!incident?.slackChannelId) {
+    if (!incident || !room?.providerChannelId) {
       return { success: false, error: 'No war-room channel' };
     }
 
     // Several paths archive on resolve (server action, bulk resolve, Slack
     // button). Without this, a resolve that hits two of them posts the farewell
     // message twice.
-    if (incident.warRoomArchivedAt) {
+    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') {
       return { success: true };
     }
 
@@ -690,24 +698,24 @@ export async function archiveWarRoomChannel(
 
     // Update topic to resolved
     await slackApiCall('conversations.setTopic', botToken, {
-      channel: incident.slackChannelId,
+      channel: room.providerChannelId,
       topic: '✅ Incident Resolved — This channel has been archived.',
     }).catch(() => {});
 
     // Post final message
     await slackApiCall('chat.postMessage', botToken, {
-      channel: incident.slackChannelId,
+      channel: room.providerChannelId,
       text: `✅ *This incident has been resolved.* Archiving war-room channel.`,
     }).catch(() => {});
 
     // Ensure bot is in channel before archiving
     await slackApiCall('conversations.join', botToken, {
-      channel: incident.slackChannelId,
+      channel: room.providerChannelId,
     }).catch(() => {});
 
     // Archive channel
     const archiveResult = await slackApiCall('conversations.archive', botToken, {
-      channel: incident.slackChannelId,
+      channel: room.providerChannelId,
     });
 
     const isIdempotentSuccess =
@@ -721,32 +729,37 @@ export async function archiveWarRoomChannel(
     }
 
     if (archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found') {
-      logger.info('[ChatOps] Channel already archived or not found in Slack; treating as archived', {
-        incidentId,
-        channelId: incident.slackChannelId,
-        slackError: archiveResult.error,
-      });
+      logger.info(
+        '[ChatOps] Channel already archived or not found in Slack; treating as archived',
+        {
+          incidentId,
+          channelId: room.providerChannelId,
+          slackError: archiveResult.error,
+        }
+      );
     }
 
-    // Mark the war-room as archived. The channel id is kept so the incident
-    // retains its history; this is what stops the UI advertising a live channel
-    // and stops later updates being posted where nobody will read them.
-    await prisma.incident
-      .update({ where: { id: incidentId }, data: { warRoomArchivedAt: new Date() } })
-      .catch(err => logger.warn('[ChatOps] Failed to record archive time', { error: err }));
+    const archivedAt = new Date();
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id, state: { in: ['READY', 'CLOSING'] } },
+      data: { state: 'ARCHIVED', closedAt: archivedAt, archivedAt },
+    });
+    await projectSlackWarRoomToLegacyIncident(room.id).catch(err =>
+      logger.warn('[ChatOps] Failed to project archive time', { error: err })
+    );
 
     // Log event
     await prisma.incidentEvent.create({
       data: {
         incidentId,
         type: 'STATUS_CHANGE',
-        message: `War-room channel #${incident.slackChannelName} archived`,
+        message: `War-room channel #${room.providerChannelName} archived`,
       },
     });
 
     logger.info('[ChatOps] War-room archived', {
       incidentId,
-      channelId: incident.slackChannelId,
+      channelId: room.providerChannelId,
     });
 
     return { success: true };
@@ -765,21 +778,22 @@ export async function updateWarRoomTopic(
   newStatus?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const incident = await prisma.incident.findUnique({
-      where: { id: incidentId },
-      select: {
-        title: true,
-        urgency: true,
-        status: true,
-        slackChannelId: true,
-        serviceId: true,
-        warRoomArchivedAt: true,
-        assignee: { select: { name: true } },
-        team: { select: { name: true } },
-      },
-    });
+    const [incident, room] = await Promise.all([
+      prisma.incident.findUnique({
+        where: { id: incidentId },
+        select: {
+          title: true,
+          urgency: true,
+          status: true,
+          serviceId: true,
+          assignee: { select: { name: true } },
+          team: { select: { name: true } },
+        },
+      }),
+      findSlackWarRoomAuthority(incidentId, { activeOnly: true }),
+    ]);
 
-    if (!incident?.slackChannelId || incident.warRoomArchivedAt) return { success: true };
+    if (!incident || !room?.providerChannelId) return { success: true };
 
     const botToken = await getSlackBotToken(incident.serviceId);
     if (!botToken) return { success: true };
@@ -797,7 +811,7 @@ export async function updateWarRoomTopic(
     const topic = `${statusIcon} ${incident.title} | ${displayStatus} | ${incident.urgency}${assigneeText} | ${dashboardUrl}`;
 
     const result = await slackApiCall('conversations.setTopic', botToken, {
-      channel: incident.slackChannelId,
+      channel: room.providerChannelId,
       topic: topic.slice(0, 250),
     });
     if (!result.ok) return { success: false, error: result.error || 'Slack topic update failed' };
@@ -816,23 +830,21 @@ export async function inviteUserToWarRoom(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const incident = await prisma.incident.findUnique({
-      where: { id: incidentId },
-      select: {
-        slackChannelId: true,
-        slackChannelName: true,
-        serviceId: true,
-        warRoomArchivedAt: true,
-      },
-    });
+    const [incident, room] = await Promise.all([
+      prisma.incident.findUnique({
+        where: { id: incidentId },
+        select: { serviceId: true },
+      }),
+      findSlackWarRoomAuthority(incidentId),
+    ]);
 
-    if (!incident?.slackChannelId) {
+    if (!incident || !room?.providerChannelId) {
       return { success: false, error: 'No active war-room channel' };
     }
 
     // Reassigning an incident whose channel was archived must not drag people
     // into a dead channel — Slack rejects it, and it would be noise if it did not
-    if (incident.warRoomArchivedAt) {
+    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') {
       return { success: false, error: 'War-room channel is archived' };
     }
 
@@ -877,7 +889,7 @@ export async function inviteUserToWarRoom(
 
     const slackUserId = (lookupResult as any).user.id as string; // eslint-disable-line @typescript-eslint/no-explicit-any
     const inviteResult = await slackApiCall('conversations.invite', botToken, {
-      channel: incident.slackChannelId,
+      channel: room.providerChannelId,
       users: slackUserId,
     });
 
@@ -887,7 +899,7 @@ export async function inviteUserToWarRoom(
         .create({
           data: {
             incidentId,
-            message: `Slack War-Room: Could not invite ${user.name} to channel #${incident.slackChannelName} (${inviteErr})`,
+            message: `Slack War-Room: Could not invite ${user.name} to channel #${room.providerChannelName} (${inviteErr})`,
           },
         })
         .catch(() => {});
