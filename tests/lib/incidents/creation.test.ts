@@ -14,6 +14,7 @@ vi.mock('@/lib/incidents/lifecycle', () => ({
 }));
 vi.mock('@/lib/db-utils', () => ({
   runSerializableTransaction: mocks.runSerializableTransaction,
+  TRANSACTION_MAX_ATTEMPTS_HIGH_LOAD: 5,
 }));
 
 import { applyIncidentCreation, executeIncidentCreation } from '@/lib/incidents/creation';
@@ -88,7 +89,10 @@ describe('incident creation domain engine', () => {
   it('commits a new incident and its creation outbox work through one transaction', async () => {
     const result = await executeIncidentCreation(baseInput());
 
-    expect(mocks.runSerializableTransaction).toHaveBeenCalledOnce();
+    expect(mocks.runSerializableTransaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      5
+    );
     expect(tx.incident.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
