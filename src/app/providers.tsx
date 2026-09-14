@@ -11,6 +11,21 @@ const MOBILE_THEME_COLORS = {
   dark: '#09090b',
 } as const;
 
+// In React 19 / Next.js 16, next-themes renders an inline <script> tag for noflash theme
+// initialization which triggers a harmless development console warning.
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  const origError = console.error;
+  console.error = (...args: unknown[]) => {
+    if (
+      typeof args[0] === 'string' &&
+      args[0].includes('Encountered a script tag while rendering React component')
+    ) {
+      return;
+    }
+    origError(...args);
+  };
+}
+
 function ThemeAttributeBridge() {
   const { resolvedTheme } = useTheme();
 
@@ -33,8 +48,9 @@ function ThemeAttributeBridge() {
     } else {
       // Fallback path retained for contract compatibility: query the canonical
       // meta[name="theme-color"] node when the runtime node is absent.
-      const fallbackThemeColor =
-        document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+      const fallbackThemeColor = document.querySelector<HTMLMetaElement>(
+        'meta[name="theme-color"]'
+      );
       if (fallbackThemeColor) fallbackThemeColor.content = nextThemeColor;
     }
   }, [resolvedTheme]);

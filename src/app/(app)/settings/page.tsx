@@ -2,16 +2,8 @@ import { getUserPermissions } from '@/lib/rbac';
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
 import { cn } from '@/lib/utils';
-import { SETTINGS_NAV_SECTIONS, SETTINGS_NAV_ITEMS } from '@/components/settings/navConfig';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from '@/components/ui/shadcn/card';
+import { SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
 import { Badge } from '@/components/ui/shadcn/badge';
-import SettingsSearch from '@/components/settings/SettingsSearch';
 import {
   User,
   Settings,
@@ -19,7 +11,7 @@ import {
   Building2,
   Puzzle,
   Bell,
-  ArrowRight,
+  ChevronRight,
   Globe,
   Activity,
   MessageSquare,
@@ -28,7 +20,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
-import { SlackLogo, JiraLogo } from '@/components/common/BrandLogos';
+import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 
 const sectionIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
   account: User,
@@ -48,6 +40,7 @@ const itemIcons: Record<string, LucideIcon | React.ComponentType<{ className?: s
   'security-compliance': ShieldCheck,
   integrations: Puzzle,
   slack: SlackLogo,
+  'microsoft-teams': MicrosoftTeamsLogo,
   chatops: MessageSquare,
   jira: JiraLogo,
   'health-center': Activity,
@@ -62,6 +55,49 @@ type ItemLiveStatus = {
   connected: boolean;
 };
 
+const itemThemes: Record<string, { bg: string; text: string }> = {
+  profile: { bg: 'bg-sky-500/10 dark:bg-sky-500/20', text: 'text-sky-600 dark:text-sky-400' },
+  security: {
+    bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
+  'incident-sla': {
+    bg: 'bg-rose-500/10 dark:bg-rose-500/20',
+    text: 'text-rose-600 dark:text-rose-400',
+  },
+  'custom-fields': {
+    bg: 'bg-indigo-500/10 dark:bg-indigo-500/20',
+    text: 'text-indigo-600 dark:text-indigo-400',
+  },
+  'status-page': {
+    bg: 'bg-cyan-500/10 dark:bg-cyan-500/20',
+    text: 'text-cyan-600 dark:text-cyan-400',
+  },
+  'api-keys': {
+    bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+    text: 'text-amber-600 dark:text-amber-400',
+  },
+  'audit-logs': {
+    bg: 'bg-slate-500/10 dark:bg-slate-500/20',
+    text: 'text-slate-600 dark:text-slate-400',
+  },
+  'security-compliance': {
+    bg: 'bg-teal-500/10 dark:bg-teal-500/20',
+    text: 'text-teal-600 dark:text-teal-400',
+  },
+  integrations: {
+    bg: 'bg-purple-500/10 dark:bg-purple-500/20',
+    text: 'text-purple-600 dark:text-purple-400',
+  },
+  slack: { bg: 'bg-[#4A154B]/10 dark:bg-[#4A154B]/20', text: 'text-[#ECB22E]' },
+  'microsoft-teams': { bg: 'bg-[#505AC9]/10 dark:bg-[#505AC9]/20', text: 'text-[#7B83EB]' },
+  chatops: { bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', text: 'text-emerald-500' },
+  jira: { bg: 'bg-[#0052CC]/10 dark:bg-[#0052CC]/20', text: 'text-[#2684FF]' },
+  system: { bg: 'bg-violet-500/10 dark:bg-violet-500/20', text: 'text-violet-500' },
+  'notifications-admin': { bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-500' },
+  'health-center': { bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', text: 'text-emerald-500' },
+};
+
 export default async function SettingsOverviewPage() {
   const permissions = await getUserPermissions();
 
@@ -69,6 +105,7 @@ export default async function SettingsOverviewPage() {
     slackIntegration,
     jiraConfig,
     chatOpsConfig,
+    teamsConfig,
     activeApiKeysCount,
     notificationProvidersCount,
     statusPage,
@@ -89,6 +126,11 @@ export default async function SettingsOverviewPage() {
     prisma.chatOpsConfig
       .findUnique({
         where: { id: 'default' },
+        select: { enabled: true },
+      })
+      .catch(() => null),
+    prisma.microsoftTeamsConfig
+      .findFirst({
         select: { enabled: true },
       })
       .catch(() => null),
@@ -122,6 +164,9 @@ export default async function SettingsOverviewPage() {
     jira: jiraConfig?.enabled
       ? { label: 'Connected', connected: true }
       : { label: 'Not Connected', connected: false },
+    'microsoft-teams': teamsConfig?.enabled
+      ? { label: 'Connected', connected: true }
+      : { label: 'Not Connected', connected: false },
     chatops: chatOpsConfig?.enabled
       ? { label: 'Active', connected: true }
       : { label: 'Disabled', connected: false },
@@ -146,6 +191,12 @@ export default async function SettingsOverviewPage() {
     },
   };
 
+  const activeIntegrationsCount =
+    (slackIntegration?.enabled ? 1 : 0) +
+    (jiraConfig?.enabled ? 1 : 0) +
+    (chatOpsConfig?.enabled ? 1 : 0) +
+    (teamsConfig?.enabled ? 1 : 0);
+
   const canAccess = (item: {
     requiresAdmin?: boolean;
     requiresAdminOrAuditor?: boolean;
@@ -158,71 +209,74 @@ export default async function SettingsOverviewPage() {
   };
 
   const sectionGroups = SETTINGS_NAV_SECTIONS.filter(section => section.id !== 'overview');
-  const accessibleItems = SETTINGS_NAV_ITEMS.filter(canAccess);
-  const popularLinks = accessibleItems.filter(item =>
-    ['profile', 'security', 'api-keys', 'notifications-admin', 'custom-fields'].includes(item.id)
-  );
 
   return (
     <div className="space-y-8 pb-12 w-full">
-      {/* Header */}
-      <div className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage your personal preferences, workspace configuration, alert integrations, and system
-          diagnostics in one place.
-        </p>
+      {/* Modern Metric Capsules */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-primary/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform shrink-0">
+            <Puzzle className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Integrations
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
+              {activeIntegrationsCount} Active
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-emerald-500/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
+            <KeyRound className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              API Keys
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
+              {activeApiKeysCount} Active
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-indigo-500/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
+            <SlidersHorizontal className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Custom Fields
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
+              {customFieldsCount} Defined
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-cyan-500/40 hover:shadow-sm transition-all group">
+          <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0">
+            <Globe className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Status Page
+            </p>
+            <p className="text-sm font-bold text-foreground truncate mt-0.5">
+              {statusPage?.enabled
+                ? statusPage.privacyMode === 'PUBLIC'
+                  ? 'Public'
+                  : 'Active'
+                : 'Disabled'}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Search & Quick Access Section */}
-      <Card className="border-border bg-card shadow-xs w-full">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold">Search Settings</CardTitle>
-          <CardDescription>Quickly jump to any setting, provider, or integration</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <SettingsSearch
-            items={accessibleItems}
-            placeholder="Search settings, integrations, parameters..."
-          />
-
-          {/* Quick Access Links */}
-          {popularLinks.length > 0 && (
-            <div>
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Quick Access
-              </h3>
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {popularLinks.map(item => {
-                  const Icon = itemIcons[item.id] || Settings;
-
-                  return (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:bg-accent/60 hover:border-slate-300 hover:shadow-xs transition-all duration-150 group"
-                    >
-                      <div className="p-1.5 rounded-md bg-muted text-muted-foreground group-hover:text-foreground transition-colors shrink-0">
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-xs text-foreground truncate">{item.label}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          {item.description}
-                        </p>
-                      </div>
-                      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all shrink-0" />
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Settings Categories (Dynamic multi-column layout for large screens) */}
-      <div className="space-y-6">
+      {/* Settings Sections (Linear / Stripe Grouped List Style) */}
+      <div className="space-y-8">
         {sectionGroups.map(section => {
           const visibleItems = section.items.filter(canAccess);
           if (visibleItems.length === 0) return null;
@@ -230,88 +284,104 @@ export default async function SettingsOverviewPage() {
           const SectionIcon = sectionIcons[section.id] || Settings;
 
           return (
-            <Card key={section.id} className="border-border bg-card shadow-xs w-full">
-              <CardHeader className="pb-4 border-b border-border/50">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                    <SectionIcon className="h-5 w-5" />
+            <div key={section.id} className="space-y-3">
+              {/* Section Header */}
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-1.5 rounded-lg bg-muted text-foreground/80 border border-border/40 shrink-0">
+                    <SectionIcon className="h-4 w-4" />
                   </div>
-                  <div>
-                    <CardTitle className="text-lg font-bold">{section.label}</CardTitle>
+                  <div className="flex flex-wrap items-baseline gap-x-2 min-w-0">
+                    <span className="text-sm font-bold text-foreground tracking-tight">
+                      {section.label}
+                    </span>
                     {section.description && (
-                      <CardDescription className="text-xs">{section.description}</CardDescription>
+                      <span className="text-xs text-muted-foreground truncate">
+                        — {section.description}
+                      </span>
                     )}
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="pt-5">
-                <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {visibleItems.map(item => {
-                    const ItemIcon = itemIcons[item.id] || Settings;
-                    const status = itemStatuses[item.id];
+                <span className="text-[11px] font-medium text-muted-foreground/70 bg-muted/50 px-2 py-0.5 rounded-full border border-border/40 shrink-0 ml-2">
+                  {visibleItems.length} {visibleItems.length === 1 ? 'item' : 'items'}
+                </span>
+              </div>
 
-                    return (
-                      <Link
-                        key={item.id}
-                        href={item.href}
-                        className="group relative p-4 rounded-xl border border-border bg-background hover:bg-accent/50 hover:border-primary/30 hover:shadow-xs transition-all duration-150 flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex items-start justify-between gap-2 mb-2.5">
-                            <div className="p-2 rounded-lg bg-muted text-muted-foreground group-hover:text-primary transition-colors">
-                              <ItemIcon className="h-4 w-4" />
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                              {status && (
-                                <Badge
-                                  variant="outline"
-                                  className={cn(
-                                    'text-[10px] font-medium px-2 py-0.5 h-5 flex items-center gap-1.5 rounded-full border',
-                                    status.connected
-                                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                      : 'border-border/60 bg-muted/40 text-muted-foreground'
-                                  )}
-                                >
-                                  <span
-                                    className={cn(
-                                      'h-1.5 w-1.5 rounded-full shrink-0',
-                                      status.connected
-                                        ? 'bg-emerald-500 animate-pulse'
-                                        : 'bg-muted-foreground/50'
-                                    )}
-                                  />
-                                  <span className="truncate max-w-[125px]">{status.label}</span>
-                                </Badge>
-                              )}
-                              {item.badge && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border text-muted-foreground"
-                                >
-                                  {item.badge}
-                                </Badge>
-                              )}
-                            </div>
+              {/* Grouped Rows Container */}
+              <div className="rounded-xl border border-border/70 bg-card overflow-hidden divide-y divide-border/50 shadow-xs">
+                {visibleItems.map(item => {
+                  const ItemIcon = itemIcons[item.id] || Settings;
+                  const status = itemStatuses[item.id];
+                  const theme = itemThemes[item.id] || {
+                    bg: 'bg-muted text-muted-foreground',
+                    text: 'text-muted-foreground',
+                  };
+
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className="group flex items-center justify-between p-3.5 sm:px-4 hover:bg-muted/40 transition-colors duration-150"
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div
+                          className={cn(
+                            'p-2.5 rounded-xl shrink-0 transition-transform duration-150 group-hover:scale-105',
+                            theme.bg,
+                            theme.text
+                          )}
+                        >
+                          <ItemIcon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                              {item.label}
+                            </span>
+                            {item.badge && (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] font-semibold px-1.5 py-0 h-4 border-border/70 text-muted-foreground bg-muted/40"
+                              >
+                                {item.badge}
+                              </Badge>
+                            )}
                           </div>
-
-                          <h3 className="font-semibold text-sm text-foreground group-hover:text-primary transition-colors">
-                            {item.label}
-                          </h3>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
                             {item.description}
                           </p>
                         </div>
+                      </div>
 
-                        <div className="pt-3 mt-3 border-t border-border/40 flex items-center justify-between text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">
-                          <span>Configure</span>
-                          <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
+                      <div className="flex items-center gap-3 shrink-0 ml-4">
+                        {status && (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-[11px] font-medium px-2.5 py-0.5 h-6 flex items-center gap-1.5 rounded-full border',
+                              status.connected
+                                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                : 'border-border/60 bg-muted/40 text-muted-foreground'
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'h-1.5 w-1.5 rounded-full shrink-0',
+                                status.connected
+                                  ? 'bg-emerald-500 animate-pulse'
+                                  : 'bg-muted-foreground/50'
+                              )}
+                            />
+                            <span className="truncate max-w-[140px]">{status.label}</span>
+                          </Badge>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/60 group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>
