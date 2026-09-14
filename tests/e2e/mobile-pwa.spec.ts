@@ -48,12 +48,15 @@ async function mobileThemeSnapshot(page: import('@playwright/test').Page) {
 async function clearFixtureRateLimits() {
   // RateLimit is DB-backed and shared across chromium + webkit in the same
   // CI job. `auth:credentials:account:email` allows 10 / 15m — the suite
-  // does ~14 logins across both projects plus one retry each, so later
-  // `loginToMobile` calls would otherwise be blocked with `RATE_LIMITED`.
-  // Clearing before suite and before each authenticated test keeps every
-  // login inside a fresh window; successful logins also reset the in-memory
-  // `login-security` store via `resetLoginAttempts`.
-  await prisma.rateLimit.deleteMany({ where: { key: { contains: FIXTURE_EMAIL } } });
+  // does ~14 logins across both projects plus retries, so later
+  // `loginToMobile` calls would otherwise be blocked with `RATE_LIMITED`
+  // (seen on main 34831497556 and PR 34834947320). Clearing the whole
+  // window before suite and before each test keeps every login inside a
+  // fresh window; successful logins also reset the in-memory
+  // `login-security` store via `resetLoginAttempts`. Mirrors
+  // `auth-recovery.spec.ts:resetBootstrapFixture` which does
+  // `prisma.rateLimit.deleteMany()` without filter.
+  await prisma.rateLimit.deleteMany();
 }
 
 test.describe('mobile PWA browser contract', () => {
