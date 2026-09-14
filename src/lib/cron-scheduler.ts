@@ -358,8 +358,8 @@ async function runOnce() {
     const statusPageReconciliation = await reconcileStatusPageSnapshots();
     const { reconcileStatusPageRouteOperations } = await import('./status-pages/route-operations');
     const statusPageRouteReconciliation = await reconcileStatusPageRouteOperations();
-    const { reconcileMicrosoftTeamsWarRoomHealth } = await import('./war-room/microsoft-teams');
-    const teamsWarRoomHealth = await reconcileMicrosoftTeamsWarRoomHealth();
+    const { reconcileWarRoomHealth } = await import('./war-room/reconcile');
+    const warRoomHealth = await reconcileWarRoomHealth();
 
     logger.info('[Cron] Critical tasks processed', {
       escalations: { processed: escalationResult.processed, total: escalationResult.total },
@@ -368,7 +368,7 @@ async function runOnce() {
       integrationRecovery: integrationReconciliation,
       statusPageReconciliation,
       statusPageRouteReconciliation,
-      teamsWarRoomHealth,
+      warRoomHealth,
     });
 
     // Group 2: Secondary tasks (can run in parallel)

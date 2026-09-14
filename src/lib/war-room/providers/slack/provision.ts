@@ -133,6 +133,12 @@ export async function requestSlackWarRoom(
       manual: intent.manual,
     });
 
+    // Slack adapter declares privateRooms:false; a PRIVATE war room must fail closed
+    // rather than silently creating a STANDARD channel and leaking visibility.
+    if (decision.allowed && decision.membershipType === 'PRIVATE') {
+      return { accepted: false as const, code: 'PRIVATE_DOWNGRADE_DENIED' };
+    }
+
     if (!decision.allowed || !slackWorkspaceId || !destination)
       return {
         accepted: false as const,
@@ -229,6 +235,12 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
     !room.provisioningToken
   )
     return;
+
+  // Slack declares privateRooms:false — never provision a PRIVATE room even if racing overrides fill it.
+  if (room.membershipType === 'PRIVATE') {
+    await markFailed(room.id, expectedProvisioningToken, 'PRIVATE_WAR_ROOM_UNSUPPORTED', 'Slack war rooms do not support private rooms.');
+    return;
+  }
 
   const incident = room.incident;
   // Authority check before any Slack I/O

@@ -46,7 +46,8 @@ export type JobType =
   | 'EXTERNAL_OPERATION'
   | 'WAR_ROOM_PROVISION'
   | 'WAR_ROOM_PARTICIPANT_SYNC'
-  | 'WAR_ROOM_PROJECT';
+  | 'WAR_ROOM_PROJECT'
+  | 'WAR_ROOM_RECONCILE';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -544,6 +545,13 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         await projectWarRoom(requiredPayloadString(job.payload, 'warRoomId'), version);
         return markWarRoomJobCompleted(job.id);
       }
+      case 'WAR_ROOM_RECONCILE': {
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
+          throw new Error('War-room reconciliation job is missing warRoomId');
+        const { reconcileWarRoom } = await import('../war-room/engine');
+        await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
+        return markWarRoomJobCompleted(job.id);
+      }
       case 'EXTERNAL_OPERATION': {
         if (typeof payloadValue(job.payload, 'operationId') !== 'string')
           throw new Error('External operation job is missing operationId');
@@ -764,7 +772,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
     const isWarRoomJob =
       job.type === 'WAR_ROOM_PROVISION' ||
       job.type === 'WAR_ROOM_PROJECT' ||
-      job.type === 'WAR_ROOM_PARTICIPANT_SYNC';
+      job.type === 'WAR_ROOM_PARTICIPANT_SYNC' ||
+      job.type === 'WAR_ROOM_RECONCILE';
     if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
       const retryBudgetNeutral =

@@ -126,5 +126,9 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
     const { settleSlackWarRoomProjectionFailure } = await import('./projection');
     await settleSlackWarRoomProjectionFailure(warRoomId, projectionVersion);
   },
+  reconcile: async warRoomId => {
+    const { reconcileSlackWarRoom } = await import('./health');
+    await reconcileSlackWarRoom(warRoomId);
+  },
   handleIncidentEvent,
 };

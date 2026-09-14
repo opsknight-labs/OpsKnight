@@ -60,6 +60,7 @@ export interface WarRoomProviderAdapter {
   project(warRoomId: string, projectionVersion: number): Promise<void>;
   syncParticipants(warRoomId: string): Promise<void>;
   settleProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void>;
+  reconcile(warRoomId: string): Promise<void>;
   handleIncidentEvent(event: WarRoomIncidentEvent): Promise<ProviderOperationResult<void>>;
 }
 

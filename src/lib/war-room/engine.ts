@@ -38,6 +38,12 @@ export async function settleWarRoomProjectionFailure(
   await adapter.settleProjectionFailure(warRoomId, projectionVersion);
 }
 
+export async function reconcileWarRoom(warRoomId: string): Promise<void> {
+  const adapter = await adapterForRoom(warRoomId);
+  if (!adapter.capabilities.reconciliation) return;
+  await adapter.reconcile(warRoomId);
+}
+
 export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): Promise<void> {
   const outcomes = await Promise.all(
     listWarRoomProviders().map(async adapter => {
