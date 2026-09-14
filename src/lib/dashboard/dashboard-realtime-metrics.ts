@@ -22,6 +22,8 @@ export type DashboardRealtimeMetrics = {
   suppressed: number;
   unassigned: number;
   highUrgency: number;
+  mediumUrgency: number;
+  lowUrgency: number;
 };
 
 export async function getDashboardRealtimeMetrics(
@@ -67,6 +69,14 @@ export async function getDashboardRealtimeMetrics(
         .reduce((sum, group) => sum + group._count._all, 0);
     const open = count('OPEN');
     const acknowledged = count('ACKNOWLEDGED');
+    const urgencyCount = (urgency: string) =>
+      groups
+        .filter(
+          group =>
+            (group.status === 'OPEN' || group.status === 'ACKNOWLEDGED') &&
+            group.urgency === urgency
+        )
+        .reduce((sum, group) => sum + group._count._all, 0);
     return {
       open,
       acknowledged,
@@ -74,12 +84,9 @@ export async function getDashboardRealtimeMetrics(
       snoozed: count('SNOOZED'),
       suppressed: count('SUPPRESSED'),
       unassigned,
-      highUrgency: groups
-        .filter(
-          group =>
-            (group.status === 'OPEN' || group.status === 'ACKNOWLEDGED') && group.urgency === 'HIGH'
-        )
-        .reduce((sum, group) => sum + group._count._all, 0),
+      highUrgency: urgencyCount('HIGH'),
+      mediumUrgency: urgencyCount('MEDIUM'),
+      lowUrgency: urgencyCount('LOW'),
     };
   });
   return result.data;

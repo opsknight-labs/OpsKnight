@@ -1,14 +1,10 @@
 'use client';
 
-import { SessionProvider } from 'next-auth/react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { Toaster } from '@/components/ui/shadcn/sonner';
-import { TimezoneProvider } from '@/contexts/TimezoneContext';
-import { KeyboardShortcutsProvider } from '@/components/KeyboardShortcutsProvider';
 import ChunkLoadErrorHandler from '@/components/ChunkLoadErrorHandler';
-import ActivityTracker from '@/components/auth/ActivityTracker';
 
 const MOBILE_THEME_COLORS = {
   light: '#f8fafc',
@@ -67,15 +63,12 @@ function AppThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider refetchInterval={0} refetchOnWindowFocus={true}>
-      <ActivityTracker />
+    <>
       <ChunkLoadErrorHandler />
       <AppThemeProvider>
-        <TimezoneProvider>
-          <KeyboardShortcutsProvider>{children}</KeyboardShortcutsProvider>
-          <Toaster />
-        </TimezoneProvider>
+        {children}
+        <Toaster />
       </AppThemeProvider>
-    </SessionProvider>
+    </>
   );
 }

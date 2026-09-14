@@ -11,6 +11,7 @@ import { removeTeamMembership } from '@/lib/teams/membership-commands';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import type { TeamRole } from '@prisma/client';
+import { invalidateSessionSecurityProjection } from '@/lib/session-security-projection';
 
 type TeamFormState = {
   error?: string | null;
@@ -312,6 +313,8 @@ export async function updateTeamMemberRole(
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to update member role.' };
   }
+
+  invalidateSessionSecurityProjection(member.userId);
 
   const actorId = currentUser.id;
   await logAudit({

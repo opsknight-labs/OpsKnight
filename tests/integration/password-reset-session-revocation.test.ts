@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
 import { createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
-import { getAuthOptions, resetAuthOptionsCache } from '@/lib/auth';
+
+vi.unmock('@/lib/prisma');
 
 const describeIntegration =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -19,14 +20,16 @@ type SessionCallback = (args: {
   token: Record<string, unknown>;
 }) => Promise<{ user?: Record<string, unknown> }>;
 
+let getAuthOptions: typeof import('@/lib/auth').getAuthOptions;
+let resetAuthOptionsCache: typeof import('@/lib/auth').resetAuthOptionsCache;
 let issuePasswordResetToken: typeof import('@/lib/password-reset').issuePasswordResetToken;
 let completePasswordReset: typeof import('@/lib/password-reset').completePasswordReset;
 
 describeIntegration('Password reset session revocation', () => {
   beforeEach(async () => {
-    vi.unmock('@/lib/prisma');
     vi.resetModules();
     await resetDatabase();
+    ({ getAuthOptions, resetAuthOptionsCache } = await import('@/lib/auth'));
     resetAuthOptionsCache();
     ({ issuePasswordResetToken, completePasswordReset } = await import('@/lib/password-reset'));
   });

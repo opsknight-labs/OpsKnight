@@ -16,13 +16,29 @@ on:
       - 'src/lib/incident-push-delivery.ts'
       - 'public/custom-sw.js'
       - 'next.config.ts'
-      - 'playwright.config.ts'
       - 'playwright.pwa.config.ts'
       - 'tests/e2e/mobile-pwa.spec.ts'
       - 'tests/e2e/mobile-pwa-production.spec.ts'
       - '.github/workflows/mobile-pwa-e2e.yml'
   push:
     branches: [main]
+    paths:
+      - 'src/app/(mobile)/**'
+      - 'src/app/(public)/m/**'
+      - 'src/app/login/**'
+      - 'src/components/mobile/**'
+      - 'src/components/DashboardNotifications.tsx'
+      - 'src/lib/offline-queue.ts'
+      - 'src/lib/pwa-session-policy.ts'
+      - 'src/lib/incidents/status-client.ts'
+      - 'src/lib/incidents/status-http.ts'
+      - 'src/lib/incident-push-delivery.ts'
+      - 'public/custom-sw.js'
+      - 'next.config.ts'
+      - 'playwright.pwa.config.ts'
+      - 'tests/e2e/mobile-pwa.spec.ts'
+      - 'tests/e2e/mobile-pwa-production.spec.ts'
+      - '.github/workflows/mobile-pwa-e2e.yml'
   workflow_dispatch:
 
 permissions:

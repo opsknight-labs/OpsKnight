@@ -9,6 +9,8 @@ declare module 'next-auth' {
       avatarUrl?: string | null;
       gender?: string | null;
     };
+    /** Unix epoch seconds of the session's absolute expiry (Remember-Me hard cap). */
+    absoluteExpiresAt?: number;
   }
 
   interface User {

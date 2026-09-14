@@ -138,8 +138,12 @@ export default function LoginClient({
         // cookie has been issued so authenticated RSC data is fetched anew.
         const safeTarget = safeInternalCallbackUrl(callbackUrl, '/');
         await purgeBrowserAuthCaches();
-        router.replace(safeTarget);
-        router.refresh();
+        if (typeof window !== 'undefined') {
+          window.location.assign(safeTarget);
+        } else {
+          router.replace(safeTarget);
+          router.refresh();
+        }
       }
     } catch {
       setError('Unexpected error');

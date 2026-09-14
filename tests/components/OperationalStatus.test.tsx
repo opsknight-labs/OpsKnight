@@ -2,20 +2,36 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import OperationalStatus from '@/components/OperationalStatus';
 
-vi.mock('@/hooks/useOperationalStats', () => ({
-  useOperationalStats: vi.fn().mockReturnValue({
-    activeCount: 0,
-    criticalCount: 0,
-    mediumCount: 0,
-    lowCount: 0,
-    loading: true,
+const mockRealtimeMetrics = vi.hoisted(() => ({
+  current: null as {
+    open: number;
+    acknowledged: number;
+    resolved24h: number;
+    highUrgency: number;
+    mediumUrgency?: number;
+    lowUrgency?: number;
+    active?: number;
+  } | null,
+}));
+
+vi.mock('@/hooks/useRealtime', () => ({
+  useRealtime: () => ({
+    isConnected: true,
+    metrics: mockRealtimeMetrics.current,
+    recentIncidents: [],
     error: null,
-    hasLiveStats: false,
+  }),
+  useOptionalRealtime: () => ({
+    isConnected: true,
+    metrics: mockRealtimeMetrics.current,
+    recentIncidents: [],
+    error: null,
   }),
 }));
 
 describe('OperationalStatus', () => {
   beforeEach(() => {
+    mockRealtimeMetrics.current = null;
     vi.clearAllMocks();
   });
 
@@ -50,5 +66,31 @@ describe('OperationalStatus', () => {
 
     expect(screen.getByText('Green Corridor')).toBeInTheDocument();
     expect(screen.getByText(/H 0 · M 0 · L 0/i)).toBeInTheDocument();
+  });
+
+  it('updates dynamically from RealtimeProvider metrics without HTTP polling', () => {
+    mockRealtimeMetrics.current = {
+      open: 5,
+      acknowledged: 2,
+      resolved24h: 10,
+      highUrgency: 3,
+      mediumUrgency: 4,
+      lowUrgency: 1,
+      active: 8,
+    };
+
+    render(
+      <OperationalStatus
+        tone="ok"
+        label="Green Corridor"
+        detail="All systems fully operational"
+        criticalCount={0}
+        mediumCount={0}
+        lowCount={0}
+      />
+    );
+
+    expect(screen.getByText(/H 3 · M 4 · L 1/i)).toBeInTheDocument();
+    expect(screen.getByText('Critical Alert')).toBeInTheDocument();
   });
 });

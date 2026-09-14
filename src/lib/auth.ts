@@ -27,15 +27,12 @@ import {
 import { evaluateOidcRoleClaims } from '@/lib/oidc/role-mapping';
 import { getValidatedOidcRuntimeMetadata } from '@/lib/oidc-validation';
 import { normalizeOidcIssuer } from '@/lib/oidc/issuer-migration';
-
-/**
- * Security-sensitive user state is intentionally refreshed on every server-side
- * session evaluation. Password resets, deprovisioning and administrative
- * revocations must take effect immediately instead of inheriting a cache window.
- */
-function getJwtUserRefreshTtlMs() {
-  return 0;
-}
+import {
+  getSessionSecurityProjection,
+  getSessionProfileProjection,
+  invalidateSessionSecurityProjection,
+  resetSessionSecurityProjectionCache,
+} from '@/lib/session-security-projection';
 
 // Augmented types to avoid 'any' usage
 type AugmentedJWT = JWT & {
@@ -51,7 +48,9 @@ type AugmentedJWT = JWT & {
   lastActivityAt?: number;
   /** Time OpsKnight established this OIDC session, in epoch milliseconds. */
   oidcAuthenticatedAt?: number;
-  /** Absolute session expiration timestamp in epoch seconds. */
+  /** Absolute session expiration timestamp in epoch seconds, immutable from login. */
+  absoluteExpiresAt?: number;
+  /** Session expiration timestamp in epoch seconds. */
   sessionExpiresAt?: number;
   /** Trust-version of the provider configuration that issued this session. */
   oidcConfigVersion?: number;
@@ -120,6 +119,7 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
   delete token.oidcAuthenticatedAt;
   delete token.oidcConfigVersion;
   delete token.sessionExpiresAt;
+  delete token.absoluteExpiresAt;
   return token;
 }
 
@@ -520,15 +520,33 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             const remember = (token as AugmentedJWT).rememberMe === true;
-            const ttlSeconds =
-              account.provider === 'oidc'
-                ? oidcSessionMaxAgeSeconds
-                : remember
-                  ? rememberMeMaxAgeSeconds
-                  : credentialSessionMaxAgeSeconds;
-            const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+            const isOidc = account.provider === 'oidc';
+            const nowSec = Math.floor(Date.now() / 1000);
+
+            const oidcRenewalWindowSeconds = enterpriseSession.maximumAgeSeconds;
+            const oidcAbsoluteMaxAgeSeconds = Math.max(
+              enterpriseSession.reauthenticateAfterSeconds,
+              oidcRenewalWindowSeconds * 2
+            );
+
+            const sessionTtlSeconds = isOidc
+              ? oidcRenewalWindowSeconds
+              : remember
+                ? rememberMeMaxAgeSeconds
+                : credentialSessionMaxAgeSeconds;
+
+            const absoluteTtlSeconds = isOidc
+              ? oidcAbsoluteMaxAgeSeconds
+              : remember
+                ? rememberMeMaxAgeSeconds
+                : credentialSessionMaxAgeSeconds * 4;
+
+            const sessionExpiresAt = nowSec + sessionTtlSeconds;
+            const absoluteExpiresAt = nowSec + absoluteTtlSeconds;
+
             token.exp = sessionExpiresAt;
             (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
+            (token as AugmentedJWT).absoluteExpiresAt = absoluteExpiresAt;
           } else if (user) {
             delete (token as AugmentedJWT).error;
             logger.debug('[Auth-Debug] Initial Sign In (Fallback)', {
@@ -540,21 +558,65 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             token.name = user.name;
             token.email = user.email;
             (token as AugmentedJWT).tokenVersion = (user as AugmentedUser).tokenVersion ?? 0;
-            const ttlSeconds = credentialSessionMaxAgeSeconds;
-            const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+            const nowSec = Math.floor(Date.now() / 1000);
+            const sessionExpiresAt = nowSec + credentialSessionMaxAgeSeconds;
             token.exp = sessionExpiresAt;
             (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
-          }
-
-          if (trigger === 'update') {
-            // Force the user refresh below by bypassing the cache check.
+            (token as AugmentedJWT).absoluteExpiresAt = nowSec + credentialSessionMaxAgeSeconds * 4;
           }
 
           const augmentedToken = token as AugmentedJWT;
+          let isProfileRefresh = false;
+
+          if (trigger === 'update') {
+            const updatePayload = session as
+              | { activity?: boolean; extendSession?: boolean; profileRefresh?: boolean; force?: boolean }
+              | undefined;
+            const currentTime = Date.now();
+            const currentTimeSec = Math.floor(currentTime / 1000);
+            if (updatePayload?.activity || updatePayload?.extendSession) {
+              augmentedToken.lastActivityAt = currentTime;
+            }
+            if (updatePayload?.extendSession && typeof augmentedToken.sessionExpiresAt === 'number') {
+              const isOidc = Boolean(augmentedToken.oidcAuthenticatedAt);
+              const remember = augmentedToken.rememberMe === true;
+
+              const renewalWindowSeconds = isOidc
+                ? oidcSessionMaxAgeSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds;
+
+              let absoluteCap = augmentedToken.absoluteExpiresAt;
+              if (typeof absoluteCap !== 'number') {
+                absoluteCap =
+                  isOidc && augmentedToken.oidcAuthenticatedAt
+                    ? Math.floor((augmentedToken.oidcAuthenticatedAt + oidcReauthenticateAfterMs) / 1000)
+                    : remember
+                      ? currentTimeSec + rememberMeMaxAgeSeconds
+                      : currentTimeSec + credentialSessionMaxAgeSeconds * 4;
+                augmentedToken.absoluteExpiresAt = absoluteCap;
+              }
+
+              const renewedExpiresAt = currentTimeSec + renewalWindowSeconds;
+              const effectiveExpiresAt = Math.min(absoluteCap, renewedExpiresAt);
+
+              if (effectiveExpiresAt > augmentedToken.sessionExpiresAt) {
+                augmentedToken.sessionExpiresAt = effectiveExpiresAt;
+              }
+              const currentExp = typeof token.exp === 'number' ? token.exp : 0;
+              token.exp = Math.max(currentExp, augmentedToken.sessionExpiresAt);
+            }
+            if (updatePayload?.profileRefresh || updatePayload?.force) {
+              isProfileRefresh = true;
+            }
+          }
 
           if (
-            typeof augmentedToken.sessionExpiresAt === 'number' &&
-            Date.now() >= augmentedToken.sessionExpiresAt * 1000
+            (typeof augmentedToken.sessionExpiresAt === 'number' &&
+              Date.now() >= augmentedToken.sessionExpiresAt * 1000) ||
+            (typeof augmentedToken.absoluteExpiresAt === 'number' &&
+              Date.now() >= augmentedToken.absoluteExpiresAt * 1000)
           ) {
             return clearSessionToken(augmentedToken, 'SESSION_EXPIRED');
           }
@@ -577,94 +639,75 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             ) {
               return clearSessionToken(augmentedToken, 'OIDC_SESSION_IDLE_TIMEOUT');
             }
-
-            // Only bump lastActivityAt when an explicit user interaction/activity signal
-            // is dispatched, preventing passive background /api/auth/session polling
-            // from defeating enterprise idle timeout.
-            const isActivitySignal =
-              trigger === 'update' &&
-              Boolean((session as { activity?: boolean } | undefined)?.activity);
-            if (isActivitySignal) {
-              augmentedToken.lastActivityAt = currentTime;
-            }
           }
 
           if (token.sub && typeof token.sub === 'string') {
             const currentTokenVersion = (token as AugmentedJWT).tokenVersion;
-            const lastFetchedAt = (token as AugmentedJWT).userFetchedAt;
-            const ttlMs = getJwtUserRefreshTtlMs();
+            try {
+              if (isProfileRefresh) {
+                const profileUser = await getSessionProfileProjection(token.sub);
+                if (profileUser) {
+                  delete (token as AugmentedJWT).error;
+                  token.name = profileUser.name;
+                  token.email = profileUser.email;
+                  token.role = profileUser.role;
+                  token.avatarUrl = profileUser.avatarUrl;
+                  token.gender = profileUser.gender;
+                  (token as AugmentedJWT).tokenVersion = profileUser.tokenVersion;
+                }
+              }
 
-            if (trigger !== 'update' && lastFetchedAt && Date.now() - lastFetchedAt < ttlMs) {
-              // Cached.
-            } else {
-              try {
-                const dbUser = await prisma.user.findUnique({
-                  where: { id: token.sub },
-                  select: {
-                    name: true,
-                    email: true,
-                    role: true,
-                    tokenVersion: true,
-                    status: true,
-                    avatarUrl: true,
-                    gender: true,
-                  },
+              const dbUser = await getSessionSecurityProjection(token.sub);
+
+              if (dbUser) {
+                delete (token as AugmentedJWT).error;
+                const dbTokenVersion =
+                  typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
+                logger.debug('[Auth-Debug] User Check', {
+                  component: 'auth:jwt',
+                  dbId: token.sub,
+                  dbVer: dbTokenVersion,
+                  tokenVer: currentTokenVersion,
                 });
 
-                if (dbUser) {
-                  delete (token as AugmentedJWT).error;
-                  const dbTokenVersion =
-                    typeof dbUser.tokenVersion === 'number' ? dbUser.tokenVersion : 0;
-                  logger.debug('[Auth-Debug] User Check', {
-                    component: 'auth:jwt',
-                    dbId: token.sub,
-                    dbVer: dbTokenVersion,
-                    tokenVer: currentTokenVersion,
-                  });
-
-                  if (dbUser.status === 'DISABLED') {
-                    return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
-                  }
-
-                  if (
-                    typeof currentTokenVersion === 'number' &&
-                    dbTokenVersion !== currentTokenVersion
-                  ) {
-                    logger.warn('[Auth-Debug] REVOKING SESSION: Version Mismatch', {
-                      component: 'auth:jwt',
-                      db: dbTokenVersion,
-                      token: currentTokenVersion,
-                    });
-                    return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
-                  }
-
-                  token.name = dbUser.name;
-                  token.email = dbUser.email;
-                  token.role = dbUser.role;
-                  token.avatarUrl = dbUser.avatarUrl;
-                  token.gender = dbUser.gender;
-                  (token as AugmentedJWT).tokenVersion = dbTokenVersion;
-                } else {
-                  logger.warn('[Auth] User NOT FOUND in database; invalidating session', {
-                    component: 'auth:jwt',
-                    id: token.sub,
-                  });
-                  return clearSessionToken(token as AugmentedJWT, 'USER_NOT_FOUND');
+                if (dbUser.status === 'DISABLED') {
+                  return clearSessionToken(token as AugmentedJWT, 'USER_DISABLED');
                 }
-              } catch (error) {
-                logger.error('[Auth] User DB verification failed; failing closed', {
+
+                if (
+                  typeof currentTokenVersion === 'number' &&
+                  dbTokenVersion !== currentTokenVersion
+                ) {
+                  logger.warn('[Auth-Debug] REVOKING SESSION: Version Mismatch', {
+                    component: 'auth:jwt',
+                    db: dbTokenVersion,
+                    token: currentTokenVersion,
+                  });
+                  return clearSessionToken(token as AugmentedJWT, 'SESSION_REVOKED');
+                }
+
+                token.role = dbUser.role;
+                (token as AugmentedJWT).tokenVersion = dbTokenVersion;
+              } else {
+                logger.warn('[Auth] User NOT FOUND in database; invalidating session', {
                   component: 'auth:jwt',
                   id: token.sub,
-                  error,
                 });
-                // Availability tradeoff: Flag error so protected requests fail closed (session.user is cleared),
-                // but preserve token.sub and credentials so temporary DB connectivity glitches don't permanently
-                // overwrite the user's cookie and destroy valid sessions.
-                (token as AugmentedJWT).error = 'SECURITY_LOOKUP_UNAVAILABLE';
-                return token;
+                return clearSessionToken(token as AugmentedJWT, 'USER_NOT_FOUND');
               }
-              (token as AugmentedJWT).userFetchedAt = Date.now();
+            } catch (error) {
+              logger.error('[Auth] User DB verification failed; failing closed', {
+                component: 'auth:jwt',
+                id: token.sub,
+                error,
+              });
+              // Availability tradeoff: Flag error so protected requests fail closed (session.user is cleared),
+              // but preserve token.sub and credentials so temporary DB connectivity glitches don't permanently
+              // overwrite the user's cookie and destroy valid sessions.
+              (token as AugmentedJWT).error = 'SECURITY_LOOKUP_UNAVAILABLE';
+              return token;
             }
+            (token as AugmentedJWT).userFetchedAt = Date.now();
           } else {
             logger.debug('[Auth-Debug] No token.sub found!', { component: 'auth:jwt', token });
           }
@@ -703,6 +746,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             session.expires = new Date(
               (token as AugmentedJWT).sessionExpiresAt! * 1000
             ).toISOString();
+          }
+
+          if (typeof (token as AugmentedJWT)?.absoluteExpiresAt === 'number') {
+            session.absoluteExpiresAt = (token as AugmentedJWT).absoluteExpiresAt;
           }
 
           return session;
@@ -962,10 +1009,12 @@ export async function revokeUserSessions(userId: string) {
     where: { id: userId },
     data: { tokenVersion: { increment: 1 } },
   });
+  invalidateSessionSecurityProjection(userId);
 }
 
 /** Internal helper to reset the auth options cache. Intended for tests only. */
 export function resetAuthOptionsCache() {
   authOptionsCache = undefined;
   authOptionsInFlight = undefined;
+  resetSessionSecurityProjectionCache();
 }

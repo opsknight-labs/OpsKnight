@@ -132,6 +132,8 @@ export async function GET(req: NextRequest) {
                     acknowledged: metricsResult.data.acknowledged,
                     resolved24h: metricsResult.data.resolved,
                     highUrgency: metricsResult.data.critical,
+                    mediumUrgency: metricsResult.data.mediumUrgency,
+                    lowUrgency: metricsResult.data.lowUrgency,
                     active: metricsResult.data.active,
                     isClipped: metricsResult.data.isClipped,
                     retentionDays: metricsResult.data.retentionDays,

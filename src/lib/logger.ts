@@ -40,6 +40,8 @@ export function withRequestContext<R extends Request, A extends unknown[], T>(
         if (result instanceof Response) {
           try {
             if (!result.headers.has('x-request-id')) result.headers.set('x-request-id', requestId);
+            const durationMs = performance.now() - startedAt;
+            result.headers.append('Server-Timing', `app;dur=${durationMs.toFixed(1)}`);
           } catch {
             // Some runtime-generated responses expose immutable headers. Logs
             // still retain the correlation id in that case.

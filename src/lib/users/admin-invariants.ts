@@ -3,8 +3,16 @@ import 'server-only';
 import type { Prisma, Role, UserStatus } from '@prisma/client';
 import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 import { runSerializableTransaction } from '@/lib/db-utils';
+import {
+  invalidateSessionSecurityProjection,
+  invalidateSessionSecurityProjections,
+} from '@/lib/session-security-projection';
 
-type UserSecurityMutation = { role?: Role; status?: UserStatus };
+type UserSecurityMutation = {
+  role?: Role;
+  status?: UserStatus;
+  tokenVersion?: Prisma.IntFieldUpdateOperationsInput | number;
+};
 type SecurityMutationSideEffects = (tx: Prisma.TransactionClient) => Promise<void>;
 
 export async function updateUserSecurityState(
@@ -13,7 +21,7 @@ export async function updateUserSecurityState(
   additionalData: Prisma.UserUpdateInput = {},
   sideEffects?: SecurityMutationSideEffects
 ) {
-  return runSerializableTransaction(async tx => {
+  const updated = await runSerializableTransaction(async tx => {
     await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
     const target = await tx.user.findUnique({
       where: { id: userId },
@@ -43,6 +51,8 @@ export async function updateUserSecurityState(
     await sideEffects?.(tx);
     return updated;
   });
+  invalidateSessionSecurityProjection(userId);
+  return updated;
 }
 
 export async function bulkUpdateUserSecurityState(
@@ -52,7 +62,7 @@ export async function bulkUpdateUserSecurityState(
   sideEffects?: SecurityMutationSideEffects
 ) {
   const ids = [...new Set(userIds)];
-  return runSerializableTransaction(async tx => {
+  const updated = await runSerializableTransaction(async tx => {
     await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
     const targets = await tx.user.findMany({
       where: { id: { in: ids } },
@@ -82,4 +92,6 @@ export async function bulkUpdateUserSecurityState(
     await sideEffects?.(tx);
     return updated;
   });
+  invalidateSessionSecurityProjections(ids);
+  return updated;
 }

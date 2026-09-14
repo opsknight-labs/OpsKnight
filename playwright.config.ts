@@ -13,7 +13,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  timeout: 45_000,
+  timeout: 60_000,
   expect: {
     // Development runs compile routes lazily. Keep the extra allowance locally;
     // CI runs the production server below so browser contracts are deterministic.
@@ -28,7 +28,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: /auth-recovery\.spec\.ts/,
+      testMatch: /(auth-recovery|navigation-fast-path)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {

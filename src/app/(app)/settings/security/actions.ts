@@ -243,6 +243,7 @@ export async function saveOidcConfig(
     }
 
     const providerType = normalizeOidcProviderType(requestedProviderType, issuer);
+    let migratedUserIds: string[] = [];
     const updatedAt = await prisma.$transaction(async tx => {
       const id = existing?.id ?? 'default';
       if (existing) {
@@ -290,10 +291,22 @@ export async function saveOidcConfig(
 
         if (issuerMigration) {
           const previousIssuer = normalizeOidcIssuer(existing.issuer);
-          await tx.user.updateMany({
+          const targets = (await tx.user.findMany?.({
             where: { oidcIdentities: { some: { issuer: previousIssuer } } },
-            data: { tokenVersion: { increment: 1 } },
-          });
+            select: { id: true },
+          })) ?? [];
+          if (targets.length > 0) {
+            migratedUserIds = targets.map(t => t.id);
+            await tx.user.updateMany({
+              where: { id: { in: migratedUserIds } },
+              data: { tokenVersion: { increment: 1 } },
+            });
+          } else {
+            await tx.user.updateMany({
+              where: { oidcIdentities: { some: { issuer: previousIssuer } } },
+              data: { tokenVersion: { increment: 1 } },
+            });
+          }
         }
         if (securityConfigChanged) {
           await tx.oidcLinkingApproval.updateMany({
@@ -389,6 +402,12 @@ export async function saveOidcConfig(
 
     const { resetAuthOptionsCache } = await import('@/lib/auth');
     resetAuthOptionsCache();
+    if (migratedUserIds.length > 0) {
+      const { invalidateSessionSecurityProjections } = await import(
+        '@/lib/session-security-projection'
+      );
+      invalidateSessionSecurityProjections(migratedUserIds);
+    }
     // Invalidate the OIDC config caches too — the freshly saved issuer,
     // client secret and enabled state must take effect immediately rather
     // than remaining stale for several seconds.

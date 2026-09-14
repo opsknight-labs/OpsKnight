@@ -28,6 +28,7 @@ import { IncidentAlertProvider } from '@/contexts/IncidentAlertContext';
 import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
 import { getAppShellContext, type AppShellContext } from '@/lib/app-shell-context';
 import { getRequestActorContext } from '@/lib/request-actor-context';
+import AuthenticatedClientProviders from '@/components/auth/AuthenticatedClientProviders';
 
 const isNextRedirectError = (error: unknown) => {
   if (!error || typeof error !== 'object') return false;
@@ -56,7 +57,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     if (userCountError) {
       return (
         <DatabaseOffline
-          errorMessage={userCountError instanceof Error ? userCountError.message : String(userCountError)}
+          errorMessage={
+            userCountError instanceof Error ? userCountError.message : String(userCountError)
+          }
         />
       );
     }
@@ -77,7 +80,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   }
   if (shellError) {
-    return <DatabaseOffline errorMessage={shellError instanceof Error ? shellError.message : String(shellError)} />;
+    return (
+      <DatabaseOffline
+        errorMessage={shellError instanceof Error ? shellError.message : String(shellError)}
+      />
+    );
   }
   if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
   const activeShell: AppShellContext = shell;
@@ -104,78 +111,86 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const canCreate = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
 
   return (
-    <AppErrorBoundary>
-      <TimezoneProvider initialTimeZone={userTimeZone}>
-        <UserAvatarProvider
-          currentUserId={userId}
-          currentUserAvatar={userAvatar}
-          currentUserGender={userGender}
-          currentUserName={userName}
-        >
-          <SidebarProvider>
-            <IncidentCreationModalProvider>
-              <RealtimeProvider>
-                <IncidentAlertProvider>
-                  <GlobalKeyboardHandlerWrapper />
-                  <SkipLinks />
-                  <div className="app-shell flex min-h-screen flex-col">
-                    <AppHeader>
-                      <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
-                        <BrandLockup variant="header" />
-                        <div className="mx-0.5 h-4 w-px bg-slate-800 sm:mx-1" />
-                        <SidebarTrigger />
-                        <div className="hidden sm:block">
-                          <OperationalStatus
-                            tone={activeShell.systemStatus}
-                            label={activeShell.statusLabel}
-                            detail={activeShell.statusDetail}
-                            criticalCount={activeShell.incidentCounts.high}
-                            mediumCount={activeShell.incidentCounts.medium}
-                            lowCount={activeShell.incidentCounts.low}
+    <AuthenticatedClientProviders initialSession={requestContext.session}>
+      <AppErrorBoundary>
+        <TimezoneProvider initialTimeZone={userTimeZone}>
+          <UserAvatarProvider
+            currentUserId={userId}
+            currentUserAvatar={userAvatar}
+            currentUserGender={userGender}
+            currentUserName={userName}
+          >
+            <SidebarProvider>
+              <IncidentCreationModalProvider>
+                <RealtimeProvider>
+                  <IncidentAlertProvider>
+                    <GlobalKeyboardHandlerWrapper />
+                    <SkipLinks />
+                    <div className="app-shell flex min-h-screen flex-col">
+                      <AppHeader>
+                        <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-3">
+                          <BrandLockup variant="header" />
+                          <div className="mx-0.5 h-4 w-px bg-slate-800 sm:mx-1" />
+                          <SidebarTrigger />
+                          <div className="hidden sm:block">
+                            <OperationalStatus
+                              tone={activeShell.systemStatus}
+                              label={activeShell.statusLabel}
+                              detail={activeShell.statusDetail}
+                              criticalCount={activeShell.incidentCounts.high}
+                              mediumCount={activeShell.incidentCounts.medium}
+                              lowCount={activeShell.incidentCounts.low}
+                            />
+                          </div>
+                          <div className="hidden xl:block">
+                            <TopbarBreadcrumbs />
+                          </div>
+                        </div>
+                        <div className="mx-auto hidden max-w-md flex-1 items-center justify-center px-2 md:flex">
+                          <SidebarSearch />
+                        </div>
+                        <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+                          <TopbarNotifications />
+                          <QuickActions canCreate={canCreate} />
+                          <TopbarUserMenu
+                            name={userName}
+                            email={userEmail}
+                            role={userRole}
+                            avatarUrl={userAvatar}
+                            gender={userGender}
+                            userId={userId}
                           />
                         </div>
-                        <div className="hidden xl:block"><TopbarBreadcrumbs /></div>
-                      </div>
-                      <div className="mx-auto hidden max-w-md flex-1 items-center justify-center px-2 md:flex">
-                        <SidebarSearch />
-                      </div>
-                      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-                        <TopbarNotifications />
-                        <QuickActions canCreate={canCreate} />
-                        <TopbarUserMenu
-                          name={userName}
-                          email={userEmail}
-                          role={userRole}
-                          avatarUrl={userAvatar}
-                          gender={userGender}
+                      </AppHeader>
+                      <div className="relative flex min-h-0 flex-1 pt-14">
+                        <Sidebar
+                          userName={userName}
+                          userEmail={userEmail}
+                          userRole={userRole}
+                          userAvatar={userAvatar}
+                          userGender={userGender}
                           userId={userId}
+                          initialActiveCount={activeShell.incidentCounts.active}
+                          initialStatusPages={activeShell.statusPages}
+                          initialIsStatusPageAdmin={activeShell.isStatusPageAdmin}
                         />
-                      </div>
-                    </AppHeader>
-                    <div className="relative flex min-h-0 flex-1 pt-14">
-                      <Sidebar
-                        userName={userName}
-                        userEmail={userEmail}
-                        userRole={userRole}
-                        userAvatar={userAvatar}
-                        userGender={userGender}
-                        userId={userId}
-                        initialActiveCount={activeShell.incidentCounts.active}
-                      />
-                      <div className="content-shell flex-1">
-                        <GlobalIncidentBanner />
-                        <main id="main-content" className="page-shell">{children}</main>
+                        <div className="content-shell flex-1">
+                          <GlobalIncidentBanner />
+                          <main id="main-content" className="page-shell">
+                            {children}
+                          </main>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <CreateIncidentModal />
-                </IncidentAlertProvider>
-              </RealtimeProvider>
-            </IncidentCreationModalProvider>
-          </SidebarProvider>
-        </UserAvatarProvider>
-      </TimezoneProvider>
-      <SessionTimeoutWarning warningMinutes={5} />
-    </AppErrorBoundary>
+                    <CreateIncidentModal />
+                  </IncidentAlertProvider>
+                </RealtimeProvider>
+              </IncidentCreationModalProvider>
+            </SidebarProvider>
+          </UserAvatarProvider>
+        </TimezoneProvider>
+        <SessionTimeoutWarning warningMinutes={5} />
+      </AppErrorBoundary>
+    </AuthenticatedClientProviders>
   );
 }

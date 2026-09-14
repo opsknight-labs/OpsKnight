@@ -4,7 +4,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/s
 import { AlertTriangle, ShieldCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
-import { useOperationalStats } from '@/hooks/useOperationalStats';
+import { useOptionalRealtime } from '@/hooks/useRealtime';
 
 type Props = {
   // Optional props for fallback or override
@@ -24,29 +24,22 @@ export default function OperationalStatus({
   mediumCount = 0,
   lowCount = 0,
 }: Props) {
-  const {
-    activeCount: activeCountLive,
-    criticalCount: criticalCountLive,
-    mediumCount: mediumCountLive,
-    lowCount: lowCountLive,
-    loading,
-    hasLiveStats,
-  } = useOperationalStats();
+  const realtime = useOptionalRealtime();
+  const realtimeMetrics = realtime?.metrics ?? null;
 
-  const hasInitialProps =
-    typeof criticalCountOverride === 'number' ||
-    typeof mediumCount === 'number' ||
-    typeof lowCount === 'number';
+  const hasLiveStats = realtimeMetrics !== null;
 
-  // Use live stats once loaded; otherwise use server-rendered props
-  const critical = hasLiveStats
-    ? criticalCountLive
+  // Use live realtime metrics once available; otherwise use server-rendered initial props
+  const critical = realtimeMetrics
+    ? realtimeMetrics.highUrgency
     : typeof criticalCountOverride === 'number'
       ? criticalCountOverride
       : 0;
-  const medium = hasLiveStats ? mediumCountLive : (mediumCount ?? 0);
-  const low = hasLiveStats ? lowCountLive : (lowCount ?? 0);
-  const active = hasLiveStats ? activeCountLive : critical + medium + low;
+  const medium = realtimeMetrics ? (realtimeMetrics.mediumUrgency ?? 0) : (mediumCount ?? 0);
+  const low = realtimeMetrics ? (realtimeMetrics.lowUrgency ?? 0) : (lowCount ?? 0);
+  const active = realtimeMetrics
+    ? (realtimeMetrics.active ?? critical + medium + low)
+    : critical + medium + low;
 
   // Determine state from data
   const nonCriticalCount = Math.max(0, active - critical);
@@ -139,7 +132,12 @@ export default function OperationalStatus({
   const currentTheme =
     currentTone === 'danger' ? theme.danger : currentTone === 'warning' ? theme.warning : theme.ok;
 
-  if (loading && !initialTone && !hasInitialProps) {
+  const hasInitialProps =
+    typeof criticalCountOverride === 'number' ||
+    typeof mediumCount === 'number' ||
+    typeof lowCount === 'number';
+
+  if (!hasLiveStats && !initialTone && !hasInitialProps) {
     // Show loading only if no fallback
     return (
       <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-border/60 bg-muted/20 animate-pulse">

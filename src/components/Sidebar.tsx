@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link, { useLinkStatus } from 'next/link';
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { useSidebar } from '@/contexts/SidebarContext';
@@ -25,13 +25,28 @@ import {
   getAuthorizedNavItems,
   groupNavItemsBySection,
 } from '@/config/navigation';
+import { useRealtime } from '@/hooks/useRealtime';
 
 // Status page shape from sidebar-stats API
-interface SidebarStatusPage {
+export interface SidebarStatusPage {
   id: string;
   name: string;
   slug: string | null;
   isDefault: boolean;
+}
+
+function NavigationPendingIndicator() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden="true"
+      data-navigation-pending={pending ? 'true' : 'false'}
+      className={cn(
+        'h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400 transition-opacity',
+        pending ? 'animate-pulse opacity-100' : 'opacity-0'
+      )}
+    />
+  );
 }
 
 type SidebarProps = {
@@ -42,6 +57,8 @@ type SidebarProps = {
   userGender?: string | null;
   userId?: string;
   initialActiveCount?: number;
+  initialStatusPages?: SidebarStatusPage[];
+  initialIsStatusPageAdmin?: boolean;
 };
 
 
@@ -54,10 +71,13 @@ export default function Sidebar({
   userGender = null,
   userId = 'user',
   initialActiveCount,
+  initialStatusPages = [],
+  initialIsStatusPageAdmin = false,
 }: SidebarProps) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const { isCollapsed, isMobile, isMobileOpen, closeMobile } = useSidebar();
+  const { metrics: realtimeMetrics } = useRealtime();
 
   // Prefer client session data for reactive updates
   const currentName = session?.user?.name || userName;
@@ -65,11 +85,11 @@ export default function Sidebar({
   const currentRole = (session?.user as { role?: string } | undefined)?.role || userRole;
   const currentGender = (session?.user as { gender?: string } | undefined)?.gender || userGender;
 
-  const [stats, setStats] = useState<{ count: number; calculatedAt?: string } | null>(() => {
-    return typeof initialActiveCount === 'number' ? { count: initialActiveCount } : null;
-  });
-  const [statusPages, setStatusPages] = useState<SidebarStatusPage[]>([]);
-  const [isStatusPageAdmin, setIsStatusPageAdmin] = useState(false);
+  const activeCount =
+    typeof realtimeMetrics?.active === 'number' ? realtimeMetrics.active : initialActiveCount;
+  const stats = typeof activeCount === 'number' ? { count: activeCount } : null;
+  const statusPages = initialStatusPages;
+  const isStatusPageAdmin = initialIsStatusPageAdmin;
   // Manual toggle state; accordion is also open when user is on any /status route
   const [statusPagesManuallyExpanded, setStatusPagesExpanded] = useState(false);
   // Derive expanded state — no useEffect needed, avoids cascading renders
@@ -77,38 +97,6 @@ export default function Sidebar({
 
   const isDesktopCollapsed = !isMobile && isCollapsed;
   const sidebarId = 'app-sidebar';
-
-  // Fetch real-time active incident counts + status page metadata
-  useEffect(() => {
-    let isMounted = true;
-    fetch('/api/sidebar-stats')
-      .then(async res => {
-        if (!res.ok) throw new Error('Stats unavailable');
-        return res.json();
-      })
-      .then(data => {
-        if (!isMounted) return;
-        if (typeof data?.activeIncidentsCount === 'number') {
-          setStats({
-            count: data.activeIncidentsCount,
-            calculatedAt: data.calculatedAt,
-          });
-        }
-        if (Array.isArray(data?.statusPages)) {
-          setStatusPages(data.statusPages);
-        }
-        if (typeof data?.isStatusPageAdmin === 'boolean') {
-          setIsStatusPageAdmin(data.isStatusPageAdmin);
-        }
-      })
-      .catch(() => {
-        // Keep current stats on error to avoid UI flicker
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [pathname]);
 
   // Close mobile drawer on route change
   const prevPathnameRef = useRef(pathname);
@@ -199,12 +187,12 @@ export default function Sidebar({
               variant="sidebar-danger"
               size="xs"
               aria-label={`${stats!.count} active incidents`}
-              title={stats?.calculatedAt ? `Updated ${stats.calculatedAt}` : undefined}
               className="ml-auto h-4.5 min-w-4.5 px-1.5 rounded-full text-[10.5px] font-bold bg-rose-500 text-white border-0 shadow-xs"
             >
               {badgeText}
             </Badge>
           ))}
+        <NavigationPendingIndicator />
       </Link>
     );
 
@@ -318,14 +306,15 @@ export default function Sidebar({
       }
 
       return (
-        <div key="status-single">
+        <div key="status-single" className="group relative flex items-center">
           <Link
             href={href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
+              'relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
               'px-2.5 py-2 gap-2.5 text-[13px] w-full',
+              showManageLink && 'pr-8',
               active
                 ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -338,18 +327,17 @@ export default function Sidebar({
               <Activity className="h-[18px] w-[18px]" />
             </span>
             <span className="min-w-0 flex-1 truncate">{page.name}</span>
-            {showManageLink && (
-              <Link
-                href="/settings/status-pages"
-                onClick={e => e.stopPropagation()}
-                className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-slate-300 p-0.5 rounded"
-                title="Manage status pages"
-                aria-label="Manage status pages"
-              >
-                <Settings className="h-3 w-3" />
-              </Link>
-            )}
           </Link>
+          {showManageLink && (
+            <Link
+              href="/settings/status-pages"
+              className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-slate-300 p-0.5 rounded"
+              title="Manage status pages"
+              aria-label="Manage status pages"
+            >
+              <Settings className="h-3 w-3" />
+            </Link>
+          )}
         </div>
       );
     }

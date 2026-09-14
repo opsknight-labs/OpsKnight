@@ -17,7 +17,15 @@ export type RealtimeEvent =
   | { type: 'incidents_updated'; incidents: RealtimeIncident[]; timestamp: string }
   | {
       type: 'metrics_updated';
-      metrics: { open: number; acknowledged: number; resolved24h: number; highUrgency: number };
+      metrics: {
+        open: number;
+        acknowledged: number;
+        resolved24h: number;
+        highUrgency: number;
+        mediumUrgency?: number;
+        lowUrgency?: number;
+        active?: number;
+      };
       timestamp: string;
     }
   | { type: 'heartbeat'; timestamp: string }
@@ -29,6 +37,8 @@ export type RealtimeMetrics = {
   acknowledged: number;
   resolved24h: number;
   highUrgency: number;
+  mediumUrgency?: number;
+  lowUrgency?: number;
   active?: number;
   snoozed?: number;
   suppressed?: number;
@@ -209,4 +219,9 @@ export function useRealtime(): RealtimeContextValue {
   const value = useContext(RealtimeContext);
   if (!value) throw new Error('useRealtime must be used within RealtimeProvider');
   return value;
+}
+
+/** Optionally consume the realtime connection if inside RealtimeProvider; returns null otherwise. */
+export function useOptionalRealtime(): RealtimeContextValue | null {
+  return useContext(RealtimeContext);
 }
