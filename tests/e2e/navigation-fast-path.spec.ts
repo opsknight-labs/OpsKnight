@@ -9,12 +9,32 @@ const DEFAULT_PASSWORD = 'FastPath-Secure-Pass-921!';
 const email = process.env.E2E_ADMIN_EMAIL || DEFAULT_EMAIL;
 const password = process.env.E2E_ADMIN_PASSWORD || DEFAULT_PASSWORD;
 
+async function ensureTestUser() {
+  const passwordHash = await bcrypt.hash(password, 12);
+  await prisma.user.upsert({
+    where: { email },
+    update: {
+      passwordHash,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    },
+    create: {
+      email,
+      name: 'Fast Path Admin',
+      passwordHash,
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    },
+  });
+}
+
 async function login(page: Page) {
+  await ensureTestUser();
   await page.goto('/login');
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
   await page.locator('form button[type="submit"]').click();
-  await expect(page).not.toHaveURL(/\/login/);
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
   await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible({ timeout: 30_000 });
 }
 
@@ -29,19 +49,7 @@ async function navigationRequests(page: Page) {
 
 test.describe.serial('authenticated navigation fast path', () => {
   test.beforeAll(async () => {
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (!existing) {
-      const passwordHash = await bcrypt.hash(password, 12);
-      await prisma.user.create({
-        data: {
-          email,
-          name: 'Fast Path Admin',
-          passwordHash,
-          role: 'ADMIN',
-          status: 'ACTIVE',
-        },
-      });
-    }
+    await ensureTestUser();
   });
 
   test.afterAll(async () => {
