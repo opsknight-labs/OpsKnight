@@ -11,8 +11,10 @@ import {
 } from '@/lib/authorization-actors';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 
+import type { Session } from 'next-auth';
+
 export type AuthenticatedRequestActorContext = {
-  session: NonNullable<Awaited<ReturnType<typeof getServerSession>>>;
+  session: Session;
   user: {
     id: string;
     email: string;

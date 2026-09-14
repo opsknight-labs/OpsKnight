@@ -306,14 +306,15 @@ export default function Sidebar({
       }
 
       return (
-        <div key="status-single">
+        <div key="status-single" className="group relative flex items-center">
           <Link
             href={href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'group relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
+              'relative flex items-center rounded-lg font-medium transition-all duration-150 select-none',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
               'px-2.5 py-2 gap-2.5 text-[13px] w-full',
+              showManageLink && 'pr-8',
               active
                 ? 'bg-slate-800/90 text-white font-semibold shadow-xs ring-1 ring-white/10'
                 : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -326,18 +327,17 @@ export default function Sidebar({
               <Activity className="h-[18px] w-[18px]" />
             </span>
             <span className="min-w-0 flex-1 truncate">{page.name}</span>
-            {showManageLink && (
-              <Link
-                href="/settings/status-pages"
-                onClick={e => e.stopPropagation()}
-                className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-slate-300 p-0.5 rounded"
-                title="Manage status pages"
-                aria-label="Manage status pages"
-              >
-                <Settings className="h-3 w-3" />
-              </Link>
-            )}
           </Link>
+          {showManageLink && (
+            <Link
+              href="/settings/status-pages"
+              className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-slate-300 p-0.5 rounded"
+              title="Manage status pages"
+              aria-label="Manage status pages"
+            >
+              <Settings className="h-3 w-3" />
+            </Link>
+          )}
         </div>
       );
     }

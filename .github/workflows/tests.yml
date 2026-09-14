@@ -60,6 +60,9 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      - name: Build application
+        run: npm run build
+
       - name: Performance architecture budgets
         run: npm run perf:budgets
 

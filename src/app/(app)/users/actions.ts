@@ -556,14 +556,16 @@ export async function reactivateUser(userId: string, _formData?: FormData) {
   if (!target) return { error: 'User not found.' };
   if (target.status !== 'DISABLED') return { error: 'Only disabled users can be reactivated.' };
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
+  await updateUserSecurityState(
+    userId,
+    {
       status: target.passwordHash ? 'ACTIVE' : 'INVITED',
-      deactivatedAt: null,
       tokenVersion: { increment: 1 },
     },
-  });
+    {
+      deactivatedAt: null,
+    }
+  );
 
   await logAudit({
     action: 'user.reactivated',
@@ -716,13 +718,16 @@ export async function bulkUpdateUsers(
   }
 
   if (action === 'activate') {
-    await prisma.user.updateMany({
-      where: { id: { in: userIds } },
-      data: {
+    await bulkUpdateUserSecurityState(
+      userIds,
+      {
         status: 'ACTIVE',
-        deactivatedAt: null,
+        tokenVersion: { increment: 1 },
       },
-    });
+      {
+        deactivatedAt: null,
+      }
+    );
 
     await logAudit({
       action: 'user.reactivated.bulk',

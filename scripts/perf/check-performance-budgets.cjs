@@ -35,10 +35,40 @@ for (const stylesheet of [
   );
 }
 
+const globalsCss = read('src/app/globals.css');
 assertBudget(
-  !sidebar.includes("fetch('/api/sidebar-stats')"),
-  'Sidebar must not fetch database-backed metadata during navigation'
+  !/\.status-page-[a-zA-Z0-9_-]/.test(globalsCss),
+  'globals.css must not contain status-page specific styles; keep them in route-scoped stylesheets'
 );
+
+function scanDirectoryForPattern(dir, pattern) {
+  const violating = [];
+  const fullDir = path.join(root, dir);
+  if (!fs.existsSync(fullDir)) return violating;
+  const entries = fs.readdirSync(fullDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const rel = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      violating.push(...scanDirectoryForPattern(rel, pattern));
+    } else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
+      const content = read(rel);
+      if (pattern.test(content)) violating.push(rel);
+    }
+  }
+  return violating;
+}
+
+const sidebarStatsConsumers = [
+  ...scanDirectoryForPattern('src/components', /\/api\/sidebar-stats/),
+  ...scanDirectoryForPattern('src/hooks', /\/api\/sidebar-stats/),
+  ...scanDirectoryForPattern('src/app/(app)', /\/api\/sidebar-stats/),
+  ...scanDirectoryForPattern('src/app/(mobile)', /\/api\/sidebar-stats/),
+];
+assertBudget(
+  sidebarStatsConsumers.length === 0,
+  `authenticated shell dependency graph must not consume /api/sidebar-stats: ${sidebarStatsConsumers.join(', ')}`
+);
+
 assertBudget(
   !/const handleUserActivity = \(\) => \{[^}]*\bupdate\(/.test(activityTracker),
   'user interaction handlers must not invoke a session update'
@@ -55,7 +85,14 @@ assertBudget(size('src/app/globals.css') <= 96_000, 'legacy global CSS exceeds 9
 assertBudget(size('src/styles/index.css') <= 8_000, 'root CSS entry exceeds 8 KB');
 
 const buildManifestPath = path.join(root, '.next/app-build-manifest.json');
-if (fs.existsSync(buildManifestPath)) {
+if (!fs.existsSync(buildManifestPath)) {
+  if (process.env.CI) {
+    assertBudget(
+      false,
+      '.next/app-build-manifest.json missing. Run `npm run build` before checking performance budgets in CI.'
+    );
+  }
+} else {
   const manifest = JSON.parse(fs.readFileSync(buildManifestPath, 'utf8'));
   const staticRoot = path.join(root, '.next');
   for (const [route, assets] of Object.entries(manifest.pages ?? {})) {

@@ -8,7 +8,11 @@ import {
   invalidateSessionSecurityProjections,
 } from '@/lib/session-security-projection';
 
-type UserSecurityMutation = { role?: Role; status?: UserStatus };
+type UserSecurityMutation = {
+  role?: Role;
+  status?: UserStatus;
+  tokenVersion?: Prisma.IntFieldUpdateOperationsInput | number;
+};
 type SecurityMutationSideEffects = (tx: Prisma.TransactionClient) => Promise<void>;
 
 export async function updateUserSecurityState(

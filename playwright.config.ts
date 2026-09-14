@@ -28,7 +28,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: /auth-recovery\.spec\.ts/,
+      testMatch: /(auth-recovery|navigation-fast-path)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {

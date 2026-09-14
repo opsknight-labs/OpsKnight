@@ -111,7 +111,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const canCreate = isAppRole(userRole) && hasCapability(userRole, CAPABILITIES.OPERATIONS_MANAGE);
 
   return (
-    <AuthenticatedClientProviders>
+    <AuthenticatedClientProviders initialSession={requestContext.session}>
       <AppErrorBoundary>
         <TimezoneProvider initialTimeZone={userTimeZone}>
           <UserAvatarProvider

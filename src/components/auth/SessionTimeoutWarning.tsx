@@ -20,8 +20,8 @@ export default function SessionTimeoutWarning({
 
   const handleExtendSession = useCallback(async () => {
     try {
-      // Trigger session update to refresh the JWT
-      await update();
+      // Trigger session update to refresh the JWT and extend session activity & expiry
+      await update({ activity: true, extendSession: true });
       setShowWarning(false);
       onExtend?.();
     } catch (error) {

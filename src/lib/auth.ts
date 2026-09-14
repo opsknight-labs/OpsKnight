@@ -542,11 +542,27 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
           }
 
-          if (trigger === 'update') {
-            // Force the user refresh below by bypassing the cache check.
-          }
-
           const augmentedToken = token as AugmentedJWT;
+
+          if (trigger === 'update') {
+            const updatePayload = session as { activity?: boolean; extendSession?: boolean } | undefined;
+            const currentTime = Date.now();
+            if (updatePayload?.activity || updatePayload?.extendSession) {
+              augmentedToken.lastActivityAt = currentTime;
+            }
+            if (updatePayload?.extendSession && typeof augmentedToken.sessionExpiresAt === 'number') {
+              const isOidc = Boolean(augmentedToken.oidcAuthenticatedAt);
+              const remember = augmentedToken.rememberMe === true;
+              const ttlSeconds = isOidc
+                ? oidcSessionMaxAgeSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds;
+              const newExpiresAt = Math.floor(currentTime / 1000) + ttlSeconds;
+              token.exp = newExpiresAt;
+              augmentedToken.sessionExpiresAt = newExpiresAt;
+            }
+          }
 
           if (
             typeof augmentedToken.sessionExpiresAt === 'number' &&
@@ -572,16 +588,6 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               currentTime - augmentedToken.lastActivityAt >= sessionIdleTimeoutMs
             ) {
               return clearSessionToken(augmentedToken, 'OIDC_SESSION_IDLE_TIMEOUT');
-            }
-
-            // Only bump lastActivityAt when an explicit user interaction/activity signal
-            // is dispatched, preventing passive background /api/auth/session polling
-            // from defeating enterprise idle timeout.
-            const isActivitySignal =
-              trigger === 'update' &&
-              Boolean((session as { activity?: boolean } | undefined)?.activity);
-            if (isActivitySignal) {
-              augmentedToken.lastActivityAt = currentTime;
             }
           }
 

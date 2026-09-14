@@ -64,4 +64,40 @@ describe('session security projection', () => {
       select: { id: true, tokenVersion: true, status: true, role: true },
     });
   });
+
+  it('discards stale in-flight reads when invalidated before resolution', async () => {
+    let resolveStaleLookup!: (val: unknown) => void;
+    const stalePromise = new Promise(resolve => {
+      resolveStaleLookup = resolve;
+    });
+
+    vi.mocked(prisma.user.findUnique)
+      .mockImplementationOnce(() => stalePromise as never)
+      .mockResolvedValueOnce({
+        id: 'user-1',
+        tokenVersion: 5,
+        status: 'DISABLED',
+        role: 'USER',
+      } as never);
+
+    // T0: start read for user-1 (in flight)
+    const inFlightPromise = getSessionSecurityProjection('user-1');
+
+    // T1: admin revokes user-1 and invalidates projection while T0 is in flight
+    invalidateSessionSecurityProjection('user-1');
+
+    // T2: old T0 database lookup completes with stale tokenVersion = 4
+    resolveStaleLookup({
+      id: 'user-1',
+      tokenVersion: 4,
+      status: 'ACTIVE',
+      role: 'USER',
+    });
+    await inFlightPromise;
+
+    // T3: next read must NOT receive stale tokenVersion 4 from cache; it must trigger a fresh lookup
+    const freshResult = await getSessionSecurityProjection('user-1');
+    expect(freshResult).toMatchObject({ tokenVersion: 5, status: 'DISABLED' });
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+  });
 });

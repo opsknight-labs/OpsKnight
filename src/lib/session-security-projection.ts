@@ -17,6 +17,7 @@ type CacheEntry = {
 
 const projectionCache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<SessionSecurityProjection | null>>();
+const userEpoch = new Map<string, number>();
 
 function projectionTtlMs() {
   const configured = Number.parseInt(process.env.SESSION_SECURITY_CACHE_TTL_MS ?? '5000', 10);
@@ -37,6 +38,8 @@ export async function getSessionSecurityProjection(
   const pending = inFlight.get(userId);
   if (pending) return pending;
 
+  const capturedEpoch = userEpoch.get(userId) ?? 0;
+
   const lookup = prisma.user
     .findUnique({
       where: { id: userId },
@@ -51,7 +54,10 @@ export async function getSessionSecurityProjection(
             role: user.role,
           }
         : null;
-      projectionCache.set(userId, { value, expiresAt: Date.now() + projectionTtlMs() });
+      // Discard stale in-flight results if invalidation occurred while resolving
+      if ((userEpoch.get(userId) ?? 0) === capturedEpoch) {
+        projectionCache.set(userId, { value, expiresAt: Date.now() + projectionTtlMs() });
+      }
       return value;
     })
     .finally(() => {
@@ -63,6 +69,7 @@ export async function getSessionSecurityProjection(
 }
 
 export function invalidateSessionSecurityProjection(userId: string) {
+  userEpoch.set(userId, (userEpoch.get(userId) ?? 0) + 1);
   projectionCache.delete(userId);
 }
 
@@ -74,4 +81,6 @@ export function invalidateSessionSecurityProjections(userIds: readonly string[])
 export function resetSessionSecurityProjectionCache() {
   projectionCache.clear();
   inFlight.clear();
+  userEpoch.clear();
 }
+
