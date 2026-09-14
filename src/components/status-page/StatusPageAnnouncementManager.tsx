@@ -214,6 +214,8 @@ export default function StatusPageAnnouncementManager({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [deletingAnnouncement, setDeletingAnnouncement] = useState<AnnouncementItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Service ID map for fast lookup
   const serviceMap = useMemo(() => {
@@ -261,8 +263,25 @@ export default function StatusPageAnnouncementManager({
         return 'End date and time must be after start date and time.';
       }
     }
+    if (publishOption === 'AT_START' && parsedStartDate) {
+      if (parsedStartDate.getTime() <= Date.now()) {
+        return 'Scheduled publication start time must be in the future. Select "Publish Now" if this notice is already active or retrospective.';
+      }
+    }
+    if (notificationTiming === 'AT_START' && parsedStartDate) {
+      if (parsedStartDate.getTime() <= Date.now()) {
+        return 'Subscriber notification "At Start Time" cannot be scheduled in the past. Select "On Publish" or a future start time.';
+      }
+    }
     return null;
-  }, [parsedStartResult, parsedStartDate, parsedEndResult, parsedEndDate]);
+  }, [
+    parsedStartResult,
+    parsedStartDate,
+    parsedEndResult,
+    parsedEndDate,
+    publishOption,
+    notificationTiming,
+  ]);
 
   const calculatedDuration = useMemo(() => {
     if (parsedStartDate && parsedEndDate && parsedEndDate > parsedStartDate) {
@@ -490,27 +509,29 @@ export default function StatusPageAnnouncementManager({
     });
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string): Promise<boolean> => {
     setAnnouncementError(null);
-    startTransition(async () => {
-      try {
-        const response = await fetch('/api/settings/status-page/announcements', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ statusPageId, id }),
-        });
+    try {
+      const response = await fetch('/api/settings/status-page/announcements', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statusPageId, id }),
+      });
 
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to delete announcement');
-        }
-
-        setAnnouncements(current => current.filter(item => item.id !== id));
-        notify.success('Announcement deleted');
-      } catch (err) {
-        setAnnouncementError(getUserFacingErrorMessage(err) || 'Failed to delete announcement');
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete announcement');
       }
-    });
+
+      setAnnouncements(current => current.filter(item => item.id !== id));
+      notify.success('Announcement deleted');
+      return true;
+    } catch (err) {
+      const msg = getUserFacingErrorMessage(err) || 'Failed to delete announcement';
+      setAnnouncementError(msg);
+      notify.error(msg);
+      return false;
+    }
   };
 
   return (
@@ -815,8 +836,11 @@ export default function StatusPageAnnouncementManager({
                       variant="ghost"
                       size="sm"
                       className="h-8 px-2.5 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition-colors"
-                      onClick={() => setDeletingAnnouncement(announcement)}
-                      disabled={isPending}
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeletingAnnouncement(announcement);
+                      }}
+                      disabled={isPending || isDeleting}
                       title="Delete Announcement"
                     >
                       <Trash2 className="w-4 h-4 mr-1" />
@@ -1044,6 +1068,11 @@ export default function StatusPageAnnouncementManager({
                       <input
                         type="date"
                         value={startDate}
+                        min={
+                          publishOption === 'AT_START'
+                            ? getLocalDateString(new Date(), browserTimeZone)
+                            : undefined
+                        }
                         onChange={e => {
                           const nextD = e.target.value;
                           setStartDate(nextD);
@@ -1162,7 +1191,11 @@ export default function StatusPageAnnouncementManager({
                       )}
                     </span>
                     <span className="font-mono text-xs">
-                      {parsedStartDate && parsedStartDate.getTime() > Date.now() ? (
+                      {parsedEndDate && parsedEndDate.getTime() < Date.now() ? (
+                        <span className="text-muted-foreground font-medium">
+                          ● Concluded historical notice
+                        </span>
+                      ) : parsedStartDate && parsedStartDate.getTime() > Date.now() ? (
                         <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
                           ● Scheduled
                         </span>
@@ -1369,7 +1402,12 @@ export default function StatusPageAnnouncementManager({
 
       <Dialog
         open={Boolean(deletingAnnouncement)}
-        onOpenChange={open => !open && setDeletingAnnouncement(null)}
+        onOpenChange={open => {
+          if (!open && !isDeleting) {
+            setDeletingAnnouncement(null);
+            setDeleteError(null);
+          }
+        }}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -1394,24 +1432,40 @@ export default function StatusPageAnnouncementManager({
             )}
           </div>
 
+          {deleteError && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-medium">
+              {deleteError}
+            </div>
+          )}
+
           <DialogFooter className="pt-3 gap-2">
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setDeletingAnnouncement(null)}
-              disabled={isPending}
+              onClick={() => {
+                setDeletingAnnouncement(null);
+                setDeleteError(null);
+              }}
+              disabled={isDeleting}
             >
               Cancel
             </Button>
             <Button
               type="button"
               variant="danger"
-              isLoading={isPending}
-              onClick={() => {
-                if (deletingAnnouncement) {
-                  const id = deletingAnnouncement.id;
+              isLoading={isDeleting}
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!deletingAnnouncement || isDeleting) return;
+                const id = deletingAnnouncement.id;
+                setIsDeleting(true);
+                setDeleteError(null);
+                const success = await handleDelete(id);
+                setIsDeleting(false);
+                if (success) {
                   setDeletingAnnouncement(null);
-                  handleDelete(id);
+                } else {
+                  setDeleteError('Failed to delete announcement. Please check your connection and try again.');
                 }
               }}
             >
