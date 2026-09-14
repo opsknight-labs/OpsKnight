@@ -9,6 +9,7 @@ import { adoptWarRoomChannel, claimWarRoomProvisioning, closeWarRoom } from './r
 import {
   createChannel,
   findWarRoomChannel,
+  getChannelById,
   warRoomChannelName,
   warRoomMarker,
 } from '@/lib/microsoft-teams/graph/channels';
@@ -183,7 +184,32 @@ export async function reconcileMicrosoftTeamsWarRoomHealth(limit = 20): Promise<
   });
   let healthy = 0;
   for (const room of rooms) {
-    const result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+    // Fast path: READY rooms have a durable providerChannelId — verify that
+    // single channel directly instead of paginating the entire channel list.
+    // Fall back to the marker scan only when the direct probe is inconclusive.
+    let result: Awaited<ReturnType<typeof getChannelById>> | Awaited<ReturnType<typeof findWarRoomChannel>>;
+    if (room.providerChannelId) {
+      const direct = await getChannelById({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, channelId: room.providerChannelId });
+      if (!direct.ok) {
+        // PERMISSION / TRANSIENT / rate-limit — surface directly, no scan needed.
+        result = direct;
+      } else if (direct.value) {
+        const hasMarker = direct.value.description?.includes(warRoomMarker(room.incident.id, room.generation));
+        if (hasMarker) {
+          result = direct; // HEALTHY — single GET, no pagination.
+        } else {
+          // Channel exists but marker missing (edited away or replaced). Scan
+          // by marker to avoid false HEALTHY.
+          result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+        }
+      } else {
+        // Channel id no longer resolves — scan by marker to distinguish deletion
+        // from transient Graph listing quirks.
+        result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+      }
+    } else {
+      result = await findWarRoomChannel({ tenantId: room.providerTenantId!, teamId: room.providerContainerId!, marker: warRoomMarker(room.incident.id, room.generation) });
+    }
     const health = result.ok && result.value ? 'HEALTHY' : !result.ok && result.code === 'MISSING_PERMISSION' ? 'PERMISSION_ERROR' : result.ok ? 'MISSING' : 'DEGRADED';
     await prisma.incidentWarRoom.update({
       where: { id: room.id },
@@ -474,13 +500,54 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
 
-  const metadata = room.metadata as { privateOwnerObjectId?: unknown } | null;
-  const privateOwnerObjectId = typeof metadata?.privateOwnerObjectId === 'string' ? metadata.privateOwnerObjectId : null;
+  const metadata = room.metadata as { privateOwnerObjectId?: unknown; privateOwnerUserId?: unknown } | null;
+  let privateOwnerObjectId = typeof metadata?.privateOwnerObjectId === 'string' ? metadata.privateOwnerObjectId : null;
   if (room.membershipType === 'PRIVATE') {
     if (!privateOwnerObjectId) return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_OWNER_UNAVAILABLE', 'Private Teams war rooms require a verified owner.');
-    const owner = await findTeamMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, userObjectId: privateOwnerObjectId });
-    if (!owner.ok) return markFailed(room.id, expectedProvisioningToken, owner.code, owner.message);
-    if (!owner.value) return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_OWNER_NOT_IN_TEAM', 'The selected private-room owner is not a member of the parent Team.');
+    let owner = await findTeamMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, userObjectId: privateOwnerObjectId });
+    if (!owner.ok) {
+      if (owner.code === 'RATE_LIMITED' || owner.code === 'TRANSIENT_READ' || owner.code === 'GRAPH_TOKEN_FAILED') throw new WarRoomRetryableError(owner.message, owner.retryAfterMs);
+      return markFailed(room.id, expectedProvisioningToken, owner.code, owner.message);
+    }
+    if (!owner.value) {
+      // Fallback: the durable snapshot owner may have left the Team since the
+      // request boundary. Re-resolve from incident assignee / team-lead links
+      // and try the next verified candidate that is actually in the Team.
+      const incidentForFallback = await prisma.incident.findUnique({
+        where: { id: room.incident.id },
+        select: { assigneeId: true, service: { select: { team: { select: { teamLeadId: true } } } } },
+      });
+      const fallbackCandidates = [incidentForFallback?.assigneeId, incidentForFallback?.service.team?.teamLeadId].filter(
+        (id): id is string => Boolean(id)
+      );
+      if (fallbackCandidates.length > 0) {
+        const destinationTenant = room.providerTenantId;
+        const fallbackLinks = await prisma.chatIdentityLink.findMany({
+          where: { provider: 'MICROSOFT_TEAMS', providerTenantId: destinationTenant, revokedAt: null, userId: { in: fallbackCandidates } },
+          select: { userId: true, providerUserId: true, providerObjectId: true },
+        });
+        for (const userId of fallbackCandidates) {
+          if (userId === (metadata?.privateOwnerUserId as string | undefined)) continue;
+          const link = fallbackLinks.find(candidate => candidate.userId === userId);
+          const objectId = link?.providerObjectId ?? link?.providerUserId ?? null;
+          if (!objectId) continue;
+          const candidateOwner = await findTeamMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, userObjectId: objectId });
+          if (!candidateOwner.ok) {
+            if (candidateOwner.code === 'RATE_LIMITED' || candidateOwner.code === 'TRANSIENT_READ' || candidateOwner.code === 'GRAPH_TOKEN_FAILED') throw new WarRoomRetryableError(candidateOwner.message, candidateOwner.retryAfterMs);
+            return markFailed(room.id, expectedProvisioningToken, candidateOwner.code, candidateOwner.message);
+          }
+          if (!candidateOwner.value) continue;
+          await prisma.incidentWarRoom.updateMany({
+            where: { id: room.id, provisioningToken: expectedProvisioningToken },
+            data: { metadata: { privateOwnerUserId: userId, privateOwnerObjectId: objectId } },
+          });
+          privateOwnerObjectId = objectId;
+          owner = candidateOwner;
+          break;
+        }
+      }
+      if (!owner.value) return markFailed(room.id, expectedProvisioningToken, 'PRIVATE_OWNER_NOT_IN_TEAM', 'The selected private-room owner is not a member of the parent Team.');
+    }
   }
 
   const current = await prisma.incidentWarRoom.findUnique({

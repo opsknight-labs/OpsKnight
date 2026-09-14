@@ -173,6 +173,7 @@ describe('queue.processJob WAR_ROOM_PARTICIPANT_SYNC', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.backgroundJob.update.mockResolvedValue({});
+    prismaMock.backgroundJob.updateMany.mockResolvedValue({ count: 1 });
   });
 
   it('runs participant synchronization only in the durable worker', async () => {
@@ -182,8 +183,10 @@ describe('queue.processJob WAR_ROOM_PARTICIPANT_SYNC', () => {
     });
     expect(result).toBe(true);
     expect(syncMicrosoftTeamsWarRoomParticipantsMock).toHaveBeenCalledWith('room-1');
-    expect(prismaMock.backgroundJob.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: 'job-war-room-members' }, data: expect.objectContaining({ status: 'COMPLETED' }),
+    // Fenced completion: must not resurrect a job cancelled while Graph was in flight.
+    expect(prismaMock.backgroundJob.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'job-war-room-members', status: 'PROCESSING' },
+      data: expect.objectContaining({ status: 'COMPLETED' }),
     }));
   });
 });

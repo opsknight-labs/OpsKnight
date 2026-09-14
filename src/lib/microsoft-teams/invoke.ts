@@ -66,8 +66,20 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     }
     const destinationRouteMatches = destination.tenantId === tenantId && destination.teamId === teamId
       && destination.channelId === channelId && incident?.serviceId === destination.serviceId;
+    // A war-room card must be bound to the exact destination that provisioned
+    // the room. Without this, a card from one service/destination could be
+    // replayed against a different war-room in the same Team/channel.
+    const warRoomDestinationBound = Boolean(
+      warRoom
+      && warRoom.destinationId === destinationId
+      && incident.serviceId === destination.serviceId
+      && (!warRoom.installationId || warRoom.installationId === destination.installationId)
+      && (!warRoom.providerTenantId || warRoom.providerTenantId === destination.tenantId)
+      && (!warRoom.providerContainerId || warRoom.providerContainerId === destination.teamId)
+    );
     const warRoomRouteMatches = Boolean(warRoom && warRoom.state === 'READY' &&
-      warRoom.providerTenantId === tenantId && warRoom.providerContainerId === teamId && warRoom.providerChannelId === channelId);
+      warRoom.providerTenantId === tenantId && warRoom.providerContainerId === teamId && warRoom.providerChannelId === channelId
+      && warRoomDestinationBound);
     const routeMatches = destinationRouteMatches || warRoomRouteMatches;
     const messageMatches = warRoom
       ? warRoom.messageGeneration === messageGeneration

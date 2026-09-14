@@ -78,3 +78,34 @@ export async function addChannelMember(input: {
   );
   return result.ok ? { ok: true, value: null } : result;
 }
+
+/**
+ * Removes a member from a private channel. The caller must supply the
+ * channel membership id (not the Entra object id) obtained from
+ * findChannelMember. Idempotent: 404 is treated as already removed.
+ * Never removes the user from the parent Team.
+ */
+export async function removeChannelMember(input: {
+  tenantId: string;
+  teamId: string;
+  channelId: string;
+  membershipId: string;
+}): Promise<WarRoomGraphResult<null>> {
+  const result = await microsoftTeamsGraphRequest(
+    input.tenantId,
+    `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/members/${encodeURIComponent(input.membershipId)}`,
+    { method: 'DELETE' },
+    'MEMBER_REMOVE',
+  );
+  if (result.ok) return { ok: true, value: null };
+  // Graph returns 404 when the membership was already removed — treat as success
+  // for idempotency. The WarRoomGraphResult will map it to TEAM_NOT_FOUND;
+  // we normalize that case here.
+  if (!result.ok && result.code === 'TEAM_NOT_FOUND') {
+    // Probe whether this was genuinely missing vs team gone — for member removal
+    // we conservatively treat any 404 as already-removed when the channel still
+    // exists (caller should have verified channel existence via health).
+    return { ok: true, value: null };
+  }
+  return result;
+}

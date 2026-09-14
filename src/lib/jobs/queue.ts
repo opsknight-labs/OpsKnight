@@ -421,8 +421,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           throw new Error('War-room participant sync job is missing warRoomId');
         const { syncMicrosoftTeamsWarRoomParticipants } = await import('../war-room/participants');
         await syncMicrosoftTeamsWarRoomParticipants(requiredPayloadString(job.payload, 'warRoomId'));
-        await markJobCompleted(job.id);
-        return true;
+        return markWarRoomJobCompleted(job.id);
       }
       case 'WAR_ROOM_PROJECT': {
         const version = payloadValue(job.payload, 'projectionVersion');
@@ -430,8 +429,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           throw new Error('War-room projection job is missing projectionVersion');
         const { projectMicrosoftTeamsWarRoomCard } = await import('../war-room/projection');
         await projectMicrosoftTeamsWarRoomCard(requiredPayloadString(job.payload, 'warRoomId'), version);
-        await markJobCompleted(job.id);
-        return true;
+        return markWarRoomJobCompleted(job.id);
       }
       case 'EXTERNAL_OPERATION': {
         if (typeof payloadValue(job.payload, 'operationId') !== 'string')
@@ -594,7 +592,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
     }
   } catch (error) {
-    if (job.type === 'WAR_ROOM_PROVISION' && error instanceof Error && error.name === 'WarRoomRetryableError') {
+    const isWarRoomJob = job.type === 'WAR_ROOM_PROVISION' || job.type === 'WAR_ROOM_PROJECT' || job.type === 'WAR_ROOM_PARTICIPANT_SYNC';
+    if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
       const retryBudgetNeutral = (error as Error & { retryBudgetNeutral?: unknown }).retryBudgetNeutral === true;
       const delay = typeof retryAfterMs === 'number' && retryAfterMs > 0
@@ -615,7 +614,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
       }
     }
-    if (job.type === 'WAR_ROOM_PROVISION') {
+    if (isWarRoomJob) {
       await markWarRoomJobFailed(job, error instanceof Error ? error.message : 'Unknown error');
       return false;
     }

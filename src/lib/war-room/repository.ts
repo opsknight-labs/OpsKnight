@@ -64,13 +64,22 @@ export async function closeWarRoom(
   const changed = await tx.incidentWarRoom.updateMany({
     // AMBIGUOUS means an external channel may exist but is not yet adopted.
     // Closing it would permit a new generation and risk an untracked duplicate.
+    // CLOSING is included so an operator can force-close a room while the
+    // resolve-driven card projection is still in flight; the projection lease
+    // is cleared so a stale worker cannot resurrect the room.
     where: {
       id: input.warRoomId,
       incidentId: input.incidentId,
       provider: input.provider,
-      state: { in: ['READY', 'FAILED'] },
+      state: { in: ['READY', 'CLOSING', 'FAILED'] },
     },
-    data: { state: 'CLOSED', closedAt: new Date(), provisioningToken: null },
+    data: {
+      state: 'CLOSED',
+      closedAt: new Date(),
+      provisioningToken: null,
+      projectionLeaseToken: null,
+      projectionLeaseExpiresAt: null,
+    },
   });
   return changed.count === 1;
 }

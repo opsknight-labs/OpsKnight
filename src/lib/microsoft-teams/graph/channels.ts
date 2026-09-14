@@ -3,7 +3,7 @@ import type { WarRoomGraphResult } from '@/lib/war-room/types';
 
 type Channel = { id: string; displayName: string; description?: string | null; webUrl?: string | null };
 
-type GraphOperation = 'READ' | 'CREATE' | 'UPDATE' | 'MEMBER_ADD';
+type GraphOperation = 'READ' | 'CREATE' | 'UPDATE' | 'MEMBER_ADD' | 'MEMBER_REMOVE';
 
 function failure(status: number, body: string, retryAfter: string | null, operation: GraphOperation): WarRoomGraphResult<never> {
   if (status === 429) return { ok: false, code: 'RATE_LIMITED', message: 'Microsoft Teams rate limited the request.', retryAfterMs: Number(retryAfter) > 0 ? Number(retryAfter) * 1000 : undefined };
@@ -84,6 +84,23 @@ export async function findWarRoomChannel(input: { tenantId: string; teamId: stri
   return next
     ? { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph channel pagination exceeded its safety limit.' }
     : { ok: true, value: matchingChannel };
+}
+
+export async function getChannelById(input: { tenantId: string; teamId: string; channelId: string }): Promise<WarRoomGraphResult<Channel | null>> {
+  const result = await microsoftTeamsGraphRequest(
+    input.tenantId,
+    `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}?$select=id,displayName,description,webUrl`,
+    { method: 'GET' },
+    'READ',
+  );
+  if (!result.ok) {
+    // A missing channel is a health signal, not a discovery failure.
+    if (result.code === 'TEAM_NOT_FOUND') return { ok: true, value: null };
+    return result;
+  }
+  const channel = await result.value.json().catch(() => null) as Channel | null;
+  if (!channel?.id) return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph returned an invalid channel.' };
+  return { ok: true, value: channel };
 }
 
 export async function updateChannel(input: { tenantId: string; teamId: string; channelId: string; displayName?: string; description?: string }): Promise<WarRoomGraphResult<null>> {

@@ -17,7 +17,7 @@
 export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
   'ChannelSettings.Read.Group', // List teams / channels for destination picker (Graph)
 ] as const;
-export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.2.0';
+export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.3.0';
 
 export const MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS = [
   'TeamSettings.Read.Group',

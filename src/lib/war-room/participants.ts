@@ -1,10 +1,35 @@
 import 'server-only';
 
 import prisma from '@/lib/prisma';
-import { addChannelMember, findChannelMember, findTeamMember } from '@/lib/microsoft-teams/graph/members';
+import { addChannelMember, findChannelMember, findTeamMember, removeChannelMember } from '@/lib/microsoft-teams/graph/members';
 import { scheduleJob } from '@/lib/jobs/queue';
+import { WarRoomRetryableError } from './microsoft-teams';
 
 type ResponderSource = 'ASSIGNEE' | 'WATCHER';
+
+function isRetryableMemberGraphCode(code: string): boolean {
+  return code === 'RATE_LIMITED' || code === 'TRANSIENT_READ' || code === 'GRAPH_TOKEN_FAILED';
+}
+
+async function validateParticipantSyncAuthority(room: {
+  destinationId: string | null;
+  installationId: string | null;
+  providerTenantId: string | null;
+  providerContainerId: string | null;
+  state: string;
+}): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> {
+  if (!room.destinationId) return { allowed: false, code: 'DESTINATION_SNAPSHOT_MISSING', message: 'War-room routing snapshot is missing.' };
+  if (room.state !== 'READY') return { allowed: false, code: 'WAR_ROOM_STATE_INVALID', message: `War-room state ${room.state} does not permit member sync.` };
+  const [config, destination, installation] = await Promise.all([
+    prisma.microsoftTeamsConfig.findFirst({ where: { enabled: true, warRoomsEnabled: true }, select: { id: true } }),
+    prisma.microsoftTeamsDestination.findUnique({ where: { id: room.destinationId }, select: { enabled: true, warRoomEnabled: true, installationId: true } }),
+    room.installationId ? prisma.microsoftTeamsInstallation.findUnique({ where: { id: room.installationId }, select: { enabled: true } }) : Promise.resolve(null),
+  ]);
+  if (!config) return { allowed: false, code: 'WAR_ROOM_AUTHORITY_REVOKED', message: 'Microsoft Teams war-room configuration was disabled.' };
+  if (!destination?.enabled || !destination.warRoomEnabled) return { allowed: false, code: 'WAR_ROOM_DESTINATION_REVOKED', message: 'Microsoft Teams war-room destination was disabled.' };
+  if (room.installationId && (!installation?.enabled || destination.installationId !== room.installationId)) return { allowed: false, code: 'WAR_ROOM_INSTALLATION_REVOKED', message: 'Microsoft Teams installation was disabled.' };
+  return { allowed: true };
+}
 
 /**
  * Projects responders into durable desired members. Identity resolution is
@@ -55,14 +80,23 @@ export async function projectMicrosoftTeamsWarRoomParticipants(warRoomId: string
 
 async function persistParticipantOutcome(input: {
   id: string;
-  state: 'PENDING' | 'PRESENT' | 'SKIPPED' | 'FAILED';
+  state: 'PENDING' | 'PRESENT' | 'SKIPPED' | 'FAILED' | 'REMOVED';
   code?: string | null;
   message?: string | null;
   added?: boolean;
 }): Promise<void> {
   const now = new Date();
-  await prisma.warRoomParticipant.update({
-    where: { id: input.id },
+  // CAS fencing: never resurrect a REMOVED row into PRESENT/PENDING. The
+  // projection owns the DESIRED→REMOVED transition; the sync may only advance
+  // DESIRED/PENDING/FAILED forward, or keep REMOVED stable.
+  const allowedPrior =
+    input.state === 'REMOVED'
+      ? ['REMOVED', 'DESIRED', 'PENDING', 'FAILED', 'PRESENT', 'PROCESSING'] as const
+      : input.state === 'PENDING'
+        ? ['DESIRED', 'PENDING', 'FAILED'] as const
+        : ['DESIRED', 'PENDING', 'FAILED', 'PRESENT'] as const;
+  const changed = await prisma.warRoomParticipant.updateMany({
+    where: { id: input.id, state: { in: [...allowedPrior] } } as never,
     data: {
       state: input.state,
       lastSyncAt: now,
@@ -71,12 +105,28 @@ async function persistParticipantOutcome(input: {
       ...(input.added ? { addedAt: now } : {}),
     },
   });
+  // If CAS fenced the write (projection concurrently marked REMOVED), do not
+  // clobber the removal — the next projection cycle will reconcile.
+  if (changed.count === 0 && input.state !== 'REMOVED') {
+    // Ensure we at least surface the terminal error without reviving the row.
+    await prisma.warRoomParticipant.updateMany({
+      where: { id: input.id, state: 'REMOVED' },
+      data: { lastSyncAt: now },
+    });
+  }
+}
+
+function throwIfRetryableMemberGraph(result: { ok: false; code: string; message: string; retryAfterMs?: number }): never | void {
+  if (isRetryableMemberGraphCode(result.code)) {
+    throw new WarRoomRetryableError(result.message, result.retryAfterMs);
+  }
 }
 
 /**
  * Performs an idempotent provider sync after projection. Standard channels do
  * not mutate parent-Team membership; they only verify each identity is already
- * in the Team. Private rooms also reconcile channel membership before adding.
+ * in the Team. Private rooms also reconcile channel membership before adding
+ * and removing.
  */
 export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): Promise<void> {
   await projectMicrosoftTeamsWarRoomParticipants(warRoomId);
@@ -89,16 +139,71 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     !room.providerTenantId || !room.providerContainerId || !room.membershipType
   ) return;
 
+  const authority = await validateParticipantSyncAuthority(room);
+  if (!authority.allowed) {
+    // Authority revoked while job was queued — do not leak Graph calls. Keep
+    // durable participant state as-is; the revocation path cancels future jobs.
+    // Mark a soft failure so operators can see why sync stalled.
+    for (const participant of room.participants) {
+      if (['DESIRED', 'PENDING', 'FAILED'].includes(participant.state)) {
+        await prisma.warRoomParticipant.updateMany({
+          where: { id: participant.id, state: { in: ['DESIRED', 'PENDING', 'FAILED'] } },
+          data: { lastErrorCode: authority.code, lastError: authority.message, lastSyncAt: new Date() },
+        });
+      }
+    }
+    return;
+  }
+
   for (const participant of room.participants) {
+    // Removal path: projection marked REMOVED after watcher/assignee left.
+    // Private channels must actually remove the Graph membership; standard
+    // channels never added a channel member so REMOVED is already terminal.
+    if (participant.state === 'REMOVED') {
+      if (room.membershipType !== 'PRIVATE' || !room.providerChannelId) continue;
+      const userObjectId = participant.providerObjectId ?? participant.providerUserId;
+      if (!userObjectId) {
+        await persistParticipantOutcome({ id: participant.id, state: 'REMOVED' });
+        continue;
+      }
+      const channelMember = await findChannelMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId, userObjectId });
+      if (!channelMember.ok) {
+        throwIfRetryableMemberGraph(channelMember);
+        await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: channelMember.code, message: channelMember.message });
+        continue;
+      }
+      if (!channelMember.value) {
+        // Already removed — keep REMOVED stable and refresh lastSyncAt.
+        await persistParticipantOutcome({ id: participant.id, state: 'REMOVED' });
+        continue;
+      }
+      const membershipId = (channelMember.value as { id?: string }).id;
+      if (!membershipId) {
+        await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: 'MEMBER_NOT_FOUND', message: 'Channel membership record is missing its identifier.' });
+        continue;
+      }
+      const removed = await removeChannelMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId, membershipId });
+      if (!removed.ok) {
+        throwIfRetryableMemberGraph(removed);
+        await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: removed.code, message: removed.message });
+        continue;
+      }
+      await persistParticipantOutcome({ id: participant.id, state: 'REMOVED' });
+      continue;
+    }
+
     if (!['DESIRED', 'PENDING', 'FAILED'].includes(participant.state)) continue;
     const userObjectId = participant.providerObjectId ?? participant.providerUserId;
     if (!userObjectId) {
       await persistParticipantOutcome({ id: participant.id, state: 'SKIPPED', code: 'IDENTITY_NOT_LINKED', message: 'No verified Microsoft Teams identity is linked to this responder.' });
       continue;
     }
+    // CAS transition DESIRED/FAILED -> PENDING so a concurrent removal is not
+    // clobbered by this PENDING write.
     await persistParticipantOutcome({ id: participant.id, state: 'PENDING' });
     const teamMember = await findTeamMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, userObjectId });
     if (!teamMember.ok) {
+      throwIfRetryableMemberGraph(teamMember);
       await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: teamMember.code, message: teamMember.message });
       continue;
     }
@@ -116,6 +221,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     }
     const channelMember = await findChannelMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId, userObjectId });
     if (!channelMember.ok) {
+      throwIfRetryableMemberGraph(channelMember);
       await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: channelMember.code, message: channelMember.message });
       continue;
     }
@@ -125,6 +231,7 @@ export async function syncMicrosoftTeamsWarRoomParticipants(warRoomId: string): 
     }
     const added = await addChannelMember({ tenantId: room.providerTenantId, teamId: room.providerContainerId, channelId: room.providerChannelId, userObjectId });
     if (!added.ok && added.code !== 'MEMBER_ALREADY_PRESENT') {
+      throwIfRetryableMemberGraph(added);
       await persistParticipantOutcome({ id: participant.id, state: 'FAILED', code: added.code, message: added.message });
       continue;
     }
