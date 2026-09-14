@@ -144,7 +144,7 @@ export async function closeMicrosoftTeamsWarRoom(
 export async function reconcileMicrosoftTeamsWarRoom(incidentId: string, warRoomId: string): Promise<{ queued: boolean }> {
   return prisma.$transaction(async tx => {
     const room = await tx.incidentWarRoom.findFirst({
-      where: { id: warRoomId, incidentId, provider: 'MICROSOFT_TEAMS', state: 'AMBIGUOUS', createAttemptedAt: { not: null } },
+      where: { id: warRoomId, incidentId, provider: 'MICROSOFT_TEAMS', state: 'AMBIGUOUS', NOT: { createAttemptedAt: { equals: null } } },
       select: { id: true, provisioningToken: true },
     });
     if (!room?.provisioningToken) return { queued: false };
@@ -222,7 +222,9 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
     });
     await tx.incidentWarRoom.updateMany({
       where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
-      data: { state: 'CLOSED', closedAt: now, provisioningToken: null },
+      // Keep the card reference alive long enough to render the terminal,
+      // action-disabled state. The projection worker closes it only on success.
+      data: { state: 'CLOSING', provisioningToken: null },
     });
 
     const rooms = await tx.incidentWarRoom.findMany({
@@ -309,6 +311,11 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
       });
     }
   });
+  const closing = await prisma.incidentWarRoom.findMany({
+    where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'CLOSING' }, select: { id: true },
+  });
+  const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
+  await Promise.all(closing.map(room => requestMicrosoftTeamsWarRoomProjection(room.id)));
 }
 
 async function adoptProviderChannel(

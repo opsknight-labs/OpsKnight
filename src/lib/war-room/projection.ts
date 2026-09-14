@@ -11,7 +11,7 @@ const PROJECTION_LEASE_MS = 2 * 60_000;
 export async function requestMicrosoftTeamsWarRoomProjection(warRoomId: string): Promise<number | null> {
   return prisma.$transaction(async tx => {
     const changed = await tx.incidentWarRoom.updateMany({
-      where: { id: warRoomId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
+      where: { id: warRoomId, provider: 'MICROSOFT_TEAMS', state: { in: ['READY', 'CLOSING'] } },
       data: { projectionVersion: { increment: 1 } },
     });
     if (changed.count !== 1) return null;
@@ -41,7 +41,7 @@ export async function claimMicrosoftTeamsWarRoomProjection(warRoomId: string, pr
   const now = new Date();
   const changed = await prisma.incidentWarRoom.updateMany({
     where: {
-      id: warRoomId, provider: 'MICROSOFT_TEAMS', state: 'READY', projectionVersion,
+      id: warRoomId, provider: 'MICROSOFT_TEAMS', state: { in: ['READY', 'CLOSING'] }, projectionVersion,
       OR: [{ projectionLeaseExpiresAt: null }, { projectionLeaseExpiresAt: { lte: now } }],
     },
     data: { projectionLeaseToken: token, projectionLeaseExpiresAt: new Date(now.getTime() + PROJECTION_LEASE_MS) },
@@ -54,6 +54,12 @@ export async function completeMicrosoftTeamsWarRoomProjection(warRoomId: string,
     where: { id: warRoomId, projectionVersion, projectionLeaseToken: token },
     data: { lastProjectedAt: new Date(), projectionLeaseToken: null, projectionLeaseExpiresAt: null },
   });
+  if (changed.count === 1) {
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: warRoomId, projectionVersion, state: 'CLOSING', projectionLeaseToken: null },
+      data: { state: 'CLOSED', closedAt: new Date() },
+    });
+  }
   return changed.count === 1;
 }
 
