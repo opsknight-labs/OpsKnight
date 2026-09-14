@@ -48,7 +48,9 @@ type AugmentedJWT = JWT & {
   lastActivityAt?: number;
   /** Time OpsKnight established this OIDC session, in epoch milliseconds. */
   oidcAuthenticatedAt?: number;
-  /** Absolute session expiration timestamp in epoch seconds. */
+  /** Absolute session expiration timestamp in epoch seconds, immutable from login. */
+  absoluteExpiresAt?: number;
+  /** Session expiration timestamp in epoch seconds. */
   sessionExpiresAt?: number;
   /** Trust-version of the provider configuration that issued this session. */
   oidcConfigVersion?: number;
@@ -117,6 +119,7 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
   delete token.oidcAuthenticatedAt;
   delete token.oidcConfigVersion;
   delete token.sessionExpiresAt;
+  delete token.absoluteExpiresAt;
   return token;
 }
 
@@ -526,6 +529,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
             token.exp = sessionExpiresAt;
             (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
+            (token as AugmentedJWT).absoluteExpiresAt = sessionExpiresAt;
           } else if (user) {
             delete (token as AugmentedJWT).error;
             logger.debug('[Auth-Debug] Initial Sign In (Fallback)', {
@@ -541,6 +545,7 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
             token.exp = sessionExpiresAt;
             (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
+            (token as AugmentedJWT).absoluteExpiresAt = sessionExpiresAt;
           }
 
           const augmentedToken = token as AugmentedJWT;
@@ -556,15 +561,26 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
             if (updatePayload?.extendSession && typeof augmentedToken.sessionExpiresAt === 'number') {
               const isOidc = Boolean(augmentedToken.oidcAuthenticatedAt);
-              const remember = augmentedToken.rememberMe === true;
-              const ttlSeconds = isOidc
-                ? oidcSessionMaxAgeSeconds
-                : remember
-                  ? rememberMeMaxAgeSeconds
-                  : credentialSessionMaxAgeSeconds;
-              const newExpiresAt = Math.floor(currentTime / 1000) + ttlSeconds;
-              token.exp = newExpiresAt;
-              augmentedToken.sessionExpiresAt = newExpiresAt;
+              if (isOidc) {
+                // For OIDC, renewal can extend the rolling session up to the absolute reauthentication cap
+                const absoluteCap =
+                  augmentedToken.absoluteExpiresAt ??
+                  (augmentedToken.oidcAuthenticatedAt
+                    ? Math.floor((augmentedToken.oidcAuthenticatedAt + oidcReauthenticateAfterMs) / 1000)
+                    : augmentedToken.sessionExpiresAt);
+                const renewedExpiresAt = Math.floor(currentTime / 1000) + oidcSessionMaxAgeSeconds;
+                const effectiveExpiresAt = Math.min(absoluteCap, renewedExpiresAt);
+                token.exp = effectiveExpiresAt;
+                augmentedToken.sessionExpiresAt = effectiveExpiresAt;
+              } else {
+                // For credentials, "Stay Signed In" renews activity while strictly preserving
+                // the original hard/absolute expiration established at login (e.g. 7 days or 90-day Remember Me).
+                const absoluteCap =
+                  augmentedToken.absoluteExpiresAt ?? augmentedToken.sessionExpiresAt;
+                token.exp = absoluteCap;
+                augmentedToken.sessionExpiresAt = absoluteCap;
+                augmentedToken.absoluteExpiresAt = absoluteCap;
+              }
             }
             if (updatePayload?.profileRefresh || updatePayload?.force) {
               isProfileRefresh = true;
@@ -572,8 +588,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           }
 
           if (
-            typeof augmentedToken.sessionExpiresAt === 'number' &&
-            Date.now() >= augmentedToken.sessionExpiresAt * 1000
+            (typeof augmentedToken.sessionExpiresAt === 'number' &&
+              Date.now() >= augmentedToken.sessionExpiresAt * 1000) ||
+            (typeof augmentedToken.absoluteExpiresAt === 'number' &&
+              Date.now() >= augmentedToken.absoluteExpiresAt * 1000)
           ) {
             return clearSessionToken(augmentedToken, 'SESSION_EXPIRED');
           }

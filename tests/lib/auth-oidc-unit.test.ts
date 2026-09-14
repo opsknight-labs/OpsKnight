@@ -538,6 +538,44 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(token.exp).toBeLessThanOrEqual(Math.floor(Date.now() / 1000) + 7_776_000);
   });
 
+  it('preserves immutable absolute expiration for credential sessions on extendSession', async () => {
+    const jwt = await getJwtCallback();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u-cred',
+      email: 'cred@example.com',
+      name: 'Credential User',
+      role: 'USER',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const fixedAbsoluteExpiry = Math.floor(Date.now() / 1000) + 300; // 5 minutes remaining
+
+    const token = await jwt({
+      token: {
+        sub: 'u-cred',
+        sessionExpiresAt: fixedAbsoluteExpiry,
+        absoluteExpiresAt: fixedAbsoluteExpiry,
+        lastActivityAt: Date.now() - 60_000,
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'update',
+      session: { activity: true, extendSession: true },
+    });
+
+    // Activity timestamp should be refreshed
+    expect(token.lastActivityAt).toBeGreaterThanOrEqual(Date.now() - 1000);
+    // Absolute expiration must NOT roll forward into an additional 7 days
+    expect(token.exp).toBe(fixedAbsoluteExpiry);
+    expect(token.sessionExpiresAt).toBe(fixedAbsoluteExpiry);
+    expect(token.absoluteExpiresAt).toBe(fixedAbsoluteExpiry);
+  });
+
   it('revokeUserSessions increments tokenVersion', async () => {
     await revokeUserSessions('u1');
     expect(prisma.user.update).toHaveBeenCalledWith({

@@ -92,8 +92,8 @@ export async function getSessionSecurityProjection(
 
 /**
  * Explicit profile projection read used only when profile data is refreshed
- * (e.g. after avatar, name, or settings update). Also updates the security
- * projection cache with the latest tokenVersion/status/role.
+ * (e.g. after avatar, name, or settings update). Does NOT populate the security
+ * cache to prevent stale data races across invalidations.
  */
 export async function getSessionProfileProjection(
   userId: string
@@ -114,21 +114,11 @@ export async function getSessionProfileProjection(
 
   if (!user) return null;
 
-  const securityValue: SessionSecurityProjection = {
+  return {
     userId: user.id,
     tokenVersion: user.tokenVersion ?? 0,
     status: user.status,
     role: user.role,
-  };
-
-  // Populate or refresh security projection cache so following fast-path checks stay warm
-  projectionCache.set(userId, {
-    value: securityValue,
-    expiresAt: Date.now() + projectionTtlMs(),
-  });
-
-  return {
-    ...securityValue,
     name: user.name,
     email: user.email,
     avatarUrl: user.avatarUrl,
