@@ -224,12 +224,26 @@ async function ensurePrivateOwnerHandoff(input: {
         }
         // Will be added as owner by the normal add path — promote by adding as owner
         const added = await addChannelMember({ tenantId: input.tenantId, teamId: input.teamId, channelId: input.channelId, userObjectId: oid, owner: true });
-        if (added.ok || added.code === 'MEMBER_ALREADY_PRESENT') {
+        const alreadyPresent = !added.ok && added.code === 'MEMBER_ALREADY_PRESENT';
+        if (added.ok || alreadyPresent) {
+          if (alreadyPresent) {
+            const members = await listChannelMembers({ tenantId: input.tenantId, teamId: input.teamId, channelId: input.channelId });
+            if (!members.ok) {
+              if (isRetryableMemberGraphCode(members.code)) throw new WarRoomRetryableError(members.message, members.retryAfterMs);
+              return { ok: false, code: members.code, message: members.message };
+            }
+            if (!isOwnerRole(members.value.get(oid)?.roles)) {
+              return { ok: false, code: 'OWNER_HANDOFF_RACED', message: 'Replacement member is present but is not a private-channel owner.' };
+            }
+          }
           const afterAdd = await prisma.warRoomParticipant.findUnique({ where: { id: participant.id }, select: { state: true, desiredVersion: true } });
-          if (!afterAdd || !['DESIRED', 'PENDING', 'PRESENT'].includes(afterAdd.state) || afterAdd.desiredVersion !== participant.desiredVersion) await ensureCompensationScheduled(input.warRoomId);
+          if (!afterAdd || !['DESIRED', 'PENDING', 'PRESENT'].includes(afterAdd.state) || afterAdd.desiredVersion !== participant.desiredVersion) {
+            await ensureCompensationScheduled(input.warRoomId);
+            return { ok: false, code: 'OWNER_HANDOFF_RACED', message: 'Replacement owner changed while Teams promotion was in flight.' };
+          }
           return { ok: true };
         }
-        if (isRetryableMemberGraphCode(added.code)) throw new WarRoomRetryableError(added.message, added.retryAfterMs);
+        if (!added.ok && isRetryableMemberGraphCode(added.code)) throw new WarRoomRetryableError(added.message, added.retryAfterMs);
         return { ok: false, code: added.code, message: added.message };
       }
     }
@@ -255,9 +269,12 @@ async function ensurePrivateOwnerHandoff(input: {
   }
   // Update local map so subsequent removals see new owner
   const existing = input.channelMembersByObjectId.get(candidateObjectId);
-  if (existing) existing.roles = ['owner'];
   const afterPromote = await prisma.warRoomParticipant.findUnique({ where: { id: candidateParticipant!.id }, select: { state: true, desiredVersion: true } });
-  if (!afterPromote || !['DESIRED', 'PENDING', 'PRESENT'].includes(afterPromote.state) || afterPromote.desiredVersion !== candidateParticipant!.desiredVersion) await ensureCompensationScheduled(input.warRoomId);
+  if (!afterPromote || !['DESIRED', 'PENDING', 'PRESENT'].includes(afterPromote.state) || afterPromote.desiredVersion !== candidateParticipant!.desiredVersion) {
+    await ensureCompensationScheduled(input.warRoomId);
+    return { ok: false, code: 'OWNER_HANDOFF_RACED', message: 'Replacement owner changed while Teams promotion was in flight.' };
+  }
+  if (existing) existing.roles = ['owner'];
   return { ok: true };
 }
 
