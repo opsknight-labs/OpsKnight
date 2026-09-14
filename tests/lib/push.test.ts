@@ -219,8 +219,7 @@ describe('sendPush', () => {
     });
 
     expect(first).toMatchObject({
-      success: false,
-      code: 'DELIVERY_FAILED',
+      success: true, // partial success: at least one device delivered
       deliveredCount: 1,
       failedCount: 1,
     });

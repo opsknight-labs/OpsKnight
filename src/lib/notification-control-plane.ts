@@ -107,6 +107,7 @@ export type CentralNotificationPayload =
       data?: Record<string, unknown>;
       badge?: number;
       providerKey?: string;
+      targetDeviceId?: string;
     }
   | {
       kind: 'SLACK_CHANNEL';
@@ -195,37 +196,39 @@ export type CentralNotificationInput = {
   tenantKey?: string;
 };
 
-const centralNotificationInputSchema = z.object({
-  category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
-  channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP', 'MICROSOFT_TEAMS']),
-  recipientType: z.enum([
-    'USER',
-    'EMAIL',
-    'PHONE',
-    'SUBSCRIBER',
-    'SLACK_CHANNEL',
-    'WEBHOOK',
-    'MICROSOFT_TEAMS_CHANNEL',
-  ]),
-  recipientId: z.string().max(191).optional(),
-  recipientAddress: z.string().max(2_048),
-  userId: z.string().max(191).optional(),
-  incidentId: z.string().max(191).optional(),
-  templateKey: z.string().max(191),
-  sourceType: z.string().max(191),
-  sourceId: z.string().max(191),
-  eventKey: z.string().max(512),
-  displayMessage: z.string().max(2_000),
-  payload: z.unknown(),
-  priority: z.number().int().optional(),
-  trafficClass: z.enum(['CRITICAL', 'TRANSACTIONAL', 'PUBLIC_INCIDENT', 'BULK']).optional(),
-  scheduledAt: z.date().optional(),
-  expiresAt: z.date().optional(),
-  maxAttempts: z.number().int().optional(),
-  contentId: z.string().max(191).optional(),
-  fanoutId: z.string().max(191).optional(),
-  tenantKey: z.string().trim().min(1).max(191).optional(),
-}).strict();
+const centralNotificationInputSchema = z
+  .object({
+    category: z.enum(['INCIDENT', 'SECURITY', 'STATUS_PAGE', 'SLA', 'ADMINISTRATION', 'SYSTEM']),
+    channel: z.enum(['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP', 'MICROSOFT_TEAMS']),
+    recipientType: z.enum([
+      'USER',
+      'EMAIL',
+      'PHONE',
+      'SUBSCRIBER',
+      'SLACK_CHANNEL',
+      'WEBHOOK',
+      'MICROSOFT_TEAMS_CHANNEL',
+    ]),
+    recipientId: z.string().max(191).optional(),
+    recipientAddress: z.string().max(2_048),
+    userId: z.string().max(191).optional(),
+    incidentId: z.string().max(191).optional(),
+    templateKey: z.string().max(191),
+    sourceType: z.string().max(191),
+    sourceId: z.string().max(191),
+    eventKey: z.string().max(512),
+    displayMessage: z.string().max(2_000),
+    payload: z.unknown(),
+    priority: z.number().int().optional(),
+    trafficClass: z.enum(['CRITICAL', 'TRANSACTIONAL', 'PUBLIC_INCIDENT', 'BULK']).optional(),
+    scheduledAt: z.date().optional(),
+    expiresAt: z.date().optional(),
+    maxAttempts: z.number().int().optional(),
+    contentId: z.string().max(191).optional(),
+    fanoutId: z.string().max(191).optional(),
+    tenantKey: z.string().trim().min(1).max(191).optional(),
+  })
+  .strict();
 
 type NotificationStore = Pick<Prisma.TransactionClient, 'notification'>;
 
@@ -643,7 +646,9 @@ async function payloadProviderKeyAsync(payload: CentralNotificationPayload): Pro
   if (payload.kind === 'MICROSOFT_TEAMS_CHANNEL') {
     try {
       const anyPrisma = prisma as unknown as {
-        microsoftTeamsDestination: { findUnique: (a: unknown) => Promise<{ tenantId: string } | null> };
+        microsoftTeamsDestination: {
+          findUnique: (a: unknown) => Promise<{ tenantId: string } | null>;
+        };
       };
       const dest = await anyPrisma.microsoftTeamsDestination.findUnique({
         where: { id: payload.destinationId },
@@ -755,7 +760,9 @@ async function dispatchPayload(
     case 'INCIDENT_SMS': {
       const { sendIncidentSMS } = await import('./sms');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module => module.getSMSConfig());
+        const current = await import('./notification-providers').then(module =>
+          module.getSMSConfig()
+        );
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -778,7 +785,9 @@ async function dispatchPayload(
     case 'INCIDENT_PUSH': {
       const { sendNotificationIntentPush } = await import('./incident-push-delivery');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module => module.getPushConfig());
+        const current = await import('./notification-providers').then(module =>
+          module.getPushConfig()
+        );
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -803,7 +812,9 @@ async function dispatchPayload(
     case 'INCIDENT_WHATSAPP': {
       const { sendIncidentWhatsApp } = await import('./whatsapp');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module => module.getWhatsAppConfig());
+        const current = await import('./notification-providers').then(module =>
+          module.getWhatsAppConfig()
+        );
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -831,7 +842,8 @@ async function dispatchPayload(
           where: { id: payload.contentId },
           select: { encryptedTemplate: true },
         });
-        if (!content) return { success: false, statusCode: 410, error: 'Notification content expired' };
+        if (!content)
+          return { success: false, statusCode: 410, error: 'Notification content expired' };
         html = (await decrypt(content.encryptedTemplate))
           .replaceAll('{{unsubscribe_url}}', payload.unsubscribeUrl ?? '')
           .replaceAll('{{start_time}}', payload.startTime ?? '')
@@ -867,7 +879,9 @@ async function dispatchPayload(
     case 'SMS': {
       const { sendSMS } = await import('./sms');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module => module.getSMSConfig());
+        const current = await import('./notification-providers').then(module =>
+          module.getSMSConfig()
+        );
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -888,7 +902,9 @@ async function dispatchPayload(
     case 'WHATSAPP': {
       const { sendWhatsApp } = await import('./whatsapp');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module => module.getWhatsAppConfig());
+        const current = await import('./notification-providers').then(module =>
+          module.getWhatsAppConfig()
+        );
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -898,14 +914,21 @@ async function dispatchPayload(
           };
       }
       return executeProvider(CircuitBreakers.whatsapp(), async () => {
-        const result = await sendWhatsApp(payload.to, payload.message, payload.from, notificationId);
+        const result = await sendWhatsApp(
+          payload.to,
+          payload.message,
+          payload.from,
+          notificationId
+        );
         return { ...result, providerMessageId: result.messageSid };
       });
     }
     case 'PUSH': {
       const { sendPush } = await import('./push');
       if (payload.providerKey) {
-        const current = await import('./notification-providers').then(module => module.getPushConfig());
+        const current = await import('./notification-providers').then(module =>
+          module.getPushConfig()
+        );
         if (current.provider !== payload.providerKey)
           return {
             success: false,
@@ -922,6 +945,7 @@ async function dispatchPayload(
           data: payload.data,
           badge: payload.badge,
           deliveryKey: notificationId,
+          targetDeviceId: payload.targetDeviceId,
         })
       );
     }
@@ -989,7 +1013,8 @@ async function dispatchPayload(
         success: false,
         statusCode: 410,
         errorCode: 'DESTINATION_NOT_FOUND',
-        error: 'Microsoft Teams via central Notification is retired — use ExternalOperation delivery.',
+        error:
+          'Microsoft Teams via central Notification is retired — use ExternalOperation delivery.',
       };
     }
   }
@@ -1163,9 +1188,15 @@ async function serviceTargetDeliveryRevoked(
     }
     const service = await prisma.service.findUnique({
       where: { id: policy.serviceId },
-      select: { serviceNotificationChannels: true, serviceNotifyOnTriggered: true, serviceNotifyOnAck: true, serviceNotifyOnResolved: true },
+      select: {
+        serviceNotificationChannels: true,
+        serviceNotifyOnTriggered: true,
+        serviceNotifyOnAck: true,
+        serviceNotifyOnResolved: true,
+      },
     });
-    if (!service || !serviceEventEnabled(service, policy.eventType)) return 'Service notification target was disabled';
+    if (!service || !serviceEventEnabled(service, policy.eventType))
+      return 'Service notification target was disabled';
     if (!service.serviceNotificationChannels.includes('MICROSOFT_TEAMS' as never)) {
       return 'Service Microsoft Teams notifications were disabled';
     }
@@ -1207,7 +1238,9 @@ async function lifecycleDeliveryRevoked(
   payload: CentralNotificationPayload
 ): Promise<string | null> {
   const policy =
-    payload.kind === 'SLACK_CHANNEL' || payload.kind === 'SLACK_WEBHOOK' || payload.kind === 'MICROSOFT_TEAMS_CHANNEL'
+    payload.kind === 'SLACK_CHANNEL' ||
+    payload.kind === 'SLACK_WEBHOOK' ||
+    payload.kind === 'MICROSOFT_TEAMS_CHANNEL'
       ? (payload.lifecyclePolicy ?? {
           incidentId: payload.incident.id,
           eventType: payload.eventType,
@@ -1582,13 +1615,26 @@ export async function deliverCentralNotification(
     return { success: false, claimed: true, error: errorMessage };
   }
   if (!concurrency.allowed) {
+    const isControlPlane = concurrency.reason === 'CONTROL_PLANE_UNAVAILABLE';
+    const deferMsg = isControlPlane
+      ? `Control-plane DB unavailable (${(concurrency as { cause: string }).cause}); notification deferred until ${concurrency.retryAt.toISOString()}`
+      : `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`;
+    if (isControlPlane) {
+      logger.warn('notification.control_plane_deferral', {
+        notificationId: candidate.id,
+        channel: payload.kind,
+        trafficClass: candidate.trafficClass,
+        retryAt: concurrency.retryAt.toISOString(),
+        cause: (concurrency as { cause: string }).cause,
+      });
+    }
     await prisma.notification.updateMany({
       where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
       data: {
         status: 'PENDING',
         lastAttemptAt: null,
         nextAttemptAt: concurrency.retryAt,
-        errorMsg: `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`,
+        errorMsg: deferMsg,
       },
     });
     return { success: false, claimed: true };

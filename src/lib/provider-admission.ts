@@ -3,8 +3,33 @@ import { Prisma, type NotificationChannel, type NotificationTrafficClass } from 
 import prisma from './prisma';
 import { getEffectiveCapacity, recordCapacityPressure } from './notification-capacity/resolver';
 import { usesBulkCapacity } from './provider-capacity';
+import { logger } from './logger';
 
-export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK' | 'MICROSOFT_TEAMS';
+/**
+ * Emergency local concurrency when the control-plane DB is unreachable.
+ * These are intentionally conservative to avoid flooding providers.
+ * Bulk traffic is paused entirely (0) so CRITICAL/TRANSACTIONAL still drain.
+ */
+const EMERGENCY_CONCURRENCY: Record<string, number> = {
+  PUSH: 2,
+  EMAIL: 1,
+  SMS: 1,
+  SLACK: 1,
+  WEBHOOK: 2,
+  WHATSAPP: 1,
+  MICROSOFT_TEAMS: 1,
+};
+/** Maximum slots a single worker may claim from a provider pool (fairness cap). */
+const MAX_SLOTS_PER_WORKER = 5;
+
+export type ProviderAdmissionScope =
+  | 'EMAIL'
+  | 'SMS'
+  | 'WHATSAPP'
+  | 'PUSH'
+  | 'SLACK'
+  | 'WEBHOOK'
+  | 'MICROSOFT_TEAMS';
 
 export type ProviderAdmissionResult =
   | { allowed: true }
@@ -12,7 +37,8 @@ export type ProviderAdmissionResult =
 
 export type ProviderConcurrencyResult =
   | { allowed: true; leaseKey: string }
-  | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' };
+  | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' }
+  | { allowed: false; retryAt: Date; reason: 'CONTROL_PLANE_UNAVAILABLE'; cause: string };
 
 export const PROVIDER_LEASE_MS = 30_000;
 const WORKER_ID = process.env.OPSKNIGHT_WORKER_ID?.trim() || crypto.randomUUID();
@@ -37,14 +63,32 @@ export function resetProviderAdmissionForTests() {
   localConcurrency.clear();
   concurrencyClaims.clear();
   localCooldown.clear();
+  _testProductionOverride = false;
 }
 
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
 }
 
+/** Lifted by resetProviderAdmissionForTests(); set by forceProductionModeForTests() */
+let _testProductionOverride = false;
+
 function isProviderAdmissionTestEnv(): boolean {
-  return process.env.NODE_ENV === 'test' || process.env.VITEST === 'true' || Boolean(process.env.VITEST_WORKER_ID);
+  if (_testProductionOverride) return false;
+  return (
+    process.env.NODE_ENV === 'test' ||
+    process.env.VITEST === 'true' ||
+    Boolean(process.env.VITEST_WORKER_ID)
+  );
+}
+
+/**
+ * Force the production code path for concurrency/admission even when running under
+ * Vitest. Used by P0 regression tests that must exercise the DB-failure →
+ * CONTROL_PLANE_UNAVAILABLE flow. Automatically reverted by resetProviderAdmissionForTests().
+ */
+export function forceProductionModeForTests(): void {
+  _testProductionOverride = true;
 }
 
 /**
@@ -235,23 +279,47 @@ export async function acquireProviderConcurrency(
   const poolKey = `${physicalPoolKey}:${lane}`;
   const leaseOwner = `${WORKER_ID}:${lane}`.slice(0, 240);
   const laneCeiling = bulk ? config.bulkMaxInFlight : config.maxInFlight;
+
+  // Fairness cap: no single worker may monopolize the pool.
+  // Clamp requested slots to the smaller of the pool ceiling and per-worker cap.
+  const fairnessLimit = Math.min(MAX_SLOTS_PER_WORKER, laneCeiling);
+
   let local = localConcurrency.get(poolKey);
   if (!local || local.expiresAt <= now.getTime()) {
     const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
-    const requested = Math.min(20, laneCeiling);
+    const requested = Math.min(fairnessLimit, laneCeiling);
     const concQuery = (prisma as unknown as Record<string, unknown>).$queryRaw as
       | ((...args: unknown[]) => Promise<unknown>)
       | undefined;
     if (!concQuery) {
+      // Missing Prisma method — only acceptable in unit tests
       if (isProviderAdmissionTestEnv()) {
         local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
         localConcurrency.set(poolKey, local);
       } else {
-        return {
-          allowed: false,
-          retryAt: new Date(now.getTime() + 250),
-          reason: 'MAX_IN_FLIGHT',
+        // Production: control-plane is inaccessible — activate emergency limiter
+        const emergencySlots = bulk ? 0 : (EMERGENCY_CONCURRENCY[scope] ?? 1);
+        logger.error('provider_admission.control_plane_unavailable', {
+          scope,
+          providerKey,
+          lane,
+          cause: 'Prisma $queryRaw not available',
+          emergencySlots,
+        });
+        if (emergencySlots === 0) {
+          return {
+            allowed: false,
+            retryAt: new Date(now.getTime() + 5_000),
+            reason: 'CONTROL_PLANE_UNAVAILABLE',
+            cause: 'Control plane DB unavailable; bulk traffic paused',
+          };
+        }
+        local = {
+          reserved: emergencySlots,
+          active: 0,
+          expiresAt: now.getTime() + PROVIDER_LEASE_MS,
         };
+        localConcurrency.set(poolKey, local);
       }
     } else {
       try {
@@ -284,16 +352,44 @@ export async function acquireProviderConcurrency(
         }
         local = { reserved, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
         localConcurrency.set(poolKey, local);
-      } catch {
+      } catch (dbError) {
+        const cause = dbError instanceof Error ? dbError.message : String(dbError);
         if (isProviderAdmissionTestEnv()) {
-          local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
+          local = {
+            reserved: laneCeiling,
+            active: 0,
+            expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+          };
           localConcurrency.set(poolKey, local);
         } else {
-          return {
-            allowed: false,
-            retryAt: new Date(now.getTime() + 250),
-            reason: 'MAX_IN_FLIGHT',
+          // P0 FIX: DB failure must NEVER become MAX_IN_FLIGHT — use CONTROL_PLANE_UNAVAILABLE
+          // so operators can distinguish a DB outage from real provider saturation.
+          const emergencySlots = bulk ? 0 : (EMERGENCY_CONCURRENCY[scope] ?? 1);
+          logger.error('provider_admission.concurrency_db_failed', {
+            scope,
+            providerKey,
+            lane,
+            cause,
+            emergencySlots,
+            detail:
+              'ProviderWorkerLease query failed. This is a control-plane outage, NOT provider saturation. ' +
+              'Notifications will be deferred with reason=CONTROL_PLANE_UNAVAILABLE.',
+          });
+          if (emergencySlots === 0) {
+            return {
+              allowed: false,
+              retryAt: new Date(now.getTime() + 5_000),
+              reason: 'CONTROL_PLANE_UNAVAILABLE',
+              cause,
+            };
+          }
+          // Emergency local limiter: allow a small number of deliveries without DB coordination
+          local = {
+            reserved: emergencySlots,
+            active: 0,
+            expiresAt: now.getTime() + PROVIDER_LEASE_MS,
           };
+          localConcurrency.set(poolKey, local);
         }
       }
     }
@@ -301,7 +397,8 @@ export async function acquireProviderConcurrency(
   // If admin lowered maxInFlight, an existing local reservation must not keep
   // admitting against the old, larger reserved value for up to PROVIDER_LEASE_MS.
   // DB rows expire conservatively; the local check shrinks immediately.
-  local.reserved = Math.min(local.reserved, laneCeiling);
+  // Also honour the fairness cap in case config changed since last DB refresh.
+  local.reserved = Math.min(local.reserved, laneCeiling, fairnessLimit);
   if (local.active >= local.reserved) {
     return {
       allowed: false,
@@ -357,22 +454,25 @@ export async function recordProviderSuccess(key: string): Promise<void> {
   if (!successModel?.upsert) return;
   try {
     await successModel.upsert({
-    where: { key },
-    create: { key, state: 'CLOSED', lastSuccessAt: new Date() },
-    update: {
-      state: 'CLOSED',
-      blockedUntil: null,
-      consecutiveFails: 0,
-      lastSuccessAt: new Date(),
-      lastStatusCode: null,
-    },
-  });
+      where: { key },
+      create: { key, state: 'CLOSED', lastSuccessAt: new Date() },
+      update: {
+        state: 'CLOSED',
+        blockedUntil: null,
+        consecutiveFails: 0,
+        lastSuccessAt: new Date(),
+        lastStatusCode: null,
+      },
+    });
   } catch {
     // best-effort in tests
   }
 }
 
-function automaticBreakerDelayMs(consecutiveFails: number, statusCode?: number): number | undefined {
+function automaticBreakerDelayMs(
+  consecutiveFails: number,
+  statusCode?: number
+): number | undefined {
   const transient = statusCode === undefined || statusCode === 429 || statusCode >= 500;
   if (!transient || consecutiveFails < 2) return undefined;
   if (consecutiveFails === 2) return 10_000;
@@ -412,7 +512,7 @@ export async function recordProviderFailure(
         ? generatedBlockedUntil > existingBlockedUntil
           ? generatedBlockedUntil
           : existingBlockedUntil
-        : generatedBlockedUntil ?? existingBlockedUntil ?? undefined;
+        : (generatedBlockedUntil ?? existingBlockedUntil ?? undefined);
 
     await client.providerAdmission.upsert({
       where: { key },
@@ -447,4 +547,54 @@ export async function recordProviderFailure(
   } catch {
     // best-effort in tests; real DB errors still surface in prod via caller handling
   }
+}
+
+/**
+ * Startup readiness certification: verifies that all notification control-plane
+ * tables are accessible. Call this once at process startup (e.g., inside the
+ * notification worker's `init()` function). If any table is unreachable the
+ * function throws a descriptive error so the caller can abort or mark degraded.
+ *
+ * This prevents the silent CONTROL_PLANE_UNAVAILABLE situation from going
+ * undetected until the first notification attempts are made in production.
+ */
+export async function certifyNotificationControlPlane(): Promise<void> {
+  const tables: Array<{ name: string; fn: () => Promise<unknown> }> = [
+    {
+      name: 'ProviderWorkerLease',
+      fn: () => prisma.$queryRaw`SELECT 1 FROM "ProviderWorkerLease" LIMIT 0`,
+    },
+    {
+      name: 'ProviderQuotaWindow',
+      fn: () => prisma.$queryRaw`SELECT 1 FROM "ProviderQuotaWindow" LIMIT 0`,
+    },
+    {
+      name: 'RateLimit',
+      fn: () => prisma.$queryRaw`SELECT 1 FROM "RateLimit" LIMIT 0`,
+    },
+    {
+      name: 'ProviderAdmission',
+      fn: () => prisma.providerAdmission.count(),
+    },
+  ];
+  const failures: string[] = [];
+  await Promise.all(
+    tables.map(async ({ name, fn }) => {
+      try {
+        await fn();
+      } catch (err) {
+        const cause = err instanceof Error ? err.message : String(err);
+        failures.push(`${name}: ${cause}`);
+        logger.error('provider_admission.startup_certification_failed', { table: name, cause });
+      }
+    })
+  );
+  if (failures.length > 0) {
+    throw new Error(
+      `Notification control-plane startup certification failed for ${failures.length} table(s):\n${failures.join('\n')}`
+    );
+  }
+  logger.info('provider_admission.startup_certification_passed', {
+    tables: tables.map(t => t.name),
+  });
 }
