@@ -331,12 +331,14 @@ async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<vo
         : lifecycle.status === 'SNOOZED'
           ? '😴'
           : '🔇';
+  const { requestMicrosoftTeamsWarRoomProjectionForIncident } = await import('./war-room/projection');
   const [postResult, topicResult] = await Promise.all([
     postWarRoomUpdate(payload.incidentId, `${emoji} *Status updated to ${lifecycle.status}*`),
     updateWarRoomTopic(payload.incidentId, lifecycle.status),
   ]);
   requireWarRoomDelivery(postResult, 'war-room status update');
   requireWarRoomDelivery(topicResult, 'war-room topic update');
+  await requestMicrosoftTeamsWarRoomProjectionForIncident(payload.incidentId);
 }
 async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<void> {
   const lifecycle = lifecycleContext(payload);

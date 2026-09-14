@@ -26,6 +26,15 @@ export async function requestMicrosoftTeamsWarRoomProjection(warRoomId: string):
   });
 }
 
+/** Queues the latest canonical-card projection for every ready Teams room. */
+export async function requestMicrosoftTeamsWarRoomProjectionForIncident(incidentId: string): Promise<void> {
+  const rooms = await prisma.incidentWarRoom.findMany({
+    where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
+    select: { id: true },
+  });
+  await Promise.all(rooms.map(room => requestMicrosoftTeamsWarRoomProjection(room.id)));
+}
+
 /** Claims a short lease. Older queued versions are intentionally no-ops. */
 export async function claimMicrosoftTeamsWarRoomProjection(warRoomId: string, projectionVersion: number) {
   const token = crypto.randomUUID();
