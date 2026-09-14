@@ -15,6 +15,7 @@ async function login(page: Page) {
   await page.locator('input[type="password"]').fill(password);
   await page.locator('form button[type="submit"]').click();
   await expect(page).not.toHaveURL(/\/login/);
+  await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible({ timeout: 30_000 });
 }
 
 async function navigationRequests(page: Page) {
