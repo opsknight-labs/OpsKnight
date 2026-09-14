@@ -535,9 +535,15 @@ describeIfRealDB('Authentication Logic (Real DB)', () => {
       const jwtCallback = authOptions.callbacks?.jwt as unknown as (args: {
         token: Record<string, unknown>;
         user?: unknown;
+        trigger?: string;
+        session?: unknown;
       }) => Promise<Record<string, unknown>>;
 
-      const result = await jwtCallback({ token });
+      const result = await jwtCallback({
+        token,
+        trigger: 'update',
+        session: { profileRefresh: true },
+      });
 
       expect(result.role).toBe('ADMIN');
       expect(result.name).toBe('New Name');

@@ -520,16 +520,33 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             }
 
             const remember = (token as AugmentedJWT).rememberMe === true;
-            const ttlSeconds =
-              account.provider === 'oidc'
-                ? oidcSessionMaxAgeSeconds
-                : remember
-                  ? rememberMeMaxAgeSeconds
-                  : credentialSessionMaxAgeSeconds;
-            const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+            const isOidc = account.provider === 'oidc';
+            const nowSec = Math.floor(Date.now() / 1000);
+
+            const oidcRenewalWindowSeconds = enterpriseSession.maximumAgeSeconds;
+            const oidcAbsoluteMaxAgeSeconds = Math.max(
+              enterpriseSession.reauthenticateAfterSeconds,
+              oidcRenewalWindowSeconds * 2
+            );
+
+            const sessionTtlSeconds = isOidc
+              ? oidcRenewalWindowSeconds
+              : remember
+                ? rememberMeMaxAgeSeconds
+                : credentialSessionMaxAgeSeconds;
+
+            const absoluteTtlSeconds = isOidc
+              ? oidcAbsoluteMaxAgeSeconds
+              : remember
+                ? rememberMeMaxAgeSeconds
+                : credentialSessionMaxAgeSeconds * 4;
+
+            const sessionExpiresAt = nowSec + sessionTtlSeconds;
+            const absoluteExpiresAt = nowSec + absoluteTtlSeconds;
+
             token.exp = sessionExpiresAt;
             (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
-            (token as AugmentedJWT).absoluteExpiresAt = sessionExpiresAt;
+            (token as AugmentedJWT).absoluteExpiresAt = absoluteExpiresAt;
           } else if (user) {
             delete (token as AugmentedJWT).error;
             logger.debug('[Auth-Debug] Initial Sign In (Fallback)', {
@@ -541,11 +558,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             token.name = user.name;
             token.email = user.email;
             (token as AugmentedJWT).tokenVersion = (user as AugmentedUser).tokenVersion ?? 0;
-            const ttlSeconds = credentialSessionMaxAgeSeconds;
-            const sessionExpiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+            const nowSec = Math.floor(Date.now() / 1000);
+            const sessionExpiresAt = nowSec + credentialSessionMaxAgeSeconds;
             token.exp = sessionExpiresAt;
             (token as AugmentedJWT).sessionExpiresAt = sessionExpiresAt;
-            (token as AugmentedJWT).absoluteExpiresAt = sessionExpiresAt;
+            (token as AugmentedJWT).absoluteExpiresAt = nowSec + credentialSessionMaxAgeSeconds * 4;
           }
 
           const augmentedToken = token as AugmentedJWT;
@@ -556,31 +573,35 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               | { activity?: boolean; extendSession?: boolean; profileRefresh?: boolean; force?: boolean }
               | undefined;
             const currentTime = Date.now();
+            const currentTimeSec = Math.floor(currentTime / 1000);
             if (updatePayload?.activity || updatePayload?.extendSession) {
               augmentedToken.lastActivityAt = currentTime;
             }
             if (updatePayload?.extendSession && typeof augmentedToken.sessionExpiresAt === 'number') {
               const isOidc = Boolean(augmentedToken.oidcAuthenticatedAt);
-              if (isOidc) {
-                // For OIDC, renewal can extend the rolling session up to the absolute reauthentication cap
-                const absoluteCap =
-                  augmentedToken.absoluteExpiresAt ??
-                  (augmentedToken.oidcAuthenticatedAt
-                    ? Math.floor((augmentedToken.oidcAuthenticatedAt + oidcReauthenticateAfterMs) / 1000)
-                    : augmentedToken.sessionExpiresAt);
-                const renewedExpiresAt = Math.floor(currentTime / 1000) + oidcSessionMaxAgeSeconds;
-                const effectiveExpiresAt = Math.min(absoluteCap, renewedExpiresAt);
-                token.exp = effectiveExpiresAt;
+              const remember = augmentedToken.rememberMe === true;
+
+              const renewalWindowSeconds = isOidc
+                ? oidcSessionMaxAgeSeconds
+                : remember
+                  ? rememberMeMaxAgeSeconds
+                  : credentialSessionMaxAgeSeconds;
+
+              const absoluteCap =
+                augmentedToken.absoluteExpiresAt ??
+                (isOidc && augmentedToken.oidcAuthenticatedAt
+                  ? Math.floor((augmentedToken.oidcAuthenticatedAt + oidcReauthenticateAfterMs) / 1000)
+                  : remember
+                    ? currentTimeSec + rememberMeMaxAgeSeconds
+                    : currentTimeSec + credentialSessionMaxAgeSeconds * 4);
+
+              const renewedExpiresAt = currentTimeSec + renewalWindowSeconds;
+              const effectiveExpiresAt = Math.min(absoluteCap, renewedExpiresAt);
+
+              if (effectiveExpiresAt > augmentedToken.sessionExpiresAt) {
                 augmentedToken.sessionExpiresAt = effectiveExpiresAt;
-              } else {
-                // For credentials, "Stay Signed In" renews activity while strictly preserving
-                // the original hard/absolute expiration established at login (e.g. 7 days or 90-day Remember Me).
-                const absoluteCap =
-                  augmentedToken.absoluteExpiresAt ?? augmentedToken.sessionExpiresAt;
-                token.exp = absoluteCap;
-                augmentedToken.sessionExpiresAt = absoluteCap;
-                augmentedToken.absoluteExpiresAt = absoluteCap;
               }
+              token.exp = Math.max(token.exp ?? 0, augmentedToken.sessionExpiresAt);
             }
             if (updatePayload?.profileRefresh || updatePayload?.force) {
               isProfileRefresh = true;

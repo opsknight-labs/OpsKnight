@@ -576,6 +576,67 @@ describe('Auth JWT + OIDC callback contract', () => {
     expect(token.absoluteExpiresAt).toBe(fixedAbsoluteExpiry);
   });
 
+  it('extends renewable session expiry when Stay Signed In is clicked within absolute bounds', async () => {
+    const jwt = await getJwtCallback();
+    const authOptions = await getAuthOptions();
+    const sessionCallback = authOptions.callbacks?.session as unknown as (args: {
+      session: { user?: Record<string, unknown>; expires?: string };
+      token: Record<string, unknown>;
+    }) => Promise<{ user?: Record<string, unknown>; expires: string }>;
+
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      id: 'u-stay',
+      email: 'stay@example.com',
+      name: 'Stay User',
+      role: 'USER',
+      tokenVersion: 0,
+      status: 'ACTIVE',
+      avatarUrl: null,
+      gender: null,
+    } as never);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const oldExpiresSec = nowSec + 300; // 5 minutes remaining (warning active)
+    const absoluteExpiresSec = nowSec + 86400; // 24 hours absolute limit
+
+    // 1. Prior session state (expires in 5m)
+    const oldSession = await sessionCallback({
+      session: { user: { name: 'Stay User' } },
+      token: { sub: 'u-stay', sessionExpiresAt: oldExpiresSec, absoluteExpiresAt: absoluteExpiresSec },
+    });
+    const oldExpiresMs = new Date(oldSession.expires).getTime();
+
+    // 2. Click "Stay Signed In" (trigger: 'update', extendSession: true)
+    const updatedToken = await jwt({
+      token: {
+        sub: 'u-stay',
+        sessionExpiresAt: oldExpiresSec,
+        absoluteExpiresAt: absoluteExpiresSec,
+        lastActivityAt: Date.now() - 60_000,
+      },
+      user: undefined as never,
+      account: null,
+      profile: undefined,
+      isNewUser: false,
+      trigger: 'update',
+      session: { activity: true, extendSession: true },
+    });
+
+    const updatedSession = await sessionCallback({
+      session: { user: { name: 'Stay User' } },
+      token: updatedToken,
+    });
+    const newExpiresMs = new Date(updatedSession.expires).getTime();
+
+    // Verification:
+    // returned session.expires > old session.expires
+    expect(newExpiresMs).toBeGreaterThan(oldExpiresMs);
+    // returned session.expires <= absoluteExpiresAt
+    expect(newExpiresMs).toBeLessThanOrEqual(absoluteExpiresSec * 1000);
+    // Remaining time is now extended outside the 5m warning threshold (warning disappears)
+    expect(newExpiresMs - Date.now()).toBeGreaterThan(5 * 60 * 1000);
+  });
+
   it('revokeUserSessions increments tokenVersion', async () => {
     await revokeUserSessions('u1');
     expect(prisma.user.update).toHaveBeenCalledWith({
