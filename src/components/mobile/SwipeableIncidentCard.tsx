@@ -2,6 +2,7 @@
 
 import { useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Check, Clock3 } from 'lucide-react';
 import { motion, useAnimation, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ export default function SwipeableIncidentCard({
   isUpdating = false,
 }: SwipeableIncidentCardProps) {
   const { userTimeZone } = useTimezone();
+  const router = useRouter();
   const controls = useAnimation();
   const x = useMotionValue(0);
   const isDraggingRef = useRef(false);
@@ -80,16 +82,38 @@ export default function SwipeableIncidentCard({
     }
   };
 
-  const handleLinkClick = (e: React.MouseEvent) => {
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (isUpdating || isDraggingRef.current || dragDistanceRef.current > 15) {
       e.preventDefault();
       return;
     }
+    // Preserve native browser affordances for aux clicks and modified clicks
+    // (middle-click, cmd+click, etc.).
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    // `motion.article` with `drag="x"` can swallow the synthetic click after
+    // a small pointer jitter (the jitter test moves 5px then expects a tap).
+    // Relying solely on the anchor's default navigation is flaky inside the
+    // draggable container, so drive navigation explicitly via the router while
+    // preserving the Link href for a11y / open-in-new-tab.
+    e.preventDefault();
     try {
       haptics.soft();
     } catch {
       // haptics is best-effort; never block navigation on vibrate failure
     }
+    router.push(`/m/incidents/${incident.id}`);
+  };
+
+  const handleTapFallback = () => {
+    // Framer `onTap` is more reliable than the nested anchor click inside a
+    // draggable article. Treat a tap with negligible drag as a tap-to-open.
+    if (isUpdating || isDraggingRef.current || dragDistanceRef.current > 15) return;
+    try {
+      haptics.soft();
+    } catch {
+      // best-effort
+    }
+    router.push(`/m/incidents/${incident.id}`);
   };
 
   return (
@@ -111,8 +135,10 @@ export default function SwipeableIncidentCard({
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.55}
+        dragMomentum={false}
         onDrag={handleDrag}
         onDragEnd={handleDragEnd}
+        onTap={handleTapFallback}
         animate={controls}
         style={{ x }}
         className={cn(
