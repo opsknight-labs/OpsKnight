@@ -15,6 +15,8 @@ import {
   findSlackWarRoomAuthority,
   projectSlackWarRoomToLegacyIncident,
 } from '@/lib/war-room/slack-compatibility';
+import { projectIncidentWarRoomParticipants } from '@/lib/war-room/participant-desired-state';
+import { scheduleJob } from '@/lib/jobs/queue';
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -67,6 +69,13 @@ vi.mock('@/lib/war-room/slack-compatibility', () => ({
   projectSlackWarRoomToLegacyIncident: vi.fn(),
 }));
 
+vi.mock('@/lib/war-room/participant-desired-state', () => ({
+  projectIncidentWarRoomParticipants: vi.fn(),
+  requestWarRoomParticipant: vi.fn(),
+}));
+
+vi.mock('@/lib/jobs/queue', () => ({ scheduleJob: vi.fn() }));
+
 vi.mock('@/lib/escalation', () => ({
   resolveEscalationTarget: vi.fn().mockResolvedValue([]),
 }));
@@ -105,6 +114,8 @@ describe('ChatOps War-Room Engine', () => {
     vi.clearAllMocks();
     vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(null);
     vi.mocked(projectSlackWarRoomToLegacyIncident).mockResolvedValue(undefined);
+    vi.mocked(projectIncidentWarRoomParticipants).mockResolvedValue(undefined);
+    vi.mocked(scheduleJob).mockResolvedValue('job-1');
     vi.mocked(claimWarRoomProvisioning).mockResolvedValue({
       claimed: true,
       warRoom: {
@@ -400,10 +411,7 @@ describe('ChatOps War-Room Engine', () => {
       );
     });
 
-    it('should look up responders via HTTP GET and invite them to the channel', async () => {
-      // Regression guard for a bug fixed five separate times: users.lookupByEmail
-      // must be a GET with query params. POST+JSON returns invalid_arguments and
-      // silently invites nobody, leaving an empty war-room.
+    it('should project responders before scheduling durable participant sync', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-abcdef123456',
         title: 'Database Overload',
@@ -435,10 +443,6 @@ describe('ChatOps War-Room Engine', () => {
         policy: { steps: [] },
       } as any);
 
-      // Mixed case on purpose — the lookup must normalise before querying Slack
-      vi.mocked(prisma.user.findMany).mockResolvedValue([
-        { id: 'usr-1', name: 'Dev', email: 'Dev@Test.com' },
-      ] as any);
       vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
 
@@ -456,27 +460,20 @@ describe('ChatOps War-Room Engine', () => {
             }),
           };
         }
-        if (href.includes('users.lookupByEmail')) {
-          return { json: async () => ({ ok: true, user: { id: 'U-SLACK-1' } }) };
-        }
         return { json: async () => ({ ok: true }) };
       }) as any);
 
       const result = await createIncidentWarRoom('inc-abcdef123456');
       expect(result.success).toBe(true);
 
-      const lookup = requests.find(r => r.url.includes('users.lookupByEmail'));
-      expect(lookup).toBeDefined();
-      expect(lookup!.method).toBe('GET');
-      expect(lookup!.body).toBeUndefined();
-      expect(lookup!.url).toContain(`email=${encodeURIComponent('dev@test.com')}`);
-
-      const invite = requests.find(r => r.url.includes('conversations.invite'));
-      expect(invite).toBeDefined();
-      expect(JSON.parse(String(invite!.body))).toMatchObject({
-        channel: 'C999888',
-        users: 'U-SLACK-1',
-      });
+      expect(projectIncidentWarRoomParticipants).toHaveBeenCalledWith('slack-room-1');
+      expect(scheduleJob).toHaveBeenCalledWith(
+        'WAR_ROOM_PARTICIPANT_SYNC',
+        expect.any(Date),
+        { warRoomId: 'slack-room-1' },
+        5
+      );
+      expect(requests.some(request => request.url.includes('conversations.invite'))).toBe(false);
     });
   });
 

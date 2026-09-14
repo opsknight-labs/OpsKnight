@@ -74,18 +74,21 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
 export const slackWarRoomAdapter: WarRoomProviderAdapter = {
   provider: 'SLACK',
   capabilities: {
-    createRoom: false,
+    createRoom: true,
     privateRooms: false,
-    manageMembers: false,
-    updateRoom: false,
-    archiveRoom: false,
-    interactiveProjection: false,
-    projectionUpdates: false,
-    reconciliation: false,
+    manageMembers: true,
+    updateRoom: true,
+    archiveRoom: true,
+    interactiveProjection: true,
+    projectionUpdates: true,
+    reconciliation: true,
   },
   provision: async () => unsupported('provision'),
   project: async () => unsupported('project'),
-  syncParticipants: async () => unsupported('syncParticipants'),
+  syncParticipants: async warRoomId => {
+    const { syncSlackWarRoomParticipants } = await import('../../slack-participants');
+    await syncSlackWarRoomParticipants(warRoomId);
+  },
   settleProjectionFailure: async () => unsupported('settleProjectionFailure'),
   handleIncidentEvent,
 };

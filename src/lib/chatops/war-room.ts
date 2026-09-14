@@ -158,36 +158,6 @@ async function findExistingChannel(
 }
 
 /**
- * Lookup Slack user by email via HTTP GET query parameters
- */
-async function findSlackUserByEmail(
-  botToken: string,
-  email: string
-): Promise<{ ok: boolean; error?: string; user?: { id: string } }> {
-  const url = `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`;
-  try {
-    const response = await retryFetch(
-      url,
-      {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${botToken}`,
-        },
-      },
-      {
-        maxAttempts: 2,
-        initialDelayMs: 500,
-      }
-    );
-    return await response.json();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.warn('[ChatOps] Slack user lookup failed', { error: message });
-    return { ok: false, error: message };
-  }
-}
-
-/**
  * Create a dedicated Slack war-room channel for a critical incident.
  * Checks eligibility based on ChatOpsConfig thresholds and service settings.
  *
@@ -384,136 +354,6 @@ export async function createIncidentWarRoom(
       topic: topic.slice(0, 250),
     }).catch(err => logger.warn('[ChatOps] Failed to set channel topic', { error: err }));
 
-    // Resolve and invite on-call responders
-    try {
-      const { resolveEscalationTarget } = await import('@/lib/escalation');
-
-      const service = await prisma.service.findUnique({
-        where: { id: incident.serviceId },
-        include: {
-          policy: {
-            include: {
-              steps: {
-                orderBy: { stepOrder: 'asc' },
-                take: 3, // First 3 escalation steps
-              },
-            },
-          },
-        },
-      });
-
-      const userIdsToInvite = new Set<string>();
-
-      // Collect user IDs from escalation policy steps (Schedules, Teams, Users)
-      if (service?.policy?.steps) {
-        for (const step of service.policy.steps) {
-          const targetId =
-            step.targetType === 'USER'
-              ? step.targetUserId
-              : step.targetType === 'TEAM'
-                ? step.targetTeamId
-                : step.targetScheduleId;
-          if (targetId) {
-            try {
-              const resolvedUserIds = await resolveEscalationTarget(
-                step.targetType as 'USER' | 'TEAM' | 'SCHEDULE',
-                targetId,
-                new Date(),
-                step.notifyOnlyTeamLead
-              );
-              resolvedUserIds.forEach(id => userIdsToInvite.add(id));
-            } catch (stepErr) {
-              logger.warn('[ChatOps] Failed to resolve step target', { targetId, error: stepErr });
-            }
-          }
-        }
-      }
-
-      // Add the current assignee (re-query latest from DB in case escalation just assigned it)
-      const latestIncidentAssignee = await prisma.incident.findUnique({
-        where: { id: incidentId },
-        select: { assigneeId: true },
-      });
-      const activeAssigneeId = latestIncidentAssignee?.assigneeId || incident.assigneeId;
-      if (activeAssigneeId) {
-        userIdsToInvite.add(activeAssigneeId);
-      }
-
-      const emailsToInvite = new Set<string>();
-
-      // Fetch emails for all resolved user IDs
-      if (userIdsToInvite.size > 0) {
-        const usersToInvite = await prisma.user.findMany({
-          where: { id: { in: Array.from(userIdsToInvite) } },
-          select: { id: true, name: true, email: true },
-        });
-
-        for (const user of usersToInvite) {
-          if (user.email) {
-            emailsToInvite.add(user.email);
-          }
-        }
-      }
-
-      // Parallel email lookups using GET-based findSlackUserByEmail
-      // (slackApiCall sends POST+JSON which causes `invalid_arguments` for users.lookupByEmail)
-      const lookupResults = await Promise.allSettled(
-        Array.from(emailsToInvite).map(async email => {
-          const lookupResult = await findSlackUserByEmail(botToken, email.trim().toLowerCase());
-          if (lookupResult.ok && (lookupResult as any).user?.id) {
-            return (lookupResult as any).user.id as string; // eslint-disable-line @typescript-eslint/no-explicit-any
-          }
-          const lookupErr = lookupResult.error || 'User not found in Slack workspace';
-          logger.warn('[ChatOps] Could not find Slack user by email', {
-            email,
-            error: lookupErr,
-          });
-          // Log to incident timeline for visibility
-          await prisma.incidentEvent
-            .create({
-              data: {
-                incidentId,
-                message: `War-room: Could not invite user (${email}) — ${lookupErr === 'users_not_found' ? 'email not found in Slack workspace' : lookupErr}`,
-              },
-            })
-            .catch(() => {});
-          return null;
-        })
-      );
-
-      const slackUserIds: string[] = lookupResults
-        .filter(
-          (r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && r.value !== null
-        )
-        .map(r => r.value);
-
-      if (slackUserIds.length > 0) {
-        // Try batch invite first to conserve Slack Tier 3 rate limits
-        const batchResult = await slackApiCall('conversations.invite', botToken, {
-          channel: channelId,
-          users: slackUserIds.join(','),
-        });
-
-        if (!batchResult.ok) {
-          // Fallback to individual invites if batch encountered an error (e.g. partial membership or already_in_channel)
-          for (const slackUserId of slackUserIds) {
-            const indResult = await slackApiCall('conversations.invite', botToken, {
-              channel: channelId,
-              users: slackUserId,
-            });
-            if (!indResult.ok && indResult.error !== 'already_in_channel') {
-              logger.warn('[ChatOps] Failed to invite user to war-room', {
-                slackUserId,
-                error: indResult.error,
-              });
-            }
-          }
-        }
-      }
-    } catch (err) {
-      logger.warn('[ChatOps] Failed to resolve/invite responders', { error: err, incidentId });
-    }
-
     // Generate video bridge URL
     const videoBridge = incident.service.warRoomVideoBridge || config.defaultVideoBridge;
     const customUrl = incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate;
@@ -573,6 +413,14 @@ export async function createIncidentWarRoom(
       };
     }
     await projectSlackWarRoomToLegacyIncident(warRoomId);
+    if (adoption === 'READY') {
+      const { projectIncidentWarRoomParticipants } = await import(
+        '@/lib/war-room/participant-desired-state'
+      );
+      const { scheduleJob } = await import('@/lib/jobs/queue');
+      await projectIncidentWarRoomParticipants(warRoomId);
+      await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId }, 5);
+    }
 
     // Log timeline event
     await prisma.incidentEvent.create({
@@ -827,18 +675,12 @@ export async function updateWarRoomTopic(
  */
 export async function inviteUserToWarRoom(
   incidentId: string,
-  userId: string
+  userId: string,
+  source: 'MANUAL' | 'TEAM' = 'MANUAL'
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const [incident, room] = await Promise.all([
-      prisma.incident.findUnique({
-        where: { id: incidentId },
-        select: { serviceId: true },
-      }),
-      findSlackWarRoomAuthority(incidentId),
-    ]);
-
-    if (!incident || !room?.providerChannelId) {
+    const room = await findSlackWarRoomAuthority(incidentId);
+    if (!room?.providerChannelId) {
       return { success: false, error: 'No active war-room channel' };
     }
 
@@ -848,66 +690,19 @@ export async function inviteUserToWarRoom(
       return { success: false, error: 'War-room channel is archived' };
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true, email: true },
-    });
-
-    if (!user?.email) {
-      return { success: false, error: 'User has no email configured' };
-    }
-
-    const botToken = await getSlackBotToken(incident.serviceId);
-    if (!botToken) {
-      return { success: false, error: 'No Slack bot token' };
-    }
-
-    const normalizedEmail = user.email.trim().toLowerCase();
-    const lookupResult = await findSlackUserByEmail(botToken, normalizedEmail);
-
-    if (!lookupResult.ok || !(lookupResult as any).user?.id) {
-      const lookupErr = lookupResult.error || 'User not found in Slack workspace';
-      const reason =
-        lookupErr === 'users_not_found' || lookupErr === 'user_not_found'
-          ? `Email ${normalizedEmail} not found in Slack workspace`
-          : lookupErr === 'missing_scope'
-            ? `Slack app is missing 'users:read.email' scope`
-            : lookupErr;
-
-      await prisma.incidentEvent
-        .create({
-          data: {
-            incidentId,
-            type: 'STATUS_CHANGE',
-            message: `Slack War-Room: Could not auto-invite ${user.name} (${reason})`,
-          },
-        })
-        .catch(() => {});
-
-      return { success: false, error: reason };
-    }
-
-    const slackUserId = (lookupResult as any).user.id as string; // eslint-disable-line @typescript-eslint/no-explicit-any
-    const inviteResult = await slackApiCall('conversations.invite', botToken, {
-      channel: room.providerChannelId,
-      users: slackUserId,
-    });
-
-    if (!inviteResult.ok && (inviteResult as any).error !== 'already_in_channel') {
-      const inviteErr = (inviteResult as any).error || 'Failed to invite user'; // eslint-disable-line @typescript-eslint/no-explicit-any
-      await prisma.incidentEvent
-        .create({
-          data: {
-            incidentId,
-            message: `Slack War-Room: Could not invite ${user.name} to channel #${room.providerChannelName} (${inviteErr})`,
-          },
-        })
-        .catch(() => {});
-
-      return { success: false, error: inviteErr };
-    }
-
-    return { success: true };
+    const { requestWarRoomParticipant } = await import(
+      '@/lib/war-room/participant-desired-state'
+    );
+    const result = await requestWarRoomParticipant(room.id, userId, source);
+    return result.accepted
+      ? { success: true }
+      : {
+          success: false,
+          error:
+            result.code === 'IDENTITY_NOT_LINKED'
+              ? 'User has no verified Slack identity link'
+              : 'War-room is not ready',
+        };
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);
     logger.error('[ChatOps] Invite user to war-room failed', { incidentId, userId, error: err });
@@ -929,7 +724,7 @@ export async function inviteTeamToWarRoom(
     });
 
     for (const member of teamMembers) {
-      await inviteUserToWarRoom(incidentId, member.userId).catch(() => {});
+      await inviteUserToWarRoom(incidentId, member.userId, 'TEAM').catch(() => {});
     }
 
     return { success: true };
