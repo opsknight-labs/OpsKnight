@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { getSlackBotToken } from '@/lib/slack';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { scheduleJob } from '@/lib/jobs/queue';
-import { slackApiCall } from '@/lib/chatops/war-room';
+import { slackApiCall } from './providers/slack/client';
 
 const desiredStates = ['DESIRED', 'PENDING', 'FAILED'] as const;
 

@@ -1,30 +1,28 @@
 /**
- * ChatOps War-Room Engine
- * Provisions dedicated Slack channels for critical incidents,
- * auto-invites on-call responders, generates video bridges,
- * and posts rich Incident Command Cards.
+ * ChatOps War-Room Engine (Slack compatibility surface)
+ * Request path is delegated to the provider-neutral Slack provision boundary.
+ * Side-effect-heavy channel creation is owned by the durable worker
+ * `provisionSlackWarRoom`. This module remains the compatibility adapter for
+ * existing callers and the API route until the full migration completes.
  */
 
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getSlackBotToken } from '@/lib/slack';
-import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { getBaseUrl } from '@/lib/env-validation';
-import { retryFetch } from '@/lib/retry';
-import { runSerializableTransaction } from '@/lib/db-utils';
-import { adoptWarRoomChannel, claimWarRoomProvisioning } from '@/lib/war-room/repository';
-import {
-  findSlackWarRoomAuthority,
-  projectSlackWarRoomToLegacyIncident,
-} from '@/lib/war-room/slack-compatibility';
+import { findSlackWarRoomAuthority, projectSlackWarRoomToLegacyIncident } from '@/lib/war-room/slack-compatibility';
 
 type WarRoomResult = {
   success: boolean;
   channelId?: string;
   channelName?: string;
   warRoomUrl?: string | null;
+  warRoomId?: string;
+  state?: string;
   error?: string;
 };
+
+export type { WarRoomResult };
 
 /**
  * Slugify a service name for Slack channel naming (lowercase, hyphens, max length)
@@ -92,88 +90,29 @@ export function generateBridgeUrl(
   }
 }
 
-/**
- * Call a Slack API method with bot token authentication
- */
-export async function slackApiCall(
-  method: string,
-  botToken: string,
-  body: Record<string, unknown>
-): Promise<{
-  ok: boolean;
-  error?: string;
-  channel?: { id: string; name: string };
-  channels?: Array<{ id: string; name: string }>;
-  user?: { profile?: { email?: string } };
-}> {
-  try {
-    const response = await retryFetch(
-      `https://slack.com/api/${method}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${botToken}`,
-        },
-        body: JSON.stringify(body),
-      },
-      {
-        maxAttempts: 2,
-        initialDelayMs: 500,
-        retryableErrors: error => {
-          if (error instanceof Error) {
-            // Network blips, plus Slack rate limiting and server errors, which
-            // retryFetch surfaces as a thrown `HTTP <status>: <text>` error.
-            return (
-              error.message.includes('fetch') ||
-              error.message.includes('network') ||
-              /^HTTP (429|5\d{2}):/.test(error.message)
-            );
-          }
-          return false;
-        },
-      }
-    );
-
-    return await response.json();
-  } catch (error) {
-    // Callers branch on `result.ok`; throwing here made rate limits surface as
-    // an exception on some paths and get silently swallowed on others.
-    const message = error instanceof Error ? error.message : String(error);
-    logger.warn('[ChatOps] Slack API call failed', { method, error: message });
-    return { ok: false, error: message };
-  }
-}
-
-async function findExistingChannel(
-  botToken: string,
-  channelName: string
-): Promise<{ id: string; name: string } | null> {
-  const result = await slackApiCall('conversations.list', botToken, {
-    exclude_archived: true,
-    limit: 1000,
-    types: 'public_channel,private_channel',
-  });
-  return result.channels?.find(channel => channel.name === channelName) || null;
-}
+import { slackApiCall } from '@/lib/war-room/providers/slack/client';
+// Re-export provider-scoped Slack transport for tests and other consumers that
+// still import from the compatibility surface. The canonical implementation
+// lives in the provider client so the engine/queue boundaries stay neutral.
+export { slackApiCall };
 
 /**
  * Create a dedicated Slack war-room channel for a critical incident.
- * Checks eligibility based on ChatOpsConfig thresholds and service settings.
+ * Durable request boundary only — it never performs Slack I/O. Slack API
+ * channel creation (conversations.create, reconciliation, bridging) is owned
+ * by the queue worker `provisionSlackWarRoom`.
  *
  * `force` skips the auto-creation gates — the urgency/priority threshold and
  * the per-service autoCreateWarRoom toggle. Both exist to decide when a
  * war-room appears *by itself*; neither should refuse an operator who pressed
  * "Create War-Room" on the incident page. The global `enabled` flag and the
- * bot-token requirement still apply, since without them there is no
- * integration to create anything in.
+ * bot-token requirement still apply.
  */
 export async function createIncidentWarRoom(
   incidentId: string,
   options: { force?: boolean } = {}
 ): Promise<WarRoomResult> {
   try {
-    // Load incident with service
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },
       include: {
@@ -188,8 +127,6 @@ export async function createIncidentWarRoom(
       return { success: false, error: 'Incident not found' };
     }
 
-    // IncidentWarRoom is authoritative. The legacy Incident columns are only
-    // maintained as a rolling-deploy compatibility projection.
     const currentRoom = await findSlackWarRoomAuthority(incidentId, { activeOnly: true });
     if (currentRoom?.state === 'READY' && currentRoom.providerChannelId) {
       return {
@@ -197,247 +134,84 @@ export async function createIncidentWarRoom(
         channelId: currentRoom.providerChannelId,
         channelName: currentRoom.providerChannelName || undefined,
         warRoomUrl: currentRoom.providerChannelUrl,
+        warRoomId: currentRoom.id,
+        state: currentRoom.state,
       };
     }
 
-    // Load global ChatOps config
-    const config = await prisma.chatOpsConfig.findUnique({
-      where: { id: 'default' },
+    const allowNewGeneration = ['OPEN', 'ACKNOWLEDGED'].includes(incident.status);
+    const { requestSlackWarRoom } = await import('@/lib/war-room/providers/slack/provision');
+    const result = await requestSlackWarRoom(incidentId, {
+      manual: Boolean(options.force),
+      allowNewGeneration,
     });
 
-    if (!config?.enabled) {
-      return { success: false, error: 'ChatOps is not enabled' };
+    if (!result.accepted) {
+      const code = result.code;
+      const message =
+        code === 'INCIDENT_NOT_FOUND'
+          ? 'Incident not found'
+          : code === 'INCIDENT_NOT_ACTIVE'
+            ? 'Incident is not active'
+            : code === 'CHATOPS_DISABLED'
+              ? 'ChatOps is not enabled'
+              : code === 'WAR_ROOMS_DISABLED'
+                ? 'ChatOps is not enabled'
+                : code === 'DESTINATION_UNAVAILABLE'
+                  ? 'No Slack workspace installation configured for this service or organization'
+                  : code === 'SERVICE_DISABLED'
+                    ? 'War-room auto-creation disabled for this service'
+                    : code === 'AUTO_CREATE_DISABLED'
+                      ? 'War-room auto-creation disabled for this service'
+                      : code === 'THRESHOLD_NOT_MET'
+                        ? 'Incident does not meet urgency/priority threshold'
+                        : code === 'PRIVATE_DOWNGRADE_DENIED'
+                          ? 'War-room provisioning is not permitted for this visibility'
+                          : code;
+      return { success: false, error: message };
     }
 
-    if (!options.force) {
-      // Check per-service override
-      if (!incident.service.autoCreateWarRoom) {
-        return { success: false, error: 'War-room auto-creation disabled for this service' };
-      }
-
-      // Check urgency threshold
-      const urgencyMatch = config.autoCreateOnUrgency.includes(incident.urgency);
-      const priorityMatch = incident.priority
-        ? config.autoCreateOnPriority.includes(incident.priority)
-        : false;
-
-      if (!urgencyMatch && !priorityMatch) {
-        return { success: false, error: 'Incident does not meet urgency/priority threshold' };
-      }
-    }
-
-    // Get bot token
-    const botToken = await getSlackBotToken(incident.serviceId);
-    if (!botToken) {
-      return { success: false, error: 'No Slack bot token configured' };
-    }
-    // Verify a Slack workspace installation exists (service-specific or global)
-    const slackWorkspaceId =
-      incident.service.slackIntegration?.workspaceId ||
-      (
-        await prisma.slackIntegration.findFirst({
-          where: { enabled: true, services: { none: {} } },
-          select: { workspaceId: true },
-        })
-      )?.workspaceId;
-    if (!slackWorkspaceId) {
+    const fresh = await findSlackWarRoomAuthority(incidentId, { activeOnly: true });
+    // If the room raced to READY between request and this read, return the channel.
+    if (fresh?.state === 'READY' && fresh.providerChannelId) {
       return {
-        success: false,
-        error: 'No Slack workspace installation configured for this service or organization',
+        success: true,
+        channelId: fresh.providerChannelId,
+        channelName: fresh.providerChannelName || undefined,
+        warRoomUrl: fresh.providerChannelUrl,
+        warRoomId: fresh.id,
+        state: fresh.state,
       };
     }
-
-    // Generate channel name
-    const serviceSlug = slugify(incident.service.name);
-    const idSuffix = incidentId.slice(-6);
-    const safePrefix =
-      (config.channelPrefix || 'incident')
-        .toLowerCase()
-        .replace(/^#+/, '')
-        .replace(/[^a-z0-9_-]+/g, '-')
-        .replace(/[-_]{2,}/g, '-')
-        .replace(/^[-_]+|[-_]+$/g, '') || 'incident';
-    const channelName = `${safePrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
-
-    // Claim the neutral lifecycle row before external I/O. Reopened incidents
-    // receive a new generation; concurrent workers share the same lease.
-    const claim = await runSerializableTransaction(tx =>
-      claimWarRoomProvisioning(tx, {
-        incidentId,
-        provider: 'SLACK',
-        reopen: ['OPEN', 'ACKNOWLEDGED'].includes(incident.status),
-      })
-    );
-    if (!claim.claimed) {
-      if (claim.warRoom.state === 'READY' && claim.warRoom.providerChannelId) {
-        return {
-          success: true,
-          channelId: claim.warRoom.providerChannelId,
-          channelName: claim.warRoom.providerChannelName || undefined,
-          warRoomUrl: claim.warRoom.providerChannelUrl,
-        };
-      }
-      return { success: false, error: 'War-room provisioning is already in progress' };
-    }
-    const warRoomId = claim.warRoom.id;
-    const provisioningToken = claim.warRoom.provisioningToken!;
-    await prisma.incidentWarRoom.updateMany({
-      where: { id: warRoomId, provisioningToken, state: 'PROVISIONING' },
-      data: { providerTenantId: slackWorkspaceId },
+    // Also check the exact warRoomId for PROVISIONING/AMBIGUOUS after enqueue.
+    const provisioned = await prisma.incidentWarRoom.findUnique({
+      where: { id: result.warRoomId },
+      select: {
+        id: true,
+        state: true,
+        providerChannelId: true,
+        providerChannelName: true,
+        providerChannelUrl: true,
+      },
     });
-    await projectSlackWarRoomToLegacyIncident(warRoomId);
-
-    const failProvisioning = async (error: string) => {
-      await prisma.incidentWarRoom.updateMany({
-        where: { id: warRoomId, provisioningToken, state: 'PROVISIONING' },
-        data: {
-          state: 'FAILED',
-          lastErrorCode: 'SLACK_PROVISION_FAILED',
-          lastError: error.slice(0, 1000),
-          provisioningToken: null,
-        },
-      });
-      await projectSlackWarRoomToLegacyIncident(warRoomId);
-      return { success: false, error } satisfies WarRoomResult;
+    if (provisioned?.state === 'READY' && provisioned.providerChannelId) {
+      return {
+        success: true,
+        channelId: provisioned.providerChannelId,
+        channelName: provisioned.providerChannelName || undefined,
+        warRoomUrl: provisioned.providerChannelUrl,
+        warRoomId: provisioned.id,
+        state: provisioned.state,
+      };
+    }
+    return {
+      success: true,
+      channelId: provisioned?.providerChannelId || undefined,
+      channelName: provisioned?.providerChannelName || undefined,
+      warRoomUrl: provisioned?.providerChannelUrl ?? null,
+      warRoomId: provisioned?.id ?? result.warRoomId,
+      state: provisioned?.state ?? result.state,
     };
-
-    // Create channel via Slack API
-    let effectiveChannelName = channelName;
-    let createResult = await slackApiCall('conversations.create', botToken, {
-      name: effectiveChannelName,
-      is_private: false,
-    });
-
-    if (!createResult.ok) {
-      // A timeout can mean Slack created the channel but the response was
-      // lost. Reconcile the deterministic name before any second create.
-      const existing = await findExistingChannel(botToken, channelName);
-      if (existing) {
-        createResult = { ok: true, channel: existing };
-      } else if (createResult.error === 'name_taken') {
-        // Name collisions are only given a random suffix after reconciliation
-        // proves that the deterministic channel belongs to somebody else.
-        const suffix = Math.floor(Math.random() * 8999 + 1000).toString();
-        effectiveChannelName = `${channelName.slice(0, 74)}-${suffix}`;
-        createResult = await slackApiCall('conversations.create', botToken, {
-          name: effectiveChannelName,
-          is_private: false,
-        });
-      }
-    }
-
-    if (!createResult.ok) {
-      logger.error('[ChatOps] Failed to create Slack channel', {
-        error: createResult.error,
-        channelName: effectiveChannelName,
-        incidentId,
-      });
-      const errorMsg =
-        createResult.error === 'missing_scope'
-          ? "Slack app is missing the 'channels:manage' scope. Please re-authorize Slack in Settings > Slack to grant channel creation permissions."
-          : `Slack API error: ${createResult.error}`;
-      return failProvisioning(errorMsg);
-    }
-
-    const channelId = createResult.channel?.id;
-    if (!channelId) {
-      return failProvisioning('No channel ID returned from Slack');
-    }
-
-    // Set channel topic
-    const appUrl = getBaseUrl();
-    const dashboardUrl = `${appUrl}/incidents/${incidentId}`;
-    const topic = `🚨 ${incident.title} | ${incident.urgency} | ${dashboardUrl}`;
-
-    await slackApiCall('conversations.setTopic', botToken, {
-      channel: channelId,
-      topic: topic.slice(0, 250),
-    }).catch(err => logger.warn('[ChatOps] Failed to set channel topic', { error: err }));
-
-    // Generate video bridge URL
-    const videoBridge = incident.service.warRoomVideoBridge || config.defaultVideoBridge;
-    const customUrl = incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate;
-    const warRoomUrl = generateBridgeUrl(incidentId, videoBridge, customUrl);
-
-    // Post Incident Command Card to the channel
-    await enqueueCentralNotification({
-      category: 'INCIDENT',
-      channel: 'SLACK',
-      recipientType: 'SLACK_CHANNEL',
-      recipientAddress: channelId,
-      incidentId: incident.id,
-      templateKey: 'chatops-war-room-command-card',
-      sourceType: 'INCIDENT',
-      sourceId: incident.id,
-      eventKey: `war-room:${channelId}:command-card`,
-      displayMessage: `War-room command card for ${incident.title}`,
-      priority: 1,
-      payload: {
-        kind: 'SLACK_CHANNEL',
-        channel: channelId,
-        incident: {
-          id: incident.id,
-          title: incident.title,
-          status: incident.status,
-          urgency: incident.urgency,
-          serviceName: incident.service.name,
-          assigneeName: incident.assignee?.name,
-        },
-        eventType: 'triggered',
-        includeInteractiveButtons: true,
-        serviceId: incident.serviceId,
-        additionalMessage: warRoomUrl ? `📹 Video Bridge: ${warRoomUrl}` : undefined,
-      },
-    }).catch(err => logger.warn('[ChatOps] Failed to queue command card', { error: err }));
-
-    // Post War-Room Welcome & Feature Hints Card
-    await postWarRoomWelcomeCard(channelId, incident.title, botToken).catch(err =>
-      logger.warn('[ChatOps] Failed to post welcome card', { error: err })
-    );
-
-    const adoption = await runSerializableTransaction(tx =>
-      adoptWarRoomChannel(tx, {
-        warRoomId,
-        provisioningToken,
-        providerTenantId: slackWorkspaceId,
-        channelId,
-        channelName: effectiveChannelName,
-        channelUrl: warRoomUrl,
-      })
-    );
-    if (adoption === 'FENCED') {
-      logger.warn('[ChatOps] War-room completion lease was lost', { incidentId, channelId });
-      return {
-        success: false,
-        error: 'War-room provisioning lease was lost; reconciliation will adopt the channel',
-      };
-    }
-    await projectSlackWarRoomToLegacyIncident(warRoomId);
-    if (adoption === 'READY') {
-      const { projectIncidentWarRoomParticipants } = await import(
-        '@/lib/war-room/participant-desired-state'
-      );
-      const { scheduleJob } = await import('@/lib/jobs/queue');
-      await projectIncidentWarRoomParticipants(warRoomId);
-      await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId }, 5);
-    }
-
-    // Log timeline event
-    await prisma.incidentEvent.create({
-      data: {
-        incidentId,
-        message: `War-room channel #${effectiveChannelName} created${warRoomUrl ? ` with video bridge` : ''}`,
-      },
-    });
-
-    logger.info('[ChatOps] War-room created successfully', {
-      incidentId,
-      channelId,
-      channelName: effectiveChannelName,
-      warRoomUrl,
-    });
-
-    return { success: true, channelId, channelName: effectiveChannelName, warRoomUrl };
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);
     logger.error('[ChatOps] War-room creation failed', { incidentId, error: err });

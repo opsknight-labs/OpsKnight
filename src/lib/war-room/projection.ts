@@ -5,7 +5,7 @@ import prisma from '@/lib/prisma';
 import { sendMicrosoftTeamsIncidentCard, updateMicrosoftTeamsIncidentCard } from '@/lib/microsoft-teams/client';
 import { getBaseUrl } from '@/lib/env-validation';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
-import { WarRoomRetryableError } from './microsoft-teams';
+import { WarRoomRetryableError } from './errors';
 
 const PROJECTION_LEASE_MS = 2 * 60_000;
 

@@ -23,16 +23,33 @@ const expectedSkips = [
   'channel_not_found',
 ];
 
+const expectedSlackRequestSkips = new Set([
+  'INCIDENT_NOT_FOUND',
+  'INCIDENT_NOT_ACTIVE',
+  'CHATOPS_DISABLED',
+  'WAR_ROOMS_DISABLED',
+  'DESTINATION_UNAVAILABLE',
+  'SERVICE_DISABLED',
+  'AUTO_CREATE_DISABLED',
+  'THRESHOLD_NOT_MET',
+  'PRIVATE_DOWNGRADE_DENIED',
+]);
+
 async function handleIncidentEvent(event: WarRoomIncidentEvent) {
+  if (event.kind === 'TRIGGER' || event.kind === 'ENSURE') {
+    const { requestSlackWarRoom } = await import('./provision');
+    const result = await requestSlackWarRoom(event.incidentId, {
+      manual: false,
+      allowNewGeneration: event.kind === 'ENSURE',
+    });
+    if (result.accepted) return { ok: true as const, value: undefined };
+    if (expectedSlackRequestSkips.has(result.code)) return { ok: true as const, value: undefined };
+    return { ok: false as const, code: 'TRANSIENT' as const, message: result.code };
+  }
+
   const slack = await import('@/lib/chatops/war-room');
   let result: { success: boolean; error?: string };
   switch (event.kind) {
-    case 'TRIGGER':
-      result = await slack.createIncidentWarRoom(event.incidentId);
-      break;
-    case 'ENSURE':
-      result = await slack.createIncidentWarRoom(event.incidentId);
-      break;
     case 'ARCHIVE':
       result = await slack.archiveWarRoomChannel(event.incidentId);
       break;
@@ -56,6 +73,8 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
     case 'INVITE_TEAM':
       result = await slack.inviteTeamToWarRoom(event.incidentId, event.teamId);
       break;
+    default:
+      return { ok: true as const, value: undefined };
   }
   if (result.success || expectedSkips.some(reason => result.error?.includes(reason))) {
     return { ok: true as const, value: undefined };
@@ -83,7 +102,10 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
     projectionUpdates: true,
     reconciliation: true,
   },
-  provision: async () => unsupported('provision'),
+  provision: async (warRoomId, provisioningToken) => {
+    const { provisionSlackWarRoom } = await import('./provision');
+    await provisionSlackWarRoom(warRoomId, provisioningToken);
+  },
   project: async () => unsupported('project'),
   syncParticipants: async warRoomId => {
     const { syncSlackWarRoomParticipants } = await import('../../slack-participants');

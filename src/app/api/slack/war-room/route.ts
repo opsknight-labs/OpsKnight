@@ -70,7 +70,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'create') {
-      // Explicit operator action — not subject to the auto-creation thresholds
+      // Explicit operator action — not subject to the auto-creation thresholds.
+      // Durable provision: 202 while the worker owns `conversations.create`
+      // and reconciliation; 200 only when the channel already existed (READY).
       const result = await createIncidentWarRoom(incidentId, { force: true });
       if (!result.success) {
         return jsonError(
@@ -80,7 +82,9 @@ export async function POST(request: NextRequest) {
           })
         );
       }
-      return jsonOk(result, 200);
+      const isProvisioning =
+        result.state === 'PROVISIONING' || result.state === 'AMBIGUOUS' || !result.channelId;
+      return jsonOk(result, isProvisioning ? 202 : 200);
     }
 
     if (action === 'archive') {

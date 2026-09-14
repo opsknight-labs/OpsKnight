@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { evaluateWarRoomPolicy } from './policy';
 import { adoptWarRoomChannel, claimWarRoomProvisioning, closeWarRoom } from './repository';
+import { WarRoomRetryableError } from './errors';
 import {
   createChannel,
   findWarRoomChannel,
@@ -21,17 +22,6 @@ type RequestResult =
   | { accepted: false; code: string };
 type WarRoomRequestIntent = { manual: boolean; allowNewGeneration: boolean };
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
-
-export class WarRoomRetryableError extends Error {
-  constructor(
-    message: string,
-    readonly retryAfterMs?: number,
-    readonly retryBudgetNeutral = false
-  ) {
-    super(message);
-    this.name = 'WarRoomRetryableError';
-  }
-}
 
 /** Durable request boundary. No Microsoft I/O occurs here. */
 export async function requestMicrosoftTeamsWarRoom(
