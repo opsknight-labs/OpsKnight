@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { createMobileIncident, getIncidentCreationContext } from '@/app/(app)/incidents/actions';
+import { getIncidentCreationContext } from '@/app/(app)/incidents/actions';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileCreateIncidentClient from './client';
 
@@ -52,12 +52,7 @@ export default async function MobileCreateIncidentPage() {
           </div>
         }
       >
-        <MobileCreateIncidentClient
-          services={services}
-          users={users}
-          templates={templates}
-          createAction={createMobileIncident}
-        />
+        <MobileCreateIncidentClient services={services} users={users} templates={templates} />
       </Suspense>
     </div>
   );

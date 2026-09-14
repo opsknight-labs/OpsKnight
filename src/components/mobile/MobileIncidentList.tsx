@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SwipeableIncidentCard from '@/components/mobile/SwipeableIncidentCard';
+import MobileCachedDataNotice from '@/components/mobile/MobileCachedDataNotice';
 import { logger } from '@/lib/logger';
 import { readCache, writeCache } from '@/lib/mobile-cache';
+import { readMobileCacheStatus } from '@/lib/mobile-cache-status';
 import {
   IncidentStatusMutationError,
   mutateIncidentStatus,
@@ -31,53 +33,63 @@ export default function MobileIncidentList({
 }) {
   const router = useRouter();
   const [localIncidents, setLocalIncidents] = useState<IncidentListItem[]>(incidents);
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updatingIds, setUpdatingIds] = useState<Set<string>>(() => new Set());
   const [errorMessage, setErrorMessage] = useState('');
+  const [cachedAt, setCachedAt] = useState<Date | null>(null);
+  const cacheKey = useMemo(() => {
+    if (typeof window === 'undefined') return `mobile-incidents:${filter}`;
+    const projection = new URLSearchParams(window.location.search);
+    projection.sort();
+    return `mobile-incidents:${projection.toString() || `filter=${filter}`}`;
+  }, [filter]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const loadFromCache = async () => {
+    let cancelled = false;
+    const reconcileConnectivity = async () => {
       if (!navigator.onLine) {
-        const cached = await readCache<IncidentListItem[]>('mobile-incidents', 24 * 60 * 60 * 1000);
-        if (cached && Array.isArray(cached) && cached.length > 0) setLocalIncidents(cached);
+        const cached = await readCache<IncidentListItem[]>(cacheKey, 24 * 60 * 60 * 1000);
+        const status = readMobileCacheStatus(cacheKey);
+        if (cancelled) return;
+        if (cached && Array.isArray(cached)) {
+          setLocalIncidents(cached);
+          setCachedAt(status?.savedAt ?? null);
+        }
+      } else {
+        setLocalIncidents(incidents);
+        setCachedAt(null);
       }
     };
-    void loadFromCache();
-  }, []);
+    window.addEventListener('online', reconcileConnectivity);
+    window.addEventListener('offline', reconcileConnectivity);
+    void reconcileConnectivity();
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', reconcileConnectivity);
+      window.removeEventListener('offline', reconcileConnectivity);
+    };
+  }, [cacheKey, incidents]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (incidents.length === 0 && !navigator.onLine) return;
+    if (typeof window === 'undefined' || !navigator.onLine) return;
     setLocalIncidents(incidents);
-    void writeCache('mobile-incidents', incidents);
-  }, [incidents]);
-
-  useEffect(() => {
-    void writeCache('mobile-incidents', localIncidents);
-  }, [localIncidents]);
+    setCachedAt(null);
+    void writeCache(cacheKey, incidents);
+  }, [cacheKey, incidents]);
 
   const handleStatusUpdate = async (id: string, status: 'ACKNOWLEDGED' | 'SNOOZED') => {
-    if (updatingId) return;
-    setUpdatingId(id);
+    if (updatingIds.has(id)) return;
+    setUpdatingIds(current => new Set(current).add(id));
     setErrorMessage('');
 
     const previous = localIncidents;
     const expectedStatus = localIncidents.find(incident => incident.id === id)?.status;
-
     setLocalIncidents(current => {
-      const updated = current.map(incident =>
-        incident.id === id ? { ...incident, status } : incident
-      );
+      const updated = current.map(incident => (incident.id === id ? { ...incident, status } : incident));
       if (filter === 'open') return updated.filter(incident => incident.id !== id);
-      if (filter === 'all_open' && status !== 'ACKNOWLEDGED') {
-        return updated.filter(incident => incident.id !== id);
-      }
-      if (filter === 'acknowledged' && status !== 'ACKNOWLEDGED') {
-        return updated.filter(incident => incident.id !== id);
-      }
-      if (filter === 'muted' && status !== 'SNOOZED') {
-        return updated.filter(incident => incident.id !== id);
-      }
+      if (filter === 'all_open' && status !== 'ACKNOWLEDGED') return updated.filter(incident => incident.id !== id);
+      if (filter === 'acknowledged' && status !== 'ACKNOWLEDGED') return updated.filter(incident => incident.id !== id);
+      if (filter === 'muted' && status !== 'SNOOZED') return updated.filter(incident => incident.id !== id);
       return updated;
     });
 
@@ -105,13 +117,18 @@ export default function MobileIncidentList({
         status,
       });
     } finally {
-      setUpdatingId(null);
+      setUpdatingIds(current => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
   return (
     <div className="flex flex-col gap-2.5">
-      {errorMessage && (
+      <MobileCachedDataNotice savedAt={cachedAt} />
+      {errorMessage ? (
         <div
           role="status"
           aria-live="polite"
@@ -119,7 +136,7 @@ export default function MobileIncidentList({
         >
           {errorMessage}
         </div>
-      )}
+      ) : null}
       {localIncidents.map(incident => (
         <SwipeableIncidentCard
           key={incident.id}
@@ -130,11 +147,9 @@ export default function MobileIncidentList({
               : undefined
           }
           onSnooze={
-            incident.status === 'OPEN'
-              ? () => handleStatusUpdate(incident.id, 'SNOOZED')
-              : undefined
+            incident.status === 'OPEN' ? () => handleStatusUpdate(incident.id, 'SNOOZED') : undefined
           }
-          isUpdating={updatingId === incident.id}
+          isUpdating={updatingIds.has(incident.id)}
         />
       ))}
     </div>

@@ -1,13 +1,15 @@
 {
+  "id": "/m",
   "name": "OpsKnight",
   "short_name": "OpsKnight",
-  "description": "Enterprise Incident Management & On-Call",
+  "description": "Self-hosted incident response, on-call operations, and responder workflows.",
   "start_url": "/m",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
-  "orientation": "portrait",
-  "scope": "/",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icons/app-icon-192.png",
@@ -36,9 +38,36 @@
   ],
   "shortcuts": [
     {
-      "name": "Mobile Dashboard",
+      "name": "Responder Dashboard",
+      "short_name": "Dashboard",
       "url": "/m",
-      "description": "Open the mobile dashboard",
+      "description": "Open the responder dashboard",
+      "icons": [
+        {
+          "src": "/icons/app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Active Incidents",
+      "short_name": "Incidents",
+      "url": "/m/incidents?filter=all_open",
+      "description": "Open active incidents",
+      "icons": [
+        {
+          "src": "/icons/app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "New Incident",
+      "short_name": "New Incident",
+      "url": "/m/incidents/create",
+      "description": "Create an incident",
       "icons": [
         {
           "src": "/icons/app-icon-192.png",
