@@ -178,9 +178,9 @@ function formatDuration(start: Date, end: Date): string {
 
 export default function StatusPageAnnouncementManager({
   statusPageId,
-  announcements,
+  announcements = [],
   setAnnouncements,
-  allServices,
+  allServices = [],
   browserTimeZone,
 }: StatusPageAnnouncementManagerProps) {
   const [isPending, startTransition] = useTransition();
