@@ -13,6 +13,7 @@ interface StatusPageSubscribeProps {
   services?: ServiceOption[];
   variant?: 'card' | 'modal';
   rssHref?: string | null;
+  apiHref?: string | null;
   onSuccess?: () => void;
   onClose?: () => void;
 }
@@ -102,6 +103,22 @@ function RssIcon() {
       <path d="M4 11a9 9 0 0 1 9 9" strokeLinecap="round" />
       <path d="M4 4a16 16 0 0 1 16 16" strokeLinecap="round" />
       <circle cx="5" cy="19" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function ApiIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      aria-hidden="true"
+    >
+      <path d="M8 8 4 12l4 4M16 8l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -203,6 +220,7 @@ export default function StatusPageSubscribe({
   services = [],
   variant = 'card',
   rssHref,
+  apiHref,
   onSuccess,
   onClose,
 }: StatusPageSubscribeProps) {
@@ -335,11 +353,21 @@ export default function StatusPageSubscribe({
               Receive real-time notifications for active incidents and scheduled maintenance.
             </span>
           </div>
-          {rssHref && (
-            <a href={rssHref} className="status-subscribe__rss" title="RSS Feed">
-              <RssIcon />
-              <span>RSS</span>
-            </a>
+          {(rssHref || apiHref) && (
+            <div className="status-subscribe__feed-links">
+              {rssHref && (
+                <a href={rssHref} className="status-subscribe__rss" title="RSS Feed">
+                  <RssIcon />
+                  <span>RSS</span>
+                </a>
+              )}
+              {apiHref && (
+                <a href={apiHref} className="status-subscribe__rss" title="JSON API">
+                  <ApiIcon />
+                  <span>JSON</span>
+                </a>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -462,12 +490,20 @@ export default function StatusPageSubscribe({
           <ShieldCheckIcon />
         </span>
         <span>No spam. Verification required. 1-click unsubscribe anytime.</span>
-        {!isCard && rssHref ? (
+        {!isCard && (rssHref || apiHref) ? (
           <>
             {' '}
-            <a href={rssHref} className="status-subscribe__hintlink">
-              RSS Feed
-            </a>
+            {rssHref && (
+              <a href={rssHref} className="status-subscribe__hintlink">
+                RSS Feed
+              </a>
+            )}
+            {rssHref && apiHref && <>{' · '}</>}
+            {apiHref && (
+              <a href={apiHref} className="status-subscribe__hintlink">
+                JSON API
+              </a>
+            )}
           </>
         ) : null}
       </div>

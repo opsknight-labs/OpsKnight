@@ -73,22 +73,16 @@ describe('StatusPageV3', () => {
         ])}
       />
     );
-    expect(
-      screen.getByRole('heading', { name: 'One service down' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'One service down' })).toBeInTheDocument();
     expect(screen.getAllByText('Major Outage').length).toBeGreaterThan(0);
     expect(screen.getByText(/Status unverified for 1 additional service/)).toBeInTheDocument();
   });
 
   it('distinguishes partial from major outage', () => {
     render(<StatusPageV3 snapshot={snapshotOf([service({ status: 'PARTIAL_OUTAGE' })])} />);
-    expect(
-      screen.getByRole('heading', { name: 'Partial outage' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Partial outage' })).toBeInTheDocument();
     expect(screen.getAllByText('Partial Outage').length).toBeGreaterThan(0);
-    expect(
-      screen.queryByRole('heading', { name: 'One service down' })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'One service down' })).not.toBeInTheDocument();
   });
 
   it('filters services by search term', () => {
@@ -236,8 +230,10 @@ describe('StatusPageV3', () => {
       />
     );
     expect(screen.getByRole('heading', { name: 'Regions' })).toBeInTheDocument();
-    expect(screen.getByText(/2 services/)).toBeInTheDocument();
-    expect(screen.getByText(/1 impacted/)).toBeInTheDocument();
+    // "2 services" appears in both the legend count and the search aria-label
+    expect(screen.getAllByText(/2 services/).length).toBeGreaterThan(0);
+    // Both services share eu-west-1, so there is 1 region total with 1 impacted
+    expect(screen.getByText(/1 of 1 affected/)).toBeInTheDocument();
   });
 
   it('says a region is healthy when it is', () => {

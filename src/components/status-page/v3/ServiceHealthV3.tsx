@@ -294,7 +294,8 @@ export default function ServiceHealthV3({
             </svg>
             <input
               type="search"
-              placeholder={`Search ${services.length} services...`}
+              placeholder="Search services"
+              aria-label={`Search ${services.length} services`}
               value={query}
               onChange={event => setQuery(event.target.value)}
             />

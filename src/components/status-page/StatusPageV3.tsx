@@ -234,6 +234,7 @@ export default function StatusPageV3({
               statusPageId={page.id}
               services={serviceOptions}
               rssHref={rssHref}
+              apiHref={showApi ? apiPath : null}
             />
           ) : (
             <p className="status-muted">Subscriptions are accepted on the published status page.</p>
@@ -247,6 +248,7 @@ export default function StatusPageV3({
           statusPageId={page.id}
           services={serviceOptions}
           rssHref={rssHref}
+          apiHref={showApi ? apiPath : null}
           onClose={() => setSubscribeOpen(false)}
         />
       )}
