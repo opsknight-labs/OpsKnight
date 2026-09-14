@@ -35,6 +35,16 @@ export type WarRoomProviderCapabilities = {
   reconciliation: boolean;
 };
 
+export type WarRoomIncidentEvent =
+  | { kind: 'TRIGGER'; incidentId: string }
+  | { kind: 'ENSURE'; incidentId: string }
+  | { kind: 'LIFECYCLE'; incidentId: string; status: string; message: string }
+  | { kind: 'ARCHIVE'; incidentId: string }
+  | { kind: 'MESSAGE'; incidentId: string; message: string }
+  | { kind: 'TOPIC'; incidentId: string; status?: string }
+  | { kind: 'INVITE_USER'; incidentId: string; userId: string }
+  | { kind: 'INVITE_TEAM'; incidentId: string; teamId: string };
+
 /**
  * Provider boundary used by the neutral runtime. The orchestration methods are
  * deliberately lifecycle-free: adapters execute provider work while durable
@@ -50,6 +60,7 @@ export interface WarRoomProviderAdapter {
   project(warRoomId: string, projectionVersion: number): Promise<void>;
   syncParticipants(warRoomId: string): Promise<void>;
   settleProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void>;
+  handleIncidentEvent(event: WarRoomIncidentEvent): Promise<ProviderOperationResult<void>>;
 }
 
 export class UnsupportedWarRoomProviderOperationError extends Error {

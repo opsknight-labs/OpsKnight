@@ -13,3 +13,7 @@ export function getWarRoomProvider(provider: WarRoomProviderName): WarRoomProvid
   if (!adapter) throw new Error(`War-room provider ${provider} is not registered.`);
   return adapter;
 }
+
+export function listWarRoomProviders(): readonly WarRoomProviderAdapter[] {
+  return [...providers.values()];
+}
