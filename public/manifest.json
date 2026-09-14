@@ -64,10 +64,23 @@
       ]
     },
     {
-      "name": "New Incident",
-      "short_name": "New Incident",
-      "url": "/m/incidents/create",
-      "description": "Create an incident",
+      "name": "On-Call Schedules",
+      "short_name": "Schedules",
+      "url": "/m/schedules",
+      "description": "Open on-call schedules",
+      "icons": [
+        {
+          "src": "/icons/app-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "short_name": "Alerts",
+      "url": "/m/notifications",
+      "description": "Open responder notifications",
       "icons": [
         {
           "src": "/icons/app-icon-192.png",

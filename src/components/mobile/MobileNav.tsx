@@ -11,7 +11,9 @@ import { useNotificationStream } from '@/hooks/useNotificationStream';
 export default function MobileNav() {
   const pathname = usePathname() || '/m';
   const [unreadCount, setUnreadCount] = useState(0);
-  const [pollingRequired, setPollingRequired] = useState(false);
+  const [pollingRequired, setPollingRequired] = useState(
+    () => typeof window !== 'undefined' && typeof EventSource === 'undefined'
+  );
   const moreIndex = MOBILE_NAV_ITEMS.findIndex(item => item.href === '/m/more');
   const focusedWorkflow = isFocusedMobileWorkflow(pathname);
 
@@ -48,7 +50,9 @@ export default function MobileNav() {
   });
 
   useEffect(() => {
-    setPollingRequired(typeof EventSource === 'undefined');
+    // Badge count is polled external state: fetch once on mount and on filter
+    // changes; visibility/online handlers subsequently refresh it.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- badge freshness is external polling
     void fetchCount();
   }, [fetchCount]);
 

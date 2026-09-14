@@ -74,7 +74,9 @@ export default function MobileNotificationsClient() {
   const [markingAll, setMarkingAll] = useState(false);
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(() => new Set());
   const [errorMessage, setErrorMessage] = useState('');
-  const [pollingRequired, setPollingRequired] = useState(false);
+  const [pollingRequired, setPollingRequired] = useState(
+    () => typeof window !== 'undefined' && typeof EventSource === 'undefined'
+  );
   const [cachedAt, setCachedAt] = useState<Date | null>(null);
   const cacheKey = `mobile-notifications:${activeFilter}`;
 
@@ -149,10 +151,6 @@ export default function MobileNotificationsClient() {
       if (/not supported/i.test(error.message)) setPollingRequired(true);
     },
   });
-
-  useEffect(() => {
-    setPollingRequired(typeof EventSource === 'undefined');
-  }, []);
 
   useEffect(() => {
     if (!pollingRequired) return;

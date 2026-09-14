@@ -29,14 +29,17 @@ function ThemeAttributeBridge() {
     // replace, or create framework-owned head nodes from a client effect.
     // Keep browser/PWA chrome aligned with an explicit in-app theme override,
     // not only with the OS media query used during the initial HTML response.
-    const themeColor = document.getElementById('opsknight-runtime-theme-color');
-    if (themeColor instanceof HTMLMetaElement) {
-      themeColor.content = MOBILE_THEME_COLORS[effectiveTheme];
+    const nextThemeColor =
+      effectiveTheme === 'dark' ? MOBILE_THEME_COLORS.dark : MOBILE_THEME_COLORS.light;
+    const runtimeThemeColor = document.getElementById('opsknight-runtime-theme-color');
+    if (runtimeThemeColor instanceof HTMLMetaElement) {
+      runtimeThemeColor.content = nextThemeColor;
     } else {
       // Fallback path retained for contract compatibility: query the canonical
       // meta[name="theme-color"] node when the runtime node is absent.
-      const fallback = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-      if (fallback) fallback.content = MOBILE_THEME_COLORS[effectiveTheme];
+      const fallbackThemeColor =
+        document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+      if (fallbackThemeColor) fallbackThemeColor.content = nextThemeColor;
     }
   }, [resolvedTheme]);
 

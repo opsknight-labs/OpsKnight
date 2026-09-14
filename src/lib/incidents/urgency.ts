@@ -8,7 +8,10 @@ const RANK: Record<RankedIncidentUrgency, number> = {
 };
 
 export function incidentUrgencyRank(value: string | null | undefined): number {
-  return value === 'HIGH' || value === 'MEDIUM' || value === 'LOW' ? RANK[value] : Number.MAX_SAFE_INTEGER;
+  if (value === 'HIGH') return RANK.HIGH;
+  if (value === 'MEDIUM') return RANK.MEDIUM;
+  if (value === 'LOW') return RANK.LOW;
+  return Number.MAX_SAFE_INTEGER;
 }
 
 export function compareIncidentUrgency(
