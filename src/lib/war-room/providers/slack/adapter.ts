@@ -265,6 +265,15 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
     const { reconcileSlackWarRoom } = await import('./health');
     await reconcileSlackWarRoom(warRoomId);
   },
-
+  archive: async warRoomId => {
+    const room = await (await import('@/lib/prisma')).default.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { incidentId: true } });
+    if (!room?.incidentId) return { ok: false as const, code: 'NOT_FOUND' as const, message: 'War room not found' };
+    const { archiveSlackWarRoomChannel } = await import('./lifecycle');
+    const r = await archiveSlackWarRoomChannel(room.incidentId);
+    if (r.success) return { ok: true as const, value: undefined };
+    const lower = (r.error ?? '').toLowerCase();
+    const isNotFound = lower.includes('channel_not_found') || lower.includes('not_found');
+    return { ok: false as const, code: (isNotFound ? ('NOT_FOUND' as const) : ('TRANSIENT' as const)), message: r.error ?? 'Archive failed' };
+  },
   handleIncidentEvent,
 };

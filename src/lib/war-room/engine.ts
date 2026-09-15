@@ -17,6 +17,9 @@ export async function provisionWarRoom(
   warRoomId: string,
   provisioningToken: string
 ): Promise<void> {
+  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true } });
+  // CLOSING wins over provisioning — if a close has won, do not race to READY.
+  if (room?.state === 'CLOSING') return;
   const adapter = await adapterForRoom(warRoomId);
   await adapter.provision(warRoomId, provisioningToken);
 }
@@ -47,12 +50,93 @@ export async function reconcileWarRoom(warRoomId: string): Promise<void> {
 
 // ── Neutral lifecycle operations (routes must not branch on provider) ──
 
+/**
+ * Neutral close lifecycle: READY|FAILED|PROVISIONING → CLOSING → terminal projection → provider archive → CLOSED/ARCHIVED.
+ * Manual close and resolve-driven close share this same engine; the provider adapter only implements mechanics.
+ * Transient archive failures keep the room in CLOSING for queue retry; ambiguous is surfaced as DEGRADED.
+ */
 export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId: string }): Promise<boolean> {
-  const room = await prisma.incidentWarRoom.findFirst({ where: { id: input.warRoomId, incidentId: input.incidentId }, select: { provider: true } });
+  const room = await prisma.incidentWarRoom.findFirst({ where: { id: input.warRoomId, incidentId: input.incidentId }, select: { id: true, provider: true, state: true } });
   if (!room) return false;
+  if (room.state === 'CLOSED' || room.state === 'ARCHIVED') return true; // idempotent no-op
+  if (room.state === 'CLOSING') return true; // already closing — idempotent
+  if (room.state === 'AMBIGUOUS') return false; // cannot close while external identity is unresolved
   const { runSerializableTransaction } = await import('@/lib/db-utils');
-  const { closeWarRoom } = await import('./repository');
-  return runSerializableTransaction(tx => closeWarRoom(tx, { incidentId: input.incidentId, warRoomId: input.warRoomId, provider: room.provider }));
+  const { initiateWarRoomClose } = await import('./repository');
+  const initiated = await runSerializableTransaction(tx => initiateWarRoomClose(tx, { incidentId: input.incidentId, warRoomId: input.warRoomId, provider: room.provider }));
+  if (!initiated) return false;
+  // Queue terminal projection (provider card becomes close-state), then close worker will archive/close externally
+  try {
+    await requestWarRoomProjectionNeutral(input.warRoomId);
+  } catch {}
+  // Also enqueue the close-side-effect job that will run archive/terminalization after projections drain
+  try {
+    const { scheduleJob } = await import('@/lib/jobs/queue');
+    await scheduleJob('WAR_ROOM_RECONCILE', new Date(Date.now() + 2_000), { warRoomId: input.warRoomId, reason: 'close' } as unknown as Record<string, unknown>, 5);
+    // The actual terminal close (archive) is driven by the dedicated close finalizer below; we queue it inline
+    await finalizeWarRoomCloseNeutral(input.warRoomId, input.incidentId);
+  } catch {}
+  return true;
+}
+
+/** Finalizes a CLOSING room: terminal projection then provider close/archive, then CLOSED/ARCHIVED. Called by both manual close and resolve-driven close. */
+export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?: string): Promise<void> {
+  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { id: true, incidentId: true, provider: true, state: true } });
+  if (!room) return;
+  if (room.state !== 'CLOSING') return;
+  const effectiveIncidentId = incidentId ?? room.incidentId;
+  const adapter = getWarRoomProvider(room.provider as WarRoomProviderName);
+  const canArchive = adapter.capabilities.archiveRoom;
+
+  // 1) Ensure terminal projection is queued and wait is not required — projection worker will handle CLOSING→CLOSED fallback even if we race.
+  // We bump projection to render the terminal card (Resolve/close state) before archiving externally.
+  try {
+    await requestWarRoomProjectionNeutral(warRoomId);
+  } catch {}
+
+  // 2) Provider close/archive operation
+  if (canArchive && adapter.archive) {
+    const result = await adapter.archive(warRoomId);
+    if (!result.ok) {
+      if (result.code === 'AMBIGUOUS_SIDE_EFFECT') {
+        await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { health: 'DEGRADED', lastErrorCode: 'CLOSE_AMBIGUOUS', lastError: result.message } });
+        const { WarRoomRetryableError } = await import('./errors');
+        throw new WarRoomRetryableError(result.message, result.retryAfterMs, true);
+      }
+      if (result.code === 'RATE_LIMITED' || result.code === 'TRANSIENT') {
+        const { WarRoomRetryableError } = await import('./errors');
+        throw new WarRoomRetryableError(result.message, result.retryAfterMs);
+      }
+      if (result.code === 'NOT_FOUND' || result.code === 'ALREADY_EXISTS') {
+        // Idempotent: channel already archived — settle to ARCHIVED/CLOSED
+        const { runSerializableTransaction } = await import('@/lib/db-utils');
+        const cap = adapter.capabilities.archiveRoom;
+        await runSerializableTransaction(async tx => {
+          const { settleWarRoomClosed } = await import('./repository');
+          await settleWarRoomClosed(tx, { incidentId: effectiveIncidentId, warRoomId, provider: room.provider });
+          if (cap) {
+            await tx.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { state: 'ARCHIVED', archivedAt: new Date() } });
+          }
+        });
+        return;
+      }
+      // Terminal failure — keep CLOSING for operator visibility; do not claim CLOSED
+      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { health: 'DEGRADED', lastErrorCode: result.code, lastError: result.message } });
+      const { WarRoomRetryableError } = await import('./errors');
+      throw new WarRoomRetryableError(result.message, result.retryAfterMs);
+    }
+    // Archive succeeded — settle to ARCHIVED
+    const { runSerializableTransaction } = await import('@/lib/db-utils');
+    await runSerializableTransaction(async tx => {
+      await tx.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { state: 'ARCHIVED', archivedAt: new Date(), closedAt: new Date(), provisioningToken: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+    });
+    return;
+  }
+
+  // Provider cannot archive — terminal projection + local close is the valid terminal state (capability-aware CLOSED).
+  const { runSerializableTransaction } = await import('@/lib/db-utils');
+  const { settleWarRoomClosed } = await import('./repository');
+  await runSerializableTransaction(tx => settleWarRoomClosed(tx, { incidentId: effectiveIncidentId, warRoomId, provider: room.provider }));
 }
 
 export async function requestWarRoomProjectionNeutral(warRoomId: string): Promise<number | null> {

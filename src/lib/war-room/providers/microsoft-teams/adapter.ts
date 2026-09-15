@@ -96,4 +96,5 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
     });
   },
   handleIncidentEvent,
+  // Teams has archiveRoom=false — engine treats CLOSED as terminal without external archive.
 };

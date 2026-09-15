@@ -120,22 +120,54 @@ export async function claimWarRoomProvisioning(
   return { claimed: true as const, warRoom };
 }
 
-/** Local lifecycle close is deliberate and immediately prevents new commands. */
+/** @deprecated Legacy direct-CLOSED alias for rolling deploy. New code must use initiateWarRoomClose → CLOSING → settle. */
 export async function closeWarRoom(
   tx: Prisma.TransactionClient,
   input: { incidentId: string; warRoomId: string; provider: WarRoomProvider }
-) {
+): Promise<boolean> {
+  return initiateWarRoomClose(tx, input);
+}
+
+export async function initiateWarRoomClose(
+  tx: Prisma.TransactionClient,
+  input: { incidentId: string; warRoomId: string; provider: WarRoomProvider }
+): Promise<boolean> {
   const changed = await tx.incidentWarRoom.updateMany({
     // AMBIGUOUS means an external channel may exist but is not yet adopted.
     // Closing it would permit a new generation and risk an untracked duplicate.
-    // CLOSING is included so an operator can force-close a room while the
-    // resolve-driven card projection is still in flight; the projection lease
-    // is cleared so a stale worker cannot resurrect the room.
+    // PROVISIONING is included to allow close while a create is still in flight;
+    // the provisioning worker checks CLOSING and exits gracefully.
     where: {
       id: input.warRoomId,
       incidentId: input.incidentId,
       provider: input.provider,
-      state: { in: ['READY', 'CLOSING', 'FAILED'] },
+      state: { in: ['READY', 'PROVISIONING', 'FAILED'] },
+    },
+    data: {
+      state: 'CLOSING',
+      provisioningToken: null,
+      projectionLeaseToken: null,
+      projectionLeaseExpiresAt: null,
+    },
+  });
+  return changed.count === 1;
+}
+
+/**
+ * Terminal local lifecycle close. Only the engine sets this after provider
+ * terminal projection + external archive/cleanup are complete. Once set, no
+ * projection or provisioning worker can resurrect the room.
+ */
+export async function settleWarRoomClosed(
+  tx: Prisma.TransactionClient,
+  input: { incidentId: string; warRoomId: string; provider: WarRoomProvider }
+): Promise<boolean> {
+  const changed = await tx.incidentWarRoom.updateMany({
+    where: {
+      id: input.warRoomId,
+      incidentId: input.incidentId,
+      provider: input.provider,
+      state: { in: ['READY', 'CLOSING'] },
     },
     data: {
       state: 'CLOSED',
@@ -147,6 +179,7 @@ export async function closeWarRoom(
   });
   return changed.count === 1;
 }
+
 export type WarRoomChannelAdoption = 'READY' | 'CLOSED' | 'FENCED';
 
 /**

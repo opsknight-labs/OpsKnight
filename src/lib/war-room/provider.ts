@@ -65,6 +65,7 @@ export interface WarRoomProviderAdapter {
   syncParticipants(warRoomId: string): Promise<void>;
   settleProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void>;
   reconcile(warRoomId: string): Promise<void>;
+  archive?(warRoomId: string): Promise<ProviderOperationResult<void>>;
   handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deliveryId?: string; idempotencyKey?: string }): Promise<ProviderOperationResult<void>>;
 }
 
