@@ -390,6 +390,40 @@ async function markWarRoomJobCompleted(jobId: string): Promise<boolean> {
 
 async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void> {
   const shouldRetry = job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
+  // Terminal delivery must be settled atomically with the job failure so we never
+  // leave BackgroundJob FAILED while delivery stays PENDING (which orphan recovery would revive).
+  if (!shouldRetry && job.type === 'WAR_ROOM_PROVIDER_EVENT') {
+    const raw = job.payload as Record<string, unknown>;
+    const deliveryId = typeof raw.deliveryId === 'string' ? raw.deliveryId : null;
+    if (deliveryId) {
+      try {
+        await prisma.$transaction(async tx => {
+          await tx.backgroundJob.updateMany({
+            where: { id: job.id, status: 'PROCESSING' },
+            data: { status: 'FAILED', failedAt: new Date(), error },
+          });
+          await tx.warRoomProviderEventDelivery.updateMany({
+            where: { id: deliveryId },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              lastError: error.slice(0, 1000),
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+        });
+      } catch (txError) {
+        logger.warn('jobs.war_room_terminal_settlement_failed', {
+          jobId: job.id,
+          deliveryId,
+          error: txError instanceof Error ? txError.message : String(txError),
+        });
+        return;
+      }
+      return;
+    }
+  }
   await prisma.backgroundJob.updateMany({
     where: { id: job.id, status: 'PROCESSING' },
     data: {
@@ -411,16 +445,6 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
     ) {
       const { settleWarRoomProjectionFailure } = await import('../war-room/engine');
       await settleWarRoomProjectionFailure(warRoomIdValue, versionValue);
-    }
-  }
-  if (!shouldRetry && job.type === 'WAR_ROOM_PROVIDER_EVENT') {
-    const raw = job.payload as Record<string, unknown>;
-    const deliveryId = typeof raw.deliveryId === 'string' ? raw.deliveryId : null;
-    if (deliveryId) {
-      try {
-        const { failWarRoomDeliveryTerminal } = await import('../war-room/delivery');
-        await failWarRoomDeliveryTerminal(deliveryId, error);
-      } catch {}
     }
   }
 }
@@ -564,7 +588,14 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         if (raw.reason === 'close') {
           const { finalizeWarRoomCloseNeutral } = await import('../war-room/engine');
           const incidentId = typeof raw.incidentId === 'string' ? raw.incidentId : undefined;
-          await finalizeWarRoomCloseNeutral(requiredPayloadString(job.payload, 'warRoomId'), incidentId);
+          const tv = raw.terminalProjectionVersion;
+          const terminalProjectionVersion =
+            typeof tv === 'number' && Number.isInteger(tv) ? tv : undefined;
+          await finalizeWarRoomCloseNeutral(
+            requiredPayloadString(job.payload, 'warRoomId'),
+            incidentId,
+            terminalProjectionVersion
+          );
           return markWarRoomJobCompleted(job.id);
         }
         const { reconcileWarRoom } = await import('../war-room/engine');
@@ -577,7 +608,14 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         const { finalizeWarRoomCloseNeutral } = await import('../war-room/engine');
         const rawClose = job.payload as Record<string, unknown>;
         const incidentId = typeof rawClose.incidentId === 'string' ? rawClose.incidentId : undefined;
-        await finalizeWarRoomCloseNeutral(requiredPayloadString(job.payload, 'warRoomId'), incidentId);
+        const tv = rawClose.terminalProjectionVersion;
+        const terminalProjectionVersion =
+          typeof tv === 'number' && Number.isInteger(tv) ? tv : undefined;
+        await finalizeWarRoomCloseNeutral(
+          requiredPayloadString(job.payload, 'warRoomId'),
+          incidentId,
+          terminalProjectionVersion
+        );
         return markWarRoomJobCompleted(job.id);
       }
       case 'WAR_ROOM_PROVIDER_EVENT': {

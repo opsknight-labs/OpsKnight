@@ -189,7 +189,8 @@ export async function markStageAmbiguous(deliveryId: string, stage: string, erro
       where: { deliveryId, stage, operationId, leaseToken: stageLeaseToken, status: 'ATTEMPTING' },
       data: { status: 'AMBIGUOUS', lastError: error.slice(0, 1000), leaseToken: null, leaseExpiresAt: null },
     });
-    if (changed.count === 1) return true;
+    // CAS-only when fencing tokens are present: never fall back to an unfenced broad update.
+    return changed.count === 1;
   }
   const changed = await prisma.warRoomProviderEventStage.updateMany({ where: { deliveryId, stage }, data: { status: 'AMBIGUOUS', lastError: error.slice(0, 1000), leaseToken: null, leaseExpiresAt: null } });
   return changed.count === 1;
@@ -200,7 +201,8 @@ export async function stageAlreadyCompleted(deliveryId: string, stage: string): 
   return s?.status === 'COMPLETED';
 }
 
-/** Atomically transitions a stage from PENDING/ATTEMPTING-stale → ATTEMPTING with fencing. Returns false if fenced. */
+/** Atomically transitions a stage PENDING|FAILED → ATTEMPTING with fencing.
+ * Stale ATTEMPTING (lease expired) is converted to AMBIGUOUS — never retried for non-idempotent ops. */
 export async function claimWarRoomStageAttempt(deliveryId: string, stage: string, deliveryLeaseToken?: string): Promise<{ claimed: boolean; operationId: string; stageLeaseToken: string }> {
   if (deliveryLeaseToken) {
     const ok = await validateDeliveryLease(deliveryId, deliveryLeaseToken);
@@ -210,26 +212,36 @@ export async function claimWarRoomStageAttempt(deliveryId: string, stage: string
     where: { deliveryId_stage: { deliveryId, stage } },
     select: { id: true, status: true, leaseExpiresAt: true },
   });
-  if (stageRow?.status === 'COMPLETED' || stageRow?.status === 'SKIPPED') {
+  if (stageRow?.status === 'COMPLETED' || stageRow?.status === 'SKIPPED' || stageRow?.status === 'AMBIGUOUS') {
+    return { claimed: false, operationId: '', stageLeaseToken: '' };
+  }
+  if (stageRow?.status === 'ATTEMPTING') {
+    const now = new Date();
+    const leaseActive = stageRow.leaseExpiresAt != null && stageRow.leaseExpiresAt.getTime() > now.getTime();
+    if (leaseActive) {
+      throw new WarRoomRetryableError(`War-room stage ${stage} is leased by another worker.`, 1000, true);
+    }
+    // Stale ATTEMPTING — may have side-effected; mark AMBIGUOUS and surface as ambiguous, never duplicate.
+    await prisma.warRoomProviderEventStage.updateMany({
+      where: {
+        deliveryId,
+        stage,
+        status: 'ATTEMPTING',
+        OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lte: now } }],
+      },
+      data: { status: 'AMBIGUOUS', lastError: 'Stale ATTEMPTING lease expired; treating as ambiguous to prevent duplicate side effect.', leaseToken: null, leaseExpiresAt: null },
+    });
     return { claimed: false, operationId: '', stageLeaseToken: '' };
   }
   const operationId = crypto.randomUUID();
   const stageLeaseToken = crypto.randomUUID();
   const now = new Date();
-  // Ensure row exists (idempotent create) before CAS
   await ensureWarRoomStage(deliveryId, stage);
   const changed = await prisma.warRoomProviderEventStage.updateMany({
     where: {
       deliveryId,
       stage,
-      status: { in: ['PENDING', 'ATTEMPTING', 'FAILED'] },
-      OR: [
-        { status: 'PENDING' },
-        { status: 'FAILED' },
-        { leaseExpiresAt: null },
-        { leaseExpiresAt: { lte: now } },
-        { status: 'ATTEMPTING', leaseExpiresAt: { lte: now } },
-      ],
+      status: { in: ['PENDING', 'FAILED'] },
     },
     data: {
       status: 'ATTEMPTING',
@@ -240,14 +252,11 @@ export async function claimWarRoomStageAttempt(deliveryId: string, stage: string
       attempts: { increment: 1 },
     },
   });
-  // Fallback: if CAS above didn't match due to OR complexity, try simpler PENDING→ATTEMPTING
   if (changed.count !== 1) {
-    // Check if already COMPLETED (another worker won)
     const fresh = await prisma.warRoomProviderEventStage.findUnique({ where: { deliveryId_stage: { deliveryId, stage } }, select: { status: true } });
     if (fresh?.status === 'COMPLETED' || fresh?.status === 'SKIPPED' || fresh?.status === 'AMBIGUOUS') {
       return { claimed: false, operationId: '', stageLeaseToken: '' };
     }
-    // Stage is ATTEMPTING with active lease — fenced
     throw new WarRoomRetryableError(`War-room stage ${stage} is leased by another worker.`, 1000, true);
   }
   return { claimed: true, operationId, stageLeaseToken };

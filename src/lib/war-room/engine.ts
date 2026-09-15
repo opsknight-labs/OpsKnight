@@ -65,15 +65,15 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
   const { initiateWarRoomClose } = await import('./repository');
   const initiated = await runSerializableTransaction(tx => initiateWarRoomClose(tx, { incidentId: input.incidentId, warRoomId: input.warRoomId, provider: room.provider }));
   if (!initiated) return false;
-  await requestWarRoomProjectionNeutral(input.warRoomId);
+  const terminalProjectionVersion = await requestWarRoomProjectionNeutral(input.warRoomId);
   const { scheduleJob } = await import('@/lib/jobs/queue');
   const closeGeneration = Date.now();
-  await scheduleJob('WAR_ROOM_CLOSE', new Date(Date.now() + 2_000), { warRoomId: input.warRoomId, incidentId: input.incidentId, closeGeneration } as unknown as Record<string, unknown>, 5);
+  await scheduleJob('WAR_ROOM_CLOSE', new Date(Date.now() + 2_000), { warRoomId: input.warRoomId, incidentId: input.incidentId, closeGeneration, terminalProjectionVersion } as unknown as Record<string, unknown>, 5);
   return true;
 }
 
-/** Finalizes a CLOSING room: terminal projection then provider close/archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */
-export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?: string): Promise<void> {
+/** Finalizes a CLOSING room: waits for the terminal projection to settle, then provider archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */
+export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?: string, expectedTerminalProjectionVersion?: number | null): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { id: true, incidentId: true, provider: true, state: true, projectionVersion: true, projectionLeaseToken: true } });
   if (!room) return;
   if (room.state !== 'CLOSING') return;
@@ -81,20 +81,17 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
   const adapter = getWarRoomProvider(room.provider as WarRoomProviderName);
   const canArchive = adapter.capabilities.archiveRoom;
 
-  // Enforce terminal projection is settled (no in-flight projection) before archiving externally.
-  // If a projection is still leased/pending, queue one if needed and retry via WAR_ROOM_CLOSE.
+  // Wait for the terminal projection captured at close initiation — never queue a new one on retry.
+  if (expectedTerminalProjectionVersion != null) {
+    if (room.projectionVersion !== expectedTerminalProjectionVersion) {
+      const { WarRoomRetryableError } = await import('./errors');
+      throw new WarRoomRetryableError('Waiting for terminal projection to reach target version before archive.', 3000, true);
+    }
+  }
   const hasActiveProjection = room.projectionLeaseToken != null;
   if (hasActiveProjection) {
     const { WarRoomRetryableError } = await import('./errors');
     throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
-  }
-  // Ensure the terminal close-state card was at least queued (idempotent if already queued)
-  await requestWarRoomProjectionNeutral(warRoomId);
-  // If we just queued a new projection, wait for it — retry close after a short delay
-  const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { projectionVersion: true, state: true } });
-  if (fresh && fresh.projectionVersion !== room.projectionVersion) {
-    const { WarRoomRetryableError } = await import('./errors');
-    throw new WarRoomRetryableError('Waiting for terminal projection to settle before archive.', 3000, true);
   }
 
   if (canArchive && adapter.archive) {
