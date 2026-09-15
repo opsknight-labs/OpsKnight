@@ -257,12 +257,12 @@ export async function adoptWarRoomChannel(
   if (!['PROVISIONING', 'AMBIGUOUS'].includes(current.state)) return 'FENCED';
 
   const resolved = current.incident.status === 'RESOLVED';
-  // AMBIGUOUS + unresolved create + close requested on resolve:
-  // the close intent arrived before external identity was known.
-  // Adopt as CLOSING so the terminal projection/close lifecycle owns the external room.
-  // state: resolved ? 'CLOSED' : 'READY'
-  // return resolved ? 'CLOSED' : 'READY'
-  const adoptAsClosing = resolved && current.closeRequestedAt != null && current.state === 'AMBIGUOUS';
+  // Never adopt a late-created channel directly as CLOSED — that would bypass
+  // the durable CLOSING → terminal projection → provider archive lifecycle and
+  // can leave the external channel open when archive fails (Slack returns ok:false).
+  // Any external identity discovered while the incident is already RESOLVED must
+  // go through CLOSING so both providers run the same terminal handoff.
+  const shouldClose = resolved;
   const now = new Date();
   const changed = await tx.incidentWarRoom.updateMany({
     where: {
@@ -271,14 +271,15 @@ export async function adoptWarRoomChannel(
       state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
     },
     data: {
-      state: adoptAsClosing ? 'CLOSING' : resolved ? 'CLOSED' : 'READY',
+      state: shouldClose ? 'CLOSING' : 'READY',
       providerTenantId: input.providerTenantId ?? input.tenantId ?? null,
       providerContainerId: input.providerContainerId ?? input.teamId ?? null,
       providerChannelId: input.channelId,
       providerChannelName: input.channelName,
       providerChannelUrl: input.channelUrl ?? null,
       readyAt: now,
-      closedAt: adoptAsClosing || resolved ? now : null,
+      closedAt: shouldClose ? now : null,
+      closeRequestedAt: shouldClose ? (current.closeRequestedAt ?? now) : undefined,
       provisioningToken: null,
       lastError: null,
       lastErrorCode: null,
@@ -286,8 +287,7 @@ export async function adoptWarRoomChannel(
   });
 
   if (changed.count !== 1) return 'FENCED';
-  if (adoptAsClosing) return 'CLOSING';
-  return resolved ? 'CLOSED' : 'READY';
+  return shouldClose ? 'CLOSING' : 'READY';
 }
 
 /** Compatibility wrapper for callers that only care about READY adoption. */

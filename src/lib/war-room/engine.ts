@@ -55,11 +55,18 @@ export async function reconcileWarRoom(warRoomId: string): Promise<void> {
 
 /** Ensure a marker-only reconciliation (WAR_ROOM_PROVISION) exists for this room. */
 async function ensureWarRoomReconciliationJob(warRoomId: string, provisioningToken: string): Promise<void> {
+  // Token + flag aware dedupe: only suppress when an identical reconciliationOnly
+  // job for this warRoomId+token already exists. A stale generic WAR_ROOM_PROVISION
+  // or a different token must not swallow the durable handoff.
   const existing = await prisma.backgroundJob.findFirst({
     where: {
       type: 'WAR_ROOM_PROVISION',
       status: { in: ['PENDING', 'PROCESSING'] },
-      payload: { path: ['warRoomId'], equals: warRoomId },
+      AND: [
+        { payload: { path: ['warRoomId'], equals: warRoomId } },
+        { payload: { path: ['provisioningToken'], equals: provisioningToken } },
+        { payload: { path: ['reconciliationOnly'], equals: true } },
+      ],
     },
     select: { id: true },
   });
@@ -142,7 +149,7 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
             payload: { warRoomId, projectionVersion: fresh.projectionVersion } as unknown as never,
           },
         });
-      }).catch(() => {});
+      });
     }
     return;
   }
@@ -192,7 +199,7 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
         payload: { warRoomId, incidentId, closeGeneration: Date.now(), terminalProjectionVersion: terminal } as unknown as never,
       },
     });
-  }).catch(() => {});
+  });
 }
 
 /**
@@ -569,6 +576,36 @@ export async function abandonAmbiguousWarRoomCardNeutral(incidentId: string, war
     ? 'Ambiguous Slack card abandoned. A duplicate card may still exist; delete it manually if so.'
     : 'Ambiguous card abandoned. A duplicate card may still exist in the Teams channel; delete it manually if so.';
   return { abandoned: true, warning };
+}
+
+/**
+ * Low-frequency repair sweep for CLOSING rooms that lost their terminal jobs
+ * (crash between CLOSING and job creation, or job table GC). Each room is
+ * repaired idempotently via repairWarRoomCloseJobs.
+ */
+export async function repairOrphanedClosingWarRooms(limit = 20): Promise<{ checked: number; repaired: number }> {
+  const rooms = await prisma.incidentWarRoom.findMany({
+    where: { state: 'CLOSING' },
+    orderBy: { closeRequestedAt: 'asc' },
+    take: Math.max(1, Math.min(limit, 100)),
+    select: { id: true, incidentId: true },
+  });
+  let repaired = 0;
+  for (const room of rooms) {
+    const before = await prisma.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+      select: { id: true },
+    });
+    // Let failures propagate — the cron tick will retry next cycle.
+    await repairWarRoomCloseJobs(room.id, room.incidentId);
+    const after = await prisma.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+      select: { id: true },
+    });
+    if (!before && after) repaired++;
+    else if (before && !after) repaired++; // degenerate: should not happen, count as touched
+  }
+  return { checked: rooms.length, repaired };
 }
 
 export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): Promise<void> {
