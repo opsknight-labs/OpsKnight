@@ -1,7 +1,11 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PublicStatusService, PublicHistorySlice, PublicServiceStatus } from '@/lib/status-pages/public-contract';
+import type {
+  PublicStatusService,
+  PublicHistorySlice,
+  PublicServiceStatus,
+} from '@/lib/status-pages/public-contract';
 import { buildPublicHistoryDays } from '@/lib/status-pages/history-presentation';
 import { normalizePublicStatus, statusPresentation } from '@/lib/status-pages/status-presentation';
 import { describeUptimeWindow } from '@/lib/status-pages/presentation';
@@ -157,7 +161,7 @@ function ServiceHistoryV3Inner({
 
   return (
     <div className="status-v3-uptime" ref={ref}>
-      {hasDays ? (
+      {showUptimeInline && hasDays ? (
         <div className="status-v3-uptime__head">
           <span className="status-v3-uptime__value">
             {uptime90.value}
@@ -178,7 +182,9 @@ function ServiceHistoryV3Inner({
             role="listbox"
             tabIndex={0}
             aria-label={`Daily status history for ${service.name} — press Enter to open details, arrow keys to navigate days`}
-            aria-activedescendant={selected != null ? `history-day-${service.id}-${selected}` : undefined}
+            aria-activedescendant={
+              selected != null ? `history-day-${service.id}-${selected}` : undefined
+            }
             onClick={event => {
               const target = event.target as SVGElement;
               const rect = target.closest('rect[data-day-index]');
@@ -406,7 +412,11 @@ function ServiceHistoryV3Inner({
       )}
 
       {showUptimeInline && hasUptime ? (
-        <div className="status-v3-uptime-metrics-inline" role="group" aria-label={`Uptime for ${service.name}`}>
+        <div
+          className="status-v3-uptime-metrics-inline"
+          role="group"
+          aria-label={`Uptime for ${service.name}`}
+        >
           {[
             { label: '30 days', described: uptime30, win: w30 },
             { label: '90 days', described: uptime90, win: w90 },
@@ -432,10 +442,14 @@ function ServiceHistoryV3Inner({
                   <span className="status-v3-uptime-cell__meta-main">
                     {typeof incidents === 'number'
                       ? `${incidents} ${incidents === 1 ? 'incident' : 'incidents'}`
-                      : described.coverage ?? ''}
-                    {described.coverage && typeof incidents === 'number' ? ` · ${described.coverage}` : ''}
+                      : (described.coverage ?? '')}
+                    {described.coverage && typeof incidents === 'number'
+                      ? ` · ${described.coverage}`
+                      : ''}
                   </span>
-                  {partial && <span className="status-v3-uptime-cell__partial"> · Partial history</span>}
+                  {partial && (
+                    <span className="status-v3-uptime-cell__partial"> · Partial history</span>
+                  )}
                 </span>
               </div>
             );

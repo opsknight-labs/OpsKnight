@@ -139,7 +139,7 @@ const ServiceRow = memo(function ServiceRow({
           )}
         </div>
         <div className="status-v3-service__badges">
-          {slaGrade && (
+          {showUptime && slaGrade && (
             <StatusBadge status={slaGrade} label={slaGradeLabel(slaGrade)} size="xs" showDot />
           )}
           <StatusBadge

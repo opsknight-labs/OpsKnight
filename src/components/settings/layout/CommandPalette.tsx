@@ -1,8 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Bell, Keyboard, Key, Link, Settings, Shield, User } from 'lucide-react';
-
+import { useRouter } from 'next/navigation';
 import {
   CommandDialog,
   CommandEmpty,
@@ -11,9 +10,9 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-  CommandShortcut,
 } from '@/components/ui/shadcn/command';
-import { useRouter } from 'next/navigation';
+import { SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
+import { Settings, ArrowRight } from 'lucide-react';
 
 export function CommandPalette() {
   const [open, setOpen] = React.useState(false);
@@ -31,81 +30,48 @@ export function CommandPalette() {
     return () => document.removeEventListener('keydown', down);
   }, []);
 
-  const runCommand = React.useCallback((command: () => unknown) => {
-    setOpen(false);
-    command();
-  }, []);
+  const runCommand = React.useCallback(
+    (href: string) => {
+      setOpen(false);
+      router.push(href);
+    },
+    [router]
+  );
 
   return (
-    <>
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Type a command or search..." />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Navigation">
-            <CommandItem onSelect={() => runCommand(() => router.push('/settings/profile'))}>
-              <User className="mr-2 h-4 w-4" />
-              <span>Profile</span>
-              <CommandShortcut>g p</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => router.push('/settings/security'))}>
-              <Shield className="mr-2 h-4 w-4" />
-              <span>Security</span>
-              <CommandShortcut>g s</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push('/settings/integrations/slack'))}
-            >
-              <Link className="mr-2 h-4 w-4" />
-              <span>Slack Integration</span>
-              <CommandShortcut>g s</CommandShortcut>
-            </CommandItem>
-            <CommandItem
-              onSelect={() => runCommand(() => router.push('/settings/integrations/jira'))}
-            >
-              <Link className="mr-2 h-4 w-4" />
-              <span>Jira Integration</span>
-              <CommandShortcut>g j</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => router.push('/settings/api-keys'))}>
-              <Key className="mr-2 h-4 w-4" />
-              <span>API Keys</span>
-              <CommandShortcut>g a</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => runCommand(() => router.push('/settings/notifications'))}>
-              <Bell className="mr-2 h-4 w-4" />
-              <span>Notifications</span>
-              <CommandShortcut>g n</CommandShortcut>
-            </CommandItem>
+    <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandInput placeholder="Search settings, integrations, parameters..." />
+      <CommandList>
+        <CommandEmpty>No settings found.</CommandEmpty>
+        {SETTINGS_NAV_SECTIONS.filter(sec => sec.id !== 'overview').map(section => (
+          <CommandGroup key={section.id} heading={section.label}>
+            {section.items.map(item => (
+              <CommandItem
+                key={item.id}
+                value={`${item.label} ${item.description} ${(item.keywords || []).join(' ')}`}
+                onSelect={() => runCommand(item.href)}
+                className="flex items-center justify-between cursor-pointer py-2 px-3 rounded-lg"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-1 rounded-md bg-muted text-muted-foreground shrink-0">
+                    <Settings className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      {item.label}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground truncate">
+                      {item.description}
+                    </span>
+                  </div>
+                </div>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-2" />
+              </CommandItem>
+            ))}
           </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading="Settings">
-            <CommandItem onSelect={() => runCommand(() => router.push('/settings/profile'))}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Preferences</span>
-            </CommandItem>
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading="Help">
-            <CommandItem
-              onSelect={() => {
-                setOpen(false);
-                // Trigger keyboard shortcut legend
-                const event = new KeyboardEvent('keydown', {
-                  key: '?',
-                  shiftKey: true,
-                  bubbles: true,
-                });
-                document.dispatchEvent(event);
-              }}
-            >
-              <Keyboard className="mr-2 h-4 w-4" />
-              <span>Keyboard Shortcuts</span>
-              <CommandShortcut>?</CommandShortcut>
-            </CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
-    </>
+        ))}
+        <CommandSeparator />
+      </CommandList>
+    </CommandDialog>
   );
 }
