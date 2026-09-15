@@ -19,9 +19,9 @@ import { revokeMicrosoftTeamsOperations, revokeMicrosoftTeamsWarRoomProvisioning
  * resource's messaging endpoint should point here; the
  * Teams app manifest does not carry a `botsEndpoint` property.
  *
- * Phase 1 handles:
+ * Handles:
+ *  - `invoke` (`adaptiveCard/action`) → capability-aware war-room ChatOps (Phase 4)
  *  - `conversationUpdate` → record/update MicrosoftTeamsInstallation when the bot is added to a team
- *  - `invoke` (`adaptiveCard/action`) → Phase 2 seam (returns 501 until Phase 2)
  *  - `message` → no-op (ignore DMs)
  */
 
@@ -241,25 +241,6 @@ export async function POST(request: NextRequest) {
         }
       }
       return jsonOk({ ok: true });
-    }
-
-    if (activityType === 'invoke' && activity.name === 'adaptiveCard/action') {
-      logger.info('[MicrosoftTeams] invoke adaptiveCard/action received (Phase 2)', {
-        channelId: activity.channelData?.channel?.id,
-      });
-      return NextResponse.json(
-        {
-          statusCode: 501,
-          type: 'application/vnd.microsoft.card.adaptive',
-          value: {
-            $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
-            type: 'AdaptiveCard',
-            version: '1.5',
-            body: [{ type: 'TextBlock', text: 'Interactive actions will be available in Phase 2.', wrap: true }],
-          },
-        },
-        { status: 200 }
-      );
     }
 
     if (activityType === 'message') {
