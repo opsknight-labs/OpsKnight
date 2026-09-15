@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTimezone } from '@/contexts/TimezoneContext';
 import { formatRelativeShort } from '@/lib/mobile-time';
+import { fetchWithTimeout } from '@/lib/client-timeout';
 
 interface Notification {
   id: string;
@@ -35,7 +36,11 @@ export default function MobileNotificationButton() {
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications?limit=5');
+      const res = await fetchWithTimeout(
+        '/api/notifications?limit=5',
+        { cache: 'no-store' },
+        10_000
+      );
       if (res.ok) {
         const data = await res.json();
         const newNotifications = data.notifications || [];
@@ -137,7 +142,7 @@ export default function MobileNotificationButton() {
 
   const markAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/read', { method: 'POST' });
+      await fetchWithTimeout('/api/notifications/read', { method: 'POST' }, 10_000);
       setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
     } catch {
       // Silent fail

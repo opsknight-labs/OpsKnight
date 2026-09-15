@@ -80,9 +80,17 @@ export async function platformAuthenticatorAvailable(): Promise<boolean> {
   ) {
     return false;
   }
+  let timer: ReturnType<typeof setTimeout> | null = null;
   try {
-    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    return await Promise.race([
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(),
+      new Promise<boolean>(resolve => {
+        timer = setTimeout(() => resolve(false), 3_000);
+      }),
+    ]);
   } catch {
     return false;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

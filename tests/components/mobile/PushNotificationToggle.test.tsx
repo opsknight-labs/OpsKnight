@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import PushNotificationToggle from '@/components/mobile/PushNotificationToggle';
 
@@ -99,7 +99,7 @@ describe('PushNotificationToggle', () => {
         return {
           ok: true,
           json: async () => ({
-            key: 'BNbxG8kP9a-dK8n3qV_8o3Y7n9p_1j4k6m8q0s2u4w6y8A0C2E4G6I8K0M2O4Q6S8U0W2Y4a6c8e0g2i4',
+            key: 'B' + 'A'.repeat(86),
           }),
         };
       }
@@ -306,5 +306,146 @@ describe('PushNotificationToggle', () => {
     );
     expect(screen.getByRole('button', { name: /^Disable$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send test push/i })).not.toBeDisabled();
+  });
+
+  it('handles push subscription timeout and transitions to error state cleanly', async () => {
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'granted',
+        requestPermission: vi.fn().mockResolvedValue('granted'),
+      },
+      configurable: true,
+    });
+    const registration = {
+      pushManager: {
+        getSubscription: vi
+          .fn()
+          .mockRejectedValue(new Error('Push subscription lookup timed out.')),
+        subscribe: vi.fn().mockRejectedValue(new Error('Push subscription creation timed out.')),
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/system/vapid-public-key')) {
+        return {
+          ok: true,
+          json: async () => ({
+            key: 'B' + 'A'.repeat(86),
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+
+    render(<PushNotificationToggle />);
+
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    fireEvent.click(enableButton);
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Enable/i })).not.toBeDisabled();
+    });
+  });
+
+  it('handles permission denied cleanly without hanging in working state', async () => {
+    Object.defineProperty(window, 'Notification', {
+      value: {
+        permission: 'default',
+        requestPermission: vi.fn().mockResolvedValue('denied'),
+      },
+      configurable: true,
+    });
+    const registration = {
+      pushManager: {
+        getSubscription: vi.fn().mockResolvedValue(null),
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    render(<PushNotificationToggle />);
+
+    const enableButton = await screen.findByRole('button', { name: /Enable/i });
+    fireEvent.click(enableButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Blocked')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Notifications are blocked in browser or device settings/i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('recovers cleanly when push registration hangs indefinitely', async () => {
+    vi.useFakeTimers();
+    try {
+      Object.defineProperty(window, 'Notification', {
+        value: {
+          permission: 'default',
+          requestPermission: vi.fn().mockResolvedValue('granted'),
+        },
+        configurable: true,
+      });
+      const registration = {
+        pushManager: {
+          getSubscription: vi.fn().mockResolvedValue(null),
+          subscribe: vi.fn().mockImplementation(() => new Promise(() => {})),
+        },
+      };
+      Object.defineProperty(navigator, 'serviceWorker', {
+        value: {
+          getRegistration: vi.fn().mockResolvedValue(registration),
+          register: vi.fn().mockResolvedValue(registration),
+          ready: Promise.resolve(registration),
+        },
+        configurable: true,
+      });
+
+      mockFetch.mockImplementation(async (url: unknown) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/system/vapid-public-key')) {
+          return {
+            ok: true,
+            json: async () => ({
+              key: 'B' + 'A'.repeat(86),
+            }),
+          };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+
+      render(<PushNotificationToggle />);
+
+      const enableButton = screen.getByRole('button', { name: /Enable/i });
+      fireEvent.click(enableButton);
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Enable/i })).not.toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

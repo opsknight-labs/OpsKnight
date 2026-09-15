@@ -85,7 +85,7 @@ const account: NavigationItem[] = [
   {
     href: '/settings/profile',
     label: 'Profile & security',
-    description: 'Account, devices and sessions',
+    description: 'Desktop settings: account, devices and sessions',
     icon: Settings,
   },
   {

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { errorFromResponse } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
+import { fetchWithTimeout } from '@/lib/client-timeout';
 import { MessageCircle, Video, ExternalLink, Archive, Hash, Loader2 } from 'lucide-react';
 
 interface IncidentWarRoomCardProps {
@@ -38,11 +39,15 @@ export default function IncidentWarRoomCard({ incident, canManage }: IncidentWar
     setError(null);
     startTransition(async () => {
       try {
-        const response = await fetch('/api/slack/war-room', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ incidentId: incident.id, action: 'create' }),
-        });
+        const response = await fetchWithTimeout(
+          '/api/slack/war-room',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ incidentId: incident.id, action: 'create' }),
+          },
+          15_000
+        );
 
         if (!response.ok) {
           throw await errorFromResponse(response, 'Failed to create war-room');
@@ -60,11 +65,15 @@ export default function IncidentWarRoomCard({ incident, canManage }: IncidentWar
     setError(null);
     startTransition(async () => {
       try {
-        const response = await fetch('/api/slack/war-room', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ incidentId: incident.id, action: 'archive' }),
-        });
+        const response = await fetchWithTimeout(
+          '/api/slack/war-room',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ incidentId: incident.id, action: 'archive' }),
+          },
+          15_000
+        );
 
         if (!response.ok) {
           throw await errorFromResponse(response, 'Failed to archive war-room');

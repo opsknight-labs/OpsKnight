@@ -13,7 +13,7 @@ export async function fetchWithTimeout(
   timeoutMs = 12_000
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(new ClientTimeoutError()), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new ClientTimeoutError()), timeoutMs);
   const external = init.signal;
   const abortFromExternal = () => controller.abort(external?.reason);
   external?.addEventListener('abort', abortFromExternal, { once: true });
@@ -23,7 +23,7 @@ export async function fetchWithTimeout(
     if (controller.signal.aborted && !external?.aborted) throw new ClientTimeoutError();
     throw error;
   } finally {
-    window.clearTimeout(timer);
+    clearTimeout(timer);
     external?.removeEventListener('abort', abortFromExternal);
   }
 }

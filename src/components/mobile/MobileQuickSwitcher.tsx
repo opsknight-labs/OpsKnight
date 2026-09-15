@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { readCache, writeCache } from '@/lib/mobile-cache';
 import { appRoutes } from '@/lib/app-routes';
+import { fetchWithTimeout } from '@/lib/client-timeout';
 
 type ResultType = 'incident' | 'service' | 'team' | 'user' | 'policy' | 'postmortem';
 type SearchResult = {
@@ -138,10 +139,14 @@ export default function MobileQuickSwitcher() {
       setIsLoading(true);
       setSearchError('');
       try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`, {
-          signal: controller.signal,
-          cache: 'no-store',
-        });
+        const response = await fetchWithTimeout(
+          `/api/search?q=${encodeURIComponent(query.trim())}`,
+          {
+            signal: controller.signal,
+            cache: 'no-store',
+          },
+          8_000
+        );
         if (!response.ok) throw new Error(`Search returned HTTP ${response.status}`);
         const data = (await response.json()) as { results?: SearchResult[] };
         if (generation !== searchGeneration.current) return;
@@ -223,14 +228,21 @@ export default function MobileQuickSwitcher() {
                             onSelect={() => handleSelect(item)}
                             className="min-h-11 gap-3 py-3"
                           >
-                            <meta.Icon className={cn('h-4 w-4 shrink-0', meta.tone)} aria-hidden="true" />
+                            <meta.Icon
+                              className={cn('h-4 w-4 shrink-0', meta.tone)}
+                              aria-hidden="true"
+                            />
                             <div className="min-w-0 flex-1">
                               <span className="block truncate font-medium">{item.title}</span>
                               {item.subtitle ? (
-                                <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  {item.subtitle}
+                                </span>
                               ) : null}
                             </div>
-                            <span className="text-[10px] uppercase text-muted-foreground">{meta.label}</span>
+                            <span className="text-[10px] uppercase text-muted-foreground">
+                              {meta.label}
+                            </span>
                           </CommandItem>
                         );
                       })}
@@ -265,14 +277,21 @@ export default function MobileQuickSwitcher() {
                         onSelect={() => handleSelect(item)}
                         className="min-h-11 gap-3 py-3"
                       >
-                        <meta.Icon className={cn('h-4 w-4 shrink-0', meta.tone)} aria-hidden="true" />
+                        <meta.Icon
+                          className={cn('h-4 w-4 shrink-0', meta.tone)}
+                          aria-hidden="true"
+                        />
                         <div className="min-w-0 flex-1">
                           <span className="block truncate font-medium">{item.title}</span>
                           {item.subtitle ? (
-                            <span className="block truncate text-xs text-muted-foreground">{item.subtitle}</span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {item.subtitle}
+                            </span>
                           ) : null}
                         </div>
-                        <span className="text-[10px] uppercase text-muted-foreground">{meta.label}</span>
+                        <span className="text-[10px] uppercase text-muted-foreground">
+                          {meta.label}
+                        </span>
                       </CommandItem>
                     );
                   })}

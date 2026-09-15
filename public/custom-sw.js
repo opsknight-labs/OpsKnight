@@ -292,13 +292,21 @@ const transitionClaimed = async (item, patch) => {
 
 const processClaimed = async item => {
   try {
-    const response = await fetch(item.url, {
-      method: item.method,
-      headers: item.headers,
-      body: item.body || undefined,
-      credentials: 'include',
-      cache: 'no-store',
-    });
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 15000) : null;
+    let response;
+    try {
+      response = await fetch(item.url, {
+        method: item.method,
+        headers: item.headers,
+        body: item.body || undefined,
+        credentials: 'include',
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     if (response.ok) {
       await transitionClaimed(item, {
         state: 'SUCCEEDED',
@@ -396,7 +404,7 @@ const normalizePushPayload = raw => {
   const versionCandidate = Number(data.version || nested.version || 1);
   const version = Number.isFinite(versionCandidate) ? versionCandidate : 1;
   const supportedVersion = SUPPORTED_PUSH_CONTRACT_VERSIONS.has(version);
-  const fallbackUrl = incidentId ? `/incidents/${encodeURIComponent(incidentId)}` : '/m/notifications';
+  const fallbackUrl = incidentId ? `/m/incidents/${encodeURIComponent(incidentId)}` : '/m/notifications';
   return {
     version,
     supportedVersion,
@@ -439,7 +447,7 @@ const showFeedback = (title, body, incidentId, suffix) =>
     badge: '/icons/app-icon-192.png',
     tag: `incident-${incidentId}-${suffix}`,
     requireInteraction: false,
-    data: { incidentId, url: `/incidents/${encodeURIComponent(incidentId)}` },
+    data: { incidentId, url: `/m/incidents/${encodeURIComponent(incidentId)}` },
   });
 
 const queueAcknowledgement = async ({ incidentId, expectedStatus, idempotencyKey }) => {
@@ -489,13 +497,21 @@ const handleAcknowledgeAction = async notification => {
   const stableSeed = data.deliveryId || data.eventId || notification.tag || randomId();
   const idempotencyKey = `push-ack:${incidentId}:${String(stableSeed).slice(0, 120)}`;
   try {
-    const response = await fetch(`/api/incidents/${encodeURIComponent(incidentId)}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-      body: JSON.stringify({ status: 'ACKNOWLEDGED', ...(expectedStatus ? { expectedStatus } : {}) }),
-      credentials: 'include',
-      cache: 'no-store',
-    });
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 15000) : null;
+    let response;
+    try {
+      response = await fetch(`/api/incidents/${encodeURIComponent(incidentId)}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+        body: JSON.stringify({ status: 'ACKNOWLEDGED', ...(expectedStatus ? { expectedStatus } : {}) }),
+        credentials: 'include',
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     if (response.ok) {
       await showFeedback('Incident acknowledged', `Incident #${incidentId} is acknowledged.`, incidentId, 'ack');
       return;

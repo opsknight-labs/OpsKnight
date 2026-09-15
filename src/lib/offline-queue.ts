@@ -214,8 +214,7 @@ export const enqueueRequest = async (request: EnqueueRequestInput) => {
     kind: 'REQUEST',
     principalId: principal.principalId,
     authGeneration: principal.authGeneration,
-    laneKey:
-      request.laneKey ?? deriveOfflineLaneKey(operation, request.url, principal.principalId),
+    laneKey: request.laneKey ?? deriveOfflineLaneKey(operation, request.url, principal.principalId),
     operation,
     url: request.url,
     method: request.method,
@@ -483,15 +482,25 @@ async function transitionClaimed(item: QueuedRequest, patch: Partial<QueuedReque
   }
 }
 
+const OFFLINE_HTTP_TIMEOUT_MS = 15_000;
+
 async function processClaimed(item: QueuedRequest) {
   try {
-    const response = await fetch(item.url, {
-      method: item.method,
-      headers: item.headers,
-      body: item.body ?? undefined,
-      credentials: 'include',
-      cache: 'no-store',
-    });
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), OFFLINE_HTTP_TIMEOUT_MS) : null;
+    let response: Response;
+    try {
+      response = await fetch(item.url, {
+        method: item.method,
+        headers: item.headers,
+        body: item.body ?? undefined,
+        credentials: 'include',
+        cache: 'no-store',
+        signal: controller?.signal,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
     if (response.ok) {
       await transitionClaimed(item, {
         state: 'SUCCEEDED',
@@ -516,7 +525,7 @@ async function processClaimed(item: QueuedRequest) {
 
     const delay =
       response.status === 429
-        ? retryAfterMs(response) ?? exponentialBackoffMs(item.retryCount)
+        ? (retryAfterMs(response) ?? exponentialBackoffMs(item.retryCount))
         : exponentialBackoffMs(item.retryCount);
     await transitionClaimed(item, {
       state: 'PENDING',
@@ -557,10 +566,7 @@ export const flushQueuedRequests = async () => {
     const candidates = firstPerLane(queue).filter(item => {
       if (item.state === 'AUTH_REQUIRED' || item.state === 'CONFLICT') return false;
       if (item.state === 'SENDING') return (item.leaseUntil ?? 0) <= now;
-      return (
-        item.state === 'PENDING' &&
-        (item.nextAttemptAt == null || item.nextAttemptAt <= now)
-      );
+      return item.state === 'PENDING' && (item.nextAttemptAt == null || item.nextAttemptAt <= now);
     });
     if (candidates.length === 0) break;
 
