@@ -143,7 +143,7 @@ describe('Notification System Tests', () => {
         serviceNotificationChannels: ['SLACK'],
         slackWebhookUrl: 'https://hooks.slack.com/test',
         policy: null,
-      } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
 
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: incidentId,
@@ -163,9 +163,9 @@ describe('Notification System Tests', () => {
           slackWebhookUrl: 'https://hooks.slack.com/test',
           webhookIntegrations: [],
         },
-      } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
 
-      vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-1' } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(prisma.notification.create).mockResolvedValue({ id: 'notif-1' } as never);
 
       const result = await sendServiceNotifications(incidentId, 'triggered');
 
@@ -206,7 +206,7 @@ describe('Notification System Tests', () => {
           serviceNotificationChannels: ['SLACK'],
           team: null,
         },
-      } as never); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as never);
 
       const serviceNotifications = await import('@/lib/service-notifications');
       const serviceSpy = vi
@@ -665,6 +665,7 @@ describe('Notification System Tests', () => {
       vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 1 } as never);
       vi.mocked(prisma.inAppNotification.createMany).mockResolvedValue({ count: 1 } as never);
       vi.spyOn(sms, 'sendIncidentSMS').mockResolvedValue({ success: true });
+      process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'false';
 
       const result = await executeEscalation(incidentId, 0);
 
@@ -675,6 +676,7 @@ describe('Notification System Tests', () => {
       expect(intents.data).toEqual([
         expect.objectContaining({ userId, channel: 'SMS', eventType: 'triggered' }),
       ]);
+      delete process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL;
       vi.useRealTimers();
     });
   });

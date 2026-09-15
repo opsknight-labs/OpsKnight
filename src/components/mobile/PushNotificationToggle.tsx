@@ -432,7 +432,7 @@ export default function PushNotificationToggle() {
               className="min-h-11"
               onClick={() => {
                 const callback = `${window.location.pathname}${window.location.search}`;
-                window.location.assign(appRoutes.login(callback));
+                window.location.assign(appRoutes.login('mobile', callback));
               }}
             >
               Sign in

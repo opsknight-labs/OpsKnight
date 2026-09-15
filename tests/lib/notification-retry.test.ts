@@ -146,6 +146,33 @@ describe('notification retry claiming', () => {
     );
   });
 
+  it('does not increment failed count when notification is skipped due to staleness', async () => {
+    const staleCreatedAt = new Date(Date.now() - 40 * 60 * 1000); // 40 min old (> 30m TTL)
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        ...failedNotification,
+        id: 'stale-notification-1',
+        createdAt: staleCreatedAt,
+        trafficClass: 'CRITICAL',
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 });
+
+    const result = await retryFailedNotifications();
+
+    expect(result).toEqual({ retried: 1, succeeded: 0, failed: 0, skipped: 1 });
+    expect(sendIncidentEmail).not.toHaveBeenCalled();
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'stale-notification-1', status: 'PENDING' },
+        data: expect.objectContaining({
+          status: 'SKIPPED',
+          errorMsg: expect.stringContaining('Notification expired before delivery'),
+        }),
+      })
+    );
+  });
+
   it('selects only due retries before applying the batch limit', async () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 0 });

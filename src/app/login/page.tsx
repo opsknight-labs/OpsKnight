@@ -24,8 +24,10 @@ type SearchParams = {
 
 export default async function LoginPage({
   searchParams,
+  defaultCallbackUrl = '/',
 }: {
   searchParams?: Promise<SearchParams>;
+  defaultCallbackUrl?: string;
 }) {
   // Bootstrap check: If no users exist, redirect to setup
   let userCount = 0;
@@ -56,7 +58,8 @@ export default async function LoginPage({
   // and SSO initiation. This rejects protocol-relative URLs, backslash tricks,
   // auth loops, control characters, and external origins before the value ever
   // reaches a client-side navigation API.
-  const callbackUrl = safeInternalCallbackUrl(rawCallbackUrl, '/');
+  const fallback = defaultCallbackUrl || '/';
+  const callbackUrl = safeInternalCallbackUrl(rawCallbackUrl, fallback);
 
   // Server-side check: If user is already authenticated with a valid user, redirect them away.
   // Invalidated or cleared sessions (e.g. tokenVersion mismatch or timeout) do not redirect,
@@ -94,6 +97,7 @@ export default async function LoginPage({
   return (
     <LoginClient
       callbackUrl={callbackUrl}
+      defaultCallbackUrl={fallback}
       errorCode={errorCode}
       passwordSet={passwordSet}
       ssoError={ssoError}

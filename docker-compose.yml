@@ -40,7 +40,12 @@ services:
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change_this_to_a_random_secret_in_production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08}
-      NOTIFICATION_CONTROL_PLANE_PERSONAL: ${NOTIFICATION_CONTROL_PLANE_PERSONAL:-false}
+      # Central personal-notification control plane (default: on).
+      # During a rolling upgrade, set to 'false' on old replicas to hold them
+      # on the legacy direct-dispatch path until all replicas are updated.
+      # The central plane is idempotent (ON CONFLICT DO NOTHING), so mixed-version
+      # overlap produces no duplicates. Remove the override after the rollout.
+      NOTIFICATION_CONTROL_PLANE_PERSONAL: ${NOTIFICATION_CONTROL_PLANE_PERSONAL:-true}
       PROMETHEUS_SCRAPE_TOKEN: ${PROMETHEUS_SCRAPE_TOKEN:-}
       PORT: '3000'
       HOSTNAME: '0.0.0.0'

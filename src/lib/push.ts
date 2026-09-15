@@ -436,7 +436,16 @@ export async function sendPush(options: PushOptions): Promise<PushResult> {
       });
     };
 
-    await Promise.allSettled(webDevices.map(sendToDevice));
+    // Dispatch to registered devices sequentially. Each sendToDevice() is one
+    // real Web Push HTTP request. The provider concurrency slot was acquired
+    // at the logical-notification level in the control plane; allowing parallel
+    // device requests would violate the maxInFlight=1 provider contract because
+    // 2 logical notifications × 2 parallel devices = 4 simultaneous HTTP calls.
+    // Sequential delivery preserves accounting accuracy at the cost of ~15ms
+    // extra latency per additional device, which is acceptable for on-call paging.
+    for (const device of webDevices) {
+      await sendToDevice(device);
+    }
 
     const totalDelivered = successCount + checkpointedCount;
     const isSingleTarget = Boolean(options.targetDeviceId) || webDevices.length === 1;
@@ -595,7 +604,7 @@ export async function sendIncidentPush(
     }
 
     const baseUrl = getBaseUrl();
-    const incidentUrl = `${baseUrl}/incidents/${incidentId}`;
+    const incidentUrl = `${baseUrl}/m/incidents/${incidentId}`;
     const userTimeZone = getUserTimeZone(user ?? undefined);
     let titleEmoji = '';
     let badge = '/icons/app-icon-192.png';

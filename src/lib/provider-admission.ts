@@ -9,8 +9,9 @@ import { logger } from './logger';
 
 /**
  * Emergency local concurrency when the control-plane DB is unreachable.
- * These are intentionally conservative to avoid flooding providers.
- * Bulk traffic is paused entirely (0) so CRITICAL/TRANSACTIONAL still drain.
+ * These are intentionally conservative per-process limits to avoid flooding providers
+ * even during multi-replica High Availability deployments (e.g. across 3-5 pods).
+ * Bulk traffic is paused entirely (0) so CRITICAL/TRANSACTIONAL still drain safely.
  */
 export const EMERGENCY_CONCURRENCY: Record<string, number> = {
   PUSH: 2,
@@ -24,7 +25,8 @@ export const EMERGENCY_CONCURRENCY: Record<string, number> = {
 
 /**
  * Emergency process-local rate limit per second when the control-plane DB is unreachable.
- * Bounded rates ensure critical/transactional alerts continue draining without overwhelming providers.
+ * Bounded per-replica rates ensure critical/transactional alerts continue draining without
+ * overwhelming upstream provider quotas when multiple replicas run concurrently.
  */
 export const EMERGENCY_RATE_PER_SECOND: Record<string, number> = {
   PUSH: 5,
@@ -874,6 +876,14 @@ export async function certifyNotificationControlPlane(): Promise<void> {
     {
       name: 'ProviderAdmission',
       fn: () => prisma.providerAdmission.count(),
+    },
+    {
+      name: 'NotificationProviderCapacity',
+      fn: () => prisma.notificationProviderCapacity.count(),
+    },
+    {
+      name: 'NotificationRuntimeSettings',
+      fn: () => prisma.notificationRuntimeSettings.count(),
     },
   ];
   const failures: string[] = [];

@@ -2,9 +2,20 @@ import LoginPage from '@/app/login/page';
 
 export const dynamic = 'force-dynamic';
 
+type SearchParams = {
+  callbackUrl?: string;
+  error?: string;
+  password?: string;
+};
+
 /**
- * Compatibility route for older installed PWAs and mobile bookmarks.
- * Authentication UI, validation, SSO, break-glass rules and callback
- * sanitization are owned exclusively by the canonical /login page.
+ * Mobile and installed PWA login surface. Authenticates using canonical auth
+ * security policies while ensuring the post-login destination defaults to /m.
  */
-export default LoginPage;
+export default async function MobileLoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams>;
+}) {
+  return <LoginPage searchParams={searchParams} defaultCallbackUrl="/m" />;
+}

@@ -19,6 +19,7 @@ on:
       - 'playwright.pwa.config.ts'
       - 'tests/e2e/mobile-pwa.spec.ts'
       - 'tests/e2e/mobile-pwa-production.spec.ts'
+      - 'tests/e2e/mobile-responsive-matrix.spec.ts'
       - '.github/workflows/mobile-pwa-e2e.yml'
   push:
     branches: [main]
@@ -38,6 +39,7 @@ on:
       - 'playwright.pwa.config.ts'
       - 'tests/e2e/mobile-pwa.spec.ts'
       - 'tests/e2e/mobile-pwa-production.spec.ts'
+      - 'tests/e2e/mobile-responsive-matrix.spec.ts'
       - '.github/workflows/mobile-pwa-e2e.yml'
   workflow_dispatch:
 
@@ -91,8 +93,13 @@ jobs:
       - name: Install mobile browser engines
         run: npx playwright install --with-deps chromium webkit
 
-      - name: Run Android and iPhone browser contracts
-        run: echo "Mobile browser contracts temporarily disabled"
+      - name: Run Android and iPhone browser contracts + responsive matrix
+        run: >-
+          npx playwright test
+          tests/e2e/mobile-pwa.spec.ts
+          tests/e2e/mobile-responsive-matrix.spec.ts
+          --project=mobile-chromium
+          --project=mobile-webkit
 
       - name: Upload browser Playwright report
         if: failure()
@@ -157,7 +164,10 @@ jobs:
         run: npm run build
 
       - name: Run generated service-worker contract
-        run: echo "PWA production contracts temporarily disabled"
+        run: >-
+          npx playwright test
+          -c playwright.pwa.config.ts
+          --project=pwa-production-chromium
 
       - name: Upload production PWA Playwright report
         if: failure()

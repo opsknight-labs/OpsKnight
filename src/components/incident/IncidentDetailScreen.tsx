@@ -15,6 +15,7 @@ import IncidentDescriptionCard from '@/components/incident/detail/IncidentDescri
 import IncidentSLABadges from '@/components/incident/detail/IncidentSLABadges';
 import IncidentCustomFieldsCard from '@/components/incident/detail/IncidentCustomFieldsCard';
 import IncidentQuickLinksCard from '@/components/incident/detail/IncidentQuickLinksCard';
+import MobileOperationalContextCard from '@/components/incident/MobileOperationalContextCard';
 import {
   IncidentStatusBadge,
   IncidentUrgencyBadge,
@@ -429,6 +430,45 @@ export default async function IncidentDetailScreen({
             </div>
           </div>
         </section>
+      )}
+
+      {presentation === 'mobile' && (
+        <MobileOperationalContextCard
+          service={{
+            id: incident.service.id,
+            name: incident.service.name,
+            slaTier: incident.service.slaTier,
+          }}
+          team={incident.team ? { id: incident.team.id, name: incident.team.name } : null}
+          tags={incident.tags.map(tagLink => ({
+            id: tagLink.tag.id,
+            name: tagLink.tag.name,
+            color: tagLink.tag.color,
+          }))}
+          slack={{
+            channelName: incident.slackChannelName,
+            channelId: incident.slackChannelId,
+            warRoomUrl: incident.warRoomUrl,
+            archivedAt: incident.warRoomArchivedAt,
+          }}
+          teamsWarRooms={teamsWarRooms.map(r => ({
+            id: r.id,
+            teamName: r.providerChannelName ?? '',
+            channelName: r.providerChannelName ?? '',
+            webUrl: r.providerChannelUrl,
+          }))}
+          jiraLinks={jiraLinks.map(l => ({
+            id: l.id,
+            issueKey: l.externalKey,
+            issueUrl: l.externalUrl,
+            status: l.externalStatus ?? undefined,
+          }))}
+          capabilities={{
+            slackConfigured: Boolean(globalSlackIntegration?.workspaceId),
+            teamsConfigured: Boolean(teamsWarRoomDestination?.teamId),
+            jiraConfigured: jiraLinks.length > 0,
+          }}
+        />
       )}
 
       <IncidentCommandBar

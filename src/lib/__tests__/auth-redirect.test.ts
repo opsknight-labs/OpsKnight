@@ -8,6 +8,16 @@ describe('safeInternalCallbackUrl', () => {
       '/settings/security?tab=sessions'
     );
     expect(safeInternalCallbackUrl('/?tab=open')).toBe('/?tab=open');
+    expect(safeInternalCallbackUrl('/m')).toBe('/m');
+    expect(safeInternalCallbackUrl('/m/incidents/inc-123')).toBe('/m/incidents/inc-123');
+  });
+
+  it('honors surface-specific fallback destinations', () => {
+    expect(safeInternalCallbackUrl(null, '/m')).toBe('/m');
+    expect(safeInternalCallbackUrl('', '/m')).toBe('/m');
+    expect(safeInternalCallbackUrl('/login', '/m')).toBe('/m');
+    expect(safeInternalCallbackUrl('https://malicious.com', '/m')).toBe('/m');
+    expect(safeInternalCallbackUrl(null, '/')).toBe('/');
   });
 
   it.each([

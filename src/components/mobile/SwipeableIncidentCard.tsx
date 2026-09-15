@@ -65,6 +65,7 @@ export default function SwipeableIncidentCard({
 
   const handleDragEnd = async (_: unknown, info: PanInfo) => {
     const threshold = 80;
+    const dragDistance = Math.abs(info.offset.x);
     try {
       if (info.offset.x > threshold && acknowledgeAction) {
         haptics.success();
@@ -72,6 +73,8 @@ export default function SwipeableIncidentCard({
       } else if (info.offset.x < -threshold && snoozeAction) {
         haptics.selection();
         snoozeAction(incident.id);
+      } else if (dragDistance <= 15 && !isUpdating) {
+        router.push(`/m/incidents/${incident.id}`);
       }
     } finally {
       await controls.start({ x: 0 });

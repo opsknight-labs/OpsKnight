@@ -102,7 +102,14 @@ export async function checkResponsiveIntegrity(
           let hasExplicitScrollParent = false;
           while (parent && parent !== document.body) {
             const pStyle = window.getComputedStyle(parent);
-            if (pStyle.overflowX === 'auto' || pStyle.overflowX === 'scroll') {
+            if (
+              pStyle.overflowX === 'auto' ||
+              pStyle.overflowX === 'scroll' ||
+              pStyle.overflowX === 'hidden' ||
+              pStyle.overflowX === 'clip' ||
+              pStyle.overflow === 'hidden' ||
+              pStyle.overflow === 'clip'
+            ) {
               hasExplicitScrollParent = true;
               break;
             }
@@ -125,7 +132,14 @@ export async function checkResponsiveIntegrity(
           let hasExplicitScrollParent = false;
           while (parent && parent !== document.body) {
             const pStyle = window.getComputedStyle(parent);
-            if (pStyle.overflowX === 'auto' || pStyle.overflowX === 'scroll') {
+            if (
+              pStyle.overflowX === 'auto' ||
+              pStyle.overflowX === 'scroll' ||
+              pStyle.overflowX === 'hidden' ||
+              pStyle.overflowX === 'clip' ||
+              pStyle.overflow === 'hidden' ||
+              pStyle.overflow === 'clip'
+            ) {
               hasExplicitScrollParent = true;
               break;
             }

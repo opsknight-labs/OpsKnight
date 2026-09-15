@@ -18,6 +18,7 @@ import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
 
 type Props = {
   callbackUrl: string;
+  defaultCallbackUrl?: string;
   errorCode?: string | null;
   passwordSet?: boolean;
   ssoError?: string | null;
@@ -53,6 +54,7 @@ const standardResponderSessionPolicy = () => 'STANDARD' as const;
 
 export default function LoginClient({
   callbackUrl,
+  defaultCallbackUrl,
   errorCode,
   passwordSet: _passwordSet,
   ssoError,
@@ -71,6 +73,7 @@ export default function LoginClient({
     standardResponderSessionPolicy
   );
   const trustedPwa = sessionPolicy === 'TRUSTED_PWA';
+  const effectiveFallback = defaultCallbackUrl || (trustedPwa ? '/m' : '/');
   const [rememberMeOverride, setRememberMeOverride] = useState<boolean | null>(null);
   const rememberMe = rememberMeOverride ?? trustedPwa;
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,7 +101,8 @@ export default function LoginClient({
     setIsSSOLoading(true);
     try {
       await purgeBrowserAuthCaches();
-      await signIn('oidc', { callbackUrl });
+      const safeSsoTarget = safeInternalCallbackUrl(callbackUrl, effectiveFallback);
+      await signIn('oidc', { callbackUrl: safeSsoTarget });
     } catch {
       setError('Connection failed');
       setIsSSOLoading(false);
@@ -136,7 +140,7 @@ export default function LoginClient({
         // is not authoritative for our validated callback. Use the shared
         // same-origin sanitizer and refresh the App Router after the session
         // cookie has been issued so authenticated RSC data is fetched anew.
-        const safeTarget = safeInternalCallbackUrl(callbackUrl, '/');
+        const safeTarget = safeInternalCallbackUrl(callbackUrl, effectiveFallback);
         await purgeBrowserAuthCaches();
         if (typeof window !== 'undefined') {
           window.location.assign(safeTarget);

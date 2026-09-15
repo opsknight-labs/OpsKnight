@@ -36,8 +36,9 @@ const PERSONAL_CHANNELS: readonly NotificationDeliveryChannel[] = [
   'WHATSAPP',
 ];
 
+/** See rolling-upgrade safety notes in src/lib/notifications.ts. */
 function personalControlPlaneEnabled(): boolean {
-  return process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL === 'true';
+  return process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL !== 'false';
 }
 
 export interface EscalationPageIntent {
@@ -309,6 +310,7 @@ export async function materializeEscalationNotificationIntents(
           displayMessage: 'Incident notification',
           trafficClass: 'CRITICAL',
           priority: NOTIFICATION_PRIORITY.RESPONDER_CRITICAL,
+          eventAt: plan.eventAt,
           payload: {
             kind: `INCIDENT_${intent.channel}`,
             userId: intent.userId,

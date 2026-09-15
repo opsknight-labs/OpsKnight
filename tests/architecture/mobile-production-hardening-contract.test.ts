@@ -2,19 +2,11 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const mobilePostmortems = readFileSync('src/app/(mobile)/m/postmortems/page.tsx', 'utf8');
-const mobilePostmortemDetail = readFileSync(
-  'src/app/(mobile)/m/postmortems/[id]/page.tsx',
-  'utf8'
-);
-const pushSubscriptionRoute = readFileSync(
-  'src/app/api/user/push-subscription/route.ts',
-  'utf8'
-);
-const pushStatusRoute = readFileSync(
-  'src/app/api/user/push-subscription/status/route.ts',
-  'utf8'
-);
+const mobilePostmortemDetail = readFileSync('src/app/(mobile)/m/postmortems/[id]/page.tsx', 'utf8');
+const pushSubscriptionRoute = readFileSync('src/app/api/user/push-subscription/route.ts', 'utf8');
+const pushStatusRoute = readFileSync('src/app/api/user/push-subscription/status/route.ts', 'utf8');
 const rootLayout = readFileSync('src/app/layout.tsx', 'utf8');
+const appShellLayout = readFileSync('src/app/(app)/layout.tsx', 'utf8');
 const legalSourceNotice = readFileSync('src/components/LegalSourceNotice.tsx', 'utf8');
 
 describe('mobile production hardening contract', () => {
@@ -38,9 +30,19 @@ describe('mobile production hardening contract', () => {
     expect(pushStatusRoute).toContain('await req.json()');
   });
 
-  it('keeps a persistent corresponding-source affordance in the root application shell', () => {
-    expect(rootLayout).toContain("import LegalSourceNotice from '@/components/LegalSourceNotice'");
-    expect(rootLayout).toContain('<LegalSourceNotice />');
+  it('keeps a persistent corresponding-source affordance in the authenticated desktop shell only', () => {
+    // Must be present in the authenticated desktop (app) shell
+    expect(appShellLayout).toContain(
+      "import LegalSourceNotice from '@/components/LegalSourceNotice'"
+    );
+    expect(appShellLayout).toContain('<LegalSourceNotice />');
+    // Must NOT be in the root layout — mobile PWA, login, and status pages
+    // must not render the notice
+    expect(rootLayout).not.toContain(
+      "import LegalSourceNotice from '@/components/LegalSourceNotice'"
+    );
+    expect(rootLayout).not.toContain('<LegalSourceNotice />');
+    // Component itself must retain required AGPL attributes
     expect(legalSourceNotice).toContain('NEXT_PUBLIC_SOURCE_CODE_URL');
     expect(legalSourceNotice).toContain('https://github.com/opsknight-labs/OpsKnight');
     expect(legalSourceNotice).toContain('AGPL-3.0-only');

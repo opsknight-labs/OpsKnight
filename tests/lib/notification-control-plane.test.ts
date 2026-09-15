@@ -5,6 +5,7 @@ import {
   getNextCentralNotificationAt,
   maskedNotificationRecipient,
   processCentralNotificationQueue,
+  resolveNotificationExpiry,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
@@ -248,7 +249,7 @@ describe('central notification control plane', () => {
       userId: 'user-1',
       incidentId: 'incident-1',
       eventType: 'triggered' as const,
-      eventAt: '2026-08-30T12:00:00.000Z',
+      eventAt: due.toISOString(),
       escalationGeneration: 4,
       escalationStep: 0,
       durableMessage: 'encrypted message snapshot',
@@ -267,7 +268,7 @@ describe('central notification control plane', () => {
     } as never);
     vi.mocked(prisma.incident.findUnique).mockResolvedValue({
       status: 'OPEN',
-      updatedAt: new Date('2026-08-30T12:01:00.000Z'),
+      updatedAt: new Date(due.getTime() + 10_000),
       acknowledgedAt: null,
       resolvedAt: null,
       currentEscalationStep: 1,
@@ -503,6 +504,204 @@ describe('central notification control plane', () => {
         }),
       })
     );
+  });
+
+  it('skips delivering historical notifications whose payload eventAt exceeds TTL even without stored expiresAt', async () => {
+    const due = new Date();
+    const staleEventAt = new Date(Date.now() - 35 * 60 * 1000).toISOString(); // 35m ago (TTL is 30m)
+    const payload = {
+      kind: 'INCIDENT_EMAIL' as const,
+      userId: 'user-1',
+      incidentId: 'incident-1',
+      eventType: 'triggered' as const,
+      eventAt: staleEventAt,
+      escalationGeneration: 1,
+      escalationStep: 0,
+      durableMessage: 'encrypted message snapshot',
+    };
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification_stale_event',
+      status: 'PENDING',
+      category: 'INCIDENT',
+      trafficClass: 'CRITICAL',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: due,
+      scheduledAt: due,
+      lastAttemptAt: null,
+      expiresAt: null,
+      payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await expect(deliverCentralNotification('notification_stale_event')).resolves.toEqual({
+      success: true,
+      claimed: true,
+    });
+    expect(mocks.sendIncidentEmail).not.toHaveBeenCalled();
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'notification_stale_event', status: { in: ['PENDING', 'FAILED'] } },
+        data: expect.objectContaining({
+          status: 'SKIPPED',
+        }),
+      })
+    );
+  });
+
+  it('derives expiresAt from explicit eventAt and payload.eventAt for newly created intents', () => {
+    const scheduledAt = new Date('2026-09-15T12:00:00.000Z');
+    const twoHoursAgo = new Date('2026-09-15T10:00:00.000Z');
+
+    // Case 1: Explicit eventAt overrides scheduledAt
+    const expiryFromEventAt = resolveNotificationExpiry(
+      {
+        category: 'INCIDENT',
+        channel: 'EMAIL',
+        recipientType: 'USER',
+        recipientAddress: 'alice@example.com',
+        templateKey: 'incident-triggered',
+        sourceType: 'INCIDENT',
+        sourceId: 'incident-1',
+        eventKey: 'event-1',
+        displayMessage: 'Alert',
+        trafficClass: 'CRITICAL',
+        eventAt: twoHoursAgo,
+        payload: {
+          kind: 'INCIDENT_EMAIL',
+          userId: 'u1',
+          incidentId: 'incident-1',
+          eventType: 'triggered',
+        } as never,
+      },
+      scheduledAt
+    );
+    // 10:00 + 30m TTL = 10:30 (1.5h before scheduledAt)
+    expect(expiryFromEventAt.toISOString()).toBe('2026-09-15T10:30:00.000Z');
+
+    // Case 2: Inferred from payload.eventAt
+    const expiryFromPayload = resolveNotificationExpiry(
+      {
+        category: 'INCIDENT',
+        channel: 'EMAIL',
+        recipientType: 'USER',
+        recipientAddress: 'alice@example.com',
+        templateKey: 'incident-triggered',
+        sourceType: 'INCIDENT',
+        sourceId: 'incident-1',
+        eventKey: 'event-1',
+        displayMessage: 'Alert',
+        trafficClass: 'CRITICAL',
+        payload: {
+          kind: 'INCIDENT_EMAIL',
+          userId: 'u1',
+          incidentId: 'incident-1',
+          eventType: 'triggered',
+          eventAt: twoHoursAgo.toISOString(),
+        } as never,
+      },
+      scheduledAt
+    );
+    expect(expiryFromPayload.toISOString()).toBe('2026-09-15T10:30:00.000Z');
+
+    // Case 3: Future scheduled item without eventAt falls back to scheduledAt + TTL
+    const futureExpiry = resolveNotificationExpiry(
+      {
+        category: 'ADMINISTRATION',
+        channel: 'EMAIL',
+        recipientType: 'USER',
+        recipientAddress: 'alice@example.com',
+        templateKey: 'user-invite',
+        sourceType: 'USER',
+        sourceId: 'user-1',
+        eventKey: 'invite-1',
+        displayMessage: 'Invite',
+        trafficClass: 'TRANSACTIONAL',
+        payload: { kind: 'CUSTOM', message: 'hello' } as never,
+      },
+      scheduledAt
+    );
+    // 12:00 + 2h TTL = 14:00
+    expect(futureExpiry.toISOString()).toBe('2026-09-15T14:00:00.000Z');
+  });
+
+  it('skips new intents created with stale eventAt immediately upon delivery with zero provider attempts', async () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const staleExpiresAt = new Date(twoHoursAgo.getTime() + 30 * 60 * 1000); // 1.5h ago
+
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification_stale_new_intent',
+      status: 'PENDING',
+      category: 'INCIDENT',
+      trafficClass: 'CRITICAL',
+      attempts: 0,
+      maxAttempts: 5,
+      nextAttemptAt: new Date(),
+      scheduledAt: new Date(),
+      lastAttemptAt: null,
+      expiresAt: staleExpiresAt,
+      payloadEncrypted: `encrypted:${JSON.stringify({
+        kind: 'INCIDENT_EMAIL',
+        userId: 'user-1',
+        incidentId: 'incident-1',
+        eventType: 'triggered',
+        eventAt: twoHoursAgo.toISOString(),
+      })}`,
+    } as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+
+    await expect(deliverCentralNotification('notification_stale_new_intent')).resolves.toEqual({
+      success: true,
+      claimed: true,
+    });
+    expect(mocks.sendIncidentEmail).not.toHaveBeenCalled();
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'notification_stale_new_intent', status: { in: ['PENDING', 'FAILED'] } },
+        data: expect.objectContaining({
+          status: 'SKIPPED',
+          errorMsg: 'Notification expired before delivery.',
+        }),
+      })
+    );
+  });
+
+  it('safely handles concurrent legacy and central producers for the same lifecycle event with retry deduplication', async () => {
+    const input = {
+      category: 'INCIDENT' as const,
+      channel: 'EMAIL' as const,
+      recipientType: 'USER' as const,
+      recipientAddress: 'alice@example.com',
+      templateKey: 'incident-triggered',
+      sourceType: 'INCIDENT',
+      sourceId: 'incident-1',
+      eventKey: 'event-unique-123',
+      displayMessage: 'Incident Alert',
+      payload: {
+        kind: 'INCIDENT_EMAIL' as const,
+        userId: 'user-1',
+        incidentId: 'incident-1',
+        eventType: 'triggered' as const,
+        eventAt: new Date().toISOString(),
+        durableMessage: 'Incident Alert snapshot',
+      },
+    };
+
+    // 1. Central intent creation wins initial insert
+    vi.mocked(prisma.notification.create).mockResolvedValueOnce({ id: 'intent-1' } as never);
+    const firstResult = await createCentralNotificationIntent(input);
+    expect(firstResult).toEqual({ id: expect.any(String), created: true });
+
+    // 2. Concurrent/subsequent legacy or mixed producer creation encounters duplicate key on deliveryKey
+    const duplicateError = new Error('Unique constraint failed on the fields: (`deliveryKey`)');
+    (duplicateError as unknown as { code: string }).code = 'P2002';
+    vi.mocked(prisma.notification.create).mockRejectedValueOnce(duplicateError);
+    vi.mocked(prisma.notification.findUnique).mockResolvedValueOnce({
+      id: firstResult.id,
+    } as never);
+
+    const secondResult = await createCentralNotificationIntent(input);
+    expect(secondResult).toEqual({ id: firstResult.id, created: false });
   });
 
   it('masks every externally-addressed channel without exposing a full address', () => {

@@ -10,6 +10,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import MobileTime from '@/components/mobile/MobileTime';
+import MobileManualRefreshButton from '@/components/mobile/MobileManualRefreshButton';
 import NewIncidentButton from '@/components/mobile/NewIncidentButton';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
@@ -205,9 +206,12 @@ export default async function MobileDashboard() {
 
       <section aria-labelledby="mobile-active-heading" className="space-y-2.5">
         <div className="flex items-center justify-between gap-3 px-0.5">
-          <h2 id="mobile-active-heading" className="text-sm font-bold text-foreground">
-            Active incidents
-          </h2>
+          <div className="flex items-center gap-1.5">
+            <h2 id="mobile-active-heading" className="text-sm font-bold text-foreground">
+              Active incidents
+            </h2>
+            <MobileManualRefreshButton label="Refresh active incidents" />
+          </div>
           <span className="text-[10px] text-muted-foreground">
             <MobileTime value={snapshot.generatedAt} format="time" />
             {snapshot.freshness === 'stale' ? ' · refreshing' : ''}
