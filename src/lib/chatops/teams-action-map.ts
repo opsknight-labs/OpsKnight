@@ -8,29 +8,56 @@
 import { TEAMS_CHATOPS_VERBS, type TeamsChatOpsVerb } from '@/lib/microsoft-teams/action-schema';
 import type { ChatOpsActionKind } from './action-contract';
 
-const KIND_TO_VERB: Record<ChatOpsActionKind, TeamsChatOpsVerb> = {
-  ACKNOWLEDGE: TEAMS_CHATOPS_VERBS.ACK,
-  ASSIGN_SELF: TEAMS_CHATOPS_VERBS.ASSIGN_SELF,
-  RESOLVE: TEAMS_CHATOPS_VERBS.RESOLVE,
-  ADD_NOTE: TEAMS_CHATOPS_VERBS.NOTE,
-  SET_PRIORITY: TEAMS_CHATOPS_VERBS.PRIORITY,
-  SNOOZE: TEAMS_CHATOPS_VERBS.SNOOZE,
-  ESCALATE: TEAMS_CHATOPS_VERBS.ESCALATE,
-  JOIN_RESPONDER: TEAMS_CHATOPS_VERBS.JOIN_RESPONDER,
-  VIEW_RESPONDERS: TEAMS_CHATOPS_VERBS.WHO,
-  REFRESH: TEAMS_CHATOPS_VERBS.REFRESH,
-};
-
-const VERB_TO_KIND: ReadonlyMap<string, ChatOpsActionKind> = new Map(
-  (Object.entries(KIND_TO_VERB) as Array<[ChatOpsActionKind, string]>).map(([k, v]) => [v, k]),
-);
-
 export function chatOpsKindForTeamsVerb(verb: string): ChatOpsActionKind | null {
-  return VERB_TO_KIND.get(verb) ?? null;
+  switch (verb) {
+    case TEAMS_CHATOPS_VERBS.ACK:
+      return 'ACKNOWLEDGE';
+    case TEAMS_CHATOPS_VERBS.ASSIGN_SELF:
+      return 'ASSIGN_SELF';
+    case TEAMS_CHATOPS_VERBS.RESOLVE:
+      return 'RESOLVE';
+    case TEAMS_CHATOPS_VERBS.NOTE:
+      return 'ADD_NOTE';
+    case TEAMS_CHATOPS_VERBS.PRIORITY:
+      return 'SET_PRIORITY';
+    case TEAMS_CHATOPS_VERBS.SNOOZE:
+      return 'SNOOZE';
+    case TEAMS_CHATOPS_VERBS.ESCALATE:
+      return 'ESCALATE';
+    case TEAMS_CHATOPS_VERBS.JOIN_RESPONDER:
+      return 'JOIN_RESPONDER';
+    case TEAMS_CHATOPS_VERBS.WHO:
+      return 'VIEW_RESPONDERS';
+    case TEAMS_CHATOPS_VERBS.REFRESH:
+      return 'REFRESH';
+    default:
+      return null;
+  }
 }
 
 export function teamsVerbForChatOpsKind(kind: ChatOpsActionKind): TeamsChatOpsVerb {
-  return KIND_TO_VERB[kind];
+  switch (kind) {
+    case 'ACKNOWLEDGE':
+      return TEAMS_CHATOPS_VERBS.ACK;
+    case 'ASSIGN_SELF':
+      return TEAMS_CHATOPS_VERBS.ASSIGN_SELF;
+    case 'RESOLVE':
+      return TEAMS_CHATOPS_VERBS.RESOLVE;
+    case 'ADD_NOTE':
+      return TEAMS_CHATOPS_VERBS.NOTE;
+    case 'SET_PRIORITY':
+      return TEAMS_CHATOPS_VERBS.PRIORITY;
+    case 'SNOOZE':
+      return TEAMS_CHATOPS_VERBS.SNOOZE;
+    case 'ESCALATE':
+      return TEAMS_CHATOPS_VERBS.ESCALATE;
+    case 'JOIN_RESPONDER':
+      return TEAMS_CHATOPS_VERBS.JOIN_RESPONDER;
+    case 'VIEW_RESPONDERS':
+      return TEAMS_CHATOPS_VERBS.WHO;
+    case 'REFRESH':
+      return TEAMS_CHATOPS_VERBS.REFRESH;
+  }
 }
 
 export { TEAMS_CHATOPS_VERBS, type TeamsChatOpsVerb };
