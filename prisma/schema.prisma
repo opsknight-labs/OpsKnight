@@ -795,6 +795,9 @@ model IncidentWarRoom {
   readyAt               DateTime?
   closedAt              DateTime?
   archivedAt            DateTime?
+  // Resolve-driven close intent — persisted for AMBIGUOUS rooms so the
+  // close lifecycle waits for external identity rather than stranding it.
+  closeRequestedAt      DateTime?
   lastError             String?
   lastErrorCode         String?
   health                WarRoomHealthState    @default(HEALTHY)

@@ -463,7 +463,10 @@ export async function provisionMicrosoftTeamsWarRoom(
 
   if (existing.ok && existing.value) {
     const adoption = await adoptProviderChannel(room, expectedProvisioningToken, existing.value);
-    if (adoption === 'READY') {
+    if (adoption === 'CLOSING') {
+      const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+      await ensureTerminalCloseJobsAfterClosingAdoption(room.id, room.incident.id);
+    } else if (adoption === 'READY') {
       const { scheduleJob } = await import('@/lib/jobs/queue');
       await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
       const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
@@ -511,7 +514,7 @@ export async function provisionMicrosoftTeamsWarRoom(
       );
     // A complete bounded marker scan found no room after the provider's
     // consistency window. Only now is the unknown create terminally failed.
-    if (reconciled.count === 1)
+    if (reconciled.count === 1) {
       await prisma.incidentWarRoom.updateMany({
         where: {
           id: room.id,
@@ -526,6 +529,15 @@ export async function provisionMicrosoftTeamsWarRoom(
           lastError: 'No Teams channel was found by marker during the reconciliation window.',
         },
       });
+      const postFail = await prisma.incidentWarRoom.findUnique({
+        where: { id: room.id },
+        select: { closeRequestedAt: true },
+      });
+      if ((postFail as { closeRequestedAt?: Date | null } | null)?.closeRequestedAt != null) {
+        const { closeWarRoomNeutral } = await import('../../engine');
+        await closeWarRoomNeutral({ incidentId: room.incident.id, warRoomId: room.id }).catch(() => {});
+      }
+    }
     return;
   }
 
@@ -639,7 +651,10 @@ export async function provisionMicrosoftTeamsWarRoom(
     return;
   }
   const adoption = await adoptProviderChannel(room, expectedProvisioningToken, created.value);
-  if (adoption === 'READY') {
+  if (adoption === 'CLOSING') {
+    const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+    await ensureTerminalCloseJobsAfterClosingAdoption(room.id, room.incident.id);
+  } else if (adoption === 'READY') {
     const { scheduleJob } = await import('@/lib/jobs/queue');
     await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
     const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');

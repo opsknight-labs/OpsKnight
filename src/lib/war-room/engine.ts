@@ -50,13 +50,42 @@ export async function reconcileWarRoom(warRoomId: string): Promise<void> {
 
 // ── Neutral lifecycle operations (routes must not branch on provider) ──
 
+/** Ensure a marker-only reconciliation (WAR_ROOM_PROVISION) exists for this room. */
+async function ensureWarRoomReconciliationJob(warRoomId: string, provisioningToken: string): Promise<void> {
+  const existing = await prisma.backgroundJob.findFirst({
+    where: {
+      type: 'WAR_ROOM_PROVISION',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      payload: { path: ['warRoomId'], equals: warRoomId },
+    },
+    select: { id: true },
+  });
+  if (existing) return;
+  await prisma.backgroundJob
+    .create({
+      data: {
+        type: 'WAR_ROOM_PROVISION',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 6,
+        payload: { warRoomId, provisioningToken, reconciliationOnly: true } as unknown as never,
+      },
+    })
+    .catch(() => {});
+}
+
 /** Repair helper: ensure a CLOSING room has its durable close jobs (crash-gap recovery). */
 async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
-    select: { state: true, projectionVersion: true, lastProjectedVersion: true },
+    select: { state: true, projectionVersion: true, lastProjectedVersion: true, createAttemptedAt: true, providerChannelId: true, provisioningToken: true },
   });
   if (!room || room.state !== 'CLOSING') return;
+  // CLOSING + unresolved create: identity not yet adopted. No terminal projection
+  // should run until the provisioning reconcile resolves the external create.
+  if (room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null) {
+    await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken);
+  }
   const existingClose = await prisma.backgroundJob.findFirst({
     where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
     select: { id: true },
@@ -65,9 +94,11 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
     where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
     select: { id: true, payload: true },
   });
-  // If close job already exists, ensure a project job for the terminal version also exists.
+  // If close job already exists, ensure a project job for the terminal version also exists
+  // (except when create is unresolved — terminal projection would mark DEGRADED anyway).
   if (existingClose) {
-    if (!existingProj) {
+    const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
+    if (!existingProj && !createUnresolved) {
       await prisma.$transaction(async tx => {
         const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true } });
         if (!fresh || fresh.state !== 'CLOSING') return;
@@ -85,6 +116,11 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
     return;
   }
   // No close job — need to (re)create terminal projection + close atomically.
+  // But if create is unresolved, only ensure reconciliation; do not terminalize.
+  if (room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null) {
+    // Reconciliation is already queued above. Do not create terminal close yet.
+    return;
+  }
   await prisma.$transaction(async tx => {
     const fresh = await tx.incidentWarRoom.findUnique({
       where: { id: warRoomId },
@@ -131,31 +167,53 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
 
 /**
  * Neutral close lifecycle: READY|FAILED|PROVISIONING → CLOSING → terminal projection → provider archive → CLOSED/ARCHIVED.
- * Manual close and resolve-driven close share this same engine; the provider adapter only implements mechanics.
+ * AMBIGUOUS rooms persist a closeRequestedAt intent and trigger reconciliation
+ * instead of immediate lifecycle transition — the close completes only after
+ * external identity is adopted or proven absent.
  * Transient archive failures keep the room in CLOSING for queue retry; ambiguous is surfaced as DEGRADED.
  * Initiation is atomic: CLOSING + projection increment + both jobs in one serializable transaction.
  */
 export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId: string }): Promise<boolean> {
-  const room = await prisma.incidentWarRoom.findFirst({ where: { id: input.warRoomId, incidentId: input.incidentId }, select: { id: true, provider: true, state: true } });
+  const room = await prisma.incidentWarRoom.findFirst({ where: { id: input.warRoomId, incidentId: input.incidentId }, select: { id: true, provider: true, state: true, provisioningToken: true, createAttemptedAt: true, closeRequestedAt: true } });
   if (!room) return false;
   if (room.state === 'CLOSED' || room.state === 'ARCHIVED') return true; // idempotent no-op
   if (room.state === 'CLOSING') {
     await repairWarRoomCloseJobs(input.warRoomId, input.incidentId);
     return true;
   }
-  if (room.state === 'AMBIGUOUS') return false; // cannot close while external identity is unresolved
+  // AMBIGUOUS: external create may have succeeded but OpsKnight doesn't yet
+  // know the provider identity. Persist closeRequestedAt so the next successful
+  // reconciliation (found → adopt as CLOSING) triggers the terminal close.
+  if (room.state === 'AMBIGUOUS') {
+    const now = new Date();
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: input.warRoomId, state: 'AMBIGUOUS', closeRequestedAt: null },
+      data: { closeRequestedAt: now },
+    });
+    // Ensure a marker-only reconcile is running so the external create outcome is resolved.
+    if (room.provisioningToken && room.createAttemptedAt != null) {
+      await ensureWarRoomReconciliationJob(input.warRoomId, room.provisioningToken);
+    }
+    return true;
+  }
   const { runSerializableTransaction } = await import('@/lib/db-utils');
   const result = await runSerializableTransaction(async tx => {
     const existing = await tx.incidentWarRoom.findUnique({
       where: { id: input.warRoomId },
-      select: { incidentId: true, provider: true, state: true, createAttemptedAt: true },
+      select: { incidentId: true, provider: true, state: true, createAttemptedAt: true, provisioningToken: true },
     });
     if (!existing) return { initiated: false as const };
     if (existing.incidentId !== input.incidentId || existing.provider !== room.provider) return { initiated: false as const };
     if (!['READY', 'PROVISIONING', 'FAILED'].includes(existing.state)) return { initiated: false as const };
+
+    // CLOSING with unresolved in-flight create must not have been raced before
+    // we own CLOSING — let the winner's provisioning token handle the late
+    // response. The data update below preserves provisioningToken when needed.
+
     const preserveProvisioningFence = existing.state === 'PROVISIONING' && existing.createAttemptedAt != null;
     const data: Record<string, unknown> = {
       state: 'CLOSING',
+      closeRequestedAt: new Date(),
       projectionLeaseToken: null,
       projectionLeaseExpiresAt: null,
     };
@@ -168,6 +226,25 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
       data: data as never,
     });
     if (changed.count !== 1) return { initiated: false as const };
+    // Do not create terminal projection if the external create is still unresolved;
+    // the provisioning reconcile needs to run first so the channel identity exists
+    // before the terminal card is rendered. Otherwise the projector would just
+    // mark DEGRADED and the close would orphan the late-created channel.
+    if (preserveProvisioningFence) {
+      // No terminal jobs yet — just install CLOSING + closeRequestedAt and
+      // enqueue reconciliation. The adoptWarRoomChannel(CLOSING) path will
+      // install the terminal jobs once the identity arrives.
+      await tx.backgroundJob.create({
+        data: {
+          type: 'WAR_ROOM_PROVISION',
+          status: 'PENDING',
+          scheduledAt: new Date(),
+          maxAttempts: 6,
+          payload: { warRoomId: input.warRoomId, provisioningToken: existing.provisioningToken ?? room.provisioningToken, reconciliationOnly: true } as unknown as never,
+        },
+      });
+      return { initiated: true as const, deferred: true as const } as { initiated: true; deferred: true };
+    }
     // Increment projection in same tx so crash cannot leave CLOSING without terminal version.
     const projChanged = await tx.incidentWarRoom.updateMany({
       where: { id: input.warRoomId, state: 'CLOSING' },
@@ -194,7 +271,7 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
         payload: { warRoomId: input.warRoomId, incidentId: input.incidentId, closeGeneration: Date.now(), terminalProjectionVersion } as unknown as never,
       },
     });
-    return { initiated: true as const, terminalProjectionVersion };
+    return { initiated: true as const, terminalProjectionVersion } as { initiated: true; terminalProjectionVersion: number };
   });
   return (result as { initiated: boolean }).initiated;
 }
@@ -202,7 +279,7 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
 /** Close all war rooms for an incident via the neutral engine (resolve path). Idempotent per room. */
 export async function closeIncidentWarRoomsNeutral(incidentId: string): Promise<{ closed: number; skipped: number }> {
   const rooms = await prisma.incidentWarRoom.findMany({
-    where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'FAILED', 'CLOSING'] } },
+    where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'FAILED', 'CLOSING', 'AMBIGUOUS'] } },
     select: { id: true, provider: true, state: true },
   });
   let closed = 0;
@@ -213,6 +290,45 @@ export async function closeIncidentWarRoomsNeutral(incidentId: string): Promise<
     else skipped++;
   }
   return { closed, skipped };
+}
+
+/**
+ * Called from the adoptWarRoomChannel(CLOSING) path — a late-arriving
+ * provision response adopted the external identity after closeRequestedAt
+ * was already set. Atomically queue terminal projection + WAR_ROOM_CLOSE
+ * under closeRequestedAt's ownership.
+ */
+export async function ensureTerminalCloseJobsAfterClosingAdoption(warRoomId: string, incidentId: string): Promise<void> {
+  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true, closeRequestedAt: true } });
+  if (!room || room.state !== 'CLOSING' || room.closeRequestedAt == null) return;
+  const existing = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { id: true },
+  });
+  if (existing) return;
+  await prisma.$transaction(async tx => {
+    const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true, closeRequestedAt: true } });
+    if (!fresh || fresh.state !== 'CLOSING' || fresh.closeRequestedAt == null) return;
+    const stillNoClose = await tx.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      select: { id: true },
+    });
+    if (stillNoClose) return;
+    const changed = await tx.incidentWarRoom.updateMany({
+      where: { id: warRoomId, state: 'CLOSING' },
+      data: { projectionVersion: { increment: 1 } },
+    });
+    // If increment collides (e.g. another path incremented first), just read current.
+    const withVersion = changed.count === 1
+      ? await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: warRoomId }, select: { projectionVersion: true } })
+      : await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: warRoomId }, select: { projectionVersion: true } });
+    await tx.backgroundJob.create({
+      data: { type: 'WAR_ROOM_PROJECT', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId, projectionVersion: withVersion.projectionVersion } as unknown as never },
+    });
+    await tx.backgroundJob.create({
+      data: { type: 'WAR_ROOM_CLOSE', status: 'PENDING', scheduledAt: new Date(Date.now() + 2_000), maxAttempts: 5, payload: { warRoomId, incidentId, closeGeneration: Date.now(), terminalProjectionVersion: withVersion.projectionVersion } as unknown as never },
+    });
+  }).catch(() => {});
 }
 
 /** Finalizes a CLOSING room: waits for the terminal projection to settle, then provider archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */
@@ -230,10 +346,24 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
       projectionLeaseExpiresAt: true,
       health: true,
       lastErrorCode: true,
+      createAttemptedAt: true,
+      providerChannelId: true,
+      provisioningToken: true,
     },
   });
   if (!room) return;
   if (room.state !== 'CLOSING') return;
+
+  // Unresolved external create: CLOSING + createAttemptedAt && !providerChannelId
+  // means the channel/card identity may yet arrive via the provisioning reconcile.
+  // Terminalizing now would let adoption return FENCED (token cleared) and orphan
+  // the external channel. Defer the close until identity is adopted or proven absent.
+  if (room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null) {
+    await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken);
+    const { WarRoomRetryableError } = await import('./errors');
+    throw new WarRoomRetryableError('Unresolved external create outcome — waiting for provisioning reconciliation before terminal close.', 5000, true);
+  }
+
   const effectiveIncidentId = incidentId ?? room.incidentId;
   const adapter = getWarRoomProvider(room.provider as WarRoomProviderName);
   const canArchive = adapter.capabilities.archiveRoom;

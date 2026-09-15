@@ -55,14 +55,12 @@ export async function archiveExternalSlackRoom(
     const botToken = await getSlackBotToken(incident.serviceId);
     if (!botToken) return { ok: false, code: 'TRANSIENT', message: 'No Slack bot token' };
 
+    // Terminal incident state is rendered by the war-room projection's
+    // canonical card (RESOLVED/disableActions). Do not emit a standalone
+    // chat.postMessage here — the close path would duplicate it on retry.
     await slackApiCall('conversations.setTopic', botToken, {
       channel: room.providerChannelId,
       topic: '✅ Incident Resolved — This channel has been archived.',
-    }).catch(() => {});
-
-    await slackApiCall('chat.postMessage', botToken, {
-      channel: room.providerChannelId,
-      text: '✅ *This incident has been resolved.* Archiving war-room channel.',
     }).catch(() => {});
 
     await slackApiCall('conversations.join', botToken, { channel: room.providerChannelId }).catch(() => {});

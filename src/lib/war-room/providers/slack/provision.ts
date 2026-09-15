@@ -329,6 +329,13 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
           await prisma.incidentEvent.create({
             data: { incidentId: incident.id, message: `War-room channel #${markerMatch!.name} reconciled` },
           }).catch(() => {});
+        } else if (adoption === 'CLOSING') {
+          await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
+          const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+          if (fresh) {
+            const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+            await ensureTerminalCloseJobsAfterClosingAdoption(room.id, fresh.incidentId);
+          }
         } else if (adoption === 'FENCED') {
           return;
         } else if (adoption === 'CLOSED') {
@@ -366,6 +373,13 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
           await projectIncidentWarRoomParticipants(room.id);
           await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
           await requestSlackWarRoomProjection(room.id).catch(() => {});
+        } else if (adoption === 'CLOSING') {
+          await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
+          const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+          if (fresh) {
+            const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+            await ensureTerminalCloseJobsAfterClosingAdoption(room.id, fresh.incidentId);
+          }
         }
         return;
       }
@@ -417,6 +431,15 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
         data: { state: 'FAILED', provisioningToken: null, lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED', lastError: 'No Slack channel was found by marker/planned name during reconciliation window.' },
       });
       await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
+      // If close was requested while AMBIGUOUS, continue neutral close from now-Failed.
+      const postFail = await prisma.incidentWarRoom.findUnique({
+        where: { id: room.id },
+        select: { closeRequestedAt: true },
+      });
+      if ((postFail as { closeRequestedAt?: Date | null } | null)?.closeRequestedAt != null) {
+        const { closeWarRoomNeutral } = await import('../../engine');
+        await closeWarRoomNeutral({ incidentId: incident.id, warRoomId: room.id }).catch(() => {});
+      }
     }
     return;
   }
@@ -622,6 +645,9 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
     // provider-side but local state is CLOSED. Archive the late-created channel
     // so Slack does not drift open while Incident=RESOLVED.
     await slackApiCall('conversations.archive', botToken, { channel: channelId }).catch(() => {});
+  } else if (adoption === 'CLOSING') {
+    const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+    await ensureTerminalCloseJobsAfterClosingAdoption(room.id, incident.id);
   } else if (adoption === 'READY') {
     const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
     const { scheduleJob } = await import('@/lib/jobs/queue');

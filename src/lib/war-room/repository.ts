@@ -224,6 +224,7 @@ export async function adoptWarRoomChannel(
     select: {
       state: true,
       provisioningToken: true,
+      closeRequestedAt: true,
       incident: { select: { status: true } },
     },
   });
@@ -256,6 +257,10 @@ export async function adoptWarRoomChannel(
   if (!['PROVISIONING', 'AMBIGUOUS'].includes(current.state)) return 'FENCED';
 
   const resolved = current.incident.status === 'RESOLVED';
+  // AMBIGUOUS + unresolved create + close requested on resolve:
+  // the close intent arrived before external identity was known.
+  // Adopt as CLOSING so the terminal projection/close lifecycle owns the external room.
+  const adoptAsClosing = resolved && current.closeRequestedAt != null && current.state === 'AMBIGUOUS';
   const now = new Date();
   const changed = await tx.incidentWarRoom.updateMany({
     where: {
@@ -264,14 +269,14 @@ export async function adoptWarRoomChannel(
       state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
     },
     data: {
-      state: resolved ? 'CLOSED' : 'READY',
+      state: adoptAsClosing ? 'CLOSING' : resolved ? 'CLOSED' : 'READY',
       providerTenantId: input.providerTenantId ?? input.tenantId ?? null,
       providerContainerId: input.providerContainerId ?? input.teamId ?? null,
       providerChannelId: input.channelId,
       providerChannelName: input.channelName,
       providerChannelUrl: input.channelUrl ?? null,
       readyAt: now,
-      closedAt: resolved ? now : null,
+      closedAt: adoptAsClosing || resolved ? now : null,
       provisioningToken: null,
       lastError: null,
       lastErrorCode: null,
@@ -279,6 +284,7 @@ export async function adoptWarRoomChannel(
   });
 
   if (changed.count !== 1) return 'FENCED';
+  if (adoptAsClosing) return 'CLOSING';
   return resolved ? 'CLOSED' : 'READY';
 }
 
