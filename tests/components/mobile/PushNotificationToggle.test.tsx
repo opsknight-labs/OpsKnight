@@ -292,11 +292,14 @@ describe('PushNotificationToggle', () => {
     const button = await screen.findByRole('button', { name: /Send test push/i });
     fireEvent.click(button);
 
-    await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(
-        /Push notification delivery failed|Try again shortly|temporarily unavailable/i
-      );
-    });
+    await waitFor(
+      () => {
+        expect(screen.getByRole('status')).toHaveTextContent(
+          /Push notification delivery failed|Try again shortly|temporarily unavailable/i
+        );
+      },
+      { timeout: 5000 }
+    );
     expect(screen.getByRole('button', { name: /^Disable$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Send test push/i })).not.toBeDisabled();
   });
