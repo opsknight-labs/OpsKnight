@@ -481,10 +481,10 @@ const handleAcknowledgeAction = async notification => {
   if (!incidentId) return focusOrOpen(data.url || '/m/notifications');
   if (!SUPPORTED_PUSH_CONTRACT_VERSIONS.has(Number(data.version || 1))) {
     await showFeedback('OpsKnight update required', 'Open the incident to use responder actions from this notification.', incidentId, 'version');
-    return focusOrOpen(`/incidents/${encodeURIComponent(incidentId)}`);
+    return focusOrOpen(`/m/incidents/${encodeURIComponent(incidentId)}`);
   }
 
-  const incidentPath = `/incidents/${encodeURIComponent(incidentId)}`;
+  const incidentPath = `/m/incidents/${encodeURIComponent(incidentId)}`;
   const expectedStatus = data.status === 'OPEN' ? 'OPEN' : undefined;
   const stableSeed = data.deliveryId || data.eventId || notification.tag || randomId();
   const idempotencyKey = `push-ack:${incidentId}:${String(stableSeed).slice(0, 120)}`;
@@ -502,7 +502,7 @@ const handleAcknowledgeAction = async notification => {
     }
     if (response.status === 401) {
       await showFeedback('Sign in required', 'Open OpsKnight to authenticate before acknowledging.', incidentId, 'auth');
-      return focusOrOpen(`/login?callbackUrl=${encodeURIComponent(incidentPath)}`);
+      return focusOrOpen(`/m/login?callbackUrl=${encodeURIComponent(incidentPath)}`);
     }
     if (response.status === 403) {
       await showFeedback('Acknowledgement not authorized', 'Your account cannot acknowledge this incident.', incidentId, 'forbidden');

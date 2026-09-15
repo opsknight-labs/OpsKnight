@@ -61,7 +61,10 @@ export async function sendNotificationIntentPush(
   else if (snapshot.description)
     body += `\n${snapshot.description.length > 80 ? `${snapshot.description.slice(0, 77)}...` : snapshot.description}`;
 
-  const canonicalIncidentUrl = `/incidents/${encodeURIComponent(incidentId)}`;
+  // Responder Push always targets the mobile surface. The custom service worker
+  // and middleware both handle /m routing; desktop users tapping the notification
+  // are redirected cleanly by middleware. This must match the SW's click handler.
+  const canonicalIncidentUrl = `/m/incidents/${encodeURIComponent(incidentId)}`;
 
   return sendPush({
     userId,

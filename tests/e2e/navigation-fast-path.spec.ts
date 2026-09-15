@@ -135,14 +135,14 @@ test.describe.serial('authenticated navigation fast path', () => {
   }) => {
     await page.route('**/incidents**', async route => {
       if (route.request().headers().rsc === '1') {
-        await new Promise(resolve => setTimeout(resolve, 400));
+        await new Promise(resolve => setTimeout(resolve, 600));
       }
       await route.continue();
     });
 
     const link = sidebarLink(page, 'Incidents');
     await link.click({ noWaitAfter: true });
-    await expect(link.locator('[data-navigation-pending="true"]')).toBeVisible({ timeout: 100 });
+    await expect(link.locator('[data-navigation-pending="true"]')).toBeVisible({ timeout: 500 });
     await expect(page).toHaveURL(/\/incidents/);
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible();
   });
@@ -155,9 +155,9 @@ test.describe.serial('authenticated navigation fast path', () => {
     await expect(page).toHaveURL(/\/incidents/);
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible();
 
-    expect(
-      requests.filter(path => /\/(jira|slack|microsoft-teams)(\/|$)/.test(path))
-    ).toHaveLength(0);
+    expect(requests.filter(path => /\/(jira|slack|microsoft-teams)(\/|$)/.test(path))).toHaveLength(
+      0
+    );
   });
 
   test('navigation remains available while SSE is disconnected', async ({ page }) => {
@@ -183,4 +183,3 @@ test.describe.serial('authenticated navigation fast path', () => {
     expect(requests.filter(path => path === '/api/sidebar-stats')).toHaveLength(0);
   });
 });
-

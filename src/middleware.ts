@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { getNextAuthSecret } from '@/lib/secret-manager';
 import { SESSION_TOKEN_COOKIE_NAME, useSecureCookies } from '@/lib/auth-cookies';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
+import { toMobilePath } from '@/lib/app-routes';
 import { statusDomainRequestHeaders } from '@/lib/status-pages/internal-request';
 import {
   PRIVATE_STATUS_CACHE_CONTROL,
@@ -450,9 +451,11 @@ export default async function middleware(req: NextRequest) {
   const userAgent = req.headers.get('user-agent');
   const isMobile = isMobileUserAgent(userAgent);
   const preferDesktop = req.cookies.get('prefer-desktop')?.value === 'true';
+  const mobileDestination = toMobilePath(pathname);
   const shouldRedirectToMobile =
     isMobile &&
     !preferDesktop &&
+    Boolean(mobileDestination) &&
     !pathname.startsWith('/m') &&
     !pathname.startsWith('/api') &&
     !pathname.startsWith('/setup') &&
@@ -467,30 +470,9 @@ export default async function middleware(req: NextRequest) {
       pathname
     );
 
-  if (shouldRedirectToMobile) {
+  if (shouldRedirectToMobile && mobileDestination) {
     const mobileUrl = req.nextUrl.clone();
-    if (pathname === '/') mobileUrl.pathname = '/m';
-    else if (pathname === '/login') mobileUrl.pathname = '/m/login';
-    else if (pathname === '/forgot-password') mobileUrl.pathname = '/m/forgot-password';
-    else mobileUrl.pathname = `/m${pathname}`;
-    const redirectResponse = NextResponse.redirect(mobileUrl);
-    Object.entries(securityHeaders).forEach(([key, value]) =>
-      redirectResponse.headers.set(key, value)
-    );
-    return redirectResponse;
-  }
-
-  if (
-    isMobile &&
-    !preferDesktop &&
-    !pathname.startsWith('/m') &&
-    !pathname.startsWith('/api') &&
-    !pathname.startsWith('/login') &&
-    !pathname.startsWith('/_next') &&
-    !isPublicPath(pathname)
-  ) {
-    const mobileUrl = req.nextUrl.clone();
-    mobileUrl.pathname = pathname === '/' ? '/m' : `/m${pathname}`;
+    mobileUrl.pathname = mobileDestination;
     const redirectResponse = NextResponse.redirect(mobileUrl);
     Object.entries(securityHeaders).forEach(([key, value]) =>
       redirectResponse.headers.set(key, value)
@@ -549,7 +531,7 @@ export default async function middleware(req: NextRequest) {
   });
   const isSessionExpired =
     typeof (token as { sessionExpiresAt?: unknown })?.sessionExpiresAt === 'number' &&
-    Date.now() >= ((token as { sessionExpiresAt: number }).sessionExpiresAt * 1000);
+    Date.now() >= (token as { sessionExpiresAt: number }).sessionExpiresAt * 1000;
   const isAuthenticated = !!token && !token.error && !!token.sub && !isSessionExpired;
 
   if (isAuthenticated) {
@@ -560,7 +542,8 @@ export default async function middleware(req: NextRequest) {
       pathname.startsWith('/m/login/');
     if (isLoginPage) {
       if (req.nextUrl.searchParams.has('error')) return response;
-      const defaultDest = isMobile && !preferDesktop ? '/m' : '/';
+      const isExplicitMobile = pathname === '/m/login' || pathname.startsWith('/m/login/');
+      const defaultDest = isExplicitMobile || (isMobile && !preferDesktop) ? '/m' : '/';
       const redirectUrl = safeInternalCallbackUrl(
         req.nextUrl.searchParams.get('callbackUrl'),
         defaultDest
@@ -577,7 +560,7 @@ export default async function middleware(req: NextRequest) {
   if (isPublicPath(pathname)) return response;
 
   const url = req.nextUrl.clone();
-  url.pathname = isMobile && !preferDesktop ? '/m/login' : '/login';
+  url.pathname = pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
   url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
   const redirectResponse = NextResponse.redirect(url);
   redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');

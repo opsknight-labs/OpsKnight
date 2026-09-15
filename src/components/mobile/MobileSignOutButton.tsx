@@ -19,7 +19,7 @@ export default function MobileSignOutButton({ icon, label, description }: Props)
     if (isSigningOut) return;
     setIsSigningOut(true);
     await purgeBrowserAuthCaches();
-    await signOut({ callbackUrl: '/m/login' });
+    await signOut({ callbackUrl: '/m/login?callbackUrl=/m' });
   };
 
   return (
