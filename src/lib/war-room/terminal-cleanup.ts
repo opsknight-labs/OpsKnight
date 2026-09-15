@@ -4,6 +4,9 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 
+/** Minimum interval between sweeps of the same terminal room — avoids hot-loop during outages. */
+const TERMINAL_DRIFT_MIN_RETRY_MS = 5 * 60_000;
+
 /**
  * Low-frequency drift lane for terminal war rooms whose external create was
  * unverified when the 15-minute reconciliation window expired.
@@ -13,12 +16,16 @@ import { addOperationalMetric } from '@/lib/metrics/operational/registry';
  *   wherever we wrote RECONCILIATION_EXPIRED_* with unverified outcome).
  * - Never reopens lifecycle: rooms stay CLOSED/ARCHIVED locally regardless of
  *   what the provider scan finds.
- * - `not-found`  → debt satisfied, clear pending + stamp completedAt.
- * - `found`      → Slack: archive orphan idempotently; Teams: adopt channel
- *                  identity but remain CLOSED (Teams has no archive).
- *                  In both cases debt is cleared after provider is verified.
- * - `provider unavailable` (token missing / rate-limited / transient read) →
+ * - `NOT_FOUND`    → debt satisfied, clear pending + stamp completedAt.
+ * - `FOUND`        → Slack: archive orphan idempotently; Teams: adopt channel
+ *                    identity but remain CLOSED (Teams has no archive).
+ *                    In both cases debt is cleared after provider is verified.
+ * - `UNAVAILABLE`  (token missing / rate-limited / auth / transient read) →
  *   keep debt, bump lastReconciledAt/lastAttemptAt so next sweep retries.
+ *   Slack uses a dedicated tri-state lookup `findSlackWarRoomForTerminalCleanup`
+ *   so transport/5xx/429/auth failures NEVER collapse to NOT_FOUND.
+ * - Backoff: each room is eligible no more often than TERMINAL_DRIFT_MIN_RETRY_MS
+ *   after its last attempt (due predicate on externalCleanupLastAttemptAt).
  */
 export async function reconcileTerminalWarRoomDrift(
   limit = 20
@@ -29,10 +36,12 @@ export async function reconcileTerminalWarRoomDrift(
   // that scanned before this code existed would have had no pending flag.
   // We therefore only scan pending=true; a one-off backfill can set the flag
   // for any legacy RECONCILIATION_EXPIRED_UNVERIFIED rows that still need it.
+  const dueThreshold = new Date(Date.now() - TERMINAL_DRIFT_MIN_RETRY_MS);
   const rooms = await prisma.incidentWarRoom.findMany({
     where: {
       externalCleanupPending: true,
       state: { in: ['CLOSED', 'ARCHIVED'] },
+      OR: [{ externalCleanupLastAttemptAt: null }, { externalCleanupLastAttemptAt: { lte: dueThreshold } }],
     },
     orderBy: { lastReconciledAt: 'asc' },
     take: Math.max(1, Math.min(limit, 100)),
@@ -102,7 +111,7 @@ async function reconcileTerminalSlackDrift(
   } & Record<string, unknown>
 ): Promise<'cleaned' | 'satisfied' | 'pending'> {
   const { getSlackBotToken } = await import('@/lib/slack');
-  const { findSlackChannelByMarker, findExistingSlackChannel, slackWarRoomMarker, slackApiCall } = await import('./providers/slack/client');
+  const { findSlackWarRoomForTerminalCleanup, slackWarRoomMarker, slackApiCall } = await import('./providers/slack/client');
 
   const token = await getSlackBotToken(room.incident.serviceId).catch(() => null);
   if (!token) {
@@ -120,17 +129,29 @@ async function reconcileTerminalSlackDrift(
   }
 
   const marker = slackWarRoomMarker(room.incidentId, room.generation);
-  let found: { id: string; name: string } | null = null;
-  try {
-    found = await findSlackChannelByMarker(token, marker);
-  } catch {}
-  if (!found && room.plannedExternalName) {
-    try {
-      found = await findExistingSlackChannel(token, room.plannedExternalName);
-    } catch {}
+  const lookup = await findSlackWarRoomForTerminalCleanup(token, marker, room.plannedExternalName);
+
+  if (lookup.status === 'UNAVAILABLE') {
+    const isAuth = lookup.code === 'AUTH_FAILED' || lookup.code === 'PERMISSION_DENIED';
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id },
+      data: {
+        ...(isAuth ? { health: 'PERMISSION_ERROR' as const } : {}),
+        lastErrorCode: `DRIFT_SLACK_${lookup.code}`,
+        lastError: (lookup.error ?? `Slack lookup unavailable (${lookup.code}); will retry.`).slice(0, 1000),
+        externalCleanupLastAttemptAt: new Date(),
+        lastReconciledAt: new Date(),
+      },
+    });
+    logger.warn('[ChatOps] Terminal drift: Slack lookup unavailable, keeping debt', {
+      warRoomId: room.id,
+      code: lookup.code,
+      error: lookup.error,
+    });
+    return 'pending';
   }
 
-  if (!found) {
+  if (lookup.status === 'NOT_FOUND') {
     await prisma.incidentWarRoom.updateMany({
       where: { id: room.id },
       data: {
@@ -143,7 +164,13 @@ async function reconcileTerminalSlackDrift(
     return 'satisfied';
   }
 
-  // Orphan exists — archive it idempotently. Never reopen lifecycle.
+  if (lookup.status !== 'FOUND') {
+    // exhaustiveness — UNAVAILABLE and NOT_FOUND already returned above
+    return 'pending';
+  }
+  // FOUND — orphan exists, archive it idempotently. Never reopen lifecycle.
+  // status === 'FOUND' tri-state invariant: only FOUND reaches archive path
+  const found = lookup.channel;
   const archive = await slackApiCall('conversations.archive', token, { channel: found.id });
   const isIdempotentSuccess = archive.ok || archive.error === 'already_archived' || archive.error === 'channel_not_found';
   if (isIdempotentSuccess) {

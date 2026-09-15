@@ -152,3 +152,126 @@ export async function findSlackChannelByMarker(
   }
   return null;
 }
+
+// ── Terminal-drift safe tri-state lookup ──────────────────────────────────
+
+export type SlackTerminalLookupResult =
+  | { status: 'FOUND'; channel: { id: string; name: string } }
+  | { status: 'NOT_FOUND' }
+  | { status: 'UNAVAILABLE'; code: 'RATE_LIMITED' | 'AUTH_FAILED' | 'PERMISSION_DENIED' | 'TRANSIENT'; error?: string };
+
+function classifySlackListError(result: SlackApiResult): SlackTerminalLookupResult & { status: 'UNAVAILABLE' } {
+  const raw = (result.error ?? '').toLowerCase();
+  const status = result.httpStatus;
+  if (status === 429 || raw.includes('rate_limited') || raw.includes('ratelimited') || raw.includes('429')) {
+    return { status: 'UNAVAILABLE', code: 'RATE_LIMITED', error: result.error };
+  }
+  if (['invalid_auth', 'account_inactive', 'token_revoked', 'no_team', 'not_authed'].some(k => raw.includes(k))) {
+    return { status: 'UNAVAILABLE', code: 'AUTH_FAILED', error: result.error };
+  }
+  if (raw.includes('missing_scope') || raw.includes('permission') || raw.includes('not_allowed') || raw.includes('restricted_action')) {
+    return { status: 'UNAVAILABLE', code: 'PERMISSION_DENIED', error: result.error };
+  }
+  if (result.transportFailure || result.sideEffectAmbiguous || status === undefined || (status >= 500 && status <= 599) || raw.includes('timeout') || raw.includes('fetch') || raw.includes('network') || raw.includes('econnreset') || raw.includes('etimedout')) {
+    return { status: 'UNAVAILABLE', code: 'TRANSIENT', error: result.error };
+  }
+  // Any other non-ok with no explicit classification is still unavailable — we
+  // cannot prove absence when the API itself failed.
+  return { status: 'UNAVAILABLE', code: 'TRANSIENT', error: result.error };
+}
+
+/**
+ * Cleanup-safe Slack lookup for the terminal drift lane.
+ * Tri-state: never conflates provider failure with "definitely absent".
+ *
+ * - FOUND      → channel exists, return it
+ * - NOT_FOUND  → full paginated scan completed successfully, no match
+ * - UNAVAILABLE→ any list/info call was rate-limited / auth / transport failure;
+ *               caller must KEEP externalCleanupPending debt and retry later.
+ */
+export async function findSlackWarRoomForTerminalCleanup(
+  botToken: string,
+  marker: string,
+  plannedExternalName?: string | null
+): Promise<SlackTerminalLookupResult> {
+  // 1) Marker scan
+  let cursor: string | undefined;
+  let markerScanSucceeded = true;
+  for (let page = 0; page < 100; page += 1) {
+    const result = await slackApiCall('conversations.list', botToken, {
+      exclude_archived: true,
+      limit: 200,
+      types: 'public_channel,private_channel',
+      ...(cursor ? { cursor } : {}),
+    });
+    if (!result.ok || !result.channels) {
+      return classifySlackListError(result);
+    }
+    for (const channel of result.channels) {
+      const info = await slackApiCall('conversations.info', botToken, { channel: channel.id });
+      // info failure is not fatal for the whole scan unless it is a transport/auth
+      // failure that suggests we cannot verify the marker at all — but a single
+      // info 5xx should not abort the entire sweep. We treat info transport
+      // failure as non-fatal for that channel; only list failures abort.
+      // However if info returns invalid_auth / rate_limited, that IS lane-wide
+      // unavailable — we cannot trust any negative result.
+      if (!info.ok) {
+        const lower = (info.error ?? '').toLowerCase();
+        if (lower.includes('rate_limited') || lower.includes('ratelimited') || lower.includes('429') || info.httpStatus === 429) {
+          return { status: 'UNAVAILABLE', code: 'RATE_LIMITED', error: info.error };
+        }
+        if (['invalid_auth', 'account_inactive', 'token_revoked', 'not_authed'].some(k => lower.includes(k))) {
+          return { status: 'UNAVAILABLE', code: 'AUTH_FAILED', error: info.error };
+        }
+        if (info.transportFailure) {
+          // Single channel info transport failure is skipped — continue scan.
+          // Only abort if we never complete a full successful scan and find nothing:
+          // we track that we had at least one info transport failure so a
+          // NOT_FOUND verdict can be downgraded to UNAVAILABLE.
+          markerScanSucceeded = false;
+          continue;
+        }
+        // channel_not_found / is_archived etc. just mean this channel row is stale — skip
+        continue;
+      }
+      const topic = (info as unknown as { channel?: { topic?: { value?: string }; purpose?: { value?: string } } }).channel?.topic?.value ?? '';
+      const purpose = (info as unknown as { channel?: { topic?: { value?: string }; purpose?: { value?: string } } }).channel?.purpose?.value ?? '';
+      if (topic.includes(marker) || purpose.includes(marker)) return { status: 'FOUND', channel };
+    }
+    cursor = result.response_metadata?.next_cursor;
+    if (!cursor) break;
+  }
+
+  // If any info transport failure occurred during marker scan, we cannot claim
+  // NOT_FOUND authoritatively — the orphan may have been on a page we failed to verify.
+  // Downgrade to UNAVAILABLE so the debt is kept.
+  // Exception: if we completed list successfully but had isolated info failures,
+  // we still consider the planned-name fallback before deciding.
+  // Hold the flag and check fallback; if fallback also fails/not found with no
+  // transport issues, we may still need to return UNAVAILABLE.
+
+  // 2) Planned-name fallback (only if caller provided one)
+  if (plannedExternalName) {
+    let pCursor: string | undefined;
+    for (let page = 0; page < 100; page += 1) {
+      const result = await slackApiCall('conversations.list', botToken, {
+        exclude_archived: true,
+        limit: 200,
+        types: 'public_channel,private_channel',
+        ...(pCursor ? { cursor: pCursor } : {}),
+      });
+      if (!result.ok || !result.channels) {
+        return classifySlackListError(result);
+      }
+      const found = result.channels.find(c => c.name === plannedExternalName);
+      if (found) return { status: 'FOUND', channel: found };
+      pCursor = result.response_metadata?.next_cursor;
+      if (!pCursor) break;
+    }
+  }
+
+  if (!markerScanSucceeded) {
+    return { status: 'UNAVAILABLE', code: 'TRANSIENT', error: 'Partial conversations.info transport failure during marker scan — cannot prove absence' };
+  }
+  return { status: 'NOT_FOUND' };
+}

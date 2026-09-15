@@ -225,10 +225,38 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(cleanup).toContain('Never reopen lifecycle');
     expect(cleanup).toContain('debt satisfied');
     expect(cleanup).toContain('externalCleanupCompletedAt');
-    expect(cleanup).toContain('findSlackChannelByMarker');
+    // Slack side must use tri-state cleanup-safe lookup, never bare find* that conflates failure with NOT_FOUND
+    expect(cleanup).toContain('findSlackWarRoomForTerminalCleanup');
+    expect(cleanup).toContain("status === 'UNAVAILABLE'");
+    expect(cleanup).toContain("status === 'NOT_FOUND'");
+    expect(cleanup).toContain("status === 'FOUND'");
+    expect(cleanup).toContain('DRIFT_SLACK_');
     expect(cleanup).toContain('findWarRoomChannel');
     expect(cleanup).toContain("conversations.archive");
     expect(cron).toContain('reconcileTerminalWarRoomDrift');
+  });
+
+  it('terminal drift lane has retry backoff (externalCleanupLastAttemptAt due predicate)', () => {
+    const cleanup = readFileSync('src/lib/war-room/terminal-cleanup.ts', 'utf8');
+    expect(cleanup).toContain('TERMINAL_DRIFT_MIN_RETRY_MS');
+    expect(cleanup).toContain('externalCleanupLastAttemptAt');
+    expect(cleanup).toContain('dueThreshold');
+    // due predicate is in the findMany where clause
+    expect(cleanup).toContain('externalCleanupLastAttemptAt: { lte: dueThreshold }');
+  });
+
+  it('Slack terminal lookup helper is tri-state (FOUND/NOT_FOUND/UNAVAILABLE)', () => {
+    const client = readFileSync('src/lib/war-room/providers/slack/client.ts', 'utf8');
+    expect(client).toContain('SlackTerminalLookupResult');
+    expect(client).toContain("status: 'FOUND'");
+    expect(client).toContain("status: 'NOT_FOUND'");
+    expect(client).toContain("status: 'UNAVAILABLE'");
+    expect(client).toContain('findSlackWarRoomForTerminalCleanup');
+    expect(client).toContain('RATE_LIMITED');
+    expect(client).toContain('AUTH_FAILED');
+    expect(client).toContain('TRANSIENT');
+    // helper must classify list failures as UNAVAILABLE, never return null
+    expect(client).toContain('classifySlackListError');
   });
 
   it('archiveExternalSlackRoom resolves orphan by marker when providerChannelId is null (CLOSING debt)', () => {
@@ -240,6 +268,158 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(lifecycle).toContain('channelId');
     expect(lifecycle).toContain("conversations.archive");
     expect(lifecycle).toContain('externalCleanupPending');
+  });
+});
+
+// ── Behavioral: terminal drift Slack tri-state (UNAVAILABLE keeps debt) ──
+describe('terminal drift Slack tri-state (behavioral)', () => {
+  async function runDriftWithSlackMocks(opts: {
+    lookup: { status: 'FOUND'; channel: { id: string; name: string } } | { status: 'NOT_FOUND' } | { status: 'UNAVAILABLE'; code: 'RATE_LIMITED' | 'AUTH_FAILED' | 'PERMISSION_DENIED' | 'TRANSIENT'; error?: string };
+    archiveResult?: { ok: boolean; error?: string; transportFailure?: boolean; sideEffectAmbiguous?: boolean; httpStatus?: number };
+  }) {
+    vi.resetModules();
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const findMany = vi.fn().mockResolvedValue([
+      {
+        id: 'room-drift-1',
+        provider: 'SLACK',
+        incidentId: 'inc-1',
+        generation: 1,
+        plannedExternalName: 'inc-1-war-room',
+        incident: { serviceId: 'svc-1', id: 'inc-1' },
+      },
+    ]);
+    const getSlackBotToken = vi.fn().mockResolvedValue('xoxb-mock-token');
+    const findSlackWarRoomForTerminalCleanup = vi.fn().mockResolvedValue(opts.lookup);
+    const slackApiCall = vi.fn().mockResolvedValue(opts.archiveResult ?? { ok: true });
+    const slackWarRoomMarker = (incId: string, gen: number) => `[OKWR:${incId}:g${gen}]`;
+
+    vi.doMock('@/lib/prisma', () => ({
+      default: {
+        incidentWarRoom: { findMany, updateMany },
+      },
+    }));
+    // terminal-cleanup dynamically imports '@/lib/slack' and './providers/slack/client'
+    vi.doMock('@/lib/slack', () => ({ getSlackBotToken }));
+    const clientMock = { findSlackWarRoomForTerminalCleanup, slackWarRoomMarker, slackApiCall, findSlackChannelByMarker: vi.fn(), findExistingSlackChannel: vi.fn() };
+    vi.doMock('@/lib/war-room/providers/slack/client', () => clientMock);
+    vi.doMock('@/lib/war-room/providers/slack/client.ts', () => clientMock);
+    // relative specifier as written in terminal-cleanup
+    vi.doMock('./providers/slack/client', () => clientMock);
+    vi.doMock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
+    vi.doMock('@/lib/metrics/operational/registry', () => ({ addOperationalMetric: vi.fn() }));
+
+    const mod = await import('@/lib/war-room/terminal-cleanup');
+    const result = await mod.reconcileTerminalWarRoomDrift(20);
+
+    // cleanup for next test
+    vi.doUnmock('@/lib/prisma');
+    vi.doUnmock('@/lib/slack');
+    vi.doUnmock('@/lib/war-room/providers/slack/client');
+    vi.doUnmock('@/lib/war-room/providers/slack/client.ts');
+    vi.doUnmock('./providers/slack/client');
+    vi.doUnmock('@/lib/logger');
+    vi.doUnmock('@/lib/metrics/operational/registry');
+    vi.resetModules();
+
+    return { result, updateMany, findMany, findSlackWarRoomForTerminalCleanup, slackApiCall };
+  }
+
+  it('Slack 429 during marker lookup → debt remains (UNAVAILABLE RATE_LIMITED keeps pending, not satisfied)', async () => {
+    const { result, updateMany } = await runDriftWithSlackMocks({
+      lookup: { status: 'UNAVAILABLE', code: 'RATE_LIMITED', error: 'rate_limited' },
+    });
+    expect(result.checked).toBe(1);
+    expect(result.satisfied).toBe(0);
+    expect(result.cleaned).toBe(0);
+    expect(result.stillPending).toBe(1);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'room-drift-1' },
+        data: expect.objectContaining({ lastErrorCode: 'DRIFT_SLACK_RATE_LIMITED' }),
+      })
+    );
+    // must not clear debt
+    const lastData = updateMany.mock.calls[0][0].data as Record<string, unknown>;
+    expect(lastData.externalCleanupPending).toBeUndefined();
+    expect(lastData.externalCleanupCompletedAt).toBeUndefined();
+    expect(lastData.externalCleanupLastAttemptAt).toBeInstanceOf(Date);
+  });
+
+  it('Slack network/transport failure → debt remains (UNAVAILABLE TRANSIENT)', async () => {
+    const { result, updateMany } = await runDriftWithSlackMocks({
+      lookup: { status: 'UNAVAILABLE', code: 'TRANSIENT', error: 'fetch failed' },
+    });
+    expect(result.checked).toBe(1);
+    expect(result.satisfied).toBe(0);
+    expect(result.stillPending).toBe(1);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: 'DRIFT_SLACK_TRANSIENT' }) })
+    );
+    const lastData = updateMany.mock.calls[0][0].data as Record<string, unknown>;
+    expect(lastData.externalCleanupPending).toBeUndefined();
+    expect(lastData.externalCleanupLastAttemptAt).toBeInstanceOf(Date);
+  });
+
+  it('Slack invalid_auth during drift lookup → debt remains and marks PERMISSION_ERROR', async () => {
+    const { result, updateMany } = await runDriftWithSlackMocks({
+      lookup: { status: 'UNAVAILABLE', code: 'AUTH_FAILED', error: 'invalid_auth' },
+    });
+    expect(result.checked).toBe(1);
+    expect(result.satisfied).toBe(0);
+    expect(result.stillPending).toBe(1);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ lastErrorCode: 'DRIFT_SLACK_AUTH_FAILED', health: 'PERMISSION_ERROR' }),
+      })
+    );
+  });
+
+  it('successful complete scan with no match → debt satisfied (NOT_FOUND clears pending)', async () => {
+    const { result, updateMany, slackApiCall } = await runDriftWithSlackMocks({
+      lookup: { status: 'NOT_FOUND' },
+    });
+    expect(result.checked).toBe(1);
+    expect(result.satisfied).toBe(1);
+    expect(result.stillPending).toBe(0);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ externalCleanupPending: false, externalCleanupCompletedAt: expect.any(Date) }),
+      })
+    );
+    expect(slackApiCall).not.toHaveBeenCalled();
+  });
+
+  it('match found → archive orphan and clear debt (FOUND → cleaned)', async () => {
+    const { result, updateMany, slackApiCall } = await runDriftWithSlackMocks({
+      lookup: { status: 'FOUND', channel: { id: 'C999', name: 'inc-1-war-room' } },
+      archiveResult: { ok: true },
+    });
+    expect(result.checked).toBe(1);
+    expect(result.cleaned).toBe(1);
+    expect(result.satisfied).toBe(0);
+    expect(slackApiCall).toHaveBeenCalledWith('conversations.archive', 'xoxb-mock-token', { channel: 'C999' });
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ externalCleanupPending: false, externalCleanupCompletedAt: expect.any(Date), providerChannelId: 'C999' }),
+      })
+    );
+  });
+
+  it('match found but archive rate-limited → keep debt for retry', async () => {
+    const { result, updateMany } = await runDriftWithSlackMocks({
+      lookup: { status: 'FOUND', channel: { id: 'C999', name: 'inc-1-war-room' } },
+      archiveResult: { ok: false, error: 'rate_limited' },
+    });
+    expect(result.checked).toBe(1);
+    expect(result.cleaned).toBe(0);
+    expect(result.satisfied).toBe(0);
+    expect(result.stillPending).toBe(1);
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: 'DRIFT_ARCHIVE_RATE_LIMITED' }) })
+    );
+    const lastData = updateMany.mock.calls[updateMany.mock.calls.length - 1][0].data as Record<string, unknown>;
+    expect(lastData.externalCleanupPending).toBeUndefined();
   });
 });
 
