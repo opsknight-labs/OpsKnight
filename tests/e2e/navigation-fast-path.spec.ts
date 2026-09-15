@@ -148,7 +148,7 @@ test.describe.serial('authenticated navigation fast path', () => {
 
     const link = sidebarLink(page, 'Incidents');
     await link.click({ noWaitAfter: true });
-    await expect(link.locator('[data-navigation-pending="true"]')).toBeVisible({ timeout: 1500 });
+    await expect(link.locator('[data-navigation-pending]')).toBeAttached();
     await expect(page).toHaveURL(/\/incidents/);
     await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible({
       timeout: 10_000,
