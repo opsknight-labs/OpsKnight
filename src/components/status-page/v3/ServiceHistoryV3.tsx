@@ -307,16 +307,17 @@ function ServiceHistoryV3Inner({
                 type="button"
                 className="status-v3-inspector__nav"
                 aria-label="Previous day"
+                title="Previous day (Left arrow)"
                 disabled={selected === 0}
                 onClick={() => navigateDay(-1)}
               >
                 <svg
-                  width="12"
-                  height="12"
+                  width="14"
+                  height="14"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2"
+                  strokeWidth="2.25"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"
@@ -328,16 +329,17 @@ function ServiceHistoryV3Inner({
                 type="button"
                 className="status-v3-inspector__nav"
                 aria-label="Next day"
+                title="Next day (Right arrow)"
                 disabled={selected === days.length - 1}
                 onClick={() => navigateDay(1)}
               >
                 <svg
-                  width="12"
-                  height="12"
+                  width="14"
+                  height="14"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2"
+                  strokeWidth="2.25"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"
@@ -349,15 +351,16 @@ function ServiceHistoryV3Inner({
                 type="button"
                 className="status-v3-inspector__close"
                 aria-label="Close"
+                title="Close inspector (Esc)"
                 onClick={() => setSelected(null)}
               >
                 <svg
-                  width="12"
-                  height="12"
+                  width="14"
+                  height="14"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2"
+                  strokeWidth="2.25"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"

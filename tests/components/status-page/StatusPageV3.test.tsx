@@ -322,7 +322,7 @@ describe('StatusPageV3', () => {
     expect(screen.queryByRole('button', { name: 'View 90-day history' })).not.toBeInTheDocument();
   });
 
-  it('opens the 24-hour inspector when a history day is selected', () => {
+  it('opens the 24-hour inspector when a history day is selected and provides navigation and close actions', () => {
     render(
       <StatusPageV3
         snapshot={snapshotOf([
@@ -341,6 +341,18 @@ describe('StatusPageV3', () => {
     expect(cell).not.toBeNull();
     fireEvent.click(cell as Element);
     expect(screen.getByText('24:00')).toBeInTheDocument();
+
+    const prevButton = screen.getByRole('button', { name: 'Previous day' });
+    const nextButton = screen.getByRole('button', { name: 'Next day' });
+    const closeButton = screen.getByRole('button', { name: 'Close' });
+
+    expect(prevButton).toBeInTheDocument();
+    expect(nextButton).toBeInTheDocument();
+    expect(closeButton).toBeInTheDocument();
+    expect(closeButton).toHaveAttribute('title', 'Close inspector (Esc)');
+
+    fireEvent.click(closeButton);
+    expect(screen.queryByText('24:00')).not.toBeInTheDocument();
   });
 
   it('isolates metric badges: hides SLA grade and uptime headline when metrics/uptime is disabled without removing the service card', () => {

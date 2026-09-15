@@ -1292,24 +1292,6 @@ ${R} .status-v3-inspector__divider {
   display: inline-block;
   flex-shrink: 0;
 }
-${R} .status-v3-inspector__close {
-  border: 0;
-  background: var(--status-panel-muted-bg);
-  color: var(--status-text-muted);
-  inline-size: 1.7rem;
-  block-size: 1.7rem;
-  border-radius: 4px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s ease, background-color 0.15s ease;
-  flex-shrink: 0;
-}
-${R} .status-v3-inspector__close:hover {
-  color: var(--status-text-strong);
-  background: var(--status-panel-muted-border);
-}
 ${R} .status-v3-inspector__relative {
   font-size: 0.72rem;
   font-weight: 500;
@@ -1318,29 +1300,144 @@ ${R} .status-v3-inspector__relative {
 ${R} .status-v3-inspector__actions {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
-${R} .status-v3-inspector__nav {
-  border: 0;
-  background: var(--status-panel-muted-bg);
-  color: var(--status-text-muted);
-  inline-size: 1.7rem;
-  block-size: 1.7rem;
-  border-radius: 4px;
+${R} .status-v3-inspector__nav,
+${R} .status-v3-inspector__close {
+  inline-size: 1.85rem;
+  block-size: 1.85rem;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--status-panel-border, #cbd5e1);
+  background: var(--status-panel-muted-bg, #f1f5f9);
+  color: var(--status-text-strong, #0f172a);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  padding: 0;
+  margin: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+${R} .status-v3-inspector__nav svg,
+${R} .status-v3-inspector__close svg {
+  display: block;
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  stroke: currentColor;
+  stroke-width: 2.25px;
   flex-shrink: 0;
 }
 ${R} .status-v3-inspector__nav:hover:not(:disabled) {
-  color: var(--status-text-strong);
-  background: var(--status-panel-muted-border);
+  color: var(--status-text-strong, #0f172a);
+  background: color-mix(in srgb, var(--primary, #3b82f6) 12%, var(--status-panel-bg, #ffffff));
+  border-color: var(--primary, #3b82f6);
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08);
+}
+${R} .status-v3-inspector__nav:active:not(:disabled) {
+  transform: scale(0.94);
 }
 ${R} .status-v3-inspector__nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--status-panel-border, #e2e8f0);
+  background: var(--status-panel-muted-bg, #f8fafc);
+  color: var(--status-text-muted, #94a3b8);
+  box-shadow: none;
+}
+${R} .status-v3-inspector__close:hover {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fca5a5;
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.12);
+}
+${R} .status-v3-inspector__close:active {
+  transform: scale(0.94);
+}
+${R} .status-v3-inspector__nav:focus-visible,
+${R} .status-v3-inspector__close:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: 2px;
+}
+@media (prefers-color-scheme: dark) {
+  ${R}:not([data-theme="light"]) .status-v3-inspector {
+    background: var(--status-panel-bg, #0f172a);
+    border-color: var(--status-panel-border, #334155);
+  }
+  ${R}:not([data-theme="light"]) .status-v3-inspector__nav,
+  ${R}:not([data-theme="light"]) .status-v3-inspector__close {
+    border-color: var(--status-panel-border, #334155);
+    background: var(--status-panel-muted-bg, #1e293b);
+    color: var(--status-text-strong, #f1f5f9);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  ${R}:not([data-theme="light"]) .status-v3-inspector__nav:hover:not(:disabled) {
+    color: #ffffff;
+    background: color-mix(in srgb, var(--primary, #38bdf8) 22%, #1e293b);
+    border-color: var(--primary, #38bdf8);
+  }
+  ${R}:not([data-theme="light"]) .status-v3-inspector__nav:disabled {
+    opacity: 0.3;
+    border-color: #334155;
+    background: #0f172a;
+    color: #64748b;
+  }
+  ${R}:not([data-theme="light"]) .status-v3-inspector__close:hover {
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+}
+.dark ${R} .status-v3-inspector,
+[data-theme="dark"] ${R} .status-v3-inspector,
+[data-surface-theme="dark"] ${R} .status-v3-inspector,
+.status-page-container[data-theme="dark"] .status-v3-inspector {
+  background: var(--status-panel-bg, #0f172a);
+  border-color: var(--status-panel-border, #334155);
+}
+.dark ${R} .status-v3-inspector__nav,
+.dark ${R} .status-v3-inspector__close,
+[data-theme="dark"] ${R} .status-v3-inspector__nav,
+[data-theme="dark"] ${R} .status-v3-inspector__close,
+[data-surface-theme="dark"] ${R} .status-v3-inspector__nav,
+[data-surface-theme="dark"] ${R} .status-v3-inspector__close,
+.status-page-container[data-theme="dark"] .status-v3-inspector__nav,
+.status-page-container[data-theme="dark"] .status-v3-inspector__close {
+  border-color: var(--status-panel-border, #334155);
+  background: var(--status-panel-muted-bg, #1e293b);
+  color: var(--status-text-strong, #f1f5f9);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.dark ${R} .status-v3-inspector__nav:hover:not(:disabled),
+[data-theme="dark"] ${R} .status-v3-inspector__nav:hover:not(:disabled),
+[data-surface-theme="dark"] ${R} .status-v3-inspector__nav:hover:not(:disabled),
+.status-page-container[data-theme="dark"] .status-v3-inspector__nav:hover:not(:disabled) {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--primary, #38bdf8) 22%, #1e293b);
+  border-color: var(--primary, #38bdf8);
+}
+.dark ${R} .status-v3-inspector__nav:disabled,
+[data-theme="dark"] ${R} .status-v3-inspector__nav:disabled,
+[data-surface-theme="dark"] ${R} .status-v3-inspector__nav:disabled,
+.status-page-container[data-theme="dark"] .status-v3-inspector__nav:disabled {
   opacity: 0.3;
-  cursor: default;
+  border-color: #334155;
+  background: #0f172a;
+  color: #64748b;
+}
+.dark ${R} .status-v3-inspector__close:hover,
+[data-theme="dark"] ${R} .status-v3-inspector__close:hover,
+[data-surface-theme="dark"] ${R} .status-v3-inspector__close:hover,
+.status-page-container[data-theme="dark"] .status-v3-inspector__close:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.5);
 }
 ${R} .status-v3-inspector__breakdown {
   display: flex;
