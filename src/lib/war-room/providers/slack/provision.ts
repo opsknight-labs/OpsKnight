@@ -209,7 +209,11 @@ function deterministicCollisionSuffix(provisioningToken: string, generation: num
 }
 
 /** Worker entry point. Every retry reconciles this same generation before POST. */
-export async function provisionSlackWarRoom(warRoomId: string, expectedProvisioningToken: string): Promise<void> {
+export async function provisionSlackWarRoom(
+  warRoomId: string,
+  expectedProvisioningToken: string,
+  opts?: { reconciliationOnly?: boolean }
+): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
     include: {
@@ -230,31 +234,41 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
     },
   });
 
+  const reconciliationOnly = opts?.reconciliationOnly === true;
+
   if (
     !room ||
     room.provisioningToken !== expectedProvisioningToken ||
     room.provider !== 'SLACK' ||
-    !['PROVISIONING', 'AMBIGUOUS'].includes(room.state) ||
     !room.provisioningToken
   )
     return;
 
+  if (reconciliationOnly) {
+    if (!['AMBIGUOUS', 'CLOSING'].includes(room.state)) return;
+  } else {
+    if (!['PROVISIONING', 'AMBIGUOUS'].includes(room.state)) return;
+  }
+
   // Slack declares privateRooms:false — never provision a PRIVATE room even if racing overrides fill it.
-  if (room.membershipType === 'PRIVATE') {
+  if (!reconciliationOnly && room.membershipType === 'PRIVATE') {
     await markFailed(room.id, expectedProvisioningToken, 'PRIVATE_WAR_ROOM_UNSUPPORTED', 'Slack war rooms do not support private rooms.');
     return;
   }
 
   const incident = room.incident;
-  // Authority check before any Slack I/O
-  const currentIncident = await prisma.incident.findUnique({
-    where: { id: incident.id },
-    select: { status: true, title: true, urgency: true },
-  });
-  if (!currentIncident || !['OPEN', 'ACKNOWLEDGED'].includes(currentIncident.status)) {
-    if (room.state === 'AMBIGUOUS') return;
-    await markFailed(room.id, expectedProvisioningToken, 'INCIDENT_NOT_ACTIVE', 'Incident is no longer active.');
-    return;
+  // Authority check before any Slack I/O — skipped for reconciliationOnly
+  // (CLOSING reconciliation must run even when incident is RESOLVED).
+  if (!reconciliationOnly) {
+    const currentIncident = await prisma.incident.findUnique({
+      where: { id: incident.id },
+      select: { status: true, title: true, urgency: true },
+    });
+    if (!currentIncident || !['OPEN', 'ACKNOWLEDGED'].includes(currentIncident.status)) {
+      if (room.state === 'AMBIGUOUS') return;
+      await markFailed(room.id, expectedProvisioningToken, 'INCIDENT_NOT_ACTIVE', 'Incident is no longer active.');
+      return;
+    }
   }
 
   const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
@@ -388,6 +402,40 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
     // fall through to the planned-name creation path / AMBIGUOUS gate.
   } catch (error) {
     if (error instanceof WarRoomRetryableError) throw error;
+  }
+
+  // reconciliationOnly: marker-only, never POST — must run for CLOSING as well as AMBIGUOUS
+  if (reconciliationOnly) {
+    // Marker/planned adoption already returned if found above. Here we are not-found.
+    if (room.state === 'CLOSING' && room.createAttemptedAt) {
+      const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
+      const remaining = deadline - Date.now();
+      if (remaining > 0) {
+        throw new WarRoomRetryableError('Reconciling CLOSING Slack channel-create by marker/planned name.', Math.min(60_000, remaining), true);
+      }
+      // Window exhausted — channel definitively absent. Clear fencing token so
+      // finalizeWarRoomCloseNeutral can proceed to ARCHIVED/CLOSED (NOT_FOUND is idempotent).
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+        data: {
+          lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED',
+          lastError: 'No Slack channel was found by marker/planned name during reconciliation window; closing without external channel.',
+          provisioningToken: null,
+        },
+      });
+      const freshClose = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+      if (freshClose) {
+        const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+        await ensureTerminalCloseJobsAfterClosingAdoption(room.id, freshClose.incidentId).catch(() => {});
+        // If still no terminal close job (e.g. closeRequestedAt cleared), repair via neutral close idempotent path
+        const still = await prisma.backgroundJob.findFirst({ where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } }, select: { id: true } });
+        if (!still) {
+          const { closeWarRoomNeutral } = await import('../../engine');
+          await closeWarRoomNeutral({ incidentId: freshClose.incidentId, warRoomId: room.id }).catch(() => {});
+        }
+      }
+    }
+    return;
   }
 
   // 2) Ambiguous gate: if we already attempted create, never blind POST again — reconcile only.

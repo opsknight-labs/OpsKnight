@@ -120,10 +120,12 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
   let result: { success: boolean; error?: string; sideEffectAmbiguous?: boolean };
   switch (event.kind) {
     case 'ARCHIVE': {
-      // Legacy delivery path — delegate to neutral durable close (atomic CLOSING + projection + WAR_ROOM_CLOSE)
-      // so the same crash-gap and degraded-fallback invariants apply even on rolling deploys.
-      const { closeIncidentWarRoomsNeutral } = await import('../../engine');
-      await closeIncidentWarRoomsNeutral(event.incidentId);
+      // Provider-scoped durable close — SLACK delivery must never mutate
+      // MICROSOFT_TEAMS rooms and vice versa. Global all-provider close is
+      // still available via closeIncidentWarRoomsNeutral(incidentId) for
+      // outbox-level code, but delivery handlers must be isolated.
+      const { closeProviderWarRoomsNeutral } = await import('../../engine');
+      await closeProviderWarRoomsNeutral(event.incidentId, 'SLACK');
       result = { success: true };
       break;
     }
@@ -266,9 +268,9 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
     projectionUpdates: true,
     reconciliation: true,
   },
-  provision: async (warRoomId, provisioningToken) => {
+  provision: async (warRoomId, provisioningToken, opts) => {
     const { provisionSlackWarRoom } = await import('./provision');
-    await provisionSlackWarRoom(warRoomId, provisioningToken);
+    await provisionSlackWarRoom(warRoomId, provisioningToken, opts);
   },
   project: async (warRoomId, projectionVersion) => {
     const { projectSlackWarRoomCard } = await import('./projection');

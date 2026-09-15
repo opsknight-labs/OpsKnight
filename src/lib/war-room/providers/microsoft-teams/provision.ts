@@ -436,23 +436,32 @@ async function adoptProviderChannel(
 /** Worker entry point. Every retry reconciles this same generation before POST. */
 export async function provisionMicrosoftTeamsWarRoom(
   warRoomId: string,
-  expectedProvisioningToken: string
+  expectedProvisioningToken: string,
+  opts?: { reconciliationOnly?: boolean }
 ): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
     include: { incident: { select: { id: true, title: true, status: true } } },
   });
+
+  const reconciliationOnly = opts?.reconciliationOnly === true;
+
   if (
     !room ||
     room.provisioningToken !== expectedProvisioningToken ||
     room.provider !== 'MICROSOFT_TEAMS' ||
-    !['PROVISIONING', 'AMBIGUOUS'].includes(room.state) ||
     !room.provisioningToken ||
     !room.providerTenantId ||
     !room.providerContainerId ||
     !room.membershipType
   )
     return;
+
+  if (reconciliationOnly) {
+    if (!['AMBIGUOUS', 'CLOSING'].includes(room.state)) return;
+  } else {
+    if (!['PROVISIONING', 'AMBIGUOUS'].includes(room.state)) return;
+  }
 
   const marker = warRoomMarker(room.incident.id, room.generation);
   const existing = await findWarRoomChannel({
@@ -483,6 +492,34 @@ export async function provisionMicrosoftTeamsWarRoom(
     )
       throw new WarRoomRetryableError(existing.message, existing.retryAfterMs);
     await markFailed(room.id, expectedProvisioningToken, existing.code, existing.message);
+    return;
+  }
+
+  if (reconciliationOnly) {
+    if (room.state === 'CLOSING' && room.createAttemptedAt) {
+      const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
+      const remaining = deadline - Date.now();
+      if (remaining > 0)
+        throw new WarRoomRetryableError('Reconciling CLOSING Teams channel-create by marker only.', Math.min(60_000, remaining), true);
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+        data: {
+          lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED',
+          lastError: 'No Teams channel was found by marker during the reconciliation window; closing without external channel.',
+          provisioningToken: null,
+        },
+      });
+      const freshClose = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+      if (freshClose) {
+        const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+        await ensureTerminalCloseJobsAfterClosingAdoption(room.id, freshClose.incidentId).catch(() => {});
+        const still = await prisma.backgroundJob.findFirst({ where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } }, select: { id: true } });
+        if (!still) {
+          const { closeWarRoomNeutral } = await import('../../engine');
+          await closeWarRoomNeutral({ incidentId: freshClose.incidentId, warRoomId: room.id }).catch(() => {});
+        }
+      }
+    }
     return;
   }
 

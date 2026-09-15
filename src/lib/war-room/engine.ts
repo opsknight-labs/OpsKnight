@@ -15,13 +15,16 @@ async function adapterForRoom(warRoomId: string) {
 
 export async function provisionWarRoom(
   warRoomId: string,
-  provisioningToken: string
+  provisioningToken: string,
+  opts?: { reconciliationOnly?: boolean }
 ): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true } });
-  // CLOSING wins over provisioning — if a close has won, do not race to READY.
-  if (room?.state === 'CLOSING') return;
+  // Normal create path must not race to READY once a durable close has won.
+  // Reconciliation-only jobs are the explicit exception: they are marker-only
+  // lookups for AMBIGUOUS/CLOSING that must NEVER POST a new room.
+  if (!opts?.reconciliationOnly && room?.state === 'CLOSING') return;
   const adapter = await adapterForRoom(warRoomId);
-  await adapter.provision(warRoomId, provisioningToken);
+  await adapter.provision(warRoomId, provisioningToken, opts);
 }
 
 export async function projectWarRoom(warRoomId: string, projectionVersion: number): Promise<void> {
@@ -61,17 +64,17 @@ async function ensureWarRoomReconciliationJob(warRoomId: string, provisioningTok
     select: { id: true },
   });
   if (existing) return;
-  await prisma.backgroundJob
-    .create({
-      data: {
-        type: 'WAR_ROOM_PROVISION',
-        status: 'PENDING',
-        scheduledAt: new Date(),
-        maxAttempts: 6,
-        payload: { warRoomId, provisioningToken, reconciliationOnly: true } as unknown as never,
-      },
-    })
-    .catch(() => {});
+  // Do NOT swallow enqueue failures: closeRequestedAt is durable intent;
+  // a missing worker would strand the room. Let the caller retry.
+  await prisma.backgroundJob.create({
+    data: {
+      type: 'WAR_ROOM_PROVISION',
+      status: 'PENDING',
+      scheduledAt: new Date(),
+      maxAttempts: 6,
+      payload: { warRoomId, provisioningToken, reconciliationOnly: true } as unknown as never,
+    },
+  });
 }
 
 /** Repair helper: ensure a CLOSING room has its durable close jobs (crash-gap recovery). */
@@ -277,9 +280,13 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
 }
 
 /** Close all war rooms for an incident via the neutral engine (resolve path). Idempotent per room. */
-export async function closeIncidentWarRoomsNeutral(incidentId: string): Promise<{ closed: number; skipped: number }> {
+export async function closeIncidentWarRoomsNeutral(
+  incidentId: string,
+  opts?: { provider?: WarRoomProviderName }
+): Promise<{ closed: number; skipped: number }> {
+  const providerFilter = opts?.provider ? { provider: opts.provider as never } : {};
   const rooms = await prisma.incidentWarRoom.findMany({
-    where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'FAILED', 'CLOSING', 'AMBIGUOUS'] } },
+    where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'FAILED', 'CLOSING', 'AMBIGUOUS'] }, ...providerFilter },
     select: { id: true, provider: true, state: true },
   });
   let closed = 0;
@@ -290,6 +297,14 @@ export async function closeIncidentWarRoomsNeutral(incidentId: string): Promise<
     else skipped++;
   }
   return { closed, skipped };
+}
+
+/** Provider-scoped close: only rooms for the given provider are closed. Used by ARCHIVE deliveries. */
+export async function closeProviderWarRoomsNeutral(
+  incidentId: string,
+  provider: WarRoomProviderName
+): Promise<{ closed: number; skipped: number }> {
+  return closeIncidentWarRoomsNeutral(incidentId, { provider });
 }
 
 /**

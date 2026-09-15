@@ -21,10 +21,10 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
       });
       break;
     case 'ARCHIVE': {
-      // Neutral durable close already handled pre-create fencing (PROVISIONING/AMBIGUOUS) in provision.ts path.
-      // Here we only need the READY→CLOSING durable close; reuse the neutral engine so invariants match resolve path.
-      const { closeIncidentWarRoomsNeutral } = await import('../../engine');
-      await closeIncidentWarRoomsNeutral(event.incidentId);
+      // Provider-scoped durable close — MICROSOFT_TEAMS delivery must never
+      // mutate SLACK rooms (and vice versa). See slack/adapter.ts.
+      const { closeProviderWarRoomsNeutral } = await import('../../engine');
+      await closeProviderWarRoomsNeutral(event.incidentId, 'MICROSOFT_TEAMS');
       break;
     }
     case 'INVITE_USER':

@@ -560,9 +560,12 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         )
           throw new Error('War-room provision job is missing warRoomId or provisioningToken');
         const { provisionWarRoom } = await import('../war-room/engine');
+        const rawProvision = job.payload as Record<string, unknown>;
+        const reconciliationOnly = rawProvision.reconciliationOnly === true;
         await provisionWarRoom(
           requiredPayloadString(job.payload, 'warRoomId'),
-          requiredPayloadString(job.payload, 'provisioningToken')
+          requiredPayloadString(job.payload, 'provisioningToken'),
+          reconciliationOnly ? { reconciliationOnly: true } : undefined
         );
         return markWarRoomJobCompleted(job.id);
       }

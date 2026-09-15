@@ -60,7 +60,7 @@ export interface WarRoomProviderAdapter {
   readonly provider: WarRoomProviderName;
   readonly capabilities: WarRoomProviderCapabilities;
 
-  provision(warRoomId: string, provisioningToken: string): Promise<void>;
+  provision(warRoomId: string, provisioningToken: string, opts?: { reconciliationOnly?: boolean }): Promise<void>;
   project(warRoomId: string, projectionVersion: number): Promise<void>;
   syncParticipants(warRoomId: string): Promise<void>;
   settleProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void>;
