@@ -1,5 +1,4 @@
 'use client';
-/* eslint-disable react-hooks/set-state-in-effect -- existing prop-to-alert synchronization */
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { signIn } from 'next-auth/react';
@@ -16,6 +15,7 @@ import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
 import { appRoutes } from '@/lib/app-routes';
+import { promiseWithTimeout } from '@/lib/client-timeout';
 
 type Props = {
   callbackUrl: string;
@@ -101,11 +101,16 @@ export default function LoginClient({
   const handleSSO = async () => {
     setIsSSOLoading(true);
     try {
-      await purgeBrowserAuthCaches();
+      await promiseWithTimeout(purgeBrowserAuthCaches(), 5_000).catch(() => {});
       const safeSsoTarget = safeInternalCallbackUrl(callbackUrl, effectiveFallback);
-      await signIn('oidc', { callbackUrl: safeSsoTarget });
-    } catch {
-      setError('Connection failed');
+      await promiseWithTimeout(
+        signIn('oidc', { callbackUrl: safeSsoTarget }),
+        15_000,
+        'SSO sign-in timed out. Please try again.'
+      );
+    } catch (err: unknown) {
+      setError(err instanceof Error && err.message ? err.message : 'Connection failed');
+    } finally {
       setIsSSOLoading(false);
     }
   };
@@ -121,13 +126,17 @@ export default function LoginClient({
     setError('');
 
     try {
-      const result = await signIn('credentials', {
-        redirect: false,
-        email: email.trim(),
-        password,
-        rememberMe: rememberMe.toString(),
-        callbackUrl,
-      });
+      const result = await promiseWithTimeout(
+        signIn('credentials', {
+          redirect: false,
+          email: email.trim(),
+          password,
+          rememberMe: rememberMe.toString(),
+          callbackUrl,
+        }),
+        15_000,
+        'Sign-in request timed out. Please try again.'
+      );
 
       if (!result?.ok) {
         setError(formatError(result?.error));
@@ -142,7 +151,7 @@ export default function LoginClient({
         // same-origin sanitizer and refresh the App Router after the session
         // cookie has been issued so authenticated RSC data is fetched anew.
         const safeTarget = safeInternalCallbackUrl(callbackUrl, effectiveFallback);
-        await purgeBrowserAuthCaches();
+        await promiseWithTimeout(purgeBrowserAuthCaches(), 5_000).catch(() => {});
         if (typeof window !== 'undefined') {
           window.location.assign(safeTarget);
         } else {
@@ -150,8 +159,8 @@ export default function LoginClient({
           router.refresh();
         }
       }
-    } catch {
-      setError('Unexpected error');
+    } catch (err: unknown) {
+      setError(err instanceof Error && err.message ? err.message : 'Unexpected error');
       setIsSubmitting(false);
     }
   };

@@ -96,6 +96,7 @@ export default function MobilePwaCoordinator({
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const lastSessionHeartbeatAt = useRef(0);
 
   const refreshQueue = useCallback(async () => {
@@ -257,16 +258,19 @@ export default function MobilePwaCoordinator({
 
   const applyUpdate = () => {
     if (!waitingWorker || applyingUpdate) return;
+    setUpdateError(null);
     try {
       waitingWorker.postMessage({ type: 'SKIP_WAITING' });
       void activateWaitingWorker;
       setApplyingUpdate(true);
       setTimeout(() => {
         setApplyingUpdate(false);
+        setUpdateError('Update activation timed out. Tap Reload to retry.');
       }, 8_000);
     } catch (error) {
       logger.warn('mobile.serviceWorker.activate_failed', { error });
       setApplyingUpdate(false);
+      setUpdateError('Failed to activate update. Tap Reload to retry.');
     }
   };
 
@@ -281,7 +285,11 @@ export default function MobilePwaCoordinator({
         <div className="mobile-pwa-notice" role="status">
           <div>
             <strong>OpsKnight update ready</strong>
-            <span>Your current workflow stays open until you choose to activate the update.</span>
+            <span>
+              {updateError
+                ? updateError
+                : 'Your current workflow stays open until you choose to activate the update.'}
+            </span>
           </div>
           <button type="button" onClick={applyUpdate} disabled={applyingUpdate}>
             {applyingUpdate ? 'Applying…' : 'Reload'}

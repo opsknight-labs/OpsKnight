@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import MobileBiometricGuard from '@/components/mobile/MobileBiometricGuard';
 import * as appLock from '@/lib/mobile-app-lock';
@@ -94,5 +94,44 @@ describe('MobileBiometricGuard', () => {
     await waitFor(() => {
       expect(screen.getByText('Protected Content')).toBeInTheDocument();
     });
+  });
+
+  it('recovers cleanly when biometric verification hangs indefinitely', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(appLock, 'platformAuthenticatorAvailable').mockResolvedValue(true);
+      vi.spyOn(appLock, 'isAppLockEnabled').mockReturnValue(true);
+      vi.spyOn(appLock, 'getAppLockCredentialDescriptor').mockReturnValue(undefined);
+
+      const mockGet = vi.fn().mockImplementation(() => new Promise(() => {}));
+      Object.defineProperty(navigator, 'credentials', {
+        value: { get: mockGet },
+        configurable: true,
+      });
+
+      render(
+        <MobileBiometricGuard>
+          <div>Protected Content</div>
+        </MobileBiometricGuard>
+      );
+
+      // Allow mount microtasks to resolve so auto-authenticate starts
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText(/OpsKnight is locked/i)).toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+
+      expect(screen.getByText(/Verification was not completed/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /Unlock with device verification/i })
+      ).not.toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -4,6 +4,7 @@ import { signOut } from 'next-auth/react';
 import { useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
+import { promiseWithTimeout } from '@/lib/client-timeout';
 
 type Props = {
   icon: ReactNode;
@@ -18,8 +19,15 @@ export default function MobileSignOutButton({ icon, label, description }: Props)
   const handleSignOut = async () => {
     if (isSigningOut) return;
     setIsSigningOut(true);
-    await purgeBrowserAuthCaches();
-    await signOut({ callbackUrl: '/m/login?callbackUrl=/m' });
+    const callbackUrl = '/m/login?callbackUrl=/m';
+    try {
+      await promiseWithTimeout(purgeBrowserAuthCaches(), 5_000).catch(() => {});
+      await promiseWithTimeout(signOut({ callbackUrl }), 8_000);
+    } catch {
+      window.location.assign(callbackUrl);
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   return (

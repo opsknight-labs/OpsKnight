@@ -13,6 +13,7 @@ import {
   setAppLockEnabled,
 } from '@/lib/mobile-app-lock';
 import { purgeLegacyUnscopedMobileState } from '@/lib/mobile-principal-state';
+import { promiseWithTimeout } from '@/lib/client-timeout';
 
 export default function MobileBiometricToggle() {
   const [isEnabled, setIsEnabled] = useState(false);
@@ -37,28 +38,32 @@ export default function MobileBiometricToggle() {
     setBusy(true);
     setError('');
     try {
-      const credential = await navigator.credentials.create({
-        publicKey: {
-          challenge: crypto.getRandomValues(new Uint8Array(32)),
-          rp: { name: 'OpsKnight' },
-          user: {
-            id: getOrCreateAppLockUserHandle() as unknown as BufferSource,
-            name: 'opsknight-responder',
-            displayName: 'OpsKnight responder',
+      const credential = await promiseWithTimeout(
+        navigator.credentials.create({
+          publicKey: {
+            challenge: crypto.getRandomValues(new Uint8Array(32)),
+            rp: { name: 'OpsKnight' },
+            user: {
+              id: getOrCreateAppLockUserHandle() as unknown as BufferSource,
+              name: 'opsknight-responder',
+              displayName: 'OpsKnight responder',
+            },
+            pubKeyCredParams: [
+              { alg: -7, type: 'public-key' },
+              { alg: -257, type: 'public-key' },
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: 'platform',
+              residentKey: 'preferred',
+              userVerification: 'required',
+            },
+            timeout: 60_000,
+            attestation: 'none',
           },
-          pubKeyCredParams: [
-            { alg: -7, type: 'public-key' },
-            { alg: -257, type: 'public-key' },
-          ],
-          authenticatorSelection: {
-            authenticatorAttachment: 'platform',
-            residentKey: 'preferred',
-            userVerification: 'required',
-          },
-          timeout: 60_000,
-          attestation: 'none',
-        },
-      });
+        }),
+        15_000,
+        'App Lock configuration timed out.'
+      );
       if (!(credential instanceof PublicKeyCredential) || credential.rawId.byteLength === 0) {
         throw new Error('No platform credential was created.');
       }
@@ -96,13 +101,17 @@ export default function MobileBiometricToggle() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold text-foreground">App Lock</h3>
-              {isEnabled ? <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-label="Enabled" /> : null}
+              {isEnabled ? (
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-label="Enabled" />
+              ) : null}
             </div>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Hide responder data after the app is backgrounded and require the device authenticator to reveal it again.
+              Hide responder data after the app is backgrounded and require the device authenticator
+              to reveal it again.
             </p>
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              This is a local privacy control only. Server authentication, authorization, expiry and device revocation remain authoritative.
+              This is a local privacy control only. Server authentication, authorization, expiry and
+              device revocation remain authoritative.
             </p>
           </div>
         </div>
@@ -117,7 +126,10 @@ export default function MobileBiometricToggle() {
         />
       </div>
       {error ? (
-        <p className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200" role="status">
+        <p
+          className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200"
+          role="status"
+        >
           {error}
         </p>
       ) : null}

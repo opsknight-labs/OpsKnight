@@ -12,8 +12,9 @@ import {
   platformAuthenticatorAvailable,
 } from '@/lib/mobile-app-lock';
 import { purgeLegacyUnscopedMobileState } from '@/lib/mobile-principal-state';
+import { promiseWithTimeout } from '@/lib/client-timeout';
 
-const ASSERTION_TIMEOUT_MS = 60_000;
+const ASSERTION_TIMEOUT_MS = 15_000;
 
 export default function MobileBiometricGuard({ children }: { children: React.ReactNode }) {
   const [isLocked, setIsLocked] = useState(false);
@@ -29,15 +30,19 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
     setUnlockError('');
     try {
       const challenge = crypto.getRandomValues(new Uint8Array(32));
-      const assertion = await navigator.credentials.get({
-        publicKey: {
-          challenge,
-          timeout: ASSERTION_TIMEOUT_MS,
-          rpId: window.location.hostname,
-          userVerification: 'required',
-          allowCredentials: getAppLockCredentialDescriptor(),
-        },
-      });
+      const assertion = await promiseWithTimeout(
+        navigator.credentials.get({
+          publicKey: {
+            challenge,
+            timeout: ASSERTION_TIMEOUT_MS,
+            rpId: window.location.hostname,
+            userVerification: 'required',
+            allowCredentials: getAppLockCredentialDescriptor(),
+          },
+        }),
+        ASSERTION_TIMEOUT_MS,
+        'Device verification timed out.'
+      );
 
       if (!isValidAppLockAssertion(assertion)) {
         throw new Error('The platform authenticator returned an invalid assertion.');

@@ -410,4 +410,38 @@ describe('offline-queue', () => {
     });
     expect(queue[0].lastError).toMatch(/aborted|Network unavailable/i);
   });
+
+  it('handles never-settling network fetch via timeout abort and preserves item in PENDING state', async () => {
+    vi.useFakeTimers();
+    const id = await enqueueRequest({
+      operation: 'INCIDENT_STATUS',
+      url: '/api/incidents/inc-hang/status',
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+      idempotencyKey: 'ack-hang',
+    });
+
+    vi.mocked(global.fetch).mockImplementation((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        if (init?.signal) {
+          init.signal.addEventListener('abort', () => {
+            reject(new DOMException('The user aborted a request.', 'AbortError'));
+          });
+        }
+      });
+    });
+
+    const flushPromise = flushQueuedRequests();
+    await vi.advanceTimersByTimeAsync(15_000);
+    await flushPromise;
+
+    const queue = await listQueuedRequests();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({
+      id,
+      state: 'PENDING',
+      retryCount: 1,
+    });
+    vi.useRealTimers();
+  });
 });
