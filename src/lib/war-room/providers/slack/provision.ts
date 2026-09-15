@@ -9,7 +9,7 @@ import { adoptWarRoomChannel, claimWarRoomProvisioning } from '../../repository'
 import { evaluateWarRoomPolicy } from '../../policy';
 import { projectSlackWarRoomToLegacyIncident } from '../../slack-compatibility';
 import { WarRoomRetryableError } from '../../errors';
-import { findExistingSlackChannel, findSlackWarRoomForTerminalCleanup, findSlackChannelByMarker, slackApiCall, slackWarRoomMarker } from './client';
+import { findExistingSlackChannel, findSlackWarRoomForTerminalCleanup, slackApiCall, slackWarRoomMarker } from './client';
 import { generateBridgeUrl } from '../../bridge';
 
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
