@@ -59,6 +59,8 @@ export async function retryFailedNotifications(): Promise<{
         select: {
           id: true,
           status: true,
+          priority: true,
+          urgency: true,
           createdAt: true,
           updatedAt: true,
           acknowledgedAt: true,
@@ -99,6 +101,7 @@ export async function retryFailedNotifications(): Promise<{
               eventType: notification.eventType as NotificationEventType,
               message: notification.message,
               incident: notification.incident,
+              trafficClass: notification.trafficClass,
             });
           } catch (dispatchError) {
             result = {

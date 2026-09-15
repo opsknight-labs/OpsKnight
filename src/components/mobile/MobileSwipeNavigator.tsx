@@ -41,7 +41,14 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
   const isFocused = isFocusedMobileWorkflow(pathname);
 
   const [snapDirection, setSnapDirection] = useState<'left' | 'right' | null>(null);
-  const [showHint, setShowHint] = useState(false);
+  const [showHint, setShowHint] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return Boolean('ontouchstart' in window && !window.localStorage.getItem(SWIPE_HINT_KEY));
+    } catch {
+      return false;
+    }
+  });
   const startX = useRef(0);
   const startY = useRef(0);
   const tracking = useRef(false);
@@ -50,15 +57,13 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
   const hintTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!('ontouchstart' in window)) return;
+    if (!showHint) return;
     try {
-      if (window.localStorage.getItem(SWIPE_HINT_KEY)) return;
       window.localStorage.setItem(SWIPE_HINT_KEY, 'true');
-      setShowHint(true);
     } catch {
       // ignore storage errors
     }
-  }, []);
+  }, [showHint]);
 
   useEffect(() => {
     return () => {

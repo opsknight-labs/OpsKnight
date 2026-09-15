@@ -207,11 +207,9 @@ export async function checkResponsiveIntegrity(
         return isInteractive || isHeading || isTextOrBadge;
       });
 
-      for (let i = 0; i < collisionCandidates.length; i++) {
-        const elA = collisionCandidates[i];
+      collisionCandidates.forEach((elA, i) => {
         const rectA = elA.getBoundingClientRect();
-        for (let j = i + 1; j < collisionCandidates.length; j++) {
-          const elB = collisionCandidates[j];
+        for (const elB of collisionCandidates.slice(i + 1)) {
           if (elA.contains(elB) || elB.contains(elA)) continue;
 
           const rectB = elB.getBoundingClientRect();
@@ -238,7 +236,7 @@ export async function checkResponsiveIntegrity(
             });
           }
         }
-      }
+      });
 
       return violations;
     },
