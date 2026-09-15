@@ -27,6 +27,7 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Clock,
 } from 'lucide-react';
 import RoleMappingEditor, { type RoleMappingRule } from '@/components/settings/RoleMappingEditor';
 import {
@@ -57,6 +58,8 @@ type OidcConfig = {
   organizationId?: string | null;
   tokenEndpointAuthMethod?: string | null;
   profileMapping?: ProfileMapping | null;
+  sessionMaxAgeSeconds?: number | null;
+  sessionIdleTimeoutSeconds?: number | null;
   updatedAt?: string;
 };
 
@@ -151,6 +154,27 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function toSeconds(valueStr: string, unit: 'minutes' | 'hours' | 'days'): number {
+  const val = Number.parseFloat(valueStr);
+  if (!Number.isFinite(val) || val <= 0) return 0;
+  if (unit === 'days') return Math.round(val * 86400);
+  if (unit === 'hours') return Math.round(val * 3600);
+  return Math.round(val * 60);
+}
+
+function formatDurationSeconds(seconds: number): string {
+  if (seconds >= 86400 && seconds % 86400 === 0) {
+    const days = seconds / 86400;
+    return `${days} ${days === 1 ? 'Day' : 'Days'}`;
+  }
+  if (seconds >= 3600 && seconds % 3600 === 0) {
+    const hours = seconds / 3600;
+    return `${hours} ${hours === 1 ? 'Hour' : 'Hours'}`;
+  }
+  const mins = Math.round(seconds / 60);
+  return `${mins} ${mins === 1 ? 'Minute' : 'Minutes'}`;
+}
+
 export default function SsoSettingsForm({
   initialConfig,
   callbackUrl,
@@ -174,6 +198,44 @@ export default function SsoSettingsForm({
   const initialRoleMapping = Array.isArray(initialConfig?.roleMapping)
     ? initialConfig?.roleMapping
     : [];
+  const initialSessionMaxAge = initialConfig?.sessionMaxAgeSeconds ?? null;
+  const initialSessionIdleTimeout = initialConfig?.sessionIdleTimeoutSeconds ?? null;
+
+  const [sessionMaxAge, setSessionMaxAge] = useState<number | null>(initialSessionMaxAge);
+  const [sessionIdleTimeout, setSessionIdleTimeout] = useState<number | null>(
+    initialSessionIdleTimeout
+  );
+  const [isCustomMaxAge, setIsCustomMaxAge] = useState<boolean>(() => {
+    if (initialSessionMaxAge == null) return false;
+    return ![28800, 43200, 86400, 604800].includes(initialSessionMaxAge);
+  });
+  const [isCustomIdleTimeout, setIsCustomIdleTimeout] = useState<boolean>(() => {
+    if (initialSessionIdleTimeout == null) return false;
+    return ![3600, 7200, 14400, 28800].includes(initialSessionIdleTimeout);
+  });
+  const [customMaxAgeValue, setCustomMaxAgeValue] = useState<string>(() => {
+    if (initialSessionMaxAge == null) return '12';
+    if (initialSessionMaxAge % 86400 === 0) return String(initialSessionMaxAge / 86400);
+    if (initialSessionMaxAge % 3600 === 0) return String(initialSessionMaxAge / 3600);
+    return String(Math.round(initialSessionMaxAge / 60));
+  });
+  const [customMaxAgeUnit, setCustomMaxAgeUnit] = useState<'minutes' | 'hours' | 'days'>(() => {
+    if (initialSessionMaxAge == null) return 'hours';
+    if (initialSessionMaxAge % 86400 === 0 && initialSessionMaxAge >= 86400) return 'days';
+    if (initialSessionMaxAge % 3600 === 0) return 'hours';
+    return 'minutes';
+  });
+
+  const [customIdleValue, setCustomIdleValue] = useState<string>(() => {
+    if (initialSessionIdleTimeout == null) return '4';
+    if (initialSessionIdleTimeout % 3600 === 0) return String(initialSessionIdleTimeout / 3600);
+    return String(Math.round(initialSessionIdleTimeout / 60));
+  });
+  const [customIdleUnit, setCustomIdleUnit] = useState<'minutes' | 'hours' | 'days'>(() => {
+    if (initialSessionIdleTimeout == null) return 'hours';
+    if (initialSessionIdleTimeout % 3600 === 0) return 'hours';
+    return 'minutes';
+  });
 
   const [domains, setDomains] = useState(initialDomains);
   const [issuerUrl, setIssuerUrl] = useState(initialIssuer);
@@ -240,8 +302,7 @@ export default function SsoSettingsForm({
 
   const clientSecretRequired = !initialConfig?.hasClientSecret;
   const issuerChanged =
-    Boolean(initialIssuer) &&
-    normalizeOidcIssuer(issuerUrl) !== normalizeOidcIssuer(initialIssuer);
+    Boolean(initialIssuer) && normalizeOidcIssuer(issuerUrl) !== normalizeOidcIssuer(initialIssuer);
   const selectedPresetNote =
     PROVIDER_PRESETS.find(preset => preset.id === selectedPreset)?.note ??
     'Enter the issuer URL from your provider.';
@@ -262,6 +323,8 @@ export default function SsoSettingsForm({
     tokenEndpointAuthMethodValue !== initialTokenEndpointAuthMethod ||
     customScopesValue.trim() !== initialCustomScopes.trim() ||
     autoProvision !== initialAutoProvision ||
+    sessionMaxAge !== initialSessionMaxAge ||
+    sessionIdleTimeout !== initialSessionIdleTimeout ||
     isRoleMappingDirty ||
     isProfileMappingDirty;
   const isIssuerValid = (value: string) => {
@@ -273,12 +336,18 @@ export default function SsoSettingsForm({
       return false;
     }
   };
+  const isSessionPolicyInvalid =
+    sessionIdleTimeout != null &&
+    ((sessionMaxAge != null && sessionIdleTimeout > sessionMaxAge) ||
+      (sessionMaxAge == null && sessionIdleTimeout > 43200));
+
   const isSaveDisabled =
-    enabled
+    isSessionPolicyInvalid ||
+    (enabled
       ? !isIssuerValid(issuerUrl) ||
         !clientIdValue.trim() ||
         (clientSecretRequired && !clientSecretValue.trim())
-      : !initialConfig && (!isIssuerValid(issuerUrl) || !clientIdValue.trim());
+      : !initialConfig && (!isIssuerValid(issuerUrl) || !clientIdValue.trim()));
   const [lastSaved, setLastSaved] = useState<string | null>(null);
 
   const [state, formAction] = useActionState<SettingsActionState, FormData>(
@@ -315,6 +384,7 @@ export default function SsoSettingsForm({
   }, [state]);
 
   const validateFields = () => {
+    if (isSessionPolicyInvalid) return false;
     if (!enabled && initialConfig) return true;
     const errors: ValidationErrors = {};
     if (!issuerUrl.trim()) {
@@ -371,10 +441,53 @@ export default function SsoSettingsForm({
         setRoleMappingPreview(initialRoleMapping);
         setRoleMappingResetKey(current => current + 1);
         setProfileMappingValues(initialProfileMapping);
+        setSessionMaxAge(initialSessionMaxAge);
+        setSessionIdleTimeout(initialSessionIdleTimeout);
+        setIsCustomMaxAge(
+          initialSessionMaxAge != null &&
+            ![28800, 43200, 86400, 604800].includes(initialSessionMaxAge)
+        );
+        setIsCustomIdleTimeout(
+          initialSessionIdleTimeout != null &&
+            ![3600, 7200, 14400, 28800].includes(initialSessionIdleTimeout)
+        );
+        if (initialSessionMaxAge == null) {
+          setCustomMaxAgeValue('12');
+          setCustomMaxAgeUnit('hours');
+        } else if (initialSessionMaxAge % 86400 === 0 && initialSessionMaxAge >= 86400) {
+          setCustomMaxAgeValue(String(initialSessionMaxAge / 86400));
+          setCustomMaxAgeUnit('days');
+        } else if (initialSessionMaxAge % 3600 === 0) {
+          setCustomMaxAgeValue(String(initialSessionMaxAge / 3600));
+          setCustomMaxAgeUnit('hours');
+        } else {
+          setCustomMaxAgeValue(String(Math.round(initialSessionMaxAge / 60)));
+          setCustomMaxAgeUnit('minutes');
+        }
+        if (initialSessionIdleTimeout == null) {
+          setCustomIdleValue('4');
+          setCustomIdleUnit('hours');
+        } else if (initialSessionIdleTimeout % 3600 === 0) {
+          setCustomIdleValue(String(initialSessionIdleTimeout / 3600));
+          setCustomIdleUnit('hours');
+        } else {
+          setCustomIdleValue(String(Math.round(initialSessionIdleTimeout / 60)));
+          setCustomIdleUnit('minutes');
+        }
       }}
       className="space-y-6"
     >
       <input type="hidden" name="providerType" value={selectedPreset} />
+      <input
+        type="hidden"
+        name="sessionMaxAgeSeconds"
+        value={sessionMaxAge != null ? String(sessionMaxAge) : 'default'}
+      />
+      <input
+        type="hidden"
+        name="sessionIdleTimeoutSeconds"
+        value={sessionIdleTimeout != null ? String(sessionIdleTimeout) : 'default'}
+      />
       {!hasEncryptionKey && (
         <Alert className="bg-amber-500/10 border-amber-500/30">
           <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
@@ -689,9 +802,7 @@ export default function SsoSettingsForm({
 
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <Label className="text-sm font-semibold">
-              Token Endpoint Authentication
-            </Label>
+            <Label className="text-sm font-semibold">Token Endpoint Authentication</Label>
             <span className="text-[11px] text-muted-foreground">
               client_secret_basic / client_secret_post
             </span>
@@ -752,7 +863,8 @@ export default function SsoSettingsForm({
             </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Must match your application&apos;s authentication configuration in your Identity Provider.
+            Must match your application&apos;s authentication configuration in your Identity
+            Provider.
           </p>
         </div>
 
@@ -827,7 +939,8 @@ export default function SsoSettingsForm({
           />
           {selectedPreset === 'azure' ? (
             <p className="text-xs text-muted-foreground">
-              Access is scoped to the configured Microsoft Entra tenant authority. Email domain filtering is not applied for Entra authorization.
+              Access is scoped to the configured Microsoft Entra tenant authority. Email domain
+              filtering is not applied for Entra authorization.
             </p>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -1007,6 +1120,243 @@ export default function SsoSettingsForm({
         </div>
       </div>
 
+      {/* Card 3: Session & Inactivity Policies */}
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-foreground">
+                  Session & Inactivity Policies
+                </h3>
+                {(sessionMaxAge != null || sessionIdleTimeout != null) && (
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10"
+                  >
+                    Customized
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Control maximum session duration and idle timeout for SSO logins. Responders receive
+                an interactive renewal prompt 5 minutes before expiration.
+              </p>
+            </div>
+          </div>
+          {(sessionMaxAge != null || sessionIdleTimeout != null) && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSessionMaxAge(null);
+                setSessionIdleTimeout(null);
+                setIsCustomMaxAge(false);
+                setIsCustomIdleTimeout(false);
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground h-8 shrink-0"
+            >
+              Reset to Defaults
+            </Button>
+          )}
+        </div>
+
+        {/* Setting 1: Maximum Session Lifetime */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-semibold">Maximum Session Lifetime</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Hard re-authentication threshold for SSO logins (allowed: 15m to 30 days).
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[11px] font-mono shrink-0">
+              {sessionMaxAge == null
+                ? 'Default: 12 Hours'
+                : `Active: ${formatDurationSeconds(sessionMaxAge)}`}
+            </Badge>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { label: '8 Hours (Shift)', seconds: 28800 },
+              { label: '12 Hours (Recommended)', seconds: 43200 },
+              { label: '24 Hours (1 Day)', seconds: 86400 },
+              { label: '7 Days', seconds: 604800 },
+            ].map(preset => {
+              const isSelected =
+                !isCustomMaxAge &&
+                (sessionMaxAge === preset.seconds ||
+                  (sessionMaxAge == null && preset.seconds === 43200));
+              return (
+                <button
+                  key={preset.seconds}
+                  type="button"
+                  onClick={() => {
+                    setSessionMaxAge(preset.seconds);
+                    setIsCustomMaxAge(false);
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setIsCustomMaxAge(true)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                isCustomMaxAge
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                  : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+              }`}
+            >
+              Custom...
+            </button>
+          </div>
+
+          {isCustomMaxAge && (
+            <div className="flex items-center gap-2 pt-1 max-w-xs">
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                placeholder="Value"
+                value={customMaxAgeValue}
+                onChange={e => {
+                  setCustomMaxAgeValue(e.target.value);
+                  const secs = toSeconds(e.target.value, customMaxAgeUnit);
+                  setSessionMaxAge(secs > 0 ? secs : null);
+                }}
+                className="h-9 text-xs font-mono w-28"
+              />
+              <select
+                value={customMaxAgeUnit}
+                onChange={e => {
+                  const unit = e.target.value as 'minutes' | 'hours' | 'days';
+                  setCustomMaxAgeUnit(unit);
+                  const secs = toSeconds(customMaxAgeValue, unit);
+                  setSessionMaxAge(secs > 0 ? secs : null);
+                }}
+                className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground"
+              >
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* Setting 2: Idle Inactivity Timeout */}
+        <div className="space-y-3 pt-4 border-t">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-semibold">Idle Inactivity Timeout</Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Terminates sessions when no authentic user activity occurs (allowed: 5m to 7 days).
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[11px] font-mono shrink-0">
+              {sessionIdleTimeout == null
+                ? 'Default: 4 Hours'
+                : `Active: ${formatDurationSeconds(sessionIdleTimeout)}`}
+            </Badge>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { label: '1 Hour (Strict)', seconds: 3600 },
+              { label: '2 Hours', seconds: 7200 },
+              { label: '4 Hours (Recommended)', seconds: 14400 },
+              { label: '8 Hours', seconds: 28800 },
+            ].map(preset => {
+              const isSelected =
+                !isCustomIdleTimeout &&
+                (sessionIdleTimeout === preset.seconds ||
+                  (sessionIdleTimeout == null && preset.seconds === 14400));
+              return (
+                <button
+                  key={preset.seconds}
+                  type="button"
+                  onClick={() => {
+                    setSessionIdleTimeout(preset.seconds);
+                    setIsCustomIdleTimeout(false);
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                      : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setIsCustomIdleTimeout(true)}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-all font-medium cursor-pointer ${
+                isCustomIdleTimeout
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                  : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground border-border/80'
+              }`}
+            >
+              Custom...
+            </button>
+          </div>
+
+          {isCustomIdleTimeout && (
+            <div className="flex items-center gap-2 pt-1 max-w-xs">
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                placeholder="Value"
+                value={customIdleValue}
+                onChange={e => {
+                  setCustomIdleValue(e.target.value);
+                  const secs = toSeconds(e.target.value, customIdleUnit);
+                  setSessionIdleTimeout(secs > 0 ? secs : null);
+                }}
+                className="h-9 text-xs font-mono w-28"
+              />
+              <select
+                value={customIdleUnit}
+                onChange={e => {
+                  const unit = e.target.value as 'minutes' | 'hours' | 'days';
+                  setCustomIdleUnit(unit);
+                  const secs = toSeconds(customIdleValue, unit);
+                  setSessionIdleTimeout(secs > 0 ? secs : null);
+                }}
+                className="h-9 text-xs rounded-md border border-input bg-background px-2.5 py-1 text-foreground"
+              >
+                <option value="minutes">Minutes</option>
+                <option value="hours">Hours</option>
+                <option value="days">Days</option>
+              </select>
+            </div>
+          )}
+
+          {sessionIdleTimeout != null &&
+            sessionMaxAge != null &&
+            sessionIdleTimeout > sessionMaxAge && (
+              <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Idle inactivity timeout cannot exceed maximum session lifetime.
+              </p>
+            )}
+        </div>
+      </div>
+
       <div className="rounded-xl border bg-amber-500/5 border-amber-500/25 p-4 flex items-start gap-3">
         <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
         <div className="space-y-0.5 text-xs">
@@ -1052,7 +1402,6 @@ export default function SsoSettingsForm({
           Your Single Sign-On and identity provider settings have been saved successfully.
         </InlineNotice>
       )}
-
 
       <div className="sticky bottom-4 z-10 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
         <div className="text-xs text-muted-foreground">

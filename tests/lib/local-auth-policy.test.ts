@@ -45,4 +45,39 @@ describe('enterprise local authentication policy', () => {
     expect(getEnterpriseSessionPolicy().idleTimeoutSeconds).toBe(14400);
     expect(getEnterpriseSessionPolicy().reauthenticateAfterSeconds).toBe(43200);
   });
+
+  it('supports dynamic database-backed session policy overrides with clamping', () => {
+    // Custom valid overrides
+    const custom = getEnterpriseSessionPolicy({
+      sessionMaxAgeSeconds: 28800, // 8 hours
+      sessionIdleTimeoutSeconds: 7200, // 2 hours
+    });
+    expect(custom.maximumAgeSeconds).toBe(28800);
+    expect(custom.idleTimeoutSeconds).toBe(7200);
+    expect(custom.reauthenticateAfterSeconds).toBe(28800);
+
+    // Clamping when idle timeout exceeds maximum age
+    const clamped = getEnterpriseSessionPolicy({
+      sessionMaxAgeSeconds: 3600, // 1 hour
+      sessionIdleTimeoutSeconds: 7200, // 2 hours -> clamped to 1 hour
+    });
+    expect(clamped.maximumAgeSeconds).toBe(3600);
+    expect(clamped.idleTimeoutSeconds).toBe(3600);
+
+    // Out of bounds values fallback to env / system defaults
+    const outOfBounds = getEnterpriseSessionPolicy({
+      sessionMaxAgeSeconds: 100, // below 900
+      sessionIdleTimeoutSeconds: 50, // below 300
+    });
+    expect(outOfBounds.maximumAgeSeconds).toBe(43200);
+    expect(outOfBounds.idleTimeoutSeconds).toBe(14400);
+
+    // Null overrides gracefully inherit defaults
+    const nullOverrides = getEnterpriseSessionPolicy({
+      sessionMaxAgeSeconds: null,
+      sessionIdleTimeoutSeconds: null,
+    });
+    expect(nullOverrides.maximumAgeSeconds).toBe(43200);
+    expect(nullOverrides.idleTimeoutSeconds).toBe(14400);
+  });
 });

@@ -19,6 +19,7 @@ import {
   normalizeOidcIssuer,
 } from '@/lib/oidc/issuer-migration';
 import { normalizeOidcProviderType } from '@/lib/oidc-provider';
+import { getEnterpriseSessionPolicy } from '@/lib/local-auth-policy';
 
 function normalizeDomains(value: string) {
   if (!value) return [];
@@ -148,6 +149,49 @@ export async function saveOidcConfig(
     if (pmAvatarUrl) profileMapping.avatarUrl = pmAvatarUrl;
 
     const existing = await prisma.oidcConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
+    const defaultPolicy = getEnterpriseSessionPolicy();
+
+    const rawMaxAge = (formData.get('sessionMaxAgeSeconds') as string | null)?.trim();
+    const rawIdleTimeout = (formData.get('sessionIdleTimeoutSeconds') as string | null)?.trim();
+
+    let sessionMaxAgeSeconds: number | null = null;
+    if (rawMaxAge && rawMaxAge !== 'default') {
+      const parsedMaxAge = Number.parseInt(rawMaxAge, 10);
+      if (Number.isNaN(parsedMaxAge) || parsedMaxAge < 900 || parsedMaxAge > 2_592_000) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Maximum session lifetime must be between 15 minutes and 30 days.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      sessionMaxAgeSeconds = parsedMaxAge;
+    }
+
+    let sessionIdleTimeoutSeconds: number | null = null;
+    if (rawIdleTimeout && rawIdleTimeout !== 'default') {
+      const parsedIdle = Number.parseInt(rawIdleTimeout, 10);
+      if (Number.isNaN(parsedIdle) || parsedIdle < 300 || parsedIdle > 604_800) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Idle inactivity timeout must be between 5 minutes and 7 days.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      const effectiveMaxAge =
+        sessionMaxAgeSeconds ?? existing?.sessionMaxAgeSeconds ?? defaultPolicy.maximumAgeSeconds;
+      if (parsedIdle > effectiveMaxAge) {
+        return {
+          success: false,
+          code: 'VALIDATION_ERROR',
+          error: 'Idle inactivity timeout cannot exceed maximum session lifetime.',
+          updatedAt: expectedUpdatedAt,
+        };
+      }
+      sessionIdleTimeoutSeconds = parsedIdle;
+    }
+
     const issuer = (rawIssuer || existing?.issuer || '').trim();
     const clientId = (rawClientId || existing?.clientId || '').trim();
 
@@ -283,6 +327,8 @@ export async function saveOidcConfig(
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
                 : Prisma.JsonNull,
+            sessionMaxAgeSeconds,
+            sessionIdleTimeoutSeconds,
             updatedBy: actor.id,
             ...(securityConfigChanged ? { configVersion: { increment: 1 } } : {}),
           },
@@ -291,10 +337,11 @@ export async function saveOidcConfig(
 
         if (issuerMigration) {
           const previousIssuer = normalizeOidcIssuer(existing.issuer);
-          const targets = (await tx.user.findMany?.({
-            where: { oidcIdentities: { some: { issuer: previousIssuer } } },
-            select: { id: true },
-          })) ?? [];
+          const targets =
+            (await tx.user.findMany?.({
+              where: { oidcIdentities: { some: { issuer: previousIssuer } } },
+              select: { id: true },
+            })) ?? [];
           if (targets.length > 0) {
             migratedUserIds = targets.map(t => t.id);
             await tx.user.updateMany({
@@ -338,6 +385,8 @@ export async function saveOidcConfig(
               Object.keys(profileMapping).length > 0
                 ? (profileMapping as Prisma.InputJsonObject)
                 : Prisma.JsonNull,
+            sessionMaxAgeSeconds,
+            sessionIdleTimeoutSeconds,
             updatedBy: actor.id,
           },
         });
@@ -362,6 +411,8 @@ export async function saveOidcConfig(
                 organizationId: existing.organizationId,
                 tokenEndpointAuthMethod: existing.tokenEndpointAuthMethod,
                 hasClientSecret: Boolean(existing.clientSecret),
+                sessionMaxAgeSeconds: existing.sessionMaxAgeSeconds,
+                sessionIdleTimeoutSeconds: existing.sessionIdleTimeoutSeconds,
               }
             : null,
           newValue: {
@@ -377,6 +428,8 @@ export async function saveOidcConfig(
             tokenEndpointAuthMethod,
             roleMappingCount: roleMapping.length,
             hasClientSecret: Boolean(encryptedSecret),
+            sessionMaxAgeSeconds,
+            sessionIdleTimeoutSeconds,
           },
           details: {
             integration: 'oidc',
@@ -403,9 +456,8 @@ export async function saveOidcConfig(
     const { resetAuthOptionsCache } = await import('@/lib/auth');
     resetAuthOptionsCache();
     if (migratedUserIds.length > 0) {
-      const { invalidateSessionSecurityProjections } = await import(
-        '@/lib/session-security-projection'
-      );
+      const { invalidateSessionSecurityProjections } =
+        await import('@/lib/session-security-projection');
       invalidateSessionSecurityProjections(migratedUserIds);
     }
     // Invalidate the OIDC config caches too — the freshly saved issuer,
