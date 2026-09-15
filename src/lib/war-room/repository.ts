@@ -260,6 +260,8 @@ export async function adoptWarRoomChannel(
   // AMBIGUOUS + unresolved create + close requested on resolve:
   // the close intent arrived before external identity was known.
   // Adopt as CLOSING so the terminal projection/close lifecycle owns the external room.
+  // state: resolved ? 'CLOSED' : 'READY'
+  // return resolved ? 'CLOSED' : 'READY'
   const adoptAsClosing = resolved && current.closeRequestedAt != null && current.state === 'AMBIGUOUS';
   const now = new Date();
   const changed = await tx.incidentWarRoom.updateMany({

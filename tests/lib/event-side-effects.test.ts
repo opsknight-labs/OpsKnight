@@ -105,7 +105,7 @@ describe('event durable side effects', () => {
             await mockedCreateIncidentWarRoom(event.incidentId);
             return;
           case 'ARCHIVE':
-            await mockedArchiveWarRoomChannel(event.incidentId);
+            await mockedCloseIncidentWarRoomsNeutral(event.incidentId);
             return;
           case 'LIFECYCLE':
             await Promise.all([

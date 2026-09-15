@@ -345,8 +345,11 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
     incident.resolvedAt?.toISOString() !== lifecycle.transitionAt
   )
     return;
-  const { closeIncidentWarRoomsNeutral } = await import('./war-room/engine');
-  await closeIncidentWarRoomsNeutral(payload.incidentId);
+  // Provider-neutral archive: route through the war-room outbox so
+  // TRIGGER/ENSURE/ARCHIVE share the same durable delivery semantics
+  // (idempotency + fencing). Adapters then call closeIncidentWarRoomsNeutral.
+  const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
+  await handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
 }
 
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
