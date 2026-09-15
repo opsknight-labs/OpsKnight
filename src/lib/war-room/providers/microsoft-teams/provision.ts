@@ -501,6 +501,9 @@ export async function provisionMicrosoftTeamsWarRoom(
               lastErrorCode: `RECONCILIATION_EXPIRED_TEAMS_${existing.code}`,
               lastError: `Teams reconciliation lookup ${existing.code} beyond window; closing locally as DEGRADED with unverified external outcome. Provider drift will be reconciled asynchronously.`,
               provisioningToken: null,
+              externalCleanupPending: true,
+              externalCleanupReason: `RECONCILIATION_EXPIRED_TEAMS_${existing.code}`,
+              externalCleanupLastAttemptAt: new Date(),
             },
           }).catch(() => {});
           const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
@@ -528,6 +531,9 @@ export async function provisionMicrosoftTeamsWarRoom(
             lastErrorCode: `RECONCILIATION_EXPIRED_TEAMS_${existing.code}`,
             lastError: `Teams reconciliation lookup ${existing.code} beyond window; closing locally as DEGRADED with unverified external outcome.`,
             provisioningToken: null,
+            externalCleanupPending: true,
+            externalCleanupReason: `RECONCILIATION_EXPIRED_TEAMS_${existing.code}`,
+            externalCleanupLastAttemptAt: new Date(),
           },
         });
         const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });

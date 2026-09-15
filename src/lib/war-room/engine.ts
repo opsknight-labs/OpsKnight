@@ -102,6 +102,8 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
   if (createUnresolved && reconciliationExpired) {
     // Deadline authoritative: mark unverified and clear fencing token so
     // terminal close can proceed even though provider lookup never succeeded.
+    // Persist drift debt so the low-frequency orphan lane can archive any
+    // late-created provider channel idempotently without reopening lifecycle.
     await prisma.incidentWarRoom.updateMany({
       where: { id: warRoomId, state: 'CLOSING', provisioningToken: room.provisioningToken! },
       data: {
@@ -109,6 +111,9 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
         lastErrorCode: 'RECONCILIATION_EXPIRED_UNVERIFIED',
         lastError: 'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
         provisioningToken: null,
+        externalCleanupPending: true,
+        externalCleanupReason: 'RECONCILIATION_EXPIRED_UNVERIFIED',
+        externalCleanupLastAttemptAt: new Date(),
       },
     });
   }
@@ -409,13 +414,42 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
         lastErrorCode: 'RECONCILIATION_EXPIRED_UNVERIFIED',
         lastError: 'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
         provisioningToken: null,
+        externalCleanupPending: true,
+        externalCleanupReason: 'RECONCILIATION_EXPIRED_UNVERIFIED',
+        externalCleanupLastAttemptAt: new Date(),
       },
     });
-    // Fall through to archive/close below.
-  } else if (createUnresolved) {
-    await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken!);
-    const { WarRoomRetryableError } = await import('./errors');
-    throw new WarRoomRetryableError('Unresolved external create outcome — waiting for provisioning reconciliation before terminal close.', 5000, true);
+    // Engine-level expiry also persists debt even though no provider was consulted.
+  }
+  // Backfill debt for degraded-terminal closes that already settled locally
+  // with providerChannelId == null and a RECONCILIATION_EXPIRED_* reason but
+  // predated the externalCleanupPending column. The async orphan lane scans
+  // pending=true, so ensure debt is wired even when this tick didn't create it.
+  if (
+    room.state === 'CLOSING' &&
+    room.providerChannelId == null &&
+    typeof room.lastErrorCode === 'string' &&
+    room.lastErrorCode.startsWith('RECONCILIATION_EXPIRED_')
+  ) {
+    try {
+      const freshDebt = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { externalCleanupPending: true, lastErrorCode: true } });
+      if (freshDebt && !freshDebt.externalCleanupPending && typeof freshDebt.lastErrorCode === 'string' && freshDebt.lastErrorCode.startsWith('RECONCILIATION_EXPIRED_')) {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: warRoomId, externalCleanupPending: false },
+          data: { externalCleanupPending: true, externalCleanupReason: freshDebt.lastErrorCode, externalCleanupLastAttemptAt: new Date() },
+        });
+      }
+    } catch {}
+  }
+  if (createUnresolved) {
+    if (reconciliationExpired) {
+      // Debt already wired above — fall through to local CLOSED/ARCHIVED and
+      // let the async drift lane reclaim any provider orphan.
+    } else {
+      await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken!);
+      const { WarRoomRetryableError } = await import('./errors');
+      throw new WarRoomRetryableError('Unresolved external create outcome — waiting for provisioning reconciliation before terminal close.', 5000, true);
+    }
   }
 
   const effectiveIncidentId = incidentId ?? room.incidentId;

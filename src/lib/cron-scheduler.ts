@@ -360,6 +360,13 @@ async function runOnce() {
     const statusPageRouteReconciliation = await reconcileStatusPageRouteOperations();
     const { reconcileWarRoomHealth } = await import('./war-room/reconcile');
     const warRoomHealth = await reconcileWarRoomHealth();
+    let warRoomTerminalDrift: { checked: number; cleaned: number; stillPending: number; satisfied: number } | null = null;
+    try {
+      const { reconcileTerminalWarRoomDrift } = await import('./war-room/terminal-cleanup');
+      warRoomTerminalDrift = await reconcileTerminalWarRoomDrift(20);
+    } catch (error) {
+      logger.warn('[Cron] Terminal war-room drift sweep failed', { error: error instanceof Error ? error.message : String(error) });
+    }
 
     logger.info('[Cron] Critical tasks processed', {
       escalations: { processed: escalationResult.processed, total: escalationResult.total },
@@ -369,6 +376,7 @@ async function runOnce() {
       statusPageReconciliation,
       statusPageRouteReconciliation,
       warRoomHealth,
+      warRoomTerminalDrift,
     });
 
     // Group 2: Secondary tasks (can run in parallel)

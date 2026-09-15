@@ -46,9 +46,58 @@ export async function archiveExternalSlackRoom(
   try {
     const room = await prisma.incidentWarRoom.findUnique({
       where: { id: warRoomId },
-      select: { id: true, incidentId: true, providerChannelId: true, providerChannelName: true, state: true },
+      select: {
+        id: true,
+        incidentId: true,
+        providerChannelId: true,
+        providerChannelName: true,
+        state: true,
+        generation: true,
+        plannedExternalName: true,
+        externalCleanupPending: true,
+      },
     });
-    if (!room?.providerChannelId) return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel' };
+    if (!room) return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel' };
+    // Terminal debt lane may call archive with providerChannelId == null when the
+    // external create was unverified. Try to resolve the orphan by marker/planned
+    // name before deciding NOT_FOUND so we don't leave the provider channel open.
+    let channelId = room.providerChannelId;
+    if (!channelId) {
+      // If already locally terminal and debt pending, marker scan is best-effort;
+      // do not block local close on provider lookup — return NOT_FOUND so the
+      // engine can settle CLOSED and let the async debt lane retry when
+      // credentials recover.
+      if (room.state === 'ARCHIVED' || room.state === 'CLOSED') {
+        // Debt lane handles orphan reconciliation asynchronously; this immediate
+        // archive call must not fail the local close.
+        if ((room as { externalCleanupPending?: boolean }).externalCleanupPending) return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel (debt pending)' };
+        return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel' };
+      }
+      // CLOSING-but-unresolved with no local channel id yet — attempt marker
+      // resolution so we can archive the orphan immediately if credentials allow.
+      try {
+        const incidentForLookup = await prisma.incident.findUnique({ where: { id: room.incidentId }, select: { serviceId: true } });
+        const tokenForLookup = incidentForLookup ? await getSlackBotToken(incidentForLookup.serviceId).catch(() => null) : null;
+        if (tokenForLookup) {
+          const { findSlackChannelByMarker, slackWarRoomMarker, findExistingSlackChannel } = await import('./client');
+          const marker = slackWarRoomMarker(room.incidentId, (room as { generation: number }).generation);
+          let found: { id: string; name: string } | null = null;
+          try { found = await findSlackChannelByMarker(tokenForLookup, marker); } catch {}
+          if (!found && (room as { plannedExternalName?: string | null }).plannedExternalName) {
+            try { found = await findExistingSlackChannel(tokenForLookup, (room as { plannedExternalName: string }).plannedExternalName!); } catch {}
+          }
+          if (found) channelId = found.id;
+          else return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel (marker not found)' };
+        } else {
+          // Credentials unavailable now — treat as NOT_FOUND for local close;
+          // the debt lane will retry when they recover.
+          if ((room as { externalCleanupPending?: boolean }).externalCleanupPending) return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel (debt pending, token unavailable)' };
+          return { ok: false, code: 'TRANSIENT', message: 'No Slack bot token' };
+        }
+      } catch {
+        return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel' };
+      }
+    }
     if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { ok: true };
     const incident = await prisma.incident.findUnique({ where: { id: room.incidentId }, select: { serviceId: true } });
     if (!incident) return { ok: false, code: 'NOT_FOUND', message: 'Incident not found' };
@@ -59,14 +108,14 @@ export async function archiveExternalSlackRoom(
     // canonical card (RESOLVED/disableActions). Do not emit a standalone
     // chat.postMessage here — the close path would duplicate it on retry.
     await slackApiCall('conversations.setTopic', botToken, {
-      channel: room.providerChannelId,
+      channel: channelId,
       topic: '✅ Incident Resolved — This channel has been archived.',
     }).catch(() => {});
 
-    await slackApiCall('conversations.join', botToken, { channel: room.providerChannelId }).catch(() => {});
+    await slackApiCall('conversations.join', botToken, { channel: channelId }).catch(() => {});
 
     const archiveResult = await slackApiCall('conversations.archive', botToken, {
-      channel: room.providerChannelId,
+      channel: channelId,
     });
     const isIdempotentSuccess =
       archiveResult.ok || archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found';
@@ -83,13 +132,13 @@ export async function archiveExternalSlackRoom(
     if (archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found') {
       logger.info('[ChatOps] Channel already archived or not found in Slack; treating as archived', {
         warRoomId,
-        channelId: room.providerChannelId,
+        channelId,
         slackError: archiveResult.error,
       });
       return { ok: true };
     }
 
-    logger.info('[ChatOps] War-room external archive succeeded', { warRoomId, channelId: room.providerChannelId });
+    logger.info('[ChatOps] War-room external archive succeeded', { warRoomId, channelId });
     return { ok: true };
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);

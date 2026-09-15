@@ -317,6 +317,9 @@ export async function provisionSlackWarRoom(
             lastErrorCode: 'RECONCILIATION_EXPIRED_CHATOPS_DISABLED',
             lastError: 'ChatOps disabled beyond reconciliation window; closing locally as DEGRADED with unverified external outcome. Provider drift will be reconciled asynchronously.',
             provisioningToken: null,
+            externalCleanupPending: true,
+            externalCleanupReason: 'RECONCILIATION_EXPIRED_CHATOPS_DISABLED',
+            externalCleanupLastAttemptAt: new Date(),
           },
         });
         const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
@@ -351,6 +354,9 @@ export async function provisionSlackWarRoom(
             lastErrorCode: 'RECONCILIATION_EXPIRED_SLACK_BOT_TOKEN_MISSING',
             lastError: 'No Slack bot token beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
             provisioningToken: null,
+            externalCleanupPending: true,
+            externalCleanupReason: 'RECONCILIATION_EXPIRED_SLACK_BOT_TOKEN_MISSING',
+            externalCleanupLastAttemptAt: new Date(),
           },
         });
         const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
@@ -391,6 +397,9 @@ export async function provisionSlackWarRoom(
             lastErrorCode: 'RECONCILIATION_EXPIRED_SLACK_WORKSPACE_MISSING',
             lastError: 'No Slack workspace beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
             provisioningToken: null,
+            externalCleanupPending: true,
+            externalCleanupReason: 'RECONCILIATION_EXPIRED_SLACK_WORKSPACE_MISSING',
+            externalCleanupLastAttemptAt: new Date(),
           },
         });
         const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });

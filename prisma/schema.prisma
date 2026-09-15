@@ -802,6 +802,14 @@ model IncidentWarRoom {
   lastErrorCode         String?
   health                WarRoomHealthState    @default(HEALTHY)
   lastReconciledAt      DateTime?
+  // Terminal drift debt: set when reconciliation window expires with
+  // unverified external outcome. A low-frequency lane scans these rooms
+  // by marker/planned name and archives any orphan channel idempotently
+  // without reopening the lifecycle. Cleared on next marker scan.
+  externalCleanupPending     Boolean   @default(false)
+  externalCleanupReason      String?
+  externalCleanupLastAttemptAt DateTime?
+  externalCleanupCompletedAt DateTime?
   metadata              Json?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
@@ -812,6 +820,7 @@ model IncidentWarRoom {
   @@index([provider, providerTenantId, providerContainerId, providerChannelId])
   @@index([state, provisioningStartedAt])
   @@index([provider, health, lastReconciledAt])
+  @@index([state, health, externalCleanupPending, lastReconciledAt])
 }
 
 model WarRoomParticipant {

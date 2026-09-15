@@ -191,6 +191,56 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     const finalizeStart = engine.indexOf('export async function finalizeWarRoomCloseNeutral');
     expect(engine.slice(repairStart, finalizeStart)).toContain('RECONCILIATION_EXPIRED_UNVERIFIED');
   });
+
+  it('expired degraded close persists externalCleanupPending debt for async orphan lane (engine + Slack + Teams)', () => {
+    const engine = readFileSync('src/lib/war-room/engine.ts', 'utf8');
+    const slack = readFileSync('src/lib/war-room/providers/slack/provision.ts', 'utf8');
+    const teams = readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+    expect(engine).toContain('externalCleanupPending: true');
+    expect(engine).toContain('externalCleanupReason');
+    expect(engine).toContain('externalCleanupLastAttemptAt');
+    expect(slack).toContain('externalCleanupPending: true');
+    expect(slack).toContain('RECONCILIATION_EXPIRED_CHATOPS_DISABLED');
+    expect(slack).toContain('RECONCILIATION_EXPIRED_SLACK_BOT_TOKEN_MISSING');
+    expect(slack).toContain('RECONCILIATION_EXPIRED_SLACK_WORKSPACE_MISSING');
+    expect(teams).toContain('externalCleanupPending: true');
+    expect(teams).toContain('RECONCILIATION_EXPIRED_TEAMS_${existing.code}');
+  });
+
+  it('IncidentWarRoom schema persists terminal cleanup debt fields and debt index', () => {
+    const schema = readFileSync('prisma/schema.prisma', 'utf8');
+    expect(schema).toContain('externalCleanupPending');
+    expect(schema).toContain('externalCleanupReason');
+    expect(schema).toContain('externalCleanupLastAttemptAt');
+    expect(schema).toContain('externalCleanupCompletedAt');
+    expect(schema).toContain('@@index([state, health, externalCleanupPending, lastReconciledAt])');
+  });
+
+  it('terminal orphan lane scans pending debt and never reopens lifecycle', () => {
+    const cleanup = readFileSync('src/lib/war-room/terminal-cleanup.ts', 'utf8');
+    const cron = readFileSync('src/lib/cron-scheduler.ts', 'utf8');
+    expect(cleanup).toContain('reconcileTerminalWarRoomDrift');
+    expect(cleanup).toContain('externalCleanupPending: true');
+    expect(cleanup).toContain("state: { in: ['CLOSED', 'ARCHIVED'] }");
+    expect(cleanup).toContain('Never reopen lifecycle');
+    expect(cleanup).toContain('debt satisfied');
+    expect(cleanup).toContain('externalCleanupCompletedAt');
+    expect(cleanup).toContain('findSlackChannelByMarker');
+    expect(cleanup).toContain('findWarRoomChannel');
+    expect(cleanup).toContain("conversations.archive");
+    expect(cron).toContain('reconcileTerminalWarRoomDrift');
+  });
+
+  it('archiveExternalSlackRoom resolves orphan by marker when providerChannelId is null (CLOSING debt)', () => {
+    const lifecycle = readFileSync('src/lib/war-room/providers/slack/lifecycle.ts', 'utf8');
+    expect(lifecycle).toContain('findSlackChannelByMarker');
+    expect(lifecycle).toContain('slackWarRoomMarker');
+    expect(lifecycle).toContain('let channelId = room.providerChannelId');
+    expect(lifecycle).toContain('providerChannelId');
+    expect(lifecycle).toContain('channelId');
+    expect(lifecycle).toContain("conversations.archive");
+    expect(lifecycle).toContain('externalCleanupPending');
+  });
 });
 
 // ── Behavioral: provisionWarRoom fencing (isolated via dynamic import) ──
