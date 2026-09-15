@@ -223,4 +223,40 @@ describe('StatusPageServicesManager Component', () => {
     fireEvent.click(service4);
     expect(setSelectedServices).toHaveBeenCalled();
   });
+
+  it('synchronizes privacySettings when toggling Show Service Owners', () => {
+    const setPrivacySettings = vi.fn();
+    renderManager({ setPrivacySettings });
+
+    const switchOwner = screen.getByRole('switch', { name: 'Show Service Owners' });
+    fireEvent.click(switchOwner);
+
+    expect(setFormData).toHaveBeenCalledWith(expect.objectContaining({ showServiceOwners: true }));
+    expect(setPrivacySettings).toHaveBeenCalled();
+  });
+
+  it('synchronizes privacySettings when toggling Group by Region switch', () => {
+    const setPrivacySettings = vi.fn();
+    renderManager({
+      setPrivacySettings,
+      privacySettings: { showServiceRegions: false, showTeamInformation: false },
+    });
+
+    const switchRegion = screen.getByRole('switch', { name: 'Group by Region' });
+    fireEvent.click(switchRegion);
+
+    expect(setFormData).toHaveBeenCalledWith(
+      expect.objectContaining({ showServicesByRegion: true })
+    );
+    expect(setPrivacySettings).toHaveBeenCalled();
+  });
+
+  it('updates formData when toggling Show SLA Tier switch', () => {
+    renderManager();
+
+    const switchSla = screen.getByRole('switch', { name: 'Show SLA Tier' });
+    fireEvent.click(switchSla);
+
+    expect(setFormData).toHaveBeenCalledWith(expect.objectContaining({ showServiceSlaTier: true }));
+  });
 });

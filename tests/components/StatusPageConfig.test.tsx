@@ -230,4 +230,107 @@ describe('StatusPageConfig Component', () => {
       expect(deleteReq![0]).toContain('id=sp-1');
     });
   });
+
+  it('saves auto-refresh in Advanced settings without being blocked by empty API token name', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: { updatedAt: new Date().toISOString(), publication: { status: 'LIVE' } },
+      }),
+    });
+    global.fetch = fetchMock;
+
+    render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
+
+    // Navigate to Advanced tab
+    const advancedTab = screen.getByText('Advanced');
+    fireEvent.click(advancedTab);
+
+    expect(screen.getByText('Live Updates & Feeds')).toBeDefined();
+
+    // Auto-Refresh is enabled by default; refresh interval input is present
+    const intervalInput = screen.getByLabelText(/Refresh Interval/i);
+    expect(intervalInput).toBeDefined();
+    fireEvent.change(intervalInput, { target: { value: '120' } });
+
+    // The API token field is empty, but Save Settings should still succeed without form validation blockage
+    const saveBtn = screen.getByText(/Save Settings/);
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => expect(notifySuccess).toHaveBeenCalled());
+    const request = fetchMock.mock.calls.find(([, options]) => options?.method === 'PATCH');
+    expect(request).toBeDefined();
+    const payload = JSON.parse(request![1].body);
+    expect(payload.branding.autoRefresh).toBe(true);
+    expect(payload.branding.refreshInterval).toBe(120);
+  });
+
+  it('validates API token creation programmatically when token name is empty', async () => {
+    render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
+
+    fireEvent.click(screen.getByText('Advanced'));
+
+    const createTokenBtn = screen.getByRole('button', { name: 'Create token' });
+    fireEvent.click(createTokenBtn);
+
+    // Shows programmatic validation error
+    expect(screen.getByText('Token name is required.')).toBeDefined();
+  });
+
+  it('toggles Content section display options and verifies helper text', () => {
+    render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
+
+    fireEvent.click(screen.getByText('Content'));
+
+    expect(screen.getByText('Display Options')).toBeDefined();
+
+    // Verify Show Services switch and clarified helper text
+    const showServicesSwitch = screen.getByRole('switch', { name: 'Show Services' });
+    expect(showServicesSwitch).toBeChecked();
+    expect(screen.getByText(/disabling hides all service cards from the page/i)).toBeDefined();
+    fireEvent.click(showServicesSwitch);
+    expect(showServicesSwitch).not.toBeChecked();
+
+    // Verify Show Incidents switch
+    const showIncidentsSwitch = screen.getByRole('switch', { name: 'Show Incidents' });
+    expect(showIncidentsSwitch).toBeChecked();
+    fireEvent.click(showIncidentsSwitch);
+    expect(showIncidentsSwitch).not.toBeChecked();
+
+    // Verify Show Uptime & Availability switch
+    const showUptimeSwitch = screen.getByRole('switch', { name: 'Show Uptime & Availability' });
+    expect(showUptimeSwitch).toBeChecked();
+    fireEvent.click(showUptimeSwitch);
+    expect(showUptimeSwitch).not.toBeChecked();
+
+    // Verify Show Region Heatmap switch is not disabled and toggles
+    const heatmapSwitch = screen.getByRole('switch', { name: 'Show Region Heatmap' });
+    expect(heatmapSwitch).not.toBeDisabled();
+    expect(heatmapSwitch).toBeChecked();
+    fireEvent.click(heatmapSwitch);
+    expect(heatmapSwitch).not.toBeChecked();
+
+    // Verify Show Subscribe to Updates switch
+    const subscribeSwitch = screen.getByRole('switch', { name: 'Show Subscribe to Updates' });
+    expect(subscribeSwitch).toBeChecked();
+    fireEvent.click(subscribeSwitch);
+    expect(subscribeSwitch).not.toBeChecked();
+  });
+
+  it('toggles Appearance section header and footer visibility switches', () => {
+    render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
+
+    fireEvent.click(screen.getByText('Appearance'));
+
+    const showHeaderSwitch = screen.getByRole('switch', { name: 'Show Header' });
+    expect(showHeaderSwitch).toBeChecked();
+    fireEvent.click(showHeaderSwitch);
+    expect(showHeaderSwitch).not.toBeChecked();
+
+    const showFooterSwitch = screen.getByRole('switch', { name: 'Show Footer' });
+    expect(showFooterSwitch).toBeChecked();
+    fireEvent.click(showFooterSwitch);
+    expect(showFooterSwitch).not.toBeChecked();
+  });
 });
