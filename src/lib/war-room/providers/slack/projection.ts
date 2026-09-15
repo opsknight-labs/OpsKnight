@@ -32,14 +32,14 @@ export async function settleSlackWarRoomProjectionFailure(
   warRoomId: string,
   projectionVersion: number
 ): Promise<void> {
+  // Projection is subordinate to close lifecycle: never transition CLOSING → CLOSED here.
+  // Mark degraded and clear the lease; the close worker decides fallback policy.
   const changed = await prisma.incidentWarRoom.updateMany({
     where: { id: warRoomId, projectionVersion, state: 'CLOSING' },
     data: {
-      state: 'CLOSED',
-      closedAt: new Date(),
       health: 'DEGRADED',
       lastErrorCode: 'PROJECTION_RETRIES_EXHAUSTED',
-      lastError: 'War-room card projection exhausted its retry budget while closing; closed locally.',
+      lastError: 'War-room card projection exhausted its retry budget while closing; awaiting close lifecycle decision.',
       projectionLeaseToken: null,
       projectionLeaseExpiresAt: null,
     },
@@ -119,14 +119,9 @@ export async function completeSlackWarRoomProjection(
 ): Promise<boolean> {
   const changed = await prisma.incidentWarRoom.updateMany({
     where: { id: warRoomId, projectionVersion, projectionLeaseToken: token },
-    data: { lastProjectedAt: new Date(), projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+    data: { lastProjectedVersion: projectionVersion, lastProjectedAt: new Date(), projectionLeaseToken: null, projectionLeaseExpiresAt: null },
   });
-  if (changed.count === 1) {
-    await prisma.incidentWarRoom.updateMany({
-      where: { id: warRoomId, projectionVersion, state: 'CLOSING' },
-      data: { state: 'CLOSED', closedAt: new Date() },
-    });
-  }
+  // Do not transition CLOSING → CLOSED here; close lifecycle owns terminal state.
   return changed.count === 1;
 }
 
@@ -162,23 +157,10 @@ export async function projectSlackWarRoomCard(
   const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId } });
   if (!room?.providerTenantId || !room.providerChannelId) {
     if (!room) return;
-    const missingTerminal = room.state === 'CLOSING';
     await prisma.incidentWarRoom.updateMany({
       where: { id: room.id, projectionLeaseToken: token },
-      data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+      data: { health: 'DEGRADED', lastErrorCode: 'WAR_ROOM_ROUTING_MISSING', lastError: 'War-room routing snapshot was missing during terminal projection; close lifecycle owns final state.', projectionLeaseToken: null, projectionLeaseExpiresAt: null },
     });
-    if (missingTerminal) {
-      await prisma.incidentWarRoom.updateMany({
-        where: { id: room.id, projectionVersion, state: 'CLOSING' },
-        data: {
-          state: 'CLOSED',
-          closedAt: new Date(),
-          health: 'DEGRADED',
-          lastErrorCode: 'WAR_ROOM_ROUTING_MISSING',
-          lastError: 'War-room routing snapshot was missing during terminal projection; closed locally.',
-        },
-      });
-    }
     return;
   }
 
@@ -190,18 +172,8 @@ export async function projectSlackWarRoomCard(
     });
     await prisma.incidentWarRoom.updateMany({
       where: { id: room.id, projectionLeaseToken: token },
-      data: { health: 'DEGRADED', lastErrorCode: authority.code, lastError: authority.message },
+      data: { health: 'DEGRADED', lastErrorCode: authority.code, lastError: authority.message, projectionLeaseToken: null, projectionLeaseExpiresAt: null },
     });
-    await prisma.incidentWarRoom.updateMany({
-      where: { id: room.id, projectionLeaseToken: token },
-      data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
-    });
-    if (room.state === 'CLOSING') {
-      await prisma.incidentWarRoom.updateMany({
-        where: { id: room.id, projectionVersion, state: 'CLOSING' },
-        data: { state: 'CLOSED', closedAt: new Date() },
-      });
-    }
     return;
   }
 
@@ -212,20 +184,8 @@ export async function projectSlackWarRoomCard(
   if (!incidentRecord) {
     await prisma.incidentWarRoom.updateMany({
       where: { id: room.id, projectionLeaseToken: token },
-      data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+      data: { health: 'DEGRADED', lastErrorCode: 'INCIDENT_NOT_FOUND', lastError: 'Incident no longer exists during terminal projection; close lifecycle owns final state.', projectionLeaseToken: null, projectionLeaseExpiresAt: null },
     });
-    if (room.state === 'CLOSING') {
-      await prisma.incidentWarRoom.updateMany({
-        where: { id: room.id, projectionVersion, state: 'CLOSING' },
-        data: {
-          state: 'CLOSED',
-          closedAt: new Date(),
-          health: 'DEGRADED',
-          lastErrorCode: 'INCIDENT_NOT_FOUND',
-          lastError: 'Incident no longer exists during terminal projection; closed locally.',
-        },
-      });
-    }
     return;
   }
 
@@ -234,18 +194,8 @@ export async function projectSlackWarRoomCard(
   if (!botToken) {
     await prisma.incidentWarRoom.updateMany({
       where: { id: room.id, projectionLeaseToken: token },
-      data: { health: 'DEGRADED', lastErrorCode: 'SLACK_BOT_TOKEN_MISSING', lastError: 'No Slack bot token configured for projection.' },
+      data: { health: 'DEGRADED', lastErrorCode: 'SLACK_BOT_TOKEN_MISSING', lastError: 'No Slack bot token configured for projection.', projectionLeaseToken: null, projectionLeaseExpiresAt: null },
     });
-    await prisma.incidentWarRoom.updateMany({
-      where: { id: room.id, projectionLeaseToken: token },
-      data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
-    });
-    if (room.state === 'CLOSING') {
-      await prisma.incidentWarRoom.updateMany({
-        where: { id: room.id, projectionVersion, state: 'CLOSING' },
-        data: { state: 'CLOSED', closedAt: new Date() },
-      });
-    }
     return;
   }
 
@@ -314,28 +264,17 @@ export async function projectSlackWarRoomCard(
       }
       if (retryable) {
         // Ambiguous — keep commandCreateAttemptedAt so next worker never blind-rePOSTs.
+        // Subordinate to close lifecycle: do not close here.
         await prisma.incidentWarRoom.updateMany({
           where: { id: room.id, projectionLeaseToken: token },
           data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
         });
-        if (room.state === 'CLOSING') {
-          await prisma.incidentWarRoom.updateMany({
-            where: { id: room.id, projectionVersion, state: 'CLOSING' },
-            data: { state: 'CLOSED', closedAt: new Date() },
-          });
-        }
         return;
       }
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, projectionLeaseToken: token },
         data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
       });
-      if (room.state === 'CLOSING') {
-        await prisma.incidentWarRoom.updateMany({
-          where: { id: room.id, projectionVersion, state: 'CLOSING' },
-          data: { state: 'CLOSED', closedAt: new Date() },
-        });
-      }
       return;
     }
     // Slack returns ts as message identifier; capture it from channel response if available.
@@ -370,12 +309,6 @@ export async function projectSlackWarRoomCard(
           projectionLeaseExpiresAt: null,
         },
       });
-      if (room.state === 'CLOSING') {
-        await prisma.incidentWarRoom.updateMany({
-          where: { id: room.id, projectionVersion, state: 'CLOSING' },
-          data: { state: 'CLOSED', closedAt: new Date() },
-        });
-      }
       return;
     }
   } else {
@@ -406,12 +339,6 @@ export async function projectSlackWarRoomCard(
         where: { id: room.id, projectionLeaseToken: token },
         data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null },
       });
-      if (room.state === 'CLOSING') {
-        await prisma.incidentWarRoom.updateMany({
-          where: { id: room.id, projectionVersion, state: 'CLOSING' },
-          data: { state: 'CLOSED', closedAt: new Date() },
-        });
-      }
       return;
     }
     await prisma.incidentWarRoom.updateMany({

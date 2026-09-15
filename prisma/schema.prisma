@@ -780,6 +780,7 @@ model IncidentWarRoom {
   commandCreateAttemptedAt DateTime?
   messageGeneration     Int                   @default(1)
   projectionVersion     Int                   @default(0)
+  lastProjectedVersion  Int                   @default(0)
   lastProjectedAt       DateTime?
   projectionLeaseToken  String?
   projectionLeaseExpiresAt DateTime?

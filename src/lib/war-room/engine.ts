@@ -74,7 +74,7 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
 
 /** Finalizes a CLOSING room: waits for the terminal projection to settle, then provider archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */
 export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?: string, expectedTerminalProjectionVersion?: number | null): Promise<void> {
-  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { id: true, incidentId: true, provider: true, state: true, projectionVersion: true, projectionLeaseToken: true } });
+  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { id: true, incidentId: true, provider: true, state: true, projectionVersion: true, lastProjectedVersion: true, projectionLeaseToken: true, projectionLeaseExpiresAt: true } });
   if (!room) return;
   if (room.state !== 'CLOSING') return;
   const effectiveIncidentId = incidentId ?? room.incidentId;
@@ -82,16 +82,35 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
   const canArchive = adapter.capabilities.archiveRoom;
 
   // Wait for the terminal projection captured at close initiation — never queue a new one on retry.
+  // lastProjectedVersion advances only on successful provider apply (complete*Projection), so
+  // projectionVersion alone (queued-at) + lease==null does NOT mean completed.
   if (expectedTerminalProjectionVersion != null) {
-    if (room.projectionVersion !== expectedTerminalProjectionVersion) {
+    const lastProjected = (room as { lastProjectedVersion?: number | null }).lastProjectedVersion ?? 0;
+    if (lastProjected < expectedTerminalProjectionVersion) {
+      // If lease is still active, the terminal projection is in flight.
+      // If lease is null/cleared but lastProjected is still behind, the worker either
+      // failed terminally (settle marks DEGRADED) or hasn't completed yet — retry
+      // budget-neutral and let the projection job settle. The close worker does NOT
+      // queue a new projection on retry.
+      const hasActiveProjection = room.projectionLeaseToken != null;
+      // Also consider stale lease: if lease exists but expired, projector will clear it; still retry.
+      if (hasActiveProjection || room.projectionVersion >= expectedTerminalProjectionVersion) {
+        const { WarRoomRetryableError } = await import('./errors');
+        const msg = hasActiveProjection
+          ? 'Terminal projection still in flight; retrying close after it settles.'
+          : 'Waiting for terminal projection to be applied before archive.';
+        throw new WarRoomRetryableError(msg, 3000, true);
+      }
+      // projectionVersion behind expected should not happen (close queued N, but version reverted) — treat as wait.
       const { WarRoomRetryableError } = await import('./errors');
       throw new WarRoomRetryableError('Waiting for terminal projection to reach target version before archive.', 3000, true);
     }
-  }
-  const hasActiveProjection = room.projectionLeaseToken != null;
-  if (hasActiveProjection) {
-    const { WarRoomRetryableError } = await import('./errors');
-    throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
+  } else {
+    const hasActiveProjection = room.projectionLeaseToken != null;
+    if (hasActiveProjection) {
+      const { WarRoomRetryableError } = await import('./errors');
+      throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
+    }
   }
 
   if (canArchive && adapter.archive) {

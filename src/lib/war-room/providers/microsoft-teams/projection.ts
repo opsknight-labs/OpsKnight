@@ -47,14 +47,13 @@ function isAmbiguousCardCreateResult(result: { errorCode?: string; success: bool
  * locally so the room never hangs in CLOSING forever.
  */
 export async function settleWarRoomProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void> {
+  // Subordinate to close lifecycle: never CLOSING→CLOSED here.
   const changed = await prisma.incidentWarRoom.updateMany({
     where: { id: warRoomId, projectionVersion, state: 'CLOSING' },
     data: {
-      state: 'CLOSED',
-      closedAt: new Date(),
       health: 'DEGRADED',
       lastErrorCode: 'PROJECTION_RETRIES_EXHAUSTED',
-      lastError: 'War-room card projection exhausted its retry budget while closing; closed locally.',
+      lastError: 'War-room card projection exhausted its retry budget while closing; awaiting close lifecycle decision.',
       projectionLeaseToken: null,
       projectionLeaseExpiresAt: null,
     },
@@ -113,14 +112,9 @@ export async function claimMicrosoftTeamsWarRoomProjection(warRoomId: string, pr
 export async function completeMicrosoftTeamsWarRoomProjection(warRoomId: string, projectionVersion: number, token: string): Promise<boolean> {
   const changed = await prisma.incidentWarRoom.updateMany({
     where: { id: warRoomId, projectionVersion, projectionLeaseToken: token },
-    data: { lastProjectedAt: new Date(), projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+    data: { lastProjectedVersion: projectionVersion, lastProjectedAt: new Date(), projectionLeaseToken: null, projectionLeaseExpiresAt: null },
   });
-  if (changed.count === 1) {
-    await prisma.incidentWarRoom.updateMany({
-      where: { id: warRoomId, projectionVersion, state: 'CLOSING' },
-      data: { state: 'CLOSED', closedAt: new Date() },
-    });
-  }
+  // Do not transition CLOSING→CLOSED here; close lifecycle owns terminal state.
   return changed.count === 1;
 }
 
@@ -133,11 +127,7 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
   });
   if (!room?.destinationId || !room.providerTenantId || !room.providerContainerId || !room.providerChannelId) {
     if (!room) return;
-    const missingTerminal = room.state === 'CLOSING';
-    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
-    if (missingTerminal) {
-      await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date(), health: 'DEGRADED', lastErrorCode: 'WAR_ROOM_ROUTING_MISSING', lastError: 'War-room routing snapshot was missing during terminal projection; closed locally.' } });
-    }
+    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { health: 'DEGRADED', lastErrorCode: 'WAR_ROOM_ROUTING_MISSING', lastError: 'War-room routing snapshot was missing during terminal projection; close lifecycle owns final state.', projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
     return;
   }
 
@@ -146,14 +136,7 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
   const authority = await validateWarRoomCollaborationAuthority(room);
   if (!authority.allowed) {
     addOperationalMetric('opsknight_war_room_projection_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'authority_revoked' });
-    await prisma.incidentWarRoom.updateMany({
-      where: { id: room.id, projectionLeaseToken: token },
-      data: { health: 'DEGRADED', lastErrorCode: authority.code, lastError: authority.message },
-    });
-    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
-    if (room.state === 'CLOSING') {
-      await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
-    }
+    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { health: 'DEGRADED', lastErrorCode: authority.code, lastError: authority.message, projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
     return;
   }
 
@@ -162,10 +145,7 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
     include: { service: { select: { name: true } }, assignee: { select: { name: true } } },
   });
   if (!incidentRecord) {
-    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
-    if (room.state === 'CLOSING') {
-      await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date(), health: 'DEGRADED', lastErrorCode: 'INCIDENT_NOT_FOUND', lastError: 'Incident no longer exists during terminal projection; closed locally.' } });
-    }
+    await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { health: 'DEGRADED', lastErrorCode: 'INCIDENT_NOT_FOUND', lastError: 'Incident no longer exists during terminal projection; close lifecycle owns final state.', projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
     return;
   }
   const incident = {
@@ -209,11 +189,7 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
         where: { id: room.id, projectionLeaseToken: token },
         data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_CARD_CREATE', lastError: created.success ? 'Teams returned an incomplete command-card reference.' : (created as { error: string }).error },
       });
-      // Ambiguous POST must never be auto-retried blindly.
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
-      if (room.state === 'CLOSING') {
-        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
-      }
       return;
     }
     if (!created.success || !created.providerMessageId || !created.conversationId) {
@@ -243,15 +219,9 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
           data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_CARD_CREATE', lastError: (created as { error: string }).error },
         });
         await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
-        if (room.state === 'CLOSING') {
-          await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
-        }
         return;
       }
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
-      if (room.state === 'CLOSING') {
-        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
-      }
       return;
     }
     await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { commandMessageId: created.providerMessageId, commandConversationId: created.conversationId, health: 'HEALTHY', lastError: null, lastErrorCode: null } });
@@ -266,9 +236,6 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
         throw new WarRoomRetryableError(updated.error, updated.retryAfterMs);
       }
       await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
-      if (room.state === 'CLOSING') {
-        await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionVersion, state: 'CLOSING' }, data: { state: 'CLOSED', closedAt: new Date() } });
-      }
       return;
     }
     // Successful update clears health degradation.

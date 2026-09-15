@@ -302,7 +302,8 @@ describe('WAR_ROOM_CLOSE terminal projection fencing', () => {
         incidentId: 'inc-1',
         provider: 'SLACK',
         state: 'CLOSING',
-        projectionVersion: 5,
+        projectionVersion: 7,
+        lastProjectedVersion: 5,
         projectionLeaseToken: null,
       }),
     } as unknown;
@@ -313,7 +314,7 @@ describe('WAR_ROOM_CLOSE terminal projection fencing', () => {
     });
   });
 
-  it('WAR_ROOM_CLOSE with matching version and no lease does not throw version wait', async () => {
+  it('WAR_ROOM_CLOSE with matching lastProjectedVersion and no lease does not throw version wait', async () => {
     (prismaMock as Record<string, unknown>).incidentWarRoom = {
       findUnique: vi.fn().mockResolvedValue({
         id: 'room-1',
@@ -321,6 +322,7 @@ describe('WAR_ROOM_CLOSE terminal projection fencing', () => {
         provider: 'SLACK',
         state: 'CLOSING',
         projectionVersion: 5,
+        lastProjectedVersion: 5,
         projectionLeaseToken: null,
       }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
@@ -331,6 +333,27 @@ describe('WAR_ROOM_CLOSE terminal projection fencing', () => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       expect(msg).not.toContain('Waiting for terminal projection to reach target version');
+      expect(msg).not.toContain('Waiting for terminal projection to be applied');
     }
+  });
+
+  it('WAR_ROOM_CLOSE with active lease waits budget-neutral even when lastProjectedVersion is behind', async () => {
+    (prismaMock as Record<string, unknown>).incidentWarRoom = {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'room-1',
+        incidentId: 'inc-1',
+        provider: 'SLACK',
+        state: 'CLOSING',
+        projectionVersion: 7,
+        lastProjectedVersion: 5,
+        projectionLeaseToken: 'lease-1',
+        projectionLeaseExpiresAt: new Date(Date.now() + 60_000),
+      }),
+    } as unknown;
+    const { finalizeWarRoomCloseNeutral } = await import('@/lib/war-room/engine');
+    await expect(finalizeWarRoomCloseNeutral('room-1', 'inc-1', 7)).rejects.toMatchObject({
+      name: 'WarRoomRetryableError',
+      retryBudgetNeutral: true,
+    });
   });
 });
