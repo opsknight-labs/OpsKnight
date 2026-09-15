@@ -179,7 +179,7 @@ describe('provider admission control', () => {
     const now = new Date('2026-08-30T12:00:00.000Z');
 
     // CRITICAL receives bounded emergency admission
-    const critical = await acquireProviderAdmission('PUSH', 'default', now, 'CRITICAL' as any);
+    const critical = await acquireProviderAdmission('PUSH', 'default', now, 'CRITICAL');
     expect(critical.allowed).toBe(true);
 
     // TRANSACTIONAL receives bounded emergency admission

@@ -36,6 +36,17 @@ export const EMERGENCY_RATE_PER_SECOND: Record<string, number> = {
   MICROSOFT_TEAMS: 2,
 };
 
+const EMERGENCY_CONCURRENCY_MAP = new Map<string, number>(Object.entries(EMERGENCY_CONCURRENCY));
+const EMERGENCY_RATE_MAP = new Map<string, number>(Object.entries(EMERGENCY_RATE_PER_SECOND));
+
+function getEmergencyConcurrency(scope: string): number {
+  return EMERGENCY_CONCURRENCY_MAP.get(scope) ?? 1;
+}
+
+function getEmergencyRate(scope: string): number {
+  return EMERGENCY_RATE_MAP.get(scope) ?? 1;
+}
+
 /** Process-local emergency rate tracking per 1s window (key: `${scope}:${providerKey}`) */
 const localEmergencyRate = new Map<string, { count: number; windowStartSec: number }>();
 
@@ -130,8 +141,7 @@ function tryEmergencyRateAdmission(
     };
   }
 
-  const isEmergencyClass =
-    trafficClass === 'TRANSACTIONAL' || (trafficClass as string) === 'CRITICAL';
+  const isEmergencyClass = trafficClass === 'TRANSACTIONAL' || trafficClass === 'CRITICAL';
   if (!isEmergencyClass) {
     return {
       allowed: false,
@@ -140,7 +150,7 @@ function tryEmergencyRateAdmission(
     };
   }
 
-  const emergencyRate = EMERGENCY_RATE_PER_SECOND[scope] ?? 1;
+  const emergencyRate = getEmergencyRate(scope);
   const nowSec = Math.floor(now.getTime() / 1_000);
   const emergencyKey = `${scope}:${providerKey}`;
   const current = localEmergencyRate.get(emergencyKey);
@@ -427,7 +437,7 @@ export async function acquireProviderConcurrency(
         revision: null,
       };
     } else {
-      const emergencySlots = bulk ? 0 : (EMERGENCY_CONCURRENCY[scope] ?? 1);
+      const emergencySlots = bulk ? 0 : getEmergencyConcurrency(scope);
       logger.error('provider_admission.capacity_resolution_db_failed', {
         scope,
         providerKey,
@@ -475,7 +485,7 @@ export async function acquireProviderConcurrency(
         localConcurrency.set(poolKey, local);
       } else {
         // Production: control-plane is inaccessible — activate emergency limiter
-        const emergencySlots = bulk ? 0 : (EMERGENCY_CONCURRENCY[scope] ?? 1);
+        const emergencySlots = bulk ? 0 : getEmergencyConcurrency(scope);
         logger.error('provider_admission.control_plane_unavailable', {
           scope,
           providerKey,
@@ -541,7 +551,7 @@ export async function acquireProviderConcurrency(
         } else {
           // P0 FIX: DB failure must NEVER become MAX_IN_FLIGHT — use CONTROL_PLANE_UNAVAILABLE
           // so operators can distinguish a DB outage from real provider saturation.
-          const emergencySlots = bulk ? 0 : (EMERGENCY_CONCURRENCY[scope] ?? 1);
+          const emergencySlots = bulk ? 0 : getEmergencyConcurrency(scope);
           logger.error('provider_admission.concurrency_db_failed', {
             scope,
             providerKey,
