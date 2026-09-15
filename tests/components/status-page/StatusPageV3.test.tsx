@@ -342,4 +342,144 @@ describe('StatusPageV3', () => {
     fireEvent.click(cell as Element);
     expect(screen.getByText('24:00')).toBeInTheDocument();
   });
+
+  it('isolates metric badges: hides SLA grade and uptime headline when metrics/uptime is disabled without removing the service card', () => {
+    const serviceWithMetrics: PublicStatusService = service({
+      id: 'svc-metric-test',
+      name: 'Metric Test Service',
+      sla: { grade: 'EXCELLENT', tier: 'CRITICAL' },
+      uptime: {
+        days30: {
+          percentage: 99.9,
+          grade: 'EXCELLENT',
+          measuredDays: 30,
+          complete: true,
+          incidentCount: 0,
+        },
+        days90: {
+          percentage: 94.0,
+          grade: 'EXCELLENT',
+          measuredDays: 90,
+          complete: true,
+          incidentCount: 0,
+        },
+      },
+      history: {
+        rangeStart: '2026-06-12T00:00:00.000Z',
+        rangeEnd: '2026-09-10T00:00:00.000Z',
+        coverage: 'COMPLETE',
+        segments: [],
+      },
+    });
+
+    // 1. With metrics and uptime ENABLED
+    const { unmount: unmountEnabled } = render(
+      <StatusPageV3
+        snapshot={snapshotOf([serviceWithMetrics], {
+          page: {
+            ...snapshotOf([serviceWithMetrics]).page,
+            visibility: {
+              services: true,
+              incidents: true,
+              metrics: true,
+              uptime: true,
+              regions: true,
+              changelog: true,
+              subscribe: false,
+            },
+          },
+        })}
+      />
+    );
+
+    // Both service name and SLA grade are visible
+    expect(screen.getByText('Metric Test Service')).toBeInTheDocument();
+    expect(screen.getAllByText('Excellent').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/94/).length).toBeGreaterThan(0);
+    unmountEnabled();
+
+    // 2. With metrics DISABLED
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf([serviceWithMetrics], {
+          page: {
+            ...snapshotOf([serviceWithMetrics]).page,
+            visibility: {
+              services: true,
+              incidents: true,
+              metrics: false,
+              uptime: false,
+              regions: true,
+              changelog: true,
+              subscribe: false,
+            },
+          },
+        })}
+      />
+    );
+
+    // The service card itself is STILL rendered (never deleted!)
+    expect(screen.getByText('Metric Test Service')).toBeInTheDocument();
+    // But the SLA grade and 94% uptime headline are cleanly removed
+    expect(screen.queryByText('Excellent')).not.toBeInTheDocument();
+    expect(screen.queryByText(/94\.0%/)).not.toBeInTheDocument();
+  });
+
+  it('hides footer when showFooter is false and displays it when true', () => {
+    // 1. Hidden footer
+    const { unmount } = render(
+      <StatusPageV3
+        snapshot={snapshotOf([service()], {
+          page: {
+            ...snapshotOf([service()]).page,
+            presentation: { showFooter: false },
+          },
+        })}
+      />
+    );
+    expect(document.querySelector('.status-site-footer')).not.toBeInTheDocument();
+    unmount();
+
+    // 2. Visible footer
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf([service()], {
+          page: {
+            ...snapshotOf([service()]).page,
+            presentation: { showFooter: true },
+          },
+        })}
+      />
+    );
+    expect(document.querySelector('.status-site-footer')).toBeInTheDocument();
+  });
+
+  it('hides header when showHeader is false and displays it when true', () => {
+    // 1. Hidden header
+    const { unmount } = render(
+      <StatusPageV3
+        snapshot={snapshotOf([service()], {
+          page: {
+            ...snapshotOf([service()]).page,
+            presentation: { showHeader: false },
+          },
+        })}
+      />
+    );
+    expect(document.querySelector('.status-page-header')).not.toBeInTheDocument();
+    unmount();
+
+    // 2. Visible header
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf([service()], {
+          page: {
+            ...snapshotOf([service()]).page,
+            presentation: { showHeader: true },
+          },
+        })}
+      />
+    );
+    expect(document.querySelector('.status-page-header')).toBeInTheDocument();
+  });
 });
