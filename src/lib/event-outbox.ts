@@ -127,6 +127,7 @@ export function getLifecycleSideEffects(
   if (input.source === 'CHATOPS') {
     if (input.status === 'ACKNOWLEDGED') effects.add('LIFECYCLE_WAR_ROOM_TOPIC');
     if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');
+    if (input.status === 'SNOOZED' || input.status === 'SUPPRESSED') effects.add('LIFECYCLE_WAR_ROOM_SYNC');
     return Array.from(effects);
   }
   if (input.status === 'RESOLVED') effects.add('LIFECYCLE_WAR_ROOM_ARCHIVE');

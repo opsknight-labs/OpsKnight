@@ -1,15 +1,15 @@
 /**
- * Central ChatOps action contract.
+ * Central ChatOps action contract — provider-neutral.
  *
- * One registry owns the semantic war-room actions. Provider adapters (Slack
- * block actions, Teams Action.Execute verbs) map their verb to this kind;
- * projection-model filters by phase + capability; cards derive button titles;
- * invoke validates + authorizes via the same capability key.
+ * One registry owns the semantic war-room actions. Provider adapters
+ * (src/lib/chatops/teams-action-map.ts, src/lib/chatops/slack-action-map.ts)
+ * map their transport verbs to this kind; projection-model filters by phase +
+ * capability; cards derive titles/modes; invoke authorizes via the same
+ * capability key.
  *
- * Adding a new war-room action requires exactly one entry here — no other
- * file defines a separate action set.
+ * Adding a new war-room action requires exactly one entry here —
+ * no provider file defines a separate action set.
  */
-import { TEAMS_CHATOPS_VERBS } from '@/lib/microsoft-teams/action-schema';
 
 export const CHATOPS_ACTION_KINDS = [
   'ACKNOWLEDGE',
@@ -47,8 +47,6 @@ export type ChatOpsActionMeta = {
   mutates: boolean;
   /** Input required from the card. */
   requiresInput?: 'note' | 'priority' | 'snooze' | 'resolutionNote';
-  /** Teams Adaptive Card verb (stable, provider-specific). */
-  teamsVerb: string;
   /** Human title rendered on the card. */
   title: string;
   /** Adaptive Cards `mode` hint. */
@@ -57,7 +55,13 @@ export type ChatOpsActionMeta = {
 
 /**
  * Canonical registry — ordered as rendered. Projection filters this list by
- * phase + capability; cards iterate the filtered result; invoke maps verb → kind.
+ * phase + capability; cards iterate the filtered result.
+ *
+ * Phase policy (P1-8):
+ *  TRIGGERED    → ACK / Assign / Escalate / Note / Priority / Snooze
+ *  ACKNOWLEDGED → Resolve / Assign / Escalate / Note / Priority / Snooze
+ *  RESOLVED     → (none)
+ *  REFRESH + VIEW_RESPONDERS → 'all' (non-terminal)
  */
 export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
   ACKNOWLEDGE: {
@@ -65,7 +69,6 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     capability: 'canAcknowledge',
     phases: ['TRIGGERED'],
     mutates: true,
-    teamsVerb: TEAMS_CHATOPS_VERBS.ACK,
     title: 'Acknowledge',
   },
   ASSIGN_SELF: {
@@ -73,16 +76,14 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     capability: 'canAssignSelf',
     phases: ['TRIGGERED', 'ACKNOWLEDGED'],
     mutates: true,
-    teamsVerb: TEAMS_CHATOPS_VERBS.ASSIGN_SELF,
     title: 'Assign to me',
   },
   RESOLVE: {
     kind: 'RESOLVE',
     capability: 'canResolve',
-    phases: ['TRIGGERED', 'ACKNOWLEDGED'],
+    phases: ['ACKNOWLEDGED'],
     mutates: true,
     requiresInput: 'resolutionNote',
-    teamsVerb: TEAMS_CHATOPS_VERBS.RESOLVE,
     title: 'Resolve',
   },
   ESCALATE: {
@@ -90,7 +91,6 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     capability: 'canEscalate',
     phases: ['TRIGGERED', 'ACKNOWLEDGED'],
     mutates: true,
-    teamsVerb: TEAMS_CHATOPS_VERBS.ESCALATE,
     title: 'Escalate',
   },
   ADD_NOTE: {
@@ -99,7 +99,6 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     phases: ['TRIGGERED', 'ACKNOWLEDGED'],
     mutates: true,
     requiresInput: 'note',
-    teamsVerb: TEAMS_CHATOPS_VERBS.NOTE,
     title: 'Add note',
     mode: 'secondary',
   },
@@ -109,7 +108,6 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     phases: ['TRIGGERED', 'ACKNOWLEDGED'],
     mutates: true,
     requiresInput: 'priority',
-    teamsVerb: TEAMS_CHATOPS_VERBS.PRIORITY,
     title: 'Priority',
     mode: 'secondary',
   },
@@ -119,7 +117,6 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     phases: ['TRIGGERED', 'ACKNOWLEDGED'],
     mutates: true,
     requiresInput: 'snooze',
-    teamsVerb: TEAMS_CHATOPS_VERBS.SNOOZE,
     title: 'Snooze',
     mode: 'secondary',
   },
@@ -128,7 +125,6 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     capability: 'canJoinResponder',
     phases: ['TRIGGERED', 'ACKNOWLEDGED'],
     mutates: true,
-    teamsVerb: TEAMS_CHATOPS_VERBS.JOIN_RESPONDER,
     title: 'Join as responder',
     mode: 'secondary',
   },
@@ -137,7 +133,6 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     capability: 'canRead',
     phases: 'all',
     mutates: false,
-    teamsVerb: TEAMS_CHATOPS_VERBS.WHO,
     title: 'Current responders',
     mode: 'secondary',
   },
@@ -146,19 +141,10 @@ export const CHATOPS_ACTIONS: Record<ChatOpsActionKind, ChatOpsActionMeta> = {
     capability: null,
     phases: 'all',
     mutates: false,
-    teamsVerb: TEAMS_CHATOPS_VERBS.REFRESH,
     title: 'Refresh',
     mode: 'secondary',
   },
 } as const;
-
-const VERB_TO_KIND: ReadonlyMap<string, ChatOpsActionKind> = new Map(
-  (Object.values(CHATOPS_ACTIONS) as ChatOpsActionMeta[]).map(meta => [meta.teamsVerb, meta.kind]),
-);
-
-export function chatOpsKindForTeamsVerb(verb: string): ChatOpsActionKind | null {
-  return VERB_TO_KIND.get(verb) ?? null;
-}
 
 export function isChatOpsActionKind(value: string): value is ChatOpsActionKind {
   return (CHATOPS_ACTION_KINDS as readonly string[]).includes(value);
@@ -166,7 +152,7 @@ export function isChatOpsActionKind(value: string): value is ChatOpsActionKind {
 
 /**
  * Map a semantic kind to the incident-domain ChatOpsCommand kind.
- * Returns null for REFRESH/VIEW_RESPONDERS which are read/refresh only.
+ * VIEW_RESPONDERS and REFRESH map to READ (non-mutating).
  */
 export function chatOpsCommandKindForActionKind(
   kind: ChatOpsActionKind,

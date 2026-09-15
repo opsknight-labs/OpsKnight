@@ -1,5 +1,6 @@
 import type { WarRoomProjectionModel } from '../../projection-model';
 import { CHATOPS_ACTIONS, type ChatOpsActionKind } from '@/lib/chatops/action-contract';
+import { teamsVerbForChatOpsKind } from '@/lib/chatops/teams-action-map';
 import { buildMicrosoftTeamsIncidentCard } from '@/lib/microsoft-teams/cards';
 
 /**
@@ -78,10 +79,16 @@ export function renderMicrosoftTeamsWarRoomProjection(
     // ShowCard actions (note/priority/snooze) require a card host — without
     // destination context we emit a plain Execute so tests can assert length
     // without needing to fixture Team destinations.
+    let verb: string;
+    try {
+      verb = teamsVerbForChatOpsKind(kind as ChatOpsActionKind);
+    } catch {
+      verb = String(kind).toLowerCase();
+    }
     return {
       type: 'Action.Execute' as const,
       title: meta?.title ?? String(kind),
-      verb: meta?.teamsVerb ?? String(kind).toLowerCase(),
+      verb,
       data: { incidentId: model.incident.id },
     };
   });

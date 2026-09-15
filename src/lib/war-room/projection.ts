@@ -148,6 +148,23 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
     await prisma.incidentWarRoom.updateMany({ where: { id: room.id, projectionLeaseToken: token }, data: { health: 'DEGRADED', lastErrorCode: 'INCIDENT_NOT_FOUND', lastError: 'Incident no longer exists during terminal projection; close lifecycle owns final state.', projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
     return;
   }
+  // P1-1: single runtime path WAR_ROOM_PROJECT → buildWarRoomProjection → renderer → transport.
+  // Shared channel card is fail-closed: no privileged actions, only View Incident + refresh.
+  const { buildWarRoomProjection } = await import('./projection-model');
+  const sharedCapFailClosed = {
+    canAcknowledge: false, canResolve: false, canAssignSelf: false, canAddNote: false,
+    canSetPriority: false, canSnooze: false, canEscalate: false, canJoinResponder: false, canRead: false,
+  } as const;
+  const model = buildWarRoomProjection(
+    {
+      id: incidentRecord.id, title: incidentRecord.title, description: incidentRecord.description,
+      status: incidentRecord.status, urgency: incidentRecord.urgency, priority: incidentRecord.priority,
+      serviceName: incidentRecord.service.name, assigneeName: incidentRecord.assignee?.name ?? null,
+      url: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incidentRecord.id}`,
+      createdAt: incidentRecord.createdAt, acknowledgedAt: incidentRecord.acknowledgedAt, resolvedAt: incidentRecord.resolvedAt,
+    },
+    { capabilities: sharedCapFailClosed as unknown as never },
+  );
   const incident = {
     id: incidentRecord.id, title: incidentRecord.title, description: incidentRecord.description,
     status: incidentRecord.status, urgency: incidentRecord.urgency, priority: incidentRecord.priority,
@@ -155,8 +172,15 @@ export async function projectMicrosoftTeamsWarRoomCard(warRoomId: string, projec
     incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incidentRecord.id}`,
     createdAt: incidentRecord.createdAt, acknowledgedAt: incidentRecord.acknowledgedAt, resolvedAt: incidentRecord.resolvedAt,
   };
-  const eventType = incidentRecord.status === 'RESOLVED' ? 'resolved' as const : incidentRecord.acknowledgedAt ? 'acknowledged' as const : 'triggered' as const;
-  const interactive = { destinationId: room.destinationId, messageGeneration: room.messageGeneration, warRoomId: room.id };
+  // eventType derived from canonical phase; model.phase is source of truth for RESOLVED disable.
+  const eventType = model.phase === 'RESOLVED' ? 'resolved' as const : model.phase === 'ACKNOWLEDGED' ? 'acknowledged' as const : 'triggered' as const;
+  const interactive = {
+    destinationId: room.destinationId,
+    messageGeneration: room.messageGeneration,
+    warRoomId: room.id,
+    // Explicit fail-closed capabilities so the card builder does not fall back to allow-all.
+    capabilities: sharedCapFailClosed as unknown as never,
+  };
   if (!room.commandMessageId) {
     // Use the durable pre-POST hook so only a real network attempt marks the
     // canonical create as attempted. A token/serviceUrl failure before the POST

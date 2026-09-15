@@ -31,22 +31,35 @@ function derivePhase(input: { status: string; acknowledgedAt?: Date | null }): W
   return 'TRIGGERED';
 }
 
+function isAllowed(key: ChatOpsCapabilityKey | null, caps: Partial<Record<ChatOpsCapabilityKey, boolean>> | undefined): boolean {
+  if (key === null) return true;
+  if (!caps) return true;
+  // Explicit per-key check to avoid dynamic indexing (security/detect-object-injection)
+  switch (key) {
+    case 'canAcknowledge': return caps.canAcknowledge === true;
+    case 'canResolve': return caps.canResolve === true;
+    case 'canAssignSelf': return caps.canAssignSelf === true;
+    case 'canAddNote': return caps.canAddNote === true;
+    case 'canSetPriority': return caps.canSetPriority === true;
+    case 'canSnooze': return caps.canSnooze === true;
+    case 'canEscalate': return caps.canEscalate === true;
+    case 'canJoinResponder': return caps.canJoinResponder === true;
+    case 'canRead': return caps.canRead === true;
+    default: return false;
+  }
+}
+
 function filterActionsByPhaseAndCapability(
   phase: WarRoomProjectionPhase,
   capabilities?: Partial<Record<ChatOpsCapabilityKey, boolean>>,
 ): readonly ChatOpsActionKind[] {
   if (phase === 'RESOLVED') return [];
-  const allow = (key: ChatOpsCapabilityKey | null): boolean => {
-    if (!key) return true;
-    if (!capabilities) return true;
-    return capabilities[key] === true;
-  };
   const result: ChatOpsActionKind[] = [];
   for (const meta of Object.values(CHATOPS_ACTIONS) as Array<(typeof CHATOPS_ACTIONS)[ChatOpsActionKind]>) {
     if (meta.phases !== 'all') {
       if (Array.isArray(meta.phases) && !meta.phases.includes(phase as 'TRIGGERED' | 'ACKNOWLEDGED')) continue;
     }
-    if (!allow(meta.capability)) continue;
+    if (!isAllowed(meta.capability, capabilities)) continue;
     result.push(meta.kind);
   }
   return result;
@@ -70,15 +83,18 @@ export function buildWarRoomProjection(
   opts?: { capabilities?: Partial<Record<ChatOpsCapabilityKey, boolean>> },
 ): WarRoomProjectionModel {
   const phase = derivePhase(input);
-  // Transitional compatibility: callers that do not pass capabilities still
-  // receive the legacy 3-action set so Slack + existing tests remain stable.
-  // Callers that pass capabilities (Teams war-room path) receive the full
-  // capability-gated 10-action contract.
-  const actions: readonly WarRoomProjectionAction[] = opts?.capabilities
-    ? filterActionsByPhaseAndCapability(phase, opts.capabilities)
-    : phase === 'RESOLVED'
-      ? []
-      : (['ACKNOWLEDGE', 'ASSIGN_SELF', 'RESOLVE'] as const);
+  // Capability-gated path (Teams war-room) → full 10-action contract filtered by phase+cap.
+  // Legacy fallback (no capabilities, e.g. Slack or old tests) → phase-correct 3-action set:
+  //  TRIGGERED    → ACK + Assign (no Resolve until acknowledged)
+  //  ACKNOWLEDGED → Assign + Resolve (ACK already done)
+  const actions: readonly WarRoomProjectionAction[] =
+    opts?.capabilities !== undefined
+      ? filterActionsByPhaseAndCapability(phase, opts.capabilities)
+      : phase === 'RESOLVED'
+        ? []
+        : phase === 'ACKNOWLEDGED'
+          ? (['ASSIGN_SELF', 'RESOLVE'] as const)
+          : (['ACKNOWLEDGE', 'ASSIGN_SELF'] as const);
 
   return {
     version: 1,
