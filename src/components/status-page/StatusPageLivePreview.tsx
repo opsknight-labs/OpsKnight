@@ -136,8 +136,8 @@ export interface StatusPagePreviewData {
   layout: string;
   privacySettings?: StatusPagePreviewPrivacySettings | null;
   enableUptimeExports?: boolean;
-  regions?: any[];
-  maintenance?: any[];
+  regions?: unknown[];
+  maintenance?: unknown[];
   uptimeExcellentThreshold?: number | null;
   uptimeGoodThreshold?: number | null;
 }
@@ -204,7 +204,7 @@ function StatusPageLivePreview({
           showFooter: previewData.showFooter,
           showRssLink: previewData.showRssLink,
           showApiLink: previewData.showApiLink,
-          showSlaMetrics: (previewData.branding as any)?.showSlaMetrics !== false,
+          showSlaMetrics: previewData.branding?.showSlaMetrics !== false,
         },
         services: previewData.services,
         mappings: previewData.statusPageServices,
