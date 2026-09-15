@@ -485,12 +485,28 @@ export async function provisionMicrosoftTeamsWarRoom(
 
   if (!existing.ok) {
     const isClosingReconciliation = reconciliationOnly && room.state === 'CLOSING' && room.createAttemptedAt != null;
+    const closingReconciliationDeadline = isClosingReconciliation ? room.createAttemptedAt!.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS : 0;
+    const closingReconciliationExpired = isClosingReconciliation && Date.now() >= closingReconciliationDeadline;
     if (
       existing.code === 'TRANSIENT_READ' ||
       existing.code === 'RATE_LIMITED' ||
       existing.code === 'GRAPH_TOKEN_FAILED'
     ) {
       if (isClosingReconciliation) {
+        if (closingReconciliationExpired) {
+          await prisma.incidentWarRoom.updateMany({
+            where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+            data: {
+              health: 'DEGRADED',
+              lastErrorCode: `RECONCILIATION_EXPIRED_TEAMS_${existing.code}`,
+              lastError: `Teams reconciliation lookup ${existing.code} beyond window; closing locally as DEGRADED with unverified external outcome. Provider drift will be reconciled asynchronously.`,
+              provisioningToken: null,
+            },
+          }).catch(() => {});
+          const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+          if (fresh) await ensureTeamsTerminalCloseHandoff(room.id, fresh.incidentId);
+          return;
+        }
         await prisma.incidentWarRoom.updateMany({
           where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
           data: {
@@ -504,6 +520,20 @@ export async function provisionMicrosoftTeamsWarRoom(
       throw new WarRoomRetryableError(existing.message, existing.retryAfterMs);
     }
     if (isClosingReconciliation) {
+      if (closingReconciliationExpired) {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+          data: {
+            health: existing.code === 'MISSING_PERMISSION' ? 'PERMISSION_ERROR' : 'DEGRADED',
+            lastErrorCode: `RECONCILIATION_EXPIRED_TEAMS_${existing.code}`,
+            lastError: `Teams reconciliation lookup ${existing.code} beyond window; closing locally as DEGRADED with unverified external outcome.`,
+            provisioningToken: null,
+          },
+        });
+        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+        if (fresh) await ensureTeamsTerminalCloseHandoff(room.id, fresh.incidentId);
+        return;
+      }
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
         data: {

@@ -77,17 +77,40 @@ async function ensureWarRoomReconciliationJob(warRoomId: string, provisioningTok
   });
 }
 
+const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
+
+function isClosingReconciliationExpired(createAttemptedAt: Date | null): boolean {
+  return createAttemptedAt != null && Date.now() >= createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
+}
+
 /** Repair helper: ensure a CLOSING room has its durable close jobs (crash-gap recovery). */
 async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
-    select: { state: true, projectionVersion: true, lastProjectedVersion: true, createAttemptedAt: true, providerChannelId: true, provisioningToken: true },
+    select: { state: true, health: true, projectionVersion: true, lastProjectedVersion: true, createAttemptedAt: true, providerChannelId: true, provisioningToken: true },
   });
   if (!room || room.state !== 'CLOSING') return;
+  const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
+  const reconciliationExpired = isClosingReconciliationExpired(room.createAttemptedAt);
   // CLOSING + unresolved create: identity not yet adopted. No terminal projection
-  // should run until the provisioning reconcile resolves the external create.
-  if (room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null) {
-    await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken);
+  // should run until the provisioning reconcile resolves the external create —
+  // unless the 15-min window has expired, in which case we must stop blocking
+  // lifecycle and close locally as DEGRADED (unverified external outcome).
+  if (createUnresolved && !reconciliationExpired) {
+    await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken!);
+  }
+  if (createUnresolved && reconciliationExpired) {
+    // Deadline authoritative: mark unverified and clear fencing token so
+    // terminal close can proceed even though provider lookup never succeeded.
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: warRoomId, state: 'CLOSING', provisioningToken: room.provisioningToken! },
+      data: {
+        health: 'DEGRADED',
+        lastErrorCode: 'RECONCILIATION_EXPIRED_UNVERIFIED',
+        lastError: 'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
+        provisioningToken: null,
+      },
+    });
   }
   const existingClose = await prisma.backgroundJob.findFirst({
     where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
@@ -98,10 +121,10 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
     select: { id: true, payload: true },
   });
   // If close job already exists, ensure a project job for the terminal version also exists
-  // (except when create is unresolved — terminal projection would mark DEGRADED anyway).
+  // (except when create is unresolved and window still live — terminal projection would mark DEGRADED anyway).
   if (existingClose) {
-    const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
-    if (!existingProj && !createUnresolved) {
+    const liveUnresolved = createUnresolved && !reconciliationExpired;
+    if (!existingProj && !liveUnresolved) {
       await prisma.$transaction(async tx => {
         const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true } });
         if (!fresh || fresh.state !== 'CLOSING') return;
@@ -119,9 +142,8 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
     return;
   }
   // No close job — need to (re)create terminal projection + close atomically.
-  // But if create is unresolved, only ensure reconciliation; do not terminalize.
-  if (room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null) {
-    // Reconciliation is already queued above. Do not create terminal close yet.
+  // But if create is still unresolved and window is live, only ensure reconciliation.
+  if (createUnresolved && !reconciliationExpired) {
     return;
   }
   await prisma.$transaction(async tx => {
@@ -372,9 +394,26 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
   // Unresolved external create: CLOSING + createAttemptedAt && !providerChannelId
   // means the channel/card identity may yet arrive via the provisioning reconcile.
   // Terminalizing now would let adoption return FENCED (token cleared) and orphan
-  // the external channel. Defer the close until identity is adopted or proven absent.
-  if (room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null) {
-    await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken);
+  // the external channel. Defer the close until identity is adopted or proven absent
+  // — but only while the reconciliation window is still live. After 15 min we
+  // must close locally as DEGRADED (unverified) and leave provider drift for
+  // asynchronous cleanup; otherwise CLOSING would be held forever when
+  // credentials are removed or the provider is persistently unavailable.
+  const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
+  const reconciliationExpired = isClosingReconciliationExpired(room.createAttemptedAt);
+  if (createUnresolved && reconciliationExpired) {
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: warRoomId, state: 'CLOSING', provisioningToken: room.provisioningToken! },
+      data: {
+        health: 'DEGRADED',
+        lastErrorCode: 'RECONCILIATION_EXPIRED_UNVERIFIED',
+        lastError: 'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
+        provisioningToken: null,
+      },
+    });
+    // Fall through to archive/close below.
+  } else if (createUnresolved) {
+    await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken!);
     const { WarRoomRetryableError } = await import('./errors');
     throw new WarRoomRetryableError('Unresolved external create outcome — waiting for provisioning reconciliation before terminal close.', 5000, true);
   }

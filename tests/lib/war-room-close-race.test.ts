@@ -153,6 +153,44 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     const authorityIdx = slack.indexOf("INCIDENT_NOT_ACTIVE", guardIdx);
     expect(authorityIdx).toBeGreaterThan(guardIdx);
   });
+
+  it('CLOSING prerequisite failures are bounded by reconciliation deadline (Slack chatOps/token/workspace)', () => {
+    const slack = readFileSync('src/lib/war-room/providers/slack/provision.ts', 'utf8');
+    expect(slack).toContain('closingReconciliationExpired');
+    expect(slack).toContain('RECONCILIATION_EXPIRED_CHATOPS_DISABLED');
+    expect(slack).toContain('RECONCILIATION_EXPIRED_SLACK_BOT_TOKEN_MISSING');
+    expect(slack).toContain('RECONCILIATION_EXPIRED_SLACK_WORKSPACE_MISSING');
+    expect(slack).toContain('closing locally as DEGRADED with unverified external outcome');
+    expect(slack).toContain('createAttemptedAt!.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS');
+    expect(slack).toContain('Date.now() >= closingReconciliationDeadline');
+    expect(slack).toContain('ensureTerminalCloseHandoff');
+  });
+
+  it('CLOSING prerequisite failures are bounded by reconciliation deadline (Teams GRAPH_TOKEN_FAILED / MISSING_PERMISSION etc.)', () => {
+    const teams = readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+    expect(teams).toContain('closingReconciliationExpired');
+    // Teams uses dynamic RECONCILIATION_EXPIRED_TEAMS_${existing.code} so both persistent and transient codes are covered
+    expect(teams).toContain('RECONCILIATION_EXPIRED_TEAMS_${existing.code}');
+    expect(teams).toContain('RECONCILIATION_EXPIRED_TEAMS_');
+    expect(teams).toContain('closing locally as DEGRADED with unverified external outcome');
+    expect(teams).toContain('createAttemptedAt!.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS');
+    expect(teams).toContain('ensureTeamsTerminalCloseHandoff');
+    // Must handle both transient (GRAPH_TOKEN_FAILED/RATE_LIMITED/TRANSIENT_READ) and persistent (MISSING_PERMISSION etc.) branches
+    expect(teams).toContain('GRAPH_TOKEN_FAILED');
+    expect(teams).toContain('MISSING_PERMISSION');
+  });
+
+  it('engine finalizeWarRoomCloseNeutral and repair are bounded by reconciliation expiry (OpsKnight source of truth)', () => {
+    const engine = readFileSync('src/lib/war-room/engine.ts', 'utf8');
+    expect(engine).toContain('isClosingReconciliationExpired');
+    expect(engine).toContain('AMBIGUOUS_RECONCILIATION_WINDOW_MS');
+    expect(engine).toContain('RECONCILIATION_EXPIRED_UNVERIFIED');
+    expect(engine).toContain('Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED');
+    expect(engine).toContain('provisioningToken: null');
+    const repairStart = engine.indexOf('async function repairWarRoomCloseJobs');
+    const finalizeStart = engine.indexOf('export async function finalizeWarRoomCloseNeutral');
+    expect(engine.slice(repairStart, finalizeStart)).toContain('RECONCILIATION_EXPIRED_UNVERIFIED');
+  });
 });
 
 // ── Behavioral: provisionWarRoom fencing (isolated via dynamic import) ──

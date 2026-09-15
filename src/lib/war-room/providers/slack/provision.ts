@@ -305,8 +305,24 @@ export async function provisionSlackWarRoom(
 
   const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
   const isClosingReconciliation = reconciliationOnly && room.state === 'CLOSING' && room.createAttemptedAt != null;
+  const closingReconciliationDeadline = isClosingReconciliation ? room.createAttemptedAt!.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS : 0;
+  const closingReconciliationExpired = isClosingReconciliation && Date.now() >= closingReconciliationDeadline;
   if (!config?.enabled) {
     if (isClosingReconciliation) {
+      if (closingReconciliationExpired) {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+          data: {
+            health: 'DEGRADED',
+            lastErrorCode: 'RECONCILIATION_EXPIRED_CHATOPS_DISABLED',
+            lastError: 'ChatOps disabled beyond reconciliation window; closing locally as DEGRADED with unverified external outcome. Provider drift will be reconciled asynchronously.',
+            provisioningToken: null,
+          },
+        });
+        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+        if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
+        return;
+      }
       // Cleanup is lifecycle recovery, not feature provisioning — do not fail
       // to FAILED when ChatOps was disabled after the attempt. Keep CLOSING
       // and retry boundedly so the external identity is still reconciled.
@@ -327,6 +343,20 @@ export async function provisionSlackWarRoom(
   const botToken = await getSlackBotToken(incident.serviceId);
   if (!botToken) {
     if (isClosingReconciliation) {
+      if (closingReconciliationExpired) {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+          data: {
+            health: 'DEGRADED',
+            lastErrorCode: 'RECONCILIATION_EXPIRED_SLACK_BOT_TOKEN_MISSING',
+            lastError: 'No Slack bot token beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
+            provisioningToken: null,
+          },
+        });
+        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+        if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
+        return;
+      }
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
         data: {
@@ -353,6 +383,20 @@ export async function provisionSlackWarRoom(
 
   if (!slackWorkspaceId) {
     if (isClosingReconciliation) {
+      if (closingReconciliationExpired) {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+          data: {
+            health: 'DEGRADED',
+            lastErrorCode: 'RECONCILIATION_EXPIRED_SLACK_WORKSPACE_MISSING',
+            lastError: 'No Slack workspace beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
+            provisioningToken: null,
+          },
+        });
+        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+        if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
+        return;
+      }
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
         data: {
