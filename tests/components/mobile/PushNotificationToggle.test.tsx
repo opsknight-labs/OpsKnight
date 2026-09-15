@@ -151,4 +151,156 @@ describe('PushNotificationToggle', () => {
     // Primary assertion: a non-REGISTERED (safe) state — the toggle should not show "Disable".
     expect(screen.queryByRole('button', { name: /^Disable$/i })).not.toBeInTheDocument();
   });
+
+  it('transitions to REPAIR_REQUIRED when test push returns 410', async () => {
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          json: async () => ({ deviceRegistered: true, accountEnabled: true }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/notifications/test-push')) {
+        return {
+          ok: false,
+          status: 410,
+          text: async () =>
+            JSON.stringify({
+              code: 'VALIDATION_FAILED',
+              meta: { reason: 'PUSH_SUBSCRIPTION_EXPIRED' },
+            }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+    const button = await screen.findByRole('button', { name: /Send test push/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Repair/i })).toBeInTheDocument();
+      expect(
+        screen.getByText(/Push subscription on this device has expired. Tap Repair to restore./i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('transitions to REPAIR_REQUIRED when test push returns 404', async () => {
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          json: async () => ({ deviceRegistered: true, accountEnabled: true }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/notifications/test-push')) {
+        return {
+          ok: false,
+          status: 404,
+          text: async () =>
+            JSON.stringify({
+              code: 'RESOURCE_NOT_FOUND',
+              meta: { reason: 'PUSH_NO_SUBSCRIPTION' },
+            }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+    const button = await screen.findByRole('button', { name: /Send test push/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Repair/i })).toBeInTheDocument();
+      expect(
+        screen.getByText(/Push subscription on this device has expired. Tap Repair to restore./i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('transitions to REPAIR_REQUIRED when subscription endpoint is missing', async () => {
+    const registration = {
+      pushManager: {
+        getSubscription: vi
+          .fn()
+          .mockResolvedValueOnce({
+            endpoint: 'https://push.example.com/test-endpoint',
+            unsubscribe: vi.fn().mockResolvedValue(true),
+          })
+          .mockResolvedValueOnce({
+            endpoint: null,
+            unsubscribe: vi.fn().mockResolvedValue(true),
+          }),
+      },
+    };
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistration: vi.fn().mockResolvedValue(registration),
+        register: vi.fn().mockResolvedValue(registration),
+        ready: Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          json: async () => ({ deviceRegistered: true, accountEnabled: true }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+    const button = await screen.findByRole('button', { name: /Send test push/i });
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Repair/i })).toBeInTheDocument();
+      expect(
+        screen.getByText(/No active push subscription on this device. Tap Repair to restore./i)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('remains REGISTERED and displays error message when test push returns 503', async () => {
+    mockFetch.mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/user/push-subscription')) {
+        return {
+          ok: true,
+          json: async () => ({ deviceRegistered: true, accountEnabled: true }),
+        };
+      }
+      if (typeof url === 'string' && url.includes('/api/notifications/test-push')) {
+        return {
+          ok: false,
+          status: 503,
+          text: async () =>
+            JSON.stringify({
+              code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+              error: 'Push notification delivery failed for this device.',
+            }),
+        };
+      }
+      return { ok: false, status: 404 };
+    });
+
+    render(<PushNotificationToggle />);
+    const button = await screen.findByRole('button', { name: /Send test push/i });
+    fireEvent.click(button);
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole('status')).toHaveTextContent(
+          /Push notification delivery failed|Try again shortly|temporarily unavailable/i
+        );
+      },
+      { timeout: 5000 }
+    );
+    expect(screen.getByRole('button', { name: /^Disable$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Send test push/i })).not.toBeDisabled();
+  });
 });

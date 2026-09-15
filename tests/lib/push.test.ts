@@ -219,8 +219,8 @@ describe('sendPush', () => {
     });
 
     expect(first).toMatchObject({
-      success: false,
-      code: 'DELIVERY_FAILED',
+      success: false, // partial delivery with retryable failures remains retryable
+      outcome: 'PARTIAL',
       deliveredCount: 1,
       failedCount: 1,
     });
@@ -248,5 +248,82 @@ describe('sendPush', () => {
     expect(markDeliveryComplete).toHaveBeenCalledWith(
       expect.objectContaining({ targetId: 'device-2', deliveryKey: 'intent-1' })
     );
+  });
+
+  it('preserves provider Retry-After from WebPushProviderError', async () => {
+    vi.mocked(getPushConfig).mockResolvedValue({
+      enabled: true,
+      provider: 'web-push',
+      vapidPublicKey: 'public-key',
+      vapidPrivateKey: 'private-key',
+      vapidSubject: 'mailto:test@example.com',
+    });
+    vi.mocked(prisma.userDevice.findMany).mockResolvedValue([
+      {
+        id: 'device-1',
+        deviceId: 'device-1',
+        token: JSON.stringify({
+          endpoint: 'https://example.com/device-1',
+          keys: { p256dh: 'p256', auth: 'auth' },
+        }),
+        platform: 'web',
+      },
+    ] as unknown as Awaited<ReturnType<typeof prisma.userDevice.findMany>>);
+
+    // Provider returns 429 with explicit Retry-After: "7"
+    vi.mocked(sendWebPushSafely).mockRejectedValueOnce(
+      new WebPushProviderError('Too Many Requests', 429, '7')
+    );
+
+    const res = await sendPush({
+      userId: 'user-1',
+      title: 'Incident',
+      body: 'Rate limited test',
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.statusCode).toBe(429);
+    expect(res.retryAfterMs).toBe(7000);
+    expect(res.failures?.[0]?.retryAfterMs).toBe(7000);
+  });
+
+  it('propagates top-level statusCode 429 and max retryAfterMs on multi-device PARTIAL delivery', async () => {
+    vi.mocked(getPushConfig).mockResolvedValue({
+      enabled: true,
+      provider: 'web-push',
+      vapidPublicKey: 'public-key',
+      vapidPrivateKey: 'private-key',
+      vapidSubject: 'mailto:test@example.com',
+    });
+    vi.mocked(prisma.userDevice.findMany).mockResolvedValue(
+      ['device-1', 'device-2', 'device-3'].map(id => ({
+        id,
+        deviceId: id,
+        token: JSON.stringify({
+          endpoint: `https://example.com/${id}`,
+          keys: { p256dh: 'p256', auth: 'auth' },
+        }),
+        platform: 'web',
+      })) as unknown as Awaited<ReturnType<typeof prisma.userDevice.findMany>>
+    );
+
+    vi.mocked(sendWebPushSafely)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new WebPushProviderError('Too Many Requests', 429, '15'))
+      .mockRejectedValueOnce(new WebPushProviderError('Too Many Requests', 429, '45'));
+
+    const res = await sendPush({
+      userId: 'user-1',
+      title: 'Incident',
+      body: 'Partial rate-limit',
+      deliveryKey: 'intent-multi-429',
+    });
+
+    expect(res.success).toBe(false);
+    expect(res.outcome).toBe('PARTIAL');
+    expect(res.statusCode).toBe(429);
+    expect(res.retryAfterMs).toBe(45_000);
+    expect(res.deliveredCount).toBe(1);
+    expect(res.failedCount).toBe(2);
   });
 });

@@ -13,7 +13,10 @@ import MobileTime from '@/components/mobile/MobileTime';
 import NewIncidentButton from '@/components/mobile/NewIncidentButton';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
-import { IncidentStatusBadge, IncidentUrgencyBadge } from '@/components/incident/IncidentSemanticBadge';
+import {
+  IncidentStatusBadge,
+  IncidentUrgencyBadge,
+} from '@/components/incident/IncidentSemanticBadge';
 import { formatDurationShort } from '@/lib/mobile-time';
 import { logger } from '@/lib/logger';
 import { getResponderDashboardSnapshot } from '@/lib/dashboard/responder-dashboard-snapshot';
@@ -25,18 +28,22 @@ export default async function MobileDashboard() {
   const context = await getRequestActorContext();
   if (!context) redirect('/login?callbackUrl=/m');
 
-  const snapshot = await getResponderDashboardSnapshot(context.actor, context.user.id).catch(error => {
-    logger.error('mobile.dashboard.snapshotUnavailable', {
-      component: 'MobileDashboard',
-      error,
-    });
-    return null;
-  });
+  const snapshot = await getResponderDashboardSnapshot(context.actor, context.user.id).catch(
+    error => {
+      logger.error('mobile.dashboard.snapshotUnavailable', {
+        component: 'MobileDashboard',
+        error,
+      });
+      return null;
+    }
+  );
 
   const firstName = context.user.name?.trim().split(/\s+/)[0] || 'there';
   const timeZone = context.user.timeZone || 'UTC';
   const hour = Number(
-    new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone }).format(new Date())
+    new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone }).format(
+      new Date()
+    )
   );
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -67,16 +74,18 @@ export default async function MobileDashboard() {
 
   const currentScheduleId =
     snapshot.currentOnCallShift?.scheduleId || snapshot.currentOnCallShift?.schedule.id;
-  const currentScheduleHref = currentScheduleId ? `/m/schedules/${currentScheduleId}` : '/m/schedules';
+  const currentScheduleHref = currentScheduleId
+    ? `/m/schedules/${currentScheduleId}`
+    : '/m/schedules';
 
   return (
     <div className="responsive-page space-y-5">
-      <section className="flex min-w-0 items-start justify-between gap-3 pt-0.5">
-        <div className="min-w-0 flex-1">
+      <section className="flex min-w-0 flex-wrap items-start justify-between gap-3 pt-0.5">
+        <div className="min-w-0 flex-1 basis-44">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Responder workspace
           </p>
-          <h1 className="mt-1 truncate text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+          <h1 className="mt-1 break-words text-xl font-bold tracking-tight text-foreground sm:text-2xl">
             {greeting}, {firstName}
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">What needs your attention right now.</p>
@@ -144,7 +153,9 @@ export default async function MobileDashboard() {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block text-xs font-bold text-foreground">High urgency</span>
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">Active incidents requiring priority response</span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                Active incidents requiring priority response
+              </span>
             </span>
             <strong className="text-lg font-bold tabular-nums text-rose-600 dark:text-rose-300">
               {snapshot.criticalIncidents}
@@ -159,10 +170,16 @@ export default async function MobileDashboard() {
               <BellRing className="h-4 w-4" aria-hidden="true" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-xs font-bold text-foreground">Waiting for acknowledgement</span>
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">Triggered incidents with no ACK yet</span>
+              <span className="block text-xs font-bold text-foreground">
+                Waiting for acknowledgement
+              </span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                Triggered incidents with no ACK yet
+              </span>
             </span>
-            <strong className="text-lg font-bold tabular-nums text-foreground">{snapshot.openIncidents}</strong>
+            <strong className="text-lg font-bold tabular-nums text-foreground">
+              {snapshot.openIncidents}
+            </strong>
           </Link>
 
           <div className="grid grid-cols-2 border-t border-border/70 bg-muted/20">
@@ -171,7 +188,9 @@ export default async function MobileDashboard() {
               className="flex min-h-11 items-center justify-between gap-2 border-r border-border/70 px-3 text-[11px] text-muted-foreground hover:bg-accent/40 hover:text-foreground"
             >
               <span>Acknowledged</span>
-              <strong className="tabular-nums text-foreground">{snapshot.acknowledgedIncidents}</strong>
+              <strong className="tabular-nums text-foreground">
+                {snapshot.acknowledgedIncidents}
+              </strong>
             </Link>
             <Link
               href="/m/incidents?filter=muted"
@@ -214,7 +233,7 @@ export default async function MobileDashboard() {
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-1.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                       <IncidentStatusBadge status={incident.status} />
                       <IncidentUrgencyBadge urgency={incident.urgency} />
                       <span className="ml-auto shrink-0 text-[10px] font-medium text-muted-foreground">
@@ -224,9 +243,14 @@ export default async function MobileDashboard() {
                     <h3 className="mt-1.5 line-clamp-2 break-words text-[13px] font-semibold leading-snug text-foreground">
                       {incident.title}
                     </h3>
-                    <p className="mt-1 truncate text-[11px] text-muted-foreground">{incident.service.name}</p>
+                    <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                      {incident.service.name}
+                    </p>
                   </div>
-                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <ArrowRight
+                    className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </div>
               </Link>
             ))}
@@ -239,21 +263,25 @@ export default async function MobileDashboard() {
           Today
         </h2>
         <div className="grid grid-cols-3 divide-x divide-border overflow-hidden rounded-xl border border-border bg-card">
-          <div className="px-3 py-3 text-center">
-            <strong className="block text-base font-bold tabular-nums text-foreground">{snapshot.totalActive}</strong>
-            <span className="mt-0.5 block text-[10px] text-muted-foreground">Active</span>
+          <div className="min-w-0 px-2 py-3 text-center sm:px-3">
+            <strong className="block truncate text-base font-bold tabular-nums text-foreground">
+              {snapshot.totalActive}
+            </strong>
+            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">Active</span>
           </div>
-          <div className="px-3 py-3 text-center">
-            <strong className="block text-base font-bold tabular-nums text-rose-600 dark:text-rose-300">
+          <div className="min-w-0 px-2 py-3 text-center sm:px-3">
+            <strong className="block truncate text-base font-bold tabular-nums text-rose-600 dark:text-rose-300">
               {snapshot.criticalIncidents}
             </strong>
-            <span className="mt-0.5 block text-[10px] text-muted-foreground">High</span>
+            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">High</span>
           </div>
-          <div className="px-3 py-3 text-center">
-            <strong className="block text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-300">
+          <div className="min-w-0 px-2 py-3 text-center sm:px-3">
+            <strong className="block truncate text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-300">
               {snapshot.resolved24h}
             </strong>
-            <span className="mt-0.5 block text-[10px] text-muted-foreground">Resolved</span>
+            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+              Resolved
+            </span>
           </div>
         </div>
       </section>

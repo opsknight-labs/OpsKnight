@@ -43,11 +43,8 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
   const [snapDirection, setSnapDirection] = useState<'left' | 'right' | null>(null);
   const [showHint, setShowHint] = useState(() => {
     if (typeof window === 'undefined') return false;
-    if (!('ontouchstart' in window)) return false;
     try {
-      if (window.localStorage.getItem(SWIPE_HINT_KEY)) return false;
-      window.localStorage.setItem(SWIPE_HINT_KEY, 'true');
-      return true;
+      return Boolean('ontouchstart' in window && !window.localStorage.getItem(SWIPE_HINT_KEY));
     } catch {
       return false;
     }
@@ -58,6 +55,15 @@ export default function MobileSwipeNavigator({ children }: MobileSwipeNavigatorP
   const cancelled = useRef(false);
   const navTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hintTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!showHint) return;
+    try {
+      window.localStorage.setItem(SWIPE_HINT_KEY, 'true');
+    } catch {
+      // ignore storage errors
+    }
+  }, [showHint]);
 
   useEffect(() => {
     return () => {

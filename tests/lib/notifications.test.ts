@@ -79,7 +79,7 @@ function intentIdFor(
     userId: 'user-1',
     channel: 'EMAIL',
     triggerGeneration:
-      eventType === 'triggered' ? incidentValue.escalationGeneration ?? 0 : undefined,
+      eventType === 'triggered' ? (incidentValue.escalationGeneration ?? 0) : undefined,
   });
 }
 
@@ -107,7 +107,9 @@ describe('durable notification intents', () => {
     expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:${digest}`)).toBeNull();
     expect(notificationIntentTriggerGeneration(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(4);
     expect(isLegacyTriggeredNotificationIntent(`ntf:triggered:${timestamp}:${digest}`)).toBe(true);
-    expect(isLegacyTriggeredNotificationIntent(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(false);
+    expect(isLegacyTriggeredNotificationIntent(`ntf:triggered:${timestamp}:g4:${digest}`)).toBe(
+      false
+    );
     expect(notificationIntentEventAt(`ntf:triggered:${timestamp}:g4:${digest}:extra`)).toBeNull();
   });
 
@@ -258,8 +260,14 @@ describe('durable notification intents', () => {
     vi.mocked(prisma.notification.create).mockResolvedValue(pendingIntent(pushId));
     vi.mocked(sendNotificationIntentPush).mockResolvedValue({
       success: false,
+      outcome: 'NO_ACTIVE_DEVICE',
       code: 'NO_DEVICE_TOKENS',
+      reason: 'PUSH_NO_SUBSCRIPTION',
       error: 'No device tokens',
+      deliveredCount: 0,
+      checkpointedCount: 0,
+      failedCount: 0,
+      removedCount: 0,
     });
 
     const result = await sendNotification('inc-1', 'user-1', 'PUSH', 'push');

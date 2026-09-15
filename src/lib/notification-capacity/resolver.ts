@@ -22,7 +22,12 @@ function envValue(env: NodeJS.ProcessEnv, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function integerSetting(raw: string | undefined, fallback: number, min: number, max: number): number {
+function integerSetting(
+  raw: string | undefined,
+  fallback: number,
+  min: number,
+  max: number
+): number {
   if (!raw) return fallback;
   const parsed = Number(raw);
   if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) return fallback;
@@ -36,7 +41,12 @@ function shareFromEnv(raw: string | undefined, fallback = DEFAULT_BULK_SHARE): n
 }
 
 function boundedQuotaBlockSize(env: NodeJS.ProcessEnv): number {
-  return integerSetting(env.NOTIFICATION_QUOTA_BLOCK_SIZE, DEFAULT_QUOTA_BLOCK_SIZE, HARD_LIMITS.quotaBlockSize.min, HARD_LIMITS.quotaBlockSize.max);
+  return integerSetting(
+    env.NOTIFICATION_QUOTA_BLOCK_SIZE,
+    DEFAULT_QUOTA_BLOCK_SIZE,
+    HARD_LIMITS.quotaBlockSize.min,
+    HARD_LIMITS.quotaBlockSize.max
+  );
 }
 
 const adaptiveRates = new Map<string, { rate: number; changedAt: number }>();
@@ -60,7 +70,12 @@ function capacityKey(channel: string, provider: string): string {
   return `${channel}:${provider}`;
 }
 
-function recoverAdaptiveRate(key: string, hardRate: number, configured: number, nowMs: number): number {
+function recoverAdaptiveRate(
+  key: string,
+  hardRate: number,
+  configured: number,
+  nowMs: number
+): number {
   const state = adaptiveRates.get(key);
   if (!state) return hardRate;
   const elapsed = Math.max(0, nowMs - state.changedAt);
@@ -90,27 +105,46 @@ async function resolveRuntimeSettingsCached(nowMs: number): Promise<RuntimeSetti
   // runtimeCache distinguishes undefined (miss/expired) from null (cached absence)
   const cached = runtimeCache.get('runtime', nowMs) as RuntimeSettingsRow | undefined;
   if (cached !== undefined) return cached;
-  const runtimeModel = (prisma as unknown as Record<string, unknown>).notificationRuntimeSettings as
-    | { findUnique: (args: unknown) => Promise<unknown> }
-    | undefined;
+  const runtimeModel = (prisma as unknown as Record<string, unknown>)
+    .notificationRuntimeSettings as { findUnique: (args: unknown) => Promise<unknown> } | undefined;
   if (!runtimeModel?.findUnique) {
     runtimeCache.set('runtime', null as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
     return null;
   }
-  const record = (await runtimeModel.findUnique({ where: { id: 'default' } })) as RuntimeSettingsRow;
-  // Cache null (no row yet) as negative cache so fanout doesn't hammer Postgres before first admin save.
-  runtimeCache.set('runtime', record as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
-  return record;
+  try {
+    const record = (await runtimeModel.findUnique({
+      where: { id: 'default' },
+    })) as RuntimeSettingsRow;
+    // Cache null (no row yet) as negative cache so fanout doesn't hammer Postgres before first admin save.
+    runtimeCache.set('runtime', record as unknown as null, nowMs, CACHE_TTLS.runtimeTtlMs);
+    return record;
+  } catch (err) {
+    throw new Error(
+      `Failed to resolve runtime settings: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
 }
 
 function resolveEnvCapacity(
   channel: NotificationChannel,
   provider: string,
   env: NodeJS.ProcessEnv
-): { configuredRate?: number; configuredInFlight?: number; bulkShare?: number; adaptive?: boolean; ceiling: number; quotaBlockSize: number; hasAny: boolean } {
-  const providerEnvKey = provider.toUpperCase().replace(/[^A-Z0-9]+/g, '_').slice(0, 80);
+): {
+  configuredRate?: number;
+  configuredInFlight?: number;
+  bulkShare?: number;
+  adaptive?: boolean;
+  ceiling: number;
+  quotaBlockSize: number;
+  hasAny: boolean;
+} {
+  const providerEnvKey = provider
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .slice(0, 80);
   const scoped = (suffix: string) =>
-    envValue(env, `NOTIFICATION_${channel}_${providerEnvKey}_${suffix}`) ?? envValue(env, `NOTIFICATION_${channel}_${suffix}`);
+    envValue(env, `NOTIFICATION_${channel}_${providerEnvKey}_${suffix}`) ??
+    envValue(env, `NOTIFICATION_${channel}_${suffix}`);
   const rateRaw = scoped('RATE_PER_SECOND');
   const inFlightRaw = scoped('MAX_IN_FLIGHT');
   const bulkShareRaw = env.NOTIFICATION_BULK_SHARE;
@@ -119,9 +153,24 @@ function resolveEnvCapacity(
   // quota-block size are independent infrastructure clamps and must not hijack
   // DB-owned bulkShare/adaptive values (e.g. DB 50% + emergency ceiling=1000
   // must keep the DB's 50%, not fall through to the env-default 80%).
-  const hasRate = Boolean(rateRaw && Number.isSafeInteger(Number(rateRaw)) && Number(rateRaw) >= HARD_LIMITS.ratePerSecond.min && Number(rateRaw) <= HARD_LIMITS.ratePerSecond.max);
-  const hasInFlight = Boolean(inFlightRaw && Number.isSafeInteger(Number(inFlightRaw)) && Number(inFlightRaw) >= HARD_LIMITS.maxInFlight.min && Number(inFlightRaw) <= HARD_LIMITS.maxInFlight.max);
-  const hasBulkShare = typeof bulkShareRaw === 'string' && bulkShareRaw.trim() !== '' && Number.isFinite(Number(bulkShareRaw)) && Number(bulkShareRaw) >= 0.05 && Number(bulkShareRaw) <= 1;
+  const hasRate = Boolean(
+    rateRaw &&
+    Number.isSafeInteger(Number(rateRaw)) &&
+    Number(rateRaw) >= HARD_LIMITS.ratePerSecond.min &&
+    Number(rateRaw) <= HARD_LIMITS.ratePerSecond.max
+  );
+  const hasInFlight = Boolean(
+    inFlightRaw &&
+    Number.isSafeInteger(Number(inFlightRaw)) &&
+    Number(inFlightRaw) >= HARD_LIMITS.maxInFlight.min &&
+    Number(inFlightRaw) <= HARD_LIMITS.maxInFlight.max
+  );
+  const hasBulkShare =
+    typeof bulkShareRaw === 'string' &&
+    bulkShareRaw.trim() !== '' &&
+    Number.isFinite(Number(bulkShareRaw)) &&
+    Number(bulkShareRaw) >= 0.05 &&
+    Number(bulkShareRaw) <= 1;
   const hasAdaptive = typeof adaptiveRaw === 'string' && adaptiveRaw.trim() !== '';
   const hasAny = Boolean(hasRate || hasInFlight || hasBulkShare || hasAdaptive);
   let configuredRate: number | undefined;
@@ -133,7 +182,12 @@ function resolveEnvCapacity(
     configuredInFlight,
     bulkShare: hasBulkShare ? shareFromEnv(bulkShareRaw) : undefined,
     adaptive: hasAdaptive ? adaptiveRaw !== 'false' : undefined,
-    ceiling: integerSetting(env.NOTIFICATION_DEPLOYMENT_RATE_CEILING, HARD_LIMITS.ratePerSecond.max, 1, HARD_LIMITS.ratePerSecond.max),
+    ceiling: integerSetting(
+      env.NOTIFICATION_DEPLOYMENT_RATE_CEILING,
+      HARD_LIMITS.ratePerSecond.max,
+      1,
+      HARD_LIMITS.ratePerSecond.max
+    ),
     quotaBlockSize: boundedQuotaBlockSize(env),
     hasAny,
   };
@@ -160,14 +214,30 @@ export async function getEffectiveCapacity(input: {
     // Cheap refresh for adaptive recovery without re-querying Postgres every call.
     if (cached.adaptiveBackpressure) {
       const key = capacityKey(channel, provider);
-      const effective = recoverAdaptiveRate(key, Math.min(cached.configuredRatePerSecond, integerSetting(env.NOTIFICATION_DEPLOYMENT_RATE_CEILING, HARD_LIMITS.ratePerSecond.max, 1, HARD_LIMITS.ratePerSecond.max)), cached.configuredRatePerSecond, nowMs);
+      const effective = recoverAdaptiveRate(
+        key,
+        Math.min(
+          cached.configuredRatePerSecond,
+          integerSetting(
+            env.NOTIFICATION_DEPLOYMENT_RATE_CEILING,
+            HARD_LIMITS.ratePerSecond.max,
+            1,
+            HARD_LIMITS.ratePerSecond.max
+          )
+        ),
+        cached.configuredRatePerSecond,
+        nowMs
+      );
       const bulkRate = Math.max(1, Math.floor(effective * cached.bulkShare));
-      return { ...cached, effectiveRatePerSecond: Math.max(1, Math.min(cached.configuredRatePerSecond, effective)), bulkRatePerSecond: bulkRate } as EffectiveCapacityConfig;
+      return {
+        ...cached,
+        effectiveRatePerSecond: Math.max(1, Math.min(cached.configuredRatePerSecond, effective)),
+        bulkRatePerSecond: bulkRate,
+      } as EffectiveCapacityConfig;
     }
     return cached;
   }
 
-  const runtimePromise = resolveRuntimeSettingsCached(nowMs);
   type CapacityRow = {
     provider: string;
     channel: string;
@@ -178,24 +248,46 @@ export async function getEffectiveCapacity(input: {
     adaptiveBackpressure: boolean;
     revision: number;
   } | null;
-  const capacityModel = (prisma as unknown as Record<string, unknown>).notificationProviderCapacity as
+  const capacityModel = (prisma as unknown as Record<string, unknown>)
+    .notificationProviderCapacity as
     | { findUnique: (args: unknown) => Promise<unknown> }
     | undefined;
-  let stored: CapacityRow = capacityModel?.findUnique
-    ? ((await capacityModel.findUnique({ where: { provider_channel: { provider, channel } } })) as CapacityRow)
-    : null;
-  // WEBHOOK/SLACK admission uses dynamic bucket keys (e.g. WEBHOOK:<origin>) but is
-  // governed by a single logical profile WEBHOOK:default (similarly SLACK:default).
-  // Without a fallback an admin saving WEBHOOK:default would see no effect on
-  // actual webhook deliveries because each origin would resolve to DEFAULT.
-  if (!stored && (channel === 'WEBHOOK' || channel === 'SLACK') && provider !== 'default' && capacityModel?.findUnique) {
-    stored = (await capacityModel.findUnique({ where: { provider_channel: { provider: 'default', channel } } })) as CapacityRow;
+
+  let stored: CapacityRow = null;
+  let runtime: RuntimeSettingsRow = null;
+
+  try {
+    const [storedResult, runtimeResult] = await Promise.all([
+      (async () => {
+        if (!capacityModel?.findUnique) return null;
+        let res = (await capacityModel.findUnique({
+          where: { provider_channel: { provider, channel } },
+        })) as CapacityRow;
+        if (!res && (channel === 'WEBHOOK' || channel === 'SLACK') && provider !== 'default') {
+          res = (await capacityModel.findUnique({
+            where: { provider_channel: { provider: 'default', channel } },
+          })) as CapacityRow;
+        }
+        return res;
+      })(),
+      resolveRuntimeSettingsCached(nowMs),
+    ]);
+    stored = storedResult;
+    runtime = runtimeResult;
+  } catch (err) {
+    throw new Error(
+      `Failed to resolve capacity from database: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
-  const runtime = await runtimePromise;
 
   const runtimeBulkShare = runtime ? runtime.defaultBulkSharePercent / 100 : DEFAULT_BULK_SHARE;
   const envCapacity = resolveEnvCapacity(channel, provider, env);
-  const deploymentCeiling = integerSetting(env.NOTIFICATION_DEPLOYMENT_RATE_CEILING, HARD_LIMITS.ratePerSecond.max, 1, HARD_LIMITS.ratePerSecond.max);
+  const deploymentCeiling = integerSetting(
+    env.NOTIFICATION_DEPLOYMENT_RATE_CEILING,
+    HARD_LIMITS.ratePerSecond.max,
+    1,
+    HARD_LIMITS.ratePerSecond.max
+  );
 
   let source: CapacitySource;
   let mode: 'AUTO' | 'CUSTOM' = 'AUTO';
@@ -215,7 +307,10 @@ export async function getEffectiveCapacity(input: {
       configuredRate = defaultRate(channel);
       configuredInFlight = defaultInFlight(channel);
     }
-    bulkShare = (stored.bulkSharePercent ?? runtime?.defaultBulkSharePercent ?? Math.round(DEFAULT_BULK_SHARE * 100)) / 100;
+    bulkShare =
+      (stored.bulkSharePercent ??
+        runtime?.defaultBulkSharePercent ??
+        Math.round(DEFAULT_BULK_SHARE * 100)) / 100;
     adaptiveBackpressure = stored.adaptiveBackpressure;
     revision = stored.revision;
   } else if (envCapacity.hasAny) {
@@ -223,7 +318,8 @@ export async function getEffectiveCapacity(input: {
     configuredRate = envCapacity.configuredRate ?? defaultRate(channel);
     configuredInFlight = envCapacity.configuredInFlight ?? defaultInFlight(channel);
     bulkShare = envCapacity.bulkShare ?? runtimeBulkShare;
-    adaptiveBackpressure = envCapacity.adaptive ?? runtime?.adaptiveBackpressure ?? DEFAULT_ADAPTIVE_BACKPRESSURE;
+    adaptiveBackpressure =
+      envCapacity.adaptive ?? runtime?.adaptiveBackpressure ?? DEFAULT_ADAPTIVE_BACKPRESSURE;
     mode = 'CUSTOM';
   } else {
     source = 'DEFAULT';
@@ -234,12 +330,20 @@ export async function getEffectiveCapacity(input: {
     mode = 'AUTO';
   }
 
-  configuredRate = Math.min(HARD_LIMITS.ratePerSecond.max, Math.max(HARD_LIMITS.ratePerSecond.min, configuredRate));
-  configuredInFlight = Math.min(HARD_LIMITS.maxInFlight.max, Math.max(HARD_LIMITS.maxInFlight.min, configuredInFlight));
+  configuredRate = Math.min(
+    HARD_LIMITS.ratePerSecond.max,
+    Math.max(HARD_LIMITS.ratePerSecond.min, configuredRate)
+  );
+  configuredInFlight = Math.min(
+    HARD_LIMITS.maxInFlight.max,
+    Math.max(HARD_LIMITS.maxInFlight.min, configuredInFlight)
+  );
   bulkShare = Math.min(0.95, Math.max(0.05, bulkShare));
 
   const hardRate = Math.min(configuredRate, deploymentCeiling);
-  const adaptiveRate = adaptiveBackpressure ? recoverAdaptiveRate(cacheKey, hardRate, configuredRate, nowMs) : hardRate;
+  const adaptiveRate = adaptiveBackpressure
+    ? recoverAdaptiveRate(cacheKey, hardRate, configuredRate, nowMs)
+    : hardRate;
   const effectiveRatePerSecond = Math.max(1, Math.min(hardRate, adaptiveRate));
   const bulkRatePerSecond = Math.max(1, Math.floor(effectiveRatePerSecond * bulkShare));
   const bulkMaxInFlight = computeBulkInFlight(configuredInFlight, bulkShare);
@@ -264,7 +368,10 @@ export async function getEffectiveCapacity(input: {
   return effective;
 }
 
-export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; nowMs?: number }): Promise<{
+export async function getEffectiveWatermarks(input?: {
+  env?: NodeJS.ProcessEnv;
+  nowMs?: number;
+}): Promise<{
   low: number;
   high: number;
   defaultBulkSharePercent: number;
@@ -277,12 +384,24 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
   const runtime: RuntimeSettingsRow = await resolveRuntimeSettingsCached(nowMs);
   if (runtime) {
     // Defense in depth: a bad manual DB edit or stale migration must not widen into an invalid fanout.
-    const lowClamped = clampInt(runtime.bulkQueueLowWatermark, HARD_LIMITS.queueLowWatermark.min, HARD_LIMITS.queueLowWatermark.max);
-    const highClamped = clampInt(runtime.bulkQueueHighWatermark, HARD_LIMITS.queueHighWatermark.min, HARD_LIMITS.queueHighWatermark.max);
+    const lowClamped = clampInt(
+      runtime.bulkQueueLowWatermark,
+      HARD_LIMITS.queueLowWatermark.min,
+      HARD_LIMITS.queueLowWatermark.max
+    );
+    const highClamped = clampInt(
+      runtime.bulkQueueHighWatermark,
+      HARD_LIMITS.queueHighWatermark.min,
+      HARD_LIMITS.queueHighWatermark.max
+    );
     return {
       low: lowClamped,
       high: Math.max(lowClamped, highClamped),
-      defaultBulkSharePercent: clampInt(runtime.defaultBulkSharePercent, HARD_LIMITS.bulkSharePercent.min, HARD_LIMITS.bulkSharePercent.max),
+      defaultBulkSharePercent: clampInt(
+        runtime.defaultBulkSharePercent,
+        HARD_LIMITS.bulkSharePercent.min,
+        HARD_LIMITS.bulkSharePercent.max
+      ),
       adaptiveBackpressure: runtime.adaptiveBackpressure,
       source: 'DATABASE',
       revision: runtime.revision,
@@ -293,7 +412,12 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
   const envBulkRaw = env.NOTIFICATION_BULK_SHARE;
   const envAdaptiveRaw = env.NOTIFICATION_ADAPTIVE_BACKPRESSURE;
   const hasEnvLowHigh = Boolean(envLowRaw || envHighRaw);
-  const hasBulkShare = typeof envBulkRaw === 'string' && envBulkRaw.trim() !== '' && Number.isFinite(Number(envBulkRaw)) && Number(envBulkRaw) >= 0.05 && Number(envBulkRaw) <= 1;
+  const hasBulkShare =
+    typeof envBulkRaw === 'string' &&
+    envBulkRaw.trim() !== '' &&
+    Number.isFinite(Number(envBulkRaw)) &&
+    Number(envBulkRaw) >= 0.05 &&
+    Number(envBulkRaw) <= 1;
   const hasAdaptive = typeof envAdaptiveRaw === 'string' && envAdaptiveRaw.trim() !== '';
   const hasEnv = hasEnvLowHigh || hasBulkShare || hasAdaptive;
   if (hasEnv) {
@@ -315,12 +439,18 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
     };
     const low = boundedLow(envLowRaw, DEFAULT_BULK_QUEUE_LOW_WATERMARK);
     const high = boundedHigh(envHighRaw, DEFAULT_BULK_QUEUE_HIGH_WATERMARK);
-    const bulkPercent = hasBulkShare ? Math.round(shareFromEnv(envBulkRaw) * 100) : Math.round(DEFAULT_BULK_SHARE * 100);
+    const bulkPercent = hasBulkShare
+      ? Math.round(shareFromEnv(envBulkRaw) * 100)
+      : Math.round(DEFAULT_BULK_SHARE * 100);
     const adaptive = hasAdaptive ? envAdaptiveRaw !== 'false' : DEFAULT_ADAPTIVE_BACKPRESSURE;
     return {
       low,
       high: Math.max(low, high),
-      defaultBulkSharePercent: clampInt(bulkPercent, HARD_LIMITS.bulkSharePercent.min, HARD_LIMITS.bulkSharePercent.max),
+      defaultBulkSharePercent: clampInt(
+        bulkPercent,
+        HARD_LIMITS.bulkSharePercent.min,
+        HARD_LIMITS.bulkSharePercent.max
+      ),
       adaptiveBackpressure: adaptive,
       source: 'ENV',
       revision: null,
@@ -336,13 +466,21 @@ export async function getEffectiveWatermarks(input?: { env?: NodeJS.ProcessEnv; 
   };
 }
 
-export function recordCapacityPressure(channel: NotificationChannel, provider: string, nowMs = Date.now()): number {
+export function recordCapacityPressure(
+  channel: NotificationChannel,
+  provider: string,
+  nowMs = Date.now()
+): number {
   const effectiveKey = `${channel}:${normalizedProvider(provider || 'default')}`;
   const cached = capacityCache.get(effectiveKey, nowMs) as EffectiveCapacityConfig | undefined;
   let configured: number;
   if (cached !== undefined) configured = cached.configuredRatePerSecond;
   else {
-    const envCap = resolveEnvCapacity(channel, normalizedProvider(provider || 'default'), process.env);
+    const envCap = resolveEnvCapacity(
+      channel,
+      normalizedProvider(provider || 'default'),
+      process.env
+    );
     configured = envCap.configuredRate ?? defaultRate(channel);
   }
   const adaptiveCurrent = adaptiveRates.get(effectiveKey)?.rate;
@@ -354,13 +492,21 @@ export function recordCapacityPressure(channel: NotificationChannel, provider: s
   return reduced;
 }
 
-export function recordHealthyCapacity(channel: NotificationChannel, provider: string, nowMs = Date.now()): number {
+export function recordHealthyCapacity(
+  channel: NotificationChannel,
+  provider: string,
+  nowMs = Date.now()
+): number {
   const effectiveKey = `${channel}:${normalizedProvider(provider || 'default')}`;
   const cached = capacityCache.get(effectiveKey, nowMs) as EffectiveCapacityConfig | undefined;
   let configured: number;
   if (cached !== undefined) configured = cached.configuredRatePerSecond;
   else {
-    const envCap = resolveEnvCapacity(channel, normalizedProvider(provider || 'default'), process.env);
+    const envCap = resolveEnvCapacity(
+      channel,
+      normalizedProvider(provider || 'default'),
+      process.env
+    );
     configured = envCap.configuredRate ?? defaultRate(channel);
   }
   const adaptiveCurrent = adaptiveRates.get(effectiveKey)?.rate;

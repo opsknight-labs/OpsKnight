@@ -7,6 +7,16 @@
  */
 
 .mobile-app {
+  --mobile-inline: 14px;
+  --mobile-block: 14px;
+  --mobile-gap-xs: 6px;
+  --mobile-gap-sm: 10px;
+  --mobile-gap-md: 14px;
+
+  --mobile-title-size: 20px;
+  --mobile-section-title-size: 14px;
+
+  --mobile-control-height: 44px;
   --mobile-header-height: 56px;
   --mobile-nav-height: 64px;
   --mobile-content-max: 52rem;
@@ -37,6 +47,37 @@
   font-family: var(--font-manrope), Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* Compact phone: <= 359px */
+@media (max-width: 359px) {
+  .mobile-app {
+    --mobile-inline: 11px;
+    --mobile-block: 11px;
+    --mobile-gap-xs: 4px;
+    --mobile-gap-sm: 8px;
+    --mobile-gap-md: 10px;
+    --mobile-title-size: 18px;
+    --mobile-section-title-size: 13px;
+  }
+}
+
+/* Comfortable phone: 400px - 479px */
+@media (min-width: 400px) and (max-width: 479px) {
+  .mobile-app {
+    --mobile-inline: 16px;
+    --mobile-block: 16px;
+    --mobile-gap-md: 16px;
+  }
+}
+
+/* Tablet / mobile landscape: >= 480px */
+@media (min-width: 480px) {
+  .mobile-app {
+    --mobile-inline: 20px;
+    --mobile-block: 16px;
+    --mobile-content-max: 56rem;
+  }
+}
+
 .mobile-app[data-bottom-nav='absent'] {
   --mobile-nav-height: 0px;
 }
@@ -60,8 +101,8 @@
   min-height: 0;
   height: 100%;
   margin-inline: auto;
-  padding: 0.875rem 0.875rem 1rem;
-  overflow-x: clip;
+  padding: var(--mobile-block) var(--mobile-inline) calc(var(--mobile-block) + 0.75rem);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
@@ -69,10 +110,28 @@
 }
 
 .responsive-page {
+  container-type: inline-size;
   width: 100%;
   min-width: 0;
   margin-inline: auto;
   overflow-wrap: anywhere;
+}
+
+/* Container query utilities for inline-size responsiveness */
+@container (max-width: 359px) {
+  .cq-stack-compact {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .cq-wrap-compact {
+    flex-wrap: wrap !important;
+  }
+  .cq-hide-compact {
+    display: none !important;
+  }
+  .cq-text-compact {
+    font-size: 0.8125rem !important;
+  }
 }
 
 /* App header. It is a dedicated grid row, never part of the scroll container. */
