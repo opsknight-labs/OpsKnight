@@ -188,6 +188,67 @@ function tryEmergencyRateAdmission(
   };
 }
 
+/**
+ * Acquire an emergency local concurrency slot when the control-plane DB is unreachable.
+ * CRITICAL and TRANSACTIONAL traffic drain at bounded emergency concurrency ceilings
+ * (e.g. 2 for PUSH, 1 for EMAIL/SMS/Teams), while BULK traffic pauses fail-closed.
+ *
+ * Crucially, if an emergency local pool already exists and has not expired, its
+ * `active` count is preserved across repeated database failures so the ceiling is
+ * strictly enforced rather than being wiped to active=0 on every request.
+ */
+function acquireEmergencyConcurrencySlot(
+  poolKey: string,
+  scope: ProviderAdmissionScope,
+  bulk: boolean,
+  now: Date,
+  cause: string
+): ProviderConcurrencyResult {
+  if (bulk) {
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 5_000),
+      reason: 'CONTROL_PLANE_UNAVAILABLE',
+      cause: `Bulk traffic paused during control plane outage: ${cause}`,
+    };
+  }
+
+  const emergencySlots = getEmergencyConcurrency(scope);
+  if (emergencySlots === 0) {
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 5_000),
+      reason: 'CONTROL_PLANE_UNAVAILABLE',
+      cause,
+    };
+  }
+
+  let pool = localConcurrency.get(poolKey);
+  if (!pool || pool.expiresAt <= now.getTime()) {
+    pool = {
+      reserved: emergencySlots,
+      active: 0,
+      expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+    };
+    localConcurrency.set(poolKey, pool);
+  } else {
+    pool.reserved = Math.min(pool.reserved, emergencySlots);
+  }
+
+  if (pool.active >= pool.reserved) {
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 25),
+      reason: 'MAX_IN_FLIGHT',
+    };
+  }
+
+  pool.active += 1;
+  const leaseKey = `${poolKey}:${crypto.randomUUID()}`;
+  concurrencyClaims.set(leaseKey, { poolKey, expiresAt: now.getTime() + PROVIDER_LEASE_MS });
+  return { allowed: true, leaseKey };
+}
+
 /** Lifted by resetProviderAdmissionForTests(); set by forceProductionModeForTests() */
 let _testProductionOverride = false;
 
@@ -363,34 +424,38 @@ export async function deferProviderAdmission(
   providerKey: string,
   retryAt: Date
 ): Promise<void> {
-  const config = await getEffectiveCapacity({
-    channel: scope as unknown as NotificationChannel,
-    provider: providerKey,
-  });
   const key = bucketKey(scope, providerKey);
-  // Always maintain process-local cooldown so a DB persistence failure still
-  // throttles this replica and fail-closed reads can honor it.
+  // Always maintain process-local cooldown FIRST so a DB persistence failure or
+  // capacity-resolution failure still throttles this replica immediately.
   const existing = localCooldown.get(key);
   if (!existing || retryAt > existing) localCooldown.set(key, retryAt);
-  const deferRaw = safePrisma.$executeRaw;
-  if (deferRaw) {
-    try {
-      await deferRaw(Prisma.sql`
-    INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-    VALUES (${key}, ${config.effectiveRatePerSecond}, ${retryAt})
-    ON CONFLICT ("key") DO UPDATE SET
-      "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
-      "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
-  `);
-    } catch {
-      // Persistence is best-effort in tests; in production the local
-      // cooldown above still enforces the Retry-After on this replica.
-    }
-  }
+
+  // Invalidate local quota immediately on this replica
   for (const localKey of localQuota.keys()) {
     if (localKey.startsWith(`${key}:`)) localQuota.delete(localKey);
   }
   recordCapacityPressure(scope as unknown as NotificationChannel, providerKey);
+
+  // Best-effort durable persistence across replicas via PostgreSQL
+  try {
+    const config = await getEffectiveCapacity({
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+    });
+    const deferRaw = safePrisma.$executeRaw;
+    if (deferRaw) {
+      await deferRaw(Prisma.sql`
+        INSERT INTO "RateLimit" ("key", "count", "expiresAt")
+        VALUES (${key}, ${config.effectiveRatePerSecond}, ${retryAt})
+        ON CONFLICT ("key") DO UPDATE SET
+          "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
+          "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
+      `);
+    }
+  } catch {
+    // Persistence is best-effort; the process-local cooldown above
+    // still enforces the Retry-After on this replica even during complete DB outage.
+  }
 }
 
 /**
@@ -437,31 +502,19 @@ export async function acquireProviderConcurrency(
         revision: null,
       };
     } else {
-      const emergencySlots = bulk ? 0 : getEmergencyConcurrency(scope);
       logger.error('provider_admission.capacity_resolution_db_failed', {
         scope,
         providerKey,
         cause,
-        emergencySlots,
+        lane,
       });
-      if (emergencySlots === 0) {
-        return {
-          allowed: false,
-          retryAt: new Date(now.getTime() + 5_000),
-          reason: 'CONTROL_PLANE_UNAVAILABLE',
-          cause: `Capacity resolution DB failed: ${cause}`,
-        };
-      }
-      local = {
-        reserved: emergencySlots,
-        active: 0,
-        expiresAt: now.getTime() + PROVIDER_LEASE_MS,
-      };
-      localConcurrency.set(poolKey, local);
-      local.active += 1;
-      const leaseKey = `${poolKey}:${crypto.randomUUID()}`;
-      concurrencyClaims.set(leaseKey, { poolKey, expiresAt: now.getTime() + PROVIDER_LEASE_MS });
-      return { allowed: true, leaseKey };
+      return acquireEmergencyConcurrencySlot(
+        poolKey,
+        scope,
+        bulk,
+        now,
+        `Capacity resolution DB failed: ${cause}`
+      );
     }
   }
   const laneCeiling = bulk ? config.bulkMaxInFlight : config.maxInFlight;
@@ -501,12 +554,16 @@ export async function acquireProviderConcurrency(
             cause: 'Control plane DB unavailable; bulk traffic paused',
           };
         }
-        local = {
-          reserved: emergencySlots,
-          active: 0,
-          expiresAt: now.getTime() + PROVIDER_LEASE_MS,
-        };
-        localConcurrency.set(poolKey, local);
+        if (!local || local.expiresAt <= now.getTime()) {
+          local = {
+            reserved: emergencySlots,
+            active: 0,
+            expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+          };
+          localConcurrency.set(poolKey, local);
+        } else {
+          local.reserved = Math.min(local.reserved, emergencySlots);
+        }
       }
     } else {
       try {
@@ -570,13 +627,18 @@ export async function acquireProviderConcurrency(
               cause,
             };
           }
-          // Emergency local limiter: allow a small number of deliveries without DB coordination
-          local = {
-            reserved: emergencySlots,
-            active: 0,
-            expiresAt: now.getTime() + PROVIDER_LEASE_MS,
-          };
-          localConcurrency.set(poolKey, local);
+          // Emergency local limiter: allow a small number of deliveries without DB coordination.
+          // Preserve active slots if an emergency pool is already active for this replica.
+          if (!local || local.expiresAt <= now.getTime()) {
+            local = {
+              reserved: emergencySlots,
+              active: 0,
+              expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+            };
+            localConcurrency.set(poolKey, local);
+          } else {
+            local.reserved = Math.min(local.reserved, emergencySlots);
+          }
         }
       }
     }

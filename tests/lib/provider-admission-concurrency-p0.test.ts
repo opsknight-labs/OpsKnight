@@ -22,6 +22,7 @@ const loggerMocks = vi.hoisted(() => ({
 
 const mocks = vi.hoisted(() => ({
   queryRaw: vi.fn(),
+  executeRaw: vi.fn(),
   capacityFindUnique: vi.fn(),
   runtimeFindUnique: vi.fn(),
   providerAdmissionCount: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@/lib/prisma', () => ({
   __esModule: true,
   default: {
     $queryRaw: mocks.queryRaw,
+    $executeRaw: mocks.executeRaw,
     notificationProviderCapacity: { findUnique: mocks.capacityFindUnique },
     notificationRuntimeSettings: { findUnique: mocks.runtimeFindUnique },
     providerAdmission: { count: mocks.providerAdmissionCount },
@@ -43,6 +45,7 @@ import {
   acquireProviderAdmission,
   acquireProviderConcurrency,
   certifyNotificationControlPlane,
+  deferProviderAdmission,
   forceProductionModeForTests,
   releaseProviderConcurrency,
   resetProviderAdmissionForTests,
@@ -51,6 +54,8 @@ import { resetCapacityResolverForTests } from '@/lib/notification-capacity/resol
 
 function setup() {
   vi.clearAllMocks();
+  mocks.queryRaw.mockReset();
+  mocks.executeRaw.mockReset();
   mocks.capacityFindUnique.mockResolvedValue(null);
   mocks.runtimeFindUnique.mockResolvedValue(null);
   mocks.providerAdmissionCount.mockResolvedValue(0);
@@ -356,6 +361,98 @@ describe('P0: provider concurrency control-plane', () => {
     expect(bulkConcurrency.allowed).toBe(false);
     if (!bulkConcurrency.allowed) {
       expect(bulkConcurrency.reason).toBe('CONTROL_PLANE_UNAVAILABLE');
+    }
+  });
+
+  // ─── Test 14 ───────────────────────────────────────────────────────────────
+  // Sustained capacity outage: repeated getEffectiveCapacity failures preserve
+  // the local emergency pool and strictly enforce the emergency concurrency ceiling (PUSH = 2).
+  it('[P0-14] Sustained capacity resolution outage: preserves emergency pool and bounds concurrency', async () => {
+    resetCapacityResolverForTests();
+    resetProviderAdmissionForTests();
+    forceProductionModeForTests();
+
+    // Capacity DB is completely down
+    const dbErr = new Error('getaddrinfo ENOTFOUND postgres');
+    mocks.capacityFindUnique.mockRejectedValue(dbErr);
+    mocks.runtimeFindUnique.mockRejectedValue(dbErr);
+
+    const now = new Date();
+    // 1st TRANSACTIONAL call -> admitted (1/2)
+    const c1 = await acquireProviderConcurrency('PUSH', 'web-push', now, 'TRANSACTIONAL');
+    expect(c1.allowed).toBe(true);
+
+    // 2nd TRANSACTIONAL call -> admitted (2/2)
+    const c2 = await acquireProviderConcurrency('PUSH', 'web-push', now, 'TRANSACTIONAL');
+    expect(c2.allowed).toBe(true);
+
+    // 3rd TRANSACTIONAL call -> pool exhausted (2/2 active) -> denied as MAX_IN_FLIGHT
+    const c3 = await acquireProviderConcurrency('PUSH', 'web-push', now, 'TRANSACTIONAL');
+    expect(c3.allowed).toBe(false);
+    if (!c3.allowed) {
+      expect(c3.reason).toBe('MAX_IN_FLIGHT');
+    }
+
+    // Release first slot -> active becomes 1/2
+    if (c1.allowed) {
+      await releaseProviderConcurrency(c1.leaseKey);
+    }
+
+    // 4th call can now acquire the freed emergency slot
+    const c4 = await acquireProviderConcurrency('PUSH', 'web-push', now, 'TRANSACTIONAL');
+    expect(c4.allowed).toBe(true);
+  });
+
+  // ─── Test 15 ───────────────────────────────────────────────────────────────
+  // Sustained outage with single-slot provider (EMAIL/SMS/MICROSOFT_TEAMS = 1 slot):
+  // 1st allowed, 2nd denied as MAX_IN_FLIGHT under sustained capacity DB outage.
+  it('[P0-15] Sustained capacity resolution outage: single-slot provider ceiling = 1', async () => {
+    resetCapacityResolverForTests();
+    resetProviderAdmissionForTests();
+    forceProductionModeForTests();
+
+    const dbErr = new Error('connection timeout');
+    mocks.capacityFindUnique.mockRejectedValue(dbErr);
+    mocks.runtimeFindUnique.mockRejectedValue(dbErr);
+
+    const now = new Date();
+    const c1 = await acquireProviderConcurrency('EMAIL', 'resend', now, 'TRANSACTIONAL');
+    expect(c1.allowed).toBe(true);
+
+    // 2nd call -> ceiling of 1 is reached -> denied as MAX_IN_FLIGHT
+    const c2 = await acquireProviderConcurrency('EMAIL', 'resend', now, 'TRANSACTIONAL');
+    expect(c2.allowed).toBe(false);
+    if (!c2.allowed) {
+      expect(c2.reason).toBe('MAX_IN_FLIGHT');
+    }
+  });
+
+  // ─── Test 16 ───────────────────────────────────────────────────────────────
+  // Combined Retry-After + control plane outage: deferProviderAdmission installs
+  // process-local cooldown FIRST, ensuring admission is denied even when PostgreSQL
+  // and capacity resolver are completely unreachable.
+  it('[P0-16] Retry-After + control plane outage: local cooldown enforces rate limit even if DB throws', async () => {
+    resetCapacityResolverForTests();
+    resetProviderAdmissionForTests();
+    forceProductionModeForTests();
+
+    const dbErr = new Error('PostgreSQL unreachable');
+    mocks.capacityFindUnique.mockRejectedValue(dbErr);
+    mocks.runtimeFindUnique.mockRejectedValue(dbErr);
+    mocks.executeRaw.mockRejectedValue(dbErr);
+
+    const now = new Date();
+    const retryAt = new Date(now.getTime() + 60_000);
+
+    // deferProviderAdmission called with provider 429 Retry-After during total DB outage
+    await deferProviderAdmission('PUSH', 'web-push', retryAt);
+
+    // Subsequent admission call must immediately fail closed with RATE_LIMITED
+    const result = await acquireProviderAdmission('PUSH', 'web-push', now, 'CRITICAL');
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) {
+      expect(result.reason).toBe('RATE_LIMITED');
+      expect(result.retryAt.getTime()).toBe(retryAt.getTime());
     }
   });
 });
