@@ -70,6 +70,17 @@ function standaloneMode() {
   );
 }
 
+type PushStage =
+  | 'INIT'
+  | 'REQUEST_PERMISSION'
+  | 'SERVICE_WORKER_READY'
+  | 'FETCH_VAPID_KEY'
+  | 'READ_SUBSCRIPTION'
+  | 'CREATE_SUBSCRIPTION'
+  | 'SAVE_SUBSCRIPTION'
+  | 'VERIFY_REGISTRATION'
+  | 'UNSUBSCRIBE';
+
 export default function PushNotificationToggle() {
   const [pushState, setPushState] = useState<PushState>('PERMISSION_REQUIRED');
   const [loading, setLoading] = useState(false);
@@ -84,10 +95,18 @@ export default function PushNotificationToggle() {
     if (!window.isSecureContext && window.location.hostname !== 'localhost') {
       throw new Error('Push notifications require HTTPS.');
     }
-    let registration = await navigator.serviceWorker.getRegistration();
+    let registration = await promiseWithTimeout(
+      navigator.serviceWorker.getRegistration(),
+      SERVICE_WORKER_READY_TIMEOUT_MS,
+      'Service worker lookup timed out.'
+    );
     const expected = new URL('/sw.js', window.location.origin).toString();
     if (!registration || registration.active?.scriptURL !== expected) {
-      registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      registration = await promiseWithTimeout(
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }),
+        SERVICE_WORKER_READY_TIMEOUT_MS,
+        'Service worker registration timed out.'
+      );
     }
     await promiseWithTimeout(
       navigator.serviceWorker.ready,
@@ -126,8 +145,16 @@ export default function PushNotificationToggle() {
     }
 
     try {
-      const registration = await navigator.serviceWorker.getRegistration();
-      const subscription = await registration?.pushManager?.getSubscription();
+      const registration = await promiseWithTimeout(
+        navigator.serviceWorker.getRegistration(),
+        SERVICE_WORKER_READY_TIMEOUT_MS,
+        'Service worker lookup timed out.'
+      ).catch(() => null);
+      const subscription = await promiseWithTimeout(
+        registration?.pushManager?.getSubscription() ?? Promise.resolve(null),
+        REQUEST_TIMEOUT_MS,
+        'Push subscription lookup timed out.'
+      ).catch(() => null);
       if (!subscription) {
         setPushState('PERMISSION_REQUIRED');
         return;
@@ -193,10 +220,18 @@ export default function PushNotificationToggle() {
     setError('');
     setTestMessage('');
     setPushState('REGISTERING');
+    let stage: PushStage = 'INIT';
     try {
       let permission = Notification.permission;
       // Browser permission is requested only from this explicit user gesture.
-      if (permission !== 'granted') permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        stage = 'REQUEST_PERMISSION';
+        permission = await promiseWithTimeout(
+          Notification.requestPermission(),
+          REQUEST_TIMEOUT_MS,
+          'Notification permission request timed out.'
+        );
+      }
       if (permission === 'denied') {
         setPushState('PERMISSION_DENIED');
         setError('Notifications are blocked in browser or device settings.');
@@ -208,7 +243,10 @@ export default function PushNotificationToggle() {
         return;
       }
 
+      stage = 'SERVICE_WORKER_READY';
       const registration = await ensureServiceWorker();
+
+      stage = 'FETCH_VAPID_KEY';
       const keyResponse = await fetchWithTimeout(
         '/api/system/vapid-public-key',
         { cache: 'no-store' },
@@ -222,14 +260,25 @@ export default function PushNotificationToggle() {
       const applicationServerKey = urlBase64ToUint8Array(normalized.key);
       if (applicationServerKey.length !== 65) throw new Error('Push public key length is invalid.');
 
-      let subscription = await registration.pushManager.getSubscription();
+      stage = 'READ_SUBSCRIPTION';
+      let subscription = await promiseWithTimeout(
+        registration.pushManager.getSubscription(),
+        REQUEST_TIMEOUT_MS,
+        'Push subscription lookup timed out.'
+      );
       if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: applicationServerKey as unknown as BufferSource,
-        });
+        stage = 'CREATE_SUBSCRIPTION';
+        subscription = await promiseWithTimeout(
+          registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: applicationServerKey as unknown as BufferSource,
+          }),
+          REQUEST_TIMEOUT_MS,
+          'Push subscription creation timed out.'
+        );
       }
 
+      stage = 'SAVE_SUBSCRIPTION';
       const saveResponse = await fetchWithTimeout(
         '/api/user/push-subscription',
         {
@@ -246,11 +295,14 @@ export default function PushNotificationToggle() {
       }
       if (!saveResponse.ok)
         throw await errorFromResponse(saveResponse, 'Failed to save Push subscription.');
+
+      stage = 'VERIFY_REGISTRATION';
       setPushState('REGISTERED');
       haptics.success();
     } catch (subscribeError) {
       logger.error('push.subscription_failed', {
         component: 'PushNotificationToggle',
+        stage,
         error: subscribeError,
       });
       setError(displayError(subscribeError, 'Failed to enable Push notifications.'));
@@ -270,7 +322,11 @@ export default function PushNotificationToggle() {
     setError('');
     try {
       const registration = await ensureServiceWorker();
-      const subscription = await registration.pushManager.getSubscription();
+      const subscription = await promiseWithTimeout(
+        registration.pushManager.getSubscription(),
+        REQUEST_TIMEOUT_MS,
+        'Push subscription lookup timed out.'
+      );
       if (!subscription) {
         setPushState('PERMISSION_REQUIRED');
         return;
@@ -296,7 +352,11 @@ export default function PushNotificationToggle() {
         throw await errorFromResponse(serverResponse, 'Failed to disable Push on the server.');
       }
 
-      const browserRemoved = await subscription.unsubscribe();
+      const browserRemoved = await promiseWithTimeout(
+        subscription.unsubscribe(),
+        REQUEST_TIMEOUT_MS,
+        'Push unsubscribe timed out.'
+      );
       if (!browserRemoved) {
         setPushState('REPAIR_REQUIRED');
         setError(
@@ -324,7 +384,11 @@ export default function PushNotificationToggle() {
     setTestMessage('');
     try {
       const registration = await ensureServiceWorker();
-      const subscription = await registration.pushManager.getSubscription();
+      const subscription = await promiseWithTimeout(
+        registration.pushManager.getSubscription(),
+        REQUEST_TIMEOUT_MS,
+        'Push subscription lookup timed out.'
+      );
       if (!subscription?.endpoint) {
         setPushState('REPAIR_REQUIRED');
         setError('No active push subscription on this device. Tap Repair to restore.');
