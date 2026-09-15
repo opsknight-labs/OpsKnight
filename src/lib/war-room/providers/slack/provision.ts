@@ -39,6 +39,29 @@ function slackChannelName(config: { channelPrefix?: string | null }, serviceName
   return `${safePrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
 }
 
+function classifySlackCreateResult(result: { ok: boolean; error?: string; httpStatus?: number; transportFailure?: boolean; sideEffectAmbiguous?: boolean }): 'SUCCESS' | 'AMBIGUOUS' | 'RETRYABLE_NOT_AMBIGUOUS' | 'TERMINAL' | 'NAME_TAKEN' {
+  if (result.ok) return 'SUCCESS';
+  if (result.error === 'name_taken') return 'NAME_TAKEN';
+  // Structured transport ambiguity wins over string parsing — this is the fix for
+  // the "500 → 'Internal Server Error' parsed as terminal" bug on non-idempotent POSTs.
+  if (result.sideEffectAmbiguous) return 'AMBIGUOUS';
+  // 429 / 5xx already surfaced as sideEffectAmbiguous above; keep retryable classification
+  // for non-ambiguous transport retries only (read-path rate-limits, etc.).
+  if (result.transportFailure) return 'AMBIGUOUS';
+  const lower = (result.error ?? '').toLowerCase();
+  if (
+    lower.includes('rate_limited') ||
+    lower.includes('ratelimited') ||
+    lower.includes('timeout') ||
+    lower.includes('fetch') ||
+    lower.includes('network') ||
+    lower.includes('econnreset') ||
+    lower.includes('etimedout')
+  )
+    return 'AMBIGUOUS';
+  return 'TERMINAL';
+}
+
 function isSlackRetryableError(error?: string): boolean {
   if (!error) return false;
   const lower = error.toLowerCase();
@@ -281,14 +304,15 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
   const channelName = slackChannelName(config, incident.service.name, incident.id);
   const marker = slackWarRoomMarker(incident.id, room.generation);
 
-  // 1) Reconcile by marker and deterministic name before POST — marker is ownership proof, name is discovery hint
+  // 1) Reconcile BEFORE any POST:
+  //    - marker match  → safe to adopt (ownership proof)
+  //    - plannedExternalName match → safe (unique durable identity for this generation)
+  //    - generic base-name match WITHOUT marker/planned identity → NEVER adopt — it is a collision
   try {
-    // Prefer marker scan (topic/purpose) for precise ownership; fall back to name match
     let existing: { id: string; name: string } | null = null;
     try {
       existing = await findSlackChannelByMarker(botToken, marker);
     } catch {}
-    if (!existing) existing = await findExistingChannel(botToken, channelName);
     if (existing) {
       const warRoomUrl = generateBridgeUrl(
         incident.id,
@@ -321,17 +345,51 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
       } else if (adoption === 'FENCED') {
         return;
       } else if (adoption === 'CLOSED') {
-        // Resolve won the race while create was in flight — archive the late-created channel
         await slackApiCall('conversations.archive', botToken, { channel: existing.id }).catch(() => {});
         await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
       }
       return;
     }
+    // No marker match. Check plannedExternalName (unique per-generation) — safe to adopt.
+    if ((room as unknown as { plannedExternalName?: string | null }).plannedExternalName) {
+      const planned = (room as unknown as { plannedExternalName: string | null }).plannedExternalName!;
+      const plannedMatch = await findExistingChannel(botToken, planned);
+      if (plannedMatch) {
+        const warRoomUrl = generateBridgeUrl(
+          incident.id,
+          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
+          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
+        );
+        const adoption = await runSerializableTransaction(tx =>
+          adoptWarRoomChannel(tx, {
+            warRoomId: room.id,
+            provisioningToken: expectedProvisioningToken,
+            providerTenantId: slackWorkspaceId,
+            channelId: plannedMatch.id,
+            channelName: plannedMatch.name,
+            channelUrl: warRoomUrl,
+          })
+        );
+        if (adoption === 'READY') {
+          await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
+          const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
+          const { scheduleJob } = await import('@/lib/jobs/queue');
+          const { requestSlackWarRoomProjection } = await import('./projection');
+          await projectIncidentWarRoomParticipants(room.id);
+          await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
+          await requestSlackWarRoomProjection(room.id).catch(() => {});
+        }
+        return;
+      }
+    }
+    // Generic base-name match without ownership proof → collision. NEVER adopt;
+    // fall through to the planned-name creation path / AMBIGUOUS gate.
   } catch (error) {
     if (error instanceof WarRoomRetryableError) throw error;
   }
 
-  // 2) Ambiguous gate: if we already attempted create, never blind POST again — reconcile only
+  // 2) Ambiguous gate: if we already attempted create, never blind POST again — reconcile only.
+  // Reconciliation now looks for (marker OR plannedExternalName) — never generic name.
   if (room.createAttemptedAt) {
     const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
     const remaining = deadline - Date.now();
@@ -342,22 +400,57 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
         lastErrorCode: remaining > 0 ? 'CREATE_OUTCOME_RECONCILING' : 'CREATE_OUTCOME_UNRESOLVED',
         lastError:
           remaining > 0
-            ? 'A prior Slack channel-create may have succeeded; reconciling by name only.'
+            ? 'A prior Slack channel-create may have succeeded; reconciling by marker/planned name.'
             : 'Slack channel-create outcome remains unresolved after reconciliation window; operator reconciliation required.',
       },
     });
-    if (remaining > 0) throw new WarRoomRetryableError('Reconciling ambiguous Slack channel-create by name only.', Math.min(60_000, remaining), true);
+    if (remaining > 0) {
+      // Reconcile by marker and planned name (not generic name) before re-queuing.
+      try {
+        const m = await findSlackChannelByMarker(botToken, marker);
+        if (m) throw new WarRoomRetryableError('Found marker channel during AMBIGUOUS reconcile.', 1_000, true);
+      } catch (e) {
+        if (e instanceof WarRoomRetryableError) throw e;
+      }
+      const planned = (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null;
+      if (planned) {
+        try {
+          const pm = await findExistingChannel(botToken, planned);
+          if (pm) throw new WarRoomRetryableError('Found planned channel during AMBIGUOUS reconcile.', 1_000, true);
+        } catch (e) {
+          if (e instanceof WarRoomRetryableError) throw e;
+        }
+      }
+      throw new WarRoomRetryableError('Reconciling ambiguous Slack channel-create by marker/planned name.', Math.min(60_000, remaining), true);
+    }
     if (remaining <= 0) {
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'AMBIGUOUS', createAttemptedAt: { not: null } },
-        data: { state: 'FAILED', provisioningToken: null, lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED', lastError: 'No Slack channel was found by name during reconciliation window.' },
+        data: { state: 'FAILED', provisioningToken: null, lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED', lastError: 'No Slack channel was found by marker/planned name during reconciliation window.' },
       });
       await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
     }
     return;
   }
 
-  // 3) Fresh authority check right before POST
+  // 3) Persist plannedExternalName durably BEFORE any conversations.create.
+  // This is the durable alternate identity per generation. Slack cannot store the
+  // marker atomically with create, so we use this unique name as the reconciliation anchor.
+  const currentPlanned = (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null;
+  if (!currentPlanned) {
+    // First attempt for this generation: suffix comes from provisioningToken hash so it is
+    // unique per generation/incident and stable across retries. Stored before POST.
+    const suffix = deterministicCollisionSuffix(expectedProvisioningToken, room.generation);
+    const plannedName = `${channelName.slice(0, 74)}-${suffix}`;
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id, provisioningToken: expectedProvisioningToken },
+      data: { plannedExternalName: plannedName } as unknown as Record<string, unknown>,
+    });
+    // Reload room so later steps read the updated plannedExternalName
+    (room as unknown as { plannedExternalName?: string | null }).plannedExternalName = plannedName;
+  }
+
+  // Fresh authority check right before POST
   const freshRoom = await prisma.incidentWarRoom.findUnique({
     where: { id: room.id },
     select: { provisioningToken: true, state: true },
@@ -379,53 +472,26 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
   });
 
   if (!createResult.ok) {
-    if (isSlackRetryableError(createResult.error)) {
+    const cls = classifySlackCreateResult(createResult);
+    if (cls === 'AMBIGUOUS') {
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, provisioningToken: expectedProvisioningToken },
-        data: { state: 'AMBIGUOUS', lastErrorCode: 'SLACK_RATE_LIMITED', lastError: createResult.error ?? 'Slack rate limited' },
+        data: { state: 'AMBIGUOUS', lastErrorCode: 'SLACK_CREATE_AMBIGUOUS', lastError: createResult.error ?? `Slack create ambiguous (HTTP ${createResult.httpStatus ?? '?'})` },
       });
-      throw new WarRoomRetryableError(createResult.error ?? 'Slack rate limited');
+      throw new WarRoomRetryableError(createResult.error ?? 'Slack create ambiguous', undefined, true);
     }
 
-    // Reconcile deterministic name before second create on any failure
-    const existingAfterFail = await findExistingChannel(botToken, channelName).catch(error => {
-      if (error instanceof WarRoomRetryableError) throw error;
-      return null;
-    });
-    if (existingAfterFail) {
-      const warRoomUrl = generateBridgeUrl(
-        incident.id,
-        incident.service.warRoomVideoBridge || config.defaultVideoBridge,
-        incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
-      );
-      const adoption = await runSerializableTransaction(tx =>
-        adoptWarRoomChannel(tx, {
-          warRoomId: room.id,
-          provisioningToken: expectedProvisioningToken,
-          providerTenantId: slackWorkspaceId,
-          channelId: existingAfterFail.id,
-          channelName: existingAfterFail.name,
-          channelUrl: warRoomUrl,
-        })
-      );
-      if (adoption === 'READY') {
-        await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
-        const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
-        const { scheduleJob } = await import('@/lib/jobs/queue');
-        const { requestSlackWarRoomProjection } = await import('./projection');
-        await projectIncidentWarRoomParticipants(room.id);
-        await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
-        await requestSlackWarRoomProjection(room.id).catch(err =>
-          logger.warn('[ChatOps] Failed to queue Slack projection after fallback reconciliation', { error: err })
-        );
-      }
-      return;
+    // For any non-name_taken terminal failure, adopt ONLY if we find the persisted
+    // plannedExternalName (not the generic base name) — name-only adoption is forbidden.
+    if (cls !== 'NAME_TAKEN') {
+      // No planned-name adoption attempted here for non-name_taken errors; fail through to terminal.
     }
 
-    if (createResult.error === 'name_taken') {
-      const suffix = deterministicCollisionSuffix(expectedProvisioningToken, room.generation);
-      effectiveChannelName = `${channelName.slice(0, 74)}-${suffix}`;
-      // Check if deterministic alternate already exists (lost-response retry)
+    if (cls === 'NAME_TAKEN') {
+      // Base name collision — create the persisted plannedExternalName (already stored above).
+      const planned = (room as unknown as { plannedExternalName: string | null }).plannedExternalName!;
+      effectiveChannelName = planned;
+      // Check if planned alternate already exists (lost-response retry) — reconcile that exact identity
       const altExisting = await findExistingChannel(botToken, effectiveChannelName).catch(() => null);
       if (altExisting) {
         const warRoomUrl = generateBridgeUrl(
@@ -458,13 +524,16 @@ export async function provisionSlackWarRoom(warRoomId: string, expectedProvision
         name: effectiveChannelName,
         is_private: false,
       });
-      if (!createResult.ok && isSlackRetryableError(createResult.error)) {
+      const cls2 = classifySlackCreateResult(createResult);
+      if (cls2 === 'AMBIGUOUS') {
         await prisma.incidentWarRoom.updateMany({
           where: { id: room.id, provisioningToken: expectedProvisioningToken },
-          data: { state: 'AMBIGUOUS', lastErrorCode: 'SLACK_RATE_LIMITED', lastError: createResult.error ?? 'Slack rate limited' },
+          data: { state: 'AMBIGUOUS', lastErrorCode: 'SLACK_CREATE_AMBIGUOUS', lastError: createResult.error ?? `Slack create ambiguous (HTTP ${createResult.httpStatus ?? '?'})` },
         });
-        throw new WarRoomRetryableError(createResult.error ?? 'Slack rate limited');
+        throw new WarRoomRetryableError(createResult.error ?? 'Slack create ambiguous', undefined, true);
       }
+      // If create failed again with NAME_TAKEN on the planned unique name, treat as terminal collision
+      // (another generation already owns the suffix); fail closed.
     }
   }
 

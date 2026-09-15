@@ -3,20 +3,25 @@ import { retryFetch } from '@/lib/retry';
 
 const NON_IDEMPOTENT_POST_METHODS = new Set(['conversations.create', 'chat.postMessage']);
 
-export async function slackApiCall(
-  method: string,
-  botToken: string,
-  body: Record<string, unknown>
-): Promise<{
+export type SlackApiResult = {
   ok: boolean;
   error?: string;
+  httpStatus?: number;
+  transportFailure?: boolean;
+  sideEffectAmbiguous?: boolean;
   channel?: { id: string; name: string };
   channels?: Array<{ id: string; name: string }>;
   user?: { profile?: { email?: string } };
   ts?: string;
   message?: { ts?: string };
   response_metadata?: { next_cursor?: string };
-}> {
+};
+
+export async function slackApiCall(
+  method: string,
+  botToken: string,
+  body: Record<string, unknown>
+): Promise<SlackApiResult> {
   const allowRetry = !NON_IDEMPOTENT_POST_METHODS.has(method);
   try {
     if (allowRetry) {
@@ -56,6 +61,7 @@ export async function slackApiCall(
     }
     // Non-idempotent creates: single attempt only — never blind-retry after a
     // POST that may have had a provider side effect. Callers must reconcile.
+    // Preserve structured transport signals instead of folding HTTP status into the string.
     const response = await fetch(`https://slack.com/api/${method}`, {
       method: 'POST',
       headers: {
@@ -65,10 +71,17 @@ export async function slackApiCall(
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
     });
-    // Surface HTTP errors as ok:false without retry; caller decides AMBIGUOUS vs FAILED.
     if (!response.ok) {
       const text = await response.text().catch(() => '');
-      return { ok: false, error: text ? text.slice(0, 500) : `HTTP ${response.status}` };
+      const isRateLimited = response.status === 429;
+      const is5xx = response.status >= 500 && response.status <= 599;
+      return {
+        ok: false,
+        error: text ? text.slice(0, 500) : `HTTP ${response.status}`,
+        httpStatus: response.status,
+        transportFailure: true,
+        sideEffectAmbiguous: isRateLimited || is5xx,
+      };
     }
     return (await response.json()) as {
       ok: boolean;
@@ -81,7 +94,8 @@ export async function slackApiCall(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.warn('[ChatOps] Slack API call failed', { method, error: message });
-    return { ok: false, error: message };
+    const isTimeoutish = /timeout|fetch|network|econnreset|etimedout/i.test(message);
+    return { ok: false, error: message, transportFailure: isTimeoutish, sideEffectAmbiguous: NON_IDEMPOTENT_POST_METHODS.has(method) && isTimeoutish };
   }
 }
 

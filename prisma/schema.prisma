@@ -787,6 +787,10 @@ model IncidentWarRoom {
   provisioningStartedAt DateTime?
   createAttemptedAt     DateTime?
   createOperationId     String?
+  // Durable planned identity for this generation — set BEFORE conversations.create
+  // and never overwritten by reconciliation. Lost-response recovery reconciles
+  // only this exact name (plus marker); generic name fallback is forbidden.
+  plannedExternalName   String?
   readyAt               DateTime?
   closedAt              DateTime?
   archivedAt            DateTime?

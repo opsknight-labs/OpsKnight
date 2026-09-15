@@ -30,7 +30,7 @@ export async function reconcileSlackWarRoom(warRoomId: string): Promise<void> {
   });
   if (!room || room.provider !== 'SLACK' || !room.providerTenantId) return;
 
-  // AMBIGUOUS: provisioning reconciliation — scan by marker and adopt if found.
+  // AMBIGUOUS: provisioning reconciliation — scan by marker OR plannedExternalName (never generic name).
   if (room.state === 'AMBIGUOUS') {
     const svcId: string = (room.incident as { serviceId?: string }).serviceId ?? '';
     const token = svcId ? await getSlackBotToken(svcId).catch(() => null) : null;
@@ -38,12 +38,20 @@ export async function reconcileSlackWarRoom(warRoomId: string): Promise<void> {
       await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
       return;
     }
-    const { findSlackChannelByMarker, slackWarRoomMarker } = await import('./client');
-    const marker = slackWarRoomMarker(room.incidentId, room.generation);
     let found: { id: string; name: string } | null = null;
     try {
-      found = await findSlackChannelByMarker(token, marker);
+      const { findSlackChannelByMarker, slackWarRoomMarker } = await import('./client');
+      found = await findSlackChannelByMarker(token, slackWarRoomMarker(room.incidentId, room.generation));
     } catch {}
+    if (!found) {
+      const planned = (room as { plannedExternalName?: string | null }).plannedExternalName ?? null;
+      if (planned) {
+        try {
+          const { findExistingSlackChannel } = await import('./client');
+          found = await findExistingSlackChannel(token, planned);
+        } catch {}
+      }
+    }
     if (!found) {
       await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
       return;

@@ -356,11 +356,27 @@ export async function projectSlackWarRoomCard(
         },
       });
     } else {
-      // No ts returned — still clear degraded health but keep lease cleared; next projection will try update path if ts later appears.
+      // Slack returned ok:true without ts — ambiguous outcome (card may or may not exist).
+      // Must NOT mark HEALTHY: next projection requires commandCreateAttemptedAt==null to POST,
+      // so clearing it would wedge the card, while leaving it armed wedges it differently.
+      // Leave fence armed and surface AMBIGUOUS so operator abandon + retry can repair it.
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, projectionLeaseToken: token },
-        data: { health: 'HEALTHY', lastError: null, lastErrorCode: null, commandConversationId: room.providerChannelId },
+        data: {
+          health: 'DEGRADED',
+          lastErrorCode: 'AMBIGUOUS_CARD_CREATE',
+          lastError: 'Slack card create returned success without a message identifier; canonical card outcome is ambiguous.',
+          projectionLeaseToken: null,
+          projectionLeaseExpiresAt: null,
+        },
       });
+      if (room.state === 'CLOSING') {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, projectionVersion, state: 'CLOSING' },
+          data: { state: 'CLOSED', closedAt: new Date() },
+        });
+      }
+      return;
     }
   } else {
     const updated = await slackApiCall('chat.update', botToken, {
