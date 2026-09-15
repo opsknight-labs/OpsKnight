@@ -93,7 +93,9 @@ export async function runCriticalNotificationCycle(
     result.scannedCentral = true;
     try {
       const { processCentralNotificationQueue } = await import('./notification-control-plane');
-      const central = await processCentralNotificationQueue();
+      const central = await processCentralNotificationQueue({
+        trafficClasses: ['CRITICAL', 'TRANSACTIONAL'],
+      });
       result.centralProcessed = central.processed;
       result.centralSucceeded = central.succeeded;
       result.centralFailed = central.failed;

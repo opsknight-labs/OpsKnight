@@ -178,6 +178,14 @@ async function runOnce(): Promise<void> {
   }
 
   try {
+    if (workerState.controlPlaneState === 'UNINITIALIZED') {
+      const laneLabel =
+        workerState.workerLane === 'bulk' ? 'Bulk lane' : `${workerState.workerLane} lane`;
+      logger.warn(`[JobWorker] ${laneLabel} paused during UNINITIALIZED control plane state`);
+      workerState.lastError = `${laneLabel} paused: control plane in UNINITIALIZED state`;
+      scheduleNextRun(workerState.workerConfig.busyPollMs);
+      return;
+    }
     if (workerState.workerLane === 'projector') {
       const { reconcileStatusPageSnapshots } = await import('./status-pages/snapshot');
       const projection = await reconcileStatusPageSnapshots(workerState.workerConfig.batchSize);
@@ -192,10 +200,7 @@ async function runOnce(): Promise<void> {
     }
 
     if (workerState.workerLane === 'bulk') {
-      if (
-        workerState.controlPlaneState === 'EMERGENCY_LOCAL' ||
-        workerState.controlPlaneState === 'UNINITIALIZED'
-      ) {
+      if (workerState.controlPlaneState === 'EMERGENCY_LOCAL') {
         logger.warn(
           `[JobWorker] Bulk lane paused during ${workerState.controlPlaneState} control plane state`
         );
@@ -363,13 +368,18 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
     lane: workerState.workerLane,
   });
 
-  // Certify notification control-plane tables at worker boot
+  // Certify notification control-plane tables at worker boot.
+  // runOnce() fences all lanes while controlPlaneState is UNINITIALIZED,
+  // ensuring work is never claimed until the state is certified HEALTHY or EMERGENCY_LOCAL.
   void (async () => {
     try {
       const { certifyNotificationControlPlane } = await import('./provider-admission');
       await certifyNotificationControlPlane();
       workerState.controlPlaneState = 'HEALTHY';
       logger.info('[JobWorker] Control plane startup certification passed');
+      if (workerState.initialized) {
+        scheduleNextRun(0);
+      }
     } catch (certError) {
       const msg = certError instanceof Error ? certError.message : String(certError);
       workerState.controlPlaneState = 'EMERGENCY_LOCAL';
@@ -378,6 +388,9 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
         '[JobWorker] Control plane startup certification failed; entering EMERGENCY_LOCAL mode',
         { error: msg }
       );
+      if (workerState.initialized) {
+        scheduleNextRun(0);
+      }
     }
   })();
 

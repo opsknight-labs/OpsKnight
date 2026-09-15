@@ -309,6 +309,7 @@ export async function materializeEscalationNotificationIntents(
           displayMessage: 'Incident notification',
           trafficClass: 'CRITICAL',
           priority: NOTIFICATION_PRIORITY.RESPONDER_CRITICAL,
+          eventAt: plan.eventAt,
           payload: {
             kind: `INCIDENT_${intent.channel}`,
             userId: intent.userId,

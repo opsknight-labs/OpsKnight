@@ -8,14 +8,14 @@ import {
   type NotificationChannel,
   type NotificationRecipientType,
 } from '@prisma/client';
-import prisma from './prisma';
+import prisma from '@/lib/prisma';
 import {
   CircuitBreakerError,
   CircuitBreakerTimeoutError,
   CircuitBreakers,
   type CircuitBreaker,
 } from './circuit-breaker';
-import { decrypt, encrypt, getEncryptionKey } from './encryption';
+import { decrypt, encrypt, getEncryptionKey } from '@/lib/encryption';
 import {
   acquireProviderAdmission,
   acquireProviderConcurrency,
@@ -190,6 +190,7 @@ export type CentralNotificationInput = {
   trafficClass?: NotificationTrafficClass;
   scheduledAt?: Date;
   expiresAt?: Date;
+  eventAt?: Date | string;
   maxAttempts?: number;
   contentId?: string;
   fanoutId?: string;
@@ -223,6 +224,7 @@ const centralNotificationInputSchema = z
     trafficClass: z.enum(['CRITICAL', 'TRANSACTIONAL', 'PUBLIC_INCIDENT', 'BULK']).optional(),
     scheduledAt: z.date().optional(),
     expiresAt: z.date().optional(),
+    eventAt: z.union([z.date(), z.string()]).optional(),
     maxAttempts: z.number().int().optional(),
     contentId: z.string().max(191).optional(),
     fanoutId: z.string().max(191).optional(),
@@ -395,12 +397,71 @@ function tenantKeyForInput(input: CentralNotificationInput): string {
 }
 
 function isUniqueConstraintError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    return error.code === 'P2002';
+  }
   return Boolean(
     error &&
     typeof error === 'object' &&
     'code' in error &&
-    (error as { code?: string }).code === 'P2002'
+    (error as { code?: unknown }).code === 'P2002'
   );
+}
+
+export const NOTIFICATION_FRESHNESS_TTL_MS = {
+  RESPONDER_CRITICAL: 30 * 60 * 1_000, // 30 minutes for incident/escalation pages
+  TRANSACTIONAL: 2 * 60 * 60 * 1_000, // 2 hours for auth, user invites, verifications
+  PUBLIC_INCIDENT: 6 * 60 * 60 * 1_000, // 6 hours for public status incident updates
+  BULK: 24 * 60 * 60 * 1_000, // 24 hours for broad subscriber broadcasts
+} as const;
+
+/**
+ * Maximum permitted age for a notification based on its traffic class.
+ * Used as a fallback when `expiresAt` is NULL (pre-upgrade rows or rows
+ * created before the freshness policy was introduced).
+ */
+export function ttlMsForTrafficClass(
+  trafficClass: string | null | undefined,
+  category?: string | null
+): number {
+  if (trafficClass === 'CRITICAL' || category === 'INCIDENT')
+    return NOTIFICATION_FRESHNESS_TTL_MS.RESPONDER_CRITICAL;
+  if (trafficClass === 'TRANSACTIONAL') return NOTIFICATION_FRESHNESS_TTL_MS.TRANSACTIONAL;
+  if (trafficClass === 'PUBLIC_INCIDENT') return NOTIFICATION_FRESHNESS_TTL_MS.PUBLIC_INCIDENT;
+  return NOTIFICATION_FRESHNESS_TTL_MS.BULK;
+}
+
+export function resolveNotificationExpiry(
+  input: CentralNotificationInput,
+  scheduledAt: Date
+): Date {
+  if (input.expiresAt) return input.expiresAt;
+  const policy = defaultNotificationPolicy(input.category, input.templateKey);
+  const trafficClass = input.trafficClass ?? policy.trafficClass;
+  const ttlMs =
+    trafficClass === 'CRITICAL' || input.category === 'INCIDENT'
+      ? NOTIFICATION_FRESHNESS_TTL_MS.RESPONDER_CRITICAL
+      : trafficClass === 'TRANSACTIONAL'
+        ? NOTIFICATION_FRESHNESS_TTL_MS.TRANSACTIONAL
+        : trafficClass === 'PUBLIC_INCIDENT'
+          ? NOTIFICATION_FRESHNESS_TTL_MS.PUBLIC_INCIDENT
+          : NOTIFICATION_FRESHNESS_TTL_MS.BULK;
+
+  let originTime = scheduledAt.getTime();
+  if (input.eventAt) {
+    const parsed = new Date(input.eventAt).getTime();
+    if (!Number.isNaN(parsed)) originTime = parsed;
+  } else if (
+    input.payload &&
+    typeof input.payload === 'object' &&
+    'eventAt' in input.payload &&
+    typeof (input.payload as { eventAt?: unknown }).eventAt === 'string'
+  ) {
+    const parsed = new Date((input.payload as { eventAt: string }).eventAt).getTime();
+    if (!Number.isNaN(parsed)) originTime = parsed;
+  }
+
+  return new Date(originTime + ttlMs);
 }
 
 export async function createCentralNotificationIntent(
@@ -464,7 +525,7 @@ export async function createCentralNotificationIntent(
         scheduledAt,
         nextAttemptAt: scheduledAt,
         maxAttempts,
-        expiresAt: input.expiresAt,
+        expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
       },
       select: { id: true },
     });
@@ -536,7 +597,7 @@ export async function createCentralNotificationIntentsBatch(
           Math.max(input.maxAttempts ?? NOTIFICATION_RETRY_POLICY.maxAttempts, 1),
           20
         ),
-        expiresAt: input.expiresAt,
+        expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
       };
     })
   );
@@ -1035,6 +1096,7 @@ function terminalPayload(_category: NotificationCategory): { payloadEncrypted: n
 
 async function cleanupExpiredNotifications(now: Date): Promise<number> {
   const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
+  // Pass 1: rows with an explicit expiresAt that has elapsed.
   const expired = await prisma.notification.findMany({
     where: {
       payloadEncrypted: { not: null },
@@ -1050,9 +1112,34 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
     take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
     select: { id: true },
   });
-  if (expired.length === 0) return 0;
+
+  // Pass 2: pre-upgrade rows where expiresAt IS NULL but the row is older than
+  // the maximum permitted TTL for any traffic class (BULK = 24 h).  These are
+  // guaranteed stale; the delivery fence in deliverCentralNotification applies
+  // the per-class TTL for rows still within the BULK window.
+  const maxTtlMs = NOTIFICATION_FRESHNESS_TTL_MS.BULK;
+  const nullExpiryOlderThan = new Date(now.getTime() - maxTtlMs);
+  const nullExpired = await prisma.notification.findMany({
+    where: {
+      payloadEncrypted: { not: null },
+      expiresAt: null,
+      createdAt: { lt: nullExpiryOlderThan },
+      status: { in: ['PENDING', 'FAILED'] },
+      OR: [
+        { status: 'FAILED' },
+        { status: 'PENDING', lastAttemptAt: null },
+        { status: 'PENDING', lastAttemptAt: { lt: staleClaimBefore } },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+    take: EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE,
+    select: { id: true },
+  });
+
+  const allExpiredIds = [...expired.map(item => item.id), ...nullExpired.map(item => item.id)];
+  if (allExpiredIds.length === 0) return 0;
   const result = await prisma.notification.updateMany({
-    where: { id: { in: expired.map(item => item.id) } },
+    where: { id: { in: allExpiredIds } },
     data: {
       status: 'SKIPPED',
       payloadEncrypted: null,
@@ -1486,6 +1573,7 @@ export async function deliverCentralNotification(
       scheduledAt: true,
       lastAttemptAt: true,
       expiresAt: true,
+      createdAt: true,
       payloadEncrypted: true,
       sourceType: true,
       sourceId: true,
@@ -1501,12 +1589,39 @@ export async function deliverCentralNotification(
   if (candidate.status !== 'PENDING' && candidate.status !== 'FAILED') {
     return { success: false, claimed: false };
   }
-  if (candidate.expiresAt && candidate.expiresAt <= now) {
+  // Compute effective expiry even for pre-upgrade rows where expiresAt is NULL.
+  // Fallback chain: stored expiresAt → eventAt + TTL → scheduledAt + TTL.
+  // This prevents the queue from re-delivering historical backlog rows indefinitely
+  // during or after a rolling upgrade that introduced the freshness policy.
+  const ttlMs = ttlMsForTrafficClass(candidate.trafficClass, candidate.category);
+  let effectiveExpiry = candidate.expiresAt;
+  if (!effectiveExpiry) {
+    try {
+      const decoded: unknown = JSON.parse(await decrypt(candidate.payloadEncrypted));
+      if (
+        decoded &&
+        typeof decoded === 'object' &&
+        'eventAt' in decoded &&
+        typeof (decoded as { eventAt?: unknown }).eventAt === 'string'
+      ) {
+        const eventTime = new Date((decoded as { eventAt: string }).eventAt).getTime();
+        if (!Number.isNaN(eventTime)) {
+          effectiveExpiry = new Date(eventTime + ttlMs);
+        }
+      }
+    } catch {
+      // ignore, fallback to scheduledAt below
+    }
+    effectiveExpiry = effectiveExpiry ?? new Date(candidate.scheduledAt.getTime() + ttlMs);
+  }
+  if (effectiveExpiry <= now) {
     await prisma.notification.updateMany({
       where: { id: candidate.id, status: { in: ['PENDING', 'FAILED'] } },
       data: {
         status: 'SKIPPED',
-        errorMsg: 'Notification expired before delivery.',
+        errorMsg: candidate.expiresAt
+          ? 'Notification expired before delivery.'
+          : `Notification exceeded class TTL before delivery (no stored expiry; effective TTL: ${Math.round(ttlMs / 60_000)}m).`,
         ...terminalPayload(candidate.category),
       },
     });
