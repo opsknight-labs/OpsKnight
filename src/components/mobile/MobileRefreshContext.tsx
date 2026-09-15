@@ -2,7 +2,13 @@
 
 import { createContext, useContext, type ReactNode } from 'react';
 
-const MobileRefreshEpochContext = createContext<string | null>(null);
+export type MobileRefreshContextValue = {
+  epoch: string;
+  refresh: () => Promise<void>;
+  isRefreshing: boolean;
+};
+
+const MobileRefreshContext = createContext<MobileRefreshContextValue | null>(null);
 
 export function MobileRefreshEpochProvider({
   epoch,
@@ -12,14 +18,33 @@ export function MobileRefreshEpochProvider({
   children: ReactNode;
 }) {
   return (
-    <MobileRefreshEpochContext.Provider value={epoch}>
+    <MobileRefreshContext.Provider
+      value={{
+        epoch,
+        refresh: async () => {},
+        isRefreshing: false,
+      }}
+    >
       {children}
-    </MobileRefreshEpochContext.Provider>
+    </MobileRefreshContext.Provider>
   );
 }
 
+export function MobileRefreshProvider({
+  value,
+  children,
+}: {
+  value: MobileRefreshContextValue;
+  children: ReactNode;
+}) {
+  return <MobileRefreshContext.Provider value={value}>{children}</MobileRefreshContext.Provider>;
+}
+
+export function useMobileRefresh() {
+  return useContext(MobileRefreshContext);
+}
+
 export function useMobileRefreshEpoch() {
-  const value = useContext(MobileRefreshEpochContext);
-  if (!value) throw new Error('useMobileRefreshEpoch must be used within MobileRefreshEpochProvider');
-  return value;
+  const value = useContext(MobileRefreshContext);
+  return value?.epoch ?? '';
 }

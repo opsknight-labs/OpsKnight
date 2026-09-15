@@ -12,6 +12,7 @@ import TopbarBreadcrumbs from '@/components/TopbarBreadcrumbs';
 import GlobalKeyboardHandlerWrapper from '@/components/GlobalKeyboardHandlerWrapper';
 import AppErrorBoundary from './error-boundary';
 import SkipLinks from '@/components/SkipLinks';
+import LegalSourceNotice from '@/components/LegalSourceNotice';
 import { TimezoneProvider } from '@/contexts/TimezoneContext';
 import { SidebarProvider } from '@/contexts/SidebarContext';
 import { UserAvatarProvider } from '@/contexts/UserAvatarContext';
@@ -190,6 +191,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </UserAvatarProvider>
         </TimezoneProvider>
         <SessionTimeoutWarning warningMinutes={5} />
+        {/* AGPL source-code notice: only in the authenticated desktop shell.
+            Not rendered on mobile (/m), login, or status pages. */}
+        <LegalSourceNotice />
       </AppErrorBoundary>
     </AuthenticatedClientProviders>
   );

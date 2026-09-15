@@ -157,6 +157,7 @@ export default function IncidentCommandBar({
   const [isWarRoomPending, startWarRoomTransition] = useTransition();
   const [warRoomError, setWarRoomError] = useState<string | null>(null);
   const [showJiraDialog, setShowJiraDialog] = useState(false);
+  const [showSlackDialog, setShowSlackDialog] = useState(false);
   const [jiraLinkKey, setJiraLinkKey] = useState('');
   const [isJiraPending, startJiraTransition] = useTransition();
   const [jiraError, setJiraError] = useState<string | null>(null);
@@ -711,7 +712,7 @@ export default function IncidentCommandBar({
                   className="w-full h-11 justify-start gap-2.5 text-sm font-medium"
                   onClick={() => {
                     setShowMobileMore(false);
-                    router.push('/settings/integrations/slack');
+                    setShowSlackDialog(true);
                   }}
                 >
                   <SlackLogo className="h-4 w-4" />
@@ -780,6 +781,36 @@ export default function IncidentCommandBar({
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={showSlackDialog} onOpenChange={setShowSlackDialog}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SlackLogo className="h-5 w-5" />
+              <span>Connect Slack Workspace</span>
+            </DialogTitle>
+            <DialogDescription>
+              Slack ChatOps integration requires desktop configuration to connect your Slack
+              workspace and authorize war room management.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button asChild className="w-full h-11">
+              <Link href="/settings/integrations/slack" onClick={() => setShowSlackDialog(false)}>
+                Open Desktop Settings
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full h-11"
+              onClick={() => setShowSlackDialog(false)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {(primaryJira || hasOperationalJira) && (
         <Dialog open={showJiraDialog} onOpenChange={setShowJiraDialog}>

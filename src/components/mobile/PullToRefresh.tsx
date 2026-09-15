@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { haptics } from '@/lib/haptics';
 import { isInteractiveMobileTarget } from '@/lib/mobile-interactive';
-import { useMobileRefreshEpoch } from '@/components/mobile/MobileRefreshContext';
+import {
+  useMobileRefreshEpoch,
+  MobileRefreshProvider,
+} from '@/components/mobile/MobileRefreshContext';
 
 const REFRESH_TIMEOUT_MS = 15_000;
 
@@ -211,8 +214,21 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
           }}
         >
           <div style={{ position: 'relative', width: '40px', height: '40px' }}>
-            <svg width="40" height="40" viewBox="0 0 40 40" style={{ position: 'absolute', top: 0, left: 0 }} aria-hidden="true">
-              <circle cx="20" cy="20" r="16" fill="none" stroke="hsl(var(--ui-border))" strokeWidth="3" />
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 40 40"
+              style={{ position: 'absolute', top: 0, left: 0 }}
+              aria-hidden="true"
+            >
+              <circle
+                cx="20"
+                cy="20"
+                r="16"
+                fill="none"
+                stroke="hsl(var(--ui-border))"
+                strokeWidth="3"
+              />
             </svg>
             <svg
               width="40"
@@ -255,7 +271,14 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
               {refreshing ? (
                 <span style={{ fontSize: '16px', color: accent }}>•</span>
               ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={isReady ? accent : muted} strokeWidth="2.5">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke={isReady ? accent : muted}
+                  strokeWidth="2.5"
+                >
                   <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
@@ -271,7 +294,11 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
               transition: 'color 0.2s ease',
             }}
           >
-            {refreshing ? 'Refreshing fresh data…' : isReady ? 'Release to refresh' : 'Pull to refresh'}
+            {refreshing
+              ? 'Refreshing fresh data…'
+              : isReady
+                ? 'Release to refresh'
+                : 'Pull to refresh'}
           </span>
         </div>
       </div>
@@ -285,12 +312,24 @@ export default function PullToRefresh({ children }: { children: ReactNode }) {
         </div>
       ) : null}
 
-      <div>{children}</div>
+      <MobileRefreshProvider
+        value={{
+          epoch: refreshEpoch,
+          refresh: initLoading,
+          isRefreshing: refreshing,
+        }}
+      >
+        <div>{children}</div>
+      </MobileRefreshProvider>
 
       <style jsx>{`
         @keyframes spin {
-          from { transform: rotate(-90deg); }
-          to { transform: rotate(270deg); }
+          from {
+            transform: rotate(-90deg);
+          }
+          to {
+            transform: rotate(270deg);
+          }
         }
       `}</style>
     </div>

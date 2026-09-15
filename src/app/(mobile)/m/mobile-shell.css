@@ -295,12 +295,11 @@
 
 .mobile-nav-label {
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.64rem;
+  font-size: clamp(0.56rem, 2.2vw, 0.65rem);
   line-height: 1.05;
   font-weight: 650;
+  text-align: center;
 }
 
 .mobile-nav-badge {
@@ -490,9 +489,18 @@
   }
 }
 
-@media (max-width: 350px) {
+@media (max-width: 359px) {
   .mobile-header-brand span { display: none; }
-  .mobile-nav-label { font-size: 0.59rem; }
+  .mobile-nav {
+    padding-inline: max(0.2rem, env(safe-area-inset-left, 0px)) max(0.2rem, env(safe-area-inset-right, 0px));
+  }
+  .mobile-nav-item {
+    gap: 0.12rem;
+  }
+  .mobile-nav-label {
+    font-size: 0.56rem;
+    letter-spacing: -0.015em;
+  }
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
