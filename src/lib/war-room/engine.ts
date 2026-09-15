@@ -343,7 +343,7 @@ export async function ensureTerminalCloseJobsAfterClosingAdoption(warRoomId: str
     await tx.backgroundJob.create({
       data: { type: 'WAR_ROOM_CLOSE', status: 'PENDING', scheduledAt: new Date(Date.now() + 2_000), maxAttempts: 5, payload: { warRoomId, incidentId, closeGeneration: Date.now(), terminalProjectionVersion: withVersion.projectionVersion } as unknown as never },
     });
-  }).catch(() => {});
+  });
 }
 
 /** Finalizes a CLOSING room: waits for the terminal projection to settle, then provider archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */

@@ -75,6 +75,38 @@ async function markFailed(id: string, provisioningToken: string, code: string, m
   await projectSlackWarRoomToLegacyIncident(id).catch(() => {});
 }
 
+async function ensureTerminalCloseHandoff(warRoomId: string, incidentId: string): Promise<void> {
+  const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+  const { closeWarRoomNeutral } = await import('../../engine');
+  let ensured = false;
+  let ensureError: unknown = null;
+  try {
+    await ensureTerminalCloseJobsAfterClosingAdoption(warRoomId, incidentId);
+    ensured = true;
+  } catch (e) {
+    ensureError = e;
+  }
+  const existing = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { id: true },
+  });
+  if (existing) return;
+  // No durable close owner — surface the original persistence failure so the
+  // WAR_ROOM_PROVISION job retries instead of completing and stranding CLOSING.
+  if (!ensured && ensureError) throw ensureError;
+  // Fallback repair path: idempotent neutral close (also durable, may throw).
+  await closeWarRoomNeutral({ incidentId, warRoomId });
+  const afterRepair = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { id: true },
+  });
+  if (!afterRepair) {
+    // P2002 duplicate race: another worker already inserted. Retries are
+    // exactly what we want — treat as success.
+    throw new WarRoomRetryableError('Terminal close ownership not yet durable; retrying.', 2000, true);
+  }
+}
+
 /** Durable request boundary. No Slack I/O occurs here. */
 export async function requestSlackWarRoom(
   incidentId: string,
@@ -272,13 +304,39 @@ export async function provisionSlackWarRoom(
   }
 
   const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
+  const isClosingReconciliation = reconciliationOnly && room.state === 'CLOSING' && room.createAttemptedAt != null;
   if (!config?.enabled) {
+    if (isClosingReconciliation) {
+      // Cleanup is lifecycle recovery, not feature provisioning — do not fail
+      // to FAILED when ChatOps was disabled after the attempt. Keep CLOSING
+      // and retry boundedly so the external identity is still reconciled.
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+        data: {
+          health: 'DEGRADED',
+          lastErrorCode: 'CHATOPS_DISABLED_DURING_CLOSE_RECONCILIATION',
+          lastError: 'ChatOps is disabled but CLOSING reconciliation keeps retrying until marker resolved.',
+        },
+      });
+      throw new WarRoomRetryableError('ChatOps disabled during CLOSING reconciliation; retrying.', 30_000, true);
+    }
     await markFailed(room.id, expectedProvisioningToken, 'CHATOPS_DISABLED', 'ChatOps is not enabled');
     return;
   }
 
   const botToken = await getSlackBotToken(incident.serviceId);
   if (!botToken) {
+    if (isClosingReconciliation) {
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+        data: {
+          health: 'DEGRADED',
+          lastErrorCode: 'SLACK_BOT_TOKEN_MISSING_DURING_CLOSE',
+          lastError: 'No Slack bot token during CLOSING reconciliation; keeping CLOSING for retry.',
+        },
+      });
+      throw new WarRoomRetryableError('No Slack bot token during CLOSING reconciliation; retrying.', 30_000, true);
+    }
     await markFailed(room.id, expectedProvisioningToken, 'SLACK_BOT_TOKEN_MISSING', 'No Slack bot token configured');
     return;
   }
@@ -294,6 +352,17 @@ export async function provisionSlackWarRoom(
     room.providerTenantId;
 
   if (!slackWorkspaceId) {
+    if (isClosingReconciliation) {
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+        data: {
+          health: 'DEGRADED',
+          lastErrorCode: 'SLACK_WORKSPACE_MISSING_DURING_CLOSE',
+          lastError: 'No Slack workspace during CLOSING reconciliation; keeping CLOSING for retry.',
+        },
+      });
+      throw new WarRoomRetryableError('No Slack workspace during CLOSING reconciliation; retrying.', 30_000, true);
+    }
     await markFailed(room.id, expectedProvisioningToken, 'SLACK_WORKSPACE_MISSING', 'No Slack workspace installation configured');
     return;
   }
@@ -347,8 +416,7 @@ export async function provisionSlackWarRoom(
           await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
           const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
           if (fresh) {
-            const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
-            await ensureTerminalCloseJobsAfterClosingAdoption(room.id, fresh.incidentId);
+            await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
           }
         } else if (adoption === 'FENCED') {
           return;
@@ -391,8 +459,7 @@ export async function provisionSlackWarRoom(
           await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
           const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
           if (fresh) {
-            const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
-            await ensureTerminalCloseJobsAfterClosingAdoption(room.id, fresh.incidentId);
+            await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
           }
         }
         return;
@@ -425,14 +492,9 @@ export async function provisionSlackWarRoom(
       });
       const freshClose = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
       if (freshClose) {
-        const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
-        await ensureTerminalCloseJobsAfterClosingAdoption(room.id, freshClose.incidentId).catch(() => {});
-        // If still no terminal close job (e.g. closeRequestedAt cleared), repair via neutral close idempotent path
-        const still = await prisma.backgroundJob.findFirst({ where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } }, select: { id: true } });
-        if (!still) {
-          const { closeWarRoomNeutral } = await import('../../engine');
-          await closeWarRoomNeutral({ incidentId: freshClose.incidentId, warRoomId: room.id }).catch(() => {});
-        }
+        // Do not swallow durability failures — the reconciliation job must only
+        // complete when terminal ownership is durable, otherwise it must retry.
+        await ensureTerminalCloseHandoff(room.id, freshClose.incidentId);
       }
     }
     return;
@@ -694,8 +756,7 @@ export async function provisionSlackWarRoom(
     // so Slack does not drift open while Incident=RESOLVED.
     await slackApiCall('conversations.archive', botToken, { channel: channelId }).catch(() => {});
   } else if (adoption === 'CLOSING') {
-    const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
-    await ensureTerminalCloseJobsAfterClosingAdoption(room.id, incident.id);
+    await ensureTerminalCloseHandoff(room.id, incident.id);
   } else if (adoption === 'READY') {
     const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
     const { scheduleJob } = await import('@/lib/jobs/queue');

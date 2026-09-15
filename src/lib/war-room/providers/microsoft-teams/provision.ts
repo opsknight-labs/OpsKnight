@@ -473,8 +473,7 @@ export async function provisionMicrosoftTeamsWarRoom(
   if (existing.ok && existing.value) {
     const adoption = await adoptProviderChannel(room, expectedProvisioningToken, existing.value);
     if (adoption === 'CLOSING') {
-      const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
-      await ensureTerminalCloseJobsAfterClosingAdoption(room.id, room.incident.id);
+      await ensureTeamsTerminalCloseHandoff(room.id, room.incident.id);
     } else if (adoption === 'READY') {
       const { scheduleJob } = await import('@/lib/jobs/queue');
       await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
@@ -485,12 +484,36 @@ export async function provisionMicrosoftTeamsWarRoom(
   }
 
   if (!existing.ok) {
+    const isClosingReconciliation = reconciliationOnly && room.state === 'CLOSING' && room.createAttemptedAt != null;
     if (
       existing.code === 'TRANSIENT_READ' ||
       existing.code === 'RATE_LIMITED' ||
       existing.code === 'GRAPH_TOKEN_FAILED'
-    )
+    ) {
+      if (isClosingReconciliation) {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+          data: {
+            health: 'DEGRADED',
+            lastErrorCode: `RECONCILIATION_LOOKUP_${existing.code}`,
+            lastError: existing.message.slice(0, 1000),
+          },
+        }).catch(() => {});
+        throw new WarRoomRetryableError(existing.message, existing.retryAfterMs ?? 30_000, true);
+      }
       throw new WarRoomRetryableError(existing.message, existing.retryAfterMs);
+    }
+    if (isClosingReconciliation) {
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+        data: {
+          health: existing.code === 'MISSING_PERMISSION' ? 'PERMISSION_ERROR' : 'DEGRADED',
+          lastErrorCode: `RECONCILIATION_LOOKUP_${existing.code}`,
+          lastError: existing.message.slice(0, 1000),
+        },
+      });
+      throw new WarRoomRetryableError(`CLOSING Teams reconciliation lookup failed (${existing.code}); retrying.`, 30_000, true);
+    }
     await markFailed(room.id, expectedProvisioningToken, existing.code, existing.message);
     return;
   }
@@ -511,13 +534,7 @@ export async function provisionMicrosoftTeamsWarRoom(
       });
       const freshClose = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
       if (freshClose) {
-        const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
-        await ensureTerminalCloseJobsAfterClosingAdoption(room.id, freshClose.incidentId).catch(() => {});
-        const still = await prisma.backgroundJob.findFirst({ where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } }, select: { id: true } });
-        if (!still) {
-          const { closeWarRoomNeutral } = await import('../../engine');
-          await closeWarRoomNeutral({ incidentId: freshClose.incidentId, warRoomId: room.id }).catch(() => {});
-        }
+        await ensureTeamsTerminalCloseHandoff(room.id, freshClose.incidentId);
       }
     }
     return;
@@ -689,8 +706,7 @@ export async function provisionMicrosoftTeamsWarRoom(
   }
   const adoption = await adoptProviderChannel(room, expectedProvisioningToken, created.value);
   if (adoption === 'CLOSING') {
-    const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
-    await ensureTerminalCloseJobsAfterClosingAdoption(room.id, room.incident.id);
+    await ensureTeamsTerminalCloseHandoff(room.id, room.incident.id);
   } else if (adoption === 'READY') {
     const { scheduleJob } = await import('@/lib/jobs/queue');
     await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
@@ -731,6 +747,33 @@ async function markFailed(
       provisioningToken: null,
     },
   });
+}
+
+async function ensureTeamsTerminalCloseHandoff(warRoomId: string, incidentId: string): Promise<void> {
+  const { ensureTerminalCloseJobsAfterClosingAdoption } = await import('../../engine');
+  const { closeWarRoomNeutral } = await import('../../engine');
+  let ensured = false;
+  let ensureError: unknown = null;
+  try {
+    await ensureTerminalCloseJobsAfterClosingAdoption(warRoomId, incidentId);
+    ensured = true;
+  } catch (e) {
+    ensureError = e;
+  }
+  const existing = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { id: true },
+  });
+  if (existing) return;
+  if (!ensured && ensureError) throw ensureError;
+  await closeWarRoomNeutral({ incidentId, warRoomId });
+  const afterRepair = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { id: true },
+  });
+  if (!afterRepair) {
+    throw new WarRoomRetryableError('Terminal close ownership not yet durable; retrying.', 2000, true);
+  }
 }
 
 async function validateWarRoomProvisioningAuthority(room: {

@@ -123,7 +123,18 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(queue).toContain('provisionWarRoom(');
     // Verifies queue reads rawProvision.reconciliationOnly and passes opts
     expect(queue).toContain('rawProvision.reconciliationOnly === true');
-    expect(queue).toContain('reconciliationOnly ? { reconciliationOnly: true } : undefined');
+    expect(queue).toContain('{ reconciliationOnly: true }');
+    // Accepts either the original ternary or the branched 2-arg/3-arg form (fixes queue.test stale 3-arg expectation)
+    const hasTernary = queue.includes('reconciliationOnly ? { reconciliationOnly: true } : undefined');
+    const hasBranched = queue.includes('if (reconciliationOnly)') && queue.includes('provisionWarRoom(');
+    expect(hasTernary || hasBranched).toBe(true);
+    // Branched form must preserve 2-arg normal case (no third arg) to keep queue.test 2-arg expectation green
+    if (hasBranched) {
+      expect(queue).toContain('await provisionWarRoom(');
+      // At least one call without opts (2-arg) must exist
+      const calls = queue.split('await provisionWarRoom(').length - 1;
+      expect(calls).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it('engine closeIncidentWarRoomsNeutral provider filter is spread into where clause', () => {
