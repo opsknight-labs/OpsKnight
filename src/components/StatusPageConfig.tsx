@@ -1940,16 +1940,17 @@ export default function StatusPageConfig({
                                 <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
                                   <Switch
                                     checked={formData.showRegionHeatmap}
-                                    onChange={checked =>
-                                      setFormData({ ...formData, showRegionHeatmap: checked })
-                                    }
+                                    onChange={checked => {
+                                      setFormData({ ...formData, showRegionHeatmap: checked });
+                                      if (checked && privacySettings.showServiceRegions === false) {
+                                        setPrivacySettings((prev: any) => ({
+                                          ...prev,
+                                          showServiceRegions: true,
+                                        }));
+                                      }
+                                    }}
                                     label="Show Region Heatmap"
-                                    helperText={
-                                      privacySettings.showServiceRegions === false
-                                        ? 'Requires Service regions in Privacy settings'
-                                        : 'Display a compact region impact grid'
-                                    }
-                                    disabled={privacySettings.showServiceRegions === false}
+                                    helperText="Display a compact region impact grid"
                                   />
                                 </div>
                                 <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors md:col-span-2">
