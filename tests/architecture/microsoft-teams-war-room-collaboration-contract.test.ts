@@ -23,8 +23,8 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     const participantState = schema.match(/enum WarRoomParticipantState \{([\s\S]*?)\n\}/)?.[1];
     expect(participantState).toContain('PENDING');
     expect(participantState).toContain('PROCESSING');
-    expect(enumsMigration).toContain("ADD VALUE 'PENDING'");
-    expect(enumsMigration).toContain("ADD VALUE 'WAR_ROOM_PARTICIPANT_SYNC'");
+    expect(enumsMigration).toMatch(/ADD VALUE (IF NOT EXISTS )?'PENDING'/);
+    expect(enumsMigration).toMatch(/ADD VALUE (IF NOT EXISTS )?'WAR_ROOM_PARTICIPANT_SYNC'/);
     // Enum mutation must be isolated from other DDL for Postgres transaction safety.
     expect(enumsMigration).not.toContain('CREATE TYPE "WarRoomHealthState"');
     expect(enumsMigration).not.toContain('CREATE INDEX');

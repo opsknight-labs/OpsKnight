@@ -780,6 +780,7 @@ model IncidentWarRoom {
   commandCreateAttemptedAt DateTime?
   messageGeneration     Int                   @default(1)
   projectionVersion     Int                   @default(0)
+  lastProjectedVersion  Int                   @default(0)
   lastProjectedAt       DateTime?
   projectionLeaseToken  String?
   projectionLeaseExpiresAt DateTime?
@@ -787,13 +788,28 @@ model IncidentWarRoom {
   provisioningStartedAt DateTime?
   createAttemptedAt     DateTime?
   createOperationId     String?
+  // Durable planned identity for this generation — set BEFORE conversations.create
+  // and never overwritten by reconciliation. Lost-response recovery reconciles
+  // only this exact name (plus marker); generic name fallback is forbidden.
+  plannedExternalName   String?
   readyAt               DateTime?
   closedAt              DateTime?
   archivedAt            DateTime?
+  // Resolve-driven close intent — persisted for AMBIGUOUS rooms so the
+  // close lifecycle waits for external identity rather than stranding it.
+  closeRequestedAt      DateTime?
   lastError             String?
   lastErrorCode         String?
   health                WarRoomHealthState    @default(HEALTHY)
   lastReconciledAt      DateTime?
+  // Terminal drift debt: set when reconciliation window expires with
+  // unverified external outcome. A low-frequency lane scans these rooms
+  // by marker/planned name and archives any orphan channel idempotently
+  // without reopening the lifecycle. Cleared on next marker scan.
+  externalCleanupPending     Boolean   @default(false)
+  externalCleanupReason      String?
+  externalCleanupLastAttemptAt DateTime?
+  externalCleanupCompletedAt DateTime?
   metadata              Json?
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
@@ -804,6 +820,7 @@ model IncidentWarRoom {
   @@index([provider, providerTenantId, providerContainerId, providerChannelId])
   @@index([state, provisioningStartedAt])
   @@index([provider, health, lastReconciledAt])
+  @@index([state, health, externalCleanupPending, lastReconciledAt])
 }
 
 model WarRoomParticipant {
@@ -825,6 +842,66 @@ model WarRoomParticipant {
   user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   @@index([warRoomId, state])
   @@index([userId])
+}
+
+enum WarRoomProviderEventDeliveryStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum WarRoomProviderEventStageStatus {
+  PENDING
+  ATTEMPTING
+  COMPLETED
+  FAILED
+  AMBIGUOUS
+  SKIPPED
+}
+
+model WarRoomProviderEventDelivery {
+  id             String                              @id @default(cuid())
+  provider       WarRoomProvider
+  idempotencyKey String
+  incidentId     String
+  kind           String
+  eventPayload   Json
+  status         WarRoomProviderEventDeliveryStatus @default(PENDING)
+  attempts       Int                                 @default(0)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  completedAt    DateTime?
+  failedAt       DateTime?
+  lastError      String?
+  lastErrorCode  String?
+  createdAt      DateTime                            @default(now())
+  updatedAt      DateTime                            @updatedAt
+  stages         WarRoomProviderEventStage[]
+  @@unique([provider, idempotencyKey])
+  @@index([status, leaseExpiresAt])
+  @@index([incidentId, kind])
+  @@index([provider, status])
+}
+
+model WarRoomProviderEventStage {
+  id               String                          @id @default(cuid())
+  deliveryId       String
+  stage            String
+  status           WarRoomProviderEventStageStatus @default(PENDING)
+  attempts         Int                             @default(0)
+  lastError        String?
+  // Operation fencing: prevents a stale worker that lost its delivery lease from completing a stage claimed by another worker.
+  operationId      String?
+  leaseToken       String?
+  leaseExpiresAt   DateTime?
+  attemptStartedAt DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
+  delivery WarRoomProviderEventDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  @@unique([deliveryId, stage])
+  @@index([deliveryId])
 }
 
 model Alert {
@@ -1625,6 +1702,9 @@ enum JobType {
   WAR_ROOM_PROVISION
   WAR_ROOM_PARTICIPANT_SYNC
   WAR_ROOM_PROJECT
+  WAR_ROOM_RECONCILE
+  WAR_ROOM_CLOSE
+  WAR_ROOM_PROVIDER_EVENT
 }
 
 enum JobStatus {

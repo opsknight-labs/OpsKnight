@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   generateBridgeUrl,
@@ -10,6 +9,19 @@ import {
 } from '@/lib/chatops/war-room';
 import prisma from '@/lib/prisma';
 import * as retryModule from '@/lib/retry';
+import { adoptWarRoomChannel, claimWarRoomProvisioning } from '@/lib/war-room/repository';
+import {
+  findSlackWarRoomAuthority,
+  projectSlackWarRoomToLegacyIncident,
+} from '@/lib/war-room/slack-compatibility';
+import { projectIncidentWarRoomParticipants } from '@/lib/war-room/participant-desired-state';
+import { scheduleJob } from '@/lib/jobs/queue';
+import { requestSlackWarRoom } from '@/lib/war-room/providers/slack/provision';
+
+vi.mock('@/lib/war-room/providers/slack/provision', () => ({
+  requestSlackWarRoom: vi.fn(),
+  provisionSlackWarRoom: vi.fn(),
+}));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
@@ -24,8 +36,18 @@ vi.mock('@/lib/prisma', () => ({
     service: {
       findUnique: vi.fn(),
     },
+    slackIntegration: {
+      findFirst: vi.fn(),
+    },
+    backgroundJob: {
+      create: vi.fn(),
+    },
     incidentEvent: {
       create: vi.fn(),
+    },
+    incidentWarRoom: {
+      findUnique: vi.fn(),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     slackPinnedMessage: {
       findUnique: vi.fn(),
@@ -44,6 +66,27 @@ vi.mock('@/lib/prisma', () => ({
     },
   },
 }));
+
+vi.mock('@/lib/db-utils', () => ({
+  runSerializableTransaction: vi.fn((callback: (tx: object) => unknown) => callback({})),
+}));
+
+vi.mock('@/lib/war-room/repository', () => ({
+  claimWarRoomProvisioning: vi.fn(),
+  adoptWarRoomChannel: vi.fn(),
+}));
+
+vi.mock('@/lib/war-room/slack-compatibility', () => ({
+  findSlackWarRoomAuthority: vi.fn(),
+  projectSlackWarRoomToLegacyIncident: vi.fn(),
+}));
+
+vi.mock('@/lib/war-room/participant-desired-state', () => ({
+  projectIncidentWarRoomParticipants: vi.fn(),
+  requestWarRoomParticipant: vi.fn(),
+}));
+
+vi.mock('@/lib/jobs/queue', () => ({ scheduleJob: vi.fn() }));
 
 vi.mock('@/lib/escalation', () => ({
   resolveEscalationTarget: vi.fn().mockResolvedValue([]),
@@ -71,8 +114,42 @@ vi.mock('@/lib/retry', () => ({
 }));
 
 describe('ChatOps War-Room Engine', () => {
+  const activeSlackRoom = {
+    id: 'slack-room-1',
+    state: 'READY',
+    providerChannelId: 'C123',
+    providerChannelName: 'inc-104-payments',
+    providerChannelUrl: null,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(null as unknown as never);
+    vi.mocked(projectSlackWarRoomToLegacyIncident).mockResolvedValue(undefined);
+    vi.mocked(projectIncidentWarRoomParticipants).mockResolvedValue(undefined);
+    vi.mocked(scheduleJob).mockResolvedValue('job-1');
+    vi.mocked(claimWarRoomProvisioning).mockResolvedValue({
+      claimed: true,
+      warRoom: {
+        id: 'slack-room-1',
+        state: 'PROVISIONING',
+        provisioningToken: 'slack-lease-1',
+      },
+    } as never);
+    vi.mocked(adoptWarRoomChannel).mockResolvedValue('READY');
+    vi.mocked(prisma.incidentWarRoom.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(requestSlackWarRoom).mockResolvedValue({
+      accepted: true,
+      warRoomId: 'slack-room-1',
+      state: 'PROVISIONING',
+    } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique).mockResolvedValue({
+      id: 'slack-room-1',
+      state: 'PROVISIONING',
+      providerChannelId: null,
+      providerChannelName: null,
+      providerChannelUrl: null,
+    } as never);
   });
 
   describe('generateBridgeUrl', () => {
@@ -114,14 +191,15 @@ describe('ChatOps War-Room Engine', () => {
 
   describe('createIncidentWarRoom', () => {
     it('should return error if incident is not found', async () => {
-      vi.mocked(prisma.incident.findUnique).mockResolvedValue(null as any);
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue(null as unknown as never);
       const result = await createIncidentWarRoom('inc-missing');
       expect(result.success).toBe(false);
       expect(result.error).toBe('Incident not found');
     });
 
     it('should provision a fresh channel when the previous one was archived', async () => {
-      // Reopening an incident must not be blocked by a dead channel.
+      // Reopening must enqueue a fresh generation even though a prior
+      // IncidentWarRoom is ARCHIVED — legacy channelId is not authority.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-abcdef123456',
         title: 'Recurring outage',
@@ -137,46 +215,45 @@ describe('ChatOps War-Room Engine', () => {
           slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: null,
-      } as any);
-      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
-        enabled: true,
-        channelPrefix: 'inc',
-        autoCreateOnUrgency: ['HIGH'],
-        autoCreateOnPriority: ['P1'],
-        defaultVideoBridge: 'JITSI',
-      } as any);
-      vi.mocked(prisma.service.findUnique).mockResolvedValue({
-        id: 'srv-1',
-        policy: { steps: [] },
-      } as any);
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
-      vi.mocked(retryModule.retryFetch).mockReset();
-      vi.mocked(retryModule.retryFetch).mockImplementation((async (url: any) => {
-        if (String(url).includes('conversations.create')) {
-          return { json: async () => ({ ok: true, channel: { id: 'C-NEW', name: 'inc-new' } }) };
-        }
-        return { json: async () => ({ ok: true }) };
-      }) as any);
+      } as never);
+      // Durable request boundary — Slack I/O is owned by the worker.
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: true,
+        warRoomId: 'slack-room-1',
+        state: 'PROVISIONING',
+      } as never);
+      vi.mocked(prisma.incidentWarRoom.findUnique).mockResolvedValue({
+        id: 'slack-room-1',
+        state: 'PROVISIONING',
+        providerChannelId: null,
+        providerChannelName: null,
+        providerChannelUrl: null,
+      } as never);
 
       const result = await createIncidentWarRoom('inc-abcdef123456');
 
+      expect(requestSlackWarRoom).toHaveBeenCalledWith('inc-abcdef123456', {
+        manual: false,
+        allowNewGeneration: true,
+      });
       expect(result.success).toBe(true);
-      expect(result.channelId).toBe('C-NEW');
-      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ slackChannelId: 'C-NEW', warRoomArchivedAt: null }),
-        })
-      );
+      expect(result.warRoomId).toBe('slack-room-1');
+      expect(result.state).toBe('PROVISIONING');
+      expect(retryModule.retryFetch).not.toHaveBeenCalled();
     });
 
     it('should return existing war-room if already created', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-104',
-        slackChannelId: 'C123456',
-        slackChannelName: 'inc-104-payments',
         service: { id: 'srv-1', name: 'Payments API' },
-      } as any);
+      } as never);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        id: 'slack-room-existing',
+        state: 'READY',
+        providerChannelId: 'C123456',
+        providerChannelName: 'inc-104-payments',
+        providerChannelUrl: null,
+      } as never);
 
       const result = await createIncidentWarRoom('inc-104');
       expect(result.success).toBe(true);
@@ -187,12 +264,14 @@ describe('ChatOps War-Room Engine', () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-104',
         urgency: 'HIGH',
+        status: 'OPEN',
         slackChannelId: null,
         service: { id: 'srv-1', name: 'Payments API', autoCreateWarRoom: true },
-      } as any);
-      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
-        enabled: false,
-      } as any);
+      } as never);
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: false,
+        code: 'CHATOPS_DISABLED',
+      } as never);
 
       const result = await createIncidentWarRoom('inc-104');
       expect(result.success).toBe(false);
@@ -204,14 +283,14 @@ describe('ChatOps War-Room Engine', () => {
         id: 'inc-104',
         urgency: 'LOW',
         priority: 'P4',
+        status: 'OPEN',
         slackChannelId: null,
         service: { id: 'srv-1', name: 'Payments API', autoCreateWarRoom: true },
-      } as any);
-      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
-        enabled: true,
-        autoCreateOnUrgency: ['HIGH'],
-        autoCreateOnPriority: ['P1', 'P2'],
-      } as any);
+      } as never);
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: false,
+        code: 'THRESHOLD_NOT_MET',
+      } as never);
 
       const result = await createIncidentWarRoom('inc-104');
       expect(result.success).toBe(false);
@@ -219,8 +298,9 @@ describe('ChatOps War-Room Engine', () => {
     });
 
     it('should create a war-room below threshold when forced', async () => {
-      // The incident page renders "Create War-Room" for every incident. Pressing
-      // it must not be refused by the thresholds that govern auto-creation.
+      // Manual creation (force: true) must enqueue even when the thresholds
+      // that govern auto-creation would otherwise deny it. The policy boundary
+      // inside requestSlackWarRoom receives manual=true.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-abcdef123456',
         title: 'Minor Glitch',
@@ -232,45 +312,33 @@ describe('ChatOps War-Room Engine', () => {
         service: {
           id: 'srv-1',
           name: 'Payments API',
-          autoCreateWarRoom: false, // per-service auto-creation off
+          autoCreateWarRoom: false,
           warRoomVideoBridge: 'JITSI',
           slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: null,
-      } as any);
-
-      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
-        enabled: true,
-        channelPrefix: 'inc',
-        autoCreateOnUrgency: ['HIGH'],
-        autoCreateOnPriority: ['P1', 'P2'],
-        defaultVideoBridge: 'JITSI',
-      } as any);
-
-      vi.mocked(prisma.service.findUnique).mockResolvedValue({
-        id: 'srv-1',
-        policy: { steps: [] },
-      } as any);
-      vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 });
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
-
-      vi.mocked(retryModule.retryFetch).mockReset();
-      vi.mocked(retryModule.retryFetch).mockImplementation((async (url: any) => {
-        if (String(url).includes('conversations.create')) {
-          return {
-            json: async () => ({
-              ok: true,
-              channel: { id: 'C555444', name: 'inc-123456-payments-api' },
-            }),
-          };
-        }
-        return { json: async () => ({ ok: true }) };
-      }) as any);
+      } as never);
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: true,
+        warRoomId: 'slack-room-1',
+        state: 'PROVISIONING',
+      } as never);
+      vi.mocked(prisma.incidentWarRoom.findUnique).mockResolvedValue({
+        id: 'slack-room-1',
+        state: 'PROVISIONING',
+        providerChannelId: null,
+        providerChannelName: null,
+        providerChannelUrl: null,
+      } as never);
 
       const result = await createIncidentWarRoom('inc-abcdef123456', { force: true });
 
+      expect(requestSlackWarRoom).toHaveBeenCalledWith('inc-abcdef123456', {
+        manual: true,
+        allowNewGeneration: true,
+      });
       expect(result.success).toBe(true);
-      expect(result.channelId).toBe('C555444');
+      expect(result.state).toBe('PROVISIONING');
     });
 
     it('should still refuse auto-creation below threshold when not forced', async () => {
@@ -278,14 +346,14 @@ describe('ChatOps War-Room Engine', () => {
         id: 'inc-104',
         urgency: 'LOW',
         priority: 'P4',
+        status: 'OPEN',
         slackChannelId: null,
         service: { id: 'srv-1', name: 'Payments API', autoCreateWarRoom: true },
-      } as any);
-      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
-        enabled: true,
-        autoCreateOnUrgency: ['HIGH'],
-        autoCreateOnPriority: ['P1', 'P2'],
-      } as any);
+      } as never);
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: false,
+        code: 'THRESHOLD_NOT_MET',
+      } as never);
 
       const result = await createIncidentWarRoom('inc-104', {});
       expect(result.success).toBe(false);
@@ -293,6 +361,9 @@ describe('ChatOps War-Room Engine', () => {
     });
 
     it('should successfully create Slack channel and update incident', async () => {
+      // Durable boundary: request path enqueues creation and returns the
+      // generation immediately; the queue worker owns conversations.create,
+      // topic/bridge setup and adoption.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-abcdef123456',
         title: 'Database Overload',
@@ -308,54 +379,35 @@ describe('ChatOps War-Room Engine', () => {
           slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: { id: 'usr-1', name: 'Dev', email: 'dev@test.com' },
-      } as any);
-
-      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
-        enabled: true,
-        channelPrefix: 'inc',
-        autoCreateOnUrgency: ['HIGH'],
-        autoCreateOnPriority: ['P1'],
-        defaultVideoBridge: 'JITSI',
-      } as any);
-
-      vi.mocked(prisma.service.findUnique).mockResolvedValue({
-        id: 'srv-1',
-        policy: { steps: [] },
-      } as any);
-
-      // Mock Slack API calls (conversations.create, setTopic)
-      vi.spyOn(retryModule, 'retryFetch')
-        .mockResolvedValueOnce({
-          json: async () => ({
-            ok: true,
-            channel: { id: 'C999888', name: 'inc-123456-database-cluster' },
-          }),
-        } as any)
-        .mockResolvedValueOnce({
-          json: async () => ({ ok: true }),
-        } as any);
-
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      } as never);
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: true,
+        warRoomId: 'slack-room-1',
+        state: 'PROVISIONING',
+      } as never);
+      vi.mocked(prisma.incidentWarRoom.findUnique).mockResolvedValue({
+        id: 'slack-room-1',
+        state: 'PROVISIONING',
+        providerChannelId: null,
+        providerChannelName: null,
+        providerChannelUrl: null,
+      } as never);
 
       const result = await createIncidentWarRoom('inc-abcdef123456');
       expect(result.success).toBe(true);
-      expect(result.channelId).toBe('C999888');
-      expect(result.warRoomUrl).toBe('https://meet.jit.si/opsknight-inc-ef123456');
-      expect(prisma.incident.updateMany).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ id: 'inc-abcdef123456' }),
-          data: expect.objectContaining({
-            slackChannelId: 'C999888',
-          }),
-        })
-      );
+      expect(result.warRoomId).toBe('slack-room-1');
+      expect(result.state).toBe('PROVISIONING');
+      expect(requestSlackWarRoom).toHaveBeenCalledWith('inc-abcdef123456', {
+        manual: false,
+        allowNewGeneration: true,
+      });
+      expect(retryModule.retryFetch).not.toHaveBeenCalled();
     });
 
-    it('should look up responders via HTTP GET and invite them to the channel', async () => {
-      // Regression guard for a bug fixed five separate times: users.lookupByEmail
-      // must be a GET with query params. POST+JSON returns invalid_arguments and
-      // silently invites nobody, leaving an empty war-room.
+    it('should enqueue durable participant setup through the worker path', async () => {
+      // No direct Slack invite is performed on the request path — participant
+      // projection is owned by the worker after the channel exists. This
+      // asserts the old direct-invite path stays dead.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-abcdef123456',
         title: 'Database Overload',
@@ -372,75 +424,53 @@ describe('ChatOps War-Room Engine', () => {
           slackIntegration: { workspaceId: 'workspace-1' },
         },
         assignee: { id: 'usr-1', name: 'Dev', email: 'dev@test.com' },
-      } as any);
-
-      vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
-        enabled: true,
-        channelPrefix: 'inc',
-        autoCreateOnUrgency: ['HIGH'],
-        autoCreateOnPriority: ['P1'],
-        defaultVideoBridge: 'JITSI',
-      } as any);
-
-      vi.mocked(prisma.service.findUnique).mockResolvedValue({
-        id: 'srv-1',
-        policy: { steps: [] },
-      } as any);
-
-      // Mixed case on purpose — the lookup must normalise before querying Slack
-      vi.mocked(prisma.user.findMany).mockResolvedValue([
-        { id: 'usr-1', name: 'Dev', email: 'Dev@Test.com' },
-      ] as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
-
-      const requests: Array<{ url: string; method: string; body?: unknown }> = [];
+      } as never);
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: true,
+        warRoomId: 'slack-room-1',
+        state: 'PROVISIONING',
+      } as never);
+      vi.mocked(prisma.incidentWarRoom.findUnique).mockResolvedValue({
+        id: 'slack-room-1',
+        state: 'PROVISIONING',
+        providerChannelId: null,
+        providerChannelName: null,
+        providerChannelUrl: null,
+      } as never);
       vi.mocked(retryModule.retryFetch).mockReset();
-      vi.mocked(retryModule.retryFetch).mockImplementation((async (url: any, init: any) => {
-        const href = String(url);
-        requests.push({ url: href, method: init?.method || 'GET', body: init?.body });
-
-        if (href.includes('conversations.create')) {
-          return {
-            json: async () => ({
-              ok: true,
-              channel: { id: 'C999888', name: 'inc-123456-database-cluster' },
-            }),
-          };
-        }
-        if (href.includes('users.lookupByEmail')) {
-          return { json: async () => ({ ok: true, user: { id: 'U-SLACK-1' } }) };
-        }
-        return { json: async () => ({ ok: true }) };
-      }) as any);
 
       const result = await createIncidentWarRoom('inc-abcdef123456');
       expect(result.success).toBe(true);
-
-      const lookup = requests.find(r => r.url.includes('users.lookupByEmail'));
-      expect(lookup).toBeDefined();
-      expect(lookup!.method).toBe('GET');
-      expect(lookup!.body).toBeUndefined();
-      expect(lookup!.url).toContain(`email=${encodeURIComponent('dev@test.com')}`);
-
-      const invite = requests.find(r => r.url.includes('conversations.invite'));
-      expect(invite).toBeDefined();
-      expect(JSON.parse(String(invite!.body))).toMatchObject({
-        channel: 'C999888',
-        users: 'U-SLACK-1',
+      expect(requestSlackWarRoom).toHaveBeenCalledWith('inc-abcdef123456', {
+        manual: false,
+        allowNewGeneration: true,
       });
+      expect(projectIncidentWarRoomParticipants).not.toHaveBeenCalled();
+      expect(scheduleJob).not.toHaveBeenCalledWith(
+        'WAR_ROOM_PARTICIPANT_SYNC',
+        expect.any(Date),
+        expect.anything(),
+        expect.anything()
+      );
+      expect(retryModule.retryFetch).not.toHaveBeenCalled();
     });
   });
 
   describe('postWarRoomUpdate', () => {
+    beforeEach(() => {
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(activeSlackRoom as unknown as never);
+    });
+
     it('should refuse to post into an archived channel', async () => {
       // The channel id is retained after archiving, so presence alone is not
       // enough — posting there sends updates where nobody will read them.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-        slackChannelId: 'C123',
         serviceId: 'srv-1',
-        warRoomArchivedAt: new Date('2026-08-16T10:00:00Z'),
-      } as any);
+      } as never);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        ...activeSlackRoom,
+        state: 'ARCHIVED',
+      } as unknown as never);
 
       const result = await postWarRoomUpdate('inc-104', 'Status update');
       expect(result.success).toBe(false);
@@ -450,7 +480,8 @@ describe('ChatOps War-Room Engine', () => {
     it('should return error if no channel is linked', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: null,
-      } as any);
+      } as never);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(null as unknown as never);
 
       const result = await postWarRoomUpdate('inc-104', 'Test note');
       expect(result.success).toBe(false);
@@ -461,22 +492,35 @@ describe('ChatOps War-Room Engine', () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: 'C123',
         serviceId: 'srv-1',
-      } as any);
+      } as never);
 
-      vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
-        json: async () => ({ ok: true }),
-      } as any);
+      // chat.postMessage is non-idempotent — slackApiCall uses fetch directly (single attempt, no retryFetch)
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true }),
+          text: async () => '',
+        } as unknown as Response)
+      );
 
       const result = await postWarRoomUpdate('inc-104', 'Updating database parameters');
       expect(result.success).toBe(true);
+      vi.unstubAllGlobals();
     });
   });
 
   describe('archiveWarRoomChannel', () => {
+    beforeEach(() => {
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(activeSlackRoom as unknown as never);
+    });
+
     it('should return error if no channel exists', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: null,
-      } as any);
+      } as never);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue(null as unknown as never);
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(false);
@@ -487,17 +531,17 @@ describe('ChatOps War-Room Engine', () => {
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-      } as any);
+      } as never);
 
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
         archiveOnResolve: true,
-      } as any);
+      } as never);
 
       vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
         json: async () => ({ ok: true }),
-      } as any);
+      } as never);
 
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(true);
@@ -508,38 +552,38 @@ describe('ChatOps War-Room Engine', () => {
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-      } as any);
+      } as never);
 
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
         archiveOnResolve: false,
-      } as any);
+      } as never);
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(false);
       expect(result.error).toBe('Archive on resolve is disabled');
     });
 
-    it('should stamp warRoomArchivedAt so the channel stops reading as live', async () => {
+    it('should archive the neutral authority so the channel stops reading as live', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-      } as any);
+      } as never);
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
         archiveOnResolve: true,
-      } as any);
-      vi.mocked(prisma.incident.update).mockResolvedValue({} as any);
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      } as never);
+      vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
       vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
         json: async () => ({ ok: true }),
-      } as any);
+      } as never);
 
       await archiveWarRoomChannel('inc-104');
 
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incidentWarRoom.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-104' },
-          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: 'slack-room-1' }),
+          data: expect.objectContaining({ state: 'ARCHIVED', archivedAt: expect.any(Date) }),
         })
       );
     });
@@ -551,22 +595,22 @@ describe('ChatOps War-Room Engine', () => {
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-      } as any);
+      } as never);
 
       vi.mocked(prisma.chatOpsConfig.findUnique).mockResolvedValue({
         archiveOnResolve: false,
-      } as any);
+      } as never);
 
-      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as any);
+      vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
       vi.spyOn(retryModule, 'retryFetch').mockResolvedValue({
         json: async () => ({ ok: true }),
-      } as any);
+      } as never);
 
       const result = await archiveWarRoomChannel('inc-104', { force: true });
       expect(result.success).toBe(true);
     });
 
-    it('should treat already_archived as idempotent success and stamp warRoomArchivedAt', async () => {
+    it('should treat already_archived as idempotent success and archive neutral authority', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
@@ -583,15 +627,15 @@ describe('ChatOps War-Room Engine', () => {
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(true);
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incidentWarRoom.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-104' },
-          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: 'slack-room-1' }),
+          data: expect.objectContaining({ state: 'ARCHIVED', archivedAt: expect.any(Date) }),
         })
       );
     });
 
-    it('should treat channel_not_found as idempotent success and stamp warRoomArchivedAt', async () => {
+    it('should treat channel_not_found as idempotent success and archive neutral authority', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         slackChannelId: 'C123',
         slackChannelName: 'inc-104-payments',
@@ -608,10 +652,10 @@ describe('ChatOps War-Room Engine', () => {
 
       const result = await archiveWarRoomChannel('inc-104');
       expect(result.success).toBe(true);
-      expect(prisma.incident.update).toHaveBeenCalledWith(
+      expect(prisma.incidentWarRoom.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'inc-104' },
-          data: expect.objectContaining({ warRoomArchivedAt: expect.any(Date) }),
+          where: expect.objectContaining({ id: 'slack-room-1' }),
+          data: expect.objectContaining({ state: 'ARCHIVED', archivedAt: expect.any(Date) }),
         })
       );
     });
@@ -622,11 +666,12 @@ describe('ChatOps War-Room Engine', () => {
       // Reassigning an incident after its channel was archived must not drag
       // people into a dead channel.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-        slackChannelId: 'C123',
-        slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-        warRoomArchivedAt: new Date('2026-08-16T10:00:00Z'),
-      } as any);
+      } as never);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        ...activeSlackRoom,
+        state: 'ARCHIVED',
+      } as unknown as never);
 
       const result = await inviteUserToWarRoom('inc-104', 'usr-1');
       expect(result.success).toBe(false);
@@ -638,11 +683,12 @@ describe('ChatOps War-Room Engine', () => {
       // Resolve can reach archiving from the server action, bulk resolve and the
       // Slack button; without this the farewell message posts more than once.
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
-        slackChannelId: 'C123',
-        slackChannelName: 'inc-104-payments',
         serviceId: 'srv-1',
-        warRoomArchivedAt: new Date('2026-08-16T10:00:00Z'),
-      } as any);
+      } as never);
+      vi.mocked(findSlackWarRoomAuthority).mockResolvedValue({
+        ...activeSlackRoom,
+        state: 'ARCHIVED',
+      } as unknown as never);
       vi.mocked(retryModule.retryFetch).mockReset();
 
       const result = await archiveWarRoomChannel('inc-104');
@@ -655,11 +701,18 @@ describe('ChatOps War-Room Engine', () => {
 
   describe('slackApiCall', () => {
     it('should return an error result rather than throwing when Slack rate limits', async () => {
-      // retryFetch surfaces 429/5xx as a thrown `HTTP <status>` error. Callers
-      // branch on result.ok, so throwing made rate limits crash some paths and
-      // get silently swallowed on others.
-      vi.mocked(retryModule.retryFetch).mockReset();
-      vi.mocked(retryModule.retryFetch).mockRejectedValue(new Error('HTTP 429: Too Many Requests'));
+      // chat.postMessage is non-idempotent — provider client uses direct fetch (single attempt),
+      // not retryFetch. HTTP 429 must surface as { ok:false } without throwing so callers
+      // can branch on result.ok (and classify AMBIGUOUS vs retryable).
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: false,
+          status: 429,
+          text: async () => 'HTTP 429: Too Many Requests',
+          json: async () => ({ ok: false, error: 'ratelimited' }),
+        } as unknown as Response)
+      );
 
       const result = await slackApiCall('chat.postMessage', 'xoxb-test-token', {
         channel: 'C123',
@@ -667,6 +720,7 @@ describe('ChatOps War-Room Engine', () => {
 
       expect(result.ok).toBe(false);
       expect(result.error).toContain('429');
+      vi.unstubAllGlobals();
     });
   });
 });

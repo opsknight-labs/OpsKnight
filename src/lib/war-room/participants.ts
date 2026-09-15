@@ -9,7 +9,7 @@ import {
   updateChannelMemberRoles,
 } from '@/lib/microsoft-teams/graph/members';
 import { scheduleJob } from '@/lib/jobs/queue';
-import { WarRoomRetryableError } from './microsoft-teams';
+import { WarRoomRetryableError } from './errors';
 
 type ResponderSource = 'ASSIGNEE' | 'WATCHER';
 

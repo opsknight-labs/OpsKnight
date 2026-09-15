@@ -14,6 +14,7 @@ import {
 import prisma from '@/lib/prisma';
 import { processEventSideEffect } from '@/lib/event-side-effects';
 import type { EventSideEffectPayload } from '@/lib/event-outbox';
+import { handleIncidentWarRoomEvent as mockedHandleIncidentWarRoomEvent, closeIncidentWarRoomsNeutral as mockedCloseIncidentWarRoomsNeutral } from '@/lib/war-room/engine';
 
 type TestMock = ReturnType<typeof vi.fn>;
 
@@ -32,6 +33,7 @@ vi.mock('@/lib/user-notifications', () => ({ sendIncidentNotifications: vi.fn() 
 vi.mock('@/lib/status-page-webhooks', () => ({ triggerWebhooksForService: vi.fn() }));
 vi.mock('@/lib/status-page-notifications', () => ({ notifyStatusPageSubscribers: vi.fn() }));
 vi.mock('@/lib/slack', () => ({ notifySlackForIncident: vi.fn() }));
+vi.mock('@/lib/war-room/engine', () => ({ handleIncidentWarRoomEvent: vi.fn(), closeIncidentWarRoomsNeutral: vi.fn().mockResolvedValue({ closed: 1, skipped: 0 }) }));
 vi.mock('@/lib/war-room/microsoft-teams', () => ({
   requestMicrosoftTeamsWarRoom: vi.fn().mockResolvedValue({ accepted: false, code: 'DISABLED' }),
   settleMicrosoftTeamsWarRoomsOnIncidentResolve: vi.fn().mockResolvedValue(undefined),
@@ -66,6 +68,8 @@ const updateWarRoomTopicMock = mockedUpdateWarRoomTopic as unknown as TestMock;
 const inviteUserToWarRoomMock = mockedInviteUserToWarRoom as unknown as TestMock;
 const inviteTeamToWarRoomMock = mockedInviteTeamToWarRoom as unknown as TestMock;
 const prismaMock = prisma as unknown as { incident: { findUnique: TestMock } };
+const handleIncidentWarRoomEventMock = mockedHandleIncidentWarRoomEvent as unknown as TestMock;
+const closeIncidentWarRoomsNeutralMock = mockedCloseIncidentWarRoomsNeutral as unknown as TestMock;
 
 function payload(
   effect: EventSideEffectPayload['effect'],
@@ -78,6 +82,7 @@ function payload(
     lane,
     incidentId: 'inc-1',
     eventOrderAt: '2026-08-28T07:00:00.000Z',
+    sourceEventId: 'evt-test-source-id',
     ...(lifecycle ? { lifecycle } : {}),
   };
 }
@@ -85,6 +90,44 @@ function payload(
 describe('event durable side effects', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    handleIncidentWarRoomEventMock.mockImplementation(
+      async (event: {
+        kind: string;
+        incidentId: string;
+        message?: string;
+        status?: string;
+        userId?: string;
+        teamId?: string;
+      }) => {
+        switch (event.kind) {
+          case 'TRIGGER':
+          case 'ENSURE':
+            await mockedCreateIncidentWarRoom(event.incidentId);
+            return;
+          case 'ARCHIVE':
+            await mockedCloseIncidentWarRoomsNeutral(event.incidentId);
+            return;
+          case 'LIFECYCLE':
+            await Promise.all([
+              mockedPostWarRoomUpdate(event.incidentId, event.message ?? ''),
+              mockedUpdateWarRoomTopic(event.incidentId, event.status),
+            ]);
+            return;
+          case 'MESSAGE':
+            await mockedPostWarRoomUpdate(event.incidentId, event.message ?? '');
+            return;
+          case 'TOPIC':
+            if (event.status) await mockedUpdateWarRoomTopic(event.incidentId, event.status);
+            else await mockedUpdateWarRoomTopic(event.incidentId);
+            return;
+          case 'INVITE_USER':
+            await mockedInviteUserToWarRoom(event.incidentId, event.userId ?? '');
+            return;
+          case 'INVITE_TEAM':
+            await mockedInviteTeamToWarRoom(event.incidentId, event.teamId ?? '');
+        }
+      }
+    );
   });
 
   it('keeps escalation failure isolated so the durable job retries without duplicating service delivery', async () => {
@@ -384,6 +427,7 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
+    expect(closeIncidentWarRoomsNeutralMock).not.toHaveBeenCalled();
     expect(archiveWarRoomChannelMock).not.toHaveBeenCalled();
   });
 
@@ -402,6 +446,7 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
+    expect(closeIncidentWarRoomsNeutralMock).not.toHaveBeenCalled();
     expect(archiveWarRoomChannelMock).not.toHaveBeenCalled();
   });
 
@@ -410,7 +455,7 @@ describe('event durable side effects', () => {
       status: 'RESOLVED',
       resolvedAt: new Date('2026-08-28T06:02:00.000Z'),
     });
-    archiveWarRoomChannelMock.mockResolvedValue({ success: true });
+    closeIncidentWarRoomsNeutralMock.mockResolvedValue({ closed: 1, skipped: 0 });
     await processEventSideEffect(
       payload('LIFECYCLE_WAR_ROOM_ARCHIVE', 'WAR_ROOM', {
         command: 'RESOLVE',
@@ -421,7 +466,7 @@ describe('event durable side effects', () => {
         snoozedUntil: null,
       })
     );
-    expect(archiveWarRoomChannelMock).toHaveBeenCalledWith('inc-1');
+    expect(closeIncidentWarRoomsNeutralMock).toHaveBeenCalledWith('inc-1');
   });
 
   it('rejects an unknown effect instead of silently completing it', async () => {

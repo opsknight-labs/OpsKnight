@@ -22,7 +22,10 @@ function isNonRetryableBackgroundJobError(error: string): boolean {
 function isBulkQueueBackpressureError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const e = error as Record<string, unknown>;
-  return e.name === 'BulkQueueBackpressureError' || (typeof e.message === 'string' && e.message.includes('high watermark'));
+  return (
+    e.name === 'BulkQueueBackpressureError' ||
+    (typeof e.message === 'string' && e.message.includes('high watermark'))
+  );
 }
 
 function bulkBackpressureDelayMs(): number {
@@ -43,7 +46,10 @@ export type JobType =
   | 'EXTERNAL_OPERATION'
   | 'WAR_ROOM_PROVISION'
   | 'WAR_ROOM_PARTICIPANT_SYNC'
-  | 'WAR_ROOM_PROJECT';
+  | 'WAR_ROOM_PROJECT'
+  | 'WAR_ROOM_RECONCILE'
+  | 'WAR_ROOM_CLOSE'
+  | 'WAR_ROOM_PROVIDER_EVENT';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -242,7 +248,10 @@ export async function scheduleAutoUnsnooze(
 
 export async function getPendingJobs(limit: number = 50): Promise<unknown[]> {
   return prisma.backgroundJob.findMany({
-    where: { status: { in: ['PENDING', STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING] }, scheduledAt: { lte: new Date() } },
+    where: {
+      status: { in: ['PENDING', STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2_PENDING] },
+      scheduledAt: { lte: new Date() },
+    },
     orderBy: { scheduledAt: 'asc' },
     take: limit,
   });
@@ -257,7 +266,9 @@ export async function claimPendingJobs(
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING state after exceeding maxAttempts' ELSE NULL END WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`
     )
-    .catch(err => logger.warn('[Queue] Failed to account stale bulk processing jobs (V1)', { error: err }));
+    .catch(err =>
+      logger.warn('[Queue] Failed to account stale bulk processing jobs (V1)', { error: err })
+    );
 
   await prisma
     .$executeRaw(
@@ -265,16 +276,18 @@ export async function claimPendingJobs(
     )
     .catch(err => logger.warn('[Queue] Failed to account stale V2 fan-out jobs', { error: err }));
 
-  await prisma.$executeRaw(
-    Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
-  ).catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
-  await prisma.$executeRaw(
-    Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING_V2 state after exceeding maxAttempts',"failedAt"=NOW() WHERE "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" AND "status"='PROCESSING_V2'::"JobStatus" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
-  ).catch(err => logger.warn('[Queue] Failed to sweep zombie V2 fan-out jobs', { error: err }));
+  await prisma
+    .$executeRaw(
+      Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
+    )
+    .catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
+  await prisma
+    .$executeRaw(
+      Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING_V2 state after exceeding maxAttempts',"failedAt"=NOW() WHERE "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" AND "status"='PROCESSING_V2'::"JobStatus" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
+    )
+    .catch(err => logger.warn('[Queue] Failed to sweep zombie V2 fan-out jobs', { error: err }));
 
-  const typeFilter = type
-    ? Prisma.sql`AND candidate."type"=${type}::"JobType"`
-    : Prisma.empty;
+  const typeFilter = type ? Prisma.sql`AND candidate."type"=${type}::"JobType"` : Prisma.empty;
   const excludedTypeFilter = excludeTypes.length
     ? Prisma.sql`AND candidate."type" NOT IN (${Prisma.join(
         excludeTypes.map(value => Prisma.sql`${value}::"JobType"`)
@@ -377,6 +390,40 @@ async function markWarRoomJobCompleted(jobId: string): Promise<boolean> {
 
 async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void> {
   const shouldRetry = job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
+  // Terminal delivery must be settled atomically with the job failure so we never
+  // leave BackgroundJob FAILED while delivery stays PENDING (which orphan recovery would revive).
+  if (!shouldRetry && job.type === 'WAR_ROOM_PROVIDER_EVENT') {
+    const raw = job.payload as Record<string, unknown>;
+    const deliveryId = typeof raw.deliveryId === 'string' ? raw.deliveryId : null;
+    if (deliveryId) {
+      try {
+        await prisma.$transaction(async tx => {
+          await tx.backgroundJob.updateMany({
+            where: { id: job.id, status: 'PROCESSING' },
+            data: { status: 'FAILED', failedAt: new Date(), error },
+          });
+          await tx.warRoomProviderEventDelivery.updateMany({
+            where: { id: deliveryId },
+            data: {
+              status: 'FAILED',
+              failedAt: new Date(),
+              lastError: error.slice(0, 1000),
+              leaseToken: null,
+              leaseExpiresAt: null,
+            },
+          });
+        });
+      } catch (txError) {
+        logger.warn('jobs.war_room_terminal_settlement_failed', {
+          jobId: job.id,
+          deliveryId,
+          error: txError instanceof Error ? txError.message : String(txError),
+        });
+        return;
+      }
+      return;
+    }
+  }
   await prisma.backgroundJob.updateMany({
     where: { id: job.id, status: 'PROCESSING' },
     data: {
@@ -391,8 +438,12 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
   if (!shouldRetry && job.type === 'WAR_ROOM_PROJECT') {
     const versionValue = payloadValue(job.payload, 'projectionVersion');
     const warRoomIdValue = payloadValue(job.payload, 'warRoomId');
-    if (typeof warRoomIdValue === 'string' && typeof versionValue === 'number' && Number.isInteger(versionValue)) {
-      const { settleWarRoomProjectionFailure } = await import('../war-room/projection');
+    if (
+      typeof warRoomIdValue === 'string' &&
+      typeof versionValue === 'number' &&
+      Number.isInteger(versionValue)
+    ) {
+      const { settleWarRoomProjectionFailure } = await import('../war-room/engine');
       await settleWarRoomProjectionFailure(warRoomIdValue, versionValue);
     }
   }
@@ -427,8 +478,7 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
     });
     return;
   }
-  const shouldRetry =
-    job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
+  const shouldRetry = job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: {
@@ -509,26 +559,100 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           typeof payloadValue(job.payload, 'provisioningToken') !== 'string'
         )
           throw new Error('War-room provision job is missing warRoomId or provisioningToken');
-        const { provisionMicrosoftTeamsWarRoom } = await import('../war-room/microsoft-teams');
-        await provisionMicrosoftTeamsWarRoom(
-          requiredPayloadString(job.payload, 'warRoomId'),
-          requiredPayloadString(job.payload, 'provisioningToken')
-        );
+        const { provisionWarRoom } = await import('../war-room/engine');
+        const rawProvision = job.payload as Record<string, unknown>;
+        const reconciliationOnly = rawProvision.reconciliationOnly === true;
+        if (reconciliationOnly) {
+          await provisionWarRoom(
+            requiredPayloadString(job.payload, 'warRoomId'),
+            requiredPayloadString(job.payload, 'provisioningToken'),
+            { reconciliationOnly: true }
+          );
+        } else {
+          await provisionWarRoom(
+            requiredPayloadString(job.payload, 'warRoomId'),
+            requiredPayloadString(job.payload, 'provisioningToken')
+          );
+        }
         return markWarRoomJobCompleted(job.id);
       }
       case 'WAR_ROOM_PARTICIPANT_SYNC': {
         if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
           throw new Error('War-room participant sync job is missing warRoomId');
-        const { syncMicrosoftTeamsWarRoomParticipants } = await import('../war-room/participants');
-        await syncMicrosoftTeamsWarRoomParticipants(requiredPayloadString(job.payload, 'warRoomId'));
+        const { syncWarRoomParticipants } = await import('../war-room/engine');
+        await syncWarRoomParticipants(requiredPayloadString(job.payload, 'warRoomId'));
         return markWarRoomJobCompleted(job.id);
       }
       case 'WAR_ROOM_PROJECT': {
         const version = payloadValue(job.payload, 'projectionVersion');
         if (typeof version !== 'number' || !Number.isInteger(version))
           throw new Error('War-room projection job is missing projectionVersion');
-        const { projectMicrosoftTeamsWarRoomCard } = await import('../war-room/projection');
-        await projectMicrosoftTeamsWarRoomCard(requiredPayloadString(job.payload, 'warRoomId'), version);
+        const { projectWarRoom } = await import('../war-room/engine');
+        await projectWarRoom(requiredPayloadString(job.payload, 'warRoomId'), version);
+        return markWarRoomJobCompleted(job.id);
+      }
+      case 'WAR_ROOM_RECONCILE': {
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
+          throw new Error('War-room reconciliation job is missing warRoomId');
+        const raw = job.payload as Record<string, unknown>;
+        if (raw.reason === 'close') {
+          const { finalizeWarRoomCloseNeutral } = await import('../war-room/engine');
+          const incidentId = typeof raw.incidentId === 'string' ? raw.incidentId : undefined;
+          const tv = raw.terminalProjectionVersion;
+          const terminalProjectionVersion =
+            typeof tv === 'number' && Number.isInteger(tv) ? tv : undefined;
+          await finalizeWarRoomCloseNeutral(
+            requiredPayloadString(job.payload, 'warRoomId'),
+            incidentId,
+            terminalProjectionVersion
+          );
+          return markWarRoomJobCompleted(job.id);
+        }
+        const { reconcileWarRoom } = await import('../war-room/engine');
+        await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
+        return markWarRoomJobCompleted(job.id);
+      }
+      case 'WAR_ROOM_CLOSE': {
+        if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
+          throw new Error('War-room close job is missing warRoomId');
+        const { finalizeWarRoomCloseNeutral } = await import('../war-room/engine');
+        const rawClose = job.payload as Record<string, unknown>;
+        const incidentId = typeof rawClose.incidentId === 'string' ? rawClose.incidentId : undefined;
+        const tv = rawClose.terminalProjectionVersion;
+        const terminalProjectionVersion =
+          typeof tv === 'number' && Number.isInteger(tv) ? tv : undefined;
+        await finalizeWarRoomCloseNeutral(
+          requiredPayloadString(job.payload, 'warRoomId'),
+          incidentId,
+          terminalProjectionVersion
+        );
+        return markWarRoomJobCompleted(job.id);
+      }
+      case 'WAR_ROOM_PROVIDER_EVENT': {
+        const raw = job.payload as Record<string, unknown>;
+        const deliveryIdValue = raw.deliveryId as string | undefined;
+        if (typeof deliveryIdValue === 'string' && deliveryIdValue.trim()) {
+          const { handleIncidentWarRoomProviderEvent } = await import('../war-room/engine');
+          await handleIncidentWarRoomProviderEvent({ deliveryId: deliveryIdValue });
+          return markWarRoomJobCompleted(job.id);
+        }
+        // Legacy payload (rolling deploy) — provider/event/idempotencyKey
+        const providerValue = raw.provider;
+        const eventValue = raw.event as Record<string, unknown> | undefined;
+        const idempotencyKeyValue = raw.idempotencyKey as string | undefined;
+        if (
+          typeof providerValue !== 'string' ||
+          !eventValue ||
+          typeof eventValue.kind !== 'string' ||
+          typeof eventValue.incidentId !== 'string'
+        )
+          throw new Error('War-room provider event job is missing deliveryId');
+        const { handleIncidentWarRoomProviderEvent } = await import('../war-room/engine');
+        await handleIncidentWarRoomProviderEvent({
+          provider: providerValue as import('../war-room/types').WarRoomProviderName,
+          event: eventValue as unknown as import('../war-room/provider').WarRoomIncidentEvent,
+          idempotencyKey: typeof idempotencyKeyValue === 'string' ? idempotencyKeyValue : undefined,
+        });
         return markWarRoomJobCompleted(job.id);
       }
       case 'EXTERNAL_OPERATION': {
@@ -563,7 +687,7 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           const scheduledAt =
             operation.status === 'PENDING' || jiraNeedsReconciliation
               ? operation.nextAttemptAt
-              : operation.leaseExpiresAt ?? new Date(Date.now() + 30_000);
+              : (operation.leaseExpiresAt ?? new Date(Date.now() + 30_000));
           await prisma.backgroundJob.update({
             where: { id: job.id },
             data: { status: 'PENDING', scheduledAt, startedAt: null, attempts: 0, error: null },
@@ -748,7 +872,13 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         return false;
     }
   } catch (error) {
-    const isWarRoomJob = job.type === 'WAR_ROOM_PROVISION' || job.type === 'WAR_ROOM_PROJECT' || job.type === 'WAR_ROOM_PARTICIPANT_SYNC';
+    const isWarRoomJob =
+      job.type === 'WAR_ROOM_PROVISION' ||
+      job.type === 'WAR_ROOM_PROJECT' ||
+      job.type === 'WAR_ROOM_PARTICIPANT_SYNC' ||
+      job.type === 'WAR_ROOM_RECONCILE' ||
+      job.type === 'WAR_ROOM_CLOSE' ||
+      job.type === 'WAR_ROOM_PROVIDER_EVENT';
     if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
       const retryBudgetNeutral =
@@ -785,7 +915,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
       } catch (rescheduleError) {
         logger.warn('jobs.bulk_backpressure_reschedule_failed', {
           jobId: job.id,
-          error: rescheduleError instanceof Error ? rescheduleError.message : String(rescheduleError),
+          error:
+            rescheduleError instanceof Error ? rescheduleError.message : String(rescheduleError),
         });
         await markJobFailed(job.id, error instanceof Error ? error.message : 'Unknown error');
       }

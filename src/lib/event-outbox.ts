@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { IncidentStatus, Prisma } from '@prisma/client';
 import type { IncidentLifecycleCommand, IncidentLifecycleSource } from './incidents/lifecycle';
 
@@ -57,6 +58,8 @@ export interface EventSideEffectPayload {
   lane: EventSideEffectLane;
   incidentId: string;
   eventOrderAt: string;
+  /** Durable logical-event identity for idempotency — same sourceEventId means same logical event, retry; new UUID means new event. */
+  sourceEventId: string;
   /** Incident generation/status captured in the same transaction as the outbox row. */
   escalationGeneration?: number;
   incidentStatus?: IncidentStatus;
@@ -203,6 +206,9 @@ async function enqueueSideEffects(
     }),
   ]);
   const eventOrderAtIso = eventOrderAt.toISOString();
+  // One UUID per logical incident transition — every outbox row for this enqueue shares the same sourceEventId.
+  // Retry of the same SCHEDULED_TASK preserves it; a new lifecycle transition allocates a fresh one.
+  const sourceEventId = crypto.randomUUID();
   await tx.backgroundJob.createMany({
     data: effects.map(effect => ({
       type: 'SCHEDULED_TASK',
@@ -218,6 +224,7 @@ async function enqueueSideEffects(
         lane: getEventSideEffectLane(effect),
         incidentId,
         eventOrderAt: eventOrderAtIso,
+        sourceEventId,
         escalationGeneration: incidentSnapshot?.escalationGeneration ?? 0,
         ...(incidentSnapshot?.status ? { incidentStatus: incidentSnapshot.status } : {}),
         ...(lifecycle

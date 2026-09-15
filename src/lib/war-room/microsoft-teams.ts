@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { runSerializableTransaction } from '@/lib/db-utils';
 import { evaluateWarRoomPolicy } from './policy';
 import { adoptWarRoomChannel, claimWarRoomProvisioning, closeWarRoom } from './repository';
+import { WarRoomRetryableError } from './errors';
 import {
   createChannel,
   findWarRoomChannel,
@@ -21,17 +22,6 @@ type RequestResult =
   | { accepted: false; code: string };
 type WarRoomRequestIntent = { manual: boolean; allowNewGeneration: boolean };
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
-
-export class WarRoomRetryableError extends Error {
-  constructor(
-    message: string,
-    readonly retryAfterMs?: number,
-    readonly retryBudgetNeutral = false
-  ) {
-    super(message);
-    this.name = 'WarRoomRetryableError';
-  }
-}
 
 /** Durable request boundary. No Microsoft I/O occurs here. */
 export async function requestMicrosoftTeamsWarRoom(
@@ -321,13 +311,6 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
         lastError: 'Incident resolved while channel creation may have completed; reconciling by marker only.',
       },
     });
-    await tx.incidentWarRoom.updateMany({
-      where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
-      // Keep the card reference alive long enough to render the terminal,
-      // action-disabled state. The projection worker closes it only on success.
-      data: { state: 'CLOSING', provisioningToken: null },
-    });
-
     const rooms = await tx.incidentWarRoom.findMany({
       where: {
         incidentId,
@@ -412,11 +395,16 @@ export async function settleMicrosoftTeamsWarRoomsOnIncidentResolve(
       });
     }
   });
-  const closing = await prisma.incidentWarRoom.findMany({
-    where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'CLOSING' }, select: { id: true },
+  // READY → CLOSING must use the neutral durable close (atomic CLOSING + projection + WAR_ROOM_CLOSE)
+  // so a crash never leaves CLOSING without jobs and projection never owns archive.
+  const readyRooms = await prisma.incidentWarRoom.findMany({
+    where: { incidentId, provider: 'MICROSOFT_TEAMS', state: 'READY' },
+    select: { id: true },
   });
-  const { requestMicrosoftTeamsWarRoomProjection } = await import('./projection');
-  await Promise.all(closing.map(room => requestMicrosoftTeamsWarRoomProjection(room.id)));
+  if (readyRooms.length > 0) {
+    const { closeWarRoomNeutral } = await import('./engine');
+    await Promise.all(readyRooms.map(r => closeWarRoomNeutral({ incidentId, warRoomId: r.id })));
+  }
 }
 
 async function adoptProviderChannel(

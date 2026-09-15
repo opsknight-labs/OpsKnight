@@ -58,12 +58,19 @@ describe('war-room generation lifecycle', () => {
 
   it('fences close to the incident, provider, and active state', async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
-    const result = await closeWarRoom({ incidentWarRoom: { updateMany } } as never, {
+    const findUnique = vi.fn().mockResolvedValue({
+      incidentId: 'incident-1',
+      provider: 'MICROSOFT_TEAMS',
+      state: 'READY',
+      createAttemptedAt: null,
+    });
+    const result = await closeWarRoom({ incidentWarRoom: { findUnique, updateMany } } as never, {
       incidentId: 'incident-1',
       warRoomId: 'room-1',
       provider: 'MICROSOFT_TEAMS',
     });
     expect(result).toBe(true);
+    // Durable close is now CLOSING-first (initiateWarRoomClose); settlement to CLOSED is via settleWarRoomClosed after terminal projection/archive.
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -71,12 +78,14 @@ describe('war-room generation lifecycle', () => {
           incidentId: 'incident-1',
           provider: 'MICROSOFT_TEAMS',
         }),
-        data: expect.objectContaining({ state: 'CLOSED', provisioningToken: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null }),
+        data: expect.objectContaining({ state: 'CLOSING', provisioningToken: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null }),
       })
     );
     const where = updateMany.mock.calls[0][0].where;
     expect(where.state.in).not.toContain('AMBIGUOUS');
-    expect(where.state.in).toContain('CLOSING');
+    // initiateWarRoomClose fences to READY|PROVISIONING|FAILED → CLOSING; never AMBIGUOUS/CLOSING/CLOSED/ARCHIVED
+    expect(where.state.in).toEqual(expect.arrayContaining(['READY', 'PROVISIONING', 'FAILED']));
+    expect(where.state.in).not.toContain('CLOSING');
   });
 
   it('adopts a channel as READY only while the incident remains active', async () => {

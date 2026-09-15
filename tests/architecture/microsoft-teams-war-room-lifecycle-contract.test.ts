@@ -5,15 +5,21 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
   it('requests Teams rooms through the outbox and never performs Graph I/O in incident actions', () => {
     const effects = readFileSync('src/lib/event-side-effects.ts', 'utf8');
     const actions = readFileSync('src/app/(app)/incidents/actions.ts', 'utf8');
-    expect(effects).toContain("import('./war-room/microsoft-teams')");
-    expect(effects).toContain(
-      'requestMicrosoftTeamsWarRoom(payload.incidentId, { manual: false, allowNewGeneration: false })'
-    );
-    expect(effects).toContain(
-      'requestMicrosoftTeamsWarRoom(payload.incidentId, { manual: false, allowNewGeneration: true })'
-    );
-    expect(effects).toContain('settleMicrosoftTeamsWarRoomsOnIncidentResolve(payload.incidentId)');
+    // Unified ChatOps: event side-effects route through the neutral engine
+    // (provider-neutral War Room Engine → Provider Registry → Adapters). The
+    // engine fans out TRIGGER/ENSURE/ARCHIVE to every registered provider; the
+    // file must never import a provider implementation directly.
+    expect(effects).toContain("import('./war-room/engine')");
+    expect(effects).toContain('handleIncidentWarRoomEvent');
+    expect(effects).toContain("kind: 'TRIGGER'");
+    expect(effects).toContain("kind: 'ENSURE'");
+    expect(effects).toContain("kind: 'ARCHIVE'");
+    expect(effects).not.toContain("war-room/microsoft-teams");
+    expect(effects).not.toContain("war-room/participants");
+    expect(effects).not.toContain("war-room/projection");
+    expect(effects).not.toContain('createChannel(');
     expect(actions).not.toContain('requestMicrosoftTeamsWarRoom(');
+    expect(actions).not.toContain('handleIncidentWarRoomEvent(');
     expect(actions).not.toContain('createChannel(');
   });
 
