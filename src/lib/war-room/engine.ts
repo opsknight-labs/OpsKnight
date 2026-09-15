@@ -50,31 +50,188 @@ export async function reconcileWarRoom(warRoomId: string): Promise<void> {
 
 // ── Neutral lifecycle operations (routes must not branch on provider) ──
 
+/** Repair helper: ensure a CLOSING room has its durable close jobs (crash-gap recovery). */
+async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Promise<void> {
+  const room = await prisma.incidentWarRoom.findUnique({
+    where: { id: warRoomId },
+    select: { state: true, projectionVersion: true, lastProjectedVersion: true },
+  });
+  if (!room || room.state !== 'CLOSING') return;
+  const existingClose = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { id: true },
+  });
+  const existingProj = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { id: true, payload: true },
+  });
+  // If close job already exists, ensure a project job for the terminal version also exists.
+  if (existingClose) {
+    if (!existingProj) {
+      await prisma.$transaction(async tx => {
+        const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true } });
+        if (!fresh || fresh.state !== 'CLOSING') return;
+        await tx.backgroundJob.create({
+          data: {
+            type: 'WAR_ROOM_PROJECT',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 5,
+            payload: { warRoomId, projectionVersion: fresh.projectionVersion } as unknown as never,
+          },
+        });
+      }).catch(() => {});
+    }
+    return;
+  }
+  // No close job — need to (re)create terminal projection + close atomically.
+  await prisma.$transaction(async tx => {
+    const fresh = await tx.incidentWarRoom.findUnique({
+      where: { id: warRoomId },
+      select: { state: true, projectionVersion: true, lastProjectedVersion: true },
+    });
+    if (!fresh || fresh.state !== 'CLOSING') return;
+    const stillNoClose = await tx.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      select: { id: true },
+    });
+    if (stillNoClose) return;
+    let terminal = fresh.projectionVersion;
+    // If projection hasn't advanced past lastApplied, the original increment was lost — recreate it.
+    if (fresh.projectionVersion === (fresh.lastProjectedVersion ?? 0)) {
+      const inc = await tx.incidentWarRoom.updateMany({
+        where: { id: warRoomId, state: 'CLOSING' },
+        data: { projectionVersion: { increment: 1 } },
+      });
+      if (inc.count === 1) {
+        const after = await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: warRoomId }, select: { projectionVersion: true } });
+        terminal = after.projectionVersion;
+      }
+    }
+    await tx.backgroundJob.create({
+      data: {
+        type: 'WAR_ROOM_PROJECT',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 5,
+        payload: { warRoomId, projectionVersion: terminal } as unknown as never,
+      },
+    });
+    await tx.backgroundJob.create({
+      data: {
+        type: 'WAR_ROOM_CLOSE',
+        status: 'PENDING',
+        scheduledAt: new Date(Date.now() + 2_000),
+        maxAttempts: 5,
+        payload: { warRoomId, incidentId, closeGeneration: Date.now(), terminalProjectionVersion: terminal } as unknown as never,
+      },
+    });
+  }).catch(() => {});
+}
+
 /**
  * Neutral close lifecycle: READY|FAILED|PROVISIONING → CLOSING → terminal projection → provider archive → CLOSED/ARCHIVED.
  * Manual close and resolve-driven close share this same engine; the provider adapter only implements mechanics.
  * Transient archive failures keep the room in CLOSING for queue retry; ambiguous is surfaced as DEGRADED.
+ * Initiation is atomic: CLOSING + projection increment + both jobs in one serializable transaction.
  */
 export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId: string }): Promise<boolean> {
   const room = await prisma.incidentWarRoom.findFirst({ where: { id: input.warRoomId, incidentId: input.incidentId }, select: { id: true, provider: true, state: true } });
   if (!room) return false;
   if (room.state === 'CLOSED' || room.state === 'ARCHIVED') return true; // idempotent no-op
-  if (room.state === 'CLOSING') return true; // already closing — idempotent
+  if (room.state === 'CLOSING') {
+    await repairWarRoomCloseJobs(input.warRoomId, input.incidentId);
+    return true;
+  }
   if (room.state === 'AMBIGUOUS') return false; // cannot close while external identity is unresolved
   const { runSerializableTransaction } = await import('@/lib/db-utils');
-  const { initiateWarRoomClose } = await import('./repository');
-  const initiated = await runSerializableTransaction(tx => initiateWarRoomClose(tx, { incidentId: input.incidentId, warRoomId: input.warRoomId, provider: room.provider }));
-  if (!initiated) return false;
-  const terminalProjectionVersion = await requestWarRoomProjectionNeutral(input.warRoomId);
-  const { scheduleJob } = await import('@/lib/jobs/queue');
-  const closeGeneration = Date.now();
-  await scheduleJob('WAR_ROOM_CLOSE', new Date(Date.now() + 2_000), { warRoomId: input.warRoomId, incidentId: input.incidentId, closeGeneration, terminalProjectionVersion } as unknown as Record<string, unknown>, 5);
-  return true;
+  const result = await runSerializableTransaction(async tx => {
+    const existing = await tx.incidentWarRoom.findUnique({
+      where: { id: input.warRoomId },
+      select: { incidentId: true, provider: true, state: true, createAttemptedAt: true },
+    });
+    if (!existing) return { initiated: false as const };
+    if (existing.incidentId !== input.incidentId || existing.provider !== room.provider) return { initiated: false as const };
+    if (!['READY', 'PROVISIONING', 'FAILED'].includes(existing.state)) return { initiated: false as const };
+    const preserveProvisioningFence = existing.state === 'PROVISIONING' && existing.createAttemptedAt != null;
+    const data: Record<string, unknown> = {
+      state: 'CLOSING',
+      projectionLeaseToken: null,
+      projectionLeaseExpiresAt: null,
+    };
+    if (!preserveProvisioningFence) {
+      (data as Record<string, unknown>).provisioningToken = null;
+      (data as Record<string, unknown>).provisioningStartedAt = null;
+    }
+    const changed = await tx.incidentWarRoom.updateMany({
+      where: { id: input.warRoomId, incidentId: input.incidentId, provider: room.provider as never, state: { in: ['READY', 'PROVISIONING', 'FAILED'] } },
+      data: data as never,
+    });
+    if (changed.count !== 1) return { initiated: false as const };
+    // Increment projection in same tx so crash cannot leave CLOSING without terminal version.
+    const projChanged = await tx.incidentWarRoom.updateMany({
+      where: { id: input.warRoomId, state: 'CLOSING' },
+      data: { projectionVersion: { increment: 1 } },
+    });
+    if (projChanged.count !== 1) return { initiated: false as const };
+    const fresh = await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: input.warRoomId }, select: { projectionVersion: true } });
+    const terminalProjectionVersion = fresh.projectionVersion;
+    await tx.backgroundJob.create({
+      data: {
+        type: 'WAR_ROOM_PROJECT',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 5,
+        payload: { warRoomId: input.warRoomId, projectionVersion: terminalProjectionVersion } as unknown as never,
+      },
+    });
+    await tx.backgroundJob.create({
+      data: {
+        type: 'WAR_ROOM_CLOSE',
+        status: 'PENDING',
+        scheduledAt: new Date(Date.now() + 2_000),
+        maxAttempts: 5,
+        payload: { warRoomId: input.warRoomId, incidentId: input.incidentId, closeGeneration: Date.now(), terminalProjectionVersion } as unknown as never,
+      },
+    });
+    return { initiated: true as const, terminalProjectionVersion };
+  });
+  return (result as { initiated: boolean }).initiated;
+}
+
+/** Close all war rooms for an incident via the neutral engine (resolve path). Idempotent per room. */
+export async function closeIncidentWarRoomsNeutral(incidentId: string): Promise<{ closed: number; skipped: number }> {
+  const rooms = await prisma.incidentWarRoom.findMany({
+    where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'FAILED', 'CLOSING'] } },
+    select: { id: true, provider: true, state: true },
+  });
+  let closed = 0;
+  let skipped = 0;
+  for (const room of rooms) {
+    const ok = await closeWarRoomNeutral({ incidentId, warRoomId: room.id });
+    if (ok) closed++;
+    else skipped++;
+  }
+  return { closed, skipped };
 }
 
 /** Finalizes a CLOSING room: waits for the terminal projection to settle, then provider archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */
 export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?: string, expectedTerminalProjectionVersion?: number | null): Promise<void> {
-  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { id: true, incidentId: true, provider: true, state: true, projectionVersion: true, lastProjectedVersion: true, projectionLeaseToken: true, projectionLeaseExpiresAt: true } });
+  const room = await prisma.incidentWarRoom.findUnique({
+    where: { id: warRoomId },
+    select: {
+      id: true,
+      incidentId: true,
+      provider: true,
+      state: true,
+      projectionVersion: true,
+      lastProjectedVersion: true,
+      projectionLeaseToken: true,
+      projectionLeaseExpiresAt: true,
+      health: true,
+      lastErrorCode: true,
+    },
+  });
   if (!room) return;
   if (room.state !== 'CLOSING') return;
   const effectiveIncidentId = incidentId ?? room.incidentId;
@@ -87,23 +244,35 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
   if (expectedTerminalProjectionVersion != null) {
     const lastProjected = (room as { lastProjectedVersion?: number | null }).lastProjectedVersion ?? 0;
     if (lastProjected < expectedTerminalProjectionVersion) {
-      // If lease is still active, the terminal projection is in flight.
-      // If lease is null/cleared but lastProjected is still behind, the worker either
-      // failed terminally (settle marks DEGRADED) or hasn't completed yet — retry
-      // budget-neutral and let the projection job settle. The close worker does NOT
-      // queue a new projection on retry.
       const hasActiveProjection = room.projectionLeaseToken != null;
-      // Also consider stale lease: if lease exists but expired, projector will clear it; still retry.
-      if (hasActiveProjection || room.projectionVersion >= expectedTerminalProjectionVersion) {
+      if (hasActiveProjection) {
         const { WarRoomRetryableError } = await import('./errors');
-        const msg = hasActiveProjection
-          ? 'Terminal projection still in flight; retrying close after it settles.'
-          : 'Waiting for terminal projection to be applied before archive.';
+        throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
+      }
+      // Lease cleared but still behind — either projection job is still pending or it was terminally settled as DEGRADED.
+      // If a WAR_ROOM_PROJECT job for this room is still PENDING/PROCESSING, retry budget-neutral.
+      // If no such job remains (exhausted / failed), fall through to degraded-close fallback (archive anyway / CLOSED + DEGRADED audit) instead of infinite retry.
+      const hasPendingProjectJob = await prisma.backgroundJob.findFirst({
+        where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+        select: { id: true },
+      });
+      if (hasPendingProjectJob) {
+        const { WarRoomRetryableError } = await import('./errors');
+        const msg =
+          room.projectionVersion >= expectedTerminalProjectionVersion
+            ? 'Waiting for terminal projection to be applied before archive.'
+            : 'Waiting for terminal projection to reach target version before archive.';
         throw new WarRoomRetryableError(msg, 3000, true);
       }
-      // projectionVersion behind expected should not happen (close queued N, but version reverted) — treat as wait.
-      const { WarRoomRetryableError } = await import('./errors');
-      throw new WarRoomRetryableError('Waiting for terminal projection to reach target version before archive.', 3000, true);
+      // Degraded fallback: terminal projection exhausted (or never scheduled) and lease cleared — proceed to close with DEGRADED audit.
+      // We keep health DEGRADED so operator can see projection did not reach terminal version.
+      if (room.health !== 'DEGRADED') {
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: warRoomId, state: 'CLOSING' },
+          data: { health: 'DEGRADED', lastErrorCode: 'CLOSE_PROJECTION_DEGRADED', lastError: `Closing with degraded terminal projection (lastProjected=${lastProjected}, expected=${expectedTerminalProjectionVersion}); archiving anyway.` },
+        });
+      }
+      // Fall through to archive/close.
     }
   } else {
     const hasActiveProjection = room.projectionLeaseToken != null;

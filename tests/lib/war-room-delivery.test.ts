@@ -305,7 +305,14 @@ describe('WAR_ROOM_CLOSE terminal projection fencing', () => {
         projectionVersion: 7,
         lastProjectedVersion: 5,
         projectionLeaseToken: null,
+        health: 'HEALTHY',
       }),
+    } as unknown;
+    // Pending terminal projection still queued → close waits budget-neutral (does not re-queue).
+    (prismaMock as Record<string, unknown>).backgroundJob = {
+      findFirst: vi.fn().mockResolvedValue({ id: 'proj-1' }),
+      findMany: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({ id: 'job-1' }),
     } as unknown;
     const { finalizeWarRoomCloseNeutral } = await import('@/lib/war-room/engine');
     await expect(finalizeWarRoomCloseNeutral('room-1', 'inc-1', 7)).rejects.toMatchObject({

@@ -35,23 +35,25 @@ export async function postSlackWarRoomUpdate(
   }
 }
 
-export async function archiveSlackWarRoomChannel(
-  incidentId: string,
-  options: { force?: boolean } = {}
-): Promise<{ success: boolean; error?: string }> {
+/**
+ * Provider-I/O only: archives the Slack channel externally. Does NOT mutate
+ * IncidentWarRoom state — the neutral engine owns ARCHIVED/CLOSED transitions.
+ * Returns ProviderResult-style shape for engine consumption.
+ */
+export async function archiveExternalSlackRoom(
+  warRoomId: string
+): Promise<{ ok: boolean; code?: 'NOT_FOUND' | 'TRANSIENT' | 'AMBIGUOUS_SIDE_EFFECT' | 'RATE_LIMITED'; message?: string }> {
   try {
-    const [incident, room] = await Promise.all([
-      prisma.incident.findUnique({ where: { id: incidentId }, select: { serviceId: true } }),
-      findSlackWarRoomAuthority(incidentId),
-    ]);
-    if (!incident || !room?.providerChannelId) return { success: false, error: 'No war-room channel' };
-    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { success: true };
-    if (!options.force) {
-      const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
-      if (!config?.archiveOnResolve) return { success: false, error: 'Archive on resolve is disabled' };
-    }
+    const room = await prisma.incidentWarRoom.findUnique({
+      where: { id: warRoomId },
+      select: { id: true, incidentId: true, providerChannelId: true, providerChannelName: true, state: true },
+    });
+    if (!room?.providerChannelId) return { ok: false, code: 'NOT_FOUND', message: 'No war-room channel' };
+    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { ok: true };
+    const incident = await prisma.incident.findUnique({ where: { id: room.incidentId }, select: { serviceId: true } });
+    if (!incident) return { ok: false, code: 'NOT_FOUND', message: 'Incident not found' };
     const botToken = await getSlackBotToken(incident.serviceId);
-    if (!botToken) return { success: false, error: 'No Slack bot token' };
+    if (!botToken) return { ok: false, code: 'TRANSIENT', message: 'No Slack bot token' };
 
     await slackApiCall('conversations.setTopic', botToken, {
       channel: room.providerChannelId,
@@ -71,15 +73,57 @@ export async function archiveSlackWarRoomChannel(
     const isIdempotentSuccess =
       archiveResult.ok || archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found';
     if (!isIdempotentSuccess) {
+      const lower = (archiveResult.error ?? '').toLowerCase();
+      const isRateLimited = lower.includes('rate_limited') || lower.includes('ratelimited');
+      if (isRateLimited) return { ok: false, code: 'RATE_LIMITED', message: archiveResult.error ?? 'Rate limited' };
+      if (archiveResult.sideEffectAmbiguous || archiveResult.transportFailure) {
+        return { ok: false, code: 'AMBIGUOUS_SIDE_EFFECT', message: archiveResult.error ?? 'Archive ambiguous' };
+      }
       logger.warn('[ChatOps] Failed to archive channel', { error: archiveResult.error });
-      return { success: false, error: archiveResult.error || 'Failed to archive Slack channel' };
+      return { ok: false, code: 'TRANSIENT', message: archiveResult.error || 'Failed to archive Slack channel' };
     }
     if (archiveResult.error === 'already_archived' || archiveResult.error === 'channel_not_found') {
       logger.info('[ChatOps] Channel already archived or not found in Slack; treating as archived', {
-        incidentId,
+        warRoomId,
         channelId: room.providerChannelId,
         slackError: archiveResult.error,
       });
+      return { ok: true };
+    }
+
+    logger.info('[ChatOps] War-room external archive succeeded', { warRoomId, channelId: room.providerChannelId });
+    return { ok: true };
+  } catch (error) {
+    const err = error instanceof Error ? error.message : String(error);
+    logger.error('[ChatOps] War-room external archive failed', { warRoomId, error: err });
+    return { ok: false, code: 'TRANSIENT', message: err };
+  }
+}
+
+export async function archiveSlackWarRoomChannel(
+  incidentId: string,
+  options: { force?: boolean } = {}
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [incident, room] = await Promise.all([
+      prisma.incident.findUnique({ where: { id: incidentId }, select: { serviceId: true } }),
+      findSlackWarRoomAuthority(incidentId),
+    ]);
+    if (!incident || !room?.providerChannelId) return { success: false, error: 'No war-room channel' };
+    if (room.state === 'ARCHIVED' || room.state === 'CLOSED') return { success: true };
+    if (!options.force) {
+      const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
+      if (!config?.archiveOnResolve) return { success: false, error: 'Archive on resolve is disabled' };
+    }
+    // Delegate external I/O to provider-only function; then let engine own state.
+    const ext = await archiveExternalSlackRoom(room.id);
+    if (!ext.ok) {
+      const lower = (ext.message ?? '').toLowerCase();
+      if (lower.includes('channel_not_found') || lower.includes('already_archived') || ext.code === 'NOT_FOUND') {
+        // Idempotent success — still commit ARCHIVED via engine path
+      } else {
+        return { success: false, error: ext.message ?? 'Failed to archive Slack channel' };
+      }
     }
 
     const archivedAt = new Date();

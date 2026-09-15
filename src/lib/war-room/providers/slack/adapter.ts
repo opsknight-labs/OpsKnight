@@ -119,9 +119,14 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
 
   let result: { success: boolean; error?: string; sideEffectAmbiguous?: boolean };
   switch (event.kind) {
-    case 'ARCHIVE':
-      result = await lifecycle.archiveSlackWarRoomChannel(event.incidentId);
+    case 'ARCHIVE': {
+      // Legacy delivery path — delegate to neutral durable close (atomic CLOSING + projection + WAR_ROOM_CLOSE)
+      // so the same crash-gap and degraded-fallback invariants apply even on rolling deploys.
+      const { closeIncidentWarRoomsNeutral } = await import('../../engine');
+      await closeIncidentWarRoomsNeutral(event.incidentId);
+      result = { success: true };
       break;
+    }
     case 'LIFECYCLE': {
       const msgStage = 'slack:lifecycle:message';
       const topicStage = 'slack:lifecycle:topic';
@@ -282,14 +287,13 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
     await reconcileSlackWarRoom(warRoomId);
   },
   archive: async warRoomId => {
-    const room = await (await import('@/lib/prisma')).default.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { incidentId: true } });
-    if (!room?.incidentId) return { ok: false as const, code: 'NOT_FOUND' as const, message: 'War room not found' };
-    const { archiveSlackWarRoomChannel } = await import('./lifecycle');
-    const r = await archiveSlackWarRoomChannel(room.incidentId);
-    if (r.success) return { ok: true as const, value: undefined };
-    const lower = (r.error ?? '').toLowerCase();
-    const isNotFound = lower.includes('channel_not_found') || lower.includes('not_found');
-    return { ok: false as const, code: (isNotFound ? ('NOT_FOUND' as const) : ('TRANSIENT' as const)), message: r.error ?? 'Archive failed' };
+    const { archiveExternalSlackRoom } = await import('./lifecycle');
+    const r = await archiveExternalSlackRoom(warRoomId);
+    if (r.ok) return { ok: true as const, value: undefined };
+    if (r.code === 'NOT_FOUND') return { ok: false as const, code: 'NOT_FOUND' as const, message: r.message ?? 'Archive failed' };
+    if (r.code === 'AMBIGUOUS_SIDE_EFFECT') return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: r.message ?? 'Archive ambiguous' };
+    if (r.code === 'RATE_LIMITED') return { ok: false as const, code: 'RATE_LIMITED' as const, message: r.message ?? 'Rate limited' };
+    return { ok: false as const, code: 'TRANSIENT' as const, message: r.message ?? 'Archive failed' };
   },
   handleIncidentEvent,
 };

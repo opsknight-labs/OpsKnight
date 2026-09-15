@@ -345,8 +345,8 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
     incident.resolvedAt?.toISOString() !== lifecycle.transitionAt
   )
     return;
-  const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-  await handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
+  const { closeIncidentWarRoomsNeutral } = await import('./war-room/engine');
+  await closeIncidentWarRoomsNeutral(payload.incidentId);
 }
 
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {

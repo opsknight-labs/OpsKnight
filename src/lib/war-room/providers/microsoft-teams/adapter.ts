@@ -20,9 +20,13 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
         allowNewGeneration: true,
       });
       break;
-    case 'ARCHIVE':
-      await teams.settleMicrosoftTeamsWarRoomsOnIncidentResolve(event.incidentId);
+    case 'ARCHIVE': {
+      // Neutral durable close already handled pre-create fencing (PROVISIONING/AMBIGUOUS) in provision.ts path.
+      // Here we only need the READY→CLOSING durable close; reuse the neutral engine so invariants match resolve path.
+      const { closeIncidentWarRoomsNeutral } = await import('../../engine');
+      await closeIncidentWarRoomsNeutral(event.incidentId);
       break;
+    }
     case 'INVITE_USER':
     case 'INVITE_TEAM':
       await Promise.all([
