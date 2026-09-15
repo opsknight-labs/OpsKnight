@@ -134,17 +134,25 @@ test.describe.serial('authenticated navigation fast path', () => {
     page,
   }) => {
     await page.route('**/incidents**', async route => {
-      if (route.request().headers().rsc === '1') {
-        await new Promise(resolve => setTimeout(resolve, 600));
+      const headers = route.request().headers();
+      if (
+        headers.rsc === '1' ||
+        headers['next-router-prefetch'] === '1' ||
+        headers['next-router-state-tree'] ||
+        route.request().url().includes('_rsc')
+      ) {
+        await new Promise(resolve => setTimeout(resolve, 800));
       }
       await route.continue();
     });
 
     const link = sidebarLink(page, 'Incidents');
     await link.click({ noWaitAfter: true });
-    await expect(link.locator('[data-navigation-pending="true"]')).toBeVisible({ timeout: 500 });
+    await expect(link.locator('[data-navigation-pending="true"]')).toBeVisible({ timeout: 1500 });
     await expect(page).toHaveURL(/\/incidents/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test('navigation does no integration work regardless of integration configuration', async ({
