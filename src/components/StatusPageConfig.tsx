@@ -1821,6 +1821,7 @@ export default function StatusPageConfig({
                           formData={formData}
                           setFormData={setFormData}
                           privacySettings={privacySettings}
+                          setPrivacySettings={setPrivacySettings}
                           hasSelectedRegions={hasSelectedRegions}
                         />
                       )}
@@ -1829,7 +1830,24 @@ export default function StatusPageConfig({
                       {activeSection === 'privacy' && (
                         <StatusPagePrivacySettings
                           settings={privacySettings}
-                          onChange={settings => setPrivacySettings(settings)}
+                          onChange={settings => {
+                            setPrivacySettings(settings);
+                            setFormData(prev => ({
+                              ...prev,
+                              ...(settings.showTeamInformation !== undefined
+                                ? { showServiceOwners: settings.showTeamInformation }
+                                : {}),
+                              ...(settings.showServiceRegions === false
+                                ? { showServicesByRegion: false, showRegionHeatmap: false }
+                                : {}),
+                              ...(settings.showServiceMetrics !== undefined
+                                ? { showMetrics: settings.showServiceMetrics }
+                                : {}),
+                              ...(settings.showRecentIncidents !== undefined
+                                ? { showIncidents: settings.showRecentIncidents }
+                                : {}),
+                            }));
+                          }}
                         />
                       )}
 
@@ -1862,7 +1880,7 @@ export default function StatusPageConfig({
                                       setFormData({ ...formData, showServices: checked })
                                     }
                                     label="Show Services"
-                                    helperText="Display service status list"
+                                    helperText="Display service status list (disabling hides all service cards from the page)"
                                   />
                                 </div>
                                 <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
@@ -1889,12 +1907,11 @@ export default function StatusPageConfig({
                                     checked={formData.showMetrics}
                                     onChange={checked => {
                                       setFormData({ ...formData, showMetrics: checked });
-                                      if (checked && privacySettings.showServiceMetrics === false) {
-                                        setPrivacySettings(prev => ({
-                                          ...prev,
-                                          showServiceMetrics: true,
-                                        }));
-                                      }
+                                      setPrivacySettings(prev => ({
+                                        ...prev,
+                                        showServiceMetrics: checked,
+                                        showUptimeHistory: checked,
+                                      }));
                                     }}
                                     label="Show Uptime & Availability"
                                     helperText="Display service uptime metrics and history"
@@ -2248,7 +2265,6 @@ export default function StatusPageConfig({
                                       value={apiTokenName}
                                       onChange={e => setApiTokenName(e.target.value)}
                                       placeholder="e.g. External status monitor"
-                                      required
                                     />
                                   </div>
                                   <Button

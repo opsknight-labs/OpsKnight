@@ -53,6 +53,7 @@ interface StatusPageServicesManagerProps {
     showTeamInformation?: boolean;
     [key: string]: any;
   };
+  setPrivacySettings?: React.Dispatch<React.SetStateAction<any>>;
   hasSelectedRegions: boolean;
 }
 
@@ -68,6 +69,7 @@ export default function StatusPageServicesManager({
   formData,
   setFormData,
   privacySettings,
+  setPrivacySettings,
   hasSelectedRegions,
 }: StatusPageServicesManagerProps) {
   // Search & Filter State
@@ -243,30 +245,33 @@ export default function StatusPageServicesManager({
         <div className="p-3.5 rounded-xl border border-border/80 bg-card hover:bg-muted/10 transition-colors shadow-2xs">
           <Switch
             checked={formData.showServicesByRegion}
-            onChange={checked => setFormData({ ...formData, showServicesByRegion: checked })}
+            onChange={checked => {
+              setFormData({ ...formData, showServicesByRegion: checked });
+              if (checked && setPrivacySettings && privacySettings.showServiceRegions === false) {
+                setPrivacySettings((prev: any) => ({ ...prev, showServiceRegions: true }));
+              }
+            }}
             label="Group by Region"
             helperText={
-              privacySettings.showServiceRegions === false
-                ? 'Enable “Show Service Regions” in Privacy settings.'
-                : hasSelectedRegions
-                  ? 'Group services under regional headings for visitors.'
-                  : 'Add regions to selected services to enable.'
+              hasSelectedRegions
+                ? 'Group services under regional headings for visitors.'
+                : 'Add regions to selected services to enable.'
             }
-            disabled={privacySettings.showServiceRegions === false || !hasSelectedRegions}
+            disabled={!hasSelectedRegions}
           />
         </div>
 
         <div className="p-3.5 rounded-xl border border-border/80 bg-card hover:bg-muted/10 transition-colors shadow-2xs">
           <Switch
             checked={formData.showServiceOwners}
-            onChange={checked => setFormData({ ...formData, showServiceOwners: checked })}
+            onChange={checked => {
+              setFormData({ ...formData, showServiceOwners: checked });
+              if (setPrivacySettings) {
+                setPrivacySettings((prev: any) => ({ ...prev, showTeamInformation: checked }));
+              }
+            }}
             label="Show Service Owners"
-            helperText={
-              privacySettings.showTeamInformation === false
-                ? 'Enable “Show Team Information” in Privacy.'
-                : 'Display “Owned by <team>” badges on public page.'
-            }
-            disabled={privacySettings.showTeamInformation === false}
+            helperText="Display “Owned by <team>” badges on public status page."
           />
         </div>
 
