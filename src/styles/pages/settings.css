@@ -770,13 +770,19 @@
 }
 
 /* Red-themed interactive elements */
-a {
+.settings-layout a,
+.settings-content a,
+.settings-container a,
+.settings-card a {
     color: var(--primary-color);
     text-decoration: none;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-a:hover {
+.settings-layout a:hover,
+.settings-content a:hover,
+.settings-container a:hover,
+.settings-card a:hover {
     color: var(--primary-hover);
     text-shadow: 0 0 8px rgba(148, 163, 184, 0.2);
 }
