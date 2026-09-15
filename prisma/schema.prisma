@@ -831,6 +831,56 @@ model WarRoomParticipant {
   @@index([userId])
 }
 
+enum WarRoomProviderEventDeliveryStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum WarRoomProviderEventStageStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model WarRoomProviderEventDelivery {
+  id             String                              @id @default(cuid())
+  provider       WarRoomProvider
+  idempotencyKey String
+  incidentId     String
+  kind           String
+  eventPayload   Json
+  status         WarRoomProviderEventDeliveryStatus @default(PENDING)
+  attempts       Int                                 @default(0)
+  leaseToken     String?
+  leaseExpiresAt DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime                            @default(now())
+  updatedAt      DateTime                            @updatedAt
+  stages         WarRoomProviderEventStage[]
+  @@unique([provider, idempotencyKey])
+  @@index([status, leaseExpiresAt])
+  @@index([incidentId, kind])
+  @@index([provider, status])
+}
+
+model WarRoomProviderEventStage {
+  id         String                          @id @default(cuid())
+  deliveryId String
+  stage      String
+  status     WarRoomProviderEventStageStatus @default(PENDING)
+  attempts   Int                             @default(0)
+  lastError  String?
+  completedAt DateTime?
+  createdAt  DateTime                        @default(now())
+  updatedAt  DateTime                        @updatedAt
+  delivery WarRoomProviderEventDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  @@unique([deliveryId, stage])
+  @@index([deliveryId])
+}
+
 model Alert {
   id         String   @id @default(cuid())
   dedupKey   String?

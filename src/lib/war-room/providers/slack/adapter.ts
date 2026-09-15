@@ -27,7 +27,7 @@ const expectedSlackRequestSkips = new Set([
   'PRIVATE_DOWNGRADE_DENIED',
 ]);
 
-async function handleIncidentEvent(event: WarRoomIncidentEvent) {
+async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deliveryId?: string; idempotencyKey?: string }) {
   if (event.kind === 'TRIGGER' || event.kind === 'ENSURE') {
     const { requestSlackWarRoom } = await import('./provision');
     const result = await requestSlackWarRoom(event.incidentId, {
@@ -40,41 +40,121 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
   }
 
   const lifecycle = await import('./lifecycle');
-  let result: { success: boolean; error?: string };
+  const deliveryId = context?.deliveryId ?? null;
+  let stageApi: typeof import('../../delivery') | null = null;
+  if (deliveryId) {
+    try { stageApi = await import('../../delivery'); } catch {}
+  }
+  const stageCompleted = async (stage: string) => {
+    if (!deliveryId || !stageApi) return false;
+    try { return await stageApi.stageAlreadyCompleted(deliveryId, stage); } catch { return false; }
+  };
+  const markStageCompleted = async (stage: string) => {
+    if (!deliveryId || !stageApi) return;
+    try { await stageApi.ensureWarRoomStage(deliveryId, stage); await stageApi.completeWarRoomStage(deliveryId, stage); } catch {}
+  };
+  const markStageFailed = async (stage: string, err: string) => {
+    if (!deliveryId || !stageApi) return;
+    try { await stageApi.ensureWarRoomStage(deliveryId, stage); await stageApi.failWarRoomStage(deliveryId, stage, err); } catch {}
+  };
+
+  let result: { success: boolean; error?: string; sideEffectAmbiguous?: boolean };
   switch (event.kind) {
     case 'ARCHIVE':
       result = await lifecycle.archiveSlackWarRoomChannel(event.incidentId);
       break;
     case 'LIFECYCLE': {
-      const [message, topic] = await Promise.all([
-        lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message),
-        lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status),
-      ]);
-      result = !message.success ? message : topic;
-      // Also refresh the canonical card via durable projection so status/assignee
-      // changes are reflected provider-neutrally. Best-effort: do not fail lifecycle
-      // if projection queue is momentarily unavailable — the card will be
-      // reconciled on next incident change.
+      // Sequential staged settlement: message -> topic -> card projection.
+      // Each stage is durably recorded so a retry never blind-reposts an ambiguous chat.postMessage.
+      const msgStage = 'slack:lifecycle:message';
+      const topicStage = 'slack:lifecycle:topic';
+      if (deliveryId && await stageCompleted(msgStage)) {
+        // Message already delivered — skip ambiguous re-POST.
+      } else {
+        const msg = await lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message);
+        if (!msg.success) {
+          if (msg.sideEffectAmbiguous) {
+            await markStageFailed(msgStage, msg.error ?? 'ambiguous chat.postMessage');
+            // Mark delivery as needing reconciliation; do not retry blindly.
+            try {
+              const prisma = (await import('@/lib/prisma')).default;
+              const room = await prisma.incidentWarRoom.findFirst({ where: { incidentId: event.incidentId, provider: 'SLACK', state: { in: ['READY', 'CLOSING'] } }, select: { id: true } });
+              if (room) await prisma.incidentWarRoom.updateMany({ where: { id: room.id }, data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT', lastError: 'Slack timeline message outcome is ambiguous; reconciling before retry.' } });
+            } catch {}
+            return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: msg.error ?? 'Slack timeline message ambiguous' };
+          }
+          result = msg;
+          break;
+        }
+        await markStageCompleted(msgStage);
+      }
+      if (deliveryId && await stageCompleted(topicStage)) {
+        result = { success: true };
+      } else {
+        const topic = await lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status);
+        if (!topic.success) {
+          await markStageFailed(topicStage, topic.error ?? 'topic update failed');
+          result = topic;
+          break;
+        }
+        await markStageCompleted(topicStage);
+        result = { success: true };
+      }
+      try {
+        const { requestSlackWarRoomProjectionForIncident } = await import('./projection');
+        await requestSlackWarRoomProjectionForIncident(event.incidentId);
+      } catch {}
+      // Projection is async; lifecycle delivery is complete once message+topic settled.
+      break;
+    }
+    case 'MESSAGE': {
+      const msgStage = 'slack:message';
+      if (deliveryId && await stageCompleted(msgStage)) {
+        result = { success: true };
+      } else {
+        const msg = await lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message);
+        if (!msg.success) {
+          if (msg.sideEffectAmbiguous) {
+            await markStageFailed(msgStage, msg.error ?? 'ambiguous chat.postMessage');
+            try {
+              const prisma = (await import('@/lib/prisma')).default;
+              const room = await prisma.incidentWarRoom.findFirst({ where: { incidentId: event.incidentId, provider: 'SLACK', state: { in: ['READY', 'CLOSING'] } }, select: { id: true } });
+              if (room) await prisma.incidentWarRoom.updateMany({ where: { id: room.id }, data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT', lastError: 'Slack message outcome is ambiguous; reconciling before retry.' } });
+            } catch {}
+            return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: msg.error ?? 'Slack message ambiguous' };
+          }
+          result = msg;
+          break;
+        }
+        await markStageCompleted(msgStage);
+        result = { success: true };
+      }
       try {
         const { requestSlackWarRoomProjectionForIncident } = await import('./projection');
         await requestSlackWarRoomProjectionForIncident(event.incidentId);
       } catch {}
       break;
     }
-    case 'MESSAGE':
-      result = await lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message);
+    case 'TOPIC': {
+      const topicStage = 'slack:topic';
+      if (deliveryId && await stageCompleted(topicStage)) {
+        result = { success: true };
+      } else {
+        const topic = await lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status);
+        if (!topic.success) {
+          await markStageFailed(topicStage, topic.error ?? 'topic update failed');
+          result = topic;
+          break;
+        }
+        await markStageCompleted(topicStage);
+        result = { success: true };
+      }
       try {
         const { requestSlackWarRoomProjectionForIncident } = await import('./projection');
         await requestSlackWarRoomProjectionForIncident(event.incidentId);
       } catch {}
       break;
-    case 'TOPIC':
-      result = await lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status);
-      try {
-        const { requestSlackWarRoomProjectionForIncident } = await import('./projection');
-        await requestSlackWarRoomProjectionForIncident(event.incidentId);
-      } catch {}
-      break;
+    }
     case 'INVITE_USER':
       result = await lifecycle.inviteUserToSlackWarRoom(event.incidentId, event.userId);
       break;
@@ -86,6 +166,9 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent) {
   }
   if (result.success || expectedSkips.some(reason => result.error?.includes(reason))) {
     return { ok: true as const, value: undefined };
+  }
+  if (result.sideEffectAmbiguous) {
+    return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: result.error ?? 'Slack operation ambiguous' };
   }
   return {
     ok: false as const,

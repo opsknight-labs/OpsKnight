@@ -10,7 +10,7 @@ import { slackApiCall } from './client';
 export async function postSlackWarRoomUpdate(
   incidentId: string,
   message: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean; transportFailure?: boolean; httpStatus?: number }> {
   try {
     const [incident, room] = await Promise.all([
       prisma.incident.findUnique({ where: { id: incidentId }, select: { serviceId: true } }),
@@ -26,7 +26,7 @@ export async function postSlackWarRoomUpdate(
       text: message,
       unfurl_links: false,
     });
-    if (!result.ok) return { success: false, error: result.error };
+    if (!result.ok) return { success: false, error: result.error, sideEffectAmbiguous: result.sideEffectAmbiguous, transportFailure: result.transportFailure, httpStatus: result.httpStatus };
     return { success: true };
   } catch (error) {
     const err = error instanceof Error ? error.message : String(error);
@@ -109,7 +109,7 @@ export async function archiveSlackWarRoomChannel(
 export async function updateSlackWarRoomTopic(
   incidentId: string,
   newStatus?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean; transportFailure?: boolean; httpStatus?: number }> {
   try {
     const [incident, room] = await Promise.all([
       prisma.incident.findUnique({
@@ -142,7 +142,7 @@ export async function updateSlackWarRoomTopic(
       channel: room.providerChannelId,
       topic: topic.slice(0, 250),
     });
-    if (!result.ok) return { success: false, error: result.error || 'Slack topic update failed' };
+    if (!result.ok) return { success: false, error: result.error || 'Slack topic update failed', sideEffectAmbiguous: result.sideEffectAmbiguous, transportFailure: result.transportFailure, httpStatus: result.httpStatus };
     return { success: true };
   } catch (err) {
     logger.warn('[ChatOps] Failed to update war-room topic', { incidentId, error: err });

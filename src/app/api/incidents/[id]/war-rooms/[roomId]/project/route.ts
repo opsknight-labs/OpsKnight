@@ -9,19 +9,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
   try {
     const { id, roomId } = await context.params;
     await assertCanModifyIncident(id);
-    const room = await prisma.incidentWarRoom.findFirst({ where: { id: roomId, incidentId: id }, select: { id: true, state: true, provider: true } });
+    const room = await prisma.incidentWarRoom.findFirst({ where: { id: roomId, incidentId: id }, select: { id: true, state: true } });
     if (!room) return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: 'War room not found.' }));
     if (room.state !== 'READY' && room.state !== 'CLOSING') return jsonError(new AppError({ code: 'VALIDATION_FAILED', userMessage: 'Only ready war rooms can refresh their command card.' }));
-    // Delegate via neutral participant projection where possible; engine project is per-room.
-    // Import the correct provider projection dynamically to avoid engine leakage in route.
-    let projectionVersion: number | null = null;
-    if (room.provider === 'MICROSOFT_TEAMS') {
-      const { requestMicrosoftTeamsWarRoomProjection } = await import('@/lib/war-room/providers/microsoft-teams/projection');
-      projectionVersion = await requestMicrosoftTeamsWarRoomProjection(room.id);
-    } else {
-      const { requestSlackWarRoomProjection } = await import('@/lib/war-room/providers/slack/projection');
-      projectionVersion = await requestSlackWarRoomProjection(room.id);
-    }
+    const { requestWarRoomProjectionNeutral } = await import('@/lib/war-room/engine');
+    const projectionVersion = await requestWarRoomProjectionNeutral(room.id);
     return jsonOk({ queued: projectionVersion !== null, projectionVersion });
   } catch (error) {
     return jsonError(isAppError(error) ? error : new AppError({ code: 'INTERNAL_ERROR', userMessage: 'Unable to refresh the war-room card.' }));

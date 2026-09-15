@@ -11,8 +11,6 @@ import {
 import { scheduleJob } from '@/lib/jobs/queue';
 import { WarRoomRetryableError } from '../../errors';
 
-type ResponderSource = 'ASSIGNEE' | 'WATCHER';
-
 function isRetryableMemberGraphCode(code: string): boolean {
   return code === 'RATE_LIMITED' || code === 'TRANSIENT_READ' || code === 'GRAPH_TOKEN_FAILED';
 }
@@ -40,68 +38,15 @@ async function validateParticipantSyncAuthority(room: {
 }
 
 /**
- * Projects responders into durable desired members. Identity resolution is
- * deliberately limited to verified ChatIdentityLink records: email and name
- * lookups would permit an unsafe cross-tenant membership change.
+ * Neutral projector wrapper. The durable desired-participant projection is
+ * owned solely by `participant-desired-state.ts` so provider #3 does not
+ * duplicate identity-resolution logic. This wrapper exists only for backwards
+ * compatibility with existing call sites; new code should import from
+ * `../../participant-desired-state` directly.
  */
 export async function projectMicrosoftTeamsWarRoomParticipants(warRoomId: string): Promise<void> {
-  const room = await prisma.incidentWarRoom.findUnique({
-    where: { id: warRoomId },
-    include: { incident: { select: { assigneeId: true, watchers: { select: { userId: true } } } } },
-  });
-  if (!room || room.provider !== 'MICROSOFT_TEAMS' || !room.providerTenantId) return;
-
-  const responders = new Map<string, ResponderSource>();
-  if (room.incident.assigneeId) responders.set(room.incident.assigneeId, 'ASSIGNEE');
-  for (const watcher of room.incident.watchers) if (!responders.has(watcher.userId)) responders.set(watcher.userId, 'WATCHER');
-  const userIds = [...responders.keys()];
-  const links = userIds.length === 0 ? [] : await prisma.chatIdentityLink.findMany({
-    where: { provider: 'MICROSOFT_TEAMS', providerTenantId: room.providerTenantId, revokedAt: null, userId: { in: userIds } },
-    select: { userId: true, providerUserId: true, providerObjectId: true },
-  });
-  const byUser = new Map(links.map(link => [link.userId, link]));
-  const now = new Date();
-
-  await prisma.$transaction(async tx => {
-    // Preserve historical rows but ensure removed responders are never synced.
-    // Bump desiredVersion so concurrent sync workers can detect the generation change.
-    if (userIds.length === 0) {
-      await tx.warRoomParticipant.updateMany({
-        where: { warRoomId, state: { in: ['DESIRED', 'PROCESSING', 'PENDING', 'PRESENT', 'FAILED'] } },
-        data: { state: 'REMOVED', desiredVersion: { increment: 1 }, lastSyncAt: now, lastError: null, lastErrorCode: null },
-      });
-    } else {
-      await tx.warRoomParticipant.updateMany({
-        where: { warRoomId, userId: { notIn: userIds }, state: { in: ['DESIRED', 'PROCESSING', 'PENDING', 'PRESENT', 'FAILED'] } },
-        data: { state: 'REMOVED', desiredVersion: { increment: 1 }, lastSyncAt: now, lastError: null, lastErrorCode: null },
-      });
-    }
-    for (const [userId, source] of responders) {
-      const link = byUser.get(userId);
-      const providerObjectId = link?.providerObjectId ?? link?.providerUserId ?? null;
-      const data = {
-        source,
-        providerUserId: link?.providerUserId ?? null,
-        providerObjectId,
-        state: link && providerObjectId ? 'DESIRED' as const : 'SKIPPED' as const,
-        lastError: link && providerObjectId ? null : 'IDENTITY_NOT_LINKED',
-        lastErrorCode: link && providerObjectId ? null : 'IDENTITY_NOT_LINKED',
-      };
-      const existing = await tx.warRoomParticipant.findFirst({ where: { warRoomId, userId } });
-      if (existing) {
-        // Only bump desiredVersion when desired state materially changes to avoid
-        // noisy generations. A repeated DESIRED projection without change keeps version.
-        const needsBump = existing.state !== data.state || existing.providerObjectId !== providerObjectId || existing.source !== source;
-        if (needsBump) {
-          await tx.warRoomParticipant.update({ where: { id: existing.id }, data: { ...data, desiredVersion: { increment: 1 } } });
-        } else {
-          await tx.warRoomParticipant.update({ where: { id: existing.id }, data });
-        }
-      } else {
-        await tx.warRoomParticipant.create({ data: { warRoomId, userId, ...data, desiredVersion: 1 } });
-      }
-    }
-  });
+  const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
+  await projectIncidentWarRoomParticipants(warRoomId);
 }
 
 async function persistParticipantOutcome(input: {
