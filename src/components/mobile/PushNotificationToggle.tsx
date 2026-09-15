@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, BellOff, CircleAlert, Send, Wrench } from 'lucide-react';
 import { Card } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
@@ -82,6 +83,7 @@ type PushStage =
   | 'UNSUBSCRIBE';
 
 export default function PushNotificationToggle() {
+  const router = useRouter();
   const [pushState, setPushState] = useState<PushState>('PERMISSION_REQUIRED');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -496,7 +498,7 @@ export default function PushNotificationToggle() {
               className="min-h-11"
               onClick={() => {
                 const callback = `${window.location.pathname}${window.location.search}`;
-                window.location.assign(appRoutes.login('mobile', callback));
+                router.push(appRoutes.login('mobile', callback));
               }}
             >
               Sign in

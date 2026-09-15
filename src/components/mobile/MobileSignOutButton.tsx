@@ -1,6 +1,7 @@
 'use client';
 
 import { signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export default function MobileSignOutButton({ icon, label, description }: Props) {
+  const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = async () => {
@@ -24,7 +26,7 @@ export default function MobileSignOutButton({ icon, label, description }: Props)
       await promiseWithTimeout(purgeBrowserAuthCaches(), 5_000).catch(() => {});
       await promiseWithTimeout(signOut({ callbackUrl }), 8_000);
     } catch {
-      window.location.assign(callbackUrl);
+      router.push(callbackUrl);
     } finally {
       setIsSigningOut(false);
     }

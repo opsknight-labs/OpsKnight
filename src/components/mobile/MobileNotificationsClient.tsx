@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { BellRing, CalendarClock, Check, Server } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 import MobileCachedDataNotice from '@/components/mobile/MobileCachedDataNotice';
@@ -79,6 +80,7 @@ function NotificationSkeleton() {
 }
 
 export default function MobileNotificationsClient() {
+  const router = useRouter();
   const { userTimeZone } = useTimezone();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -120,14 +122,15 @@ export default function MobileNotificationsClient() {
           { cache: 'no-store' },
           12_000
         );
-        if (response.status === 401) {
+        if (response?.status === 401) {
           if (typeof window !== 'undefined') {
             const callback = `${window.location.pathname}${window.location.search}`;
-            window.location.assign(appRoutes.login('mobile', callback));
+            router.push(appRoutes.login('mobile', callback));
           }
           return;
         }
-        if (!response.ok) throw new Error(`Notifications returned HTTP ${response.status}`);
+        if (!response?.ok)
+          throw new Error(`Notifications returned HTTP ${response?.status ?? 'error'}`);
         const data = (await response.json()) as NotificationResponse;
         setNotifications(data.notifications);
         setUnreadCount(data.unreadCount);
@@ -232,14 +235,14 @@ export default function MobileNotificationsClient() {
         },
         12_000
       );
-      if (response.status === 401) {
+      if (response?.status === 401) {
         if (typeof window !== 'undefined') {
           const callback = `${window.location.pathname}${window.location.search}`;
-          window.location.assign(appRoutes.login('mobile', callback));
+          router.push(appRoutes.login('mobile', callback));
         }
         return;
       }
-      if (!response.ok) throw new Error(`Mark-all returned HTTP ${response.status}`);
+      if (!response?.ok) throw new Error(`Mark-all returned HTTP ${response?.status ?? 'error'}`);
       if (navigator.onLine) void fetchNotifications(false);
     } catch (error) {
       setNotifications(previousNotifications);
@@ -286,14 +289,14 @@ export default function MobileNotificationsClient() {
         },
         12_000
       );
-      if (response.status === 401) {
+      if (response?.status === 401) {
         if (typeof window !== 'undefined') {
           const callback = `${window.location.pathname}${window.location.search}`;
-          window.location.assign(appRoutes.login('mobile', callback));
+          router.push(appRoutes.login('mobile', callback));
         }
         return;
       }
-      if (!response.ok) throw new Error(`Mark-read returned HTTP ${response.status}`);
+      if (!response?.ok) throw new Error(`Mark-read returned HTTP ${response?.status ?? 'error'}`);
     } catch (error) {
       setNotifications(previousNotifications);
       setUnreadCount(previousUnread);
