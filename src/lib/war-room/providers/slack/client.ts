@@ -216,23 +216,30 @@ export async function findSlackWarRoomForTerminalCleanup(
       // However if info returns invalid_auth / rate_limited, that IS lane-wide
       // unavailable — we cannot trust any negative result.
       if (!info.ok) {
-        const lower = (info.error ?? '').toLowerCase();
+        const lower = (info.error ?? '').toLowerCase().trim();
         if (lower.includes('rate_limited') || lower.includes('ratelimited') || lower.includes('429') || info.httpStatus === 429) {
           return { status: 'UNAVAILABLE', code: 'RATE_LIMITED', error: info.error };
         }
         if (['invalid_auth', 'account_inactive', 'token_revoked', 'not_authed'].some(k => lower.includes(k))) {
           return { status: 'UNAVAILABLE', code: 'AUTH_FAILED', error: info.error };
         }
-        if (info.transportFailure) {
-          // Single channel info transport failure is skipped — continue scan.
-          // Only abort if we never complete a full successful scan and find nothing:
-          // we track that we had at least one info transport failure so a
-          // NOT_FOUND verdict can be downgraded to UNAVAILABLE.
+        // Transport / 5xx at the info layer — we cannot prove the candidate is not the orphan
+        if (info.transportFailure || info.sideEffectAmbiguous || info.httpStatus === 429 || (info.httpStatus !== undefined && info.httpStatus >= 500 && info.httpStatus <= 599)) {
           markerScanSucceeded = false;
           continue;
         }
-        // channel_not_found / is_archived etc. just mean this channel row is stale — skip
-        continue;
+        // Only genuinely benign per-channel staleness is skippable. Everything else
+        // (missing_scope / restricted_action / permission / not_allowed / unknown
+        // provider error) must prevent an authoritative NOT_FOUND — either return
+        // UNAVAILABLE now or downgrade the eventual NOT_FOUND.
+        // This fixes the narrow hole where `missing_scope` on conversations.info
+        // was silently skipped, allowing a renamed orphan to leak as NOT_FOUND.
+        if (lower === 'channel_not_found' || lower === 'is_archived') {
+          continue;
+        }
+        // Permission / scope / unknown errors — classify as UNAVAILABLE so debt is kept.
+        // Reuse the same classifier that covers missing_scope / restricted_action / permission.
+        return classifySlackListError(info);
       }
       const topic = (info as unknown as { channel?: { topic?: { value?: string }; purpose?: { value?: string } } }).channel?.topic?.value ?? '';
       const purpose = (info as unknown as { channel?: { topic?: { value?: string }; purpose?: { value?: string } } }).channel?.purpose?.value ?? '';

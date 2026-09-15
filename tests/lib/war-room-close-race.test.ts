@@ -259,6 +259,22 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(client).toContain('classifySlackListError');
   });
 
+  it('Slack terminal helper strictly classifies conversations.info permission failures (not skippable)', () => {
+    const client = readFileSync('src/lib/war-room/providers/slack/client.ts', 'utf8');
+    // Only benign staleness is skippable; everything permission-related must prevent authoritative NOT_FOUND
+    expect(client).toContain("lower === 'channel_not_found'");
+    expect(client).toContain("lower === 'is_archived'");
+    // permission / missing_scope / restricted_action must be routed through classifier, not silently continued
+    expect(client).toContain('classifySlackListError(info)');
+    // the info block must not have a bare `continue;` after transport check that would swallow permission errors —
+    // the only continues after that point should be the channel_not_found / is_archived guard.
+    const infoBlockStart = client.indexOf('if (!info.ok) {');
+    const infoBlock = client.slice(infoBlockStart, infoBlockStart + 1500);
+    // must contain the permission comment and the classify call
+    expect(infoBlock).toContain('missing_scope');
+    expect(infoBlock.toLowerCase()).toContain('permission');
+  });
+
   it('archiveExternalSlackRoom resolves orphan by marker when providerChannelId is null (CLOSING debt)', () => {
     const lifecycle = readFileSync('src/lib/war-room/providers/slack/lifecycle.ts', 'utf8');
     expect(lifecycle).toContain('findSlackChannelByMarker');
