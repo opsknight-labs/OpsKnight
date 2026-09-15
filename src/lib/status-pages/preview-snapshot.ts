@@ -193,6 +193,10 @@ export function buildPreviewSnapshot(input: {
             },
           };
 
+          const showMetricsAllowed = input.showMetrics !== false && allow('showServiceMetrics');
+          const showHistoryAllowed =
+            input.showUptimeHistory !== false && allow('showUptimeHistory');
+
           return {
             id: service.id,
             name: visible.get(service.id)?.displayName || service.name,
@@ -213,8 +217,8 @@ export function buildPreviewSnapshot(input: {
               : {}),
             status,
             activeIncidentCount: impact?.count ?? (service as any).activeIncidentCount ?? 0,
-            uptime: serviceUptime,
-            history: serviceHistory,
+            ...(showMetricsAllowed ? { uptime: serviceUptime } : {}),
+            ...(showHistoryAllowed ? { history: serviceHistory } : {}),
           };
         })
     : [];
@@ -385,11 +389,11 @@ export function buildPreviewSnapshot(input: {
       visibility: {
         services: input.showServices,
         incidents: input.showIncidents,
-        metrics: input.showMetrics !== false,
+        metrics: input.showMetrics !== false && allow('showServiceMetrics'),
         uptime:
-          input.showMetrics !== false &&
-          input.showUptimeHistory !== false &&
-          allow('showServiceMetrics'),
+          (input.showMetrics !== false && allow('showServiceMetrics')) ||
+          (input.showUptimeHistory !== false && allow('showUptimeHistory')),
+        uptimeHistory: input.showUptimeHistory !== false && allow('showUptimeHistory'),
         regions:
           input.showServices && input.showServiceRegions !== false && allow('showServiceRegions'),
         changelog: input.showChangelog !== false,

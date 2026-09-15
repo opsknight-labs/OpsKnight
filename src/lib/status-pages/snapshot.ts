@@ -149,7 +149,7 @@ export async function buildStatusPageSnapshot(
       take: STATUS_PAGE_DISPLAY_FEED_LIMIT,
       select: DISPLAY_FEED_SELECT,
     });
-  const needsHistory = visibility.showUptime;
+  const needsHistory = visibility.showUptimeHistory;
   const maintenanceSelect = { startDate: true, endDate: true, affectedServiceIds: true } as const;
   const currentMaintenanceWhere = {
     statusPageId: pageId,
@@ -365,7 +365,7 @@ export async function buildStatusPageSnapshot(
       : null;
     const uptime30Percentage = availability30?.percentage ?? null;
     const uptime90Percentage = availability90?.percentage ?? null;
-    const uptime90Grade = visibility.showUptime
+    const uptime90Grade = visibility.showMetrics
       ? publicUptimeGrade(uptime90Percentage, gradeThresholds)
       : undefined;
     const slaTier = visibility.showServiceSlaTier ? mapping.service.slaTier : null;
@@ -388,7 +388,7 @@ export async function buildStatusPageSnapshot(
       status,
       ...(statusSince ? { statusSince } : {}),
       activeIncidentCount: impactByService.get(mapping.serviceId) ?? 0,
-      ...(visibility.showUptime
+      ...(visibility.showMetrics
         ? {
             uptime: {
               days30: {
@@ -414,9 +414,9 @@ export async function buildStatusPageSnapshot(
                 ...(uptime90Grade ? { grade: uptime90Grade } : {}),
               },
             },
-            history,
           }
         : {}),
+      ...(visibility.showUptimeHistory && history ? { history } : {}),
     };
   });
 
@@ -576,6 +576,7 @@ export async function buildStatusPageSnapshot(
         incidents: visibility.showIncidents,
         metrics: page.showMetrics,
         uptime: visibility.showUptime,
+        uptimeHistory: visibility.showUptimeHistory,
         regions: visibility.showServices && page.showServiceRegions,
         changelog: page.showChangelog,
         subscribe: page.showSubscribe,

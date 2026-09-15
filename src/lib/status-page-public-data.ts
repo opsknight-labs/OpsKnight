@@ -34,13 +34,15 @@ export type StatusPagePublicSettings = {
 
 export function publicStatusVisibility(settings: StatusPagePublicSettings) {
   const showIncidents = settings.showIncidents && settings.showRecentIncidents !== false;
-  const showMetrics = settings.showMetrics && settings.showServiceMetrics !== false;
+  const showMetrics = settings.showMetrics !== false && settings.showServiceMetrics !== false;
+  const showUptimeHistory = settings.showUptimeHistory !== false;
 
   return {
     showServices: settings.showServices,
     showIncidents,
     showMetrics,
-    showUptime: showMetrics && settings.showUptimeHistory,
+    showUptimeHistory,
+    showUptime: showMetrics || showUptimeHistory,
     showServiceRegion: settings.showServices && settings.showServiceRegions,
     showServiceSlaTier: settings.showServices && settings.showServiceSlaTier,
     // Team identity is sensitive — both toggles must agree to disclose. OR would leak when either is off.

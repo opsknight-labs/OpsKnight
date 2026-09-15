@@ -91,11 +91,15 @@ function ServiceHistoryV3Inner({
   timeZone,
   showGrade = true,
   showUptimeInline = true,
+  showHistoryBars = true,
+  showSlaMetrics = true,
 }: {
   service: PublicStatusService;
   timeZone: string;
   showGrade?: boolean;
   showUptimeInline?: boolean;
+  showHistoryBars?: boolean;
+  showSlaMetrics?: boolean;
 }) {
   const days = useMemo(
     () => (service.history ? buildPublicHistoryDays(service.history, timeZone) : []),
@@ -142,7 +146,9 @@ function ServiceHistoryV3Inner({
 
   const hasUptime = Boolean(service.uptime?.days30 || service.uptime?.days90);
   const hasDays = days.length > 0;
-  if (!hasDays && !(showUptimeInline && hasUptime)) return null;
+  const canShowHistory = showHistoryBars && hasDays;
+  const canShowMetrics = showUptimeInline && hasUptime;
+  if (!canShowHistory && !canShowMetrics) return null;
 
   const uptime30 = describeUptimeWindow(service.uptime?.days30);
   const uptime90 = describeUptimeWindow(service.uptime?.days90);
@@ -161,7 +167,7 @@ function ServiceHistoryV3Inner({
 
   return (
     <div className="status-v3-uptime" ref={ref}>
-      {showUptimeInline && hasDays ? (
+      {canShowMetrics ? (
         <div className="status-v3-uptime__head">
           <span className="status-v3-uptime__value">
             {uptime90.value}
@@ -173,7 +179,7 @@ function ServiceHistoryV3Inner({
         </div>
       ) : null}
 
-      {hasDays && (
+      {canShowHistory && (
         <>
           <svg
             className="status-v3-history"
@@ -411,7 +417,7 @@ function ServiceHistoryV3Inner({
         </div>
       )}
 
-      {showUptimeInline && hasUptime ? (
+      {canShowMetrics && showSlaMetrics ? (
         <div
           className="status-v3-uptime-metrics-inline"
           role="group"

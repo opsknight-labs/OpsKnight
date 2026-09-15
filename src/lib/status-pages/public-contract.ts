@@ -156,6 +156,7 @@ export interface PublicStatusBranding {
   refreshInterval?: number;
   showApiLink?: boolean;
   showRssLink?: boolean;
+  showSlaMetrics?: boolean;
 }
 
 /** Chrome and layout that the public renderer reads; kept in sync with branding. */
@@ -167,6 +168,7 @@ export interface PublicPagePresentation {
   refreshInterval?: number;
   showApiLink?: boolean;
   showRssLink?: boolean;
+  showSlaMetrics?: boolean;
 }
 
 /** What this page's engine supports, independent of what the admin chose to show. */
@@ -288,6 +290,7 @@ export interface PublicStatusPageSnapshot {
       incidents: boolean;
       metrics: boolean;
       uptime: boolean;
+      uptimeHistory?: boolean;
       regions: boolean;
       changelog: boolean;
       subscribe: boolean;

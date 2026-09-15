@@ -482,4 +482,129 @@ describe('StatusPageV3', () => {
     );
     expect(document.querySelector('.status-page-header')).toBeInTheDocument();
   });
+
+  it('renders service metrics and uptime history independently', () => {
+    const serviceWithData: PublicStatusService = {
+      ...service({ id: 'svc-data', name: 'Billing Service' }),
+      uptime: {
+        days30: {
+          percentage: 99.8,
+          incidentCount: 0,
+          measuredDays: 30,
+          complete: true,
+          grade: 'EXCELLENT',
+        },
+        days90: {
+          percentage: 99.9,
+          incidentCount: 0,
+          measuredDays: 90,
+          complete: true,
+          grade: 'EXCELLENT',
+        },
+      },
+      history: {
+        rangeStart: '2026-06-11T18:00:00.000Z',
+        rangeEnd: '2026-09-09T18:00:00.000Z',
+        coverage: 'COMPLETE',
+        segments: [],
+      },
+    };
+
+    // Case 1: History enabled, metrics disabled
+    const { unmount: unmount1 } = render(
+      <StatusPageV3
+        snapshot={snapshotOf([serviceWithData], {
+          page: {
+            ...snapshotOf([serviceWithData]).page,
+            visibility: {
+              services: true,
+              incidents: true,
+              metrics: false,
+              uptime: true,
+              uptimeHistory: true,
+              regions: true,
+              changelog: true,
+              subscribe: true,
+            },
+          },
+        })}
+      />
+    );
+    expect(document.querySelector('.status-v3-history')).toBeInTheDocument();
+    expect(document.querySelector('.status-v3-uptime__head')).not.toBeInTheDocument();
+    expect(document.querySelector('.status-v3-uptime-metrics-inline')).not.toBeInTheDocument();
+    unmount1();
+
+    // Case 2: Metrics enabled, history disabled
+    const { unmount: unmount2 } = render(
+      <StatusPageV3
+        snapshot={snapshotOf([serviceWithData], {
+          page: {
+            ...snapshotOf([serviceWithData]).page,
+            visibility: {
+              services: true,
+              incidents: true,
+              metrics: true,
+              uptime: true,
+              uptimeHistory: false,
+              regions: true,
+              changelog: true,
+              subscribe: true,
+            },
+          },
+        })}
+      />
+    );
+    expect(document.querySelector('.status-v3-history')).not.toBeInTheDocument();
+    expect(document.querySelector('.status-v3-uptime__head')).toBeInTheDocument();
+    expect(document.querySelector('.status-v3-uptime-metrics-inline')).toBeInTheDocument();
+    unmount2();
+
+    // Case 3: Metrics enabled with showSlaMetrics = false (hides 30-90 SLA meters)
+    const { unmount: unmount3 } = render(
+      <StatusPageV3
+        snapshot={snapshotOf([serviceWithData], {
+          page: {
+            ...snapshotOf([serviceWithData]).page,
+            presentation: { showSlaMetrics: false },
+            visibility: {
+              services: true,
+              incidents: true,
+              metrics: true,
+              uptime: true,
+              uptimeHistory: true,
+              regions: true,
+              changelog: true,
+              subscribe: true,
+            },
+          },
+        })}
+      />
+    );
+    expect(document.querySelector('.status-v3-history')).toBeInTheDocument();
+    expect(document.querySelector('.status-v3-uptime__head')).toBeInTheDocument();
+    expect(document.querySelector('.status-v3-uptime-metrics-inline')).not.toBeInTheDocument();
+    unmount3();
+  });
+
+  it('renders uptime report download links in footer when enableUptimeExports is true', () => {
+    render(
+      <StatusPageV3
+        snapshot={snapshotOf([service()], {
+          page: {
+            ...snapshotOf([service()]).page,
+            enableUptimeExports: true,
+            presentation: { showFooter: true },
+          },
+        })}
+      />
+    );
+
+    const csvLink = screen.getByRole('link', { name: /uptime csv/i });
+    const pdfLink = screen.getByRole('link', { name: /uptime pdf/i });
+    expect(csvLink).toBeInTheDocument();
+    expect(pdfLink).toBeInTheDocument();
+    expect(csvLink).toHaveAttribute('href', expect.stringContaining('format=csv'));
+    expect(pdfLink).toHaveAttribute('href', expect.stringContaining('format=pdf'));
+  });
 });
