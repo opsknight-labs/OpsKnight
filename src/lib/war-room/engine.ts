@@ -54,12 +54,19 @@ export async function reconcileWarRoom(warRoomId: string): Promise<void> {
 // ── Neutral lifecycle operations (routes must not branch on provider) ──
 
 /** Ensure a marker-only reconciliation (WAR_ROOM_PROVISION) exists for this room. */
-async function ensureWarRoomReconciliationJob(warRoomId: string, provisioningToken: string): Promise<void> {
+export async function ensureWarRoomReconciliationJob(warRoomId: string, provisioningToken: string): Promise<void> {
+  // Token + flag aware dedupe: only suppress when an identical reconciliationOnly
+  // job for this warRoomId+token already exists. A stale generic WAR_ROOM_PROVISION
+  // or a different token must not swallow the durable handoff.
   const existing = await prisma.backgroundJob.findFirst({
     where: {
       type: 'WAR_ROOM_PROVISION',
       status: { in: ['PENDING', 'PROCESSING'] },
-      payload: { path: ['warRoomId'], equals: warRoomId },
+      AND: [
+        { payload: { path: ['warRoomId'], equals: warRoomId } },
+        { payload: { path: ['provisioningToken'], equals: provisioningToken } },
+        { payload: { path: ['reconciliationOnly'], equals: true } },
+      ],
     },
     select: { id: true },
   });
@@ -119,31 +126,77 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
   }
   const existingClose = await prisma.backgroundJob.findFirst({
     where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
-    select: { id: true },
-  });
-  const existingProj = await prisma.backgroundJob.findFirst({
-    where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
     select: { id: true, payload: true },
   });
-  // If close job already exists, ensure a project job for the terminal version also exists
+  // If close job already exists, ensure a project job for the EXACT terminal version also exists
   // (except when create is unresolved and window still live — terminal projection would mark DEGRADED anyway).
+  // Invariant: WAR_ROOM_CLOSE target=N → lastProjectedVersion>=N OR active WAR_ROOM_PROJECT(N) exists (exact N, not any).
   if (existingClose) {
     const liveUnresolved = createUnresolved && !reconciliationExpired;
-    if (!existingProj && !liveUnresolved) {
+    if (liveUnresolved) return;
+    const rawPayload = existingClose.payload as unknown as { terminalProjectionVersion?: number } | null;
+    const terminalVersion: number | null = typeof rawPayload?.terminalProjectionVersion === 'number' ? rawPayload.terminalProjectionVersion : null;
+    const lastProjected = room.lastProjectedVersion ?? 0;
+    if (terminalVersion != null) {
+      if (lastProjected >= terminalVersion) return; // already satisfied
+      const existingExactProj = await prisma.backgroundJob.findFirst({
+        where: {
+          type: 'WAR_ROOM_PROJECT',
+          status: { in: ['PENDING', 'PROCESSING'] },
+          AND: [
+            { payload: { path: ['warRoomId'], equals: warRoomId } },
+            { payload: { path: ['projectionVersion'], equals: terminalVersion } },
+          ],
+        },
+        select: { id: true },
+      });
+      if (existingExactProj) return;
       await prisma.$transaction(async tx => {
-        const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true } });
+        const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true } });
         if (!fresh || fresh.state !== 'CLOSING') return;
+        const stillExact = await tx.backgroundJob.findFirst({
+          where: {
+            type: 'WAR_ROOM_PROJECT',
+            status: { in: ['PENDING', 'PROCESSING'] },
+            AND: [
+              { payload: { path: ['warRoomId'], equals: warRoomId } },
+              { payload: { path: ['projectionVersion'], equals: terminalVersion } },
+            ],
+          },
+          select: { id: true },
+        });
+        if (stillExact) return;
         await tx.backgroundJob.create({
           data: {
             type: 'WAR_ROOM_PROJECT',
             status: 'PENDING',
             scheduledAt: new Date(),
             maxAttempts: 5,
-            payload: { warRoomId, projectionVersion: fresh.projectionVersion } as unknown as never,
+            payload: { warRoomId, projectionVersion: terminalVersion } as unknown as never,
           },
         });
-      }).catch(() => {});
+      });
+      return;
     }
+    // Legacy close without terminalProjectionVersion — fall back to any active project check
+    const existingAnyProj = await prisma.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      select: { id: true },
+    });
+    if (existingAnyProj) return;
+    await prisma.$transaction(async tx => {
+      const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true } });
+      if (!fresh || fresh.state !== 'CLOSING') return;
+      await tx.backgroundJob.create({
+        data: {
+          type: 'WAR_ROOM_PROJECT',
+          status: 'PENDING',
+          scheduledAt: new Date(),
+          maxAttempts: 5,
+          payload: { warRoomId, projectionVersion: fresh.projectionVersion } as unknown as never,
+        },
+      });
+    });
     return;
   }
   // No close job — need to (re)create terminal projection + close atomically.
@@ -192,7 +245,7 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
         payload: { warRoomId, incidentId, closeGeneration: Date.now(), terminalProjectionVersion: terminal } as unknown as never,
       },
     });
-  }).catch(() => {});
+  });
 }
 
 /**
@@ -468,10 +521,17 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
         throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
       }
       // Lease cleared but still behind — either projection job is still pending or it was terminally settled as DEGRADED.
-      // If a WAR_ROOM_PROJECT job for this room is still PENDING/PROCESSING, retry budget-neutral.
-      // If no such job remains (exhausted / failed), fall through to degraded-close fallback (archive anyway / CLOSED + DEGRADED audit) instead of infinite retry.
+      // If a WAR_ROOM_PROJECT job for the EXACT expected terminal version is still PENDING/PROCESSING, retry budget-neutral.
+      // If no such version-specific job remains (exhausted / failed), fall through to degraded-close fallback.
       const hasPendingProjectJob = await prisma.backgroundJob.findFirst({
-        where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+        where: {
+          type: 'WAR_ROOM_PROJECT',
+          status: { in: ['PENDING', 'PROCESSING'] },
+          AND: [
+            { payload: { path: ['warRoomId'], equals: warRoomId } },
+            { payload: { path: ['projectionVersion'], equals: expectedTerminalProjectionVersion } },
+          ],
+        },
         select: { id: true },
       });
       if (hasPendingProjectJob) {
@@ -569,6 +629,183 @@ export async function abandonAmbiguousWarRoomCardNeutral(incidentId: string, war
     ? 'Ambiguous Slack card abandoned. A duplicate card may still exist; delete it manually if so.'
     : 'Ambiguous card abandoned. A duplicate card may still exist in the Teams channel; delete it manually if so.';
   return { abandoned: true, warning };
+}
+
+/**
+ * Low-frequency repair sweep for CLOSING rooms that lost their terminal jobs
+ * (crash between CLOSING and job creation, or job table GC).
+ *
+ * Orphan-selective + fair: paginates over CLOSING in closeRequestedAt order and
+ * only repairs rooms that are actually missing required jobs. The previous
+ * `take:20` over all CLOSING starved an orphan at position 21 when the first
+ * 20 already had healthy WAR_ROOM_CLOSE jobs — this scan continues until
+ * `limit` orphans are repaired or the table is exhausted.
+ *
+ * Orphan criteria (per room, mirroring repairWarRoomCloseJobs):
+ *  - CLOSING + unresolved create (createAttemptedAt && !providerChannelId && provisioningToken)
+ *    and window live but no reconciliationOnly job → orphan
+ *  - CLOSING + identity resolved and no active WAR_ROOM_CLOSE → orphan
+ *  - CLOSING + WAR_ROOM_CLOSE exists but terminal version not yet satisfied
+ *    (lastProjectedVersion < terminal) and no exact WAR_ROOM_PROJECT(terminal) → orphan
+ */
+async function isClosingOrphan(warRoomId: string): Promise<boolean> {
+  const closeRow = await prisma.backgroundJob.findFirst({
+    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    select: { payload: true },
+  });
+  if (!closeRow) return true; // missing close — orphan (or live-unresolved no-close, repairWarRoomCloseJobs will decide)
+  const raw = closeRow.payload as unknown as { terminalProjectionVersion?: number } | null;
+  const terminal = typeof raw?.terminalProjectionVersion === 'number' ? raw.terminalProjectionVersion : null;
+  if (terminal == null) {
+    // Legacy close without version — any active project suffices
+    const anyProj = await prisma.backgroundJob.findFirst({
+      where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      select: { id: true },
+    });
+    return !anyProj ? true : false; // if a project exists, may still need deeper check but treat as non-orphan for sweep
+  }
+  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { lastProjectedVersion: true } });
+  const lastProjected = room?.lastProjectedVersion ?? 0;
+  if (lastProjected >= terminal) return false; // already satisfied
+  const exactProj = await prisma.backgroundJob.findFirst({
+    where: {
+      type: 'WAR_ROOM_PROJECT',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      AND: [
+        { payload: { path: ['warRoomId'], equals: warRoomId } },
+        { payload: { path: ['projectionVersion'], equals: terminal } },
+      ],
+    },
+    select: { id: true },
+  });
+  return !exactProj;
+}
+
+async function isReconciliationOrphan(warRoomId: string): Promise<boolean> {
+  const room = await prisma.incidentWarRoom.findUnique({
+    where: { id: warRoomId },
+    select: { createAttemptedAt: true, providerChannelId: true, provisioningToken: true },
+  });
+  if (!room) return false;
+  const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
+  const expired = isClosingReconciliationExpired(room.createAttemptedAt);
+  if (!createUnresolved || expired) return false;
+  const recon = await prisma.backgroundJob.findFirst({
+    where: {
+      type: 'WAR_ROOM_PROVISION',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      AND: [
+        { payload: { path: ['warRoomId'], equals: warRoomId } },
+        { payload: { path: ['provisioningToken'], equals: room.provisioningToken! } },
+        { payload: { path: ['reconciliationOnly'], equals: true } },
+      ],
+    },
+    select: { id: true },
+  });
+  return !recon;
+}
+
+export async function repairOrphanedClosingWarRooms(limit = 20): Promise<{ checked: number; repaired: number }> {
+  const cap = Math.max(1, Math.min(limit, 100));
+  const pageSize = 50;
+  const maxPages = 10;
+  let cursor: string | undefined;
+  let checked = 0;
+  let repaired = 0;
+  let pages = 0;
+
+  while (repaired < cap && pages < maxPages) {
+    const batch = await prisma.incidentWarRoom.findMany({
+      where: { state: 'CLOSING' },
+      orderBy: [{ closeRequestedAt: 'asc' }, { id: 'asc' }],
+      take: pageSize,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: { id: true, incidentId: true },
+    });
+    if (batch.length === 0) break;
+    pages++;
+    checked += batch.length;
+
+    for (const room of batch) {
+      if (repaired >= cap) break;
+      // Determine if this specific room is an orphan before invoking repair
+      const [closingOrphan, reconOrphan] = await Promise.all([isClosingOrphan(room.id), isReconciliationOrphan(room.id)]);
+      if (!closingOrphan && !reconOrphan) continue;
+
+      const beforeClose = await prisma.backgroundJob.findFirst({
+        where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+        select: { id: true },
+      });
+      const beforeRecon = reconOrphan
+        ? null
+        : await prisma.backgroundJob.findFirst({
+            where: {
+              type: 'WAR_ROOM_PROVISION',
+              status: { in: ['PENDING', 'PROCESSING'] },
+              AND: [
+                { payload: { path: ['warRoomId'], equals: room.id } },
+                { payload: { path: ['reconciliationOnly'], equals: true } },
+              ],
+            },
+            select: { id: true },
+          });
+
+      // Let failures propagate — the cron tick will retry next cycle.
+      await repairWarRoomCloseJobs(room.id, room.incidentId);
+
+      const afterClose = await prisma.backgroundJob.findFirst({
+        where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+        select: { id: true },
+      });
+      const afterRecon = await prisma.backgroundJob.findFirst({
+        where: {
+          type: 'WAR_ROOM_PROVISION',
+          status: { in: ['PENDING', 'PROCESSING'] },
+          AND: [
+            { payload: { path: ['warRoomId'], equals: room.id } },
+            { payload: { path: ['reconciliationOnly'], equals: true } },
+          ],
+        },
+        select: { id: true },
+      });
+
+      const closeRepaired = !beforeClose && !!afterClose;
+      const reconRepaired = !beforeRecon && !!afterRecon;
+      // Also count exact-version project repair as a repair event
+      let projectRepaired = false;
+      if (beforeClose && afterClose && !reconRepaired) {
+        const closeRow = await prisma.backgroundJob.findFirst({
+          where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+          select: { payload: true },
+        });
+        const raw = closeRow?.payload as unknown as { terminalProjectionVersion?: number } | null;
+        const terminal = typeof raw?.terminalProjectionVersion === 'number' ? raw.terminalProjectionVersion : null;
+        if (terminal != null) {
+          // If before we had no exact project and now we do, that is a repair
+          // We already know isClosingOrphan was true, so after should have exact project
+          const exactNow = await prisma.backgroundJob.findFirst({
+            where: {
+              type: 'WAR_ROOM_PROJECT',
+              status: { in: ['PENDING', 'PROCESSING'] },
+              AND: [
+                { payload: { path: ['warRoomId'], equals: room.id } },
+                { payload: { path: ['projectionVersion'], equals: terminal } },
+              ],
+            },
+            select: { id: true },
+          });
+          if (exactNow) projectRepaired = true;
+        }
+      }
+
+      if (closeRepaired || reconRepaired || projectRepaired) repaired++;
+    }
+
+    if (batch.length < pageSize) break;
+    cursor = batch[batch.length - 1]!.id;
+  }
+
+  return { checked, repaired };
 }
 
 export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): Promise<void> {

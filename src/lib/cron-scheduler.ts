@@ -367,6 +367,15 @@ async function runOnce() {
     } catch (error) {
       logger.warn('[Cron] Terminal war-room drift sweep failed', { error: error instanceof Error ? error.message : String(error) });
     }
+    // CLOSING orphan repair: re-ensures terminal projection+close jobs for rooms
+    // that crashed between CLOSING and job durability. Failures propagate — next tick retries.
+    let warRoomClosingRepair: { checked: number; repaired: number } | null = null;
+    try {
+      const { repairOrphanedClosingWarRooms } = await import('./war-room/engine');
+      warRoomClosingRepair = await repairOrphanedClosingWarRooms(20);
+    } catch (error) {
+      logger.warn('[Cron] War-room CLOSING orphan repair failed', { error: error instanceof Error ? error.message : String(error) });
+    }
 
     logger.info('[Cron] Critical tasks processed', {
       escalations: { processed: escalationResult.processed, total: escalationResult.total },
@@ -377,6 +386,7 @@ async function runOnce() {
       statusPageRouteReconciliation,
       warRoomHealth,
       warRoomTerminalDrift,
+      warRoomClosingRepair,
     });
 
     // Group 2: Secondary tasks (can run in parallel)

@@ -58,22 +58,25 @@ export async function reconcileWarRoomHealth(limit = 40): Promise<{
 /**
  * Enqueue a single-room reconciliation job.
  * Used by the war-room detail view and AMBIGUOUS recovery.
+ * Splits READY (health check → WAR_ROOM_RECONCILE) vs AMBIGUOUS
+ * (marker/planned-name adoption → WAR_ROOM_PROVISION reconciliationOnly).
  */
 export async function requestWarRoomReconciliation(warRoomId: string): Promise<boolean> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
-    select: { id: true, state: true },
+    select: { id: true, state: true, provisioningToken: true, createAttemptedAt: true },
   });
   if (!room) return false;
-  // Permit reconciliation for READY and AMBIGUOUS — READY verifies health,
-  // AMBIGUOUS re-enters the marker/name reconciliation path via provision.
-  if (!['READY', 'AMBIGUOUS'].includes(room.state)) return false;
-
   const { scheduleJob } = await import('@/lib/jobs/queue');
-  await scheduleJob('WAR_ROOM_RECONCILE', new Date(), { warRoomId }, 3);
-  addOperationalMetric('opsknight_war_room_reconciliation_total', 1, {
-    provider: 'ALL',
-    result: 'queued',
-  });
-  return true;
+  if (room.state === 'READY') {
+    await scheduleJob('WAR_ROOM_RECONCILE', new Date(), { warRoomId }, 3);
+    addOperationalMetric('opsknight_war_room_reconciliation_total', 1, { provider: 'ALL', result: 'queued' });
+    return true;
+  }
+  if (room.state === 'AMBIGUOUS' && room.createAttemptedAt && room.provisioningToken) {
+    await scheduleJob('WAR_ROOM_PROVISION', new Date(), { warRoomId, provisioningToken: room.provisioningToken, reconciliationOnly: true } as unknown as Record<string, unknown>, 3);
+    addOperationalMetric('opsknight_war_room_reconciliation_total', 1, { provider: 'ALL', result: 'queued' });
+    return true;
+  }
+  return false;
 }

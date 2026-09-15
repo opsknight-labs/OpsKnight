@@ -125,13 +125,14 @@ describe('war-room generation lifecycle', () => {
     );
   });
 
-  it('adopts an in-flight channel as CLOSED when resolution wins the race', async () => {
+  it('adopts an in-flight channel as CLOSING when resolution wins the race (never direct CLOSED)', async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const tx = {
       incidentWarRoom: {
         findUnique: vi.fn().mockResolvedValue({
           state: 'AMBIGUOUS',
           provisioningToken: 'reconcile-lease',
+          closeRequestedAt: null,
           incident: { status: 'RESOLVED' },
         }),
         updateMany,
@@ -147,18 +148,19 @@ describe('war-room generation lifecycle', () => {
         channelId: 'channel-1',
         channelName: 'incident-room',
       })
-    ).resolves.toBe('CLOSED');
+    ).resolves.toBe('CLOSING');
 
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          state: 'CLOSED',
+          state: 'CLOSING',
           providerChannelId: 'channel-1',
           provisioningToken: null,
         }),
       })
     );
     expect(updateMany.mock.calls[0][0].data.closedAt).toBeInstanceOf(Date);
+    expect(updateMany.mock.calls[0][0].data.closeRequestedAt).toBeInstanceOf(Date);
   });
 
   it('refuses final adoption after a resolve or retry has already fenced the lease', async () => {
