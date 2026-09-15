@@ -27,7 +27,7 @@ const expectedSlackRequestSkips = new Set([
   'PRIVATE_DOWNGRADE_DENIED',
 ]);
 
-async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deliveryId?: string; idempotencyKey?: string }) {
+async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deliveryId?: string; deliveryLeaseToken?: string; idempotencyKey?: string }) {
   if (event.kind === 'TRIGGER' || event.kind === 'ENSURE') {
     const { requestSlackWarRoom } = await import('./provision');
     const result = await requestSlackWarRoom(event.incidentId, {
@@ -41,7 +41,7 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
 
   const lifecycle = await import('./lifecycle');
   const deliveryId = context?.deliveryId ?? null;
-  const deliveryLeaseToken: string | null = null; // validated by engine claim; passed through when available
+  const deliveryLeaseToken = context?.deliveryLeaseToken ?? null;
   let stageApi: typeof import('../../delivery') | null = null;
   if (deliveryId) {
     try { stageApi = await import('../../delivery'); } catch {}
@@ -50,57 +50,70 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
     if (!deliveryId || !stageApi) return false;
     try { return await stageApi.stageAlreadyCompleted(deliveryId, stage); } catch { return false; }
   };
+  const stageIsAmbiguous = async (stage: string) => {
+    if (!deliveryId || !stageApi) return false;
+    try {
+      const s = await stageApi.getWarRoomStage(deliveryId, stage);
+      return s?.status === 'AMBIGUOUS';
+    } catch { return false; }
+  };
   // Fenced execution: begin stage atomically → call provider → COMPLETED | AMBIGUOUS | FAILED.
-  // If process dies between provider call and DB completion, next worker sees ATTEMPTING/AMBIGUOUS and does not blind re-post.
+  // If fencing DB is down we fail-closed (do not call provider). Stale ATTEMPTING that never
+  // completed is treated as AMBIGUOUS — never re-posted blindly.
   const runFencedStage = async (
     stage: string,
-    providerCall: () => Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean }>
+    providerCall: () => Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean; transportFailure?: boolean; httpStatus?: number }>
   ): Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean } | { __fenced: true } | { __ambiguous: true; error: string }> => {
     if (!deliveryId || !stageApi) {
       return providerCall();
     }
     if (await stageCompleted(stage)) return { success: true };
-    // Pre-flight lease check
-    try {
+    if (await stageIsAmbiguous(stage)) return { __ambiguous: true, error: 'Stage is ambiguous; reconciling before retry.' } as const;
+    // Pre-flight lease check — fail-closed if DB unavailable (throw retryable)
+    if (deliveryLeaseToken) {
       const { validateDeliveryLease } = await import('../../delivery');
-      // Only validate if engine passed the lease token via delivery; otherwise rely on stage fencing alone.
-      if (deliveryLeaseToken) {
-        const ok = await validateDeliveryLease(deliveryId, deliveryLeaseToken);
-        if (!ok) return { __fenced: true } as const;
-      }
-    } catch {}
-    // Try to claim stage attempt (PENDING → ATTEMPTING)
-    try {
-      const claimed = await stageApi.claimWarRoomStageAttempt(deliveryId, stage, deliveryLeaseToken ?? undefined);
-      if (!claimed.claimed) {
-        // Already COMPLETED/SKIPPED/AMBIGUOUS by another worker
-        const isCompleted = await stageApi.stageAlreadyCompleted(deliveryId, stage);
-        if (isCompleted) return { success: true };
-        return { __fenced: true } as const;
-      }
-    } catch (e) {
-      if ((e as Error).name === 'WarRoomRetryableError') throw e;
-      // fall through to provider call if fencing is unavailable
+      let ok: boolean;
+      try { ok = await validateDeliveryLease(deliveryId, deliveryLeaseToken); } catch (e) { throw e; }
+      if (!ok) return { __fenced: true } as const;
     }
+    // Atomically claim stage — fail-closed on DB error (do not fall through to providerCall)
+    let claimed: { claimed: boolean; operationId: string; stageLeaseToken: string };
+    try {
+      claimed = await stageApi.claimWarRoomStageAttempt(deliveryId, stage, deliveryLeaseToken ?? undefined);
+    } catch (e) {
+      throw e;
+    }
+    if (!claimed.claimed) {
+      const isCompleted = await stageApi.stageAlreadyCompleted(deliveryId, stage);
+      if (isCompleted) return { success: true };
+      if (await stageIsAmbiguous(stage)) return { __ambiguous: true, error: 'Stage is ambiguous; reconciling before retry.' } as const;
+      return { __fenced: true } as const;
+    }
+    const { operationId, stageLeaseToken } = claimed;
     // Perform provider operation once
     const res = await providerCall();
-    // Validate lease freshness before committing outcome
+    // Ambiguous transport (timeout/network) — settlement must be considered successful side-effect, never retried blindly
+    const ambiguousTransport = res.sideEffectAmbiguous || res.transportFailure || (res.httpStatus != null && res.httpStatus >= 500 && !res.success);
+    // Validate lease freshness before committing outcome — stale worker must not settle
     if (deliveryLeaseToken) {
       try {
         const { validateDeliveryLease } = await import('../../delivery');
         const stillValid = await validateDeliveryLease(deliveryId, deliveryLeaseToken);
-        if (!stillValid) return { __fenced: true } as const;
+        if (!stillValid) {
+          try { await stageApi.markStageAmbiguous(deliveryId, stage, 'Delivery lease lost after provider call; treating stage as ambiguous.', operationId, stageLeaseToken); } catch {}
+          return { __fenced: true } as const;
+        }
       } catch {}
     }
     if (res.success) {
-      try { await stageApi.completeWarRoomStage(deliveryId, stage, deliveryLeaseToken ?? undefined); } catch {}
+      try { await stageApi.completeWarRoomStage(deliveryId, stage, deliveryLeaseToken ?? undefined, operationId, stageLeaseToken); } catch {}
       return res;
     }
-    if (res.sideEffectAmbiguous) {
-      try { await stageApi.markStageAmbiguous(deliveryId, stage, res.error ?? 'ambiguous'); } catch {}
+    if (res.sideEffectAmbiguous || ambiguousTransport) {
+      try { await stageApi.markStageAmbiguous(deliveryId, stage, res.error ?? 'ambiguous', operationId, stageLeaseToken); } catch {}
       return { __ambiguous: true, error: res.error ?? 'Slack operation ambiguous' } as const;
     }
-    try { await stageApi.failWarRoomStage(deliveryId, stage, res.error ?? 'failed'); } catch {}
+    try { await stageApi.failWarRoomStage(deliveryId, stage, res.error ?? 'failed', operationId, stageLeaseToken); } catch {}
     return res;
   };
 
@@ -115,7 +128,7 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
       // Message stage — fenced
       const msgOutcome = await runFencedStage(msgStage, () => lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message));
       if ('__fenced' in (msgOutcome as Record<string, unknown>)) {
-        // Another worker owns the stage — treat as success to advance delivery
+        result = { success: true };
         break;
       }
       if ('__ambiguous' in (msgOutcome as Record<string, unknown>)) {
@@ -134,7 +147,10 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
       }
       // Topic stage — fenced
       const topicOutcome = await runFencedStage(topicStage, () => lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status));
-      if ('__fenced' in (topicOutcome as Record<string, unknown>)) break;
+      if ('__fenced' in (topicOutcome as Record<string, unknown>)) {
+        result = { success: true };
+        break;
+      }
       if ('__ambiguous' in (topicOutcome as Record<string, unknown>)) {
         const amb = topicOutcome as unknown as { __ambiguous: true; error: string };
         try {

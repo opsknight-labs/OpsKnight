@@ -65,36 +65,38 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
   const { initiateWarRoomClose } = await import('./repository');
   const initiated = await runSerializableTransaction(tx => initiateWarRoomClose(tx, { incidentId: input.incidentId, warRoomId: input.warRoomId, provider: room.provider }));
   if (!initiated) return false;
-  // Queue terminal projection (provider card becomes close-state), then close worker will archive/close externally
-  try {
-    await requestWarRoomProjectionNeutral(input.warRoomId);
-  } catch {}
-  // Also enqueue the close-side-effect job that will run archive/terminalization after projections drain
-  try {
-    const { scheduleJob } = await import('@/lib/jobs/queue');
-    await scheduleJob('WAR_ROOM_RECONCILE', new Date(Date.now() + 2_000), { warRoomId: input.warRoomId, reason: 'close' } as unknown as Record<string, unknown>, 5);
-    // The actual terminal close (archive) is driven by the dedicated close finalizer below; we queue it inline
-    await finalizeWarRoomCloseNeutral(input.warRoomId, input.incidentId);
-  } catch {}
+  await requestWarRoomProjectionNeutral(input.warRoomId);
+  const { scheduleJob } = await import('@/lib/jobs/queue');
+  const closeGeneration = Date.now();
+  await scheduleJob('WAR_ROOM_CLOSE', new Date(Date.now() + 2_000), { warRoomId: input.warRoomId, incidentId: input.incidentId, closeGeneration } as unknown as Record<string, unknown>, 5);
   return true;
 }
 
-/** Finalizes a CLOSING room: terminal projection then provider close/archive, then CLOSED/ARCHIVED. Called by both manual close and resolve-driven close. */
+/** Finalizes a CLOSING room: terminal projection then provider close/archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */
 export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?: string): Promise<void> {
-  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { id: true, incidentId: true, provider: true, state: true } });
+  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { id: true, incidentId: true, provider: true, state: true, projectionVersion: true, projectionLeaseToken: true } });
   if (!room) return;
   if (room.state !== 'CLOSING') return;
   const effectiveIncidentId = incidentId ?? room.incidentId;
   const adapter = getWarRoomProvider(room.provider as WarRoomProviderName);
   const canArchive = adapter.capabilities.archiveRoom;
 
-  // 1) Ensure terminal projection is queued and wait is not required — projection worker will handle CLOSING→CLOSED fallback even if we race.
-  // We bump projection to render the terminal card (Resolve/close state) before archiving externally.
-  try {
-    await requestWarRoomProjectionNeutral(warRoomId);
-  } catch {}
+  // Enforce terminal projection is settled (no in-flight projection) before archiving externally.
+  // If a projection is still leased/pending, queue one if needed and retry via WAR_ROOM_CLOSE.
+  const hasActiveProjection = room.projectionLeaseToken != null;
+  if (hasActiveProjection) {
+    const { WarRoomRetryableError } = await import('./errors');
+    throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
+  }
+  // Ensure the terminal close-state card was at least queued (idempotent if already queued)
+  await requestWarRoomProjectionNeutral(warRoomId);
+  // If we just queued a new projection, wait for it — retry close after a short delay
+  const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { projectionVersion: true, state: true } });
+  if (fresh && fresh.projectionVersion !== room.projectionVersion) {
+    const { WarRoomRetryableError } = await import('./errors');
+    throw new WarRoomRetryableError('Waiting for terminal projection to settle before archive.', 3000, true);
+  }
 
-  // 2) Provider close/archive operation
   if (canArchive && adapter.archive) {
     const result = await adapter.archive(warRoomId);
     if (!result.ok) {
@@ -108,7 +110,6 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
         throw new WarRoomRetryableError(result.message, result.retryAfterMs);
       }
       if (result.code === 'NOT_FOUND' || result.code === 'ALREADY_EXISTS') {
-        // Idempotent: channel already archived — settle to ARCHIVED/CLOSED
         const { runSerializableTransaction } = await import('@/lib/db-utils');
         const cap = adapter.capabilities.archiveRoom;
         await runSerializableTransaction(async tx => {
@@ -120,12 +121,10 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
         });
         return;
       }
-      // Terminal failure — keep CLOSING for operator visibility; do not claim CLOSED
       await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { health: 'DEGRADED', lastErrorCode: result.code, lastError: result.message } });
       const { WarRoomRetryableError } = await import('./errors');
       throw new WarRoomRetryableError(result.message, result.retryAfterMs);
     }
-    // Archive succeeded — settle to ARCHIVED
     const { runSerializableTransaction } = await import('@/lib/db-utils');
     await runSerializableTransaction(async tx => {
       await tx.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { state: 'ARCHIVED', archivedAt: new Date(), closedAt: new Date(), provisioningToken: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
@@ -133,7 +132,6 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
     return;
   }
 
-  // Provider cannot archive — terminal projection + local close is the valid terminal state (capability-aware CLOSED).
   const { runSerializableTransaction } = await import('@/lib/db-utils');
   const { settleWarRoomClosed } = await import('./repository');
   await runSerializableTransaction(tx => settleWarRoomClosed(tx, { incidentId: effectiveIncidentId, warRoomId, provider: room.provider }));
@@ -186,12 +184,10 @@ export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): P
       eventPayload: tagged,
     });
     if (!ensure.created && ensure.alreadyCompleted) continue;
-    // DB uniqueness is the ground truth — always attempt to schedule; queue dedup + delivery lease handles races.
-    // The take:100 scan is removed — it was not world-class recovery and could miss under load.
     await scheduleJob(
       'WAR_ROOM_PROVIDER_EVENT',
       new Date(),
-      { provider: adapter.provider, event: tagged, idempotencyKey } as unknown as Record<string, unknown>,
+      { deliveryId: ensure.id } as unknown as Record<string, unknown>,
       5
     );
   }
@@ -205,7 +201,7 @@ export async function recoverOrphanedWarRoomDeliveries(): Promise<number> {
   let recovered = 0;
   for (const orphan of orphans) {
     try {
-      await scheduleJob('WAR_ROOM_PROVIDER_EVENT', new Date(), { provider: orphan.provider, event: orphan.eventPayload as Record<string, unknown>, idempotencyKey: orphan.idempotencyKey }, 5);
+      await scheduleJob('WAR_ROOM_PROVIDER_EVENT', new Date(), { deliveryId: orphan.id } as unknown as Record<string, unknown>, 5);
       recovered++;
     } catch {}
   }
@@ -213,34 +209,77 @@ export async function recoverOrphanedWarRoomDeliveries(): Promise<number> {
 }
 
 export async function handleIncidentWarRoomProviderEvent(input: {
-  provider: WarRoomProviderName;
-  event: WarRoomIncidentEvent;
+  deliveryId?: string;
+  provider?: WarRoomProviderName;
+  event?: WarRoomIncidentEvent;
   idempotencyKey?: string;
+  // legacy job still passes provider/event/idempotencyKey
 }): Promise<void> {
-  const idempotencyKey = input.idempotencyKey ?? input.event.idempotencyKey ?? warRoomIdempotencyKey(input.event as never);
-  const { claimWarRoomDelivery, completeWarRoomDelivery, releaseWarRoomDeliveryForRetry, validateDeliveryLease } = await import('./delivery');
-  let deliveryId: string | null = null;
+  const { claimWarRoomDelivery, claimWarRoomDeliveryById, completeWarRoomDelivery, releaseWarRoomDeliveryForRetry, validateDeliveryLease } = await import('./delivery');
+  let deliveryId: string | null = input.deliveryId ?? null;
   let leaseToken: string | null = null;
-  try {
+  let resolvedProvider: WarRoomProviderName | null = (input.provider as WarRoomProviderName) ?? null;
+  let resolvedEvent: WarRoomIncidentEvent | null = input.event ?? null;
+  let resolvedIdempotencyKey: string | null = input.idempotencyKey ?? input.event?.idempotencyKey ?? null;
+
+  // Resolve delivery by id when available (new durable contract)
+  if (deliveryId) {
+    const row = await prisma.warRoomProviderEventDelivery.findUnique({
+      where: { id: deliveryId },
+      select: { id: true, status: true, provider: true, idempotencyKey: true, eventPayload: true },
+    });
+    if (!row) throw new Error(`War-room delivery ${deliveryId} not found`);
+    if (row.status === 'COMPLETED') return;
+    if (row.status === 'FAILED') return;
+    resolvedProvider = row.provider as WarRoomProviderName;
+    resolvedIdempotencyKey = row.idempotencyKey;
+    resolvedEvent = row.eventPayload as unknown as WarRoomIncidentEvent;
+  } else {
+    // Fallback for rolling deploy — resolve from provider+key
+    const fallbackKey = resolvedIdempotencyKey ?? (resolvedEvent ? warRoomIdempotencyKey(resolvedEvent as never) : null);
+    if (!resolvedProvider || !fallbackKey || !resolvedEvent) throw new Error('War-room provider event missing deliveryId');
+    resolvedIdempotencyKey = fallbackKey;
     const existing = await prisma.warRoomProviderEventDelivery.findUnique({
-      where: { provider_idempotencyKey: { provider: input.provider as never, idempotencyKey } },
+      where: { provider_idempotencyKey: { provider: resolvedProvider as never, idempotencyKey: fallbackKey } },
       select: { id: true, status: true },
     });
     if (existing?.status === 'COMPLETED') return;
+    if (existing?.status === 'FAILED') return;
     if (!existing) {
       const { ensureWarRoomDelivery } = await import('./delivery');
-      await ensureWarRoomDelivery({ provider: input.provider, idempotencyKey, incidentId: input.event.incidentId, kind: input.event.kind, eventPayload: { ...input.event, idempotencyKey } });
+      const created = await ensureWarRoomDelivery({ provider: resolvedProvider, idempotencyKey: fallbackKey, incidentId: resolvedEvent.incidentId, kind: resolvedEvent.kind, eventPayload: { ...resolvedEvent, idempotencyKey: fallbackKey } });
+      deliveryId = created.id;
+    } else {
+      deliveryId = existing.id;
     }
-    const claimed = await claimWarRoomDelivery({ provider: input.provider, idempotencyKey });
-    if (!claimed) return;
-    deliveryId = claimed.id;
-    leaseToken = claimed.token;
-    const adapter = getWarRoomProvider(input.provider);
-    const event = input.idempotencyKey ? ({ ...input.event, idempotencyKey: input.idempotencyKey } as WarRoomIncidentEvent) : input.event;
-    const result = await adapter.handleIncidentEvent(event, { deliveryId, idempotencyKey });
+  }
+
+  // Claim lease
+  let claimed: { id: string; token: string } | null = null;
+  if (input.deliveryId) {
+    claimed = await claimWarRoomDeliveryById(deliveryId!);
+  } else {
+    claimed = await claimWarRoomDelivery({ provider: resolvedProvider!, idempotencyKey: resolvedIdempotencyKey! });
+  }
+  if (!claimed) return;
+  deliveryId = claimed.id;
+  leaseToken = claimed.token;
+
+  // Ensure we have event for adapter
+  if (!resolvedEvent || !resolvedProvider || !resolvedIdempotencyKey) {
+    const row = await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: deliveryId }, select: { provider: true, idempotencyKey: true, eventPayload: true } });
+    if (!row) throw new Error('Delivery disappeared after claim');
+    resolvedProvider = row.provider as WarRoomProviderName;
+    resolvedIdempotencyKey = row.idempotencyKey;
+    resolvedEvent = row.eventPayload as unknown as WarRoomIncidentEvent;
+  }
+
+  try {
+    const adapter = getWarRoomProvider(resolvedProvider);
+    const event = resolvedIdempotencyKey ? ({ ...resolvedEvent, idempotencyKey: resolvedIdempotencyKey } as WarRoomIncidentEvent) : resolvedEvent;
+    const result = await adapter.handleIncidentEvent(event, { deliveryId, deliveryLeaseToken: leaseToken, idempotencyKey: resolvedIdempotencyKey });
     if (!result.ok) {
       if (result.code === 'AMBIGUOUS_SIDE_EFFECT') {
-        // Validate lease still held before marking COMPLETED — stale worker must not commit ambiguous as completed
         const valid = await validateDeliveryLease(deliveryId, leaseToken);
         if (!valid) return;
         await prisma.warRoomProviderEventDelivery.updateMany({

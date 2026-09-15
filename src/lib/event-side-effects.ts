@@ -317,6 +317,7 @@ async function syncLifecycleWarRoom(payload: EventSideEffectPayload): Promise<vo
     incidentId: payload.incidentId,
     status: lifecycle.status,
     message: `${emoji} *Status updated to ${lifecycle.status}*`,
+    incidentEventId: payload.sourceEventId,
   });
 }
 async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<void> {
@@ -329,7 +330,7 @@ async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<
   });
   if (!incident || incident.status !== 'OPEN') return;
   const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-  await handleIncidentWarRoomEvent({ kind: 'ENSURE', incidentId: payload.incidentId });
+  await handleIncidentWarRoomEvent({ kind: 'ENSURE', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
   await syncLifecycleWarRoom(payload);
 }
 async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): Promise<void> {
@@ -345,7 +346,7 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
   )
     return;
   const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-  await handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: payload.incidentId });
+  await handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
 }
 
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
@@ -354,7 +355,8 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
     !payload.effect ||
     !payload.lane ||
     !payload.incidentId ||
-    !payload.eventOrderAt
+    !payload.eventOrderAt ||
+    !payload.sourceEventId
   )
     throw new Error('Invalid EVENT_SIDE_EFFECT payload');
   switch (payload.effect) {
@@ -370,7 +372,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'TRIGGER_WAR_ROOM': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-      await handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: payload.incidentId });
+      await handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
       return;
     }
     case 'TRIGGER_STATUS_PAGE':
@@ -513,6 +515,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         kind: 'TOPIC',
         incidentId: payload.incidentId,
         status: lifecycleContext(payload).status,
+        incidentEventId: payload.sourceEventId,
       });
       return;
     }
@@ -526,12 +529,13 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         kind: 'MESSAGE',
         incidentId: payload.incidentId,
         message: payload.warRoom.message,
+        incidentEventId: payload.sourceEventId,
       });
       return;
     }
     case 'WAR_ROOM_TOPIC': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-      await handleIncidentWarRoomEvent({ kind: 'TOPIC', incidentId: payload.incidentId });
+      await handleIncidentWarRoomEvent({ kind: 'TOPIC', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
       return;
     }
     case 'WAR_ROOM_INVITE_USER': {
@@ -541,6 +545,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         kind: 'INVITE_USER',
         incidentId: payload.incidentId,
         userId: payload.warRoom.userId,
+        incidentEventId: payload.sourceEventId,
       });
       return;
     }
@@ -551,6 +556,7 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         kind: 'INVITE_TEAM',
         incidentId: payload.incidentId,
         teamId: payload.warRoom.teamId,
+        incidentEventId: payload.sourceEventId,
       });
       return;
     }

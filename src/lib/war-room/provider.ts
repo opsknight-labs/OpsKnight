@@ -66,7 +66,7 @@ export interface WarRoomProviderAdapter {
   settleProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void>;
   reconcile(warRoomId: string): Promise<void>;
   archive?(warRoomId: string): Promise<ProviderOperationResult<void>>;
-  handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deliveryId?: string; idempotencyKey?: string }): Promise<ProviderOperationResult<void>>;
+  handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deliveryId?: string; deliveryLeaseToken?: string; idempotencyKey?: string }): Promise<ProviderOperationResult<void>>;
 }
 
 export class UnsupportedWarRoomProviderOperationError extends Error {

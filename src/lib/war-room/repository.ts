@@ -132,23 +132,35 @@ export async function initiateWarRoomClose(
   tx: Prisma.TransactionClient,
   input: { incidentId: string; warRoomId: string; provider: WarRoomProvider }
 ): Promise<boolean> {
+  const existing = await tx.incidentWarRoom.findUnique({
+    where: { id: input.warRoomId },
+    select: { incidentId: true, provider: true, state: true, createAttemptedAt: true },
+  });
+  if (!existing) return false;
+  if (existing.incidentId !== input.incidentId || existing.provider !== input.provider) return false;
+  if (!['READY', 'PROVISIONING', 'FAILED'].includes(existing.state)) return false;
+  // AMBIGUOUS means an external channel may exist but is not yet adopted.
+  // Closing it would permit a new generation and risk an untracked duplicate.
+  // PROVISIONING is included to allow close while a create is still in flight;
+  // the provisioning worker checks CLOSING and exits gracefully.
+  const preserveProvisioningFence = existing.state === 'PROVISIONING' && existing.createAttemptedAt != null;
+  const data: Record<string, unknown> = {
+    state: 'CLOSING',
+    projectionLeaseToken: null,
+    projectionLeaseExpiresAt: null,
+  };
+  if (!preserveProvisioningFence) {
+    (data as Record<string, unknown>).provisioningToken = null;
+    (data as Record<string, unknown>).provisioningStartedAt = null;
+  }
   const changed = await tx.incidentWarRoom.updateMany({
-    // AMBIGUOUS means an external channel may exist but is not yet adopted.
-    // Closing it would permit a new generation and risk an untracked duplicate.
-    // PROVISIONING is included to allow close while a create is still in flight;
-    // the provisioning worker checks CLOSING and exits gracefully.
     where: {
       id: input.warRoomId,
       incidentId: input.incidentId,
       provider: input.provider,
       state: { in: ['READY', 'PROVISIONING', 'FAILED'] },
     },
-    data: {
-      state: 'CLOSING',
-      provisioningToken: null,
-      projectionLeaseToken: null,
-      projectionLeaseExpiresAt: null,
-    },
+    data: data as never,
   });
   return changed.count === 1;
 }
@@ -180,7 +192,7 @@ export async function settleWarRoomClosed(
   return changed.count === 1;
 }
 
-export type WarRoomChannelAdoption = 'READY' | 'CLOSED' | 'FENCED';
+export type WarRoomChannelAdoption = 'READY' | 'CLOSED' | 'CLOSING' | 'FENCED';
 
 /**
  * Final channel adoption is the commit boundary for an external create.
@@ -216,12 +228,32 @@ export async function adoptWarRoomChannel(
     },
   });
 
-  if (
-    !current ||
-    current.provisioningToken !== input.provisioningToken ||
-    !['PROVISIONING', 'AMBIGUOUS'].includes(current.state)
-  )
-    return 'FENCED';
+  if (!current || current.provisioningToken !== input.provisioningToken) return 'FENCED';
+  // Close-while-provisioning: if the provisioning token still matches but state is CLOSING
+  // (in-flight PROVISIONING that was closed after a create started), adopt the channel
+  // identity but keep terminal intent — return CLOSING so caller archives it.
+  if (current.state === 'CLOSING') {
+    const changed = await tx.incidentWarRoom.updateMany({
+      where: {
+        id: input.warRoomId,
+        provisioningToken: input.provisioningToken,
+        state: 'CLOSING',
+      },
+      data: {
+        providerTenantId: input.providerTenantId ?? input.tenantId ?? null,
+        providerContainerId: input.providerContainerId ?? input.teamId ?? null,
+        providerChannelId: input.channelId,
+        providerChannelName: input.channelName,
+        providerChannelUrl: input.channelUrl ?? null,
+        // Keep CLOSING — the close worker will archive and settle to ARCHIVED/CLOSED.
+        lastError: null,
+        lastErrorCode: null,
+      },
+    });
+    if (changed.count !== 1) return 'FENCED';
+    return 'CLOSING';
+  }
+  if (!['PROVISIONING', 'AMBIGUOUS'].includes(current.state)) return 'FENCED';
 
   const resolved = current.incident.status === 'RESOLVED';
   const now = new Date();
