@@ -60,7 +60,7 @@ describe('PushNotificationToggle', () => {
     render(<PushNotificationToggle />);
 
     const button = await screen.findByRole('button', { name: /Send test push/i });
-    expect(button).not.toBeDisabled();
+    await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -176,6 +176,7 @@ describe('PushNotificationToggle', () => {
 
     render(<PushNotificationToggle />);
     const button = await screen.findByRole('button', { name: /Send test push/i });
+    await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -210,6 +211,7 @@ describe('PushNotificationToggle', () => {
 
     render(<PushNotificationToggle />);
     const button = await screen.findByRole('button', { name: /Send test push/i });
+    await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -256,6 +258,7 @@ describe('PushNotificationToggle', () => {
 
     render(<PushNotificationToggle />);
     const button = await screen.findByRole('button', { name: /Send test push/i });
+    await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
 
     await waitFor(() => {
@@ -290,6 +293,7 @@ describe('PushNotificationToggle', () => {
 
     render(<PushNotificationToggle />);
     const button = await screen.findByRole('button', { name: /Send test push/i });
+    await waitFor(() => expect(button).not.toBeDisabled());
     fireEvent.click(button);
 
     await waitFor(

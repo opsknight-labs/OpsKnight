@@ -85,13 +85,21 @@ const ServiceRow = memo(function ServiceRow({
   service,
   timeZone,
   showUptime,
+  showMetrics,
+  showUptimeHistory,
+  showSlaMetrics = true,
 }: {
   service: PublicStatusService;
   timeZone: string;
   showUptime: boolean;
+  showMetrics?: boolean;
+  showUptimeHistory?: boolean;
+  showSlaMetrics?: boolean;
 }) {
   const token = statusPresentation(service.status).token;
   const slaTier = service.sla?.tier ?? service.slaTier;
+  const effectiveShowMetrics = showMetrics ?? showUptime;
+  const effectiveShowHistory = showUptimeHistory ?? true;
   const slaGrade = service.sla?.grade ?? service.uptime?.days90?.grade;
   const hasDetails = Boolean(slaTier || service.team?.name || (service.regions?.length ?? 0) > 0);
   const affected = service.status !== 'OPERATIONAL';
@@ -139,7 +147,7 @@ const ServiceRow = memo(function ServiceRow({
           )}
         </div>
         <div className="status-v3-service__badges">
-          {showUptime && slaGrade && (
+          {effectiveShowMetrics && slaGrade && (
             <StatusBadge status={slaGrade} label={slaGradeLabel(slaGrade)} size="xs" showDot />
           )}
           <StatusBadge
@@ -154,12 +162,14 @@ const ServiceRow = memo(function ServiceRow({
 
       {service.description && <p className="status-v3-service__desc">{service.description}</p>}
 
-      {(service.history || (showUptime && service.uptime)) && (
+      {((effectiveShowHistory && service.history) || (effectiveShowMetrics && service.uptime)) && (
         <ServiceHistoryV3
           service={service}
           timeZone={timeZone}
           showGrade={false}
-          showUptimeInline={showUptime}
+          showUptimeInline={effectiveShowMetrics}
+          showHistoryBars={effectiveShowHistory}
+          showSlaMetrics={showSlaMetrics}
         />
       )}
     </div>
@@ -170,10 +180,16 @@ const ServiceList = memo(function ServiceList({
   services,
   timeZone,
   showUptime,
+  showMetrics,
+  showUptimeHistory,
+  showSlaMetrics = true,
 }: {
   services: PublicStatusService[];
   timeZone: string;
   showUptime: boolean;
+  showMetrics?: boolean;
+  showUptimeHistory?: boolean;
+  showSlaMetrics?: boolean;
 }) {
   return (
     <div className="status-v3-services__list" role="list">
@@ -183,6 +199,9 @@ const ServiceList = memo(function ServiceList({
           service={service}
           timeZone={timeZone}
           showUptime={showUptime}
+          showMetrics={showMetrics}
+          showUptimeHistory={showUptimeHistory}
+          showSlaMetrics={showSlaMetrics}
         />
       ))}
     </div>
@@ -195,11 +214,17 @@ export default function ServiceHealthV3({
   timeZone,
   groupByRegion = true,
   showUptime = true,
+  showMetrics,
+  showUptimeHistory,
+  showSlaMetrics = true,
 }: {
   services: PublicStatusService[];
   timeZone: string;
   groupByRegion?: boolean;
   showUptime?: boolean;
+  showMetrics?: boolean;
+  showUptimeHistory?: boolean;
+  showSlaMetrics?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
@@ -541,12 +566,26 @@ export default function ServiceHealthV3({
                   )}
                 </div>
               </div>
-              <ServiceList services={group.services} timeZone={timeZone} showUptime={showUptime} />
+              <ServiceList
+                services={group.services}
+                timeZone={timeZone}
+                showUptime={showUptime}
+                showMetrics={showMetrics}
+                showUptimeHistory={showUptimeHistory}
+                showSlaMetrics={showSlaMetrics}
+              />
             </div>
           );
         })
       ) : (
-        <ServiceList services={filtered} timeZone={timeZone} showUptime={showUptime} />
+        <ServiceList
+          services={filtered}
+          timeZone={timeZone}
+          showUptime={showUptime}
+          showMetrics={showMetrics}
+          showUptimeHistory={showUptimeHistory}
+          showSlaMetrics={showSlaMetrics}
+        />
       )}
     </section>
   );

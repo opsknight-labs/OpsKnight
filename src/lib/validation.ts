@@ -151,6 +151,7 @@ export const StatusPageBrandingSchema = z
     refreshInterval: z.number().int().min(10).max(3600).optional(),
     showRssLink: z.boolean().optional(),
     showApiLink: z.boolean().optional(),
+    showSlaMetrics: z.boolean().optional(),
   })
   .passthrough();
 
@@ -302,8 +303,7 @@ export type StatusAnnouncementType = (typeof STATUS_ANNOUNCEMENT_TYPES)[number];
 
 const AbsoluteInstantSchema = z.string().datetime({ offset: true });
 
-export const isValidDateTimeString = (val: string) =>
-  AbsoluteInstantSchema.safeParse(val).success;
+export const isValidDateTimeString = (val: string) => AbsoluteInstantSchema.safeParse(val).success;
 
 export const StatusAnnouncementCreateSchema = z
   .object({

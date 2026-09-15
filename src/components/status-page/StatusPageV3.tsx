@@ -94,10 +94,11 @@ export default function StatusPageV3({
     visible('regions', capabilities?.regions) &&
     page.showRegionHeatmap === true &&
     snapshot.regions.length > 0;
-  const showUptime =
-    visible('uptime', capabilities?.uptime) &&
-    visible('metrics') &&
-    snapshot.services.some(service => service.uptime);
+  const showMetrics = visible('metrics') && snapshot.services.some(service => service.uptime);
+  const showUptimeHistory =
+    page.visibility?.uptimeHistory !== false && snapshot.services.some(service => service.history);
+  const showSlaMetrics = (presentation?.showSlaMetrics ?? branding.showSlaMetrics) !== false;
+  const showUptime = visible('uptime', capabilities?.uptime) && (showMetrics || showUptimeHistory);
   const showIncidents =
     visible('incidents', capabilities?.incidents) && snapshot.incidents.length > 0;
   const showMaintenance =
@@ -124,12 +125,10 @@ export default function StatusPageV3({
     resources?.rss !== false;
   const showCsv =
     page.enableUptimeExports === true &&
-    showUptime &&
     resources?.uptimeCsv !== false &&
     capabilities?.uptimeCsv !== false;
   const showPdf =
     page.enableUptimeExports === true &&
-    showUptime &&
     resources?.uptimePdf !== false &&
     capabilities?.uptimePdf !== false;
   const postmortemsEnabled =
@@ -206,6 +205,9 @@ export default function StatusPageV3({
             timeZone={timeZone}
             groupByRegion={page.showServicesByRegion === true}
             showUptime={showUptime}
+            showMetrics={showMetrics}
+            showUptimeHistory={showUptimeHistory}
+            showSlaMetrics={showSlaMetrics}
           />
         )}
         {showChangelog && <ChangelogV3 changelog={snapshot.changelog} timeZone={timeZone} />}

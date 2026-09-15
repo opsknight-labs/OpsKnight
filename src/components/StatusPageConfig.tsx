@@ -44,16 +44,11 @@ import {
   Megaphone,
   Users,
   RefreshCw,
-  RotateCcw,
   Rss,
   Key,
   FileText,
 } from 'lucide-react';
-import {
-  STATUS_PAGE_FONTS,
-  STATUS_PAGE_COLOR_PRESETS,
-  computeStatusPageTheme,
-} from '@/lib/status-page-theme';
+import { STATUS_PAGE_FONTS } from '@/lib/status-page-theme';
 import {
   STATUS_PAGE_THEME_VERSION,
   resolveStatusPageTheme,
@@ -85,6 +80,7 @@ type StatusPageBranding = {
   themeId?: string;
   themeVersion?: number;
   themeDensity?: StatusPageThemeDensity;
+  showSlaMetrics?: boolean;
 };
 
 function isStatusPageBranding(value: unknown): value is StatusPageBranding {
@@ -275,6 +271,7 @@ export default function StatusPageConfig({
     statusApiRateLimitEnabled: statusPage.statusApiRateLimitEnabled ?? false,
     statusApiRateLimitMax: statusPage.statusApiRateLimitMax ?? 120,
     statusApiRateLimitWindowSec: statusPage.statusApiRateLimitWindowSec ?? 60,
+    showSlaMetrics: branding.showSlaMetrics !== false,
   });
 
   const [formData, setFormData] = useState(getInitialFormData);
@@ -502,14 +499,8 @@ export default function StatusPageConfig({
     themeId: formData.themeId,
     themeVersion: formData.themeVersion,
     themeDensity: formData.themeDensity,
+    showSlaMetrics: formData.showSlaMetrics,
   };
-  const effectiveColorTheme = computeStatusPageTheme({
-    primaryColor: formData.primaryColor,
-    backgroundColor: formData.backgroundColor,
-    textColor: formData.textColor,
-  });
-  const textContrastAdjusted =
-    effectiveColorTheme.textColor.toLowerCase() !== formData.textColor.toLowerCase();
   const previewMaxWidth =
     formData.layout === 'wide' ? '1600px' : formData.layout === 'compact' ? '900px' : '1280px';
 
@@ -545,6 +536,7 @@ export default function StatusPageConfig({
           themeId: formData.themeId,
           themeVersion: formData.themeVersion,
           themeDensity: formData.themeDensity,
+          showSlaMetrics: formData.showSlaMetrics,
         };
 
         const response = await fetch(
@@ -1477,275 +1469,6 @@ export default function StatusPageConfig({
                           </StatusPageSectionCard>
 
                           <StatusPageSectionCard
-                            title="Color theme"
-                            description="Start with an accessible preset, then adjust individual brand colors if needed. The preview uses the same color engine as the public page."
-                            icon={<Palette className="w-5 h-5 text-primary" />}
-                            action={
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() =>
-                                  setFormData({
-                                    ...formData,
-                                    primaryColor: STATUS_PAGE_COLOR_PRESETS[0].primary,
-                                    backgroundColor: STATUS_PAGE_COLOR_PRESETS[0].background,
-                                    textColor: STATUS_PAGE_COLOR_PRESETS[0].text,
-                                  })
-                                }
-                                className="text-xs gap-1.5 h-8 px-2.5 shadow-xs"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                                <span>Reset to default</span>
-                              </Button>
-                            }
-                          >
-                            {/* Quick Presets */}
-                            <div style={{ marginBottom: 'var(--spacing-5)' }}>
-                              <label
-                                style={{
-                                  display: 'block',
-                                  marginBottom: 'var(--spacing-2)',
-                                  fontSize: 'var(--font-size-sm)',
-                                  fontWeight: '600',
-                                }}
-                              >
-                                Theme presets
-                              </label>
-                              <div
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                                  gap: 'var(--spacing-2)',
-                                }}
-                              >
-                                {STATUS_PAGE_COLOR_PRESETS.map(preset => {
-                                  const isActive =
-                                    formData.primaryColor === preset.primary &&
-                                    formData.backgroundColor === preset.background &&
-                                    formData.textColor === preset.text;
-                                  return (
-                                    <button
-                                      key={preset.id}
-                                      type="button"
-                                      onClick={() =>
-                                        setFormData({
-                                          ...formData,
-                                          primaryColor: preset.primary,
-                                          backgroundColor: preset.background,
-                                          textColor: preset.text,
-                                        })
-                                      }
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                        padding: '8px 12px',
-                                        borderRadius: 'var(--radius-md)',
-                                        border: isActive
-                                          ? '2px solid hsl(var(--ui-primary, 215.3 25% 26.7%))'
-                                          : '1px solid hsl(var(--ui-border, 214.3 31.8% 91.4%))',
-                                        background: isActive
-                                          ? 'hsl(var(--ui-primary, 215.3 25% 26.7%) / 0.08)'
-                                          : 'hsl(var(--ui-card, 0 0% 100%))',
-                                        color: isActive
-                                          ? 'hsl(var(--ui-primary, 215.3 25% 26.7%))'
-                                          : 'inherit',
-                                        cursor: 'pointer',
-                                        textAlign: 'left',
-                                        transition: 'all 0.15s ease',
-                                      }}
-                                    >
-                                      <div style={{ display: 'flex', gap: '3px' }}>
-                                        <span
-                                          style={{
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '999px',
-                                            background: preset.primary,
-                                          }}
-                                        />
-                                        <span
-                                          style={{
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '999px',
-                                            background: preset.background,
-                                            border: '1px solid #cbd5e1',
-                                          }}
-                                        />
-                                        <span
-                                          style={{
-                                            width: '12px',
-                                            height: '12px',
-                                            borderRadius: '999px',
-                                            background: preset.text,
-                                          }}
-                                        />
-                                      </div>
-                                      <span
-                                        style={{
-                                          fontSize: 'var(--font-size-xs)',
-                                          fontWeight: isActive ? '700' : '500',
-                                        }}
-                                      >
-                                        {preset.name}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            <h3
-                              style={{
-                                margin: '0 0 var(--spacing-3)',
-                                fontSize: 'var(--font-size-sm)',
-                                fontWeight: '600',
-                              }}
-                            >
-                              Custom colors
-                            </h3>
-
-                            <div
-                              style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                                gap: 'var(--spacing-4)',
-                              }}
-                            >
-                              <div>
-                                <label
-                                  style={{
-                                    display: 'block',
-                                    marginBottom: 'var(--spacing-2)',
-                                    fontSize: 'var(--font-size-sm)',
-                                    fontWeight: '500',
-                                  }}
-                                >
-                                  Primary Color
-                                </label>
-                                <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
-                                  <input
-                                    type="color"
-                                    value={formData.primaryColor}
-                                    onChange={e =>
-                                      setFormData({ ...formData, primaryColor: e.target.value })
-                                    }
-                                    style={{
-                                      width: '60px',
-                                      height: '40px',
-                                      border: '1px solid #e5e7eb',
-                                      borderRadius: 'var(--radius-md)',
-                                      cursor: 'pointer',
-                                    }}
-                                  />
-                                  <FormField
-                                    type="input"
-                                    inputType="text"
-                                    label="Primary Color"
-                                    value={formData.primaryColor}
-                                    onChange={e =>
-                                      setFormData({ ...formData, primaryColor: e.target.value })
-                                    }
-                                    placeholder="#667eea"
-                                  />
-                                </div>
-                              </div>
-                              <div>
-                                <label
-                                  style={{
-                                    display: 'block',
-                                    marginBottom: 'var(--spacing-2)',
-                                    fontSize: 'var(--font-size-sm)',
-                                    fontWeight: '500',
-                                  }}
-                                >
-                                  Background Color
-                                </label>
-                                <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
-                                  <input
-                                    type="color"
-                                    value={formData.backgroundColor}
-                                    onChange={e =>
-                                      setFormData({ ...formData, backgroundColor: e.target.value })
-                                    }
-                                    style={{
-                                      width: '60px',
-                                      height: '40px',
-                                      border: '1px solid #e5e7eb',
-                                      borderRadius: 'var(--radius-md)',
-                                      cursor: 'pointer',
-                                    }}
-                                  />
-                                  <FormField
-                                    type="input"
-                                    inputType="text"
-                                    label="Background Color"
-                                    value={formData.backgroundColor}
-                                    onChange={e =>
-                                      setFormData({ ...formData, backgroundColor: e.target.value })
-                                    }
-                                    placeholder="#ffffff"
-                                  />
-                                </div>
-                              </div>
-                              <div>
-                                <label
-                                  style={{
-                                    display: 'block',
-                                    marginBottom: 'var(--spacing-2)',
-                                    fontSize: 'var(--font-size-sm)',
-                                    fontWeight: '500',
-                                  }}
-                                >
-                                  Text Color
-                                </label>
-                                <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
-                                  <input
-                                    type="color"
-                                    value={formData.textColor}
-                                    onChange={e =>
-                                      setFormData({ ...formData, textColor: e.target.value })
-                                    }
-                                    style={{
-                                      width: '60px',
-                                      height: '40px',
-                                      border: '1px solid #e5e7eb',
-                                      borderRadius: 'var(--radius-md)',
-                                      cursor: 'pointer',
-                                    }}
-                                  />
-                                  <FormField
-                                    type="input"
-                                    inputType="text"
-                                    label="Text Color"
-                                    value={formData.textColor}
-                                    onChange={e =>
-                                      setFormData({ ...formData, textColor: e.target.value })
-                                    }
-                                    placeholder="#111827"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-
-                            <div
-                              role="status"
-                              className={cn(
-                                'mt-4 p-3 rounded-lg text-xs leading-relaxed border',
-                                textContrastAdjusted
-                                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-200'
-                                  : 'bg-primary/5 border-primary/20 text-foreground'
-                              )}
-                            >
-                              {textContrastAdjusted
-                                ? `Readable contrast applied: public text will render as ${effectiveColorTheme.textColor}.`
-                                : 'Contrast check passed. These colors will render unchanged on the public page.'}
-                            </div>
-                          </StatusPageSectionCard>
-
-                          <StatusPageSectionCard
                             title="Layout Options"
                             description="Configure maximum page width and header/footer visibility."
                             icon={<Layout className="w-5 h-5 text-primary" />}
@@ -1887,16 +1610,11 @@ export default function StatusPageConfig({
                                   <Switch
                                     checked={formData.showIncidents}
                                     onChange={checked => {
-                                      setFormData({ ...formData, showIncidents: checked });
-                                      if (
-                                        checked &&
-                                        privacySettings.showRecentIncidents === false
-                                      ) {
-                                        setPrivacySettings(prev => ({
-                                          ...prev,
-                                          showRecentIncidents: true,
-                                        }));
-                                      }
+                                      setFormData(prev => ({ ...prev, showIncidents: checked }));
+                                      setPrivacySettings(prev => ({
+                                        ...prev,
+                                        showRecentIncidents: checked,
+                                      }));
                                     }}
                                     label="Show Incidents"
                                     helperText="Display incidents section and timeline"
@@ -1904,17 +1622,42 @@ export default function StatusPageConfig({
                                 </div>
                                 <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
                                   <Switch
-                                    checked={formData.showMetrics}
+                                    checked={
+                                      formData.showMetrics &&
+                                      privacySettings.showServiceMetrics !== false
+                                    }
                                     onChange={checked => {
-                                      setFormData({ ...formData, showMetrics: checked });
+                                      setFormData(prev => ({ ...prev, showMetrics: checked }));
                                       setPrivacySettings(prev => ({
                                         ...prev,
                                         showServiceMetrics: checked,
+                                      }));
+                                    }}
+                                    label="Show Service Metrics"
+                                    helperText="Display uptime percentages and availability metrics"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={privacySettings.showUptimeHistory !== false}
+                                    onChange={checked => {
+                                      setPrivacySettings(prev => ({
+                                        ...prev,
                                         showUptimeHistory: checked,
                                       }));
                                     }}
-                                    label="Show Uptime & Availability"
-                                    helperText="Display service uptime metrics and history"
+                                    label="Show Uptime History"
+                                    helperText="Display historical uptime charts and timelines"
+                                  />
+                                </div>
+                                <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
+                                  <Switch
+                                    checked={formData.showSlaMetrics !== false}
+                                    onChange={checked => {
+                                      setFormData(prev => ({ ...prev, showSlaMetrics: checked }));
+                                    }}
+                                    label="Show 30 & 90-Day SLA"
+                                    helperText="Display 30-day and 90-day SLA availability cards below service history"
                                   />
                                 </div>
                                 <div className="p-3 rounded-lg border border-border/70 bg-card hover:bg-muted/20 transition-colors">
@@ -2184,6 +1927,12 @@ export default function StatusPageConfig({
                                 label="Require API token"
                                 helperText="Require a token for JSON and RSS endpoints."
                               />
+                              {formData.statusApiRequireToken && apiTokens.length === 0 && (
+                                <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs">
+                                  Token authentication is enabled. Create at least one API token
+                                  below so clients can access the endpoints.
+                                </div>
+                              )}
                               <Switch
                                 checked={formData.statusApiRateLimitEnabled}
                                 onChange={checked =>
@@ -2263,6 +2012,7 @@ export default function StatusPageConfig({
                                     <FormField
                                       type="input"
                                       label="Token name"
+                                      required={formData.statusApiRequireToken}
                                       value={apiTokenName}
                                       onChange={e => setApiTokenName(e.target.value)}
                                       placeholder="e.g. External status monitor"

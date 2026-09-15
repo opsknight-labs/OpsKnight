@@ -136,8 +136,8 @@ export interface StatusPagePreviewData {
   layout: string;
   privacySettings?: StatusPagePreviewPrivacySettings | null;
   enableUptimeExports?: boolean;
-  regions?: any[];
-  maintenance?: any[];
+  regions?: unknown[];
+  maintenance?: unknown[];
   uptimeExcellentThreshold?: number | null;
   uptimeGoodThreshold?: number | null;
 }
@@ -204,6 +204,7 @@ function StatusPageLivePreview({
           showFooter: previewData.showFooter,
           showRssLink: previewData.showRssLink,
           showApiLink: previewData.showApiLink,
+          showSlaMetrics: previewData.branding?.showSlaMetrics !== false,
         },
         services: previewData.services,
         mappings: previewData.statusPageServices,
@@ -222,8 +223,10 @@ function StatusPageLivePreview({
         showServiceRegions: previewData.privacySettings?.showServiceRegions,
         showServiceOwners: previewData.showServiceOwners,
         showServiceSlaTier: previewData.showServiceSlaTier,
-        showMetrics: previewData.showMetrics,
-        showUptimeHistory: previewData.privacySettings?.showUptimeHistory,
+        showMetrics:
+          previewData.showMetrics !== false &&
+          previewData.privacySettings?.showServiceMetrics !== false,
+        showUptimeHistory: previewData.privacySettings?.showUptimeHistory !== false,
         showTeamInformation: previewData.privacySettings?.showTeamInformation,
         regions: previewData.regions,
         maintenance: previewData.maintenance,

@@ -94,30 +94,19 @@ describe('StatusPageConfig Component', () => {
     expect(screen.getByText('Cancel')).toBeDefined();
   });
 
-  it('switches sections when sidebar items are clicked and allows color reset', () => {
+  it('switches to appearance section and renders appearance cards without legacy color theme', () => {
     render(<StatusPageConfig statusPage={mockStatusPage} allServices={mockAllServices} />);
 
     const appearanceTab = screen.getByText('Appearance');
     fireEvent.click(appearanceTab);
 
     expect(screen.getByText('Branding & Logo')).toBeDefined();
-    expect(screen.getByText('Color theme')).toBeDefined();
-    expect(screen.getByText('Theme presets')).toBeDefined();
-    expect(screen.getByText('Custom colors')).toBeDefined();
-    expect(screen.getByText('Reset to default')).toBeDefined();
-
-    // Click Reset to default
-    fireEvent.click(screen.getByText('Reset to default'));
-    expect(screen.getByText('Modern Light')).toBeDefined();
-    expect(screen.getByText('Midnight Dark')).toBeDefined();
-    expect(screen.queryByText('Light theme defaults')).toBeNull();
-    expect(screen.queryByText('Dark theme defaults')).toBeNull();
-    expect(screen.queryByText('Auto-pair text contrast')).toBeNull();
-    expect(
-      screen.getByText(
-        'Contrast check passed. These colors will render unchanged on the public page.'
-      )
-    ).toBeDefined();
+    expect(screen.getByText('Typography & Font Family')).toBeDefined();
+    expect(screen.getByText('Layout Options')).toBeDefined();
+    expect(screen.queryByText('Color theme')).toBeNull();
+    expect(screen.queryByText('Theme presets')).toBeNull();
+    expect(screen.queryByText('Custom colors')).toBeNull();
+    expect(screen.queryByText('Reset to default')).toBeNull();
   });
 
   it('toggles live preview panel', () => {
@@ -298,11 +287,21 @@ describe('StatusPageConfig Component', () => {
     fireEvent.click(showIncidentsSwitch);
     expect(showIncidentsSwitch).not.toBeChecked();
 
-    // Verify Show Uptime & Availability switch
-    const showUptimeSwitch = screen.getByRole('switch', { name: 'Show Uptime & Availability' });
-    expect(showUptimeSwitch).toBeChecked();
-    fireEvent.click(showUptimeSwitch);
-    expect(showUptimeSwitch).not.toBeChecked();
+    // Verify Show Service Metrics, Show Uptime History, and Show 30 & 90-Day SLA switches
+    const showServiceMetricsSwitch = screen.getByRole('switch', { name: 'Show Service Metrics' });
+    expect(showServiceMetricsSwitch).toBeChecked();
+    fireEvent.click(showServiceMetricsSwitch);
+    expect(showServiceMetricsSwitch).not.toBeChecked();
+
+    const showUptimeHistorySwitch = screen.getByRole('switch', { name: 'Show Uptime History' });
+    expect(showUptimeHistorySwitch).toBeChecked();
+    fireEvent.click(showUptimeHistorySwitch);
+    expect(showUptimeHistorySwitch).not.toBeChecked();
+
+    const showSlaMetricsSwitch = screen.getByRole('switch', { name: 'Show 30 & 90-Day SLA' });
+    expect(showSlaMetricsSwitch).toBeChecked();
+    fireEvent.click(showSlaMetricsSwitch);
+    expect(showSlaMetricsSwitch).not.toBeChecked();
 
     // Verify Show Region Heatmap switch is not disabled and toggles
     const heatmapSwitch = screen.getByRole('switch', { name: 'Show Region Heatmap' });

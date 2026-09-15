@@ -69,6 +69,9 @@ export function projectPublicBranding(value: unknown): PublicStatusBranding | nu
       : {}),
     ...(bool(source.showApiLink) !== undefined ? { showApiLink: bool(source.showApiLink) } : {}),
     ...(bool(source.showRssLink) !== undefined ? { showRssLink: bool(source.showRssLink) } : {}),
+    ...(bool(source.showSlaMetrics) !== undefined
+      ? { showSlaMetrics: bool(source.showSlaMetrics) }
+      : {}),
   };
   return Object.keys(branding).length > 0 ? branding : null;
 }
@@ -88,6 +91,9 @@ export function projectPublicPresentation(
       : {}),
     ...(typeof branding.showApiLink === 'boolean' ? { showApiLink: branding.showApiLink } : {}),
     ...(typeof branding.showRssLink === 'boolean' ? { showRssLink: branding.showRssLink } : {}),
+    ...(typeof branding.showSlaMetrics === 'boolean'
+      ? { showSlaMetrics: branding.showSlaMetrics }
+      : {}),
   };
   return Object.keys(presentation).length > 0 ? presentation : undefined;
 }
