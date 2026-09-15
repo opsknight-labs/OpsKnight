@@ -1,14 +1,16 @@
 import type { WarRoomProjectionModel } from '../../projection-model';
 
-function actionLabel(action: WarRoomProjectionModel['actions'][number]): string {
+type SlackRenderAction = WarRoomProjectionModel['actions'][number] | 'ASSIGN_TO_ME';
+
+function actionLabel(action: SlackRenderAction): string {
   if (action === 'ACKNOWLEDGE') return 'Acknowledge';
-  if (action === 'ASSIGN_TO_ME') return 'Assign to me';
+  if (action === 'ASSIGN_TO_ME' || action === 'ASSIGN_SELF') return 'Assign to me';
   return 'Resolve';
 }
 
-function actionToSlackContract(action: WarRoomProjectionModel['actions'][number]): { actionId: string; actionValue: string } {
+function actionToSlackContract(action: SlackRenderAction): { actionId: string; actionValue: string } {
   if (action === 'ACKNOWLEDGE') return { actionId: 'ack_incident', actionValue: 'ack' };
-  if (action === 'ASSIGN_TO_ME') return { actionId: 'assign_me_incident', actionValue: 'assign_me' };
+  if (action === 'ASSIGN_TO_ME' || action === 'ASSIGN_SELF') return { actionId: 'assign_me_incident', actionValue: 'assign_me' };
   return { actionId: 'resolve_incident', actionValue: 'resolve' };
 }
 

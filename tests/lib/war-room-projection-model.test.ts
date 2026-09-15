@@ -17,7 +17,7 @@ describe('provider-neutral war-room projection', () => {
   it('derives one semantic phase and action policy for every renderer', () => {
     const model = buildWarRoomProjection(incident);
     expect(model.phase).toBe('TRIGGERED');
-    expect(model.actions).toEqual(['ACKNOWLEDGE', 'ASSIGN_TO_ME', 'RESOLVE']);
+    expect(model.actions).toEqual(['ACKNOWLEDGE', 'ASSIGN_SELF', 'RESOLVE']);
     expect(renderSlackWarRoomProjection(model).blocks.at(-1)?.type).toBe('actions');
     expect(renderMicrosoftTeamsWarRoomProjection(model).actions).toHaveLength(3);
   });
