@@ -385,12 +385,16 @@ export default async function IncidentDetailScreen({
                 >
                   #{id.slice(0, 8)}
                 </Badge>
-                <CopyButton text={id} label="ID" className="h-9 px-2 text-xs" />
+                <CopyButton
+                  text={id}
+                  label="ID"
+                  className="min-h-11 h-11 px-2.5 text-xs sm:min-h-9 sm:h-9"
+                />
                 <CopyButton
                   text={`${appUrl}/incidents/${id}`}
                   icon="link"
                   label="Link"
-                  className="h-9 px-2 text-xs"
+                  className="min-h-11 h-11 px-2.5 text-xs sm:min-h-9 sm:h-9"
                 />
               </div>
             </div>

@@ -17,6 +17,10 @@ vi.mock('@/lib/notification-recovery', () => ({
   criticalNotificationCycleWasBusy: vi.fn(() => false),
 }));
 
+vi.mock('@/lib/provider-admission', () => ({
+  certifyNotificationControlPlane: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: {
     debug: vi.fn(),
@@ -42,6 +46,7 @@ import {
   startJobWorker,
   stopJobWorker,
 } from '@/lib/job-worker';
+import { certifyNotificationControlPlane } from '@/lib/provider-admission';
 
 type WorkerResult = { processed: number; failed: number; total: number };
 
@@ -76,6 +81,7 @@ describe('dedicated job worker', () => {
     vi.mocked(criticalEscalationCycleWasBusy).mockReturnValue(false);
     vi.mocked(criticalNotificationCycleWasBusy).mockReturnValue(false);
     vi.mocked(consumeEscalationWakeRequest).mockReturnValue(false);
+    vi.mocked(certifyNotificationControlPlane).mockResolvedValue(undefined);
 
     delete process.env.OPSKNIGHT_WORKER_BATCH_SIZE;
     delete process.env.OPSKNIGHT_WORKER_CONCURRENCY;
@@ -323,5 +329,41 @@ describe('dedicated job worker', () => {
     expect(globalThis.jobWorkerGlobalState?.initialized).toBe(false);
     expect(globalThis.jobWorkerGlobalState?.startedAt).toBeNull();
     expect(getJobWorkerStatus().running).toBe(false);
+  });
+
+  it('pauses bulk worker lane when control plane state is UNINITIALIZED or EMERGENCY_LOCAL', async () => {
+    let rejectCertify!: (err: Error) => void;
+    vi.mocked(certifyNotificationControlPlane).mockImplementation(
+      () =>
+        new Promise<void>((_, reject) => {
+          rejectCertify = reject;
+        })
+    );
+
+    startJobWorker('bulk');
+    expect(globalThis.jobWorkerGlobalState?.controlPlaneState).toBe('UNINITIALIZED');
+
+    // Run 1: with UNINITIALIZED state, runOnce should pause bulk delivery
+    await vi.advanceTimersByTimeAsync(0);
+    expect(globalThis.jobWorkerGlobalState?.lastError).toContain(
+      'control plane in UNINITIALIZED state'
+    );
+
+    // Transition to EMERGENCY_LOCAL via startup certification failure
+    vi.mocked(certifyNotificationControlPlane).mockRejectedValue(
+      new Error('control plane DB unreachable')
+    );
+    rejectCertify(new Error('control plane DB unreachable'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(globalThis.jobWorkerGlobalState?.controlPlaneState).toBe('EMERGENCY_LOCAL');
+
+    // Run 2: with EMERGENCY_LOCAL state, bulk lane remains paused
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(globalThis.jobWorkerGlobalState?.lastError).toContain(
+      'control plane in EMERGENCY_LOCAL state'
+    );
+
+    await stopJobWorker();
   });
 });

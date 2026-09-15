@@ -166,11 +166,11 @@ export default function LoginClient({
               priority
               unoptimized
             />
-            <span className="text-2xl 2xl:text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
+            <span className="text-[clamp(1.25rem,4.5vw,1.5rem)] 2xl:text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
               OpsKnight
             </span>
           </div>
-          <h2 className="text-3xl 2xl:text-4xl font-bold text-slate-950 dark:text-white mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
+          <h2 className="text-[clamp(1.55rem,6vw,1.875rem)] 2xl:text-4xl font-bold text-slate-950 dark:text-white mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
             {isSuccess ? 'Station online.' : <HelloGreeting />}
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 font-normal transition-colors duration-300">
@@ -249,7 +249,8 @@ export default function LoginClient({
                 <div>
                   <p className="font-semibold">Emergency Break-Glass Recovery</p>
                   <p className="mt-0.5 text-amber-700 dark:text-amber-300">
-                    Standard local login is disabled. Only the designated break-glass administrator account is authorized.
+                    Standard local login is disabled. Only the designated break-glass administrator
+                    account is authorized.
                   </p>
                 </div>
               </div>
@@ -279,7 +280,7 @@ export default function LoginClient({
                     if (error) setError('');
                   }}
                   onBlur={() => setEmailTouched(true)}
-                  className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+                  className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
                   placeholder="you@company.com"
                   disabled={isSubmitting || isSuccess}
                 />
@@ -316,7 +317,7 @@ export default function LoginClient({
                   onKeyDown={e => {
                     setCapsLockOn(e.getModifierState('CapsLock'));
                   }}
-                  className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+                  className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
                   placeholder="Enter your password"
                   disabled={isSubmitting || isSuccess}
                 />
@@ -330,7 +331,7 @@ export default function LoginClient({
                 </button>
               </div>
 
-              <div className="flex items-start justify-between gap-4 pt-1">
+              <div className="flex flex-wrap items-start justify-between gap-y-2 gap-x-4 pt-1">
                 <div className="min-w-0">
                   <button
                     type="button"
@@ -374,14 +375,15 @@ export default function LoginClient({
                   </button>
                   {trustedPwa && (
                     <p className="mt-1 max-w-[18rem] text-[10px] leading-4 text-slate-500 dark:text-slate-500">
-                      Installed PWA: stay signed in for up to 90 days. Turn this off on a shared device.
+                      Installed PWA: stay signed in for up to 90 days. Turn this off on a shared
+                      device.
                     </p>
                   )}
                 </div>
 
                 <Link
                   href="/forgot-password"
-                  className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+                  className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors py-0.5"
                 >
                   Forgot password?
                 </Link>

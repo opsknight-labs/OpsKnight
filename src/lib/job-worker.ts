@@ -39,6 +39,8 @@ interface JobWorkerSharedState {
   startedAt: Date | null;
   lastError: string | null;
   workerLane: JobWorkerLane;
+  controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
+  lastControlPlaneProbeAt: number;
 }
 
 declare global {
@@ -55,6 +57,8 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   startedAt: null,
   lastError: null,
   workerLane: 'all',
+  controlPlaneState: 'UNINITIALIZED',
+  lastControlPlaneProbeAt: 0,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -152,6 +156,27 @@ async function runOnce(): Promise<void> {
   workerState.lastRunAt = new Date();
   const batchStartedAt = Date.now();
 
+  // If currently degraded in EMERGENCY_LOCAL, attempt a periodic re-certification probe every 30s
+  if (workerState.controlPlaneState === 'EMERGENCY_LOCAL') {
+    const now = Date.now();
+    if (now - workerState.lastControlPlaneProbeAt >= 30_000) {
+      workerState.lastControlPlaneProbeAt = now;
+      try {
+        const { certifyNotificationControlPlane } = await import('./provider-admission');
+        await certifyNotificationControlPlane();
+        workerState.controlPlaneState = 'HEALTHY';
+        workerState.lastError = null;
+        logger.info('[JobWorker] Control plane recovered from EMERGENCY_LOCAL to HEALTHY');
+      } catch (probeError) {
+        const msg = probeError instanceof Error ? probeError.message : String(probeError);
+        logger.warn(
+          '[JobWorker] Control plane re-certification probe failed, remaining in EMERGENCY_LOCAL',
+          { error: msg }
+        );
+      }
+    }
+  }
+
   try {
     if (workerState.workerLane === 'projector') {
       const { reconcileStatusPageSnapshots } = await import('./status-pages/snapshot');
@@ -167,6 +192,17 @@ async function runOnce(): Promise<void> {
     }
 
     if (workerState.workerLane === 'bulk') {
+      if (
+        workerState.controlPlaneState === 'EMERGENCY_LOCAL' ||
+        workerState.controlPlaneState === 'UNINITIALIZED'
+      ) {
+        logger.warn(
+          `[JobWorker] Bulk lane paused during ${workerState.controlPlaneState} control plane state`
+        );
+        workerState.lastError = `Bulk lane paused: control plane in ${workerState.controlPlaneState} state`;
+        scheduleNextRun(withIdleJitter(workerState.workerConfig.idlePollMs));
+        return;
+      }
       const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
       if (await isBulkNotificationDeliveryPaused()) {
         workerState.lastSuccessAt = new Date();
@@ -316,6 +352,8 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
   workerState.lastSuccessAt = null;
   workerState.startedAt = new Date();
   workerState.lastError = null;
+  workerState.controlPlaneState = 'UNINITIALIZED';
+  workerState.lastControlPlaneProbeAt = Date.now();
 
   logger.info('[JobWorker] Starting', {
     batchSize: workerState.workerConfig.batchSize,
@@ -324,6 +362,24 @@ export function startJobWorker(lane: JobWorkerLane = 'all'): void {
     busyPollMs: workerState.workerConfig.busyPollMs,
     lane: workerState.workerLane,
   });
+
+  // Certify notification control-plane tables at worker boot
+  void (async () => {
+    try {
+      const { certifyNotificationControlPlane } = await import('./provider-admission');
+      await certifyNotificationControlPlane();
+      workerState.controlPlaneState = 'HEALTHY';
+      logger.info('[JobWorker] Control plane startup certification passed');
+    } catch (certError) {
+      const msg = certError instanceof Error ? certError.message : String(certError);
+      workerState.controlPlaneState = 'EMERGENCY_LOCAL';
+      workerState.lastError = `Control plane startup certification failed: ${msg}`;
+      logger.error(
+        '[JobWorker] Control plane startup certification failed; entering EMERGENCY_LOCAL mode',
+        { error: msg }
+      );
+    }
+  })();
 
   // Start immediately. Subsequent iterations are paced based on queue activity.
   scheduleNextRun(0);
@@ -352,6 +408,8 @@ export async function stopJobWorker(): Promise<void> {
 
   workerState.workerConfig = null;
   workerState.startedAt = null;
+  workerState.controlPlaneState = 'UNINITIALIZED';
+  workerState.lastControlPlaneProbeAt = 0;
 
   if (wasRunning) {
     logger.info('[JobWorker] Stopped');
@@ -368,5 +426,6 @@ export function getJobWorkerStatus() {
     lastError: workerState.lastError,
     config: workerState.workerConfig ? { ...workerState.workerConfig } : null,
     lane: workerState.workerLane,
+    controlPlaneState: workerState.controlPlaneState,
   };
 }

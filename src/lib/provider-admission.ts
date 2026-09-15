@@ -1,18 +1,86 @@
 import crypto from 'node:crypto';
 import { Prisma, type NotificationChannel, type NotificationTrafficClass } from '@prisma/client';
 import prisma from './prisma';
+import { defaultRate, defaultInFlight } from './notification-capacity/defaults';
 import { getEffectiveCapacity, recordCapacityPressure } from './notification-capacity/resolver';
+import type { EffectiveCapacityConfig } from './notification-capacity/types';
 import { usesBulkCapacity } from './provider-capacity';
+import { logger } from './logger';
 
-export type ProviderAdmissionScope = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH' | 'SLACK' | 'WEBHOOK' | 'MICROSOFT_TEAMS';
+/**
+ * Emergency local concurrency when the control-plane DB is unreachable.
+ * These are intentionally conservative to avoid flooding providers.
+ * Bulk traffic is paused entirely (0) so CRITICAL/TRANSACTIONAL still drain.
+ */
+export const EMERGENCY_CONCURRENCY: Record<string, number> = {
+  PUSH: 2,
+  EMAIL: 1,
+  SMS: 1,
+  SLACK: 1,
+  WEBHOOK: 2,
+  WHATSAPP: 1,
+  MICROSOFT_TEAMS: 1,
+};
+
+/**
+ * Emergency process-local rate limit per second when the control-plane DB is unreachable.
+ * Bounded rates ensure critical/transactional alerts continue draining without overwhelming providers.
+ */
+export const EMERGENCY_RATE_PER_SECOND: Record<string, number> = {
+  PUSH: 5,
+  EMAIL: 2,
+  SMS: 5,
+  SLACK: 1,
+  WEBHOOK: 5,
+  WHATSAPP: 5,
+  MICROSOFT_TEAMS: 2,
+};
+
+const EMERGENCY_CONCURRENCY_MAP = new Map<string, number>(Object.entries(EMERGENCY_CONCURRENCY));
+const EMERGENCY_RATE_MAP = new Map<string, number>(Object.entries(EMERGENCY_RATE_PER_SECOND));
+
+function getEmergencyConcurrency(scope: string): number {
+  return EMERGENCY_CONCURRENCY_MAP.get(scope) ?? 1;
+}
+
+function getEmergencyRate(scope: string): number {
+  return EMERGENCY_RATE_MAP.get(scope) ?? 1;
+}
+
+/** Process-local emergency rate tracking per 1s window (key: `${scope}:${providerKey}`) */
+const localEmergencyRate = new Map<string, { count: number; windowStartSec: number }>();
+
+/** Maximum slots a single worker may claim from a provider pool (fairness cap). */
+export const MAX_SLOTS_PER_WORKER = 5;
+
+export type ProviderAdmissionScope =
+  | 'EMAIL'
+  | 'SMS'
+  | 'WHATSAPP'
+  | 'PUSH'
+  | 'SLACK'
+  | 'WEBHOOK'
+  | 'MICROSOFT_TEAMS';
 
 export type ProviderAdmissionResult =
   | { allowed: true }
-  | { allowed: false; retryAt: Date; reason: 'RATE_LIMITED' };
+  | { allowed: false; retryAt: Date; reason: 'RATE_LIMITED' }
+  | { allowed: false; retryAt: Date; reason: 'CONTROL_PLANE_UNAVAILABLE'; cause?: string };
 
 export type ProviderConcurrencyResult =
   | { allowed: true; leaseKey: string }
-  | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' };
+  | { allowed: false; retryAt: Date; reason: 'MAX_IN_FLIGHT' }
+  | { allowed: false; retryAt: Date; reason: 'CONTROL_PLANE_UNAVAILABLE'; cause: string };
+
+type PrismaClientWithModels = typeof prisma & {
+  rateLimit?: typeof prisma.rateLimit;
+  providerAdmission?: typeof prisma.providerAdmission;
+  $queryRaw?: typeof prisma.$queryRaw;
+  $executeRaw?: typeof prisma.$executeRaw;
+  $transaction?: typeof prisma.$transaction;
+};
+
+const safePrisma = prisma as unknown as PrismaClientWithModels;
 
 export const PROVIDER_LEASE_MS = 30_000;
 const WORKER_ID = process.env.OPSKNIGHT_WORKER_ID?.trim() || crypto.randomUUID();
@@ -37,14 +105,169 @@ export function resetProviderAdmissionForTests() {
   localConcurrency.clear();
   concurrencyClaims.clear();
   localCooldown.clear();
+  localEmergencyRate.clear();
+  _testProductionOverride = false;
 }
 
 function bucketKey(scope: ProviderAdmissionScope, providerKey: string): string {
   return `provider:${scope.toLowerCase()}:${providerKey}`.slice(0, 240);
 }
 
+/**
+ * Bounded process-local emergency rate admission when the control plane is unreachable.
+ * CRITICAL / TRANSACTIONAL lanes continue at bounded rates (e.g. 5/s for PUSH, 2/s for EMAIL),
+ * while PUBLIC_INCIDENT / BULK lanes fail closed as CONTROL_PLANE_UNAVAILABLE to avoid flood storms.
+ */
+function tryEmergencyRateAdmission(
+  scope: ProviderAdmissionScope,
+  providerKey: string,
+  now: Date,
+  trafficClass?: NotificationTrafficClass,
+  cause?: string
+): ProviderAdmissionResult {
+  const bulk = usesBulkCapacity(trafficClass);
+  if (bulk) {
+    logger.warn('provider_admission.bulk_paused_db_unavailable', {
+      scope,
+      providerKey,
+      trafficClass,
+      cause,
+    });
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 5_000),
+      reason: 'CONTROL_PLANE_UNAVAILABLE',
+      cause: cause ?? 'Control-plane DB unavailable; bulk traffic paused',
+    };
+  }
+
+  const isEmergencyClass = trafficClass === 'TRANSACTIONAL' || trafficClass === 'CRITICAL';
+  if (!isEmergencyClass) {
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 250),
+      reason: 'RATE_LIMITED',
+    };
+  }
+
+  const emergencyRate = getEmergencyRate(scope);
+  const nowSec = Math.floor(now.getTime() / 1_000);
+  const emergencyKey = `${scope}:${providerKey}`;
+  const current = localEmergencyRate.get(emergencyKey);
+
+  if (!current || current.windowStartSec !== nowSec) {
+    localEmergencyRate.set(emergencyKey, { count: 1, windowStartSec: nowSec });
+    logger.warn('provider_admission.emergency_rate_admitted', {
+      scope,
+      providerKey,
+      trafficClass,
+      admittedInSecond: 1,
+      emergencyRateCeiling: emergencyRate,
+      cause,
+    });
+    return { allowed: true };
+  }
+
+  if (current.count < emergencyRate) {
+    current.count += 1;
+    logger.warn('provider_admission.emergency_rate_admitted', {
+      scope,
+      providerKey,
+      trafficClass,
+      admittedInSecond: current.count,
+      emergencyRateCeiling: emergencyRate,
+      cause,
+    });
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    retryAt: new Date((nowSec + 1) * 1_000),
+    reason: 'RATE_LIMITED',
+  };
+}
+
+/**
+ * Acquire an emergency local concurrency slot when the control-plane DB is unreachable.
+ * CRITICAL and TRANSACTIONAL traffic drain at bounded emergency concurrency ceilings
+ * (e.g. 2 for PUSH, 1 for EMAIL/SMS/Teams), while BULK traffic pauses fail-closed.
+ *
+ * Crucially, if an emergency local pool already exists and has not expired, its
+ * `active` count is preserved across repeated database failures so the ceiling is
+ * strictly enforced rather than being wiped to active=0 on every request.
+ */
+function acquireEmergencyConcurrencySlot(
+  poolKey: string,
+  scope: ProviderAdmissionScope,
+  bulk: boolean,
+  now: Date,
+  cause: string
+): ProviderConcurrencyResult {
+  if (bulk) {
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 5_000),
+      reason: 'CONTROL_PLANE_UNAVAILABLE',
+      cause: `Bulk traffic paused during control plane outage: ${cause}`,
+    };
+  }
+
+  const emergencySlots = getEmergencyConcurrency(scope);
+  if (emergencySlots === 0) {
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 5_000),
+      reason: 'CONTROL_PLANE_UNAVAILABLE',
+      cause,
+    };
+  }
+
+  let pool = localConcurrency.get(poolKey);
+  if (!pool || pool.expiresAt <= now.getTime()) {
+    pool = {
+      reserved: emergencySlots,
+      active: 0,
+      expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+    };
+    localConcurrency.set(poolKey, pool);
+  } else {
+    pool.reserved = Math.min(pool.reserved, emergencySlots);
+  }
+
+  if (pool.active >= pool.reserved) {
+    return {
+      allowed: false,
+      retryAt: new Date(now.getTime() + 25),
+      reason: 'MAX_IN_FLIGHT',
+    };
+  }
+
+  pool.active += 1;
+  const leaseKey = `${poolKey}:${crypto.randomUUID()}`;
+  concurrencyClaims.set(leaseKey, { poolKey, expiresAt: now.getTime() + PROVIDER_LEASE_MS });
+  return { allowed: true, leaseKey };
+}
+
+/** Lifted by resetProviderAdmissionForTests(); set by forceProductionModeForTests() */
+let _testProductionOverride = false;
+
 function isProviderAdmissionTestEnv(): boolean {
-  return process.env.NODE_ENV === 'test' || process.env.VITEST === 'true' || Boolean(process.env.VITEST_WORKER_ID);
+  if (_testProductionOverride) return false;
+  return (
+    process.env.NODE_ENV === 'test' ||
+    process.env.VITEST === 'true' ||
+    Boolean(process.env.VITEST_WORKER_ID)
+  );
+}
+
+/**
+ * Force the production code path for concurrency/admission even when running under
+ * Vitest. Used by P0 regression tests that must exercise the DB-failure →
+ * CONTROL_PLANE_UNAVAILABLE flow. Automatically reverted by resetProviderAdmissionForTests().
+ */
+export function forceProductionModeForTests(): void {
+  _testProductionOverride = true;
 }
 
 /**
@@ -61,12 +284,7 @@ export async function acquireProviderAdmission(
   now: Date = new Date(),
   trafficClass?: NotificationTrafficClass
 ): Promise<ProviderAdmissionResult> {
-  // Defensive: per-file vi.mock('@/lib/prisma') overrides often omit capacity/
-  // admission models. In unit tests missing models should degrade to
-  // "allowed" (no DB) rather than throwing unhandled TypeError.
-  const rateLimitModel = (prisma as unknown as Record<string, unknown>).rateLimit as
-    | { findUnique: (args: unknown) => Promise<unknown> }
-    | undefined;
+  const rateLimitModel = safePrisma.rateLimit;
   const bucket = bucketKey(scope, providerKey);
   // Process-local cooldown is authoritative if DB read fails; also fast-path
   // when deferProviderAdmission persisted locally but DB not yet visible.
@@ -88,15 +306,14 @@ export async function acquireProviderAdmission(
         // Cache durable cooldown locally so a subsequent read failure still fails closed
         localCooldown.set(bucket, cooldown.expiresAt);
       }
-    } catch {
+    } catch (dbError) {
       const fallback = localCooldown.get(bucket);
       if (fallback && fallback > now) {
         return { allowed: false, retryAt: fallback, reason: 'RATE_LIMITED' };
       }
       if (!isProviderAdmissionTestEnv()) {
-        const conservativeRetryAt = new Date(now.getTime() + 1_000);
-        localCooldown.set(bucket, conservativeRetryAt);
-        return { allowed: false, retryAt: conservativeRetryAt, reason: 'RATE_LIMITED' };
+        const cause = dbError instanceof Error ? dbError.message : String(dbError);
+        return tryEmergencyRateAdmission(scope, providerKey, now, trafficClass, cause);
       }
       cooldown = null;
     }
@@ -104,10 +321,33 @@ export async function acquireProviderAdmission(
   if (cooldown?.expiresAt && cooldown.expiresAt > now) {
     return { allowed: false, retryAt: cooldown.expiresAt, reason: 'RATE_LIMITED' };
   }
-  const capacity = await getEffectiveCapacity({
-    channel: scope as unknown as NotificationChannel,
-    provider: providerKey,
-  });
+  let capacity: EffectiveCapacityConfig;
+  try {
+    capacity = await getEffectiveCapacity({
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+    });
+  } catch (capError) {
+    const cause = capError instanceof Error ? capError.message : String(capError);
+    if (!isProviderAdmissionTestEnv()) {
+      return tryEmergencyRateAdmission(scope, providerKey, now, trafficClass, cause);
+    }
+    capacity = {
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+      mode: 'AUTO',
+      source: 'DEFAULT',
+      configuredRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+      effectiveRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+      bulkRatePerSecond: 1,
+      maxInFlight: defaultInFlight(scope as unknown as NotificationChannel),
+      bulkMaxInFlight: 1,
+      adaptiveBackpressure: false,
+      quotaBlockSize: 100,
+      bulkShare: 0.8,
+      revision: null,
+    };
+  }
   const bulk = usesBulkCapacity(trafficClass);
   const cacheKey = `${bucket}:${bulk ? 'bulk' : 'global'}`;
   const cached = localQuota.get(cacheKey);
@@ -128,15 +368,17 @@ export async function acquireProviderAdmission(
   );
   // DB quota window is best-effort. Per-file vi.mock('@/lib/prisma') often omits
   // $executeRaw/$queryRaw — degrade to in-memory allow rather than unhandled throw.
-  const rawExecute = (prisma as unknown as Record<string, unknown>).$executeRaw as
-    | ((...args: unknown[]) => Promise<unknown>)
-    | undefined;
-  const rawQuery = (prisma as unknown as Record<string, unknown>).$queryRaw as
-    | ((...args: unknown[]) => Promise<unknown>)
-    | undefined;
+  const rawExecute = safePrisma.$executeRaw;
+  const rawQuery = safePrisma.$queryRaw;
   if (!rawExecute || !rawQuery) {
     if (isProviderAdmissionTestEnv()) return { allowed: true };
-    return { allowed: false, retryAt: new Date(now.getTime() + 1_000), reason: 'RATE_LIMITED' };
+    return tryEmergencyRateAdmission(
+      scope,
+      providerKey,
+      now,
+      trafficClass,
+      'Raw execute/query not available on Prisma client'
+    );
   }
   try {
     await rawExecute(Prisma.sql`
@@ -169,9 +411,10 @@ export async function acquireProviderAdmission(
       return { allowed: true };
     }
     return { allowed: false, retryAt: expiresAt, reason: 'RATE_LIMITED' };
-  } catch {
+  } catch (quotaError) {
     if (isProviderAdmissionTestEnv()) return { allowed: true };
-    return { allowed: false, retryAt: new Date(now.getTime() + 1_000), reason: 'RATE_LIMITED' };
+    const cause = quotaError instanceof Error ? quotaError.message : String(quotaError);
+    return tryEmergencyRateAdmission(scope, providerKey, now, trafficClass, cause);
   }
 }
 
@@ -181,36 +424,38 @@ export async function deferProviderAdmission(
   providerKey: string,
   retryAt: Date
 ): Promise<void> {
-  const config = await getEffectiveCapacity({
-    channel: scope as unknown as NotificationChannel,
-    provider: providerKey,
-  });
   const key = bucketKey(scope, providerKey);
-  // Always maintain process-local cooldown so a DB persistence failure still
-  // throttles this replica and fail-closed reads can honor it.
+  // Always maintain process-local cooldown FIRST so a DB persistence failure or
+  // capacity-resolution failure still throttles this replica immediately.
   const existing = localCooldown.get(key);
   if (!existing || retryAt > existing) localCooldown.set(key, retryAt);
-  const deferRaw = (prisma as unknown as Record<string, unknown>).$executeRaw as
-    | ((...args: unknown[]) => Promise<unknown>)
-    | undefined;
-  if (deferRaw) {
-    try {
-      await deferRaw(Prisma.sql`
-    INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-    VALUES (${key}, ${config.effectiveRatePerSecond}, ${retryAt})
-    ON CONFLICT ("key") DO UPDATE SET
-      "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
-      "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
-  `);
-    } catch {
-      // Persistence is best-effort in tests; in production the local
-      // cooldown above still enforces the Retry-After on this replica.
-    }
-  }
+
+  // Invalidate local quota immediately on this replica
   for (const localKey of localQuota.keys()) {
     if (localKey.startsWith(`${key}:`)) localQuota.delete(localKey);
   }
   recordCapacityPressure(scope as unknown as NotificationChannel, providerKey);
+
+  // Best-effort durable persistence across replicas via PostgreSQL
+  try {
+    const config = await getEffectiveCapacity({
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+    });
+    const deferRaw = safePrisma.$executeRaw;
+    if (deferRaw) {
+      await deferRaw(Prisma.sql`
+        INSERT INTO "RateLimit" ("key", "count", "expiresAt")
+        VALUES (${key}, ${config.effectiveRatePerSecond}, ${retryAt})
+        ON CONFLICT ("key") DO UPDATE SET
+          "count" = GREATEST("RateLimit"."count", EXCLUDED."count"),
+          "expiresAt" = GREATEST("RateLimit"."expiresAt", EXCLUDED."expiresAt")
+      `);
+    }
+  } catch {
+    // Persistence is best-effort; the process-local cooldown above
+    // still enforces the Retry-After on this replica even during complete DB outage.
+  }
 }
 
 /**
@@ -225,33 +470,100 @@ export async function acquireProviderConcurrency(
   trafficClass?: NotificationTrafficClass
 ): Promise<ProviderConcurrencyResult> {
   sweepExpiredConcurrencyClaims(now.getTime());
-  const config = await getEffectiveCapacity({
-    channel: scope as unknown as NotificationChannel,
-    provider: providerKey,
-  });
   const bulk = usesBulkCapacity(trafficClass);
   const lane = bulk ? 'bulk' : 'reserved';
   const physicalPoolKey = `${scope}:${providerKey}`;
   const poolKey = `${physicalPoolKey}:${lane}`;
   const leaseOwner = `${WORKER_ID}:${lane}`.slice(0, 240);
-  const laneCeiling = bulk ? config.bulkMaxInFlight : config.maxInFlight;
   let local = localConcurrency.get(poolKey);
+
+  let config: EffectiveCapacityConfig;
+  try {
+    config = await getEffectiveCapacity({
+      channel: scope as unknown as NotificationChannel,
+      provider: providerKey,
+    });
+  } catch (capError) {
+    const cause = capError instanceof Error ? capError.message : String(capError);
+    if (isProviderAdmissionTestEnv()) {
+      config = {
+        channel: scope as unknown as NotificationChannel,
+        provider: providerKey,
+        mode: 'AUTO',
+        source: 'DEFAULT',
+        configuredRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+        effectiveRatePerSecond: defaultRate(scope as unknown as NotificationChannel),
+        bulkRatePerSecond: 1,
+        maxInFlight: defaultInFlight(scope as unknown as NotificationChannel),
+        bulkMaxInFlight: 1,
+        adaptiveBackpressure: false,
+        quotaBlockSize: 100,
+        bulkShare: 0.8,
+        revision: null,
+      };
+    } else {
+      logger.error('provider_admission.capacity_resolution_db_failed', {
+        scope,
+        providerKey,
+        cause,
+        lane,
+      });
+      return acquireEmergencyConcurrencySlot(
+        poolKey,
+        scope,
+        bulk,
+        now,
+        `Capacity resolution DB failed: ${cause}`
+      );
+    }
+  }
+  const laneCeiling = bulk ? config.bulkMaxInFlight : config.maxInFlight;
+
   if (!local || local.expiresAt <= now.getTime()) {
     const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
-    const requested = Math.min(20, laneCeiling);
-    const concQuery = (prisma as unknown as Record<string, unknown>).$queryRaw as
-      | ((...args: unknown[]) => Promise<unknown>)
-      | undefined;
+    // Demand-aware reservation: reserve based on active demand + headroom,
+    // bounded by laneCeiling. This allows single-worker setups to scale up to full
+    // capacity under load while preventing multi-worker idle monopolization.
+    const currentActive = local?.active ?? 0;
+    const demandSlots = Math.max(1, currentActive + 2);
+    const requested = Math.min(
+      laneCeiling,
+      Math.max(demandSlots, Math.min(MAX_SLOTS_PER_WORKER, laneCeiling))
+    );
+    const concQuery = safePrisma.$queryRaw;
     if (!concQuery) {
+      // Missing Prisma method — only acceptable in unit tests
       if (isProviderAdmissionTestEnv()) {
         local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
         localConcurrency.set(poolKey, local);
       } else {
-        return {
-          allowed: false,
-          retryAt: new Date(now.getTime() + 250),
-          reason: 'MAX_IN_FLIGHT',
-        };
+        // Production: control-plane is inaccessible — activate emergency limiter
+        const emergencySlots = bulk ? 0 : getEmergencyConcurrency(scope);
+        logger.error('provider_admission.control_plane_unavailable', {
+          scope,
+          providerKey,
+          lane,
+          cause: 'Prisma $queryRaw not available',
+          emergencySlots,
+        });
+        if (emergencySlots === 0) {
+          return {
+            allowed: false,
+            retryAt: new Date(now.getTime() + 5_000),
+            reason: 'CONTROL_PLANE_UNAVAILABLE',
+            cause: 'Control plane DB unavailable; bulk traffic paused',
+          };
+        }
+        if (!local || local.expiresAt <= now.getTime()) {
+          local = {
+            reserved: emergencySlots,
+            active: 0,
+            expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+          };
+          localConcurrency.set(poolKey, local);
+        } else {
+          local.reserved = Math.min(local.reserved, emergencySlots);
+        }
       }
     } else {
       try {
@@ -284,16 +596,49 @@ export async function acquireProviderConcurrency(
         }
         local = { reserved, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
         localConcurrency.set(poolKey, local);
-      } catch {
+      } catch (dbError) {
+        const cause = dbError instanceof Error ? dbError.message : String(dbError);
         if (isProviderAdmissionTestEnv()) {
-          local = { reserved: laneCeiling, active: 0, expiresAt: now.getTime() + PROVIDER_LEASE_MS };
+          local = {
+            reserved: laneCeiling,
+            active: 0,
+            expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+          };
           localConcurrency.set(poolKey, local);
         } else {
-          return {
-            allowed: false,
-            retryAt: new Date(now.getTime() + 250),
-            reason: 'MAX_IN_FLIGHT',
-          };
+          // P0 FIX: DB failure must NEVER become MAX_IN_FLIGHT — use CONTROL_PLANE_UNAVAILABLE
+          // so operators can distinguish a DB outage from real provider saturation.
+          const emergencySlots = bulk ? 0 : getEmergencyConcurrency(scope);
+          logger.error('provider_admission.concurrency_db_failed', {
+            scope,
+            providerKey,
+            lane,
+            cause,
+            emergencySlots,
+            detail:
+              'ProviderWorkerLease query failed. This is a control-plane outage, NOT provider saturation. ' +
+              'Notifications will be deferred with reason=CONTROL_PLANE_UNAVAILABLE.',
+          });
+          if (emergencySlots === 0) {
+            return {
+              allowed: false,
+              retryAt: new Date(now.getTime() + 5_000),
+              reason: 'CONTROL_PLANE_UNAVAILABLE',
+              cause,
+            };
+          }
+          // Emergency local limiter: allow a small number of deliveries without DB coordination.
+          // Preserve active slots if an emergency pool is already active for this replica.
+          if (!local || local.expiresAt <= now.getTime()) {
+            local = {
+              reserved: emergencySlots,
+              active: 0,
+              expiresAt: now.getTime() + PROVIDER_LEASE_MS,
+            };
+            localConcurrency.set(poolKey, local);
+          } else {
+            local.reserved = Math.min(local.reserved, emergencySlots);
+          }
         }
       }
     }
@@ -302,6 +647,61 @@ export async function acquireProviderConcurrency(
   // admitting against the old, larger reserved value for up to PROVIDER_LEASE_MS.
   // DB rows expire conservatively; the local check shrinks immediately.
   local.reserved = Math.min(local.reserved, laneCeiling);
+
+  // Concurrency expansion (Gate 6):
+  // If active demand has exhausted the current reservation but laneCeiling allows more,
+  // attempt to expand the lease immediately rather than stalling until lease expiration.
+  // Expansion is strictly bounded by MAX_SLOTS_PER_WORKER to preserve multi-worker fairness.
+  const workerCap = Math.min(MAX_SLOTS_PER_WORKER, laneCeiling);
+  if (local.active >= local.reserved && local.reserved < workerCap) {
+    const concQuery = safePrisma.$queryRaw;
+    if (concQuery && !isProviderAdmissionTestEnv()) {
+      try {
+        const id = `${leaseOwner}:${scope}:${providerKey}`.slice(0, 240);
+        const expandRequested = Math.min(workerCap, local.active + 2);
+        const rows = (await concQuery(Prisma.sql`
+          WITH lock AS (
+            SELECT pg_advisory_xact_lock(hashtextextended(${`provider-slots:${physicalPoolKey}`}, 0))
+          ), available AS (
+            SELECT GREATEST(0, ${laneCeiling} - COALESCE(SUM("reservedSlots"), 0))::integer AS slots
+            FROM "ProviderWorkerLease", lock
+            WHERE "providerKey" = ${providerKey} AND "channel" = ${scope}
+              AND "expiresAt" > ${now} AND "workerId" <> ${leaseOwner}
+          )
+          INSERT INTO "ProviderWorkerLease"
+            ("id", "workerId", "providerKey", "channel", "reservedSlots", "expiresAt", "heartbeatAt", "updatedAt")
+          SELECT ${id}, ${leaseOwner}, ${providerKey}, ${scope}, LEAST(${expandRequested}, slots),
+                 ${new Date(now.getTime() + PROVIDER_LEASE_MS)}, ${now}, ${now}
+          FROM available
+          ON CONFLICT ("id") DO UPDATE SET
+            "reservedSlots" = EXCLUDED."reservedSlots",
+            "expiresAt" = EXCLUDED."expiresAt",
+            "heartbeatAt" = EXCLUDED."heartbeatAt",
+            "updatedAt" = EXCLUDED."updatedAt"
+          RETURNING "reservedSlots" AS reserved;
+        `)) as Array<{ reserved: number | null }> | null;
+        const expanded = rows?.[0]?.reserved ?? 0;
+        if (expanded > local.reserved) {
+          local.reserved = Math.min(workerCap, expanded);
+          local.expiresAt = now.getTime() + PROVIDER_LEASE_MS;
+          logger.debug('provider_admission.concurrency_expanded', {
+            scope,
+            providerKey,
+            newReserved: local.reserved,
+            workerCap,
+            laneCeiling,
+          });
+        }
+      } catch (err) {
+        logger.warn('provider_admission.concurrency_expansion_failed', {
+          scope,
+          providerKey,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
   if (local.active >= local.reserved) {
     return {
       allowed: false,
@@ -320,7 +720,9 @@ export async function releaseProviderConcurrency(leaseKey: string): Promise<void
   if (!claim) return;
   concurrencyClaims.delete(leaseKey);
   const local = localConcurrency.get(claim.poolKey);
-  if (local) local.active = Math.max(0, local.active - 1);
+  if (local && local.expiresAt > Date.now()) {
+    local.active = Math.max(0, local.active - 1);
+  }
 }
 
 export class ProviderCooldownError extends Error {
@@ -334,9 +736,7 @@ export class ProviderCooldownError extends Error {
 }
 
 export async function assertProviderAdmitted(key: string, now = new Date()): Promise<void> {
-  const admissionModel = (prisma as unknown as Record<string, unknown>).providerAdmission as
-    | { findUnique: (args: unknown) => Promise<unknown> }
-    | undefined;
+  const admissionModel = safePrisma.providerAdmission;
   if (!admissionModel?.findUnique) return;
   try {
     const admission = (await admissionModel.findUnique({ where: { key } })) as {
@@ -351,28 +751,29 @@ export async function assertProviderAdmitted(key: string, now = new Date()): Pro
 }
 
 export async function recordProviderSuccess(key: string): Promise<void> {
-  const successModel = (prisma as unknown as Record<string, unknown>).providerAdmission as
-    | { upsert: (args: unknown) => Promise<unknown> }
-    | undefined;
+  const successModel = safePrisma.providerAdmission;
   if (!successModel?.upsert) return;
   try {
     await successModel.upsert({
-    where: { key },
-    create: { key, state: 'CLOSED', lastSuccessAt: new Date() },
-    update: {
-      state: 'CLOSED',
-      blockedUntil: null,
-      consecutiveFails: 0,
-      lastSuccessAt: new Date(),
-      lastStatusCode: null,
-    },
-  });
+      where: { key },
+      create: { key, state: 'CLOSED', lastSuccessAt: new Date() },
+      update: {
+        state: 'CLOSED',
+        blockedUntil: null,
+        consecutiveFails: 0,
+        lastSuccessAt: new Date(),
+        lastStatusCode: null,
+      },
+    });
   } catch {
     // best-effort in tests
   }
 }
 
-function automaticBreakerDelayMs(consecutiveFails: number, statusCode?: number): number | undefined {
+function automaticBreakerDelayMs(
+  consecutiveFails: number,
+  statusCode?: number
+): number | undefined {
   const transient = statusCode === undefined || statusCode === 429 || statusCode >= 500;
   if (!transient || consecutiveFails < 2) return undefined;
   if (consecutiveFails === 2) return 10_000;
@@ -412,7 +813,7 @@ export async function recordProviderFailure(
         ? generatedBlockedUntil > existingBlockedUntil
           ? generatedBlockedUntil
           : existingBlockedUntil
-        : generatedBlockedUntil ?? existingBlockedUntil ?? undefined;
+        : (generatedBlockedUntil ?? existingBlockedUntil ?? undefined);
 
     await client.providerAdmission.upsert({
       where: { key },
@@ -434,9 +835,7 @@ export async function recordProviderFailure(
     });
   };
 
-  const admTx = (prisma as unknown as Record<string, unknown>).providerAdmission as
-    | { findUnique: unknown; upsert: unknown }
-    | undefined;
+  const admTx = safePrisma.providerAdmission;
   if (!admTx?.findUnique || !admTx?.upsert) return;
   try {
     if (typeof prisma.$transaction === 'function') {
@@ -447,4 +846,54 @@ export async function recordProviderFailure(
   } catch {
     // best-effort in tests; real DB errors still surface in prod via caller handling
   }
+}
+
+/**
+ * Startup readiness certification: verifies that all notification control-plane
+ * tables are accessible. Call this once at process startup (e.g., inside the
+ * notification worker's `init()` function). If any table is unreachable the
+ * function throws a descriptive error so the caller can abort or mark degraded.
+ *
+ * This prevents the silent CONTROL_PLANE_UNAVAILABLE situation from going
+ * undetected until the first notification attempts are made in production.
+ */
+export async function certifyNotificationControlPlane(): Promise<void> {
+  const tables: Array<{ name: string; fn: () => Promise<unknown> }> = [
+    {
+      name: 'ProviderWorkerLease',
+      fn: () => prisma.$queryRaw`SELECT 1 FROM "ProviderWorkerLease" LIMIT 0`,
+    },
+    {
+      name: 'ProviderQuotaWindow',
+      fn: () => prisma.$queryRaw`SELECT 1 FROM "ProviderQuotaWindow" LIMIT 0`,
+    },
+    {
+      name: 'RateLimit',
+      fn: () => prisma.$queryRaw`SELECT 1 FROM "RateLimit" LIMIT 0`,
+    },
+    {
+      name: 'ProviderAdmission',
+      fn: () => prisma.providerAdmission.count(),
+    },
+  ];
+  const failures: string[] = [];
+  await Promise.all(
+    tables.map(async ({ name, fn }) => {
+      try {
+        await fn();
+      } catch (err) {
+        const cause = err instanceof Error ? err.message : String(err);
+        failures.push(`${name}: ${cause}`);
+        logger.error('provider_admission.startup_certification_failed', { table: name, cause });
+      }
+    })
+  );
+  if (failures.length > 0) {
+    throw new Error(
+      `Notification control-plane startup certification failed for ${failures.length} table(s):\n${failures.join('\n')}`
+    );
+  }
+  logger.info('provider_admission.startup_certification_passed', {
+    tables: tables.map(t => t.name),
+  });
 }

@@ -8,9 +8,10 @@ import prisma from '@/lib/prisma';
 import { notificationProviderUnavailable } from '@/lib/provider-errors';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
 import { checkRateLimit } from '@/lib/rate-limit';
+import { webPushDeviceKey } from '@/lib/web-push-subscription';
 import { getServerSession } from 'next-auth';
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const session = await getServerSession(await getAuthOptions());
     if (!session?.user?.email) {
@@ -44,6 +45,55 @@ export async function POST() {
       );
     }
 
+    // Require the calling device's push endpoint so the test targets
+    // exactly that device rather than blasting all user subscriptions.
+    let body: { endpoint?: string } = {};
+    const text = await request.text();
+    if (text && text.trim().length > 0) {
+      try {
+        body = JSON.parse(text) as { endpoint?: string };
+      } catch {
+        return jsonError(
+          new AppError({
+            code: 'INVALID_JSON',
+            userMessage: 'The request payload contains invalid JSON.',
+            retryable: false,
+          }),
+          400
+        );
+      }
+    } else {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'Test push requires a valid device subscription endpoint.',
+          action: 'Enable push notifications on this device, then try again.',
+          retryable: false,
+          details: { reason: 'PUSH_NO_SUBSCRIPTION' },
+        }),
+        400,
+        { reason: 'PUSH_NO_SUBSCRIPTION' }
+      );
+    }
+
+    if (
+      !body.endpoint ||
+      typeof body.endpoint !== 'string' ||
+      !body.endpoint.startsWith('https://')
+    ) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: 'A valid HTTPS push subscription endpoint is required.',
+          action: 'Enable push notifications on this device, then try again.',
+          retryable: false,
+          details: { reason: 'PUSH_NO_SUBSCRIPTION' },
+        }),
+        400,
+        { reason: 'PUSH_NO_SUBSCRIPTION' }
+      );
+    }
+
     const [pushConfig, deviceCount] = await Promise.all([
       getPushConfig(),
       prisma.userDevice.count({ where: { userId: user.id, platform: 'web' } }),
@@ -56,8 +106,10 @@ export async function POST() {
           userMessage: 'Push notifications are not configured.',
           action: 'Configure Web Push before sending a test notification.',
           retryable: false,
-          details: { provider: 'web-push', reason: 'not_configured' },
-        })
+          details: { provider: 'web-push', reason: 'PUSH_VAPID_NOT_CONFIGURED' },
+        }),
+        400,
+        { provider: 'web-push', reason: 'PUSH_VAPID_NOT_CONFIGURED' }
       );
     }
 
@@ -68,10 +120,37 @@ export async function POST() {
           userMessage: 'No active web push subscription is available for this user.',
           action: 'Enable push notifications on a device, then try again.',
           retryable: false,
-          details: { provider: 'web-push', reason: 'no_subscription' },
-        })
+          details: { provider: 'web-push', reason: 'PUSH_NO_SUBSCRIPTION' },
+        }),
+        400,
+        { provider: 'web-push', reason: 'PUSH_NO_SUBSCRIPTION' }
       );
     }
+
+    // Validate the endpoint belongs to this user and use its device ID as target
+    const deviceKey = webPushDeviceKey(body.endpoint);
+    const device = await prisma.userDevice.findFirst({
+      where: { userId: user.id, deviceId: deviceKey, platform: 'web' },
+      select: { id: true, deviceId: true },
+    });
+    if (!device) {
+      logger.warn('api.test_push.device_not_found', {
+        userId: user.id,
+        deviceKey,
+      });
+      return jsonError(
+        new AppError({
+          code: 'RESOURCE_NOT_FOUND',
+          userMessage: 'The specified push subscription does not belong to this account.',
+          action: 'Re-enable push notifications on this device.',
+          retryable: false,
+          details: { reason: 'PUSH_NO_SUBSCRIPTION' },
+        }),
+        404,
+        { reason: 'PUSH_NO_SUBSCRIPTION' }
+      );
+    }
+    const targetDeviceId = device.deviceId;
 
     const result = await enqueueCentralNotification({
       category: 'SYSTEM',
@@ -86,7 +165,10 @@ export async function POST() {
       // Each rate-limited user action is intentionally a distinct delivery request.
       eventKey: `manual-test:${crypto.randomUUID()}`,
       displayMessage: 'Test push notification',
-      priority: 2,
+      // TRANSACTIONAL: bypass bulk queues so a test push is never deferred by
+      // thousands of queued bulk notifications. Priority 1 = highest urgency.
+      trafficClass: 'TRANSACTIONAL',
+      priority: 1,
       expiresAt: new Date(Date.now() + 10 * 60_000),
       payload: {
         kind: 'PUSH',
@@ -98,36 +180,64 @@ export async function POST() {
           type: 'test',
         },
         badge: 1,
+        targetDeviceId,
       },
     });
 
     if (!result.delivered) {
-      const remainingDevices = await prisma.userDevice.count({
-        where: { userId: user.id, platform: 'web' },
+      const targetDeviceStillExists = await prisma.userDevice.findFirst({
+        where: { userId: user.id, deviceId: targetDeviceId, platform: 'web' },
+        select: { id: true },
       });
-      if (remainingDevices === 0) {
+      if (!targetDeviceStillExists) {
         return jsonError(
           new AppError({
-            code: 'VALIDATION_FAILED',
-            userMessage: 'The saved push subscription is no longer valid.',
+            code: 'PUSH_SUBSCRIPTION_EXPIRED',
+            userMessage: 'The saved push subscription on this device has expired.',
             action: 'Enable push notifications again on this device and retry.',
             retryable: false,
-            details: { provider: 'web-push', reason: 'subscription_removed' },
-          })
+            details: {
+              provider: 'web-push',
+              reason: 'PUSH_SUBSCRIPTION_EXPIRED',
+              targetDeviceId,
+            },
+          }),
+          undefined,
+          {
+            provider: 'web-push',
+            reason: 'PUSH_SUBSCRIPTION_EXPIRED',
+            targetDeviceId,
+          }
         );
       }
 
       return jsonError(
-        notificationProviderUnavailable({
+        new AppError({
+          code: 'NOTIFICATION_PROVIDER_UNAVAILABLE',
+          userMessage: 'Push notification delivery failed for this device.',
+          action: 'Please try again shortly.',
+          retryable: true,
+          details: {
+            provider: 'web-push',
+            reason: 'PUSH_PROVIDER_UNAVAILABLE',
+            targetedDevice: targetDeviceId,
+          },
+        }),
+        503,
+        {
           provider: 'web-push',
-          operation: 'send_test_push',
-          cause: result.error ? new Error(result.error) : undefined,
-        })
+          reason: 'PUSH_PROVIDER_UNAVAILABLE',
+          targetedDevice: targetDeviceId,
+        }
       );
     }
 
     return jsonOk(
-      { success: true, message: 'Test notification sent successfully! Check your device.' },
+      {
+        success: true,
+        message: 'Test notification sent successfully! Check your device.',
+        targetedDevice: targetDeviceId ?? 'all',
+      },
       200
     );
   } catch (error) {

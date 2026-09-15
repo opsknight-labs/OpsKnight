@@ -23,14 +23,14 @@ export function AuthLayout({ children, showAnimation = true, isSuccess = false }
         )}
 
         {showAnimation && (
-          <div className="relative h-[164px] w-full shrink-0 overflow-hidden border-b border-[#1a202c] lg:hidden">
+          <div className="relative h-[clamp(92px,18dvh,150px)] w-full shrink-0 overflow-hidden border-b border-[#1a202c] max-h-[500px]:hidden lg:hidden">
             <LoginAnimation variant="banner" resolved={isSuccess} />
           </div>
         )}
 
         <section
           className={cn(
-            'flex w-full flex-1 flex-col justify-between overflow-y-auto bg-background px-6 py-8 text-foreground transition-colors duration-200 sm:px-12 lg:px-16 2xl:px-24',
+            'flex w-full flex-1 flex-col justify-between overflow-y-auto bg-background px-4 py-5 text-foreground transition-colors duration-200 sm:px-8 sm:py-6 lg:px-16 2xl:px-24',
             showAnimation ? 'lg:w-1/2' : 'w-full'
           )}
         >
@@ -50,8 +50,19 @@ export function AuthLayout({ children, showAnimation = true, isSuccess = false }
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-1.5 py-3 text-center text-[11px] font-medium text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:text-slate-400 dark:hover:text-slate-200 dark:focus-visible:ring-white 2xl:text-xs"
           >
-            <svg className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            <svg
+              className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              />
             </svg>
             <span>Your instance. Your data. Your rules.</span>
           </a>

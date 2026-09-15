@@ -271,7 +271,12 @@ export async function sendNotification(
       channel,
       eventType,
       message: durableMessage,
-      incident,
+      incident: identityIncident,
+      trafficClass: incidentNotificationPriority({
+        eventType,
+        priority: identityIncident.priority,
+        urgency: identityIncident.urgency,
+      }).trafficClass,
     });
     if (result.outcome === 'DELIVERED') {
       const committed = await prisma.notification.updateMany({

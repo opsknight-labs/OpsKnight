@@ -1,4 +1,4 @@
-import type { IncidentStatus } from '@prisma/client';
+import type { IncidentStatus, NotificationTrafficClass } from '@prisma/client';
 import prisma from './prisma';
 import {
   CircuitBreakerError,
@@ -17,6 +17,7 @@ import {
   releaseProviderConcurrency,
   type ProviderAdmissionScope,
 } from './provider-admission';
+import { incidentNotificationPriority } from './notification-priority';
 
 export const NOTIFICATION_CHANNELS = [
   'EMAIL',
@@ -114,6 +115,8 @@ export interface NotificationAttemptResult {
 interface IncidentDeliveryContext {
   id?: string;
   status: IncidentStatus;
+  priority?: string | null;
+  urgency?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
   acknowledgedAt?: Date | null;
@@ -132,6 +135,7 @@ export interface NotificationAttemptInput {
   eventType: NotificationEventType;
   message?: string | null;
   incident?: IncidentDeliveryContext | null;
+  trafficClass?: NotificationTrafficClass;
 }
 export function notificationRetryDelayMs(
   attempts: number,
@@ -169,10 +173,7 @@ function staleIntentReason(
       return 'Triggered notification predates immutable escalation generation';
     }
     const expectedGeneration = notificationIntentTriggerGeneration(input.notificationId);
-    if (
-      expectedGeneration != null &&
-      (incident.escalationGeneration ?? 0) !== expectedGeneration
-    ) {
+    if (expectedGeneration != null && (incident.escalationGeneration ?? 0) !== expectedGeneration) {
       return 'Triggered notification belongs to a superseded escalation generation';
     }
     return null;
@@ -240,7 +241,11 @@ async function resolveProviderKey(
   return 'default';
 }
 
-type ProviderAdmissionLease = { leaseKey: string; providerKey: string; scope: ProviderAdmissionScope };
+type ProviderAdmissionLease = {
+  leaseKey: string;
+  providerKey: string;
+  scope: ProviderAdmissionScope;
+};
 
 async function providerAdmission(
   input: NotificationAttemptInput,
@@ -249,11 +254,20 @@ async function providerAdmission(
   if (input.channel === 'SLACK') return null;
   const scope = input.channel as ProviderAdmissionScope;
   const providerKey = await resolveProviderKey(input.channel, incident);
+  const trafficClass: NotificationTrafficClass =
+    input.trafficClass ??
+    incidentNotificationPriority({
+      eventType: input.eventType,
+      priority: incident.priority,
+      urgency: incident.urgency,
+    }).trafficClass;
+
+  const now = new Date();
   // Acquire concurrency first so rate-reject can release the held slot instead
   // of leaking it. Rate is strictly cheaper to evaluate than the DB slot lease,
   // but the ordering here forces explicit release handling and avoids
   // duplicate admission accounting paths.
-  const concurrency = await acquireProviderConcurrency(scope, providerKey);
+  const concurrency = await acquireProviderConcurrency(scope, providerKey, now, trafficClass);
   if (!concurrency.allowed) {
     return {
       success: true,
@@ -261,7 +275,7 @@ async function providerAdmission(
       error: `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`,
     };
   }
-  const admission = await acquireProviderAdmission(scope, providerKey);
+  const admission = await acquireProviderAdmission(scope, providerKey, now, trafficClass);
   if (!admission.allowed) {
     await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
     return {
@@ -276,7 +290,8 @@ async function providerAdmission(
 function shouldDefer(result: unknown): { retryAfterMs?: number } | null {
   if (!result || typeof result !== 'object') return null;
   const r = result as Record<string, unknown>;
-  if (r.statusCode === 429) return { retryAfterMs: typeof r.retryAfterMs === 'number' ? r.retryAfterMs : 60_000 };
+  if (r.statusCode === 429)
+    return { retryAfterMs: typeof r.retryAfterMs === 'number' ? r.retryAfterMs : 60_000 };
   // Some providers surface 429 via error string
   const msg = typeof r.error === 'string' ? r.error : '';
   if (/too many requests|rate.?limit|429/i.test(msg)) return { retryAfterMs: 60_000 };
@@ -303,22 +318,30 @@ export async function dispatchNotificationAttempt(
   // Always read the current lifecycle generation immediately before provider
   // contact. The caller's incident is an immutable rendering snapshot, not a
   // safe stale-delivery fence: state may have changed after fan-out began.
-  const incident = await prisma.incident.findUnique({
-    where: { id: input.incidentId },
-    select: {
-      id: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      acknowledgedAt: true,
-      resolvedAt: true,
-      currentEscalationStep: true,
-      nextEscalationAt: true,
-      escalationStatus: true,
-      escalationGeneration: true,
-      service: { select: { webhookUrl: true } },
-    },
-  });
+  let incident = input.incident ?? null;
+  try {
+    const fetched = await prisma.incident.findUnique({
+      where: { id: input.incidentId },
+      select: {
+        id: true,
+        status: true,
+        priority: true,
+        urgency: true,
+        createdAt: true,
+        updatedAt: true,
+        acknowledgedAt: true,
+        resolvedAt: true,
+        currentEscalationStep: true,
+        nextEscalationAt: true,
+        escalationStatus: true,
+        escalationGeneration: true,
+        service: { select: { webhookUrl: true } },
+      },
+    });
+    if (fetched) incident = fetched;
+  } catch {
+    // Control-plane or DB failure must fall back to caller-supplied incident snapshot
+  }
   const type = input.eventType;
   if (!incident)
     return { success: false, outcome: 'PERMANENT_FAILURE', error: 'Incident not found' };
@@ -434,7 +457,12 @@ export async function dispatchNotificationAttempt(
       case 'MICROSOFT_TEAMS':
         // Teams lifecycle delivery is through the durable central control plane
         // (notification-control-plane.ts); legacy per-user retry queue skips.
-        outcome = { success: true, outcome: 'SKIPPED', skipped: true, error: 'Microsoft Teams via central control plane' };
+        outcome = {
+          success: true,
+          outcome: 'SKIPPED',
+          skipped: true,
+          error: 'Microsoft Teams via central control plane',
+        };
         break;
     }
     if (outcome && !outcome.success && lease) {
