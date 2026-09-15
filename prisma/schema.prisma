@@ -840,8 +840,10 @@ enum WarRoomProviderEventDeliveryStatus {
 
 enum WarRoomProviderEventStageStatus {
   PENDING
+  ATTEMPTING
   COMPLETED
   FAILED
+  AMBIGUOUS
   SKIPPED
 }
 
@@ -867,15 +869,20 @@ model WarRoomProviderEventDelivery {
 }
 
 model WarRoomProviderEventStage {
-  id         String                          @id @default(cuid())
-  deliveryId String
-  stage      String
-  status     WarRoomProviderEventStageStatus @default(PENDING)
-  attempts   Int                             @default(0)
-  lastError  String?
-  completedAt DateTime?
-  createdAt  DateTime                        @default(now())
-  updatedAt  DateTime                        @updatedAt
+  id               String                          @id @default(cuid())
+  deliveryId       String
+  stage            String
+  status           WarRoomProviderEventStageStatus @default(PENDING)
+  attempts         Int                             @default(0)
+  lastError        String?
+  // Operation fencing: prevents a stale worker that lost its delivery lease from completing a stage claimed by another worker.
+  operationId      String?
+  leaseToken       String?
+  leaseExpiresAt   DateTime?
+  attemptStartedAt DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime                        @default(now())
+  updatedAt        DateTime                        @updatedAt
   delivery WarRoomProviderEventDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
   @@unique([deliveryId, stage])
   @@index([deliveryId])

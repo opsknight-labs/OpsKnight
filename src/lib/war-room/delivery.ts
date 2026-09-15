@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { WarRoomRetryableError } from './errors';
 
 const DELIVERY_LEASE_MS = 5 * 60_000;
+const STAGE_ATTEMPT_LEASE_MS = 5 * 60_000;
 
 /** Derives a stable idempotency key from event content. Exported for tests. */
 export function warRoomIdempotencyKey(event: { kind: string; incidentId: string; status?: string; message?: string; userId?: string; teamId?: string; incidentEventId?: string }): string {
@@ -60,13 +61,26 @@ export async function claimWarRoomDelivery(input: { provider: string; idempotenc
     data: { status: 'PROCESSING', leaseToken: token, leaseExpiresAt: new Date(now.getTime() + DELIVERY_LEASE_MS), attempts: { increment: 1 } },
   });
   if (changed.count !== 1) {
-    // Leased by another worker — retry with backoff, do not burn retry budget.
     throw new WarRoomRetryableError('War-room delivery is leased by another worker.', 1000, true);
   }
   return { id: existing.id, token };
 }
 
+export async function validateDeliveryLease(deliveryId: string, leaseToken: string): Promise<boolean> {
+  const row = await prisma.warRoomProviderEventDelivery.findUnique({
+    where: { id: deliveryId },
+    select: { leaseToken: true, leaseExpiresAt: true, status: true },
+  });
+  if (!row) return false;
+  if (row.status !== 'PROCESSING') return false;
+  if (row.leaseToken !== leaseToken) return false;
+  if (row.leaseExpiresAt && row.leaseExpiresAt.getTime() <= Date.now()) return false;
+  return true;
+}
+
 export async function completeWarRoomDelivery(deliveryId: string, leaseToken: string): Promise<void> {
+  const valid = await validateDeliveryLease(deliveryId, leaseToken);
+  if (!valid) return;
   await prisma.warRoomProviderEventDelivery.updateMany({
     where: { id: deliveryId, leaseToken },
     data: { status: 'COMPLETED', completedAt: new Date(), leaseToken: null, leaseExpiresAt: null },
@@ -107,15 +121,127 @@ export async function ensureWarRoomStage(deliveryId: string, stage: string) {
   }
 }
 
-export async function completeWarRoomStage(deliveryId: string, stage: string): Promise<void> {
-  await prisma.warRoomProviderEventStage.updateMany({ where: { deliveryId, stage }, data: { status: 'COMPLETED', completedAt: new Date(), lastError: null } });
+export async function completeWarRoomStage(deliveryId: string, stage: string, deliveryLeaseToken?: string): Promise<void> {
+  if (deliveryLeaseToken) {
+    const ok = await validateDeliveryLease(deliveryId, deliveryLeaseToken);
+    if (!ok) return;
+  }
+  await prisma.warRoomProviderEventStage.updateMany({
+    where: { deliveryId, stage, status: { in: ['PENDING', 'ATTEMPTING'] } },
+    data: { status: 'COMPLETED', completedAt: new Date(), lastError: null, leaseToken: null, leaseExpiresAt: null },
+  });
 }
 
 export async function failWarRoomStage(deliveryId: string, stage: string, error: string): Promise<void> {
-  await prisma.warRoomProviderEventStage.updateMany({ where: { deliveryId, stage }, data: { status: 'FAILED', lastError: error.slice(0, 1000) } });
+  await prisma.warRoomProviderEventStage.updateMany({ where: { deliveryId, stage, status: { in: ['PENDING', 'ATTEMPTING'] } }, data: { status: 'FAILED', lastError: error.slice(0, 1000), leaseToken: null, leaseExpiresAt: null } });
+}
+
+export async function markStageAmbiguous(deliveryId: string, stage: string, error: string): Promise<void> {
+  await prisma.warRoomProviderEventStage.updateMany({ where: { deliveryId, stage }, data: { status: 'AMBIGUOUS', lastError: error.slice(0, 1000), leaseToken: null, leaseExpiresAt: null } });
 }
 
 export async function stageAlreadyCompleted(deliveryId: string, stage: string): Promise<boolean> {
   const s = await prisma.warRoomProviderEventStage.findUnique({ where: { deliveryId_stage: { deliveryId, stage } }, select: { status: true } });
   return s?.status === 'COMPLETED';
+}
+
+/** Atomically transitions a stage from PENDING/ATTEMPTING-stale → ATTEMPTING with fencing. Returns false if fenced. */
+export async function claimWarRoomStageAttempt(deliveryId: string, stage: string, deliveryLeaseToken?: string): Promise<{ claimed: boolean; operationId: string; stageLeaseToken: string }> {
+  if (deliveryLeaseToken) {
+    const ok = await validateDeliveryLease(deliveryId, deliveryLeaseToken);
+    if (!ok) throw new WarRoomRetryableError('Delivery lease expired or fenced.', 2000, true);
+  }
+  const stageRow = await prisma.warRoomProviderEventStage.findUnique({
+    where: { deliveryId_stage: { deliveryId, stage } },
+    select: { id: true, status: true, leaseExpiresAt: true },
+  });
+  if (stageRow?.status === 'COMPLETED' || stageRow?.status === 'SKIPPED') {
+    return { claimed: false, operationId: '', stageLeaseToken: '' };
+  }
+  const operationId = crypto.randomUUID();
+  const stageLeaseToken = crypto.randomUUID();
+  const now = new Date();
+  // Ensure row exists (idempotent create) before CAS
+  await ensureWarRoomStage(deliveryId, stage);
+  const changed = await prisma.warRoomProviderEventStage.updateMany({
+    where: {
+      deliveryId,
+      stage,
+      status: { in: ['PENDING', 'ATTEMPTING', 'FAILED'] },
+      OR: [
+        { status: 'PENDING' },
+        { status: 'FAILED' },
+        { leaseExpiresAt: null },
+        { leaseExpiresAt: { lte: now } },
+        { status: 'ATTEMPTING', leaseExpiresAt: { lte: now } },
+      ],
+    },
+    data: {
+      status: 'ATTEMPTING',
+      operationId,
+      leaseToken: stageLeaseToken,
+      leaseExpiresAt: new Date(now.getTime() + STAGE_ATTEMPT_LEASE_MS),
+      attemptStartedAt: now,
+      attempts: { increment: 1 },
+    },
+  });
+  // Fallback: if CAS above didn't match due to OR complexity, try simpler PENDING→ATTEMPTING
+  if (changed.count !== 1) {
+    // Check if already COMPLETED (another worker won)
+    const fresh = await prisma.warRoomProviderEventStage.findUnique({ where: { deliveryId_stage: { deliveryId, stage } }, select: { status: true } });
+    if (fresh?.status === 'COMPLETED' || fresh?.status === 'SKIPPED' || fresh?.status === 'AMBIGUOUS') {
+      return { claimed: false, operationId: '', stageLeaseToken: '' };
+    }
+    // Stage is ATTEMPTING with active lease — fenced
+    throw new WarRoomRetryableError(`War-room stage ${stage} is leased by another worker.`, 1000, true);
+  }
+  return { claimed: true, operationId, stageLeaseToken };
+}
+
+export async function releaseStageForRetry(deliveryId: string, stage: string): Promise<void> {
+  await prisma.warRoomProviderEventStage.updateMany({
+    where: { deliveryId, stage, status: 'ATTEMPTING' },
+    data: { status: 'PENDING', leaseToken: null, leaseExpiresAt: null },
+  });
+}
+
+export async function stageIsAlreadyAttempted(deliveryId: string, stage: string): Promise<boolean> {
+  const s = await prisma.warRoomProviderEventStage.findUnique({ where: { deliveryId_stage: { deliveryId, stage } }, select: { status: true } });
+  return s?.status === 'COMPLETED' || s?.status === 'AMBIGUOUS';
+}
+
+/** Find PENDING deliveries with no active BackgroundJob (recovery sweep). */
+export async function findOrphanedWarRoomDeliveries(limit = 50): Promise<Array<{ id: string; provider: string; idempotencyKey: string; incidentId: string; kind: string; eventPayload: unknown; createdAt: Date }>> {
+  const cutoff = new Date(Date.now() - 60_000); // 1-minute safety window
+  const orphans = await prisma.warRoomProviderEventDelivery.findMany({
+    where: { status: 'PENDING', createdAt: { lte: cutoff } },
+    orderBy: { createdAt: 'asc' },
+    take: limit,
+  });
+  if (orphans.length === 0) return [];
+  const jobPayloads = await prisma.backgroundJob.findMany({
+    where: {
+      type: 'WAR_ROOM_PROVIDER_EVENT',
+      status: { in: ['PENDING', 'PROCESSING'] },
+    },
+    select: { payload: true },
+  });
+  const activeKeys = new Set<string>();
+  for (const job of jobPayloads) {
+    const p = job.payload as Record<string, unknown> | null;
+    const pv = typeof p?.provider === 'string' ? p.provider : null;
+    const ik = typeof p?.idempotencyKey === 'string' ? p.idempotencyKey : null;
+    if (pv && ik) activeKeys.add(`${pv}:${ik}`);
+  }
+  return orphans
+    .filter(d => !activeKeys.has(`${String(d.provider)}:${d.idempotencyKey}`))
+    .map(d => ({
+      id: d.id,
+      provider: String(d.provider),
+      idempotencyKey: d.idempotencyKey,
+      incidentId: d.incidentId,
+      kind: d.kind,
+      eventPayload: d.eventPayload,
+      createdAt: d.createdAt,
+    }));
 }

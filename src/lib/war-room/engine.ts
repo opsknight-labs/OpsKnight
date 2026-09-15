@@ -102,14 +102,8 @@ export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): P
       eventPayload: tagged,
     });
     if (!ensure.created && ensure.alreadyCompleted) continue;
-    if (!ensure.created && !ensure.alreadyCompleted) {
-      const pending = await prisma.backgroundJob.findMany({ where: { type: 'WAR_ROOM_PROVIDER_EVENT', status: { in: ['PENDING', 'PROCESSING'] } }, take: 100 });
-      const alreadyQueued = pending.some(job => {
-        const p = job.payload as unknown as Record<string, unknown>;
-        return p.provider === adapter.provider && p.idempotencyKey === idempotencyKey;
-      });
-      if (alreadyQueued) continue;
-    }
+    // DB uniqueness is the ground truth — always attempt to schedule; queue dedup + delivery lease handles races.
+    // The take:100 scan is removed — it was not world-class recovery and could miss under load.
     await scheduleJob(
       'WAR_ROOM_PROVIDER_EVENT',
       new Date(),
@@ -119,13 +113,28 @@ export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): P
   }
 }
 
+/** Sweeps orphaned PENDING deliveries that lost their BackgroundJob (crash before schedule). */
+export async function recoverOrphanedWarRoomDeliveries(): Promise<number> {
+  const { findOrphanedWarRoomDeliveries } = await import('./delivery');
+  const { scheduleJob } = await import('@/lib/jobs/queue');
+  const orphans = await findOrphanedWarRoomDeliveries(50);
+  let recovered = 0;
+  for (const orphan of orphans) {
+    try {
+      await scheduleJob('WAR_ROOM_PROVIDER_EVENT', new Date(), { provider: orphan.provider, event: orphan.eventPayload as Record<string, unknown>, idempotencyKey: orphan.idempotencyKey }, 5);
+      recovered++;
+    } catch {}
+  }
+  return recovered;
+}
+
 export async function handleIncidentWarRoomProviderEvent(input: {
   provider: WarRoomProviderName;
   event: WarRoomIncidentEvent;
   idempotencyKey?: string;
 }): Promise<void> {
   const idempotencyKey = input.idempotencyKey ?? input.event.idempotencyKey ?? warRoomIdempotencyKey(input.event as never);
-  const { claimWarRoomDelivery, completeWarRoomDelivery, releaseWarRoomDeliveryForRetry } = await import('./delivery');
+  const { claimWarRoomDelivery, completeWarRoomDelivery, releaseWarRoomDeliveryForRetry, validateDeliveryLease } = await import('./delivery');
   let deliveryId: string | null = null;
   let leaseToken: string | null = null;
   try {
@@ -147,14 +156,17 @@ export async function handleIncidentWarRoomProviderEvent(input: {
     const result = await adapter.handleIncidentEvent(event, { deliveryId, idempotencyKey });
     if (!result.ok) {
       if (result.code === 'AMBIGUOUS_SIDE_EFFECT') {
+        // Validate lease still held before marking COMPLETED — stale worker must not commit ambiguous as completed
+        const valid = await validateDeliveryLease(deliveryId, leaseToken);
+        if (!valid) return;
         await prisma.warRoomProviderEventDelivery.updateMany({
           where: { id: deliveryId, leaseToken },
           data: { status: 'COMPLETED', completedAt: new Date(), leaseToken: null, leaseExpiresAt: null },
         });
         try {
-          const { ensureWarRoomStage, failWarRoomStage } = await import('./delivery');
+          const { ensureWarRoomStage, markStageAmbiguous } = await import('./delivery');
           await ensureWarRoomStage(deliveryId, 'provider:ambiguous');
-          await failWarRoomStage(deliveryId, 'provider:ambiguous', result.message);
+          await markStageAmbiguous(deliveryId, 'provider:ambiguous', result.message);
         } catch {}
         return;
       }
@@ -163,7 +175,6 @@ export async function handleIncidentWarRoomProviderEvent(input: {
     await completeWarRoomDelivery(deliveryId, leaseToken);
   } catch (error) {
     if (deliveryId && leaseToken) {
-      // Release lease for queue-level retry/backoff; budget handling is in queue.ts.
       await releaseWarRoomDeliveryForRetry(deliveryId, leaseToken);
     }
     throw error;

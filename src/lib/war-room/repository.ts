@@ -29,29 +29,81 @@ export async function claimWarRoomProvisioning(
 
   const token = crypto.randomUUID();
   if (existing && existing.state !== 'CLOSED' && existing.state !== 'ARCHIVED') {
-    const warRoom = await tx.incidentWarRoom.update({
-      where: { id: existing.id },
-      data: {
-        state: 'PROVISIONING',
-        provisioningToken: token,
-        provisioningStartedAt: now,
-        // Clear previous generation's fencing markers so a definite FAILED retry
-        // does not stay fenced by a stale createAttemptedAt/createOperationId.
-        createAttemptedAt: null,
-        createOperationId: null,
-        // plannedExternalName is per-generation; a reclaimed FAILED row starts
-        // a fresh durable identity for the next attempt.
-        plannedExternalName: null,
-        commandCreateAttemptedAt: null,
-        commandMessageId: null,
-        commandConversationId: null,
-        projectionLeaseToken: null,
-        projectionLeaseExpiresAt: null,
-        lastError: null,
-        lastErrorCode: null,
-      },
-    });
-    return { claimed: true as const, warRoom };
+    // ── Durable external-operation identity vs worker lease separation ──
+    // provisioningToken/provisioningStartedAt = worker ownership (ephemeral, safe to rotate on lease expiry)
+    // createOperationId/plannedExternalName/createAttemptedAt = external-operation identity (durable, must survive lease expiry if a create may have been issued)
+    if (existing.state === 'FAILED') {
+      // Definite failure with no ambiguous side effect — safe to reset identity and retry with a fresh planned name.
+      const warRoom = await tx.incidentWarRoom.update({
+        where: { id: existing.id },
+        data: {
+          state: 'PROVISIONING',
+          provisioningToken: token,
+          provisioningStartedAt: now,
+          createAttemptedAt: null,
+          createOperationId: null,
+          plannedExternalName: null,
+          commandCreateAttemptedAt: null,
+          commandMessageId: null,
+          commandConversationId: null,
+          projectionLeaseToken: null,
+          projectionLeaseExpiresAt: null,
+          lastError: null,
+          lastErrorCode: null,
+        },
+      });
+      return { claimed: true as const, warRoom };
+    }
+    if (existing.state === 'AMBIGUOUS') {
+      // NEVER clear external identity — a channel may have been created but response was lost. Only renew worker lease and keep reconciling.
+      const warRoom = await tx.incidentWarRoom.update({
+        where: { id: existing.id },
+        data: {
+          // Keep state AMBIGUOUS, keep createAttemptedAt/createOperationId/plannedExternalName
+          provisioningToken: token,
+          provisioningStartedAt: now,
+          // Clear only projection/card leases — provisioning reconciliation owns channel adoption.
+          projectionLeaseToken: null,
+          projectionLeaseExpiresAt: null,
+          lastError: existing.lastError,
+          lastErrorCode: existing.lastErrorCode,
+        },
+      });
+      return { claimed: true as const, warRoom };
+    }
+    if (existing.state === 'PROVISIONING') {
+      if (!existing.createAttemptedAt) {
+        // No external attempt yet — safe lease reclaim, keep plannedExternalName if already allocated (deterministic per generation).
+        const warRoom = await tx.incidentWarRoom.update({
+          where: { id: existing.id },
+          data: {
+            state: 'PROVISIONING',
+            provisioningToken: token,
+            provisioningStartedAt: now,
+            projectionLeaseToken: null,
+            projectionLeaseExpiresAt: null,
+            lastError: null,
+            lastErrorCode: null,
+          },
+        });
+        return { claimed: true as const, warRoom };
+      }
+      // External create was already attempted — preserve operation identity and transition to reconciliation mode. Never clear plannedExternalName/createAttemptedAt.
+      const warRoom = await tx.incidentWarRoom.update({
+        where: { id: existing.id },
+        data: {
+          state: 'AMBIGUOUS',
+          provisioningToken: token,
+          provisioningStartedAt: now,
+          // Preserve: createAttemptedAt, createOperationId, plannedExternalName
+          projectionLeaseToken: null,
+          projectionLeaseExpiresAt: null,
+          lastErrorCode: 'CREATE_OUTCOME_RECONCILING',
+          lastError: 'A prior channel-create may have succeeded; reconciling by marker/planned name before retry.',
+        },
+      });
+      return { claimed: true as const, warRoom };
+    }
   }
 
   const generation = existing ? existing.generation + 1 : 1;
@@ -95,7 +147,6 @@ export async function closeWarRoom(
   });
   return changed.count === 1;
 }
-
 export type WarRoomChannelAdoption = 'READY' | 'CLOSED' | 'FENCED';
 
 /**
