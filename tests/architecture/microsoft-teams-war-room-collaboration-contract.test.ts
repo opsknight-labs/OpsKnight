@@ -53,13 +53,26 @@ describe('Microsoft Teams war-room collaboration contract', () => {
 
   it('revalidates private owner candidates and leaves definite card rejections recoverable', () => {
     const participants = readFileSync('src/lib/war-room/participants.ts', 'utf8');
-    const projection = readFileSync('src/lib/war-room/projection.ts', 'utf8');
+    const readProjection = () => {
+      try {
+        const fac = readFileSync('src/lib/war-room/projection.ts', 'utf8');
+        if (fac.includes('export * from'))
+          return readFileSync('src/lib/war-room/providers/microsoft-teams/projection.ts', 'utf8');
+        return fac;
+      } catch {
+        return readFileSync('src/lib/war-room/providers/microsoft-teams/projection.ts', 'utf8');
+      }
+    };
+    const projection = readProjection();
     const readFacadeOrCanonical = () => {
       try {
         const fac = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
-        if (fac.includes('export * from')) return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+        if (fac.includes('export * from'))
+          return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
         return fac;
-      } catch { return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8'); }
+      } catch {
+        return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+      }
     };
     const teams = readFacadeOrCanonical();
     expect(participants).toContain("['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state)");
@@ -67,13 +80,20 @@ describe('Microsoft Teams war-room collaboration contract', () => {
     expect(participants).toContain('authorityBeforeOwnerAdd');
     expect(participants).toContain('afterPromote');
     expect(participants).toContain('OWNER_HANDOFF_RACED');
-    expect(participants).toContain('Replacement member is present but is not a private-channel owner.');
-    expect(projection.match(/\[401, 403, 404\]\.includes\(result\.statusCode \?\? 0\)/g)).toHaveLength(2);
+    expect(participants).toContain(
+      'Replacement member is present but is not a private-channel owner.'
+    );
+    expect(
+      projection.match(/\[401, 403, 404\]\.includes\(result\.statusCode \?\? 0\)/g)
+    ).toHaveLength(2);
     expect(projection.match(/HTTP_401', 'HTTP_403', 'HTTP_404/g)).toHaveLength(2);
     expect(projection).toContain('commandCreateAttemptedAt: null');
     expect(teams).toContain("if (room.state === 'CLOSED')");
     expect(teams).toContain('no replacement card can be projected');
-    const panel = readFileSync('src/components/incident/detail/MicrosoftTeamsWarRoomsPanel.tsx', 'utf8');
+    const panel = readFileSync(
+      'src/components/incident/detail/MicrosoftTeamsWarRoomsPanel.tsx',
+      'utf8'
+    );
     expect(panel).toContain("lastErrorCode === 'AMBIGUOUS_CARD_CREATE'");
     expect(panel).toContain('/abandon');
     expect(panel).toContain('Create replacement card?');

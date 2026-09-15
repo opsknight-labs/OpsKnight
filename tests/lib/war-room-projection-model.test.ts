@@ -17,9 +17,16 @@ describe('provider-neutral war-room projection', () => {
   it('derives one semantic phase and action policy for every renderer', () => {
     const model = buildWarRoomProjection(incident);
     expect(model.phase).toBe('TRIGGERED');
-    expect(model.actions).toEqual(['ACKNOWLEDGE', 'ASSIGN_TO_ME', 'RESOLVE']);
+    // RESOLVE is ACKNOWLEDGED-only (P1-8); TRIGGERED legacy is ACK + Assign
+    expect(model.actions).toEqual(['ACKNOWLEDGE', 'ASSIGN_SELF']);
     expect(renderSlackWarRoomProjection(model).blocks.at(-1)?.type).toBe('actions');
-    expect(renderMicrosoftTeamsWarRoomProjection(model).actions).toHaveLength(3);
+    expect(renderMicrosoftTeamsWarRoomProjection(model).actions).toHaveLength(2);
+  });
+
+  it('shows Resolve only after acknowledgement (ACKNOWLEDGED phase)', () => {
+    const ackModel = buildWarRoomProjection({ ...incident, status: 'ACKNOWLEDGED', acknowledgedAt: new Date('2026-09-14T01:00:00Z') });
+    expect(ackModel.phase).toBe('ACKNOWLEDGED');
+    expect(ackModel.actions).toEqual(['ASSIGN_SELF', 'RESOLVE']);
   });
 
   it('removes mutation actions from terminal projections in both providers', () => {

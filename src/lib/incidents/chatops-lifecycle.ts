@@ -236,6 +236,8 @@ export async function executeChatOpsPriority(input: {
         await tx.incident.update({ where: { id: input.incidentId }, data: { priority } });
         await tx.incidentEvent.create({ data: { incidentId: input.incidentId, type: 'STATUS_CHANGE', message: `Priority changed to ${priority} via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps by ${input.actor.name}` } });
         await enqueueIncidentUpdateSideEffects(tx, input.incidentId, ['INCIDENT_UPDATE_SERVICE_NOTIFICATION']);
+        // P1-3: priority must durably refresh the war-room card
+        await enqueueWarRoomSideEffects(tx, input.incidentId, [{ effect: 'WAR_ROOM_TOPIC' }]);
         return { changed: true };
       },
     });
@@ -260,6 +262,14 @@ export async function executeChatOpsJoinResponder(input: {
         await tx.incidentWatcher.create({ data: { incidentId: input.incidentId, userId: input.actor.id, role: 'FOLLOWER' } });
         await tx.incidentEvent.create({ data: { incidentId: input.incidentId, type: 'COMMENT', message: `${input.actor.name} joined as a responder via ${chatOpsProviderDisplayLabel(input.provider)} ChatOps` } });
         await enqueueIncidentUpdateSideEffects(tx, input.incidentId, ['INCIDENT_UPDATE_SERVICE_NOTIFICATION']);
+        // P1-5: Join responder must feed the centralized participant engine
+        const warRooms = await tx.incidentWarRoom.findMany({ where: { incidentId: input.incidentId, state: 'READY' }, select: { id: true } });
+        for (const wr of warRooms) {
+          // Desired participant state is derived from assignee + watchers; the sync job recomputes it.
+          await tx.backgroundJob.create({
+            data: { type: 'WAR_ROOM_PARTICIPANT_SYNC', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId: wr.id } as unknown as never },
+          });
+        }
         return { changed: true };
       },
     });
