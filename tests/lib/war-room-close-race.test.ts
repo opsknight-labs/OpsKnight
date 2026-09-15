@@ -101,7 +101,12 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     const repo = readFileSync('src/lib/war-room/repository.ts', 'utf8');
     expect(engine).toContain('closeRequestedAt');
     expect(repo).toContain('closeRequestedAt');
-    expect(repo).toContain("adoptAsClosing = resolved && current.closeRequestedAt != null && current.state === 'AMBIGUOUS'");
+    // Any RESOLVED incident must adopt as CLOSING (never direct CLOSED) so the
+    // durable CLOSING → terminal projection → provider archive lifecycle owns the room.
+    expect(repo).toContain('const shouldClose = resolved;');
+    expect(repo).toContain("state: shouldClose ? 'CLOSING' : 'READY'");
+    expect(repo).toContain("return shouldClose ? 'CLOSING' : 'READY'");
+    expect(repo).toContain('Never adopt a late-created channel directly as CLOSED');
   });
 
   it('CLOSING reconciliation throws budget-neutral retry while window remains, then deterministic close', () => {

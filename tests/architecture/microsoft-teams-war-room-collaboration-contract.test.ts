@@ -54,7 +54,14 @@ describe('Microsoft Teams war-room collaboration contract', () => {
   it('revalidates private owner candidates and leaves definite card rejections recoverable', () => {
     const participants = readFileSync('src/lib/war-room/participants.ts', 'utf8');
     const projection = readFileSync('src/lib/war-room/projection.ts', 'utf8');
-    const teams = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
+    const readFacadeOrCanonical = () => {
+      try {
+        const fac = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
+        if (fac.includes('export * from')) return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+        return fac;
+      } catch { return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8'); }
+    };
+    const teams = readFacadeOrCanonical();
     expect(participants).toContain("['DESIRED', 'PENDING', 'PRESENT'].includes(fresh.state)");
     expect(participants).toContain('authorityBeforeOwnerPromote');
     expect(participants).toContain('authorityBeforeOwnerAdd');

@@ -24,14 +24,38 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
   });
 
   it('requires explicit generation intent and rejects creation for inactive incidents', () => {
-    const teams = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
+    // Canonical implementation moved to providers/microsoft-teams/provision.ts;
+    // facade at war-room/microsoft-teams.ts re-exports it — accept either path.
+    const readFacadeOrCanonical = () => {
+      try {
+        const fac = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
+        if (fac.includes('export * from')) {
+          return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+        }
+        return fac;
+      } catch {
+        return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+      }
+    };
+    const teams = readFacadeOrCanonical();
     expect(teams).toContain('reopen: intent.allowNewGeneration');
     expect(teams).toContain("return { accepted: false, code: 'INCIDENT_NOT_ACTIVE' }");
     expect(teams).toContain('currentIncident = await prisma.incident.findUnique');
   });
 
   it('fences resolve races with predicate updates and preserves reconciliation', () => {
-    const teams = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
+    const readFacadeOrCanonical = () => {
+      try {
+        const fac = readFileSync('src/lib/war-room/microsoft-teams.ts', 'utf8');
+        if (fac.includes('export * from')) {
+          return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+        }
+        return fac;
+      } catch {
+        return readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
+      }
+    };
+    const teams = readFacadeOrCanonical();
     expect(teams).toContain("lastErrorCode: 'INCIDENT_RESOLVED_DURING_CREATE'");
     expect(teams).toContain('const token = alreadyReconciliationOnly ? prior.provisioningToken! : crypto.randomUUID()');
     expect(teams).toContain('reconciliationOnly: true');
@@ -50,7 +74,11 @@ describe('Microsoft Teams war-room lifecycle contract', () => {
   it('makes final external-channel adoption incident-state aware', () => {
     const repository = readFileSync('src/lib/war-room/repository.ts', 'utf8');
     expect(repository).toContain("const resolved = current.incident.status === 'RESOLVED'");
-    expect(repository).toContain("state: resolved ? 'CLOSED' : 'READY'");
-    expect(repository).toContain("return resolved ? 'CLOSED' : 'READY'");
+    // Any RESOLVED channel must adopt as CLOSING (never direct CLOSED) so the
+    // durable CLOSING → terminal projection → provider archive lifecycle owns it.
+    expect(repository).toContain("const shouldClose = resolved");
+    expect(repository).toContain("state: shouldClose ? 'CLOSING' : 'READY'");
+    expect(repository).toContain("return shouldClose ? 'CLOSING' : 'READY'");
+    expect(repository).toContain('Never adopt a late-created channel directly as CLOSED');
   });
 });

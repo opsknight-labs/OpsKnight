@@ -18,8 +18,9 @@ function classifySlackHealth(error?: string): 'MISSING' | 'PERMISSION_ERROR' | '
 
 /**
  * Reconciles one Slack war room against the provider.
- * - READY: verifies channel via conversations.info (health check).
- * - AMBIGUOUS: marker/name scan to adopt a channel that may have been created (provisioning reconciliation).
+ * READY only: verifies channel via conversations.info (health check).
+ * AMBIGUOUS reconciliation is owned by WAR_ROOM_PROVISION{reconciliationOnly:true}
+ * (provisionSlackWarRoom tri-state lookup) — health must not adopt channels.
  * Never throws on permission/MISSING — those are health states. Only throws
  * WarRoomRetryableError on rate-limited/transient so the queue can retry.
  */
@@ -30,56 +31,9 @@ export async function reconcileSlackWarRoom(warRoomId: string): Promise<void> {
   });
   if (!room || room.provider !== 'SLACK' || !room.providerTenantId) return;
 
-  // AMBIGUOUS: provisioning reconciliation — scan by marker OR plannedExternalName (never generic name).
+  // AMBIGUOUS is handled by WAR_ROOM_PROVISION reconciliationOnly; health lane is READY-only.
   if (room.state === 'AMBIGUOUS') {
-    const svcId: string = (room.incident as { serviceId?: string }).serviceId ?? '';
-    const token = svcId ? await getSlackBotToken(svcId).catch(() => null) : null;
-    if (!token) {
-      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
-      return;
-    }
-    let found: { id: string; name: string } | null = null;
-    try {
-      const { findSlackChannelByMarker, slackWarRoomMarker } = await import('./client');
-      found = await findSlackChannelByMarker(token, slackWarRoomMarker(room.incidentId, room.generation));
-    } catch {}
-    if (!found) {
-      const planned = (room as { plannedExternalName?: string | null }).plannedExternalName ?? null;
-      if (planned) {
-        try {
-          const { findExistingSlackChannel } = await import('./client');
-          found = await findExistingSlackChannel(token, planned);
-        } catch {}
-      }
-    }
-    if (!found) {
-      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
-      return;
-    }
-    if (found && room.provisioningToken) {
-      const { runSerializableTransaction } = await import('@/lib/db-utils');
-      const { adoptWarRoomChannel } = await import('../../repository');
-      const { generateBridgeUrl } = await import('../../bridge');
-      const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
-      let warRoomUrl: string | null = null;
-      try {
-        if (svcId) {
-          const svc = await prisma.service.findUnique({ where: { id: svcId }, select: { warRoomVideoBridge: true, warRoomCustomBridgeUrl: true } });
-          warRoomUrl = generateBridgeUrl(room.incidentId, svc?.warRoomVideoBridge ?? config?.defaultVideoBridge ?? 'NONE', svc?.warRoomCustomBridgeUrl ?? config?.customBridgeUrlTemplate ?? null);
-        }
-      } catch {}
-      await runSerializableTransaction(tx =>
-        adoptWarRoomChannel(tx, {
-          warRoomId: room.id,
-          provisioningToken: room.provisioningToken!,
-          providerTenantId: room.providerTenantId,
-          channelId: found!.id,
-          channelName: found!.name,
-          channelUrl: warRoomUrl,
-        })
-      ).catch(() => {});
-      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
-    }
+    await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
     return;
   }
 
