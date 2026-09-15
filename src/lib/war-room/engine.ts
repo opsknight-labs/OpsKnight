@@ -1,6 +1,7 @@
+import crypto from 'crypto';
 import prisma from '@/lib/prisma';
 import { getWarRoomProvider, listWarRoomProviders } from './registry';
-import type { ProviderOperationResult, WarRoomIncidentEvent } from './provider';
+import type { WarRoomIncidentEvent } from './provider';
 import type { WarRoomProviderName } from './types';
 
 async function adapterForRoom(warRoomId: string) {
@@ -10,6 +11,12 @@ async function adapterForRoom(warRoomId: string) {
   });
   if (!room) throw new Error('War room was not found.');
   return getWarRoomProvider(room.provider as WarRoomProviderName);
+}
+
+function warRoomIdempotencyKey(event: WarRoomIncidentEvent): string {
+  const ordered = JSON.stringify([event.kind, event.incidentId, (event as { status?: string }).status, (event as { message?: string }).message, (event as { userId?: string }).userId, (event as { teamId?: string }).teamId]);
+  const h = crypto.createHash('sha256').update(ordered).digest('hex').slice(0, 16);
+  return event.incidentEventId ? `${event.incidentEventId}:${h}` : `${event.incidentId}:${event.kind}:${h}`;
 }
 
 export async function provisionWarRoom(
@@ -45,28 +52,38 @@ export async function reconcileWarRoom(warRoomId: string): Promise<void> {
 }
 
 export async function handleIncidentWarRoomEvent(event: WarRoomIncidentEvent): Promise<void> {
-  const outcomes = await Promise.all(
-    listWarRoomProviders().map(async adapter => {
-      try {
-        return { provider: adapter.provider, result: await adapter.handleIncidentEvent(event) };
-      } catch (error) {
-        return { provider: adapter.provider, error };
-      }
-    })
-  );
-  const failures: Array<{ provider: string; message: string }> = [];
-  outcomes.forEach(outcome => {
-    if ('error' in outcome) {
-      failures.push({
-        provider: outcome.provider,
-        message: outcome.error instanceof Error ? outcome.error.message : String(outcome.error),
-      });
-      return;
-    }
-    const result: ProviderOperationResult<void> = outcome.result;
-    if (!result.ok) failures.push({ provider: outcome.provider, message: result.message });
+  const idempotencyKey = event.idempotencyKey ?? warRoomIdempotencyKey(event);
+  const tagged: WarRoomIncidentEvent = { ...event, idempotencyKey } as WarRoomIncidentEvent;
+  const { scheduleJob } = await import('@/lib/jobs/queue');
+  // Durable per-provider fan-out: each provider gets its own retryable job so a
+  // Teams failure does not replay a successful Slack side-effect.
+  const pending = await prisma.backgroundJob.findMany({
+    where: { type: 'WAR_ROOM_PROVIDER_EVENT', status: { in: ['PENDING', 'PROCESSING'] } },
+    take: 100,
   });
-  if (failures.length > 0) {
-    throw new Error(failures.map(failure => `${failure.provider}: ${failure.message}`).join('; '));
+  const alreadyQueuedFor = (provider: string) =>
+    pending.some(job => {
+      const p = job.payload as unknown as Record<string, unknown>;
+      return p.provider === provider && p.idempotencyKey === idempotencyKey;
+    });
+  for (const adapter of listWarRoomProviders()) {
+    if (alreadyQueuedFor(adapter.provider)) continue;
+    await scheduleJob(
+      'WAR_ROOM_PROVIDER_EVENT',
+      new Date(),
+      { provider: adapter.provider, event: tagged, idempotencyKey } as unknown as Record<string, unknown>,
+      5
+    );
   }
+}
+
+export async function handleIncidentWarRoomProviderEvent(input: {
+  provider: WarRoomProviderName;
+  event: WarRoomIncidentEvent;
+  idempotencyKey?: string;
+}): Promise<void> {
+  const adapter = getWarRoomProvider(input.provider);
+  const event = input.idempotencyKey ? ({ ...input.event, idempotencyKey: input.idempotencyKey } as WarRoomIncidentEvent) : input.event;
+  const result = await adapter.handleIncidentEvent(event);
+  if (!result.ok) throw new Error(`${adapter.provider}: ${result.message}`);
 }

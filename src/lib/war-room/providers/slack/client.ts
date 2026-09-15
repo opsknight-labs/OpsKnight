@@ -75,12 +75,13 @@ export async function slackApiCall(
       const text = await response.text().catch(() => '');
       const isRateLimited = response.status === 429;
       const is5xx = response.status >= 500 && response.status <= 599;
+      const isTransportAmbiguous = isRateLimited || is5xx;
       return {
         ok: false,
         error: text ? text.slice(0, 500) : `HTTP ${response.status}`,
         httpStatus: response.status,
-        transportFailure: true,
-        sideEffectAmbiguous: isRateLimited || is5xx,
+        transportFailure: isTransportAmbiguous,
+        sideEffectAmbiguous: isTransportAmbiguous,
       };
     }
     return (await response.json()) as {

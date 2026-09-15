@@ -35,7 +35,10 @@ export type WarRoomProviderCapabilities = {
   reconciliation: boolean;
 };
 
-export type WarRoomIncidentEvent =
+export type WarRoomIncidentEvent = {
+  incidentEventId?: string;
+  idempotencyKey?: string;
+} & (
   | { kind: 'TRIGGER'; incidentId: string }
   | { kind: 'ENSURE'; incidentId: string }
   | { kind: 'LIFECYCLE'; incidentId: string; status: string; message: string }
@@ -43,7 +46,8 @@ export type WarRoomIncidentEvent =
   | { kind: 'MESSAGE'; incidentId: string; message: string }
   | { kind: 'TOPIC'; incidentId: string; status?: string }
   | { kind: 'INVITE_USER'; incidentId: string; userId: string }
-  | { kind: 'INVITE_TEAM'; incidentId: string; teamId: string };
+  | { kind: 'INVITE_TEAM'; incidentId: string; teamId: string }
+);
 
 /**
  * Provider boundary used by the neutral runtime. The orchestration methods are

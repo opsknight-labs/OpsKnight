@@ -47,7 +47,8 @@ export type JobType =
   | 'WAR_ROOM_PROVISION'
   | 'WAR_ROOM_PARTICIPANT_SYNC'
   | 'WAR_ROOM_PROJECT'
-  | 'WAR_ROOM_RECONCILE';
+  | 'WAR_ROOM_RECONCILE'
+  | 'WAR_ROOM_PROVIDER_EVENT';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -552,6 +553,26 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
         return markWarRoomJobCompleted(job.id);
       }
+      case 'WAR_ROOM_PROVIDER_EVENT': {
+        const raw = job.payload as Record<string, unknown>;
+        const providerValue = raw.provider;
+        const eventValue = raw.event as Record<string, unknown> | undefined;
+        const idempotencyKeyValue = raw.idempotencyKey as string | undefined;
+        if (
+          typeof providerValue !== 'string' ||
+          !eventValue ||
+          typeof eventValue.kind !== 'string' ||
+          typeof eventValue.incidentId !== 'string'
+        )
+          throw new Error('War-room provider event job is missing provider or event');
+        const { handleIncidentWarRoomProviderEvent } = await import('../war-room/engine');
+        await handleIncidentWarRoomProviderEvent({
+          provider: providerValue as import('../war-room/types').WarRoomProviderName,
+          event: eventValue as unknown as import('../war-room/provider').WarRoomIncidentEvent,
+          idempotencyKey: typeof idempotencyKeyValue === 'string' ? idempotencyKeyValue : undefined,
+        });
+        return markWarRoomJobCompleted(job.id);
+      }
       case 'EXTERNAL_OPERATION': {
         if (typeof payloadValue(job.payload, 'operationId') !== 'string')
           throw new Error('External operation job is missing operationId');
@@ -773,7 +794,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
       job.type === 'WAR_ROOM_PROVISION' ||
       job.type === 'WAR_ROOM_PROJECT' ||
       job.type === 'WAR_ROOM_PARTICIPANT_SYNC' ||
-      job.type === 'WAR_ROOM_RECONCILE';
+      job.type === 'WAR_ROOM_RECONCILE' ||
+      job.type === 'WAR_ROOM_PROVIDER_EVENT';
     if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
       const retryBudgetNeutral =

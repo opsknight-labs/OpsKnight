@@ -35,6 +35,18 @@ export async function claimWarRoomProvisioning(
         state: 'PROVISIONING',
         provisioningToken: token,
         provisioningStartedAt: now,
+        // Clear previous generation's fencing markers so a definite FAILED retry
+        // does not stay fenced by a stale createAttemptedAt/createOperationId.
+        createAttemptedAt: null,
+        createOperationId: null,
+        // plannedExternalName is per-generation; a reclaimed FAILED row starts
+        // a fresh durable identity for the next attempt.
+        plannedExternalName: null,
+        commandCreateAttemptedAt: null,
+        commandMessageId: null,
+        commandConversationId: null,
+        projectionLeaseToken: null,
+        projectionLeaseExpiresAt: null,
         lastError: null,
         lastErrorCode: null,
       },
