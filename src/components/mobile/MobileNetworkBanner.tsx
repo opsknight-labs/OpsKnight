@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { flushQueuedRequests } from '@/lib/offline-queue';
 import { WifiOff, Wifi } from 'lucide-react';
 
 type ConnectionInfo = {
@@ -31,13 +30,9 @@ export default function MobileNetworkBanner() {
 
     updateOnline();
     updateConnection();
-    if (navigator.onLine) {
-      void flushQueuedRequests();
-    }
 
     const handleOnline = () => {
       updateOnline();
-      void flushQueuedRequests();
     };
 
     window.addEventListener('online', handleOnline);

@@ -261,6 +261,9 @@ export default function MobilePwaCoordinator({
       waitingWorker.postMessage({ type: 'SKIP_WAITING' });
       void activateWaitingWorker;
       setApplyingUpdate(true);
+      setTimeout(() => {
+        setApplyingUpdate(false);
+      }, 8_000);
     } catch (error) {
       logger.warn('mobile.serviceWorker.activate_failed', { error });
       setApplyingUpdate(false);

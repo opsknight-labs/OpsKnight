@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Fingerprint, Lock, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
   const [isProtecting, setIsProtecting] = useState(true);
   const [unlockError, setUnlockError] = useState('');
   const [authenticating, setAuthenticating] = useState(false);
+  const hasAutoAttempted = useRef(false);
 
   const authenticate = useCallback(async () => {
     if (authenticating || !isSupported) return;
@@ -44,12 +45,13 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
 
       setIsLocked(false);
       setIsProtecting(false);
+      hasAutoAttempted.current = false;
     } catch (error) {
       logger.warn('mobile.app_lock.unlock_failed', {
         component: 'MobileBiometricGuard',
         error,
       });
-      setUnlockError('Verification was not completed. Try again to unlock OpsKnight.');
+      setUnlockError('Verification was not completed. Tap to unlock OpsKnight.');
     } finally {
       setAuthenticating(false);
     }
@@ -74,7 +76,10 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
   }, []);
 
   useEffect(() => {
-    if (isLocked && isSupported && !authenticating) void authenticate();
+    if (isLocked && isSupported && !authenticating && !hasAutoAttempted.current) {
+      hasAutoAttempted.current = true;
+      void authenticate();
+    }
   }, [authenticate, authenticating, isLocked, isSupported]);
 
   useEffect(() => {
@@ -84,6 +89,7 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
         setIsLocked(true);
         setIsProtecting(true);
         setUnlockError('');
+        hasAutoAttempted.current = false;
       } else if (isSupported) {
         setIsLocked(true);
         setIsProtecting(true);
@@ -111,15 +117,25 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-foreground text-background">
             <Lock className="h-7 w-7" aria-hidden="true" />
           </div>
-          <h2 id="mobile-app-lock-title" className="mt-5 text-xl font-bold tracking-tight text-foreground">
+          <h2
+            id="mobile-app-lock-title"
+            className="mt-5 text-xl font-bold tracking-tight text-foreground"
+          >
             OpsKnight is locked
           </h2>
-          <p id="mobile-app-lock-description" className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Verify with your device authenticator to reveal responder data. This local privacy lock does not replace your OpsKnight session or server authorization.
+          <p
+            id="mobile-app-lock-description"
+            className="mt-2 text-sm leading-relaxed text-muted-foreground"
+          >
+            Verify with your device authenticator to reveal responder data. This local privacy lock
+            does not replace your OpsKnight session or server authorization.
           </p>
 
           {unlockError ? (
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-left text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200" role="alert">
+            <div
+              className="mt-4 flex items-start gap-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-left text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
+              role="alert"
+            >
               <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>{unlockError}</span>
             </div>
@@ -132,12 +148,20 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
             disabled={!isSupported || authenticating}
           >
             <Fingerprint className="h-4 w-4" aria-hidden="true" />
-            {authenticating ? 'Verifying…' : isSupported ? 'Unlock with device verification' : 'Device verification unavailable'}
+            {authenticating
+              ? 'Verifying…'
+              : isSupported
+                ? 'Unlock with device verification'
+                : 'Device verification unavailable'}
           </Button>
         </div>
       </div>
 
-      <div aria-hidden={isLocked || isProtecting} inert={isLocked || isProtecting ? true : undefined} className={isLocked || isProtecting ? 'invisible' : ''}>
+      <div
+        aria-hidden={isLocked || isProtecting}
+        inert={isLocked || isProtecting ? true : undefined}
+        className={isLocked || isProtecting ? 'invisible' : ''}
+      >
         {children}
       </div>
     </>
