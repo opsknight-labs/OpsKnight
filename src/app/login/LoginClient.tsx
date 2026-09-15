@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
 import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
+import { appRoutes } from '@/lib/app-routes';
 
 type Props = {
   callbackUrl: string;
@@ -386,7 +387,9 @@ export default function LoginClient({
                 </div>
 
                 <Link
-                  href="/forgot-password"
+                  href={appRoutes.forgotPassword(
+                    effectiveFallback.startsWith('/m') || trustedPwa ? 'mobile' : 'desktop'
+                  )}
                   className="shrink-0 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors py-0.5"
                 >
                   Forgot password?

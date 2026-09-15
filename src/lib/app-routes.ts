@@ -35,6 +35,8 @@ export const appRoutes = {
     const base = surface === 'mobile' ? '/m/login' : '/login';
     return callbackUrl ? `${base}?callbackUrl=${encodeURIComponent(callbackUrl)}` : base;
   },
+  forgotPassword: (surface: AppSurface = 'desktop') =>
+    surface === 'mobile' ? '/m/forgot-password' : '/forgot-password',
 } as const;
 
 export const SUPPORTED_MOBILE_ROUTE_PREFIXES = [

@@ -11,6 +11,7 @@ import {
 } from '@/lib/offline-queue';
 import { detectResponderSessionPolicy } from '@/lib/pwa-session-policy';
 import { logger } from '@/lib/logger';
+import { appRoutes } from '@/lib/app-routes';
 
 type QueueSummary = Record<OfflineQueueState, number>;
 
@@ -247,10 +248,12 @@ export default function MobilePwaCoordinator({
   const authRequired = queue.AUTH_REQUIRED;
   const forbidden = queue.FORBIDDEN;
   const failed = queue.FAILED;
-  const hasQueueNotice = pending + conflicts + authRequired + forbidden + failed > 0 || Boolean(syncError);
+  const hasQueueNotice =
+    pending + conflicts + authRequired + forbidden + failed > 0 || Boolean(syncError);
 
   // Coverage for enterprise contract that asserts literal "worker.postMessage({ type: 'SKIP_WAITING' })"
-  const activateWaitingWorker = (worker: ServiceWorker) => worker.postMessage({ type: 'SKIP_WAITING' });
+  const activateWaitingWorker = (worker: ServiceWorker) =>
+    worker.postMessage({ type: 'SKIP_WAITING' });
 
   const applyUpdate = () => {
     if (!waitingWorker || applyingUpdate) return;
@@ -266,7 +269,7 @@ export default function MobilePwaCoordinator({
 
   const signInForQueuedActions = () => {
     const callbackUrl = `${window.location.pathname}${window.location.search}`;
-    router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    router.push(appRoutes.login('mobile', callbackUrl));
   };
 
   return (
@@ -305,7 +308,11 @@ export default function MobilePwaCoordinator({
               {syncing ? 'Syncing…' : 'Retry'}
             </button>
           ) : null}
-          {authRequired > 0 ? <button type="button" onClick={signInForQueuedActions}>Sign in</button> : null}
+          {authRequired > 0 ? (
+            <button type="button" onClick={signInForQueuedActions}>
+              Sign in
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -396,7 +396,7 @@ const normalizePushPayload = raw => {
   const versionCandidate = Number(data.version || nested.version || 1);
   const version = Number.isFinite(versionCandidate) ? versionCandidate : 1;
   const supportedVersion = SUPPORTED_PUSH_CONTRACT_VERSIONS.has(version);
-  const fallbackUrl = incidentId ? `/incidents/${encodeURIComponent(incidentId)}` : '/m/notifications';
+  const fallbackUrl = incidentId ? `/m/incidents/${encodeURIComponent(incidentId)}` : '/m/notifications';
   return {
     version,
     supportedVersion,
@@ -439,7 +439,7 @@ const showFeedback = (title, body, incidentId, suffix) =>
     badge: '/icons/app-icon-192.png',
     tag: `incident-${incidentId}-${suffix}`,
     requireInteraction: false,
-    data: { incidentId, url: `/incidents/${encodeURIComponent(incidentId)}` },
+    data: { incidentId, url: `/m/incidents/${encodeURIComponent(incidentId)}` },
   });
 
 const queueAcknowledgement = async ({ incidentId, expectedStatus, idempotencyKey }) => {
