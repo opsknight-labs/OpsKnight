@@ -81,6 +81,7 @@ function payload(
     lane,
     incidentId: 'inc-1',
     eventOrderAt: '2026-08-28T07:00:00.000Z',
+    sourceEventId: 'evt-test-source-id',
     ...(lifecycle ? { lifecycle } : {}),
   };
 }

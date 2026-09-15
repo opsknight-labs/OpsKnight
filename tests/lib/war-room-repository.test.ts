@@ -58,7 +58,13 @@ describe('war-room generation lifecycle', () => {
 
   it('fences close to the incident, provider, and active state', async () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
-    const result = await closeWarRoom({ incidentWarRoom: { updateMany } } as never, {
+    const findUnique = vi.fn().mockResolvedValue({
+      incidentId: 'incident-1',
+      provider: 'MICROSOFT_TEAMS',
+      state: 'READY',
+      createAttemptedAt: null,
+    });
+    const result = await closeWarRoom({ incidentWarRoom: { findUnique, updateMany } } as never, {
       incidentId: 'incident-1',
       warRoomId: 'room-1',
       provider: 'MICROSOFT_TEAMS',

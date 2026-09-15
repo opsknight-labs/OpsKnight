@@ -20,6 +20,18 @@ vi.mock('@/lib/war-room/registry', () => ({
   })),
 }));
 
+const lifecycleMocks = {
+  postSlackWarRoomUpdate: vi.fn().mockResolvedValue({ success: true }),
+  updateSlackWarRoomTopic: vi.fn().mockResolvedValue({ success: true }),
+  archiveSlackWarRoomChannel: vi.fn().mockResolvedValue({ success: true }),
+  inviteUserToSlackWarRoom: vi.fn().mockResolvedValue({ success: true }),
+  inviteTeamToSlackWarRoom: vi.fn().mockResolvedValue({ success: true }),
+};
+vi.mock('@/lib/war-room/providers/slack/lifecycle', () => lifecycleMocks);
+vi.mock('@/lib/war-room/providers/slack/projection', () => ({
+  requestSlackWarRoomProjectionForIncident: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('WarRoomProviderEventDelivery durability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -92,43 +104,56 @@ describe('WarRoomProviderEventDelivery durability', () => {
   });
 
   it('Slack LIFECYCLE stages: retry after partial topic failure does not duplicate message', async () => {
-    // Mock lifecycle to simulate message ok, topic fail on first attempt
-    const lifecycleMock = {
-      postSlackWarRoomUpdate: vi.fn().mockResolvedValue({ success: true }),
-      updateSlackWarRoomTopic: vi.fn()
-        .mockResolvedValueOnce({ success: false, error: 'topic boom' })
-        .mockResolvedValueOnce({ success: true }),
-      archiveSlackWarRoomChannel: vi.fn(),
-      inviteUserToSlackWarRoom: vi.fn(),
-      inviteTeamToSlackWarRoom: vi.fn(),
-    };
-    vi.doMock('@/lib/war-room/providers/slack/lifecycle', () => lifecycleMock);
-    // Mock delivery stage storage
-    const stages = new Map<string, string>(); // key -> status
-    vi.doMock('@/lib/war-room/delivery', async () => {
-      const actual = await vi.importActual('@/lib/war-room/delivery') as Record<string, unknown>;
-      return {
-        ...actual,
-        stageAlreadyCompleted: vi.fn(async (_id: string, stage: string) => stages.get(stage) === 'COMPLETED'),
-        ensureWarRoomStage: vi.fn(async (_id: string, stage: string) => { if (!stages.has(stage)) stages.set(stage, 'PENDING'); }),
-        completeWarRoomStage: vi.fn(async (_id: string, stage: string) => stages.set(stage, 'COMPLETED')),
-        failWarRoomStage: vi.fn(async (_id: string, stage: string) => stages.set(stage, 'FAILED')),
-      };
-    });
+    const stages = new Map<string, string>();
+    (prismaMock as Record<string, unknown>).warRoomProviderEventStage = {
+      findUnique: vi.fn(async ({ where }: { where: { deliveryId_stage?: { stage: string } } }) => {
+        const stage = where?.deliveryId_stage?.stage;
+        if (!stage) return null;
+        const status = stages.get(stage);
+        if (!status) return null;
+        return { id: `id-${stage}`, status, leaseExpiresAt: null } as unknown;
+      }),
+      create: vi.fn(async ({ data }: { data: { stage: string } }) => {
+        if (!stages.has(data.stage)) stages.set(data.stage, 'PENDING');
+        return { id: `id-${data.stage}`, ...data, status: stages.get(data.stage) } as unknown;
+      }),
+      updateMany: vi.fn(async ({ where, data }: { where: { stage: string }; data: { status: string } }) => {
+        const stage = where.stage;
+        if (!stage) return { count: 0 };
+        if (data.status === 'ATTEMPTING') {
+          const cur = stages.get(stage);
+          if (cur === 'COMPLETED' || cur === 'SKIPPED' || cur === 'AMBIGUOUS') return { count: 0 };
+          stages.set(stage, 'ATTEMPTING');
+          return { count: 1 };
+        }
+        if (data.status === 'COMPLETED') { stages.set(stage, 'COMPLETED'); return { count: 1 }; }
+        if (data.status === 'FAILED') { stages.set(stage, 'FAILED'); return { count: 1 }; }
+        if (data.status === 'AMBIGUOUS') { stages.set(stage, 'AMBIGUOUS'); return { count: 1 }; }
+        return { count: 1 };
+      }),
+    } as unknown;
+    (prismaMock as Record<string, unknown>).warRoomProviderEventDelivery = {
+      findUnique: vi.fn().mockResolvedValue(null),
+    } as unknown as Record<string, unknown>;
+    (prismaMock as Record<string, unknown>).incidentWarRoom = {
+      findFirst: vi.fn().mockResolvedValue(null),
+      updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    } as unknown as Record<string, unknown>;
+    lifecycleMocks.postSlackWarRoomUpdate.mockReset().mockResolvedValue({ success: true });
+    lifecycleMocks.updateSlackWarRoomTopic.mockReset()
+      .mockResolvedValueOnce({ success: false, error: 'topic boom' })
+      .mockResolvedValueOnce({ success: true });
     const { slackWarRoomAdapter } = await import('@/lib/war-room/providers/slack/adapter');
-    // First attempt: message succeeds, topic fails
     const first = await slackWarRoomAdapter.handleIncidentEvent({ kind: 'LIFECYCLE', incidentId: 'inc-1', status: 'ACKNOWLEDGED', message: 'hi' } as never, { deliveryId: 'd1', idempotencyKey: 'k1' });
     expect(first.ok).toBe(false);
-    expect(lifecycleMock.postSlackWarRoomUpdate).toHaveBeenCalledTimes(1);
-    expect(lifecycleMock.updateSlackWarRoomTopic).toHaveBeenCalledTimes(1);
-    // Second attempt (retry): message stage is COMPLETED so must not be called again
-    lifecycleMock.postSlackWarRoomUpdate.mockClear();
-    lifecycleMock.updateSlackWarRoomTopic.mockClear();
-    stages.set('slack:lifecycle:message', 'COMPLETED');
+    expect(lifecycleMocks.postSlackWarRoomUpdate).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.updateSlackWarRoomTopic).toHaveBeenCalledTimes(1);
+    lifecycleMocks.postSlackWarRoomUpdate.mockClear();
+    lifecycleMocks.updateSlackWarRoomTopic.mockClear();
     const second = await slackWarRoomAdapter.handleIncidentEvent({ kind: 'LIFECYCLE', incidentId: 'inc-1', status: 'ACKNOWLEDGED', message: 'hi' } as never, { deliveryId: 'd1', idempotencyKey: 'k1' });
     expect(second.ok).toBe(true);
-    expect(lifecycleMock.postSlackWarRoomUpdate).not.toHaveBeenCalled();
-    expect(lifecycleMock.updateSlackWarRoomTopic).toHaveBeenCalledTimes(1);
+    expect(lifecycleMocks.postSlackWarRoomUpdate).not.toHaveBeenCalled();
+    expect(lifecycleMocks.updateSlackWarRoomTopic).toHaveBeenCalledTimes(1);
   });
 
   it('Teams projector delegates to neutral participant-desired-state (no duplicate)', async () => {
