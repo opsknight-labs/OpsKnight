@@ -1305,34 +1305,45 @@ ${R} .status-v3-inspector__actions {
 }
 ${R} .status-v3-inspector__nav,
 ${R} .status-v3-inspector__close {
-  inline-size: 1.85rem;
-  block-size: 1.85rem;
-  width: 1.85rem;
-  height: 1.85rem;
+  inline-size: 1.85rem !important;
+  block-size: 1.85rem !important;
+  width: 1.85rem !important;
+  height: 1.85rem !important;
+  min-inline-size: 1.85rem !important;
+  min-block-size: 1.85rem !important;
+  min-width: 1.85rem !important;
+  min-height: 1.85rem !important;
   border-radius: 6px;
   border: 1px solid var(--status-panel-border, #cbd5e1);
   background: var(--status-panel-muted-bg, #f1f5f9);
   color: var(--status-text-strong, #0f172a);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  margin: 0;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-  flex-shrink: 0;
+  flex-shrink: 0 !important;
 }
 ${R} .status-v3-inspector__nav svg,
 ${R} .status-v3-inspector__close svg {
-  display: block;
-  inline-size: 0.95rem;
-  block-size: 0.95rem;
-  width: 0.95rem;
-  height: 0.95rem;
-  stroke: currentColor;
-  stroke-width: 2.25px;
-  flex-shrink: 0;
+  display: block !important;
+  inline-size: 15px !important;
+  block-size: 15px !important;
+  width: 15px !important;
+  height: 15px !important;
+  min-inline-size: 15px !important;
+  min-block-size: 15px !important;
+  min-width: 15px !important;
+  min-height: 15px !important;
+  stroke: currentColor !important;
+  stroke-width: 2.25px !important;
+  fill: none !important;
+  flex-shrink: 0 !important;
+  overflow: visible !important;
 }
 ${R} .status-v3-inspector__nav:hover:not(:disabled) {
   color: var(--status-text-strong, #0f172a);

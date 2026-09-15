@@ -308,12 +308,13 @@ function ServiceHistoryV3Inner({
                 className="status-v3-inspector__nav"
                 aria-label="Previous day"
                 title="Previous day (Left arrow)"
+                style={{ padding: 0 }}
                 disabled={selected === 0}
                 onClick={() => navigateDay(-1)}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="15"
+                  height="15"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -321,6 +322,7 @@ function ServiceHistoryV3Inner({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"
+                  style={{ display: 'block', flexShrink: 0 }}
                 >
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
@@ -330,12 +332,13 @@ function ServiceHistoryV3Inner({
                 className="status-v3-inspector__nav"
                 aria-label="Next day"
                 title="Next day (Right arrow)"
+                style={{ padding: 0 }}
                 disabled={selected === days.length - 1}
                 onClick={() => navigateDay(1)}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="15"
+                  height="15"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -343,6 +346,7 @@ function ServiceHistoryV3Inner({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"
+                  style={{ display: 'block', flexShrink: 0 }}
                 >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
@@ -352,11 +356,12 @@ function ServiceHistoryV3Inner({
                 className="status-v3-inspector__close"
                 aria-label="Close"
                 title="Close inspector (Esc)"
+                style={{ padding: 0 }}
                 onClick={() => setSelected(null)}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="15"
+                  height="15"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -364,6 +369,7 @@ function ServiceHistoryV3Inner({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   aria-hidden="true"
+                  style={{ display: 'block', flexShrink: 0 }}
                 >
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
