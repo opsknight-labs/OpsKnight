@@ -37,6 +37,8 @@ type OidcConfigRecord = {
   tokenEndpointAuthMethod?: string | null;
   profileMapping?: unknown;
   configVersion: number;
+  sessionMaxAgeSeconds?: number | null;
+  sessionIdleTimeoutSeconds?: number | null;
 };
 
 export type OidcConfig = {
@@ -58,6 +60,8 @@ export type OidcConfig = {
   tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | string;
   profileMapping?: Record<string, string> | null;
   configVersion: number;
+  sessionMaxAgeSeconds?: number | null;
+  sessionIdleTimeoutSeconds?: number | null;
 };
 
 export type OidcPublicConfig = {
@@ -179,6 +183,8 @@ async function fetchOidcConfigRecordUncached(): Promise<OidcConfigRecord | null>
       organizationId: config.organizationId,
       tokenEndpointAuthMethod: config.tokenEndpointAuthMethod,
       configVersion: config.configVersion,
+      sessionMaxAgeSeconds: config.sessionMaxAgeSeconds ?? null,
+      sessionIdleTimeoutSeconds: config.sessionIdleTimeoutSeconds ?? null,
     };
   } catch (error) {
     // Database connection error or other Prisma errors
@@ -294,6 +300,8 @@ export async function getOidcConfig(): Promise<OidcConfig | null> {
             : 'client_secret_basic',
         profileMapping: parseProfileMapping(config.profileMapping),
         configVersion: config.configVersion,
+        sessionMaxAgeSeconds: config.sessionMaxAgeSeconds ?? null,
+        sessionIdleTimeoutSeconds: config.sessionIdleTimeoutSeconds ?? null,
       };
 
       logger.info('[OIDC] Successfully loaded OIDC config', {

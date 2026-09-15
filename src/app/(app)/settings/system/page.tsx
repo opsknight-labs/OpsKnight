@@ -96,6 +96,8 @@ export default async function SystemSettingsPage() {
       organizationId?: string | null;
       tokenEndpointAuthMethod?: string | null;
       profileMapping?: Record<string, string> | null;
+      sessionMaxAgeSeconds?: number | null;
+      sessionIdleTimeoutSeconds?: number | null;
       updatedAt: string;
     } | null = null;
 
@@ -114,6 +116,8 @@ export default async function SystemSettingsPage() {
         organizationId: rawOidcConfig.organizationId,
         tokenEndpointAuthMethod: rawOidcConfig.tokenEndpointAuthMethod,
         profileMapping: rawOidcConfig.profileMapping as Record<string, string> | null,
+        sessionMaxAgeSeconds: rawOidcConfig.sessionMaxAgeSeconds,
+        sessionIdleTimeoutSeconds: rawOidcConfig.sessionIdleTimeoutSeconds,
         updatedAt: rawOidcConfig.updatedAt.toISOString(),
       };
     }

@@ -643,6 +643,8 @@ model OidcConfig {
   organizationId          String?
   tokenEndpointAuthMethod String?  @default("client_secret_basic")
   profileMapping          Json?    @default("{}")
+  sessionMaxAgeSeconds      Int?
+  sessionIdleTimeoutSeconds Int?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   updatedBy               String?

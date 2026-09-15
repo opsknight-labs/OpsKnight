@@ -38,6 +38,8 @@ describe('OIDC configuration loading', () => {
       organizationId: 'org_enterprise',
       tokenEndpointAuthMethod: 'client_secret_post',
       profileMapping: {},
+      sessionMaxAgeSeconds: null,
+      sessionIdleTimeoutSeconds: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       updatedBy: null,
@@ -49,6 +51,38 @@ describe('OIDC configuration loading', () => {
         tokenEndpointAuthMethod: 'client_secret_post',
         configVersion: 3,
         providerType: 'auth0',
+      })
+    );
+  });
+
+  it('loads database-configured sessionMaxAgeSeconds and sessionIdleTimeoutSeconds', async () => {
+    vi.mocked(prisma.oidcConfig.findFirst).mockResolvedValue({
+      id: 'default',
+      enabled: true,
+      issuer: 'https://login.example.com',
+      clientId: 'client-id',
+      clientSecret: 'encrypted-secret',
+      configVersion: 1,
+      autoProvision: true,
+      allowedDomains: [],
+      roleMapping: [],
+      customScopes: null,
+      providerType: 'okta',
+      providerLabel: null,
+      organizationId: null,
+      tokenEndpointAuthMethod: 'client_secret_basic',
+      profileMapping: {},
+      sessionMaxAgeSeconds: 28800,
+      sessionIdleTimeoutSeconds: 7200,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      updatedBy: null,
+    });
+
+    await expect(getOidcConfig()).resolves.toEqual(
+      expect.objectContaining({
+        sessionMaxAgeSeconds: 28800,
+        sessionIdleTimeoutSeconds: 7200,
       })
     );
   });

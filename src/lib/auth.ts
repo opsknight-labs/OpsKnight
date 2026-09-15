@@ -159,13 +159,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
     // Enterprise OIDC sessions have independent absolute, idle, renewal,
     // and server-side revocation boundaries. Credential sessions use a short
     // default and an explicit, bounded responder-device opt-in.
-    const enterpriseSession = getEnterpriseSessionPolicy();
+    const enterpriseSession = getEnterpriseSessionPolicy({
+      sessionMaxAgeSeconds: oidcConfig?.sessionMaxAgeSeconds,
+      sessionIdleTimeoutSeconds: oidcConfig?.sessionIdleTimeoutSeconds,
+    });
     const oidcSessionMaxAgeSeconds = enterpriseSession.maximumAgeSeconds;
     const credentialSessionMaxAgeSeconds = 60 * 60 * 24 * 7;
     const rememberMeMaxAgeSeconds = 60 * 60 * 24 * 90;
     const sessionUpdateAgeSeconds = enterpriseSession.updateAgeSeconds;
-    const sessionIdleTimeoutMs = enterpriseSession.idleTimeoutSeconds * 1000;
-    const oidcReauthenticateAfterMs = enterpriseSession.reauthenticateAfterSeconds * 1000;
     const localAuthPolicy = getLocalAuthPolicy();
 
     if (activeOidcConfig) {
@@ -570,14 +571,22 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           if (trigger === 'update') {
             const updatePayload = session as
-              | { activity?: boolean; extendSession?: boolean; profileRefresh?: boolean; force?: boolean }
+              | {
+                  activity?: boolean;
+                  extendSession?: boolean;
+                  profileRefresh?: boolean;
+                  force?: boolean;
+                }
               | undefined;
             const currentTime = Date.now();
             const currentTimeSec = Math.floor(currentTime / 1000);
             if (updatePayload?.activity || updatePayload?.extendSession) {
               augmentedToken.lastActivityAt = currentTime;
             }
-            if (updatePayload?.extendSession && typeof augmentedToken.sessionExpiresAt === 'number') {
+            if (
+              updatePayload?.extendSession &&
+              typeof augmentedToken.sessionExpiresAt === 'number'
+            ) {
               const isOidc = Boolean(augmentedToken.oidcAuthenticatedAt);
               const remember = augmentedToken.rememberMe === true;
 
@@ -591,7 +600,10 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
               if (typeof absoluteCap !== 'number') {
                 absoluteCap =
                   isOidc && augmentedToken.oidcAuthenticatedAt
-                    ? Math.floor((augmentedToken.oidcAuthenticatedAt + oidcReauthenticateAfterMs) / 1000)
+                    ? Math.floor(
+                        (augmentedToken.oidcAuthenticatedAt + oidcSessionMaxAgeSeconds * 1000) /
+                          1000
+                      )
                     : remember
                       ? currentTimeSec + rememberMeMaxAgeSeconds
                       : currentTimeSec + credentialSessionMaxAgeSeconds * 4;
@@ -630,12 +642,18 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             ) {
               return clearSessionToken(augmentedToken, 'OIDC_CONFIGURATION_CHANGED');
             }
-            if (currentTime - augmentedToken.oidcAuthenticatedAt >= oidcReauthenticateAfterMs) {
+            const currentPolicy = getEnterpriseSessionPolicy({
+              sessionMaxAgeSeconds: currentConfig.sessionMaxAgeSeconds,
+              sessionIdleTimeoutSeconds: currentConfig.sessionIdleTimeoutSeconds,
+            });
+            const effectiveReauthMs = currentPolicy.reauthenticateAfterSeconds * 1000;
+            const effectiveIdleMs = currentPolicy.idleTimeoutSeconds * 1000;
+            if (currentTime - augmentedToken.oidcAuthenticatedAt >= effectiveReauthMs) {
               return clearSessionToken(augmentedToken, 'OIDC_SESSION_RENEWAL_REQUIRED');
             }
             if (
               augmentedToken.lastActivityAt &&
-              currentTime - augmentedToken.lastActivityAt >= sessionIdleTimeoutMs
+              currentTime - augmentedToken.lastActivityAt >= effectiveIdleMs
             ) {
               return clearSessionToken(augmentedToken, 'OIDC_SESSION_IDLE_TIMEOUT');
             }
