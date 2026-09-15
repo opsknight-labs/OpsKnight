@@ -1943,7 +1943,7 @@ export default function StatusPageConfig({
                                     onChange={checked => {
                                       setFormData({ ...formData, showRegionHeatmap: checked });
                                       if (checked && privacySettings.showServiceRegions === false) {
-                                        setPrivacySettings((prev: any) => ({
+                                        setPrivacySettings(prev => ({
                                           ...prev,
                                           showServiceRegions: true,
                                         }));

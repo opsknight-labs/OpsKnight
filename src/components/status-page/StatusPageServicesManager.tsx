@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/shadcn/badge';
 import Switch from '@/components/ui/Switch';
 import FormField from '@/components/ui/FormField';
+import type { PrivacySettings } from '@/components/status-page/StatusPagePrivacySettings';
 
 export interface ServiceItem {
   id: string;
@@ -53,7 +54,7 @@ interface StatusPageServicesManagerProps {
     showTeamInformation?: boolean;
     [key: string]: any;
   };
-  setPrivacySettings?: React.Dispatch<React.SetStateAction<any>>;
+  setPrivacySettings?: React.Dispatch<React.SetStateAction<PrivacySettings>>;
   hasSelectedRegions: boolean;
 }
 
@@ -248,7 +249,7 @@ export default function StatusPageServicesManager({
             onChange={checked => {
               setFormData({ ...formData, showServicesByRegion: checked });
               if (checked && setPrivacySettings && privacySettings.showServiceRegions === false) {
-                setPrivacySettings((prev: any) => ({ ...prev, showServiceRegions: true }));
+                setPrivacySettings(prev => ({ ...prev, showServiceRegions: true }));
               }
             }}
             label="Group by Region"
@@ -267,7 +268,7 @@ export default function StatusPageServicesManager({
             onChange={checked => {
               setFormData({ ...formData, showServiceOwners: checked });
               if (setPrivacySettings) {
-                setPrivacySettings((prev: any) => ({ ...prev, showTeamInformation: checked }));
+                setPrivacySettings(prev => ({ ...prev, showTeamInformation: checked }));
               }
             }}
             label="Show Service Owners"
