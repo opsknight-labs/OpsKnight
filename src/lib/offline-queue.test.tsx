@@ -387,4 +387,27 @@ describe('offline-queue', () => {
     queue = await listQueuedRequests();
     expect(queue[0].state).toBe('FORBIDDEN');
   });
+
+  it('recovers gracefully from request timeout abort without crashing or losing queue items', async () => {
+    const id = await enqueueRequest({
+      operation: 'INCIDENT_STATUS',
+      url: '/api/incidents/inc-timeout/status',
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+      idempotencyKey: 'ack-timeout',
+    });
+    vi.mocked(global.fetch).mockRejectedValueOnce(
+      new DOMException('The user aborted a request.', 'AbortError')
+    );
+
+    await flushQueuedRequests();
+    const queue = await listQueuedRequests();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({
+      id,
+      state: 'PENDING',
+      retryCount: 1,
+    });
+    expect(queue[0].lastError).toMatch(/aborted|Network unavailable/i);
+  });
 });
