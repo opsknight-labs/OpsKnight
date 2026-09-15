@@ -52,9 +52,7 @@ export async function encodeWebPushSubscription(
  * Reads the current encrypted format and the previous plaintext JSON format so
  * existing installations migrate on the next registration without losing push.
  */
-export async function decodeWebPushSubscription(
-  token: string
-): Promise<StoredWebPushSubscription> {
+export async function decodeWebPushSubscription(token: string): Promise<StoredWebPushSubscription> {
   const candidates: string[] = [];
   try {
     candidates.push(await decrypt(token));
@@ -103,6 +101,7 @@ export async function sendWebPushSafely(
     method: details.method,
     headers: details.headers,
     body: details.body as BodyInit,
+    signal: AbortSignal.timeout(15_000),
   });
   if (response.ok) return;
 

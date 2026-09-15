@@ -187,8 +187,14 @@ export async function updateState(data: {
       data,
     });
   } catch (error) {
-    const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
-    if (code === 'P2025' || (error instanceof Error && /Record to update not found/.test(error.message))) {
+    const code =
+      typeof error === 'object' && error && 'code' in error
+        ? String((error as { code?: string }).code)
+        : '';
+    if (
+      code === 'P2025' ||
+      (error instanceof Error && /Record to update not found/.test(error.message))
+    ) {
       try {
         await prisma.cronSchedulerState.upsert({
           where: { id: SINGLETON_ID },
@@ -197,7 +203,9 @@ export async function updateState(data: {
         });
         return;
       } catch (upsertError) {
-        logger.error('[Cron] Failed to recreate missing scheduler state row', { error: upsertError });
+        logger.error('[Cron] Failed to recreate missing scheduler state row', {
+          error: upsertError,
+        });
         return;
       }
     }
@@ -360,12 +368,19 @@ async function runOnce() {
     const statusPageRouteReconciliation = await reconcileStatusPageRouteOperations();
     const { reconcileWarRoomHealth } = await import('./war-room/reconcile');
     const warRoomHealth = await reconcileWarRoomHealth();
-    let warRoomTerminalDrift: { checked: number; cleaned: number; stillPending: number; satisfied: number } | null = null;
+    let warRoomTerminalDrift: {
+      checked: number;
+      cleaned: number;
+      stillPending: number;
+      satisfied: number;
+    } | null = null;
     try {
       const { reconcileTerminalWarRoomDrift } = await import('./war-room/terminal-cleanup');
       warRoomTerminalDrift = await reconcileTerminalWarRoomDrift(20);
     } catch (error) {
-      logger.warn('[Cron] Terminal war-room drift sweep failed', { error: error instanceof Error ? error.message : String(error) });
+      logger.warn('[Cron] Terminal war-room drift sweep failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     logger.info('[Cron] Critical tasks processed', {
@@ -382,9 +397,12 @@ async function runOnce() {
     // Group 2: Secondary tasks (can run in parallel)
     const { processShiftRotations, processUpcomingShiftReminders } =
       await import('./oncall-handoff');
+    const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
+    const bulkPaused = await isBulkNotificationDeliveryPaused();
     const [
       retryResult,
-      centralNotificationResult,
+      criticalNotificationResult,
+      bulkNotificationResult,
       autoUnsnoozeResult,
       breachResult,
       handoffResult,
@@ -394,7 +412,10 @@ async function runOnce() {
       // scheduler-only deployment with no job-worker process still recovers;
       // both paths claim before delivering, so running both is safe.
       retryFailedNotifications(),
-      processCentralNotificationQueue(),
+      processCentralNotificationQueue({ trafficClasses: ['CRITICAL', 'TRANSACTIONAL'] }),
+      bulkPaused
+        ? Promise.resolve({ processed: 0, failed: 0, pending: 0, skipped: 0 })
+        : processCentralNotificationQueue({ trafficClasses: ['PUBLIC_INCIDENT', 'BULK'] }),
       processAutoUnsnoozeInternal(),
       checkSLABreaches(),
       processShiftRotations(new Date()),
@@ -403,7 +424,10 @@ async function runOnce() {
 
     logger.info('[Cron] Secondary tasks processed', {
       retries: retryResult,
-      centralNotifications: centralNotificationResult,
+      centralNotifications: {
+        critical: criticalNotificationResult,
+        bulk: bulkNotificationResult,
+      },
       autoUnsnooze: autoUnsnoozeResult,
       slaBreaches: {
         activeIncidents: breachResult.activeIncidentCount,

@@ -4,7 +4,6 @@ import '@/styles/index.css';
 import './layers.css';
 import { Providers } from './providers';
 import VersionCheck from '@/components/VersionCheck';
-import LegalSourceNotice from '@/components/LegalSourceNotice';
 
 const manrope = Manrope({
   variable: '--font-manrope',
@@ -66,7 +65,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <VersionCheck />
           {children}
-          <LegalSourceNotice />
         </Providers>
       </body>
     </html>

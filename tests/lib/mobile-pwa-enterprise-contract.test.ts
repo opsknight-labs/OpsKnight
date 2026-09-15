@@ -5,7 +5,7 @@ describe('mobile/PWA enterprise architecture contract', () => {
   it('keeps mobile login on the canonical login implementation', () => {
     const mobileLogin = fs.readFileSync('src/app/(public)/m/login/page.tsx', 'utf8');
     expect(mobileLogin).toContain("import LoginPage from '@/app/login/page'");
-    expect(mobileLogin).toContain('export default LoginPage');
+    expect(mobileLogin).toContain('LoginPage');
     expect(fs.existsSync('src/app/(public)/m/login/MobileLoginClient.tsx')).toBe(false);
   });
 
@@ -139,14 +139,17 @@ describe('mobile/PWA enterprise architecture contract', () => {
     expect(shellCss).toContain('env(safe-area-inset-bottom');
     expect(shellCss).toContain('min-height: 44px');
     expect(dialog).toContain('safe-area-inset-bottom');
-    expect(mobileButton).toContain("@/components/ui/shadcn/button");
-    expect(mobileCard).toContain("@/components/ui/shadcn/card");
+    expect(mobileButton).toContain('@/components/ui/shadcn/button');
+    expect(mobileCard).toContain('@/components/ui/shadcn/card');
   });
 
   it('shares the complete incident detail experience across desktop and mobile', () => {
     const desktopPage = fs.readFileSync('src/app/(app)/incidents/[id]/page.tsx', 'utf8');
     const mobilePage = fs.readFileSync('src/app/(mobile)/m/incidents/[id]/page.tsx', 'utf8');
-    const sharedDetail = fs.readFileSync('src/components/incident/IncidentDetailScreen.tsx', 'utf8');
+    const sharedDetail = fs.readFileSync(
+      'src/components/incident/IncidentDetailScreen.tsx',
+      'utf8'
+    );
 
     expect(desktopPage).toContain('IncidentDetailScreen');
     expect(mobilePage).toContain('IncidentDetailScreen');

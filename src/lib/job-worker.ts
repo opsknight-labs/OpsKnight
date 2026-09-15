@@ -290,10 +290,13 @@ async function runOnce(): Promise<void> {
     // recovery runs on every replica too.
     const notifications = await runCriticalNotificationCycle();
 
+    // Operational background jobs (war-room, Jira, side effects, auto-unsnooze)
+    // always continue; processPendingJobs automatically fences bulk fan-out when paused.
     const result = await processPendingJobs(
       workerState.workerConfig.batchSize,
       workerState.workerConfig.concurrency
     );
+
     const laneErrors = [...escalation.errors, ...notifications.errors];
     if (escalation.jobsFailed > 0) {
       laneErrors.push(`${escalation.jobsFailed} escalation job(s) failed`);

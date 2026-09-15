@@ -68,7 +68,10 @@ function getEncryptionKeyring(): EncryptionKeyEntry[] {
     }
   }
 
-  if (entries.length === 0 && process.env.NODE_ENV === 'development') {
+  if (
+    entries.length === 0 &&
+    (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test')
+  ) {
     logger.warn(
       '[Encryption] Encryption keys not set. Using development fallback key. DO NOT use this in production.'
     );

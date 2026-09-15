@@ -23,8 +23,27 @@ type IncidentWithService = Incident & {
   team?: { id?: string; name?: string | null } | null;
 };
 
+/**
+ * Controls whether personal incident notifications go through the central
+ * control plane (default: ON — opt-out with NOTIFICATION_CONTROL_PLANE_PERSONAL=false).
+ *
+ * ## Rolling-upgrade safety
+ * The central control plane is safe during mixed-version deployments because:
+ *   1. `createCentralNotificationIntent` uses ON CONFLICT DO NOTHING, so concurrent
+ *      old + new replicas that both attempt to create an intent for the same
+ *      eventKey will only produce one row — no duplicate delivery.
+ *   2. Old replicas (before this commit) default to the legacy path; new replicas
+ *      default to the control-plane path. Overlap window = time to roll all replicas.
+ *   3. During the overlap, some notifications may take the legacy direct-dispatch path
+ *      instead of the central path — this is intentional and safe.
+ *
+ * To force legacy-only during a staged rollout, set:
+ *   NOTIFICATION_CONTROL_PLANE_PERSONAL=false
+ * on replicas you want to hold back, then remove the override once all replicas
+ * are on the new version.
+ */
 function personalControlPlaneEnabled(): boolean {
-  return process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL === 'true';
+  return process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL !== 'false';
 }
 
 async function sendCentralIncidentNotification(input: {

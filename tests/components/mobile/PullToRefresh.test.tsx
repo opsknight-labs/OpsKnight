@@ -4,79 +4,90 @@ import { useRouter } from 'next/navigation';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('next/navigation', () => ({
-    useRouter: vi.fn(),
-    usePathname: vi.fn().mockReturnValue('/m'),
-    useSearchParams: vi.fn().mockReturnValue({ toString: () => '' } as unknown as URLSearchParams),
+  useRouter: vi.fn(),
+  usePathname: vi.fn().mockReturnValue('/m'),
+  useSearchParams: vi.fn().mockReturnValue({ toString: () => '' } as unknown as URLSearchParams),
 }));
 
 vi.mock('@/components/mobile/MobileRefreshContext', () => ({
-    useMobileRefreshEpoch: vi.fn().mockReturnValue('test-epoch'),
+  useMobileRefreshEpoch: vi.fn().mockReturnValue('test-epoch'),
+  useMobileRefresh: vi
+    .fn()
+    .mockReturnValue({ epoch: 'test-epoch', refresh: vi.fn(), isRefreshing: false }),
+  MobileRefreshProvider: ({ children }: { children: React.ReactNode }) => children,
+  MobileRefreshEpochProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 describe('PullToRefresh', () => {
-    let refreshMock: ReturnType<typeof vi.fn>;
+  let refreshMock: ReturnType<typeof vi.fn>;
 
-    beforeEach(() => {
-        refreshMock = vi.fn();
-        (useRouter as any).mockReturnValue({ refresh: refreshMock });
-        global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) }) as unknown as typeof fetch;
+  beforeEach(() => {
+    refreshMock = vi.fn();
+    vi.mocked(useRouter).mockReturnValue({ refresh: refreshMock } as unknown as ReturnType<
+      typeof useRouter
+    >);
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    }) as unknown as typeof fetch;
+  });
+
+  it('triggers refresh when pulled down sufficiently at top', async () => {
+    const { container } = render(
+      <PullToRefresh>
+        <div>Test Content</div>
+      </PullToRefresh>
+    );
+
+    const ptrDiv = container.firstChild as HTMLElement;
+
+    // Mock closest() to return a mock element with scrollTop = 0
+    // We mock it on the ptrDiv instance.
+    // jsdom supports closest, but we want to control the return value's scrollTop
+    const mockScrollParent = { scrollTop: 0 };
+    ptrDiv.closest = vi.fn().mockReturnValue(mockScrollParent);
+
+    // 1. Touch Start
+    fireEvent.touchStart(ptrDiv, {
+      targetTouches: [{ clientY: 100 }],
     });
 
-    it('triggers refresh when pulled down sufficiently at top', async () => {
-        const { container } = render(
-            <PullToRefresh>
-                <div>Test Content</div>
-            </PullToRefresh>
-        );
-
-        const ptrDiv = container.firstChild as HTMLElement;
-
-        // Mock closest() to return a mock element with scrollTop = 0
-        // We mock it on the ptrDiv instance.
-        // jsdom supports closest, but we want to control the return value's scrollTop
-        const mockScrollParent = { scrollTop: 0 };
-        ptrDiv.closest = vi.fn().mockReturnValue(mockScrollParent);
-
-        // 1. Touch Start
-        fireEvent.touchStart(ptrDiv, {
-            targetTouches: [{ clientY: 100 }]
-        });
-
-        // 2. Touch Move (Down by 200px)
-        fireEvent.touchMove(ptrDiv, {
-            targetTouches: [{ clientY: 300 }]
-        });
-
-        // 3. Touch End — refresh is async (awaits /api/mobile/refresh then router.refresh)
-        fireEvent.touchEnd(ptrDiv);
-
-        const { waitFor } = await import('@testing-library/react');
-        await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    // 2. Touch Move (Down by 200px)
+    fireEvent.touchMove(ptrDiv, {
+      targetTouches: [{ clientY: 300 }],
     });
 
-    it('does NOT refresh if scrolled down', () => {
-        const { container } = render(
-            <PullToRefresh>
-                <div>Test Content</div>
-            </PullToRefresh>
-        );
+    // 3. Touch End — refresh is async (awaits /api/mobile/refresh then router.refresh)
+    fireEvent.touchEnd(ptrDiv);
 
-        const ptrDiv = container.firstChild as HTMLElement;
+    const { waitFor } = await import('@testing-library/react');
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
 
-        // Mock scrollTop > 0
-        const mockScrollParent = { scrollTop: 50 };
-        ptrDiv.closest = vi.fn().mockReturnValue(mockScrollParent);
+  it('does NOT refresh if scrolled down', () => {
+    const { container } = render(
+      <PullToRefresh>
+        <div>Test Content</div>
+      </PullToRefresh>
+    );
 
-        fireEvent.touchStart(ptrDiv, {
-            targetTouches: [{ clientY: 100 }]
-        });
+    const ptrDiv = container.firstChild as HTMLElement;
 
-        fireEvent.touchMove(ptrDiv, {
-            targetTouches: [{ clientY: 300 }]
-        });
+    // Mock scrollTop > 0
+    const mockScrollParent = { scrollTop: 50 };
+    ptrDiv.closest = vi.fn().mockReturnValue(mockScrollParent);
 
-        fireEvent.touchEnd(ptrDiv);
-
-        expect(refreshMock).not.toHaveBeenCalled();
+    fireEvent.touchStart(ptrDiv, {
+      targetTouches: [{ clientY: 100 }],
     });
+
+    fireEvent.touchMove(ptrDiv, {
+      targetTouches: [{ clientY: 300 }],
+    });
+
+    fireEvent.touchEnd(ptrDiv);
+
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
 });

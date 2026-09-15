@@ -89,7 +89,7 @@ function transactionDouble() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  delete process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL;
+  process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'false';
   vi.mocked(prisma.user.findUnique).mockResolvedValue(activeRecipient() as never);
   vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
   mocks.getUserNotificationChannels.mockResolvedValue(['EMAIL', 'SMS']);

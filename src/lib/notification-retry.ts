@@ -9,6 +9,7 @@ import {
   type NotificationEventType,
   type NotificationDeliveryChannel,
 } from './notification-delivery';
+import { NOTIFICATION_FRESHNESS_TTL_MS } from './notification-control-plane';
 
 const LEGACY_RETRY_MIDPOINT = () => 0.5;
 
@@ -16,6 +17,7 @@ export async function retryFailedNotifications(): Promise<{
   retried: number;
   succeeded: number;
   failed: number;
+  skipped?: number;
 }> {
   await prisma.notification.updateMany({
     where: {
@@ -74,6 +76,10 @@ export async function retryFailedNotifications(): Promise<{
   let succeeded = 0;
   let failed = 0;
   let retried = 0;
+  // skipped: stale-fenced rows (expired before delivery). Not a delivery
+  // failure — counted separately so operational dashboards can distinguish
+  // "tried and failed" from "arrived too late to send".
+  let skipped = 0;
   const readyToRetry = failedNotifications;
 
   const BATCH_SIZE = 10;
@@ -87,6 +93,28 @@ export async function retryFailedNotifications(): Promise<{
             data: { status: 'PENDING', failedAt: null, errorMsg: null },
           });
           if (claim.count === 0) return { success: false, claimed: false };
+
+          const ageMs = Date.now() - new Date(notification.createdAt).getTime();
+          const freshnessTtlMs =
+            notification.trafficClass === 'TRANSACTIONAL'
+              ? NOTIFICATION_FRESHNESS_TTL_MS.TRANSACTIONAL
+              : NOTIFICATION_FRESHNESS_TTL_MS.RESPONDER_CRITICAL;
+          if (ageMs > freshnessTtlMs) {
+            await prisma.notification.updateMany({
+              where: { id: notification.id, status: 'PENDING' },
+              data: {
+                status: 'SKIPPED',
+                failedAt: new Date(),
+                errorMsg: `Notification expired before delivery (age: ${Math.round(ageMs / 1000)}s > TTL ${Math.round(freshnessTtlMs / 1000)}s)`,
+              },
+            });
+            logger.info('notification.retry.expired_stale', {
+              notificationId: notification.id,
+              ageMs,
+              channel: notification.channel,
+            });
+            return { success: false, claimed: true, skipped: true };
+          }
 
           let result;
           try {
@@ -191,11 +219,20 @@ export async function retryFailedNotifications(): Promise<{
       if (result.status !== 'fulfilled' || !result.value.claimed) continue;
       retried++;
       if (result.value.success) succeeded++;
+      else if ('skipped' in result.value && result.value.skipped) skipped++;
       else failed++;
     }
   }
 
-  return { retried, succeeded, failed };
+  const output: { retried: number; succeeded: number; failed: number; skipped?: number } = {
+    retried,
+    succeeded,
+    failed,
+  };
+  if (skipped > 0) {
+    output.skipped = skipped;
+  }
+  return output;
 }
 
 /** Earliest time at which the scheduler has notification recovery work. */
