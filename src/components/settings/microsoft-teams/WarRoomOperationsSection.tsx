@@ -189,7 +189,7 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
   );
 }
 
-function RepairActions({ warRoomId, state }: { warRoomId: string; state: string }) {
+function RepairActions({ warRoomId, state, externalCleanupPending }: { warRoomId: string; state: string; externalCleanupPending?: boolean }) {
   const [pending, setPending] = useState<string | null>(null);
   const run = async (action: string) => {
     setPending(action);
@@ -213,16 +213,17 @@ function RepairActions({ warRoomId, state }: { warRoomId: string; state: string 
   };
   const projectionDisabled = !['READY', 'CLOSING'].includes(state);
   const participantDisabled = !['READY', 'CLOSING'].includes(state);
+  const cleanupDisabled = externalCleanupPending !== true || !['CLOSED', 'ARCHIVED'].includes(state);
   return (
     <div className="rounded-lg border bg-card p-3 space-y-2">
       <div className="flex items-center gap-2 text-xs font-semibold"><Wrench className="h-3.5 w-3.5" /> Safe repair actions</div>
-      <p className="text-[11px] text-muted-foreground">UI → Admin API → RBAC + state gate → enqueue canonical durable job → existing engine → adapter. Verify room runs Entra + Graph + bot + RSC + destination probe, then health reconcile. Idempotent; never calls Graph directly. Duplicate requests reuse the pending job.</p>
+      <p className="text-[11px] text-muted-foreground">UI → Admin API → RBAC + state gate → enqueue canonical durable job → existing engine → adapter. Verify Teams channel runs Graph channel health probe (marker scan), then health reconcile. Idempotent; never calls Graph directly. Duplicate requests reuse the pending job.</p>
       <div className="flex flex-wrap gap-1.5">
-        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('TEST_CONNECTION')} title="Entra + Graph + bot + RSC + destination probe (durable). Then health reconcile."><Send className="h-3 w-3 mr-1" />{pending === 'TEST_CONNECTION' ? 'Queuing…' : 'Verify room (Entra+Graph+bot+RSC)'}</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('TEST_CONNECTION')} title="Graph Teams channel health probe (marker scan) via durable job, then health reconcile."><Send className="h-3 w-3 mr-1" />{pending === 'TEST_CONNECTION' ? 'Queuing…' : 'Verify Teams channel'}</Button>
         <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('RECONCILE')}><RefreshCw className="h-3 w-3 mr-1" />{pending === 'RECONCILE' ? 'Queuing…' : 'Reconcile'}</Button>
         <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null || projectionDisabled} onClick={() => run('RETRY_PROJECTION')} title={projectionDisabled ? 'Only while READY or CLOSING' : undefined}><Layers2 className="h-3 w-3 mr-1" />Retry projection</Button>
         <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null || participantDisabled} onClick={() => run('RETRY_PARTICIPANT_SYNC')} title={participantDisabled ? 'Only while READY or CLOSING' : undefined}><UserPlus className="h-3 w-3 mr-1" />Retry participant sync</Button>
-        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('RETRY_EXTERNAL_CLEANUP')}><Trash2 className="h-3 w-3 mr-1" />Retry external cleanup</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null || cleanupDisabled} onClick={() => run('RETRY_EXTERNAL_CLEANUP')} title={cleanupDisabled ? 'Only when cleanup pending and CLOSED/ARCHIVED' : undefined}><Trash2 className="h-3 w-3 mr-1" />Retry external cleanup</Button>
         <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('REFRESH_PERMISSIONS')}><ShieldCheck className="h-3 w-3 mr-1" />Refresh permissions</Button>
       </div>
     </div>
@@ -288,7 +289,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
           <DiagnosticsRow label="Cleanup completed" value={diag.cleanup.externalCleanupCompletedAt} />
         </div>
       </div>
-      <RepairActions warRoomId={diag.warRoomId} state={diag.state} />
+      <RepairActions warRoomId={diag.warRoomId} state={diag.state} externalCleanupPending={diag.externalCleanupPending} />
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
         <ShieldCheck className="h-3 w-3" />No secrets or tokens are surfaced in diagnostics.
       </div>

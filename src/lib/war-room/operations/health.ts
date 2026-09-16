@@ -39,6 +39,8 @@ export type HealthInput = {
   participantDrift: number | null;
   rscUnknown?: boolean | null;
   permissionError?: boolean;
+  /** Bulk evidence was incomplete (DB read failed) — surface as UNKNOWN, never implicitly healthy. */
+  evidenceIncomplete?: boolean;
 };
 
 const UNKNOWN_HINT_CODES = new Set([
@@ -84,7 +86,14 @@ export function classifyOperationalHealth(input: HealthInput): {
   const stale = !input.lastReconciledAt || Date.now() - input.lastReconciledAt.getTime() > RECONCILIATION_STALE_MS;
   const unknownHint = isUnknownHint(input.lastErrorCode, input.lastError);
 
-  // UNKNOWN: provider unavailable and we cannot verify resource state. Requires stale + hint, or explicit unknown RSC.
+  // UNKNOWN: missing evidence or provider unavailable — never fail open to healthy.
+  if (input.evidenceIncomplete) {
+    return {
+      operationalHealth: 'UNKNOWN',
+      reasonCode: input.lastErrorCode ?? 'EVIDENCE_INCOMPLETE',
+      reasonMessage: input.lastError ?? 'Operational evidence is incomplete; health cannot be determined.',
+    };
+  }
   if ((stale && unknownHint) || (input.rscUnknown && !input.providerChannelId && stale)) {
     return {
       operationalHealth: 'UNKNOWN',
@@ -179,6 +188,7 @@ export function toOperationalSnapshot(input: {
   warRoomsEnabled?: boolean | null;
   installCountForProvider?: number | null;
   rscUnknown?: boolean | null;
+  evidenceIncomplete?: boolean;
 }): WarRoomOperationalSnapshot {
   const participantDrift = input.participantDrift ?? (input.participantCounts
     ? (input.participantCounts!.pending + input.participantCounts!.failed + (input.participantCounts?.desiredStale ?? 0))
@@ -206,6 +216,7 @@ export function toOperationalSnapshot(input: {
     participantDrift,
     rscUnknown: input.rscUnknown ?? null,
     permissionError: input.health === 'PERMISSION_ERROR',
+    evidenceIncomplete: input.evidenceIncomplete ?? false,
   });
   const lag = input.projectionVersion - input.lastProjectedVersion;
   return {

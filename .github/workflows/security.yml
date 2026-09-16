@@ -70,12 +70,20 @@ jobs:
             .replaceAll("'", '&apos;');
           const sarif = JSON.parse(fs.readFileSync('reports/eslint-security.sarif', 'utf8'));
           const results = sarif.runs?.flatMap((run) => run.results || []) || [];
+          // Only error-level findings count as JUnit failures — warnings/info are
+          // surfaced in SARIF/Code Scanning but must not inflate the Security
+          // Scan Summary with 19 red failures on every PR.
+          const errorLevel = (r) => (r.level || '').toLowerCase() === 'error';
+          const failures = results.filter(errorLevel).length;
           const cases = results.map((result) => {
             const rule = escapeXml(result.ruleId || 'eslint');
             const message = escapeXml(result.message?.text || 'ESLint finding');
-            return `    <testcase name="${rule}" classname="eslint"><failure message="${message}"/></testcase>`;
+            const isFail = errorLevel(result);
+            return isFail
+              ? `    <testcase name="${rule}" classname="eslint"><failure message="${message}"/></testcase>`
+              : `    <testcase name="${rule}" classname="eslint"/>`;
           }).join('\n');
-          const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<testsuites tests="${results.length}" failures="${results.length}"><testsuite name="ESLint Security" tests="${results.length}" failures="${results.length}">\n${cases}\n</testsuite></testsuites>\n`;
+          const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<testsuites tests="${results.length}" failures="${failures}"><testsuite name="ESLint Security" tests="${results.length}" failures="${failures}">\n${cases}\n</testsuite></testsuites>\n`;
           fs.writeFileSync('reports/eslint-security.xml', xml);
           NODE
         continue-on-error: true

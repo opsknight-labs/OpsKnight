@@ -32,6 +32,7 @@ type BulkContext = {
   teamsInstallCount: number | null;
   slackInstallCount: number | null;
   rscUnknownByContainerId: Map<string, boolean> | null;
+  evidenceIncomplete: boolean;
 };
 
 function countsFromParticipants(participants: Array<{ state: string; desiredVersion?: number | null; lastSyncAt?: Date | null }>) {
@@ -63,6 +64,7 @@ async function loadBulkContext(
   let warRoomsEnabled: boolean | null = null;
   let teamsInstallCount: number | null = null;
   let slackInstallCount: number | null = null;
+  let evidenceIncomplete = false;
 
   if (destIds.length > 0) {
     try {
@@ -70,7 +72,7 @@ async function loadBulkContext(
       for (const row of rows as unknown as Array<{ id: string; enabled: boolean; warRoomEnabled: boolean }>) {
         destMap.set(String(row.id), { enabled: Boolean(row.enabled), warRoomEnabled: Boolean(row.warRoomEnabled) });
       }
-    } catch {}
+    } catch { evidenceIncomplete = true; }
   }
   if (instIds.length > 0) {
     try {
@@ -78,7 +80,7 @@ async function loadBulkContext(
       for (const row of rows as unknown as Array<{ id: string; enabled: boolean }>) {
         instMap.set(String(row.id), { enabled: Boolean(row.enabled) });
       }
-    } catch {}
+    } catch { evidenceIncomplete = true; }
   }
   if (needsTeams) {
     try {
@@ -86,15 +88,15 @@ async function loadBulkContext(
       configEnabled = cfg?.enabled ?? null;
       warRoomsEnabled = cfg?.warRoomsEnabled ?? null;
       teamsInstallCount = await prismaAny.microsoftTeamsInstallation.count({ where: { enabled: true } } as never);
-    } catch {}
+    } catch { evidenceIncomplete = true; }
   }
   if (needsSlack && prismaAny.slackIntegration) {
     try {
       slackInstallCount = await prismaAny.slackIntegration.count({ where: { enabled: true } } as never);
-    } catch {}
+    } catch { evidenceIncomplete = true; }
   }
 
-  return { destMap, instMap, configEnabled, warRoomsEnabled, teamsInstallCount, slackInstallCount, rscUnknownByContainerId: rscUnknownByContainerId ?? null };
+  return { destMap, instMap, configEnabled, warRoomsEnabled, teamsInstallCount, slackInstallCount, rscUnknownByContainerId: rscUnknownByContainerId ?? null, evidenceIncomplete };
 }
 
 function enrichOperationalFromBulk(
@@ -172,6 +174,7 @@ function enrichOperationalFromBulk(
     warRoomsEnabled,
     installCountForProvider,
     rscUnknown,
+    evidenceIncomplete: Boolean(ctx.evidenceIncomplete),
   });
 }
 

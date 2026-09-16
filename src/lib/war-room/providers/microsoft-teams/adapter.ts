@@ -95,7 +95,9 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
       data: {
         health,
         lastReconciledAt: new Date(),
-        ...(health === 'HEALTHY' ? {} : { lastErrorCode: result.ok ? 'CHANNEL_MISSING' : result.code, lastError: result.ok ? 'The Teams war-room marker was not found during health reconciliation.' : result.message }),
+        ...(health === 'HEALTHY'
+          ? { lastErrorCode: null, lastError: null }
+          : { lastErrorCode: result.ok ? 'CHANNEL_MISSING' : result.code, lastError: result.ok ? 'The Teams war-room marker was not found during health reconciliation.' : result.message }),
       },
     });
   },

@@ -36,6 +36,14 @@ export const MICROSOFT_TEAMS_WAR_ROOM_MEMBERSHIP_RSC_PERMISSIONS = [
   'ChannelMember.Read.Group',
   'ChannelMember.ReadWrite.Group',
 ] as const;
+// Fleet-wide aggregate helper — full permission set required for the Teams capability contract
+// (create + lifecycle + membership). Worker refresh must not check only Channel.Create.Group.
+export const MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS: readonly string[] = [
+  ...MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS,
+  ...MICROSOFT_TEAMS_WAR_ROOM_LIFECYCLE_RSC_PERMISSIONS,
+  ...MICROSOFT_TEAMS_WAR_ROOM_MEMBERSHIP_RSC_PERMISSIONS,
+] as const;
+
 // Backwards-compatible export for callers that need the full opt-in union.
 export const MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS = [
   ...MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS,

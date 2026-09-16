@@ -614,7 +614,10 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           return markWarRoomJobCompleted(job.id);
         }
         if (raw.reason === 'permission_refresh') {
-          // Durable RSC probe for the room's team before normal health reconcile
+          // Durable RSC probe for the room's team before normal health reconcile.
+          // Must check the exact capability contract (create + lifecycle + membership)
+          // rather than the single default permission; otherwise a missing TeamsAppInstallation.Read
+          // would be invisible and the probe would incorrectly report healthy.
           try {
             const room = await prisma.incidentWarRoom.findUnique({
               where: { id: requiredPayloadString(job.payload, 'warRoomId') },
@@ -622,9 +625,12 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
             });
             if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId && room.providerContainerId) {
               const { getTeamsWarRoomRscGrantState } = await import('../microsoft-teams/client');
+              const { MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS } = await import('../microsoft-teams/app-manifest');
+              const requiredPermissions = [...MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS];
               await getTeamsWarRoomRscGrantState({
                 tenantId: room.providerTenantId,
                 teamId: room.providerContainerId,
+                requiredPermissions,
               }).catch(() => null);
             } else if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId) {
               const { getTeamsGrantedRscPermissions } = await import('../microsoft-teams/client');

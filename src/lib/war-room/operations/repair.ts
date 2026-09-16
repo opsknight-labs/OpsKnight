@@ -43,7 +43,7 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
   try {
     switch (action) {
       case 'TEST_CONNECTION': {
-        // Provider connection test: Entra+Graph+bot+RSC+destination probe via durable job.
+        // Provider connection test: Graph Teams channel health probe (marker scan) via durable job.
         // Worker routes `reason=connection_test` → probeMicrosoftTeamsChannelHealth + reconcile.
         const existing = await prisma.backgroundJob.findFirst({
           where: {
@@ -192,11 +192,12 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
         }
       }
       case 'RETRY_EXTERNAL_CLEANUP': {
-        // Targeted terminal-drift retry: invoke the real orphan lane for this
-        // single room immediately, then also ensure the periodic sweep will
-        // retry. Enqueues a synthetic reconcile that the worker routes to
-        // reconcileTerminalWarRoomDrift for this warRoomId.
-        // Deduped: if a cleanup-retry job already exists, reuse it.
+        // Targeted terminal-drift retry: only eligible when real orphan debt exists.
+        // CLOSING rooms can legitimately have externalCleanupPending=true before
+        // falling through to terminal — never clear/claim that debt prematurely.
+        if (!room.externalCleanupPending || !['CLOSED', 'ARCHIVED'].includes(room.state)) {
+          return { accepted: false, reasonCode: 'NOT_ELIGIBLE', message: 'External cleanup can only be retried when cleanup is pending and the war room is CLOSED or ARCHIVED.' };
+        }
         const existing = await prisma.backgroundJob.findFirst({
           where: {
             type: 'WAR_ROOM_RECONCILE',
@@ -235,13 +236,17 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
       }
       case 'REFRESH_PERMISSIONS': {
         // Durable RSC probe: enqueues a reconcile with permission_refresh so the
-        // worker can refresh RSC grants (getTeamsGrantedRscPermissions) for the
-        // room's team before running normal health reconciliation.
+        // worker can refresh RSC grants for the room's team before normal health reconcile.
+        // Scoped to reason=permission_refresh — a generic reconcile must not swallow an RSC probe.
         const existing = await prisma.backgroundJob.findFirst({
           where: {
             type: 'WAR_ROOM_RECONCILE',
             status: { in: ['PENDING', 'PROCESSING'] },
-            payload: { path: ['warRoomId'], equals: room.id } },
+            AND: [
+              { payload: { path: ['warRoomId'], equals: room.id } },
+              { payload: { path: ['reason'], equals: 'permission_refresh' } },
+            ],
+          },
           select: { id: true },
         });
         if (existing) {

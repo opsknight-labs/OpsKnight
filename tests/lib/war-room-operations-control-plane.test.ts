@@ -570,7 +570,7 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
     expect(repairSource).not.toMatch(/microsoftTeamsGraphRequest|getChannelById|findWarRoomChannel/);
   });
 
-  it('REFRESH_PERMISSIONS enqueues RECONCILE with permission_refresh reason', async () => {
+  it('REFRESH_PERMISSIONS enqueues RECONCILE with permission_refresh reason and scopes dedupe to that reason', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
     vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
@@ -580,11 +580,30 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
     expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_PERMISSIONS_REFRESHED' }));
     const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data.payload;
     expect(payload.reason).toBe('permission_refresh');
+    const findCall = vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mock.calls[0]?.[0];
+    expect(findCall.where.AND).toHaveLength(2);
+    expect(findCall.where.AND[1]).toEqual({ payload: { path: ['reason'], equals: 'permission_refresh' } });
+
+    // A generic reconcile must not swallow an RSC probe — call again still enqueues permission_refresh
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValueOnce(null);
+    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-perm-2' } as never);
+    const res2 = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'REFRESH_PERMISSIONS', actorId: 'admin-1' });
+    expect(res2.accepted).toBe(true);
+    expect(res2.jobId).toBe('job-perm-2');
+  });
+
+  it('REFRESH_PERMISSIONS reuses pending permission_refresh job (idempotent)', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-perm' } as never);
+    const dup = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'REFRESH_PERMISSIONS', actorId: 'admin-1' });
+    expect(dup.jobId).toBe('existing-perm');
+    expect(prisma.backgroundJob.create).not.toHaveBeenCalled();
   });
 
   it('RETRY_EXTERNAL_CLEANUP enqueues reconciler lane and is deduped (idempotent)', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'CLOSED', externalCleanupPending: true }) as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-cleanup' } as never);
     const dup = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
     expect(dup.jobId).toBe('existing-cleanup');
@@ -595,6 +614,19 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
     const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
     expect(res.jobType).toBe('WAR_ROOM_RECONCILE');
     expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'WAR_ROOM_EXTERNAL_CLEANUP_RETRY_REQUESTED' }));
+  });
+
+  it('RETRY_EXTERNAL_CLEANUP rejected when not CLOSED/ARCHIVED or no pending debt (lifecycle race guard)', async () => {
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'CLOSING', externalCleanupPending: true }) as never);
+    const closing = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
+    expect(closing.accepted).toBe(false);
+    expect(closing.reasonCode).toBe('NOT_ELIGIBLE');
+
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'CLOSED', externalCleanupPending: false }) as never);
+    const noDebt = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_EXTERNAL_CLEANUP', actorId: 'admin-1' });
+    expect(noDebt.accepted).toBe(false);
+    expect(noDebt.reasonCode).toBe('NOT_ELIGIBLE');
   });
 
   it('RBAC: requires ADMIN — viewer and responder are rejected', async () => {

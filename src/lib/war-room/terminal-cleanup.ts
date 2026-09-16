@@ -39,12 +39,10 @@ export async function reconcileTerminalWarRoomDriftForRoom(
   // No debt — nothing to do (idempotent)
   if (!room.externalCleanupPending) return 'satisfied';
   if (room.state !== 'CLOSED' && room.state !== 'ARCHIVED') {
-    // Only terminal rooms carry debt; for other states treat as satisfied to avoid loop
-    await prisma.incidentWarRoom.updateMany({
-      where: { id: room.id },
-      data: { externalCleanupPending: false, externalCleanupCompletedAt: new Date(), lastReconciledAt: new Date() },
-    });
-    return 'satisfied';
+    // Lifecycle race guard: CLOSING rooms can legitimately have externalCleanupPending=true
+    // before falling through to terminal. Never clear real orphan debt — return not-eligible
+    // without mutating anything so the caller can surface NOT_ELIGIBLE.
+    return 'pending';
   }
   try {
     if (room.provider === 'SLACK') {

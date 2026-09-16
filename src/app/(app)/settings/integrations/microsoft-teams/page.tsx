@@ -102,14 +102,21 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   for (const row of installationPermissions) {
     rscUnknownByContainerId.set(String(row.teamId), Boolean(row.unknown));
   }
-  const [warRoomSnapshots, cleanupPendingCounts] = await Promise.all([
-    getWarRoomOperationalSnapshots(100, { provider: 'MICROSOFT_TEAMS', rscUnknownByContainerId }).catch(() => [] as Awaited<ReturnType<typeof getWarRoomOperationalSnapshots>>),
-    (await import('@/lib/war-room/operations/diagnostics')).getWarRoomCleanupPendingCounts().catch(() => ({} as Record<string, number>)),
-  ]);
-  const operationalSummary = summarizeOperationalHealth(warRoomSnapshots);
+  let warRoomSnapshots: Awaited<ReturnType<typeof getWarRoomOperationalSnapshots>> | null = null;
+  let warRoomDiagnosticsError: string | null = null;
+  let cleanupPendingCounts: Record<string, number> = {};
+  try {
+    [warRoomSnapshots, cleanupPendingCounts] = await Promise.all([
+      getWarRoomOperationalSnapshots(100, { provider: 'MICROSOFT_TEAMS', rscUnknownByContainerId }),
+      (await import('@/lib/war-room/operations/diagnostics')).getWarRoomCleanupPendingCounts().catch(() => ({} as Record<string, number>)),
+    ]);
+  } catch (err) {
+    warRoomDiagnosticsError = err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300);
+    warRoomSnapshots = null;
+  }
+  const operationalSummary = warRoomSnapshots ? summarizeOperationalHealth(warRoomSnapshots) : [];
   const teamsSummary = operationalSummary.find(s => s.provider === 'MICROSOFT_TEAMS') ?? null;
-  // Health is derived from configuration+authentication+installation+permissions+room health — no `0 rooms => HEALTHY` fallthrough.
-  // When there are no Teams war rooms yet, the label reflects integration posture (UNKNOWN/UNAVAILABLE/DEGRADED) rather than a synthetic HEALTHY.
+  // Missing evidence must be UNKNOWN, never implicitly healthy. DB/diagnostics failure → UNKNOWN.
   const integrationHealthForEmpty: import('@/lib/war-room/operations/types').OperationalHealth = !isConnected
     ? 'UNAVAILABLE'
     : rscUnknown
@@ -119,10 +126,11 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         : health?.botHealthy === false
           ? 'DEGRADED'
           : 'HEALTHY';
-  const operationalHealthLabel = teamsSummary?.operationalHealth ?? integrationHealthForEmpty;
-  const totalWarRooms = warRoomSnapshots.length;
+  const operationalHealthLabel: import('@/lib/war-room/operations/types').OperationalHealth =
+    warRoomDiagnosticsError ? 'UNKNOWN' as const : (teamsSummary?.operationalHealth ?? integrationHealthForEmpty);
+  const totalWarRooms = warRoomSnapshots ? warRoomSnapshots.length : 0;
   // Unbounded debt — not limited to the paginated 100 window
-  const warRoomCleanupPending = cleanupPendingCounts['MICROSOFT_TEAMS'] ?? warRoomSnapshots.filter(s => s.externalCleanupPending).length;
+  const warRoomCleanupPending = cleanupPendingCounts['MICROSOFT_TEAMS'] ?? (warRoomSnapshots ? warRoomSnapshots.filter(s => s.externalCleanupPending).length : 0);
 
   return (
     <div className="space-y-6">
@@ -297,7 +305,14 @@ export default async function MicrosoftTeamsIntegrationRoute() {
 
       {/* Area 4 — War-room Operations (summary → drill-down diagnostics via Admin API, no secrets/tokens) */}
       <section id="war-room-operations">
-        <WarRoomOperationsSection snapshots={warRoomSnapshots as unknown as import('@/lib/war-room/operations/types').WarRoomOperationalSnapshot[]} />
+        {warRoomDiagnosticsError ? (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+            <div className="font-semibold flex items-center gap-2"><AlertTriangle className="h-4 w-4" /> War-room diagnostics unavailable</div>
+            <div className="mt-1 text-xs text-amber-800">Operational evidence could not be loaded — health is reported as UNKNOWN. {warRoomDiagnosticsError}</div>
+          </div>
+        ) : (
+          <WarRoomOperationsSection snapshots={(warRoomSnapshots ?? []) as unknown as import('@/lib/war-room/operations/types').WarRoomOperationalSnapshot[]} />
+        )}
       </section>
 
       {/* Full interactive console (config form, manifest, per-destination actions) — kept for console-managed credential flow; no .env */}
