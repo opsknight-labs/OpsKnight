@@ -139,11 +139,42 @@ export type IncidentMeetingView = {
   organizerEmail?: string | null;
   providerMeetingId?: string | null;
   createdAt: string;
+  readyAt?: string | null;
   closedAt?: string | null;
+  closeStartedAt?: string | null;
+  cleanupAttemptedAt?: string | null;
+  lastReconciledAt?: string | null;
+  externalCleanupPending?: boolean;
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
   actions: IncidentMeetingActions;
   readiness?: IncidentMeetingReadiness;
+};
+
+export type MeetingOperationalHealth =
+  | 'HEALTHY'
+  | 'DEGRADED'
+  | 'UNAVAILABLE'
+  | 'DRIFTED'
+  | 'UNKNOWN';
+
+export type MeetingOperationalSnapshot = {
+  resourceType: 'MEETING';
+  incidentId: string;
+  meetingId: string;
+  provider: IncidentMeetingProvider;
+  generation: number;
+  state: IncidentMeetingState;
+  health: MeetingOperationalHealth;
+  cleanupPending: boolean;
+  provisionJobState?: string | null;
+  closeJobState?: string | null;
+  lastReconciledAt?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+  createdAt: string;
+  readyAt?: string | null;
+  closedAt?: string | null;
 };
 
 export type ServiceWarRoomPolicy = {

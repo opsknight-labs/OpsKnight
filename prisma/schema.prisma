@@ -903,8 +903,12 @@ model IncidentMeeting {
   providerMeetingId     String?
   provisioningToken     String?
   provisioningStartedAt DateTime?
+  closeStartedAt        DateTime?
   readyAt               DateTime?
   closedAt              DateTime?
+  cleanupAttemptedAt    DateTime?
+  lastReconciledAt      DateTime?
+  externalCleanupPending Boolean                @default(false)
   lastErrorCode         String?
   lastErrorMessage      String?
   metadata              Json?
@@ -915,6 +919,8 @@ model IncidentMeeting {
   @@unique([incidentId, generation])
   @@index([incidentId, state])
   @@index([provider, externalId])
+  @@index([state, health, externalCleanupPending, lastReconciledAt])
+  @@index([state, provisioningStartedAt])
 }
 
 model WarRoomParticipant {
