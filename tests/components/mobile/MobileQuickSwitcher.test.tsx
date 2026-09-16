@@ -9,18 +9,24 @@ type MockVisualViewport = {
   offsetTop: number;
   addEventListener: (type: string, cb: () => void) => void;
   removeEventListener: (type: string, cb: () => void) => void;
+  dispatch: (type: 'resize' | 'scroll') => void;
 };
 
 function mockVisualViewport(height: number, offsetTop = 0): MockVisualViewport {
-  const listeners: Record<string, Array<() => void>> = {};
+  const listeners = new Map<string, Array<() => void>>();
   const viewport: MockVisualViewport = {
     height,
     offsetTop,
     addEventListener: (type, cb) => {
-      (listeners[type] ||= []).push(cb);
+      const existing = listeners.get(type) ?? [];
+      existing.push(cb);
+      listeners.set(type, existing);
     },
     removeEventListener: (type, cb) => {
-      listeners[type] = (listeners[type] || []).filter(l => l !== cb);
+      listeners.set(type, (listeners.get(type) ?? []).filter(l => l !== cb));
+    },
+    dispatch: type => {
+      for (const cb of listeners.get(type) ?? []) cb();
     },
   };
   Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
@@ -66,6 +72,24 @@ describe('MobileQuickSwitcher', () => {
 
     const sheet = screen.getByRole('dialog');
     expect(sheet.style.bottom).toBe('300px');
+  });
+
+  it('recalculates geometry live when the keyboard opens after the sheet is already visible', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    const viewport = mockVisualViewport(800, 0);
+    render(<MobileQuickSwitcher />);
+    fireEvent.click(screen.getByLabelText('Search OpsKnight'));
+
+    const sheet = screen.getByRole('dialog');
+    expect(sheet.style.bottom).toBe('0px');
+
+    // Keyboard opens: visual viewport shrinks and is pushed down from the top.
+    viewport.height = 500;
+    viewport.offsetTop = 20;
+    act(() => viewport.dispatch('resize'));
+
+    expect(parseInt(sheet.style.maxHeight, 10)).toBeLessThanOrEqual(500);
+    expect(sheet.style.bottom).toBe(`${800 - 500 - 20}px`);
   });
 
   it('returns focus to the search trigger when the sheet closes', () => {

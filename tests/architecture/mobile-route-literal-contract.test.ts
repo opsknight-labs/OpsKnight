@@ -15,25 +15,15 @@ const MOBILE_DIRS = [
 // `appRoutes`/`toMobilePath` (which always resolve to the `/m/**` mirror),
 // never as a hardcoded literal — a mobile route must never depend on
 // middleware guessing it should have been `/m/...`.
-const DESKTOP_ROUTE_ROOTS = [
-  'login',
-  'incidents',
-  'services',
-  'teams',
-  'users',
-  'policies',
-  'schedules',
-  'analytics',
-  'notifications',
-  'postmortems',
-  'settings',
-  'forgot-password',
-];
-
-const FORBIDDEN_LITERAL = new RegExp(
-  `(?:href|router\\.push|router\\.replace|redirect)\\s*[=(]\\s*["'\`]\\/(?:${DESKTOP_ROUTE_ROOTS.join('|')})(?:["'\`/?])`,
-  'g'
-);
+//
+// Kept as a literal (not built via `new RegExp(...)`) so this stays a fixed,
+// non-attacker-controlled pattern rather than a dynamic-regex construction
+// that static analysis would otherwise need to flag. If you add a route
+// root here, add it to both this comment and the alternation below.
+// login | incidents | services | teams | users | policies | schedules |
+// analytics | notifications | postmortems | settings | forgot-password
+const FORBIDDEN_LITERAL =
+  /(?:href|router\.push|router\.replace|redirect)\s*[=(]\s*["'`]\/(?:login|incidents|services|teams|users|policies|schedules|analytics|notifications|postmortems|settings|forgot-password)(?:["'`/?])/g;
 
 // Explicit, labelled escape hatches (e.g. "Open desktop workspace") are the
 // only allowed exception, and those already route through /api/prefer-desktop
@@ -42,8 +32,10 @@ const FORBIDDEN_LITERAL = new RegExp(
 const EXEMPT_FILES = new Set<string>();
 
 function listSourceFiles(dir: string): string[] {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed, hardcoded MOBILE_DIRS/recursion, not user input
   if (!fs.existsSync(dir)) return [];
   const out: string[] = [];
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed, hardcoded MOBILE_DIRS/recursion, not user input
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...listSourceFiles(full));
@@ -64,6 +56,7 @@ describe('mobile route-literal architecture contract', () => {
     for (const dir of MOBILE_DIRS) {
       for (const file of listSourceFiles(dir)) {
         if (EXEMPT_FILES.has(file)) continue;
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- file discovered from fixed MOBILE_DIRS, not user input
         const content = fs.readFileSync(file, 'utf8');
         const matches = content.match(FORBIDDEN_LITERAL);
         if (matches) violations.push(`${file}: ${matches.join(', ')}`);
@@ -83,11 +76,13 @@ describe('mobile route-literal architecture contract', () => {
     const signoutCallback = /\/api\/auth\/signout\?callbackUrl=([^'"`\s)]+)/g;
 
     const files = MOBILE_DIRS.flatMap(listSourceFiles).concat(
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed SHARED_AUTH_PAGES literal list, not user input
       SHARED_AUTH_PAGES.filter(file => fs.existsSync(file))
     );
 
     for (const file of files) {
       if (EXEMPT_FILES.has(file)) continue;
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- file discovered from fixed MOBILE_DIRS/SHARED_AUTH_PAGES, not user input
       const content = fs.readFileSync(file, 'utf8');
       for (const match of content.matchAll(signoutCallback)) {
         const raw = match[1];
