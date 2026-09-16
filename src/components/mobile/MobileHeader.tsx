@@ -3,6 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, CircleAlert, CircleCheck, Plus, TriangleAlert } from 'lucide-react';
+import MobileHeaderAction from '@/components/mobile/MobileHeaderAction';
 import MobileQuickSwitcher from '@/components/mobile/MobileQuickSwitcher';
 
 function getListTitle(pathname: string): string {
@@ -79,13 +80,11 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
           </Link>
         ) : route.backHref ? (
           <>
-            <Link
+            <MobileHeaderAction
               href={route.backHref}
-              className="mobile-header-icon-button"
-              aria-label={`Back to ${route.backHref.split('/').pop() || 'previous page'}`}
-            >
-              <ArrowLeft aria-hidden="true" />
-            </Link>
+              icon={<ArrowLeft className="h-5 w-5" aria-hidden="true" />}
+              label={`Back to ${route.backHref.split('/').pop() || 'previous page'}`}
+            />
             <span className="mobile-header-page-title">{route.title}</span>
           </>
         ) : (
@@ -95,24 +94,20 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
 
       <div className="mobile-header-actions">
         {pathname === '/m/incidents' && (
-          <Link
+          <MobileHeaderAction
             href="/m/incidents/create"
-            className="mobile-header-icon-button"
-            aria-label="Create incident"
-          >
-            <Plus aria-hidden="true" />
-          </Link>
+            icon={<Plus className="h-5 w-5" aria-hidden="true" />}
+            label="Create incident"
+          />
         )}
         <MobileQuickSwitcher />
-        <Link
+        <MobileHeaderAction
           href="/m/status"
-          className="mobile-header-system-button"
-          data-status={systemStatus}
-          aria-label={`System status: ${status.label}`}
+          icon={<StatusIcon className="h-5 w-5" aria-hidden="true" />}
+          label={`System status: ${status.label}`}
           title={status.label}
-        >
-          <StatusIcon aria-hidden="true" />
-        </Link>
+          tone={systemStatus}
+        />
       </div>
     </header>
   );

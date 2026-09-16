@@ -27,6 +27,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/shadcn/dialog';
+import MobileHeaderAction from '@/components/mobile/MobileHeaderAction';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { readCache, writeCache } from '@/lib/mobile-cache';
@@ -189,14 +190,11 @@ export default function MobileQuickSwitcher() {
 
   return (
     <>
-      <button
-        type="button"
-        className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Search OpsKnight"
+      <MobileHeaderAction
+        icon={<Search className="h-5 w-5" aria-hidden="true" />}
+        label="Search OpsKnight"
         onClick={() => setOpen(true)}
-      >
-        <Search className="h-4 w-4" aria-hidden="true" />
-      </button>
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="top-auto bottom-0 left-0 w-full max-w-none translate-x-0 translate-y-0 gap-0 rounded-t-2xl border-x-0 border-b-0 border-border bg-popover p-0 text-popover-foreground shadow-2xl sm:bottom-auto sm:left-1/2 sm:top-24 sm:w-[min(92vw,32rem)] sm:max-w-lg sm:-translate-x-1/2 sm:rounded-2xl sm:border">
