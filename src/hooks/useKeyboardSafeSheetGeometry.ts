@@ -22,10 +22,12 @@ export function useKeyboardSafeSheetGeometry(open: boolean): KeyboardSafeSheetGe
   const [bottomOffset, setBottomOffset] = useState(0);
 
   useEffect(() => {
-    if (!open || typeof window === 'undefined' || !window.visualViewport) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets geometry when the sheet closes or the viewport API is unavailable
+    const reset = () => {
       setMaxHeight(null);
       setBottomOffset(0);
+    };
+    if (!open || typeof window === 'undefined' || !window.visualViewport) {
+      reset();
       return;
     }
     const viewport = window.visualViewport;
