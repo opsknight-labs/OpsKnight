@@ -24,6 +24,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/shadcn/command';
 import MobileHeaderAction from '@/components/mobile/MobileHeaderAction';
+import { useKeyboardSafeSheetGeometry } from '@/hooks/useKeyboardSafeSheetGeometry';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { readCache, writeCache } from '@/lib/mobile-cache';
@@ -94,12 +95,8 @@ export default function MobileQuickSwitcher() {
   const [recents, setRecents] = useState<RecentItem[]>([]);
   const searchGeneration = useRef(0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  // iOS/Android keyboards shrink the visual viewport without reliably
-  // resizing `100dvh`; track it directly so the sheet is capped to the
-  // actually-visible area and lifted above the keyboard, instead of
-  // extending behind it.
-  const [sheetMaxHeight, setSheetMaxHeight] = useState<number | null>(null);
-  const [sheetBottomOffset, setSheetBottomOffset] = useState(0);
+  const { maxHeight: sheetMaxHeight, bottomOffset: sheetBottomOffset } =
+    useKeyboardSafeSheetGeometry(open);
   const hasQuery = query.trim().length >= MIN_QUERY_LENGTH;
 
   useEffect(() => {
@@ -126,33 +123,6 @@ export default function MobileQuickSwitcher() {
     });
     return () => {
       cancelled = true;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || typeof window === 'undefined' || !window.visualViewport) {
-      setSheetMaxHeight(null);
-      setSheetBottomOffset(0);
-      return;
-    }
-    const viewport = window.visualViewport;
-    const update = () => {
-      // The viewport itself is authoritative: never floor this above what is
-      // actually visible, or the sheet can extend behind the keyboard.
-      setSheetMaxHeight(Math.max(0, Math.round(viewport.height) - 12));
-      // `fixed bottom-0` anchors to the layout viewport, which does not move
-      // when the keyboard opens. Lift the sheet by however much the visual
-      // viewport has been pushed up/shrunk so it stays above the keyboard.
-      setSheetBottomOffset(
-        Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop))
-      );
-    };
-    update();
-    viewport.addEventListener('resize', update);
-    viewport.addEventListener('scroll', update);
-    return () => {
-      viewport.removeEventListener('resize', update);
-      viewport.removeEventListener('scroll', update);
     };
   }, [open]);
 

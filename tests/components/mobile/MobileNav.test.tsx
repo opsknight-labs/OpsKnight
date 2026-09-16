@@ -84,4 +84,26 @@ describe('MobileNav', () => {
 
     expect(scrollToMock).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
   });
+
+  // Design-system contract: every destination shares identical item/icon/label
+  // geometry classes -- none may opt into a bespoke size, so all five stay
+  // visually equal weight and the CSS 44px-minimum/safe-area rules apply
+  // uniformly across the row.
+  it('gives every destination identical item, icon and label geometry classes', () => {
+    render(<MobileNav />);
+    const links = screen.getAllByRole('link');
+    expect(links).toHaveLength(5);
+
+    for (const link of links) {
+      expect(link.className).toContain('mobile-nav-item');
+      const icon = link.querySelector('.mobile-nav-icon');
+      const label = link.querySelector('.mobile-nav-label');
+      expect(icon).toBeTruthy();
+      expect(label).toBeTruthy();
+      // Labels must render their full text -- no ellipsis/truncate class that
+      // could clip "Incidents" or "Notifications" at compact widths.
+      expect(label?.className).not.toMatch(/truncate|overflow-hidden/);
+      expect(label?.textContent?.trim().length).toBeGreaterThan(0);
+    }
+  });
 });
