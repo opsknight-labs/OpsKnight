@@ -197,20 +197,26 @@ export default function LoginClient({
         {/* Global Error Alert */}
         {error && (
           <div
-            className={`mb-6 p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-red-700 dark:text-red-300 text-xs flex items-start gap-2.5 ${
-              isShaking ? 'animate-shake' : ''
-            }`}
+            role="alert"
+            aria-live="assertive"
+            className={cn(
+              'mb-6 p-3 rounded-lg border border-red-200/80 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20 shadow-xs flex items-start gap-3 transition-all',
+              isShaking && 'animate-shake'
+            )}
           >
-            <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-semibold text-red-800 dark:text-red-200 mb-0.5">
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 mt-0.5">
+              <AlertCircle className="h-3.5 w-3.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-900 dark:text-white mb-0.5">
                 Couldn&apos;t sign you in
               </p>
-              <p className="text-red-600 dark:text-red-400">{error}</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{error}</p>
             </div>
             <button
+              type="button"
               onClick={() => setError('')}
-              className="text-red-400 hover:text-red-600 dark:hover:text-red-300 transition"
+              className="shrink-0 p-0.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
               aria-label="Dismiss error"
             >
               <X className="h-3.5 w-3.5" />
