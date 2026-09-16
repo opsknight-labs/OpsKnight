@@ -608,6 +608,48 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           );
           return markWarRoomJobCompleted(job.id);
         }
+        if (raw.reason === 'external_cleanup_retry') {
+          const { reconcileTerminalWarRoomDriftForRoom } = await import('../war-room/terminal-cleanup');
+          await reconcileTerminalWarRoomDriftForRoom(requiredPayloadString(job.payload, 'warRoomId'));
+          return markWarRoomJobCompleted(job.id);
+        }
+        if (raw.reason === 'permission_refresh') {
+          // Durable RSC probe for the room's team before normal health reconcile
+          try {
+            const room = await prisma.incidentWarRoom.findUnique({
+              where: { id: requiredPayloadString(job.payload, 'warRoomId') },
+              select: { provider: true, providerTenantId: true, providerContainerId: true },
+            });
+            if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId && room.providerContainerId) {
+              const { getTeamsWarRoomRscGrantState } = await import('../microsoft-teams/client');
+              await getTeamsWarRoomRscGrantState({
+                tenantId: room.providerTenantId,
+                teamId: room.providerContainerId,
+              }).catch(() => null);
+            } else if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId) {
+              const { getTeamsGrantedRscPermissions } = await import('../microsoft-teams/client');
+              await getTeamsGrantedRscPermissions({ explicitTenantId: room.providerTenantId }).catch(() => null);
+            }
+          } catch {}
+          const { reconcileWarRoom } = await import('../war-room/engine');
+          await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
+          return markWarRoomJobCompleted(job.id);
+        }
+        if (raw.reason === 'connection_test') {
+          try {
+            const room = await prisma.incidentWarRoom.findUnique({
+              where: { id: requiredPayloadString(job.payload, 'warRoomId') },
+              select: { provider: true },
+            });
+            if (room?.provider === 'MICROSOFT_TEAMS') {
+              const { probeMicrosoftTeamsChannelHealth } = await import('../war-room/providers/microsoft-teams/operations');
+              await probeMicrosoftTeamsChannelHealth(requiredPayloadString(job.payload, 'warRoomId')).catch(() => null);
+            }
+          } catch {}
+          const { reconcileWarRoom } = await import('../war-room/engine');
+          await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
+          return markWarRoomJobCompleted(job.id);
+        }
         const { reconcileWarRoom } = await import('../war-room/engine');
         await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
         return markWarRoomJobCompleted(job.id);

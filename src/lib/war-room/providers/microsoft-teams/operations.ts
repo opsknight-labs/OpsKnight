@@ -4,6 +4,24 @@ import prisma from '@/lib/prisma';
 import { getChannelById, findWarRoomChannel, warRoomMarker } from '@/lib/microsoft-teams/graph/channels';
 import type { WarRoomOperationalSnapshot } from '../../operations/types';
 import { toOperationalSnapshot } from '../../operations/health';
+import { addOperationalMetric } from '@/lib/metrics/operational/registry';
+
+/**
+ * Canonical Teams field resolver consumed by the diagnostics bulk path.
+ * Keeps provider interpretation in a single place — diagnostics bulk context
+ * delegates here rather than re-implementing Teams destination/install/config mapping.
+ */
+export function resolveMicrosoftTeamsOperationalFields(input: {
+  destinationEnabled: boolean | null;
+  destinationWarRoomEnabled: boolean | null;
+  installationEnabled: boolean | null;
+  configEnabled: boolean | null;
+  warRoomsEnabled: boolean | null;
+  installCountForProvider: number | null;
+  rscUnknown: boolean | null;
+}) {
+  return input;
+}
 
 /**
  * Teams → neutral adapter for operations.
@@ -124,8 +142,22 @@ export async function probeMicrosoftTeamsChannelHealth(warRoomId: string): Promi
     const marker = warRoomMarker(room.incidentId, room.generation);
     result = await findWarRoomChannel({ tenantId: room.providerTenantId, teamId: room.providerContainerId, marker });
   }
-  if (result.ok && result.value) return { health: 'HEALTHY', code: null, message: null };
-  if (!result.ok && result.code === 'MISSING_PERMISSION') return { health: 'PERMISSION_ERROR', code: result.code, message: result.message };
-  if (result.ok && !result.value) return { health: 'MISSING', code: 'CHANNEL_MISSING', message: 'The Teams war-room marker was not found.' };
+  if (result.ok && result.value) {
+    addOperationalMetric('opsknight_war_room_reconciliation_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'probe_healthy' });
+    return { health: 'HEALTHY', code: null, message: null };
+  }
+  if (!result.ok && result.code === 'MISSING_PERMISSION') {
+    addOperationalMetric('opsknight_provider_permission_failures_total', 1, { provider: 'MICROSOFT_TEAMS' });
+    addOperationalMetric('opsknight_war_room_reconciliation_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'probe_permission_error' });
+    return { health: 'PERMISSION_ERROR', code: result.code, message: result.message };
+  }
+  if (!result.ok && (result.code === 'RATE_LIMITED' || result.code === 'TRANSIENT_READ' || result.code === 'GRAPH_TOKEN_FAILED')) {
+    addOperationalMetric('opsknight_provider_rate_limits_total', 1, { provider: 'MICROSOFT_TEAMS' });
+  }
+  if (result.ok && !result.value) {
+    addOperationalMetric('opsknight_war_room_reconciliation_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'probe_missing' });
+    return { health: 'MISSING', code: 'CHANNEL_MISSING', message: 'The Teams war-room marker was not found.' };
+  }
+  addOperationalMetric('opsknight_war_room_reconciliation_total', 1, { provider: 'MICROSOFT_TEAMS', result: 'probe_degraded' });
   return { health: 'DEGRADED', code: (result as { code?: string }).code ?? 'UNKNOWN', message: (result as { message?: string }).message ?? 'Provider unavailable.' };
 }

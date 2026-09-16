@@ -564,6 +564,8 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
     const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'TEST_CONNECTION', actorId: 'admin-1' });
     expect(res.jobType).toBe('WAR_ROOM_RECONCILE');
     expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_CONNECTION_TESTED' }));
+    const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data.payload;
+    expect(payload.reason).toBe('connection_test');
     const repairSource = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
     expect(repairSource).not.toMatch(/microsoftTeamsGraphRequest|getChannelById|findWarRoomChannel/);
   });

@@ -97,12 +97,32 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   }
 
   // War-room Operations — provider-neutral operational snapshot (preserve per-installation correlation from getMicrosoftTeamsHealth)
-  const warRoomSnapshots = await getWarRoomOperationalSnapshots(100).catch(() => []);
+  // Build per-Team rscUnknown map: providerContainerId (teamId) -> unknown flag, so health can surface UNKNOWN when RSC is unverified.
+  const rscUnknownByContainerId = new Map<string, boolean>();
+  for (const row of installationPermissions) {
+    rscUnknownByContainerId.set(String(row.teamId), Boolean(row.unknown));
+  }
+  const [warRoomSnapshots, cleanupPendingCounts] = await Promise.all([
+    getWarRoomOperationalSnapshots(100, { provider: 'MICROSOFT_TEAMS', rscUnknownByContainerId }).catch(() => [] as Awaited<ReturnType<typeof getWarRoomOperationalSnapshots>>),
+    (await import('@/lib/war-room/operations/diagnostics')).getWarRoomCleanupPendingCounts().catch(() => ({} as Record<string, number>)),
+  ]);
   const operationalSummary = summarizeOperationalHealth(warRoomSnapshots);
   const teamsSummary = operationalSummary.find(s => s.provider === 'MICROSOFT_TEAMS') ?? null;
-  const operationalHealthLabel = teamsSummary?.operationalHealth ?? (warRoomSnapshots.length === 0 ? 'HEALTHY' : 'UNKNOWN');
+  // Health is derived from configuration+authentication+installation+permissions+room health — no `0 rooms => HEALTHY` fallthrough.
+  // When there are no Teams war rooms yet, the label reflects integration posture (UNKNOWN/UNAVAILABLE/DEGRADED) rather than a synthetic HEALTHY.
+  const integrationHealthForEmpty: import('@/lib/war-room/operations/types').OperationalHealth = !isConnected
+    ? 'UNAVAILABLE'
+    : rscUnknown
+      ? 'UNKNOWN'
+      : rscMissingCount > 0
+        ? 'DEGRADED'
+        : health?.botHealthy === false
+          ? 'DEGRADED'
+          : 'HEALTHY';
+  const operationalHealthLabel = teamsSummary?.operationalHealth ?? integrationHealthForEmpty;
   const totalWarRooms = warRoomSnapshots.length;
-  const warRoomCleanupPending = warRoomSnapshots.filter(s => s.externalCleanupPending).length;
+  // Unbounded debt — not limited to the paginated 100 window
+  const warRoomCleanupPending = cleanupPendingCounts['MICROSOFT_TEAMS'] ?? warRoomSnapshots.filter(s => s.externalCleanupPending).length;
 
   return (
     <div className="space-y-6">

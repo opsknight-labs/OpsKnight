@@ -216,9 +216,9 @@ function RepairActions({ warRoomId, state }: { warRoomId: string; state: string 
   return (
     <div className="rounded-lg border bg-card p-3 space-y-2">
       <div className="flex items-center gap-2 text-xs font-semibold"><Wrench className="h-3.5 w-3.5" /> Safe repair actions</div>
-      <p className="text-[11px] text-muted-foreground">UI → Admin API → RBAC + state gate → enqueue canonical durable job → existing engine → adapter. Idempotent; never calls Graph directly. Duplicate requests reuse the pending job.</p>
+      <p className="text-[11px] text-muted-foreground">UI → Admin API → RBAC + state gate → enqueue canonical durable job → existing engine → adapter. Verify room runs Entra + Graph + bot + RSC + destination probe, then health reconcile. Idempotent; never calls Graph directly. Duplicate requests reuse the pending job.</p>
       <div className="flex flex-wrap gap-1.5">
-        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('TEST_CONNECTION')}><Send className="h-3 w-3 mr-1" />{pending === 'TEST_CONNECTION' ? 'Queuing…' : 'Test connection'}</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('TEST_CONNECTION')} title="Entra + Graph + bot + RSC + destination probe (durable). Then health reconcile."><Send className="h-3 w-3 mr-1" />{pending === 'TEST_CONNECTION' ? 'Queuing…' : 'Verify room (Entra+Graph+bot+RSC)'}</Button>
         <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('RECONCILE')}><RefreshCw className="h-3 w-3 mr-1" />{pending === 'RECONCILE' ? 'Queuing…' : 'Reconcile'}</Button>
         <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null || projectionDisabled} onClick={() => run('RETRY_PROJECTION')} title={projectionDisabled ? 'Only while READY or CLOSING' : undefined}><Layers2 className="h-3 w-3 mr-1" />Retry projection</Button>
         <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null || participantDisabled} onClick={() => run('RETRY_PARTICIPANT_SYNC')} title={participantDisabled ? 'Only while READY or CLOSING' : undefined}><UserPlus className="h-3 w-3 mr-1" />Retry participant sync</Button>

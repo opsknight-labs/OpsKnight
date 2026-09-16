@@ -3,6 +3,7 @@ import 'server-only';
 import prisma from '@/lib/prisma';
 import { toOperationalSnapshot } from './health';
 import type { WarRoomDiagnosticsSnapshot, WarRoomOperationalSnapshot } from './types';
+import { resolveMicrosoftTeamsOperationalFields } from '../providers/microsoft-teams/operations';
 
 type PrismaAny = {
   incidentWarRoom: {
@@ -115,20 +116,22 @@ function enrichOperationalFromBulk(
   let rscUnknown: boolean | null = null;
 
   if (provider === 'MICROSOFT_TEAMS') {
-    if (destinationId) {
-      const d = ctx.destMap.get(destinationId);
-      destinationEnabled = d?.enabled ?? null;
-      destinationWarRoomEnabled = d?.warRoomEnabled ?? null;
-    }
-    if (installationId) {
-      installationEnabled = ctx.instMap.get(installationId)?.enabled ?? null;
-    }
-    configEnabled = ctx.configEnabled;
-    warRoomsEnabled = ctx.warRoomsEnabled;
-    installCountForProvider = ctx.teamsInstallCount;
-    if (containerId && ctx.rscUnknownByContainerId?.has(containerId)) {
-      rscUnknown = ctx.rscUnknownByContainerId.get(containerId) ?? null;
-    }
+    const mapped = resolveMicrosoftTeamsOperationalFields({
+      destinationEnabled: destinationId ? (ctx.destMap.get(destinationId)?.enabled ?? null) : null,
+      destinationWarRoomEnabled: destinationId ? (ctx.destMap.get(destinationId)?.warRoomEnabled ?? null) : null,
+      installationEnabled: installationId ? (ctx.instMap.get(installationId)?.enabled ?? null) : null,
+      configEnabled: ctx.configEnabled,
+      warRoomsEnabled: ctx.warRoomsEnabled,
+      installCountForProvider: ctx.teamsInstallCount,
+      rscUnknown: containerId && ctx.rscUnknownByContainerId?.has(containerId) ? (ctx.rscUnknownByContainerId.get(containerId) ?? null) : null,
+    });
+    destinationEnabled = mapped.destinationEnabled;
+    destinationWarRoomEnabled = mapped.destinationWarRoomEnabled;
+    installationEnabled = mapped.installationEnabled;
+    configEnabled = mapped.configEnabled;
+    warRoomsEnabled = mapped.warRoomsEnabled;
+    installCountForProvider = mapped.installCountForProvider;
+    rscUnknown = mapped.rscUnknown;
   } else if (provider === 'SLACK') {
     installCountForProvider = ctx.slackInstallCount;
     configEnabled = ctx.slackInstallCount != null ? ctx.slackInstallCount > 0 : null;

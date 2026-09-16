@@ -43,10 +43,17 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
   try {
     switch (action) {
       case 'TEST_CONNECTION': {
-        // UI → Admin API → enqueue durable test: provider-neutral "test connection" is a RECONCILE probe.
-        // For Teams, testMicrosoftTeamsConnection(destinationId) would require Graph; repair enqueues RECONCILE instead.
+        // Provider connection test: Entra+Graph+bot+RSC+destination probe via durable job.
+        // Worker routes `reason=connection_test` → probeMicrosoftTeamsChannelHealth + reconcile.
         const existing = await prisma.backgroundJob.findFirst({
-          where: { type: 'WAR_ROOM_RECONCILE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+          where: {
+            type: 'WAR_ROOM_RECONCILE',
+            status: { in: ['PENDING', 'PROCESSING'] },
+            AND: [
+              { payload: { path: ['warRoomId'], equals: room.id } },
+              { payload: { path: ['reason'], equals: 'connection_test' } },
+            ],
+          },
           select: { id: true },
         });
         if (existing) {
@@ -55,7 +62,7 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
           break;
         }
         const job = await prisma.backgroundJob.create({
-          data: { type: 'WAR_ROOM_RECONCILE', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 3, payload: { warRoomId: room.id } as unknown as never },
+          data: { type: 'WAR_ROOM_RECONCILE', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 3, payload: { warRoomId: room.id, reason: 'connection_test' } as unknown as never },
         });
         jobId = job.id;
         jobType = 'WAR_ROOM_RECONCILE';

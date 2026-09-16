@@ -27,6 +27,53 @@ const TERMINAL_DRIFT_MIN_RETRY_MS = 5 * 60_000;
  * - Backoff: each room is eligible no more often than TERMINAL_DRIFT_MIN_RETRY_MS
  *   after its last attempt (due predicate on externalCleanupLastAttemptAt).
  */
+/** Targeted single-room drift retry — bypasses the 5-minute backoff for operator-initiated RECONCILE. Never reopens lifecycle. */
+export async function reconcileTerminalWarRoomDriftForRoom(
+  warRoomId: string
+): Promise<'cleaned' | 'satisfied' | 'pending' | 'not_found'> {
+  const room = await prisma.incidentWarRoom.findUnique({
+    where: { id: warRoomId },
+    include: { incident: { select: { id: true, serviceId: true } } },
+  });
+  if (!room) return 'not_found';
+  // No debt — nothing to do (idempotent)
+  if (!room.externalCleanupPending) return 'satisfied';
+  if (room.state !== 'CLOSED' && room.state !== 'ARCHIVED') {
+    // Only terminal rooms carry debt; for other states treat as satisfied to avoid loop
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id },
+      data: { externalCleanupPending: false, externalCleanupCompletedAt: new Date(), lastReconciledAt: new Date() },
+    });
+    return 'satisfied';
+  }
+  try {
+    if (room.provider === 'SLACK') {
+      return await reconcileTerminalSlackDrift(room as never);
+    }
+    if (room.provider === 'MICROSOFT_TEAMS') {
+      return await reconcileTerminalTeamsDrift(room as never);
+    }
+    await prisma.incidentWarRoom.updateMany({
+      where: { id: room.id },
+      data: { externalCleanupPending: false, externalCleanupCompletedAt: new Date(), lastReconciledAt: new Date() },
+    });
+    return 'satisfied';
+  } catch (error) {
+    logger.warn('[ChatOps] Terminal drift (targeted) failed', {
+      warRoomId: room.id,
+      provider: room.provider,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    try {
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: room.id },
+        data: { externalCleanupLastAttemptAt: new Date(), lastReconciledAt: new Date() },
+      });
+    } catch {}
+    return 'pending';
+  }
+}
+
 export async function reconcileTerminalWarRoomDrift(
   limit = 20
 ): Promise<{ checked: number; cleaned: number; stillPending: number; satisfied: number }> {
