@@ -51,12 +51,19 @@ async function collectAdminInvariantBlockers(userId: string): Promise<string[]> 
  * blocking. Erasure only blocks on categories the erasure policy classifies
  * as `blocking: true` in policy.ts (active rotations, active
  * overrides/escalation ownership, open action items, active incident
- * assignment) — everything else is handled automatically by execute().
+ * assignment, active/future on-call shifts) — everything else is handled
+ * automatically by execute().
  */
 function collectDependencyBlockers(report: UserDependencyReport): string[] {
   const blockers: string[] = [];
   if (report.scheduleLayers.length > 0) {
     blockers.push(`Still assigned to ${report.scheduleLayers.length} on-call rotation layer(s).`);
+  }
+  if (report.shifts.length > 0) {
+    // discoverUserDependencies() already filters these to end >= now — a
+    // materialized current/future shift must be reassigned first, or
+    // erasure would delete it out from under live coverage.
+    blockers.push(`Assigned to ${report.shifts.length} active/future on-call shift(s).`);
   }
   if (report.overrides.length > 0) {
     blockers.push(`Referenced by ${report.overrides.length} active/future on-call override(s).`);

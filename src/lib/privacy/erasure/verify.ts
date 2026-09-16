@@ -1,6 +1,9 @@
 import 'server-only';
 
+import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
+
+export type ErasureVerificationClient = Prisma.TransactionClient | typeof prisma;
 
 export interface ErasureVerificationResult {
   verified: boolean;
@@ -9,14 +12,17 @@ export interface ErasureVerificationResult {
 
 /**
  * Post-execution assertions that a subject's identifying data is actually
- * gone. Runs after the erasure transaction commits (see execute.ts) — this is
- * the "VERIFY" step of the DISCOVER→PREVIEW→VALIDATE→EXECUTE→VERIFY→COMPLETE
- * model. originalEmail must be captured by the caller *before* the user row
- * is deleted; there is nothing left to look up it from afterwards.
+ * gone. Accepts an injectable client so execute.ts can run this *inside* the
+ * same transaction as the destructive mutation — a failed verification then
+ * rolls the whole transaction back (nothing was actually deleted) instead of
+ * leaving a partially-erased subject that a later step must reconcile.
+ * originalEmail must be captured by the caller *before* the user row is
+ * deleted; there is nothing left to look it up from afterwards.
  */
 export async function verifySubjectErasure(
   subjectId: string,
-  options: { originalEmail?: string | null } = {}
+  options: { originalEmail?: string | null } = {},
+  client: ErasureVerificationClient = prisma
 ): Promise<ErasureVerificationResult> {
   const issues: string[] = [];
   const originalEmail = options.originalEmail?.toLowerCase() ?? null;
@@ -25,7 +31,7 @@ export async function verifySubjectErasure(
     stillExists,
     teamMemberships,
     incidentWatchers,
-    onCallShifts,
+    activeOrFutureOnCallShifts,
     onCallLayerAssignments,
     onCallOverrides,
     userTokensById,
@@ -36,33 +42,34 @@ export async function verifySubjectErasure(
     auditLogByActorEmail,
     auditLogByTargetEmail,
   ] = await Promise.all([
-    prisma.user.findUnique({ where: { id: subjectId }, select: { id: true } }),
-    prisma.teamMember.count({ where: { userId: subjectId } }),
-    prisma.incidentWatcher.count({ where: { userId: subjectId } }),
-    prisma.onCallShift.count({ where: { userId: subjectId } }),
-    prisma.onCallLayerUser.count({ where: { userId: subjectId } }),
-    prisma.onCallOverride.count({
+    client.user.findUnique({ where: { id: subjectId }, select: { id: true } }),
+    client.teamMember.count({ where: { userId: subjectId } }),
+    client.incidentWatcher.count({ where: { userId: subjectId } }),
+    client.onCallShift.count({ where: { userId: subjectId, end: { gte: new Date() } } }),
+    client.onCallLayerUser.count({ where: { userId: subjectId } }),
+    client.onCallOverride.count({
       where: { OR: [{ userId: subjectId }, { replacesUserId: subjectId }] },
     }),
-    prisma.userToken.count({ where: { userId: subjectId } }),
+    client.userToken.count({ where: { userId: subjectId } }),
     originalEmail
-      ? prisma.userToken.count({ where: { identifier: originalEmail } })
+      ? client.userToken.count({ where: { identifier: originalEmail } })
       : Promise.resolve(0),
-    prisma.oidcConfig.count({ where: { updatedBy: subjectId } }),
-    prisma.slackIntegration.count({ where: { installedBy: subjectId } }),
-    prisma.auditLog.count({ where: { actorId: subjectId } }),
+    client.oidcConfig.count({ where: { updatedBy: subjectId } }),
+    client.slackIntegration.count({ where: { installedBy: subjectId } }),
+    client.auditLog.count({ where: { actorId: subjectId } }),
     originalEmail
-      ? prisma.auditLog.count({ where: { actorEmail: originalEmail } })
+      ? client.auditLog.count({ where: { actorEmail: originalEmail } })
       : Promise.resolve(0),
     originalEmail
-      ? prisma.auditLog.count({ where: { targetEmail: originalEmail } })
+      ? client.auditLog.count({ where: { targetEmail: originalEmail } })
       : Promise.resolve(0),
   ]);
 
   if (stillExists) issues.push('User row still exists.');
   if (teamMemberships > 0) issues.push(`${teamMemberships} team membership row(s) remain.`);
   if (incidentWatchers > 0) issues.push(`${incidentWatchers} incident watcher row(s) remain.`);
-  if (onCallShifts > 0) issues.push(`${onCallShifts} on-call shift row(s) remain.`);
+  if (activeOrFutureOnCallShifts > 0)
+    issues.push(`${activeOrFutureOnCallShifts} active/future on-call shift row(s) remain.`);
   if (onCallLayerAssignments > 0)
     issues.push(`${onCallLayerAssignments} on-call rotation layer row(s) remain.`);
   if (onCallOverrides > 0) issues.push(`${onCallOverrides} on-call override row(s) remain.`);

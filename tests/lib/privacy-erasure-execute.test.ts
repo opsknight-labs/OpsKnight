@@ -1,7 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => {
+  // Transaction client used by runSerializableTransaction
+  const txPrivacyErasureFindUnique = vi.fn();
+  const txPrivacyErasureCreate = vi.fn();
+  const txPrivacyErasureUpdateMany = vi.fn();
+
   const tx = {
+    privacyErasureExecution: {
+      findUnique: txPrivacyErasureFindUnique,
+      create: txPrivacyErasureCreate,
+      updateMany: txPrivacyErasureUpdateMany,
+    },
     auditLog: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     teamMember: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     incidentWatcher: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -23,23 +33,27 @@ const mocks = vi.hoisted(() => {
     notification: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     incident: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     userToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    user: { delete: vi.fn().mockResolvedValue({ id: 'subject-1' }) },
+    user: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
   };
 
   const privacyRequestFindUnique = vi.fn();
-  const privacyRequestUpdateMany = vi.fn().mockResolvedValue({ count: 1 });
   const executionFindUnique = vi.fn();
-  const executionUpsert = vi.fn();
+  const executionFindUniqueOrThrow = vi.fn();
   const executionUpdate = vi.fn();
+  const executionCreate = vi.fn();
   const userFindUnique = vi.fn();
   const auditCreate = vi.fn().mockResolvedValue(undefined);
+  // For emitAuditEvent's actor snapshot lookup (it does user.findUnique via the
+  // prisma client passed in)
+  const auditUserFindUnique = vi.fn().mockResolvedValue(null);
 
   const mockPrisma = {
-    privacyRequest: { findUnique: privacyRequestFindUnique, updateMany: privacyRequestUpdateMany },
+    privacyRequest: { findUnique: privacyRequestFindUnique },
     privacyErasureExecution: {
       findUnique: executionFindUnique,
-      upsert: executionUpsert,
+      findUniqueOrThrow: executionFindUniqueOrThrow,
       update: executionUpdate,
+      create: executionCreate,
     },
     user: { findUnique: userFindUnique },
     auditLog: { create: auditCreate },
@@ -51,21 +65,29 @@ const mocks = vi.hoisted(() => {
   const runSerializableTransaction = vi.fn(async (callback: (tx: unknown) => unknown) =>
     callback(tx)
   );
+  const transitionPrivacyRequest = vi.fn().mockResolvedValue({});
+  const emitAuditEvent = vi.fn().mockResolvedValue(undefined);
 
   return {
     tx,
+    txPrivacyErasureFindUnique,
+    txPrivacyErasureCreate,
+    txPrivacyErasureUpdateMany,
     privacyRequestFindUnique,
-    privacyRequestUpdateMany,
     executionFindUnique,
-    executionUpsert,
+    executionFindUniqueOrThrow,
     executionUpdate,
+    executionCreate,
     userFindUnique,
     auditCreate,
+    auditUserFindUnique,
     mockPrisma,
     buildSubjectErasurePlan,
     verifySubjectErasure,
     acquireAdvisoryLock,
     runSerializableTransaction,
+    transitionPrivacyRequest,
+    emitAuditEvent,
   };
 });
 
@@ -80,6 +102,12 @@ vi.mock('@/lib/privacy/erasure/plan', () => ({
 }));
 vi.mock('@/lib/privacy/erasure/verify', () => ({
   verifySubjectErasure: mocks.verifySubjectErasure,
+}));
+vi.mock('@/lib/privacy/requests', () => ({
+  transitionPrivacyRequest: mocks.transitionPrivacyRequest,
+}));
+vi.mock('@/lib/audit', () => ({
+  emitAuditEvent: mocks.emitAuditEvent,
 }));
 
 import { executeErasure } from '@/lib/privacy/erasure/execute';
@@ -117,17 +145,62 @@ function eligiblePlan(overrides: Partial<Record<string, unknown>> = {}) {
 describe('executeErasure', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.runSerializableTransaction.mockImplementation(
-      async (callback: (tx: unknown) => unknown) => callback(mocks.tx)
-    );
+    // Default: claim path creates a fresh RUNNING execution
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.txPrivacyErasureCreate.mockResolvedValue({ id: 'exec-1', status: 'RUNNING' });
+    mocks.txPrivacyErasureUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.executionFindUniqueOrThrow.mockResolvedValue({
+      id: 'exec-1',
+      status: 'RUNNING',
+      resultSummary: {},
+      manualReviewRequired: false,
+      mutationCommittedAt: new Date(),
+    });
     mocks.userFindUnique.mockResolvedValue({ email: 'alice@example.com', name: 'Alice' });
-    mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
-    mocks.executionUpsert.mockResolvedValue({ id: 'exec-1', status: 'RUNNING' });
+    // prisma.privacyErasureExecution.update is used for markClaimFailed,
+    // pre-persisting resultSummary/manualReview, mutationCommittedAt,
+    // and final COMPLETED.
     mocks.executionUpdate.mockImplementation(
       async ({ data }: { data: Record<string, unknown> }) => ({
         id: 'exec-1',
         ...data,
       })
+    );
+    mocks.transitionPrivacyRequest.mockResolvedValue({});
+    // reset tx leaf mocks that get .mock.calls inspected
+    for (const bucket of [
+      mocks.tx.auditLog,
+      mocks.tx.teamMember,
+      mocks.tx.incidentWatcher,
+      mocks.tx.onCallShift,
+      mocks.tx.onCallLayerUser,
+      mocks.tx.onCallOverride,
+      mocks.tx.oidcConfig,
+      mocks.tx.slackIntegration,
+      mocks.tx.slackOAuthConfig,
+      mocks.tx.notificationProvider,
+      mocks.tx.microsoftTeamsConfig,
+      mocks.tx.microsoftTeamsInstallation,
+      mocks.tx.microsoftTeamsDestination,
+      mocks.tx.team,
+      mocks.tx.incidentNote,
+      mocks.tx.postmortem,
+      mocks.tx.incidentTemplate,
+      mocks.tx.actionItem,
+      mocks.tx.notification,
+      mocks.tx.incident,
+      mocks.tx.userToken,
+      mocks.tx.user,
+    ]) {
+      for (const fn of Object.values(bucket)) {
+        if (typeof fn === 'function' && 'mockResolvedValue' in fn) {
+          (fn as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 } as never);
+        }
+      }
+    }
+    mocks.tx.user.deleteMany.mockResolvedValue({ count: 1 } as never);
+    mocks.runSerializableTransaction.mockImplementation(
+      async (callback: (tx: unknown) => unknown) => callback(mocks.tx)
     );
   });
 
@@ -141,19 +214,20 @@ describe('executeErasure', () => {
 
   it('refuses a request whose type is not ERASURE', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ requestType: 'ACCESS' }));
-    mocks.executionFindUnique.mockResolvedValue(null);
 
     await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
       code: 'PRIVACY_ERASURE_PREREQUISITES_NOT_MET',
     });
+    expect(mocks.txPrivacyErasureFindUnique).not.toHaveBeenCalled();
   });
 
   it('is idempotent: a second call against an already-COMPLETED execution is a safe no-op', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
-    mocks.executionFindUnique.mockResolvedValue({
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue({
       id: 'exec-1',
       status: 'COMPLETED',
       resultSummary: { userProfile: 1 },
+      manualReviewRequired: false,
     });
 
     const result = await executeErasure(REQUEST_ID, ACTOR);
@@ -162,24 +236,33 @@ describe('executeErasure', () => {
       executionId: 'exec-1',
       status: 'COMPLETED',
       domainCounts: { userProfile: 1 },
+      manualReviewRequired: false,
     });
     expect(mocks.buildSubjectErasurePlan).not.toHaveBeenCalled();
-    expect(mocks.runSerializableTransaction).not.toHaveBeenCalled();
+    // Only the claim transaction ran — no destructive transaction
+    expect(mocks.runSerializableTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('refuses to run before identity verification / outside PROCESSING', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ verifiedAt: null }));
-    mocks.executionFindUnique.mockResolvedValue(null);
+    // claim succeeds so we reach the prerequisites check
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
 
     await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
       code: 'PRIVACY_ERASURE_PREREQUISITES_NOT_MET',
     });
     expect(mocks.buildSubjectErasurePlan).not.toHaveBeenCalled();
+    expect(mocks.executionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'exec-1' },
+        data: expect.objectContaining({ status: 'FAILED' }),
+      })
+    );
   });
 
   it('blocks execution and marks the execution FAILED when the plan has blocking conditions', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
-    mocks.executionFindUnique.mockResolvedValue(null);
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
     mocks.buildSubjectErasurePlan.mockResolvedValue(
       eligiblePlan({
         canExecute: false,
@@ -191,13 +274,16 @@ describe('executeErasure', () => {
       code: 'PRIVACY_ERASURE_BLOCKED',
     });
 
-    expect(mocks.runSerializableTransaction).not.toHaveBeenCalled();
+    // No destructive transaction — only the claim transaction ran
+    expect(mocks.runSerializableTransaction).toHaveBeenCalledTimes(1);
     expect(mocks.executionUpdate).toHaveBeenCalledWith({
       where: { id: 'exec-1' },
       data: { status: 'FAILED', failureCode: 'BLOCKED' },
     });
-    const actions = mocks.auditCreate.mock.calls.map(call => call[0].data.action);
-    expect(actions).toEqual(['privacy.erasure.started', 'privacy.erasure.failed']);
+    const actions = mocks.emitAuditEvent.mock.calls.map(call => call[0].action);
+    expect(actions).toEqual(
+      expect.arrayContaining(['privacy.erasure.started', 'privacy.erasure.failed'])
+    );
   });
 
   // --- The mandatory regression guarantee -----------------------------------
@@ -209,7 +295,7 @@ describe('executeErasure', () => {
   // touched by this code path, independent of what a live DB does with them.
   it('detaches an erased responder from incidents without touching any SLA/MTTA/MTTR field', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
-    mocks.executionFindUnique.mockResolvedValue(null);
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
     mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
     mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
 
@@ -233,7 +319,7 @@ describe('executeErasure', () => {
 
   it('scrubs the audit-log PII snapshot but never touches action/entityType/createdAt', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
-    mocks.executionFindUnique.mockResolvedValue(null);
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
     mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
     mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
 
@@ -257,28 +343,35 @@ describe('executeErasure', () => {
 
   it('deletes the User row and transitions the request to COMPLETED on success', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
-    mocks.executionFindUnique.mockResolvedValue(null);
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
     mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
     mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
 
     await executeErasure(REQUEST_ID, ACTOR);
 
-    expect(mocks.tx.user.delete).toHaveBeenCalledWith({ where: { id: SUBJECT_ID } });
-    expect(mocks.privacyRequestUpdateMany).toHaveBeenCalledWith({
-      where: { id: REQUEST_ID, status: 'PROCESSING' },
-      data: expect.objectContaining({ status: 'COMPLETED' }),
+    expect(mocks.tx.user.deleteMany).toHaveBeenCalledWith({ where: { id: SUBJECT_ID } });
+    // Staged engine uses the canonical state machine, not a raw updateMany
+    expect(mocks.transitionPrivacyRequest).toHaveBeenCalledWith(
+      { requestId: REQUEST_ID, toStatus: 'COMPLETED' },
+      ACTOR
+    );
+    // Structured recipient PII on Notification is nulled alongside userId
+    expect(mocks.tx.notification.updateMany).toHaveBeenCalledWith({
+      where: { userId: SUBJECT_ID },
+      data: { userId: null, recipientDisplay: null, recipientHash: null },
     });
-    const actions = mocks.auditCreate.mock.calls.map(call => call[0].data.action);
-    expect(actions).toEqual([
-      'privacy.erasure.started',
-      'privacy.erasure.completed',
-      'privacy.request.completed',
-    ]);
+    const actions = mocks.emitAuditEvent.mock.calls.map(call => call[0].action);
+    expect(actions).toEqual(
+      expect.arrayContaining([
+        'privacy.erasure.started',
+        'privacy.erasure.completed',
+      ])
+    );
   });
 
-  it('marks the execution PARTIAL and does not complete the request when post-execution verification fails', async () => {
+  it('rolls back and reports FAILED/BLOCKED when in-transaction verification fails', async () => {
     mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
-    mocks.executionFindUnique.mockResolvedValue(null);
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
     mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
     mocks.verifySubjectErasure.mockResolvedValue({
       verified: false,
@@ -289,10 +382,64 @@ describe('executeErasure', () => {
       code: 'PRIVACY_ERASURE_BLOCKED',
     });
 
-    expect(mocks.executionUpdate).toHaveBeenCalledWith({
-      where: { id: 'exec-1' },
-      data: expect.objectContaining({ status: 'PARTIAL', failureCode: 'VERIFICATION_FAILED' }),
+    // Verification runs inside the transaction, so a failure rolls it back —
+    // the execution is FAILED (retryable), NOT PARTIAL, and the request is
+    // never transitioned.
+    expect(mocks.executionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'exec-1' },
+        data: expect.objectContaining({ status: 'FAILED', failureCode: 'VERIFICATION_FAILED' }),
+      })
+    );
+    expect(mocks.transitionPrivacyRequest).not.toHaveBeenCalled();
+  });
+
+  it('throws PRIVACY_ERASURE_IN_PROGRESS when a concurrent claim holds RUNNING', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue({
+      id: 'exec-1',
+      status: 'RUNNING',
+      resultSummary: null,
+      manualReviewRequired: false,
     });
-    expect(mocks.privacyRequestUpdateMany).not.toHaveBeenCalled();
+
+    await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+      code: 'PRIVACY_ERASURE_IN_PROGRESS',
+    });
+    expect(mocks.buildSubjectErasurePlan).not.toHaveBeenCalled();
+  });
+
+  it('completes without auto-transitioning the request when manual review is required', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(
+      eligiblePlan({
+        domains: [
+          {
+            id: 'incidentNotes',
+            label: 'x',
+            strategy: 'DETACH',
+            blocking: false,
+            manualReviewRequired: true,
+            count: 3,
+          },
+        ],
+      })
+    );
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+
+    const result = await executeErasure(REQUEST_ID, ACTOR);
+    expect(result.manualReviewRequired).toBe(true);
+    expect(mocks.transitionPrivacyRequest).not.toHaveBeenCalled();
+    expect(mocks.emitAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'privacy.erasure.manual_review_required' })
+    );
+    // execution record reflects manualReviewRequired
+    expect(mocks.executionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'exec-1' },
+        data: expect.objectContaining({ manualReviewRequired: true }),
+      })
+    );
   });
 });

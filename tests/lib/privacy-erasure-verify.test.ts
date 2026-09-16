@@ -56,7 +56,10 @@ describe('verifySubjectErasure', () => {
     const result = await verifySubjectErasure(SUBJECT_ID);
     expect(result.verified).toBe(false);
     expect(result.issues).toEqual(
-      expect.arrayContaining(['2 team membership row(s) remain.', '1 on-call shift row(s) remain.'])
+      expect.arrayContaining([
+        '2 team membership row(s) remain.',
+        '1 active/future on-call shift row(s) remain.',
+      ])
     );
   });
 

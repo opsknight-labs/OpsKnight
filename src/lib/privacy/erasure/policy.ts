@@ -26,6 +26,16 @@ export interface ErasureDomain {
   strategy: ErasureStrategy;
   /** True if this domain, if non-empty, blocks automated erasure until an admin resolves it. */
   blocking: boolean;
+  /**
+   * True when this domain's automated coverage is known to be incomplete —
+   * mirrors `discoverable: 'PARTIAL'` in src/lib/privacy/registry.ts (free
+   * text, JSON payloads, external provider copies, application logs).
+   * execute.ts completes the erasure work it can automate, but a request
+   * touching a manual-review domain is never auto-transitioned to COMPLETED;
+   * an operator must acknowledge the residual exposure and complete it
+   * explicitly via transitionPrivacyRequest().
+   */
+  manualReviewRequired?: boolean;
   notes: string;
 }
 
@@ -125,9 +135,9 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     id: 'onCallShifts',
     label: 'Historical on-call shifts',
     strategy: 'DELETE',
-    blocking: false,
+    blocking: true,
     notes:
-      'ON DELETE RESTRICT. No anonymous-actor placeholder exists for schedule rows in this schema version, so erasure removes them outright rather than leaving an orphaned coverage record.',
+      'ON DELETE RESTRICT. The domain count covers all-time shifts, but only active/future shifts (end >= now) are blocking — those must be reassigned before erasure runs. KNOWN TRADEOFF (reviewed, intentionally deferred): the registry classifies these as "coverage history" that ideally survives anonymized, not deleted, but OnCallShift.userId is NOT NULL today, so anonymizing in place would require a schema/migration change (make userId nullable, FK to SetNull) plus "Deleted user" rendering everywhere a shift\'s responder is displayed. Out of scope for this PR; once unblocked, erasure deletes the (now purely historical) rows outright instead.',
   },
   {
     id: 'onCallLayerAssignments',
@@ -197,21 +207,27 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     label: 'Incident notes authored',
     strategy: 'DETACH',
     blocking: false,
-    notes: 'Note content preserved; author reference nulled (DB-level SetNull).',
+    manualReviewRequired: true,
+    notes:
+      'Note content preserved; author reference nulled (DB-level SetNull). Free-text content may still name the subject — matches the "incident-content" PARTIAL disposition in src/lib/privacy/registry.ts.',
   },
   {
     id: 'postmortemsAuthored',
     label: 'Postmortems authored',
     strategy: 'DETACH',
     blocking: false,
-    notes: 'DB-level SetNull.',
+    manualReviewRequired: true,
+    notes:
+      'DB-level SetNull. Postmortem body text may still name the subject — matches the "incident-content" PARTIAL disposition.',
   },
   {
     id: 'incidentTemplatesAuthored',
     label: 'Incident templates authored',
     strategy: 'DETACH',
     blocking: false,
-    notes: 'DB-level SetNull.',
+    manualReviewRequired: true,
+    notes:
+      'DB-level SetNull. Template body text may still name the subject — matches the "incident-content" PARTIAL disposition.',
   },
   {
     id: 'actionItemsOwned',
@@ -238,14 +254,17 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
       'Not automated — an escalation step must be reassigned by an admin; blocking until then.',
   },
 
-  // --- Notifications: DELETE ---
+  // --- Notifications: structured fields cleaned; recipient/content/external
+  // provider copies are manual-review (matches the "notifications" PARTIAL
+  // disposition in the registry) ---
   {
     id: 'notifications',
     label: 'Delivery attempt records',
     strategy: 'DETACH',
     blocking: false,
+    manualReviewRequired: true,
     notes:
-      'DB-level SetNull; delivery history is operational, not personal once the recipient reference is gone.',
+      'userId, recipientDisplay and recipientHash are nulled explicitly. Free-text message bodies, encrypted payloads and any provider-side copies of the notification are not covered.',
   },
   {
     id: 'inAppNotifications',
@@ -277,8 +296,9 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     label: 'Audit log actor/target snapshots',
     strategy: 'ANONYMIZE',
     blocking: false,
+    manualReviewRequired: true,
     notes:
-      'actorEmail/actorName/targetEmail are denormalized PII snapshots that outlive actorId (which is already DB-level SetNull). Erasure scrubs these three columns in place; the audit row, action, and timestamps are preserved.',
+      'actorEmail/actorName/targetEmail are denormalized PII snapshots that outlive actorId (which is already DB-level SetNull). Erasure scrubs these three columns in place; the audit row, action, and timestamps are preserved. The free-text `details` JSON payload and any external/application log copies (outside the AuditLog table) are not scrubbed — matches the "audit-and-application-logs" PARTIAL disposition.',
   },
 
   // --- Privacy request record itself ---
@@ -298,4 +318,8 @@ export function getErasureDomain(id: string): ErasureDomain | undefined {
 
 export const BLOCKING_DOMAIN_IDS: readonly string[] = ERASURE_DOMAIN_POLICY.filter(
   domain => domain.blocking
+).map(domain => domain.id);
+
+export const MANUAL_REVIEW_DOMAIN_IDS: readonly string[] = ERASURE_DOMAIN_POLICY.filter(
+  domain => domain.manualReviewRequired
 ).map(domain => domain.id);
