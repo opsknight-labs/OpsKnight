@@ -309,6 +309,7 @@
 }
 
 .mobile-nav-label {
+  width: 100%;
   max-width: 100%;
   white-space: nowrap;
   font-size: clamp(0.56rem, 2.2vw, 0.65rem);

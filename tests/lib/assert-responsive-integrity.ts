@@ -9,6 +9,8 @@ export type ResponsiveIntegrityOptions = {
   touchTargetExclusions?: string[];
   /** Allow specific horizontal scrollers if intentional (e.g. horizontal code block or swipe container) */
   allowHorizontalScrollSelectors?: string[];
+  /** Selectors exempt from collision detection (e.g. an icon button intentionally nested inside its own input) */
+  collisionExclusionSelectors?: string[];
 };
 
 export type ResponsiveViolation = {
@@ -35,6 +37,7 @@ export async function checkResponsiveIntegrity(
       enforceTouchTargets: boolean;
       exclusions: string[];
       allowScrollSelectors: string[];
+      collisionExclusions: string[];
     }) => {
       const violations: Array<{
         type:
@@ -79,6 +82,10 @@ export async function checkResponsiveIntegrity(
         if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
           return false;
         }
+        // Screen-reader-only text (Tailwind's `.sr-only`) is intentionally a
+        // 1x1px clipped box with content that overflows it -- that's the whole
+        // point of the pattern, not a rendering bug.
+        if (el.classList.contains('sr-only')) return false;
         const rect = el.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
       };
@@ -213,8 +220,41 @@ export async function checkResponsiveIntegrity(
 
       // F. Element collision/overlap detection:
       // Compares visible unnested interactive/heading elements for unexpected bounding box intersections.
+      // Intersects an element's own rect with every scrolling ancestor's box.
+      // Without this, an item positioned just past the end of a scrollable
+      // container's clipped viewport (e.g. the last row in `.mobile-content`,
+      // which is a separate grid row from the fixed bottom nav and can never
+      // actually render behind it) still reports a raw bounding rect that
+      // extends past the clip boundary, producing a false "collides with the
+      // nav" result even though the browser never paints it there.
+      function getClippedRect(el: Element) {
+        const rect = el.getBoundingClientRect();
+        let top = rect.top;
+        let left = rect.left;
+        let right = rect.right;
+        let bottom = rect.bottom;
+        let parent = el.parentElement;
+        while (parent && parent !== document.body) {
+          const parentStyle = window.getComputedStyle(parent);
+          const clips = ['hidden', 'auto', 'scroll', 'clip'];
+          if (clips.includes(parentStyle.overflowY) || clips.includes(parentStyle.overflow)) {
+            const parentRect = parent.getBoundingClientRect();
+            top = Math.max(top, parentRect.top);
+            left = Math.max(left, parentRect.left);
+            right = Math.min(right, parentRect.right);
+            bottom = Math.min(bottom, parentRect.bottom);
+          }
+          parent = parent.parentElement;
+        }
+        return { top, left, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+      }
+
       const collisionCandidates = allElements.filter(el => {
         if (!isVisible(el)) return false;
+        // e.g. a password show/hide toggle (`button.absolute`) deliberately
+        // nested inside its own input's `relative` wrapper -- a standard
+        // compound-control pattern, not a layout bug.
+        if (opts.collisionExclusions.some(sel => el.matches(sel))) return false;
         const tag = el.tagName;
         const isInteractive =
           tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT';
@@ -227,11 +267,13 @@ export async function checkResponsiveIntegrity(
       });
 
       collisionCandidates.forEach((elA, i) => {
-        const rectA = elA.getBoundingClientRect();
+        const rectA = getClippedRect(elA);
+        if (rectA.width <= 0 || rectA.height <= 0) return;
         for (const elB of collisionCandidates.slice(i + 1)) {
           if (elA.contains(elB) || elB.contains(elA)) continue;
 
-          const rectB = elB.getBoundingClientRect();
+          const rectB = getClippedRect(elB);
+          if (rectB.width <= 0 || rectB.height <= 0) continue;
           const overlapX = Math.max(
             0,
             Math.min(rectA.right, rectB.right) - Math.max(rectA.left, rectB.left)
@@ -251,11 +293,12 @@ export async function checkResponsiveIntegrity(
               type: 'COLLISION_OVERLAP',
               selector: `${getPath(elA)} collides with ${getPath(elB)}`,
               details: `Visible elements overlap by ${Math.round(overlapX)}x${Math.round(overlapY)}px`,
-              rect: { x: rectA.x, y: rectA.y, width: rectA.width, height: rectA.height },
+              rect: { x: rectA.left, y: rectA.top, width: rectA.width, height: rectA.height },
             });
           }
         }
       });
+
 
       return violations;
     },
@@ -273,6 +316,7 @@ export async function checkResponsiveIntegrity(
         '.overflow-x-auto',
         '.overflow-x-scroll',
       ],
+      collisionExclusions: options.collisionExclusionSelectors ?? ['button.absolute'],
     }
   );
 }
