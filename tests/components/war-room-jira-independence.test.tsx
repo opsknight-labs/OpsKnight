@@ -50,6 +50,8 @@ describe('IncidentCommandBar integration independence', () => {
               subtitle: 'Incident channel in Slack',
               availability: 'AVAILABLE',
               visible: true,
+              enabledForService: true,
+              destinationAvailable: true,
               canCreate: true,
               unavailableReason: null,
               currentRoom: null,

@@ -14,6 +14,11 @@ import {
   settingsChangedState,
   type SettingsActionState,
 } from '@/lib/settings-result';
+import {
+  getGlobalWarRoomPolicy,
+  setGlobalDefaultWarRoomProviders,
+} from '@/lib/incident-collaboration/policy';
+import type { WarRoomProviderSet } from '@/lib/incident-collaboration/types';
 
 const ALLOWED_BRIDGE_TEMPLATE_VARIABLES = new Set(['incidentId']);
 
@@ -104,8 +109,21 @@ export async function saveChatOpsConfig(
       };
     }
 
+    const defaultProvidersOption = (formData.get('defaultProviders') as string | null) ?? 'BOTH';
+    let defaultProviders: WarRoomProviderSet = ['SLACK', 'MICROSOFT_TEAMS'];
+    if (defaultProvidersOption === 'SLACK') {
+      defaultProviders = ['SLACK'];
+    } else if (defaultProvidersOption === 'MICROSOFT_TEAMS') {
+      defaultProviders = ['MICROSOFT_TEAMS'];
+    } else {
+      defaultProviders = ['SLACK', 'MICROSOFT_TEAMS'];
+    }
+
     const next = parsed.data;
-    const existing = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
+    const [existing, existingGlobalPolicy] = await Promise.all([
+      prisma.chatOpsConfig.findUnique({ where: { id: 'default' } }),
+      getGlobalWarRoomPolicy(),
+    ]);
     const expectedRevision = parseSettingsRevision(expectedUpdatedAt);
     if (existing && !expectedRevision) return settingsChangedState(expectedUpdatedAt);
     if (!existing && expectedRevision) return settingsChangedState(expectedUpdatedAt);
@@ -130,6 +148,8 @@ export async function saveChatOpsConfig(
         });
       }
 
+      await setGlobalDefaultWarRoomProviders(defaultProviders, actor.id, tx);
+
       await logAudit(
         {
           action: 'chatops.config.updated',
@@ -145,6 +165,7 @@ export async function saveChatOpsConfig(
                 archiveOnResolve: existing.archiveOnResolve,
                 defaultVideoBridge: existing.defaultVideoBridge,
                 customBridgeUrlTemplate: existing.customBridgeUrlTemplate,
+                defaultProviders: existingGlobalPolicy.defaultProviders,
               }
             : null,
           newValue: {
@@ -155,6 +176,7 @@ export async function saveChatOpsConfig(
             archiveOnResolve: next.archiveOnResolve,
             defaultVideoBridge: next.defaultVideoBridge,
             customBridgeUrlTemplate: next.customBridgeUrlTemplate || null,
+            defaultProviders,
           },
         },
         tx

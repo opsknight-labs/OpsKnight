@@ -94,6 +94,19 @@ export type IncidentWarRoomHistoryItem = {
   createdAt: string;
 };
 
+export type WarRoomProviderSet = WarRoomProviderName[];
+
+export type ServiceWarRoomPolicy = {
+  serviceProviders: WarRoomProviderSet | null;
+  warRoomsEnabled: boolean;
+  autoCreate: boolean;
+};
+
+export type GlobalWarRoomPolicy = {
+  enabled: boolean;
+  defaultProviders: WarRoomProviderSet;
+};
+
 export type IncidentWarRoomProviderView = {
   provider: WarRoomProviderName;
   displayName: string;
@@ -101,6 +114,8 @@ export type IncidentWarRoomProviderView = {
   availability: WarRoomProviderAvailability;
   visible: boolean;
   canCreate: boolean;
+  enabledForService: boolean;
+  destinationAvailable: boolean;
   unavailableReason: string | null;
   currentRoom: IncidentWarRoomView | null;
   historyCount: number;

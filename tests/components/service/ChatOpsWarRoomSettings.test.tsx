@@ -97,4 +97,65 @@ describe('ChatOpsWarRoomSettings', () => {
     expect(hiddenServiceId).not.toBeNull();
     expect(hiddenServiceId.value).toBe('svc-789');
   });
+
+  it('renders provider routing status badges and provider selection options', () => {
+    render(
+      <ChatOpsWarRoomSettings
+        serviceId="svc-123"
+        autoCreateWarRoom={true}
+        warRoomVideoBridge="NONE"
+        warRoomCustomBridgeUrl=""
+        chatOpsEnabled={true}
+        canManage={true}
+        globalDefaultProviders={['SLACK', 'MICROSOFT_TEAMS']}
+        servicePolicy={{
+          serviceProviders: ['SLACK'],
+          warRoomsEnabled: true,
+          autoCreate: true,
+        }}
+        slackDestination={{
+          configured: true,
+          channelOrWorkspace: '#payments-alerts',
+        }}
+        teamsDestination={{
+          configured: false,
+        }}
+      />
+    );
+
+    // Provider routing status
+    expect(screen.getByText('Provider Routing Status')).toBeInTheDocument();
+    expect(screen.getByText('#payments-alerts')).toBeInTheDocument();
+    expect(screen.getByText('Destination Ready')).toBeInTheDocument();
+    expect(screen.getByText('Not Routed')).toBeInTheDocument();
+
+    // Provider selection
+    expect(screen.getByText('War Room Provider')).toBeInTheDocument();
+    expect(screen.getByText('Use global default (Both)')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SLACK')).toBeChecked();
+    expect(screen.getByDisplayValue('INHERIT')).not.toBeChecked();
+    expect(screen.getByDisplayValue('MICROSOFT_TEAMS')).not.toBeChecked();
+    expect(screen.getByDisplayValue('BOTH')).not.toBeChecked();
+    expect(screen.getByDisplayValue('DISABLED')).not.toBeChecked();
+  });
+
+  it('renders disabled mode when service warRoomsEnabled is false', () => {
+    render(
+      <ChatOpsWarRoomSettings
+        serviceId="svc-disabled"
+        autoCreateWarRoom={false}
+        warRoomVideoBridge="NONE"
+        warRoomCustomBridgeUrl=""
+        chatOpsEnabled={true}
+        canManage={true}
+        servicePolicy={{
+          serviceProviders: [],
+          warRoomsEnabled: false,
+          autoCreate: false,
+        }}
+      />
+    );
+
+    expect(screen.getByDisplayValue('DISABLED')).toBeChecked();
+  });
 });

@@ -20,7 +20,13 @@ import type {
   WarRoomPresentationHealth,
   WarRoomPresentationLifecycle,
   WarRoomProviderAvailability,
+  WarRoomProviderName,
 } from './types';
+import {
+  getGlobalWarRoomPolicy,
+  getServiceWarRoomPolicy,
+  resolveEffectiveWarRoomProviders,
+} from './policy';
 import { deriveProviderCanCreate, deriveWarRoomActions } from './capabilities';
 import { getProviderDeepLinkUrl } from './urls';
 import { PROVIDER_PRESENTATION } from './presentation';
@@ -35,7 +41,7 @@ export async function getIncidentCollaborationView(
 ): Promise<IncidentCollaborationView> {
   const { incidentId } = input;
 
-  const [incident, chatOpsConfig, globalSlackIntegration, teamsConfig, warRooms, userPermissions] =
+  const [incident, globalPolicy, globalSlackIntegration, teamsConfig, warRooms, userPermissions] =
     await Promise.all([
       prisma.incident.findUnique({
         where: { id: incidentId },
@@ -49,12 +55,7 @@ export async function getIncidentCollaborationView(
           },
         },
       }),
-      prisma.chatOpsConfig
-        .findUnique({
-          where: { id: 'default' },
-          select: { enabled: true },
-        })
-        .catch(() => null),
+      getGlobalWarRoomPolicy(),
       prisma.slackIntegration.findFirst({
         where: { enabled: true, services: { none: {} } },
         select: { id: true, workspaceId: true, enabled: true },
@@ -97,6 +98,11 @@ export async function getIncidentCollaborationView(
     };
   }
 
+  // Fetch service policy if incident has a service
+  const servicePolicy = incident.serviceId
+    ? await getServiceWarRoomPolicy(incident.serviceId)
+    : null;
+
   // Look up destination for Teams
   const teamsDestination = await prisma.microsoftTeamsDestination.findFirst({
     where: {
@@ -120,41 +126,72 @@ export async function getIncidentCollaborationView(
   const slackRooms = warRooms.filter(r => r.provider === 'SLACK');
   const teamsRooms = warRooms.filter(r => r.provider === 'MICROSOFT_TEAMS');
 
-  // Derive Slack availability
+  // Integration connectivity
   const hasSlackIntegration = Boolean(
     (incident.service?.slackIntegration?.workspaceId &&
       incident.service?.slackIntegration?.enabled !== false) ||
     globalSlackIntegration?.workspaceId
   );
-  // ChatOpsConfig can be enabled globally
-  const chatOpsEnabled = Boolean(chatOpsConfig?.enabled);
+  const isSlackConnected = hasSlackIntegration && globalPolicy.enabled;
+  const isTeamsConnected = Boolean(
+    teamsConfig?.enabled && teamsConfig?.warRoomsEnabled && globalPolicy.enabled
+  );
 
+  const availableIntegrations: WarRoomProviderName[] = [];
+  if (isSlackConnected) availableIntegrations.push('SLACK');
+  if (isTeamsConnected) availableIntegrations.push('MICROSOFT_TEAMS');
+
+  // Resolve 4-layer provider policy: Global Default + Service Override + Availability
+  const policyResolution = resolveEffectiveWarRoomProviders({
+    globalProviders: globalPolicy.defaultProviders,
+    serviceProviders: servicePolicy ? servicePolicy.serviceProviders : null,
+    availableProviders: availableIntegrations,
+    globalWarRoomsEnabled: globalPolicy.enabled,
+    serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : true,
+  });
+
+  const isSlackDesired = policyResolution.desiredProviders.includes('SLACK');
+  const isTeamsDesired = policyResolution.desiredProviders.includes('MICROSOFT_TEAMS');
+
+  // Destination validation
+  const slackDestinationAvailable = hasSlackIntegration;
+  const teamsDestinationAvailable = Boolean(
+    teamsDestination && teamsDestination.enabled && teamsDestination.warRoomEnabled
+  );
+
+  // Derive Slack availability & reason
   let slackAvailability: WarRoomProviderAvailability = 'NOT_CONFIGURED';
   let slackUnavailableReason: string | null = null;
 
-  if (!hasSlackIntegration) {
+  if (!isSlackDesired) {
+    slackAvailability = 'DISABLED';
+    slackUnavailableReason = 'Slack war rooms are not enabled for this service.';
+  } else if (!hasSlackIntegration) {
     slackAvailability = 'NOT_CONFIGURED';
     slackUnavailableReason = 'No Slack workspace installed for this service or organization.';
-  } else if (!chatOpsEnabled) {
+  } else if (!globalPolicy.enabled) {
     slackAvailability = 'DISABLED';
-    slackUnavailableReason = 'ChatOps is currently disabled in system settings.';
+    slackUnavailableReason = 'War Rooms are disabled in system settings.';
+  } else if (!slackDestinationAvailable) {
+    slackAvailability = 'NOT_CONFIGURED';
+    slackUnavailableReason = 'No Slack channel or destination mapped for this service.';
   } else {
     slackAvailability = 'AVAILABLE';
   }
 
-  // Derive Teams availability
+  // Derive Teams availability & reason
   let teamsAvailability: WarRoomProviderAvailability = 'NOT_CONFIGURED';
   let teamsUnavailableReason: string | null = null;
 
-  if (!teamsConfig || !teamsConfig.enabled || !teamsConfig.warRoomsEnabled) {
+  if (!isTeamsDesired) {
+    teamsAvailability = 'DISABLED';
+    teamsUnavailableReason = 'Microsoft Teams war rooms are not enabled for this service.';
+  } else if (!teamsConfig || !teamsConfig.enabled || !teamsConfig.warRoomsEnabled) {
     teamsAvailability = teamsConfig && !teamsConfig.enabled ? 'DISABLED' : 'NOT_CONFIGURED';
     teamsUnavailableReason = 'Microsoft Teams war rooms are not enabled in settings.';
-  } else if (!teamsDestination) {
+  } else if (!teamsDestinationAvailable) {
     teamsAvailability = 'NOT_CONFIGURED';
     teamsUnavailableReason = 'No active Teams destination is mapped for this service.';
-  } else if (!teamsDestination.enabled || !teamsDestination.warRoomEnabled) {
-    teamsAvailability = 'DISABLED';
-    teamsUnavailableReason = 'Teams war room destination is disabled for this service.';
   } else {
     teamsAvailability = 'AVAILABLE';
   }
@@ -269,18 +306,24 @@ export async function getIncidentCollaborationView(
     ? (isSlackActiveOrTransitional ? slackRooms.slice(1) : slackRooms).map(mapRoomToHistoryItem)
     : [];
 
-  const slackCanCreate = deriveProviderCanCreate({
-    availability: slackAvailability,
-    incidentStatus: incident.status,
-    canManage: canManageWarRooms,
-    latestRoomState: latestSlackRoom
-      ? (latestSlackRoom.state as WarRoomPresentationLifecycle)
-      : null,
-  });
+  const slackCanCreate =
+    isSlackDesired &&
+    deriveProviderCanCreate({
+      availability: slackAvailability,
+      incidentStatus: incident.status,
+      canManage: canManageWarRooms,
+      latestRoomState: latestSlackRoom
+        ? (latestSlackRoom.state as WarRoomPresentationLifecycle)
+        : null,
+    });
 
   // Strict visibility rule for Slack:
-  // Visible if provider is AVAILABLE or if any rooms exist (active or historical)
-  const isSlackVisible = slackAvailability === 'AVAILABLE' || slackRooms.length > 0;
+  // 1. If desired for service: visible if canCreate OR active room OR historical room exists
+  // 2. If NOT desired for service: visible ONLY if an existing or historical room exists
+  const isSlackVisible =
+    (isSlackDesired &&
+      (slackCanCreate || currentSlackRoom !== null || historicalSlackRooms.length > 0)) ||
+    slackRooms.length > 0;
 
   const slackProviderView: IncidentWarRoomProviderView = {
     provider: 'SLACK',
@@ -289,6 +332,8 @@ export async function getIncidentCollaborationView(
     availability: slackAvailability,
     visible: isSlackVisible,
     canCreate: slackCanCreate,
+    enabledForService: isSlackDesired,
+    destinationAvailable: slackDestinationAvailable,
     unavailableReason: slackUnavailableReason,
     currentRoom: currentSlackRoom,
     historyCount: historicalSlackRooms.length,
@@ -312,18 +357,24 @@ export async function getIncidentCollaborationView(
     ? (isTeamsActiveOrTransitional ? teamsRooms.slice(1) : teamsRooms).map(mapRoomToHistoryItem)
     : [];
 
-  const teamsCanCreate = deriveProviderCanCreate({
-    availability: teamsAvailability,
-    incidentStatus: incident.status,
-    canManage: canManageWarRooms,
-    latestRoomState: latestTeamsRoom
-      ? (latestTeamsRoom.state as WarRoomPresentationLifecycle)
-      : null,
-  });
+  const teamsCanCreate =
+    isTeamsDesired &&
+    deriveProviderCanCreate({
+      availability: teamsAvailability,
+      incidentStatus: incident.status,
+      canManage: canManageWarRooms,
+      latestRoomState: latestTeamsRoom
+        ? (latestTeamsRoom.state as WarRoomPresentationLifecycle)
+        : null,
+    });
 
   // Strict visibility rule for Teams:
-  // Visible if provider is AVAILABLE or if any rooms exist
-  const isTeamsVisible = teamsAvailability === 'AVAILABLE' || teamsRooms.length > 0;
+  // 1. If desired for service: visible if canCreate OR active room OR historical room exists
+  // 2. If NOT desired for service: visible ONLY if an existing or historical room exists
+  const isTeamsVisible =
+    (isTeamsDesired &&
+      (teamsCanCreate || currentTeamsRoom !== null || historicalTeamsRooms.length > 0)) ||
+    teamsRooms.length > 0;
 
   const teamsProviderView: IncidentWarRoomProviderView = {
     provider: 'MICROSOFT_TEAMS',
@@ -332,6 +383,8 @@ export async function getIncidentCollaborationView(
     availability: teamsAvailability,
     visible: isTeamsVisible,
     canCreate: teamsCanCreate,
+    enabledForService: isTeamsDesired,
+    destinationAvailable: teamsDestinationAvailable,
     unavailableReason: teamsUnavailableReason,
     currentRoom: currentTeamsRoom,
     historyCount: historicalTeamsRooms.length,

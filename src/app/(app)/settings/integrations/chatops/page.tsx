@@ -5,6 +5,7 @@ import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Shield, MessageSquare, Video, Archive, Users, Hash } from 'lucide-react';
 import ChatOpsSettingsPage from '@/components/settings/ChatOpsSettingsPage';
+import { getGlobalWarRoomPolicy } from '@/lib/incident-collaboration/policy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -14,20 +15,22 @@ export default async function GlobalChatOpsIntegrationPage() {
   if (!permissions) redirect('/login');
   if (!permissions.isAdmin) redirect('/settings');
 
-  const [config, slackIntegration, teamsConfig, teamsDestinationsCount] = await Promise.all([
-    prisma.chatOpsConfig.findUnique({
-      where: { id: 'default' },
-    }),
-    prisma.slackIntegration.findFirst({
-      where: { services: { none: {} }, enabled: true },
-    }),
-    prisma.microsoftTeamsConfig.findUnique({
-      where: { id: 'default' },
-    }),
-    prisma.microsoftTeamsDestination.count({
-      where: { enabled: true, warRoomEnabled: true },
-    }),
-  ]);
+  const [config, slackIntegration, teamsConfig, teamsDestinationsCount, globalWarRoomPolicy] =
+    await Promise.all([
+      prisma.chatOpsConfig.findUnique({
+        where: { id: 'default' },
+      }),
+      prisma.slackIntegration.findFirst({
+        where: { services: { none: {} }, enabled: true },
+      }),
+      prisma.microsoftTeamsConfig.findUnique({
+        where: { id: 'default' },
+      }),
+      prisma.microsoftTeamsDestination.count({
+        where: { enabled: true, warRoomEnabled: true },
+      }),
+      getGlobalWarRoomPolicy(),
+    ]);
 
   const isSlackConnected = !!slackIntegration?.botToken;
   const isTeamsConnected = !!teamsConfig?.enabled;
@@ -127,6 +130,7 @@ export default async function GlobalChatOpsIntegrationPage() {
       <ChatOpsSettingsPage
         config={config}
         isAdmin={permissions.isAdmin}
+        defaultProviders={globalWarRoomPolicy.defaultProviders}
         providerStatus={{
           slack: {
             connected: isSlackConnected,

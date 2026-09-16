@@ -46,6 +46,8 @@ describe('WarRoomLauncher component', () => {
           subtitle: 'Incident channel in Slack',
           availability: 'AVAILABLE',
           visible: true,
+          enabledForService: true,
+          destinationAvailable: true,
           canCreate: true,
           unavailableReason: null,
           currentRoom: null,
@@ -80,6 +82,8 @@ describe('WarRoomLauncher component', () => {
           subtitle: 'Incident channel in Slack',
           availability: 'AVAILABLE',
           visible: true,
+          enabledForService: true,
+          destinationAvailable: true,
           canCreate: false,
           unavailableReason: null,
           currentRoom: {

@@ -83,5 +83,51 @@ describe('ChatOpsSettingsPage Component', () => {
     // Provider Capabilities Table
     expect(screen.getByText('Provider Capabilities')).toBeInTheDocument();
     expect(screen.getByText('Interactive ChatOps')).toBeInTheDocument();
+
+    // Default Provider selector when both are connected
+    expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SLACK')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('MICROSOFT_TEAMS')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
+  });
+
+  it('renders static default notice when only Slack is connected', () => {
+    render(
+      <ChatOpsSettingsPage
+        config={mockConfig}
+        isAdmin={true}
+        providerStatus={{
+          slack: { connected: true, workspaceName: 'OpsKnight Dev' },
+          teams: { connected: false, warRoomsEnabled: false, destinationsCount: 0 },
+        }}
+      />
+    );
+
+    expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
+    expect(screen.getByText('Only Connected Provider')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Slack is currently the only connected war room provider/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /Both/i })).not.toBeInTheDocument();
+  });
+
+  it('renders static default notice when only Teams is connected', () => {
+    render(
+      <ChatOpsSettingsPage
+        config={mockConfig}
+        isAdmin={true}
+        providerStatus={{
+          slack: { connected: false },
+          teams: { connected: true, warRoomsEnabled: true, destinationsCount: 1 },
+        }}
+      />
+    );
+
+    expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
+    expect(screen.getByText('Only Connected Provider')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Microsoft Teams is currently the only connected war room provider/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /Both/i })).not.toBeInTheDocument();
   });
 });
