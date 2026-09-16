@@ -10,6 +10,9 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { buildMicrosoftTeamsAppManifestJson } from '@/lib/microsoft-teams/app-manifest';
 import { getTeamsGrantedRscPermissions } from '@/lib/microsoft-teams/client';
 import { getMicrosoftTeamsHealth } from '@/lib/microsoft-teams/health';
+import WarRoomOperationsSection from '@/components/settings/microsoft-teams/WarRoomOperationsSection';
+import { getWarRoomOperationalSnapshots } from '@/lib/war-room/operations/diagnostics';
+import { summarizeOperationalHealth } from '@/lib/war-room/operations/summary';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -92,6 +95,14 @@ export default async function MicrosoftTeamsIntegrationRoute() {
       error: installation.enabled ? 'PERMISSION_STATE_UNAVAILABLE' : 'BOT_REMOVED',
     });
   }
+
+  // War-room Operations — provider-neutral operational snapshot (preserve per-installation correlation from getMicrosoftTeamsHealth)
+  const warRoomSnapshots = await getWarRoomOperationalSnapshots(100).catch(() => []);
+  const operationalSummary = summarizeOperationalHealth(warRoomSnapshots);
+  const teamsSummary = operationalSummary.find(s => s.provider === 'MICROSOFT_TEAMS') ?? null;
+  const operationalHealthLabel = teamsSummary?.operationalHealth ?? (warRoomSnapshots.length === 0 ? 'HEALTHY' : 'UNKNOWN');
+  const totalWarRooms = warRoomSnapshots.length;
+  const warRoomCleanupPending = warRoomSnapshots.filter(s => s.externalCleanupPending).length;
 
   return (
     <div className="space-y-6">
@@ -178,6 +189,98 @@ export default async function MicrosoftTeamsIntegrationRoute() {
         ]}
       />
 
+      {/* ── Phase 5: 4-area Admin Control Plane (summary → drill-down, no secrets) ── */}
+      {/* Area 1 — Integration Health */}
+      <section id="integration-health" className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Shield className="h-4 w-4 text-muted-foreground" /> Integration Health
+          </h2>
+          <Badge variant="outline" className={`text-[10px] font-semibold ${operationalHealthLabel === 'HEALTHY' ? 'border-emerald-300 text-emerald-700' : operationalHealthLabel === 'UNKNOWN' ? 'border-blue-300 text-blue-700' : operationalHealthLabel === 'UNAVAILABLE' ? 'border-slate-300 text-slate-600' : operationalHealthLabel === 'DRIFTED' ? 'border-violet-300 text-violet-700' : 'border-amber-300 text-amber-700'}`}>
+            {operationalHealthLabel}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          <Badge variant="outline" className="text-[10px]">Config {isConnected ? 'connected' : 'not configured'} · war-rooms {config?.warRoomsEnabled ? 'enabled' : 'disabled'}</Badge>
+          <Badge variant="outline" className="text-[10px]">{installationCount} installation(s)</Badge>
+          <Badge variant="outline" className="text-[10px]">{totalWarRooms} war room(s){warRoomCleanupPending > 0 ? ` · ${warRoomCleanupPending} cleanup pending` : ''}</Badge>
+          {health?.botHealthy != null && <Badge variant="outline" className={health.botHealthy ? 'border-emerald-300 text-emerald-700 text-[10px]' : 'border-amber-300 text-amber-700 text-[10px]'}>{health.botHealthy ? 'Bot healthy' : 'Bot degraded'}</Badge>}
+          <Badge variant="outline" className="text-[10px]">RSC {rscUnknown ? 'unknown' : rscMissingCount === 0 ? 'ok' : `${rscMissingCount} missing`}</Badge>
+        </div>
+        {teamsSummary && (
+          <div className="text-[11px] text-muted-foreground">
+            Teams operational: {teamsSummary.healthyRooms} healthy · {teamsSummary.degradedRooms} degraded · {teamsSummary.driftedRooms} drifted · {teamsSummary.unavailableRooms} unavailable · {teamsSummary.unknownRooms} unknown · cleanup pending {teamsSummary.externalCleanupPending}
+          </div>
+        )}
+        <details className="rounded-lg border bg-muted/20 p-3">
+          <summary className="cursor-pointer text-xs font-medium">Drill down — raw integration state (no secrets)</summary>
+          <div className="mt-3 space-y-1 text-[11px] font-mono break-all">
+            <div>clientId: {config?.clientId ? `${config.clientId.slice(0, 12)}…` : '—'} · tenantId: {config?.tenantId ?? '—'} · enabled: {String(config?.enabled ?? false)} · warRoomsEnabled: {String(config?.warRoomsEnabled ?? false)}</div>
+            <div>rscState: {rscUnknown ? `unknown (${rscState?.error ?? 'pending install'})` : `missing=[${rscState?.missing.join(', ') ?? ''}]`}</div>
+            <div>health: botHealthy={String(health?.botHealthy ?? 'unknown')} permissionsHealthy={String(health?.permissionsHealthy ?? 'unknown')} lastSuccess={health?.lastSuccessAt ?? '—'} lastError={health?.lastErrorCode ?? '—'}</div>
+          </div>
+        </details>
+      </section>
+
+      {/* Area 2 — Installations & Permissions */}
+      <section id="installations-permissions" className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">Installations & Permissions</h2>
+          <Badge variant="outline" className="text-[10px]">{installationPermissions.length} team(s) · {installationCount} active install(s)</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">Per-installation correlation is preserved from <span className="font-mono">getMicrosoftTeamsHealth()</span> — no aggregation hides a broken Team behind a healthy one. Each row shows destination count and last delivery status from the durable queue.</p>
+        {installationPermissions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No installations yet — install the Teams app to a Team/Channel and consent to the RSC set.</p>
+        ) : (
+          <div className="space-y-2">
+            {installationPermissions.map(row => {
+              const delivery = health?.installations.find(i => i.teamId === row.teamId);
+              const healthy = !row.unknown && row.missing.length === 0;
+              return (
+                <div key={row.teamId} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{row.teamName ?? row.teamId}</div>
+                    <div className="truncate text-[11px] text-muted-foreground">{row.teamId}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">{row.unknown ? row.error ?? 'Permission state unavailable' : row.missing.length === 0 ? 'All RSC granted' : `Missing: ${row.missing.join(', ')}`}</div>
+                    {delivery && <div className="mt-1 text-[11px] text-muted-foreground">{delivery.enabled ? `${delivery.destinationCount} destination(s)` : 'Bot removed'} {delivery.lastDeliveryAt ? `· last ${delivery.lastDeliveryStatus} ${new Date(delivery.lastDeliveryAt).toLocaleString()}` : '· no delivery history'}</div>}
+                  </div>
+                  <Badge variant="outline" className={healthy ? 'border-emerald-300 text-emerald-700 text-[10px]' : 'border-amber-300 text-amber-700 text-[10px]'}>{healthy ? 'Healthy' : row.unknown ? 'Unknown' : 'Consent required'}</Badge>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Area 3 — Destinations */}
+      <section id="destinations" className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">Destinations</h2>
+          <Badge variant="outline" className="text-[10px]">{destinations.length} mapped</Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">Service → Teams channel routing. Tombstoned rows (enabled=false) are preserved for ledger/AMBIGUOUS reconciliation but only routable destinations are listed here.</p>
+        {destinations.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No service is mapped to a Teams channel yet.</p>
+        ) : (
+          <div className="overflow-x-auto -mx-1">
+            <table className="w-full text-xs">
+              <thead><tr className="text-[11px] text-muted-foreground border-b"><th className="text-left font-semibold py-2 px-2">Service</th><th className="text-left font-semibold py-2 px-2">Team / Channel</th><th className="text-left font-semibold py-2 px-2">Interactive</th></tr></thead>
+              <tbody>
+                {destinations.map(d => (
+                  <tr key={d.id} className="border-b last:border-0"><td className="py-2 px-2 font-medium">{d.service?.name ?? d.serviceId}</td><td className="py-2 px-2 truncate max-w-[260px]">{d.teamName ?? d.teamId} → {d.channelName ?? d.channelId}</td><td className="py-2 px-2">{d.interactiveEnabled ? 'ON' : 'OFF'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Area 4 — War-room Operations (summary → drill-down diagnostics via Admin API, no secrets/tokens) */}
+      <section id="war-room-operations">
+        <WarRoomOperationsSection snapshots={warRoomSnapshots as unknown as import('@/lib/war-room/operations/types').WarRoomOperationalSnapshot[]} />
+      </section>
+
+      {/* Full interactive console (config form, manifest, per-destination actions) — kept for console-managed credential flow; no .env */}
       <MicrosoftTeamsIntegrationPage
         config={config as unknown as { id: string; clientId: string; tenantId?: string | null; tenantMode: string; enabled: boolean; interactiveEnabled: boolean; warRoomsEnabled: boolean } | null}
         destinations={destinations as unknown as MicrosoftTeamsDestinationRow[]}
