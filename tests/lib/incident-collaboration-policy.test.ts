@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEffectiveWarRoomProviders } from '@/lib/incident-collaboration/policy';
+import {
+  resolveEffectiveWarRoomProviders,
+  getServiceWarRoomPolicy,
+} from '@/lib/incident-collaboration/policy';
 
 describe('Incident War Room Policy Resolver', () => {
   it('inherits global default when serviceProviders is null', () => {
@@ -97,5 +100,12 @@ describe('Incident War Room Policy Resolver', () => {
 
     expect(result.effectiveProviders).toEqual(['SLACK']);
     expect(result.unavailableDesiredProviders).toEqual(['MICROSOFT_TEAMS']);
+  });
+
+  it('defaults service war rooms to disabled when not explicitly configured', async () => {
+    const policy = await getServiceWarRoomPolicy('svc-unconfigured');
+    expect(policy.warRoomsEnabled).toBe(false);
+    expect(policy.serviceProviders).toEqual([]);
+    expect(policy.autoCreate).toBe(false);
   });
 });

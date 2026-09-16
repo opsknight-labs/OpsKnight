@@ -170,9 +170,10 @@ export async function getServiceWarRoomPolicy(serviceId: string): Promise<Servic
       : Promise.resolve(null),
   ]);
 
-  let serviceProviders: WarRoomProviderSet | null = null;
-  let warRoomsEnabled = true;
-  let autoCreate = Boolean(service?.autoCreateWarRoom ?? true);
+  // Default for services is DISABLED - enabling war rooms is on user discretion
+  let serviceProviders: WarRoomProviderSet | null = [];
+  let warRoomsEnabled = false;
+  let autoCreate = false;
 
   if (configRow?.value && typeof configRow.value === 'object' && !Array.isArray(configRow.value)) {
     const val = configRow.value as Record<string, unknown>;

@@ -97,12 +97,13 @@ export default function ChatOpsWarRoomSettings({
       if (servicePolicy.serviceProviders.includes('MICROSOFT_TEAMS')) return 'MICROSOFT_TEAMS';
       if (servicePolicy.serviceProviders.length === 0) return 'DISABLED';
     }
-    return 'INHERIT';
-  }, [servicePolicy]);
+    // Default for services: DISABLED (enabling is on user discretion)
+    return autoCreateWarRoom ? 'INHERIT' : 'DISABLED';
+  }, [servicePolicy, autoCreateWarRoom]);
 
   const [providerMode, setProviderMode] = useState<string>(initialProviderMode);
   const [warRoomsEnabled, setWarRoomsEnabled] = useState<boolean>(
-    servicePolicy?.warRoomsEnabled ?? true
+    servicePolicy ? servicePolicy.warRoomsEnabled : autoCreateWarRoom
   );
 
   useEffect(() => {

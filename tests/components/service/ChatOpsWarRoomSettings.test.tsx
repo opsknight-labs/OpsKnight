@@ -158,4 +158,20 @@ describe('ChatOpsWarRoomSettings', () => {
 
     expect(screen.getByDisplayValue('DISABLED')).toBeChecked();
   });
+
+  it('defaults to DISABLED when service has no custom policy configured and autoCreateWarRoom is false', () => {
+    render(
+      <ChatOpsWarRoomSettings
+        serviceId="svc-new"
+        autoCreateWarRoom={false}
+        warRoomVideoBridge={null}
+        warRoomCustomBridgeUrl={null}
+        chatOpsEnabled={true}
+        canManage={true}
+      />
+    );
+
+    expect(screen.getByDisplayValue('DISABLED')).toBeChecked();
+    expect(screen.getByText('Do not create war rooms for this service.')).toBeInTheDocument();
+  });
 });
