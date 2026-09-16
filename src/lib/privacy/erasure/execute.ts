@@ -90,6 +90,14 @@ async function claimExecution(requestId: string): Promise<ClaimResult> {
       };
     }
     if (existing.status === 'RUNNING') {
+      // If the destructive transaction already committed (mutationCommittedAt
+      // set atomically inside it), the process crashed between that commit and
+      // the final COMPLETED bookkeeping. That retry must be allowed to resume
+      // finalization; every other RUNNING means a genuinely concurrent execution
+      // is still in flight and the caller must wait.
+      if (existing.mutationCommittedAt) {
+        return { kind: 'claimed', executionId: existing.id };
+      }
       throw new AppError({ code: 'PRIVACY_ERASURE_IN_PROGRESS', details: { requestId } });
     }
 
@@ -217,9 +225,12 @@ export async function executeErasure(
         acc[domain.id] = domain.count;
         return acc;
       }, {});
-      manualReviewRequired = plan.domains.some(
-        domain => domain.manualReviewRequired && domain.count > 0
-      );
+      // Unconditional: any policy domain flagged manualReviewRequired is by
+      // definition undiscoverable by ID (free text written by others, audit
+      // details JSON, notification payloads, external/log sinks). A zero
+      // author-count does not prove the subject is absent from someone else's
+      // note or from a provider copy — see unstructuredDataReview.
+      manualReviewRequired = plan.domains.some(domain => domain.manualReviewRequired);
 
       // Persisted durably *before* the destructive transaction runs: if a
       // later finalization step fails after the transaction commits, this
@@ -232,6 +243,21 @@ export async function executeErasure(
 
       await runSerializableTransaction(async tx => {
         await acquireAdvisoryLock(tx, LOCK_KEYS.PRIVACY_ERASURE);
+
+        // Re-validate the request is still PROCESSING inside the same
+        // SERIALIZABLE transaction that will mutate the subject. An admin
+        // who moved the request to BLOCKED/REJECTED while erasure was
+        // queued must not have the subject erased underneath that decision.
+        const fresh = await tx.privacyRequest.findUnique({
+          where: { id: requestId },
+          select: { status: true, verifiedAt: true },
+        });
+        if (!fresh || fresh.status !== 'PROCESSING' || !fresh.verifiedAt) {
+          throw new AppError({
+            code: 'PRIVACY_ERASURE_PREREQUISITES_NOT_MET',
+            details: { status: fresh?.status ?? null, verified: Boolean(fresh?.verifiedAt) },
+          });
+        }
 
         // --- ANONYMIZE: scrub the immutable audit-log PII snapshot in place.
         // actorId itself is left alone here; it is SetNull automatically when
@@ -352,12 +378,17 @@ export async function executeErasure(
         if (!verification.verified) {
           throw new ErasureVerificationFailure(verification.issues);
         }
+
+        // Persisted atomically with the destructive mutation itself so a
+        // crash between transaction commit and a follow-up update cannot
+        // leave (user = erased, execution = RUNNING, mutationCommittedAt =
+        // null) — the exact window the recovery path is meant to close.
+        await tx.privacyErasureExecution.update({
+          where: { id: executionId },
+          data: { mutationCommittedAt: new Date(), resultSummary: domainCounts, manualReviewRequired },
+        });
       });
 
-      await prisma.privacyErasureExecution.update({
-        where: { id: executionId },
-        data: { mutationCommittedAt: new Date() },
-      });
       destructiveMutationCommitted = true;
     } else {
       // Recovery path: nothing left to discover/mutate. Only take this

@@ -301,6 +301,17 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
       'actorEmail/actorName/targetEmail are denormalized PII snapshots that outlive actorId (which is already DB-level SetNull). Erasure scrubs these three columns in place; the audit row, action, and timestamps are preserved. The free-text `details` JSON payload and any external/application log copies (outside the AuditLog table) are not scrubbed — matches the "audit-and-application-logs" PARTIAL disposition.',
   },
 
+  // --- Unsearchable residual surface: unconditional manual review ---
+  {
+    id: 'unstructuredDataReview',
+    label: 'Unstructured / free-text and external copies',
+    strategy: 'REVIEW',
+    blocking: false,
+    manualReviewRequired: true,
+    notes:
+      'Covers names/emails embedded in incident notes, postmortems and templates written by others (not captured by the author-count domains above), Notification message bodies / encrypted payloads / provider-side copies, AuditLog details JSON, and application/external log sinks. These surfaces are undiscoverable by ID — every erasure therefore requires explicit operator acknowledgement that any remaining free-text/log/external copies have been reviewed before the request is closed. See incident-content / audit-and-application-logs / notifications PARTIAL dispositions in src/lib/privacy/registry.ts.',
+  },
+
   // --- Privacy request record itself ---
   {
     id: 'privacyRequestRecord',

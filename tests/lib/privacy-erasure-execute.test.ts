@@ -6,11 +6,19 @@ const mocks = vi.hoisted(() => {
   const txPrivacyErasureCreate = vi.fn();
   const txPrivacyErasureUpdateMany = vi.fn();
 
+  const txPrivacyRequestFindUnique = vi.fn().mockResolvedValue({
+    status: 'PROCESSING',
+    verifiedAt: new Date('2026-09-01T00:00:00.000Z'),
+  });
+  const txPrivacyErasureUpdate = vi.fn().mockResolvedValue({ id: 'exec-1' });
+
   const tx = {
+    privacyRequest: { findUnique: txPrivacyRequestFindUnique },
     privacyErasureExecution: {
       findUnique: txPrivacyErasureFindUnique,
       create: txPrivacyErasureCreate,
       updateMany: txPrivacyErasureUpdateMany,
+      update: txPrivacyErasureUpdate,
     },
     auditLog: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     teamMember: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -73,6 +81,8 @@ const mocks = vi.hoisted(() => {
     txPrivacyErasureFindUnique,
     txPrivacyErasureCreate,
     txPrivacyErasureUpdateMany,
+    txPrivacyRequestFindUnique,
+    txPrivacyErasureUpdate,
     privacyRequestFindUnique,
     executionFindUnique,
     executionFindUniqueOrThrow,

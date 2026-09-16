@@ -5,6 +5,7 @@ import { Download, FileArchive, Loader2, RefreshCw, ShieldAlert, Trash2 } from '
 import { useToast } from '@/hooks/use-product-notification';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +14,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/shadcn/dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import {
   Table,
   TableBody,
@@ -130,6 +140,8 @@ export default function PrivacyRequestDetailDialog({
   const [plan, setPlan] = useState<ErasurePlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmInput, setConfirmInput] = useState('');
 
   async function loadDetail() {
     setLoading(true);
@@ -173,6 +185,7 @@ export default function PrivacyRequestDetailDialog({
   }
 
   async function handleExecuteErasure() {
+    if (confirmInput !== 'ERASE') return;
     setExecuting(true);
     try {
       const response = await fetch(
@@ -186,7 +199,13 @@ export default function PrivacyRequestDetailDialog({
         showToast(body?.error ?? 'Failed to execute erasure.', 'error');
         return;
       }
-      showToast('Erasure executed.', 'success');
+      setConfirmInput('');
+      setConfirmOpen(false);
+      if (body?.data?.manualReviewRequired) {
+        showToast('Erasure completed — manual review required before closing the request.', 'info');
+      } else {
+        showToast('Erasure executed.', 'success');
+      }
       await loadDetail();
     } finally {
       setExecuting(false);
@@ -371,24 +390,78 @@ export default function PrivacyRequestDetailDialog({
                             : 'Blocking conditions must be resolved before erasure can run.'
                           : 'Complete identity verification and move this request to Processing before erasure can run.'}
                       </p>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={handleExecuteErasure}
-                        disabled={
-                          !exportEligible ||
-                          !plan.canExecute ||
-                          executing ||
-                          detail.erasureExecution?.status === 'COMPLETED'
-                        }
+                      <AlertDialog
+                        open={confirmOpen}
+                        onOpenChange={next => {
+                          setConfirmOpen(next);
+                          if (!next) setConfirmInput('');
+                        }}
                       >
-                        {executing ? (
-                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="mr-1.5 h-4 w-4" />
-                        )}
-                        Execute erasure
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setConfirmOpen(true)}
+                          disabled={
+                            !exportEligible ||
+                            !plan.canExecute ||
+                            executing ||
+                            detail.erasureExecution?.status === 'COMPLETED'
+                          }
+                        >
+                          {executing ? (
+                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="mr-1.5 h-4 w-4" />
+                          )}
+                          Execute erasure
+                        </Button>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                              <ShieldAlert className="h-4 w-4" />
+                              Permanently erase subject data?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription asChild>
+                              <div className="space-y-2 text-left">
+                                <p>
+                                  This will permanently remove and anonymize data for{' '}
+                                  <span className="font-mono font-medium text-foreground">
+                                    {detail.subjectType}: {detail.subjectId}
+                                  </span>
+                                  . This action cannot be undone.
+                                </p>
+                                <p className="text-xs">
+                                  Type <span className="font-mono font-semibold">ERASE</span> to
+                                  confirm.
+                                </p>
+                              </div>
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <Input
+                            autoFocus
+                            value={confirmInput}
+                            onChange={event => setConfirmInput(event.target.value)}
+                            placeholder="Type ERASE to confirm"
+                            className="font-mono"
+                            aria-label="Type ERASE to confirm erasure"
+                          />
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={executing}>Cancel</AlertDialogCancel>
+                            <Button
+                              variant="destructive"
+                              disabled={confirmInput !== 'ERASE' || executing}
+                              onClick={() => void handleExecuteErasure()}
+                            >
+                              {executing ? (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-1.5 h-4 w-4" />
+                              )}
+                              Permanently erase
+                            </Button>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </>
                 ) : (
