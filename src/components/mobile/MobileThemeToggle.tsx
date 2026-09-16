@@ -54,7 +54,7 @@ export default function MobileThemeToggle() {
                 setTheme(option.value);
               }}
               className={cn(
-                'mobile-segmented-option inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+                'mobile-segmented-option inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
                 active
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'

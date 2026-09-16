@@ -13,7 +13,7 @@ type MobileSettingCardProps = {
   /** Header-row control, e.g. a switch or chevron. Never wraps to a new line. */
   action?: ReactNode;
   /** Full-width supporting copy rendered below the header row. */
-  description?: string;
+  description?: ReactNode;
   /** Additional content below the description (e.g. a segmented control). */
   children?: ReactNode;
   className?: string;
@@ -51,12 +51,16 @@ export default function MobileSettingCard({
             {status ? <p className="mt-0.5 text-xs text-muted-foreground">{status}</p> : null}
           </div>
         </div>
-        {action ? <div className="shrink-0 pt-0.5">{action}</div> : null}
+        {action ? (
+          // Owns the 44px minimum touch target so no consumer can shrink it below guideline.
+          <div className="flex min-h-11 min-w-11 shrink-0 items-center justify-end">{action}</div>
+        ) : null}
       </div>
       {description ? (
-        <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+        <div className="text-xs leading-relaxed text-muted-foreground">{description}</div>
       ) : null}
       {children}
     </MobileCard>
   );
 }
+

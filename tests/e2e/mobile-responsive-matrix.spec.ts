@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { assertResponsiveIntegrity } from '../lib/assert-responsive-integrity';
+import { assertResponsiveIntegrity, assertSingleLineLabels } from '../lib/assert-responsive-integrity';
 import { VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
 
 const prisma = new PrismaClient();
@@ -152,6 +152,8 @@ test.describe('mobile responsive visual integrity matrix', () => {
       // 6. More / Settings
       await page.goto('/m/more');
       await assertResponsiveIntegrity(page);
+      // Regression guard: Appearance's Light/System/Dark labels must never split mid-word.
+      await assertSingleLineLabels(page, '.mobile-segmented-option span');
       await page.screenshot({ path: `screenshots/responsive/more-${vp.width}.png` });
 
       // 7. Schedules

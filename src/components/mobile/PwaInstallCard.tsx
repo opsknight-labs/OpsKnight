@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import MobileCard from '@/components/mobile/MobileCard';
+import { useState, useEffect } from 'react';
+import { Download } from 'lucide-react';
+import MobileSettingCard from '@/components/mobile/MobileSettingCard';
+import { Button } from '@/components/ui/shadcn/button';
 
 function isIosSafari(userAgent: string) {
   const ua = userAgent.toLowerCase();
@@ -70,29 +72,27 @@ export default function PwaInstallCard() {
   if (!shouldShow) return null;
 
   return (
-    <MobileCard padding="md" className="space-y-2">
-      <div className="text-sm font-semibold text-[color:var(--text-primary)]">
-        Install OpsKnight
-      </div>
-      <div className="text-xs text-[color:var(--text-muted)]">
+    <MobileSettingCard
+      icon={<Download className="h-5 w-5" aria-hidden="true" />}
+      title="Install OpsKnight"
+      status="Not installed"
+      action={
+        deferredPrompt ? (
+          <Button type="button" size="sm" className="min-h-11" onClick={handleInstallClick}>
+            Install
+          </Button>
+        ) : null
+      }
+    >
+      <p className="text-xs leading-relaxed text-muted-foreground">
         Add the app to your Home Screen for faster access and alerts.
-      </div>
-
-      {deferredPrompt ? (
-        <button
-          onClick={handleInstallClick}
-          className="mt-1 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white transition hover:bg-primary/90"
-        >
-          Install App
-        </button>
-      ) : (
-        <div className="mt-1 text-xs text-[color:var(--text-muted)]">
-          Tap <span className="font-semibold text-[color:var(--text-primary)]">Share</span>, scroll
-          down, then tap{' '}
-          <span className="font-semibold text-[color:var(--text-primary)]">Add to Home Screen</span>
-          .
-        </div>
-      )}
-    </MobileCard>
+      </p>
+      {!deferredPrompt ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Tap <span className="font-semibold text-foreground">Share</span>, scroll down, then tap{' '}
+          <span className="font-semibold text-foreground">Add to Home Screen</span>.
+        </p>
+      ) : null}
+    </MobileSettingCard>
   );
 }
