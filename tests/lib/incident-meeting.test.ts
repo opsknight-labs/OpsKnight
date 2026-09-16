@@ -135,4 +135,48 @@ describe('Incident Meeting Store & Provisioning Lifecycle', () => {
     expect(meeting.actions.canRetry).toBe(true);
     expect(meeting.actions.canJoin).toBe(false);
   });
+
+  it('exposes external close semantics and closeLabel based on provider capabilities', async () => {
+    const jitsiMeeting = await provisionIncidentMeeting({
+      incidentId: 'inc-close-semantics-jitsi',
+      incidentTitle: 'Jitsi Close Semantics Test',
+      provider: 'JITSI',
+      generation: 1,
+    });
+    expect(jitsiMeeting.actions.supportsExternalClose).toBe(false);
+    expect(jitsiMeeting.actions.closeLabel).toBe('Detach Bridge');
+
+    const teamsAdapter = MeetingProviderRegistry.getAdapter('MICROSOFT_TEAMS');
+    expect(teamsAdapter?.supportsExternalClose).toBe(true);
+  });
+
+  it('proactive readiness probe distinguishes unconfigured and configured states', async () => {
+    const jitsiAvail = await MeetingProviderRegistry.isAvailable('JITSI');
+    expect(jitsiAvail.available).toBe(true);
+    expect(jitsiAvail.readiness).toBe('READY');
+
+    const teamsAvail = await MeetingProviderRegistry.isAvailable('MICROSOFT_TEAMS');
+    expect(teamsAvail.available).toBe(false);
+    expect(['UNAVAILABLE', 'CONFIGURED', 'ORGANIZER_REQUIRED', 'PERMISSION_REQUIRED']).toContain(
+      teamsAvail.readiness
+    );
+  });
+
+  it('getIncidentMeeting is a pure read and does not mutate state on read', async () => {
+    const incidentId = 'inc-pure-read-test';
+    const meeting = await provisionIncidentMeeting({
+      incidentId,
+      incidentTitle: 'Pure Read Test',
+      provider: 'JITSI',
+      generation: 1,
+    });
+    expect(meeting.state).toBe('READY');
+
+    const read1 = await getIncidentMeeting(incidentId);
+    const read2 = await getIncidentMeeting(incidentId);
+    expect(read1?.state).toBe('READY');
+    expect(read2?.state).toBe('READY');
+    expect(read1?.joinUrl).toBe(read2?.joinUrl);
+    expect(read1?.id).toBe(read2?.id);
+  });
 });

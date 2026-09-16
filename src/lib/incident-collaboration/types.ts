@@ -5,7 +5,7 @@
  * Server-derived capability, visibility, and state boundaries.
  */
 
-export type WarRoomProviderName = 'SLACK' | 'MICROSOFT_TEAMS';
+export type WarRoomProviderName = 'SLACK' | 'MICROSOFT_TEAMS' | (string & {});
 
 export type WarRoomProviderAvailability =
   | 'AVAILABLE'
@@ -108,11 +108,20 @@ export type IncidentMeetingState =
 
 export type IncidentMeetingHealth = 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
 
+export type IncidentMeetingReadiness =
+  | 'READY'
+  | 'CONFIGURED'
+  | 'ORGANIZER_REQUIRED'
+  | 'PERMISSION_REQUIRED'
+  | 'UNAVAILABLE';
+
 export type IncidentMeetingActions = {
   canJoin: boolean;
   canRetry: boolean;
   canClose: boolean;
   canProvision: boolean;
+  supportsExternalClose?: boolean;
+  closeLabel?: string;
 };
 
 export type IncidentMeetingView = {
@@ -133,6 +142,7 @@ export type IncidentMeetingView = {
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
   actions: IncidentMeetingActions;
+  readiness?: IncidentMeetingReadiness;
 };
 
 export type ServiceWarRoomPolicy = {

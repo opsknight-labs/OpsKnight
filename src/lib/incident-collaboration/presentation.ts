@@ -88,7 +88,7 @@ export const HEALTH_PRESENTATION: Record<WarRoomPresentationHealth, HealthPresen
 };
 
 export const PROVIDER_PRESENTATION: Record<
-  WarRoomProviderName,
+  string,
   {
     displayName: string;
     subtitle: string;
@@ -109,6 +109,23 @@ export const PROVIDER_PRESENTATION: Record<
     openActionLabel: 'Open in Teams',
   },
 };
+
+export function getProviderPresentation(provider: WarRoomProviderName) {
+  if (provider in PROVIDER_PRESENTATION) {
+    return PROVIDER_PRESENTATION[provider];
+  }
+  const formatted = String(provider)
+    .toLowerCase()
+    .split('_')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+  return {
+    displayName: formatted,
+    subtitle: `${formatted} incident channel`,
+    createActionLabel: `Create ${formatted} channel`,
+    openActionLabel: `Open in ${formatted}`,
+  };
+}
 
 export function getLifecyclePresentation(
   state: WarRoomPresentationLifecycle

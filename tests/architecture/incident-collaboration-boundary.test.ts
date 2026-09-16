@@ -1,16 +1,17 @@
 /* eslint-disable security/detect-non-literal-fs-filename */
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 function getAllFiles(dir: string): string[] {
   let results: string[] = [];
-  const list = readdirSync(dir);
+  const baseDir = resolve(process.cwd(), dir);
+  const list = readdirSync(baseDir);
   for (const file of list) {
-    const filePath = join(dir, file);
+    const filePath = join(baseDir, file);
     const stat = statSync(filePath);
     if (stat && stat.isDirectory()) {
-      results = results.concat(getAllFiles(filePath));
+      results = results.concat(getAllFiles(join(dir, file)));
     } else if (file.endsWith('.ts') || file.endsWith('.tsx')) {
       results.push(filePath);
     }

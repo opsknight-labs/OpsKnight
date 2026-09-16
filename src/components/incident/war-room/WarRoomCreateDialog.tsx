@@ -10,12 +10,12 @@ import {
 } from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
-import { Loader2, Plus, Lock, Globe } from 'lucide-react';
+import { Loader2, Plus, Lock, Globe, MessageSquare } from 'lucide-react';
 import type {
   IncidentWarRoomProviderView,
   WarRoomProviderName,
 } from '@/lib/incident-collaboration/types';
-import { PROVIDER_PRESENTATION } from '@/lib/incident-collaboration/presentation';
+import { getProviderPresentation } from '@/lib/incident-collaboration/presentation';
 
 type WarRoomCreateDialogProps = {
   providers: IncidentWarRoomProviderView[];
@@ -70,8 +70,9 @@ export function WarRoomCreateDialog({
 
         <div className="space-y-4 pt-2">
           {creatableProviders.map(providerView => {
-            const meta = PROVIDER_PRESENTATION[providerView.provider];
+            const meta = getProviderPresentation(providerView.provider);
             const isTeams = providerView.provider === 'MICROSOFT_TEAMS';
+            const isSlack = providerView.provider === 'SLACK';
             const isThisPending = isPending && activeProviderTrigger === providerView.provider;
 
             return (
@@ -81,10 +82,12 @@ export function WarRoomCreateDialog({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5">
-                    {providerView.provider === 'SLACK' ? (
+                    {isSlack ? (
                       <SlackLogo className="h-5 w-5 shrink-0" />
-                    ) : (
+                    ) : isTeams ? (
                       <MicrosoftTeamsLogo className="h-6 w-6 shrink-0" />
+                    ) : (
+                      <MessageSquare className="h-5 w-5 text-muted-foreground shrink-0" />
                     )}
                     <div>
                       <h4 className="font-semibold text-sm text-foreground">{meta.displayName}</h4>

@@ -123,4 +123,17 @@ describe('IncidentMeetingCard Component', () => {
     });
     expect(onAction).toHaveBeenCalledWith('CLOSE');
   });
+
+  it('renders custom closeLabel and supports external close semantics', async () => {
+    const customMeeting: IncidentMeetingView = {
+      ...readyMeeting,
+      actions: {
+        ...readyMeeting.actions,
+        closeLabel: 'End Meeting',
+        supportsExternalClose: true,
+      },
+    };
+    render(<IncidentMeetingCard meeting={customMeeting} />);
+    expect(screen.getByTitle('End Meeting')).toBeInTheDocument();
+  });
 });

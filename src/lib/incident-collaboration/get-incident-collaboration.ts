@@ -420,36 +420,54 @@ export async function getIncidentCollaborationView(
   let meeting: IncidentMeetingView | null = persistedMeeting;
 
   if (!meeting && meetingResolution.effectiveProvider !== 'NONE' && !meetingResolution.isDisabled) {
-    // Unprovisioned meeting bridge path:
-    // Expose initial capability card so operator can click "Provision Meeting Bridge"
+    const { MeetingProviderRegistry } = await import('./meeting-registry');
+    const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
+    const availability = await MeetingProviderRegistry.isAvailable(
+      meetingResolution.effectiveProvider,
+      customTemplate,
+      incident.id
+    );
+
+    const isAvailable = availability.available && !meetingResolution.isUnavailable;
     const canProvision = canManageMeeting && incident.status !== 'RESOLVED';
+    const isTeams = meetingResolution.effectiveProvider === 'MICROSOFT_TEAMS';
+
     meeting = {
       id: `pending_meet_${incident.id}`,
       incidentId: incident.id,
       generation: 1,
       provider: meetingResolution.effectiveProvider,
       state: 'REQUESTED',
-      health: meetingResolution.isUnavailable ? 'UNAVAILABLE' : 'HEALTHY',
+      health: isAvailable ? 'HEALTHY' : 'UNAVAILABLE',
       externalId: `opsknight:${incident.id}:1`,
       joinUrl: '',
       createdAt: incident.createdAt.toISOString(),
-      lastErrorCode: meetingResolution.isUnavailable ? 'MEETING_UNAVAILABLE' : null,
-      lastErrorMessage: meetingResolution.unavailableReason || null,
+      lastErrorCode: !isAvailable ? availability.readiness || 'MEETING_UNAVAILABLE' : null,
+      lastErrorMessage: availability.reason || meetingResolution.unavailableReason || null,
+      readiness: availability.readiness || (isAvailable ? 'READY' : 'UNAVAILABLE'),
       actions: {
         canJoin: false,
         canRetry: false,
         canClose: false,
-        canProvision: canProvision && !meetingResolution.isUnavailable,
+        canProvision: canProvision && isAvailable,
+        supportsExternalClose: isTeams,
+        closeLabel: isTeams ? 'End Meeting' : 'Detach Bridge',
       },
     };
   } else if (meeting) {
+    const isTeams = meeting.provider === 'MICROSOFT_TEAMS';
     meeting = {
       ...meeting,
       actions: {
         canJoin: meeting.state === 'READY' && Boolean(meeting.joinUrl),
         canRetry: meeting.state === 'FAILED' && canManageMeeting && incident.status !== 'RESOLVED',
-        canClose: meeting.state === 'READY' && canManageMeeting && incident.status !== 'RESOLVED',
+        canClose:
+          (meeting.state === 'READY' || meeting.state === 'PROVISIONING') &&
+          canManageMeeting &&
+          incident.status !== 'RESOLVED',
         canProvision: false,
+        supportsExternalClose: isTeams,
+        closeLabel: isTeams ? 'End Meeting' : 'Detach Bridge',
       },
     };
   }

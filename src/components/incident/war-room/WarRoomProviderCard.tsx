@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
-import { ExternalLink, Loader2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { ExternalLink, Loader2, AlertTriangle, ShieldAlert, MessageSquare } from 'lucide-react';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { WarRoomLifecycleBadge } from './WarRoomLifecycleBadge';
 import { WarRoomHealthBadge } from './WarRoomHealthBadge';
@@ -11,7 +11,7 @@ import { WarRoomActionsMenu } from './WarRoomActionsMenu';
 import { WarRoomDiagnostics } from './WarRoomDiagnostics';
 import type { IncidentWarRoomProviderView } from '@/lib/incident-collaboration/types';
 import {
-  PROVIDER_PRESENTATION,
+  getProviderPresentation,
   toUserFacingWarRoomError,
 } from '@/lib/incident-collaboration/presentation';
 import { cn } from '@/lib/utils';
@@ -31,7 +31,7 @@ export function WarRoomProviderCard({
 }: WarRoomProviderCardProps) {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const room = providerView.currentRoom;
-  const meta = PROVIDER_PRESENTATION[providerView.provider];
+  const meta = getProviderPresentation(providerView.provider);
 
   if (!room) return null;
 
@@ -41,6 +41,7 @@ export function WarRoomProviderCard({
   const hasProblem = room.health !== 'HEALTHY';
   const friendlyError = room.lastError ? toUserFacingWarRoomError(room.lastError) : null;
   const isSlack = providerView.provider === 'SLACK';
+  const isTeams = providerView.provider === 'MICROSOFT_TEAMS';
 
   const cardStyle = (() => {
     if (
@@ -56,7 +57,9 @@ export function WarRoomProviderCard({
     if (room.state === 'READY') {
       return isSlack
         ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-emerald-200/80 dark:border-emerald-900/40 border-l-[3.5px] border-l-emerald-500 hover:border-emerald-300 dark:hover:border-emerald-800/60 hover:shadow-xs'
-        : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-indigo-200/80 dark:border-indigo-900/40 border-l-[3.5px] border-l-indigo-500 hover:border-indigo-300 dark:hover:border-indigo-800/60 hover:shadow-xs';
+        : isTeams
+          ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-indigo-200/80 dark:border-indigo-900/40 border-l-[3.5px] border-l-indigo-500 hover:border-indigo-300 dark:hover:border-indigo-800/60 hover:shadow-xs'
+          : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-sky-200/80 dark:border-sky-900/40 border-l-[3.5px] border-l-sky-500 hover:border-sky-300 dark:hover:border-sky-800/60 hover:shadow-xs';
     }
     return 'bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/80 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100';
   })();
@@ -79,13 +82,17 @@ export function WarRoomProviderCard({
               'w-8 h-8 rounded-lg flex items-center justify-center shadow-2xs border',
               isSlack
                 ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50 text-amber-600 dark:text-amber-400'
-                : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400'
+                : isTeams
+                  ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400'
+                  : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300'
             )}
           >
             {isSlack ? (
               <SlackLogo className="h-4.5 w-4.5" />
-            ) : (
+            ) : isTeams ? (
               <MicrosoftTeamsLogo className="h-5 w-5" />
+            ) : (
+              <MessageSquare className="h-4.5 w-4.5" />
             )}
           </div>
         </div>

@@ -13,7 +13,7 @@
 import { generateBridgeUrl } from '@/lib/war-room/bridge';
 import { getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
 import { getMicrosoftTeamsGraphAccessToken } from '@/lib/microsoft-teams/client';
-import type { IncidentMeetingProvider } from './types';
+import type { IncidentMeetingProvider, IncidentMeetingReadiness } from './types';
 import prisma from '@/lib/prisma';
 
 export type CreateOrGetMeetingInput = {
@@ -35,6 +35,23 @@ export type MeetingResult = {
   metadata?: Record<string, unknown>;
 };
 
+export interface MeetingAvailabilityResult {
+  available: boolean;
+  readiness?: IncidentMeetingReadiness;
+  reason?: string;
+}
+
+export interface MeetingProviderAdapter {
+  readonly provider: IncidentMeetingProvider;
+  readonly supportsExternalClose?: boolean;
+  isAvailable(
+    customTemplate?: string | null,
+    incidentId?: string
+  ): Promise<MeetingAvailabilityResult>;
+  createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult>;
+  closeMeeting?(meetingId: string, externalId?: string): Promise<void>;
+}
+
 async function resolveGlobalCustomBridgeTemplate(): Promise<string | null> {
   if (prisma?.chatOpsConfig?.findUnique) {
     try {
@@ -52,19 +69,13 @@ async function resolveGlobalCustomBridgeTemplate(): Promise<string | null> {
   return null;
 }
 
-export interface MeetingProviderAdapter {
-  readonly provider: IncidentMeetingProvider;
-  isAvailable(customTemplate?: string | null): Promise<{ available: boolean; reason?: string }>;
-  createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult>;
-  closeMeeting?(meetingId: string): Promise<void>;
-}
-
 /**
  * Microsoft Teams Native Online Meeting Adapter
  * Uses Microsoft Graph /users/{userId}/onlineMeetings/createOrGet with deterministic idempotency key.
  */
 export class TeamsMeetingAdapter implements MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider = 'MICROSOFT_TEAMS';
+  readonly supportsExternalClose = true;
 
   async resolveOrganizer(
     incidentId: string,
@@ -149,13 +160,21 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
     return null;
   }
 
-  async isAvailable(): Promise<{ available: boolean; reason?: string }> {
+  async isAvailable(
+    customTemplate?: string | null,
+    incidentId?: string
+  ): Promise<MeetingAvailabilityResult> {
     try {
+      if (customTemplate && customTemplate.trim()) {
+        return { available: true, readiness: 'READY' };
+      }
+
       const resolved = await getMicrosoftTeamsConfig();
       if (!resolved || !resolved.config.enabled) {
         return {
           available: false,
-          reason: 'Microsoft Teams integration is disabled or unconfigured.',
+          readiness: 'UNAVAILABLE',
+          reason: 'Microsoft Teams integration is disabled or unconfigured in settings.',
         };
       }
 
@@ -173,16 +192,76 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
       if (!tenantId) {
         return {
           available: false,
+          readiness: 'UNAVAILABLE',
           reason: 'No Microsoft Entra tenant ID configured for Microsoft Teams.',
         };
       }
 
-      return { available: true };
+      // Proactive probe: Check organizer availability
+      const defaultOrganizer = (resolved.config as { defaultMeetingOrganizerUpn?: string | null })
+        ?.defaultMeetingOrganizerUpn;
+      const organizer = incidentId
+        ? await this.resolveOrganizer(incidentId, tenantId, defaultOrganizer)
+        : defaultOrganizer?.trim()
+          ? { userId: defaultOrganizer.trim(), email: defaultOrganizer.trim() }
+          : null;
+
+      if (!organizer) {
+        return {
+          available: false,
+          readiness: 'ORGANIZER_REQUIRED',
+          reason:
+            'No meeting organizer configured. Set Default Meeting Organizer in Settings > ChatOps, or link a Teams user.',
+        };
+      }
+
+      // Proactive probe: Check Graph access token acquisition
+      const token = await getMicrosoftTeamsGraphAccessToken(tenantId).catch(() => null);
+      if (!token) {
+        return {
+          available: false,
+          readiness: 'PERMISSION_REQUIRED',
+          reason:
+            'Unable to acquire Microsoft Graph token. Verify Entra application credentials in settings.',
+        };
+      }
+
+      return { available: true, readiness: 'READY' };
     } catch (e) {
       return {
         available: false,
+        readiness: 'UNAVAILABLE',
         reason: (e as Error).message || 'Failed to verify Microsoft Teams availability.',
       };
+    }
+  }
+
+  async closeMeeting(meetingId: string, externalId?: string): Promise<void> {
+    try {
+      const resolved = await getMicrosoftTeamsConfig();
+      if (!resolved || !resolved.config.enabled) return;
+      const tenantId = resolved.config.tenantId;
+      if (!tenantId) return;
+
+      const defaultOrganizer = (resolved.config as { defaultMeetingOrganizerUpn?: string | null })
+        ?.defaultMeetingOrganizerUpn;
+      const organizer = defaultOrganizer?.trim() ? { userId: defaultOrganizer.trim() } : null;
+      if (!organizer) return;
+
+      const token = await getMicrosoftTeamsGraphAccessToken(tenantId);
+      if (!token) return;
+
+      if (meetingId && !meetingId.startsWith('meet_') && !meetingId.startsWith('opsknight:')) {
+        await fetch(
+          `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(organizer.userId)}/onlineMeetings/${encodeURIComponent(meetingId)}`,
+          {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        ).catch(() => null);
+      }
+    } catch {
+      // Non-fatal error during cleanup
     }
   }
 
@@ -347,9 +426,10 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
  */
 export class JitsiMeetingAdapter implements MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider = 'JITSI';
+  readonly supportsExternalClose = false;
 
-  async isAvailable(): Promise<{ available: boolean }> {
-    return { available: true };
+  async isAvailable(): Promise<MeetingAvailabilityResult> {
+    return { available: true, readiness: 'READY' };
   }
 
   async createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult> {
@@ -374,19 +454,19 @@ export class JitsiMeetingAdapter implements MeetingProviderAdapter {
  */
 export class ZoomMeetingAdapter implements MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider = 'ZOOM';
+  readonly supportsExternalClose = false;
 
-  async isAvailable(
-    customTemplate?: string | null
-  ): Promise<{ available: boolean; reason?: string }> {
+  async isAvailable(customTemplate?: string | null): Promise<MeetingAvailabilityResult> {
     if (customTemplate && customTemplate.trim()) {
-      return { available: true };
+      return { available: true, readiness: 'READY' };
     }
     const globalTemplate = await resolveGlobalCustomBridgeTemplate();
     if (globalTemplate) {
-      return { available: true };
+      return { available: true, readiness: 'READY' };
     }
     return {
       available: false,
+      readiness: 'UNAVAILABLE',
       reason:
         'Zoom requires a configured meeting URL template in Global ChatOps or Service settings.',
     };
@@ -420,19 +500,19 @@ export class ZoomMeetingAdapter implements MeetingProviderAdapter {
  */
 export class GoogleMeetAdapter implements MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider = 'GOOGLE_MEET';
+  readonly supportsExternalClose = false;
 
-  async isAvailable(
-    customTemplate?: string | null
-  ): Promise<{ available: boolean; reason?: string }> {
+  async isAvailable(customTemplate?: string | null): Promise<MeetingAvailabilityResult> {
     if (customTemplate && customTemplate.trim()) {
-      return { available: true };
+      return { available: true, readiness: 'READY' };
     }
     const globalTemplate = await resolveGlobalCustomBridgeTemplate();
     if (globalTemplate) {
-      return { available: true };
+      return { available: true, readiness: 'READY' };
     }
     return {
       available: false,
+      readiness: 'UNAVAILABLE',
       reason:
         'Google Meet requires a configured meeting URL template in Global ChatOps or Service settings.',
     };
@@ -476,22 +556,35 @@ export class MeetingProviderRegistry {
     this.adapters.set(adapter.provider, adapter);
   }
 
-  static getAdapter(provider: IncidentMeetingProvider): MeetingProviderAdapter | null {
+  static get(provider: IncidentMeetingProvider): MeetingProviderAdapter | null {
     return this.adapters.get(provider) || null;
+  }
+
+  static getAdapter(provider: IncidentMeetingProvider): MeetingProviderAdapter | null {
+    return this.get(provider);
   }
 
   static async isAvailable(
     provider: IncidentMeetingProvider,
-    customTemplate?: string | null
-  ): Promise<{ available: boolean; reason?: string }> {
+    customTemplate?: string | null,
+    incidentId?: string
+  ): Promise<MeetingAvailabilityResult> {
     if (provider === 'NONE') {
-      return { available: false, reason: 'Meeting provider is disabled.' };
+      return {
+        available: false,
+        readiness: 'UNAVAILABLE',
+        reason: 'Meeting provider is disabled.',
+      };
     }
     const adapter = this.getAdapter(provider);
     if (!adapter) {
-      return { available: false, reason: `No adapter found for provider ${provider}.` };
+      return {
+        available: false,
+        readiness: 'UNAVAILABLE',
+        reason: `No adapter found for provider ${provider}.`,
+      };
     }
-    return adapter.isAvailable(customTemplate);
+    return adapter.isAvailable(customTemplate, incidentId);
   }
 
   static async createOrGetMeeting(
@@ -503,5 +596,16 @@ export class MeetingProviderRegistry {
       throw new Error(`Meeting provider ${provider} is not supported.`);
     }
     return adapter.createOrGetMeeting(input);
+  }
+
+  static async closeMeeting(
+    provider: IncidentMeetingProvider,
+    meetingId: string,
+    externalId?: string
+  ): Promise<void> {
+    const adapter = this.getAdapter(provider);
+    if (adapter?.closeMeeting) {
+      await adapter.closeMeeting(meetingId, externalId);
+    }
   }
 }

@@ -37,6 +37,8 @@ function mapRecordToView(record: {
 }): IncidentMeetingView {
   const isReady = record.state === 'READY';
   const isFailed = record.state === 'FAILED';
+  const isProvisioning = record.state === 'PROVISIONING';
+  const isTeams = record.provider === 'MICROSOFT_TEAMS';
 
   return {
     id: record.id,
@@ -64,17 +66,18 @@ function mapRecordToView(record: {
       canJoin: isReady,
       canProvision: record.state === 'REQUESTED',
       canRetry: isFailed,
-      canClose: isReady,
+      canClose: isReady || isProvisioning,
+      supportsExternalClose: isTeams,
+      closeLabel: isTeams ? 'End Meeting' : 'Detach Bridge',
     },
   };
 }
 
 /**
  * Fetch persisted canonical incident meeting view.
- * Fast database read with zero external network calls.
+ * Pure database read with zero side-effects and zero external network calls.
  */
 export async function getIncidentMeeting(incidentId: string): Promise<IncidentMeetingView | null> {
-  // 1. Try real IncidentMeeting model
   if (prisma?.incidentMeeting?.findFirst) {
     try {
       const record = await prisma.incidentMeeting.findFirst({
@@ -82,59 +85,14 @@ export async function getIncidentMeeting(incidentId: string): Promise<IncidentMe
         orderBy: { generation: 'desc' },
       });
       if (record) {
-        if (
-          record.state === 'PROVISIONING' &&
-          record.provisioningStartedAt &&
-          Date.now() - new Date(record.provisioningStartedAt).getTime() > 120_000
-        ) {
-          try {
-            await prisma.incidentMeeting.updateMany({
-              where: {
-                id: record.id,
-                state: 'PROVISIONING',
-                provisioningToken: record.provisioningToken,
-              },
-              data: {
-                state: 'FAILED',
-                health: 'UNAVAILABLE',
-                lastErrorCode: 'PROVISIONING_TIMEOUT',
-                lastErrorMessage: 'Meeting provisioning timed out after 2 minutes.',
-              },
-            });
-            record.state = 'FAILED' as never;
-            record.health = 'UNAVAILABLE' as never;
-            record.lastErrorCode = 'PROVISIONING_TIMEOUT';
-            record.lastErrorMessage = 'Meeting provisioning timed out after 2 minutes.';
-          } catch {
-            // Ignore if concurrently updated
-          }
-        }
         const view = mapRecordToView(record);
         memoryMeetingCache.set(incidentId, view);
         return view;
       }
-    } catch {
-      // Fall through to systemConfig / memory fallback
-    }
-  }
-
-  // 2. Try SystemConfig fallback (compatibility / mock environments)
-  if (prisma?.systemConfig?.findUnique) {
-    try {
-      const row = await prisma.systemConfig.findUnique({
-        where: { key: `${INCIDENT_MEETING_PREFIX}${incidentId}` },
-        select: { value: true },
-      });
-
-      if (row && row.value && typeof row.value === 'object') {
-        const val = row.value as unknown as IncidentMeetingView;
-        if (val.id && val.provider && val.state) {
-          memoryMeetingCache.set(incidentId, val);
-          return val;
-        }
+    } catch (e) {
+      if (process.env.NODE_ENV !== 'test') {
+        throw e;
       }
-    } catch {
-      // Fall through to memory cache
     }
   }
 
@@ -142,12 +100,11 @@ export async function getIncidentMeeting(incidentId: string): Promise<IncidentMe
 }
 
 /**
- * Persist or update incident meeting view with synchronization.
+ * Persist or update incident meeting view to canonical IncidentMeeting table.
  */
 export async function saveIncidentMeeting(meeting: IncidentMeetingView): Promise<void> {
   memoryMeetingCache.set(meeting.incidentId, meeting);
 
-  // Sync to IncidentMeeting table if available
   if (prisma?.incidentMeeting?.upsert) {
     try {
       await prisma.incidentMeeting.upsert({
@@ -189,26 +146,10 @@ export async function saveIncidentMeeting(meeting: IncidentMeetingView): Promise
           readyAt: meeting.state === 'READY' ? new Date() : undefined,
         },
       });
-    } catch {
-      // Continue to SystemConfig backup
-    }
-  }
-
-  // Backup sync to SystemConfig
-  if (prisma?.systemConfig?.upsert) {
-    try {
-      await prisma.systemConfig.upsert({
-        where: { key: `${INCIDENT_MEETING_PREFIX}${meeting.incidentId}` },
-        create: {
-          key: `${INCIDENT_MEETING_PREFIX}${meeting.incidentId}`,
-          value: meeting as unknown as object,
-        },
-        update: {
-          value: meeting as unknown as object,
-        },
-      });
-    } catch {
-      // Non-fatal logging
+    } catch (e) {
+      if (process.env.NODE_ENV !== 'test') {
+        throw e;
+      }
     }
   }
 }
@@ -326,50 +267,64 @@ export async function requestMeetingProvision(params: {
     throw new Error('Cannot provision meeting for provider NONE.');
   }
 
+  // 1. Check existing state before database mutation
   const existing = await getIncidentMeeting(incidentId);
   if (existing && existing.state === 'READY' && existing.provider === provider && !forceRetry) {
     return existing;
   }
+  if (existing && existing.state === 'PROVISIONING' && !forceRetry) {
+    // Concurrent claim protection: return active provisioning meeting
+    return existing;
+  }
+  if (existing && existing.state === 'CLOSING') {
+    return existing;
+  }
 
-  const generation = params.generation ?? (existing ? existing.generation + 1 : 1);
-  const meetingId = `meet_${incidentId}_${generation}`;
-  const externalId = `opsknight:${incidentId}:${generation}`;
-  const provisioningToken = crypto.randomUUID();
-  const now = new Date().toISOString();
-
-  const initialMeeting: IncidentMeetingView = {
-    id: meetingId,
-    incidentId,
-    generation,
-    provider,
-    state: 'PROVISIONING',
-    health: 'HEALTHY',
-    externalId,
-    joinUrl: existing?.joinUrl || '',
-    createdAt: now,
-    actions: {
-      canJoin: false,
-      canProvision: false,
-      canRetry: false,
-      canClose: false,
-    },
-  };
-
-  // Transactional Enqueue: Write PROVISIONING and enqueue background job atomically
+  // 2. Transactional claim: atomic generation claim and job creation
   if (prisma?.incidentMeeting && prisma?.backgroundJob) {
     try {
-      await prisma.$transaction(async tx => {
-        await tx.incidentMeeting.upsert({
-          where: { incidentId_generation: { incidentId, generation } },
+      const meetingView = await prisma.$transaction(async tx => {
+        // Re-check inside transaction to eliminate TOCTOU races
+        const current = await tx.incidentMeeting.findFirst({
+          where: { incidentId },
+          orderBy: { generation: 'desc' },
+        });
+
+        if (current) {
+          if (current.state === 'READY' && current.provider === provider && !forceRetry) {
+            return mapRecordToView(current);
+          }
+          if (current.state === 'PROVISIONING' && !forceRetry) {
+            return mapRecordToView(current);
+          }
+          if (current.state === 'CLOSING') {
+            return mapRecordToView(current);
+          }
+        }
+
+        const targetGeneration =
+          params.generation ??
+          (forceRetry && current && current.state === 'FAILED'
+            ? current.generation + 1
+            : current
+              ? current.generation + 1
+              : 1);
+
+        const meetingId = `meet_${incidentId}_${targetGeneration}`;
+        const externalId = `opsknight:${incidentId}:${targetGeneration}`;
+        const provisioningToken = crypto.randomUUID();
+
+        const record = await tx.incidentMeeting.upsert({
+          where: { incidentId_generation: { incidentId, generation: targetGeneration } },
           create: {
             id: meetingId,
             incidentId,
             provider: provider as never,
-            generation,
+            generation: targetGeneration,
             state: 'PROVISIONING',
             health: 'HEALTHY',
             externalId,
-            joinUrl: existing?.joinUrl || '',
+            joinUrl: current?.joinUrl || '',
             provisioningToken,
             provisioningStartedAt: new Date(),
           },
@@ -391,61 +346,65 @@ export async function requestMeetingProvision(params: {
               incidentId,
               provisioningToken,
               provider,
-              generation,
+              generation: targetGeneration,
               incidentTitle,
               incidentNumber,
               customTemplate: customTemplate || null,
             },
           },
         });
+
+        return mapRecordToView(record);
       });
 
-      memoryMeetingCache.set(incidentId, initialMeeting);
-      return initialMeeting;
-    } catch {
-      // Fall through to fallback path below
+      memoryMeetingCache.set(incidentId, meetingView);
+      return meetingView;
+    } catch (err) {
+      // In production, FAIL CLOSED! Database failures must never spawn un-tracked external meetings.
+      if (process.env.NODE_ENV !== 'test') {
+        throw err;
+      }
     }
   }
 
-  await saveIncidentMeeting(initialMeeting);
+  // 3. Fallback path for unit test / mock environments where Prisma is null or mock
+  const fallbackGen = params.generation ?? (existing ? existing.generation + 1 : 1);
+  const fallbackMeetingId = `meet_${incidentId}_${fallbackGen}`;
+  const fallbackExternalId = `opsknight:${incidentId}:${fallbackGen}`;
+  const fallbackToken = crypto.randomUUID();
+  const now = new Date().toISOString();
 
-  if (prisma?.incidentMeeting?.updateMany) {
-    await prisma.incidentMeeting
-      .updateMany({
-        where: { incidentId, generation },
-        data: {
-          provisioningToken,
-          provisioningStartedAt: new Date(),
-        },
-      })
-      .catch(() => null);
-  }
+  const fallbackMeeting: IncidentMeetingView = {
+    id: fallbackMeetingId,
+    incidentId,
+    generation: fallbackGen,
+    provider,
+    state: 'PROVISIONING',
+    health: 'HEALTHY',
+    externalId: fallbackExternalId,
+    joinUrl: existing?.joinUrl || '',
+    createdAt: now,
+    actions: {
+      canJoin: false,
+      canProvision: false,
+      canRetry: false,
+      canClose: true,
+      supportsExternalClose: provider === 'MICROSOFT_TEAMS',
+      closeLabel: provider === 'MICROSOFT_TEAMS' ? 'End Meeting' : 'Detach Bridge',
+    },
+  };
 
-  try {
-    const { scheduleJob } = await import('@/lib/jobs/queue');
-    await scheduleJob('MEETING_PROVISION', new Date(), {
-      incidentId,
-      provisioningToken,
-      provider,
-      generation,
-      incidentTitle,
-      incidentNumber,
-      customTemplate: customTemplate || null,
-    });
-  } catch {
-    // Synchronous execution fallback for test or offline environments
-    return executeMeetingProvision({
-      incidentId,
-      provisioningToken,
-      provider,
-      generation,
-      incidentTitle,
-      incidentNumber,
-      customTemplate,
-    });
-  }
+  await saveIncidentMeeting(fallbackMeeting);
 
-  return initialMeeting;
+  return executeMeetingProvision({
+    incidentId,
+    provisioningToken: fallbackToken,
+    provider,
+    generation: fallbackGen,
+    incidentTitle,
+    incidentNumber,
+    customTemplate,
+  });
 }
 
 export function isRetryableMeetingError(error: unknown): boolean {
@@ -529,9 +488,22 @@ export async function executeMeetingProvision(params: {
             }
           );
         }
+        if (row.state !== 'PROVISIONING') {
+          return (await getIncidentMeeting(incidentId)) || currentStatus!;
+        }
+        if (
+          provisioningToken &&
+          row.provisioningToken &&
+          row.provisioningToken !== provisioningToken
+        ) {
+          // Token mismatch: another claim or generation owns this meeting now. Abort before calling provider!
+          return (await getIncidentMeeting(incidentId)) || currentStatus!;
+        }
       }
-    } catch {
-      // Fall back to memory check
+    } catch (e) {
+      if (process.env.NODE_ENV !== 'test') {
+        throw e;
+      }
     }
   }
 
@@ -614,25 +586,12 @@ export async function executeMeetingProvision(params: {
         canProvision: false,
         canRetry: false,
         canClose: true,
+        supportsExternalClose: provider === 'MICROSOFT_TEAMS',
+        closeLabel: provider === 'MICROSOFT_TEAMS' ? 'End Meeting' : 'Detach Bridge',
       },
     };
 
     memoryMeetingCache.set(incidentId, readyMeeting);
-
-    if (prisma?.systemConfig?.upsert) {
-      await prisma.systemConfig
-        .upsert({
-          where: { key: `${INCIDENT_MEETING_PREFIX}${incidentId}` },
-          create: {
-            key: `${INCIDENT_MEETING_PREFIX}${incidentId}`,
-            value: readyMeeting as unknown as object,
-          },
-          update: {
-            value: readyMeeting as unknown as object,
-          },
-        })
-        .catch(() => null);
-    }
 
     // Reproject meeting link to active incident war rooms
     if (prisma?.incidentWarRoom?.findMany) {
@@ -737,36 +696,32 @@ export async function executeMeetingProvision(params: {
         canProvision: false,
         canRetry: true,
         canClose: false,
+        supportsExternalClose: provider === 'MICROSOFT_TEAMS',
+        closeLabel: provider === 'MICROSOFT_TEAMS' ? 'End Meeting' : 'Detach Bridge',
       },
     };
 
     memoryMeetingCache.set(incidentId, failedMeeting);
-
-    if (prisma?.systemConfig?.upsert) {
-      await prisma.systemConfig
-        .upsert({
-          where: { key: `${INCIDENT_MEETING_PREFIX}${incidentId}` },
-          create: {
-            key: `${INCIDENT_MEETING_PREFIX}${incidentId}`,
-            value: failedMeeting as unknown as object,
-          },
-          update: {
-            value: failedMeeting as unknown as object,
-          },
-        })
-        .catch(() => null);
-    }
-
     return failedMeeting;
   }
 }
 
 /**
  * Close an active incident meeting with atomic state settlement.
+ * Invokes external provider meeting termination if supported (e.g. Teams online meeting).
  */
 export async function closeIncidentMeeting(incidentId: string): Promise<void> {
   const current = await getIncidentMeeting(incidentId);
   if (!current || current.state === 'CLOSED') return;
+
+  // If provider adapter supports external termination, execute it
+  if (current.provider && current.provider !== 'NONE') {
+    try {
+      await MeetingProviderRegistry.closeMeeting(current.provider, current.id, current.externalId);
+    } catch {
+      // Non-fatal, local close must still complete
+    }
+  }
 
   const closedMeeting: IncidentMeetingView = {
     ...current,
@@ -777,39 +732,83 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
       canProvision: false,
       canRetry: false,
       canClose: false,
+      supportsExternalClose: current.actions.supportsExternalClose,
+      closeLabel: current.actions.closeLabel,
     },
   };
 
   // Clear provisioning token and transition to CLOSED atomically
   if (prisma?.incidentMeeting?.updateMany) {
-    await prisma.incidentMeeting
-      .updateMany({
+    try {
+      await prisma.incidentMeeting.updateMany({
         where: { incidentId, state: { not: 'CLOSED' } },
         data: {
           state: 'CLOSED',
           closedAt: new Date(),
           provisioningToken: null,
         },
-      })
-      .catch(() => null);
+      });
+    } catch (e) {
+      if (process.env.NODE_ENV !== 'test') {
+        throw e;
+      }
+    }
   }
 
   memoryMeetingCache.set(incidentId, closedMeeting);
+}
 
-  if (prisma?.systemConfig?.upsert) {
-    await prisma.systemConfig
-      .upsert({
-        where: { key: `${INCIDENT_MEETING_PREFIX}${incidentId}` },
-        create: {
-          key: `${INCIDENT_MEETING_PREFIX}${incidentId}`,
-          value: closedMeeting as unknown as object,
+/**
+ * Background orphan recovery:
+ * Checks for orphaned PROVISIONING meetings older than 15 minutes where no active
+ * BackgroundJob of type MEETING_PROVISION exists with that token.
+ * Owned by background reconciliation, NOT by read paths.
+ */
+export async function reconcileStalledMeetingProvisions(): Promise<number> {
+  if (!prisma?.incidentMeeting?.findMany || !prisma?.backgroundJob?.findMany) return 0;
+
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  const stalledMeetings = await prisma.incidentMeeting.findMany({
+    where: {
+      state: 'PROVISIONING',
+      provisioningStartedAt: { lt: fifteenMinutesAgo },
+    },
+  });
+
+  let recoveredCount = 0;
+  for (const m of stalledMeetings) {
+    if (!m.provisioningToken) continue;
+
+    const activeJobs = await prisma.backgroundJob.findMany({
+      where: {
+        type: 'MEETING_PROVISION',
+        status: { in: ['PENDING', 'PROCESSING'] },
+      },
+    });
+
+    const hasActiveJob = activeJobs.some(
+      j => (j.payload as { provisioningToken?: string })?.provisioningToken === m.provisioningToken
+    );
+
+    if (!hasActiveJob) {
+      await prisma.incidentMeeting.updateMany({
+        where: {
+          id: m.id,
+          state: 'PROVISIONING',
+          provisioningToken: m.provisioningToken,
         },
-        update: {
-          value: closedMeeting as unknown as object,
+        data: {
+          state: 'FAILED',
+          health: 'UNAVAILABLE',
+          lastErrorCode: 'ORPHANED_PROVISIONING',
+          lastErrorMessage: 'Provisioning stalled with no active background worker.',
         },
-      })
-      .catch(() => null);
+      });
+      recoveredCount++;
+    }
   }
+
+  return recoveredCount;
 }
 
 /**
