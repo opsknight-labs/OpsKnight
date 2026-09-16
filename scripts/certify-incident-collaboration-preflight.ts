@@ -58,6 +58,8 @@ async function runCertification(): Promise<void> {
       'externalCleanupPending',
       'lastErrorCode',
       'lastErrorMessage',
+      'closeToken',
+      'cleanupRetryCount',
     ];
 
     const missing = requiredCols.filter(c => !cols.has(c));

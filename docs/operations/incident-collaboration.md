@@ -62,19 +62,21 @@ The platform adheres to strict operational guarantees:
 ### Admin API Endpoints
 
 - `GET /api/admin/incident-collaboration`: Operational summary of active/degraded war rooms, canonical meetings, and pending cleanup debt.
+- `POST /api/admin/incident-collaboration/meetings/:meetingId/retry-cleanup`: Dedicated REST endpoint to claim and enqueue cleanup retry for an orphaned meeting resource.
+- `POST /api/admin/incident-collaboration`: Multi-action admin endpoint supporting `{ action: 'retry_cleanup', meetingId }` and `{ action: 'collect_metrics' }`.
 - `POST /api/admin/war-rooms/:warRoomId/repair`: Force reconciles and reprojects an out-of-sync war-room channel card.
 
 ### Verification Queries
 
 ```sql
 -- Check active meetings and their health
-SELECT "id", "incidentId", "provider", "generation", "state", "health", "externalCleanupPending", "joinUrl"
+SELECT "id", "incidentId", "provider", "generation", "state", "health", "externalCleanupPending", "closeToken", "cleanupRetryCount", "joinUrl"
 FROM "IncidentMeeting"
 WHERE "state" IN ('PROVISIONING', 'READY', 'CLOSING')
 ORDER BY "createdAt" DESC;
 
 -- Identify external cleanup debt
-SELECT "id", "incidentId", "provider", "lastErrorCode", "lastErrorMessage", "cleanupAttemptedAt"
+SELECT "id", "incidentId", "provider", "lastErrorCode", "lastErrorMessage", "cleanupAttemptedAt", "cleanupRetryCount"
 FROM "IncidentMeeting"
 WHERE "externalCleanupPending" = true;
 
@@ -92,7 +94,7 @@ GROUP BY "type", "status";
 ### 1. Microsoft Graph 429 Rate Limiting
 
 - **Symptom**: `WarRoomRetryableError: Microsoft Graph rate limit exceeded (429)`.
-- **System Behavior**: Meeting row stays `PROVISIONING` with `health: DEGRADED`. Worker pauses according to `Retry-After` header.
+- **System Behavior**: Meeting row stays in `CLOSING` or `PROVISIONING` with `health: DEGRADED`. Worker pauses and job is rescheduled according to `Retry-After` header.
 - **Action**: No manual intervention required for transient bursts. If persistent, verify tenant-wide Graph call volume or add additional meeting organizer accounts.
 
 ### 2. Permissions / Consent Revocation (401/403)
@@ -109,9 +111,16 @@ GROUP BY "type", "status";
 - **Symptom**: Network timeout during external meeting creation call.
 - **System Behavior**: Provider adapters use deterministic `externalId` (`opsknight:<incidentId>:<generation>`). Graph's `createOrGet` retrieves the previously created meeting idempotently on the next retry attempt without spawning duplicate meetings.
 
-### 4. Stalled Worker Recovery
+### 4. Stalled Worker Recovery & Cleanup Debt Remediation
 
-- **Action**: Run the reconciliation CLI task:
+- **Preflight Verification**: Verify local/CI deployment database columns, indexes, invariant contracts, and adapters:
   ```bash
-  npm run certify:collaboration
+  npm run certify:collaboration:preflight
   ```
+- **Staging / Production Certification**: In staging or production, live end-to-end certification executes against configured Slack and Microsoft Teams tenants using real OAuth credentials and Teams online meetings lifecycle.
+- **Cleanup Debt Remediation**: If an external meeting resource failed deletion and exhausted retries, an admin can trigger immediate retry:
+  ```bash
+  curl -X POST /api/admin/incident-collaboration/meetings/<meetingId>/retry-cleanup \
+    -H "Authorization: Bearer <ADMIN_SESSION_COOKIE>"
+  ```
+  The worker will validate the meeting's generation and `closeToken` lease before re-attempting deletion with the provider. Upon success, `externalCleanupPending` is cleared, `health` is restored to `HEALTHY`, and the cleanup debt gauge drops to 0.

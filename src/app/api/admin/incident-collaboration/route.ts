@@ -93,3 +93,44 @@ export async function GET(_request: NextRequest) {
     );
   }
 }
+
+export async function POST(request: NextRequest) {
+  let user: Awaited<ReturnType<typeof getCurrentUser>>;
+  try {
+    user = await getCurrentUser();
+  } catch {
+    return jsonError('Authentication required', 401);
+  }
+
+  if (user.role !== 'ADMIN') {
+    return jsonError('Admin access required', 403);
+  }
+
+  let body: { action?: string; meetingId?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError('Invalid JSON body', 400);
+  }
+
+  if (body.action !== 'retry_cleanup') {
+    return jsonError('Unsupported action. Supported actions: retry_cleanup', 400);
+  }
+
+  if (!body.meetingId || typeof body.meetingId !== 'string') {
+    return jsonError('meetingId is required', 400);
+  }
+
+  const { retryIncidentMeetingCleanup } =
+    await import('@/lib/incident-collaboration/meeting-reconciliation');
+
+  const result = await retryIncidentMeetingCleanup(body.meetingId.trim(), user.id);
+  if (!result.success) {
+    return jsonError(result.error || 'Failed to trigger cleanup retry', 400);
+  }
+
+  return jsonOk({ success: true, jobId: result.jobId, meetingId: body.meetingId.trim() }, 200, {
+    'Cache-Control': 'private, no-store',
+    Vary: 'Cookie',
+  });
+}
