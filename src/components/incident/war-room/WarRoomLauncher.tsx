@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { Plus, AlertTriangle, Users } from 'lucide-react';
 import { IncidentWarRoomManager } from './IncidentWarRoomManager';
+import { useIncidentWarRooms } from './useIncidentWarRooms';
 import type {
   IncidentCollaborationView,
   WarRoomProviderName,
@@ -25,15 +26,38 @@ type WarRoomLauncherProps = {
 };
 
 export function WarRoomLauncher({
-  collaboration,
+  collaboration: initialCollaboration,
   presentation = 'desktop',
   className,
-  onAction,
-  onCreate,
-  pendingAction,
-  isCreatePending,
+  onAction: externalOnAction,
+  onCreate: externalOnCreate,
+  pendingAction: externalPendingAction,
+  isCreatePending: externalIsCreatePending,
 }: WarRoomLauncherProps) {
   const [managerOpen, setManagerOpen] = useState(false);
+
+  // Hook for adaptive polling, optimistic updates, and neutral actions
+  const {
+    collaboration,
+    pendingAction: hookPendingAction,
+    handleCreate: hookCreate,
+    handleAction: hookAction,
+  } = useIncidentWarRooms(initialCollaboration);
+
+  const effectiveOnAction = externalOnAction || hookAction;
+  const effectiveOnCreate = externalOnCreate || hookCreate;
+  const effectivePendingAction =
+    externalPendingAction ||
+    (hookPendingAction
+      ? {
+          roomId: hookPendingAction.roomId,
+          action: hookPendingAction.action,
+        }
+      : null);
+  const effectiveIsCreatePending =
+    externalIsCreatePending !== undefined
+      ? externalIsCreatePending
+      : hookPendingAction?.action === 'CREATE';
 
   // If collaboration is not visible (no providers configured and no rooms exist), render nothing!
   if (!collaboration || !collaboration.visible) {
@@ -141,10 +165,10 @@ export function WarRoomLauncher({
         open={managerOpen}
         onOpenChange={setManagerOpen}
         presentation={presentation}
-        onAction={onAction}
-        onCreate={onCreate}
-        pendingAction={pendingAction}
-        isCreatePending={isCreatePending}
+        onAction={effectiveOnAction}
+        onCreate={effectiveOnCreate}
+        pendingAction={effectivePendingAction}
+        isCreatePending={effectiveIsCreatePending}
       />
     </>
   );
