@@ -70,7 +70,7 @@ export function resolveEffectiveMeetingProvider(params: {
     ? globalMeetingProvider
     : serviceMeetingProvider;
 
-  if (!globalWarRoomsEnabled || !serviceWarRoomsEnabled || desiredProvider === 'NONE') {
+  if (desiredProvider === 'NONE') {
     return {
       effectiveProvider: 'NONE',
       desiredProvider,

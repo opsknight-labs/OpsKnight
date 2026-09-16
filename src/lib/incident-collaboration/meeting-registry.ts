@@ -35,9 +35,26 @@ export type MeetingResult = {
   metadata?: Record<string, unknown>;
 };
 
+async function resolveGlobalCustomBridgeTemplate(): Promise<string | null> {
+  if (prisma?.chatOpsConfig?.findUnique) {
+    try {
+      const config = await prisma.chatOpsConfig.findUnique({
+        where: { id: 'default' },
+        select: { customBridgeUrlTemplate: true },
+      });
+      if (config?.customBridgeUrlTemplate?.trim()) {
+        return config.customBridgeUrlTemplate.trim();
+      }
+    } catch {
+      // Fallback to null
+    }
+  }
+  return null;
+}
+
 export interface MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider;
-  isAvailable(): Promise<{ available: boolean; reason?: string }>;
+  isAvailable(customTemplate?: string | null): Promise<{ available: boolean; reason?: string }>;
   createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult>;
   closeMeeting?(meetingId: string): Promise<void>;
 }
@@ -358,15 +375,30 @@ export class JitsiMeetingAdapter implements MeetingProviderAdapter {
 export class ZoomMeetingAdapter implements MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider = 'ZOOM';
 
-  async isAvailable(): Promise<{ available: boolean; reason?: string }> {
-    return { available: true };
+  async isAvailable(
+    customTemplate?: string | null
+  ): Promise<{ available: boolean; reason?: string }> {
+    if (customTemplate && customTemplate.trim()) {
+      return { available: true };
+    }
+    const globalTemplate = await resolveGlobalCustomBridgeTemplate();
+    if (globalTemplate) {
+      return { available: true };
+    }
+    return {
+      available: false,
+      reason:
+        'Zoom requires a configured meeting URL template in Global ChatOps or Service settings.',
+    };
   }
 
   async createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult> {
     const generation = input.generation ?? 1;
     const externalId = `opsknight:${input.incidentId}:${generation}`;
+    const effectiveTemplate =
+      input.customTemplate?.trim() || (await resolveGlobalCustomBridgeTemplate());
 
-    const joinUrl = generateBridgeUrl(input.incidentId, 'ZOOM', input.customTemplate);
+    const joinUrl = generateBridgeUrl(input.incidentId, 'ZOOM', effectiveTemplate);
     if (!joinUrl) {
       throw new Error(
         'Zoom requires a configured meeting URL template (e.g. https://mycompany.zoom.us/j/123456789 or personal room link).'
@@ -389,15 +421,30 @@ export class ZoomMeetingAdapter implements MeetingProviderAdapter {
 export class GoogleMeetAdapter implements MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider = 'GOOGLE_MEET';
 
-  async isAvailable(): Promise<{ available: boolean; reason?: string }> {
-    return { available: true };
+  async isAvailable(
+    customTemplate?: string | null
+  ): Promise<{ available: boolean; reason?: string }> {
+    if (customTemplate && customTemplate.trim()) {
+      return { available: true };
+    }
+    const globalTemplate = await resolveGlobalCustomBridgeTemplate();
+    if (globalTemplate) {
+      return { available: true };
+    }
+    return {
+      available: false,
+      reason:
+        'Google Meet requires a configured meeting URL template in Global ChatOps or Service settings.',
+    };
   }
 
   async createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult> {
     const generation = input.generation ?? 1;
     const externalId = `opsknight:${input.incidentId}:${generation}`;
+    const effectiveTemplate =
+      input.customTemplate?.trim() || (await resolveGlobalCustomBridgeTemplate());
 
-    const joinUrl = generateBridgeUrl(input.incidentId, 'GOOGLE_MEET', input.customTemplate);
+    const joinUrl = generateBridgeUrl(input.incidentId, 'GOOGLE_MEET', effectiveTemplate);
     if (!joinUrl) {
       throw new Error(
         'Google Meet requires a configured meeting URL template (e.g. https://meet.google.com/abc-defg-hij).'
@@ -434,7 +481,8 @@ export class MeetingProviderRegistry {
   }
 
   static async isAvailable(
-    provider: IncidentMeetingProvider
+    provider: IncidentMeetingProvider,
+    customTemplate?: string | null
   ): Promise<{ available: boolean; reason?: string }> {
     if (provider === 'NONE') {
       return { available: false, reason: 'Meeting provider is disabled.' };
@@ -443,7 +491,7 @@ export class MeetingProviderRegistry {
     if (!adapter) {
       return { available: false, reason: `No adapter found for provider ${provider}.` };
     }
-    return adapter.isAvailable();
+    return adapter.isAvailable(customTemplate);
   }
 
   static async createOrGetMeeting(

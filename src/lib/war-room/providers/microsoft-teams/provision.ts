@@ -61,18 +61,48 @@ export async function requestMicrosoftTeamsWarRoom(
       }),
     ]);
 
+    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveEffectiveWarRoomProviders } =
+      await import('@/lib/incident-collaboration/policy');
+
+    const [globalPolicy, servicePolicy] = await Promise.all([
+      getGlobalWarRoomPolicy(),
+      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
+    ]);
+
+    const effectivePolicy = resolveEffectiveWarRoomProviders({
+      globalProviders: globalPolicy.defaultProviders,
+      serviceProviders: servicePolicy ? servicePolicy.serviceProviders : null,
+      availableProviders: ['MICROSOFT_TEAMS'],
+      globalWarRoomsEnabled: globalPolicy.enabled,
+      serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : false,
+    });
+
+    if (
+      !intent.manual &&
+      (!effectivePolicy.effectiveProviders.includes('MICROSOFT_TEAMS') ||
+        effectivePolicy.isDisabled)
+    ) {
+      return { accepted: false, code: 'PROVIDER_POLICY_EXCLUDED' };
+    }
+
+    const effectiveAutoCreate = Boolean(
+      (servicePolicy?.autoCreate ?? incident.service.microsoftTeamsWarRoomAutoCreate) &&
+      effectivePolicy.effectiveProviders.includes('MICROSOFT_TEAMS') &&
+      !effectivePolicy.isDisabled
+    );
+
     const decision = evaluateWarRoomPolicy({
       incident: {
         urgency: incident.urgency,
         priority: incident.priority,
         visibility: incident.visibility,
       },
-      service: { autoCreate: incident.service.microsoftTeamsWarRoomAutoCreate },
+      service: { autoCreate: effectiveAutoCreate },
       destination: destination
         ? {
             enabled: destination.enabled,
             warRoomEnabled: destination.warRoomEnabled,
-            autoCreate: destination.warRoomAutoCreate,
+            autoCreate: effectiveAutoCreate,
             membershipType: intent.membershipType ?? destination.warRoomMembershipType,
           }
         : null,

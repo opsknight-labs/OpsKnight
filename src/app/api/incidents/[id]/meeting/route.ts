@@ -6,6 +6,7 @@ import { assertCanViewIncident, assertCanModifyIncident } from '@/lib/rbac';
 import {
   getIncidentMeeting,
   provisionIncidentMeeting,
+  requestMeetingProvision,
   closeIncidentMeeting,
 } from '@/lib/incident-collaboration/meeting-store';
 import {
@@ -149,7 +150,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
 
-      const meeting = await provisionIncidentMeeting({
+      const meeting = await requestMeetingProvision({
         incidentId,
         incidentTitle: incident.title,
         provider: requestedProvider,

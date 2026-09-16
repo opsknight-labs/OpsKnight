@@ -261,44 +261,244 @@ export async function provisionIncidentMeeting(params: {
       .catch(() => null);
   }
 
+  return executeMeetingProvision({
+    incidentId,
+    provisioningToken,
+    provider,
+    generation,
+    incidentTitle,
+    incidentNumber,
+    customTemplate,
+  });
+}
+
+/**
+ * Request asynchronous meeting bridge provisioning via durable background job.
+ * Sets the meeting record to PROVISIONING with a fencing token and immediately returns
+ * the optimistic view so the client UI can reactively poll or await completion.
+ */
+export async function requestMeetingProvision(params: {
+  incidentId: string;
+  incidentNumber?: number;
+  incidentTitle: string;
+  provider: IncidentMeetingProvider;
+  generation?: number;
+  customTemplate?: string | null;
+  forceRetry?: boolean;
+}): Promise<IncidentMeetingView> {
+  const {
+    incidentId,
+    incidentNumber,
+    incidentTitle,
+    provider,
+    customTemplate,
+    forceRetry = false,
+  } = params;
+
+  if (provider === 'NONE') {
+    throw new Error('Cannot provision meeting for provider NONE.');
+  }
+
+  const existing = await getIncidentMeeting(incidentId);
+  if (existing && existing.state === 'READY' && existing.provider === provider && !forceRetry) {
+    return existing;
+  }
+
+  const generation = params.generation ?? (existing ? existing.generation + 1 : 1);
+  const meetingId = `meet_${incidentId}_${generation}`;
+  const externalId = `opsknight:${incidentId}:${generation}`;
+  const provisioningToken = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  const initialMeeting: IncidentMeetingView = {
+    id: meetingId,
+    incidentId,
+    generation,
+    provider,
+    state: 'PROVISIONING',
+    health: 'HEALTHY',
+    externalId,
+    joinUrl: existing?.joinUrl || '',
+    createdAt: now,
+    actions: {
+      canJoin: false,
+      canProvision: false,
+      canRetry: false,
+      canClose: false,
+    },
+  };
+
+  await saveIncidentMeeting(initialMeeting);
+
+  if (prisma?.incidentMeeting?.updateMany) {
+    await prisma.incidentMeeting
+      .updateMany({
+        where: { incidentId, generation },
+        data: {
+          provisioningToken,
+          provisioningStartedAt: new Date(),
+        },
+      })
+      .catch(() => null);
+  }
+
+  try {
+    const { scheduleJob } = await import('@/lib/jobs/queue');
+    await scheduleJob('MEETING_PROVISION', new Date(), {
+      incidentId,
+      provisioningToken,
+      provider,
+      generation,
+      incidentTitle,
+      incidentNumber,
+      customTemplate: customTemplate || null,
+    });
+  } catch {
+    // Synchronous execution fallback for test or offline environments
+    return executeMeetingProvision({
+      incidentId,
+      provisioningToken,
+      provider,
+      generation,
+      incidentTitle,
+      incidentNumber,
+      customTemplate,
+    });
+  }
+
+  return initialMeeting;
+}
+
+/**
+ * Execute meeting provisioning with atomic CAS fencing.
+ * Called either synchronously by provisionIncidentMeeting or asynchronously by the MEETING_PROVISION job worker.
+ * Guarantees that an in-flight provision NEVER overwrites a CLOSED state (TOCTOU protection).
+ */
+export async function executeMeetingProvision(params: {
+  incidentId: string;
+  provisioningToken: string;
+  provider: IncidentMeetingProvider;
+  generation?: number;
+  incidentTitle?: string;
+  incidentNumber?: number;
+  customTemplate?: string | null;
+}): Promise<IncidentMeetingView> {
+  const {
+    incidentId,
+    provisioningToken,
+    provider,
+    generation,
+    incidentTitle = 'Incident Meeting',
+    incidentNumber,
+    customTemplate,
+  } = params;
+
+  const currentStatus = await getIncidentMeeting(incidentId);
+  if (currentStatus && (currentStatus.state === 'CLOSED' || currentStatus.state === 'CLOSING')) {
+    return currentStatus;
+  }
+
+  const gen = generation ?? currentStatus?.generation ?? 1;
+  const meetingId = `meet_${incidentId}_${gen}`;
+  const externalId = `opsknight:${incidentId}:${gen}`;
+  const now = new Date().toISOString();
+
+  let dbHasRecord = false;
+  if (prisma?.incidentMeeting?.findFirst) {
+    try {
+      const row = await prisma.incidentMeeting.findFirst({
+        where: { incidentId, generation: gen },
+        select: { state: true, provisioningToken: true },
+      });
+      if (row) {
+        dbHasRecord = true;
+        if (row.state === 'CLOSED' || row.state === 'CLOSING') {
+          return (
+            (await getIncidentMeeting(incidentId)) || {
+              id: meetingId,
+              incidentId,
+              generation: gen,
+              provider,
+              state: 'CLOSED',
+              health: 'HEALTHY',
+              externalId,
+              joinUrl: '',
+              createdAt: now,
+              closedAt: now,
+              actions: { canJoin: false, canProvision: false, canRetry: false, canClose: false },
+            }
+          );
+        }
+      }
+    } catch {
+      // Fall back to memory check
+    }
+  }
+
   try {
     const result = await MeetingProviderRegistry.createOrGetMeeting(provider, {
       incidentId,
       incidentNumber,
       incidentTitle,
-      generation,
+      generation: gen,
       customTemplate,
     });
 
-    // CAS Check: Inspect current state right before committing READY.
-    // If another thread or operator called closeIncidentMeeting(), do NOT resurrect to READY!
-    const currentStatus = await getIncidentMeeting(incidentId);
-    if (currentStatus && (currentStatus.state === 'CLOSED' || currentStatus.state === 'CLOSING')) {
-      return currentStatus;
+    // Check if close already won before or during adapter call
+    const cachedBefore = memoryMeetingCache.get(incidentId);
+    if (cachedBefore && (cachedBefore.state === 'CLOSED' || cachedBefore.state === 'CLOSING')) {
+      return cachedBefore;
     }
 
-    // Fencing token check on DB record
-    if (prisma?.incidentMeeting?.findFirst) {
-      const dbRow = await prisma.incidentMeeting
-        .findFirst({
-          where: { incidentId, generation },
-          select: { provisioningToken: true, state: true },
-        })
-        .catch(() => null);
+    // Atomic CAS Update: Only transition to READY if state is still PROVISIONING and token matches.
+    if (prisma?.incidentMeeting?.updateMany) {
+      const updateResult = await prisma.incidentMeeting.updateMany({
+        where: {
+          incidentId,
+          generation: gen,
+          state: 'PROVISIONING',
+          provisioningToken,
+        },
+        data: {
+          state: 'READY',
+          health: 'HEALTHY',
+          externalId: result.externalId,
+          joinUrl: result.joinUrl,
+          joinWebUrl: result.joinWebUrl || null,
+          conferenceId: result.conferenceId || null,
+          tollNumber: result.tollNumber || null,
+          organizerEmail: result.organizerEmail || null,
+          readyAt: new Date(),
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
+      });
 
-      if (dbRow && (dbRow.state === 'CLOSED' || dbRow.state === 'CLOSING')) {
-        return currentStatus || initialMeeting;
-      }
-      if (dbRow && dbRow.provisioningToken && dbRow.provisioningToken !== provisioningToken) {
-        // Superceded by another generation or token
-        return currentStatus || initialMeeting;
+      if (dbHasRecord && updateResult.count === 0) {
+        // CLOSE won the race in DB, or token changed. Do NOT resurrect to READY!
+        const latest = await getIncidentMeeting(incidentId);
+        return (
+          latest || {
+            id: meetingId,
+            incidentId,
+            generation: gen,
+            provider,
+            state: 'CLOSED',
+            health: 'HEALTHY',
+            externalId: result.externalId,
+            joinUrl: '',
+            createdAt: now,
+            closedAt: now,
+            actions: { canJoin: false, canProvision: false, canRetry: false, canClose: false },
+          }
+        );
       }
     }
 
     const readyMeeting: IncidentMeetingView = {
       id: meetingId,
       incidentId,
-      generation,
+      generation: gen,
       provider,
       state: 'READY',
       health: 'HEALTHY',
@@ -308,7 +508,7 @@ export async function provisionIncidentMeeting(params: {
       conferenceId: result.conferenceId || null,
       tollNumber: result.tollNumber || null,
       organizerEmail: result.organizerEmail || null,
-      createdAt: now,
+      createdAt: currentStatus?.createdAt || now,
       actions: {
         canJoin: true,
         canProvision: false,
@@ -317,26 +517,95 @@ export async function provisionIncidentMeeting(params: {
       },
     };
 
-    await saveIncidentMeeting(readyMeeting);
-    return readyMeeting;
-  } catch (error) {
-    // Before saving failure, check if close already won
-    const currentStatus = await getIncidentMeeting(incidentId);
-    if (currentStatus && (currentStatus.state === 'CLOSED' || currentStatus.state === 'CLOSING')) {
-      return currentStatus;
+    memoryMeetingCache.set(incidentId, readyMeeting);
+
+    if (prisma?.systemConfig?.upsert) {
+      await prisma.systemConfig
+        .upsert({
+          where: { key: `${INCIDENT_MEETING_PREFIX}${incidentId}` },
+          create: {
+            key: `${INCIDENT_MEETING_PREFIX}${incidentId}`,
+            value: readyMeeting as unknown as object,
+          },
+          update: {
+            value: readyMeeting as unknown as object,
+          },
+        })
+        .catch(() => null);
     }
 
+    // Reproject meeting link to active incident war rooms
+    if (prisma?.incidentWarRoom?.findMany) {
+      const activeRooms = await prisma.incidentWarRoom
+        .findMany({
+          where: { incidentId, state: { in: ['READY', 'CLOSING'] } },
+          select: { id: true },
+        })
+        .catch(() => []);
+      if (activeRooms.length > 0) {
+        const { requestWarRoomProjectionNeutral } = await import('@/lib/war-room/engine');
+        for (const r of activeRooms) {
+          await requestWarRoomProjectionNeutral(r.id).catch(() => null);
+        }
+      }
+    }
+
+    return readyMeeting;
+  } catch (error) {
     const errorMessage = (error as Error).message || 'Failed to provision meeting bridge.';
+
+    if (prisma?.incidentMeeting?.updateMany) {
+      const updateResult = await prisma.incidentMeeting.updateMany({
+        where: {
+          incidentId,
+          generation: gen,
+          state: 'PROVISIONING',
+          provisioningToken,
+        },
+        data: {
+          state: 'FAILED',
+          health: 'UNAVAILABLE',
+          lastErrorCode: 'PROVISION_FAILED',
+          lastErrorMessage: errorMessage,
+        },
+      });
+
+      const mem = memoryMeetingCache.get(incidentId);
+      if (mem && (mem.state === 'CLOSED' || mem.state === 'CLOSING')) {
+        return mem;
+      }
+
+      if (dbHasRecord && updateResult.count === 0) {
+        // CLOSE won the race
+        const latest = await getIncidentMeeting(incidentId);
+        return (
+          latest || {
+            id: meetingId,
+            incidentId,
+            generation: gen,
+            provider,
+            state: 'CLOSED',
+            health: 'HEALTHY',
+            externalId,
+            joinUrl: '',
+            createdAt: now,
+            closedAt: now,
+            actions: { canJoin: false, canProvision: false, canRetry: false, canClose: false },
+          }
+        );
+      }
+    }
+
     const failedMeeting: IncidentMeetingView = {
       id: meetingId,
       incidentId,
-      generation,
+      generation: gen,
       provider,
       state: 'FAILED',
       health: 'UNAVAILABLE',
       externalId,
       joinUrl: '',
-      createdAt: now,
+      createdAt: currentStatus?.createdAt || now,
       lastErrorCode: 'PROVISION_FAILED',
       lastErrorMessage: errorMessage,
       actions: {
@@ -347,7 +616,23 @@ export async function provisionIncidentMeeting(params: {
       },
     };
 
-    await saveIncidentMeeting(failedMeeting);
+    memoryMeetingCache.set(incidentId, failedMeeting);
+
+    if (prisma?.systemConfig?.upsert) {
+      await prisma.systemConfig
+        .upsert({
+          where: { key: `${INCIDENT_MEETING_PREFIX}${incidentId}` },
+          create: {
+            key: `${INCIDENT_MEETING_PREFIX}${incidentId}`,
+            value: failedMeeting as unknown as object,
+          },
+          update: {
+            value: failedMeeting as unknown as object,
+          },
+        })
+        .catch(() => null);
+    }
+
     return failedMeeting;
   }
 }
@@ -371,11 +656,11 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
     },
   };
 
-  // Clear provisioning token to invalidate in-flight operations
+  // Clear provisioning token and transition to CLOSED atomically
   if (prisma?.incidentMeeting?.updateMany) {
     await prisma.incidentMeeting
       .updateMany({
-        where: { incidentId, generation: current.generation },
+        where: { incidentId, state: { not: 'CLOSED' } },
         data: {
           state: 'CLOSED',
           closedAt: new Date(),
@@ -385,5 +670,20 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
       .catch(() => null);
   }
 
-  await saveIncidentMeeting(closedMeeting);
+  memoryMeetingCache.set(incidentId, closedMeeting);
+
+  if (prisma?.systemConfig?.upsert) {
+    await prisma.systemConfig
+      .upsert({
+        where: { key: `${INCIDENT_MEETING_PREFIX}${incidentId}` },
+        create: {
+          key: `${INCIDENT_MEETING_PREFIX}${incidentId}`,
+          value: closedMeeting as unknown as object,
+        },
+        update: {
+          value: closedMeeting as unknown as object,
+        },
+      })
+      .catch(() => null);
+  }
 }

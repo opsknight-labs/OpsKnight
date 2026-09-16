@@ -170,12 +170,25 @@ describe('Incident Meeting Policy Resolver', () => {
     expect(result.effectiveProvider).toBe('NONE');
   });
 
-  it('disables meeting when global feature is disabled', () => {
+  it('allows meeting bridge even when chat war rooms are disabled (decoupled meeting enablement)', () => {
     const result = resolveEffectiveMeetingProvider({
       globalMeetingProvider: 'MICROSOFT_TEAMS',
       serviceMeetingProvider: null,
       isTeamsMeetingAvailable: true,
       globalWarRoomsEnabled: false,
+      serviceWarRoomsEnabled: false,
+    });
+
+    expect(result.isDisabled).toBe(false);
+    expect(result.effectiveProvider).toBe('MICROSOFT_TEAMS');
+  });
+
+  it('disables meeting when global meeting provider is NONE', () => {
+    const result = resolveEffectiveMeetingProvider({
+      globalMeetingProvider: 'NONE',
+      serviceMeetingProvider: null,
+      isTeamsMeetingAvailable: true,
+      globalWarRoomsEnabled: true,
       serviceWarRoomsEnabled: true,
     });
 
