@@ -97,7 +97,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const existingActive = await prisma.incidentWarRoom.findFirst({
         where: {
           incidentId,
-          provider,
+          provider: provider as 'SLACK' | 'MICROSOFT_TEAMS',
           state: { in: ['PROVISIONING', 'AMBIGUOUS', 'READY', 'CLOSING'] },
         },
         select: { id: true, state: true },
