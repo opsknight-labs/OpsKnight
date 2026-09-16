@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { ArrowRight, Plus, Server } from 'lucide-react';
+import { appRoutes } from '@/lib/app-routes';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileTime from '@/components/mobile/MobileTime';
@@ -23,7 +24,7 @@ type PageProps = {
 
 export default async function MobileServiceDetailPage({ params }: PageProps) {
   const context = await getRequestActorContext();
-  if (!context) redirect('/login?callbackUrl=/m/services');
+  if (!context) redirect(appRoutes.login('mobile', '/m/services'));
 
   const { id } = await params;
   const incidentAccess = incidentReadWhere(context.actor);

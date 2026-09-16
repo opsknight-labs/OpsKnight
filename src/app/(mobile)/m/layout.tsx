@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { redirect } from 'next/navigation';
 import MobileNav from '@/components/mobile/MobileNav';
+import { appRoutes, forcedSignOutUrl } from '@/lib/app-routes';
 import MobileHeader from '@/components/mobile/MobileHeader';
 import '@/styles/pages/mobile.css';
 import './mobile-shell.css';
@@ -24,10 +25,10 @@ export const revalidate = 0;
 
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
   const requestContext = await getRequestActorContext();
-  if (!requestContext) redirect('/login?callbackUrl=/m');
+  if (!requestContext) redirect(appRoutes.login('mobile', '/m'));
 
   const shell = await getAppShellContext(requestContext);
-  if (!shell) redirect('/api/auth/signout?callbackUrl=/login?error=SessionExpired');
+  if (!shell) redirect(forcedSignOutUrl('mobile', { error: 'SessionExpired', callbackUrl: '/m' }));
 
   try {
     const { headers } = await import('next/headers');

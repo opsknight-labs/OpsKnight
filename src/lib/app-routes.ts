@@ -39,6 +39,24 @@ export const appRoutes = {
     surface === 'mobile' ? '/m/forgot-password' : '/forgot-password',
 } as const;
 
+/**
+ * Forces a NextAuth sign-out and lands the responder back on the login
+ * surface they were on, never on the other surface's login page. Use this
+ * instead of hand-assembling `/api/auth/signout?callbackUrl=/login...`,
+ * which is exactly how a mobile session-expiry redirect previously escaped
+ * to the desktop login page.
+ */
+export function forcedSignOutUrl(
+  surface: AppSurface,
+  options: { error?: string; callbackUrl?: string } = {}
+): string {
+  const loginUrl = appRoutes.login(surface, options.callbackUrl);
+  const destination = options.error
+    ? `${loginUrl}${loginUrl.includes('?') ? '&' : '?'}error=${encodeURIComponent(options.error)}`
+    : loginUrl;
+  return `/api/auth/signout?callbackUrl=${encodeURIComponent(destination)}`;
+}
+
 export const SUPPORTED_MOBILE_ROUTE_PREFIXES = [
   '/incidents',
   '/services',

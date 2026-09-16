@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { MobileAvatar } from '@/components/mobile/MobileUtils';
+import { appRoutes } from '@/lib/app-routes';
 import { getDefaultAvatar } from '@/lib/avatar';
 import MobileCard from '@/components/mobile/MobileCard';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
@@ -17,7 +18,7 @@ type PageProps = {
 export default async function MobileUserDetailPage({ params }: PageProps) {
   const { id } = await params;
   const context = await getRequestActorContext();
-  if (!context) redirect(`/login?callbackUrl=/m/users/${id}`);
+  if (!context) redirect(appRoutes.login('mobile', `/m/users/${id}`));
 
   const user = await prisma.user.findUnique({
     where: { id },

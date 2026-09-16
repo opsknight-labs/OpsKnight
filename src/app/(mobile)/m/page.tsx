@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { appRoutes } from '@/lib/app-routes';
 import {
   AlertTriangle,
   ArrowRight,
@@ -27,7 +28,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function MobileDashboard() {
   const context = await getRequestActorContext();
-  if (!context) redirect('/login?callbackUrl=/m');
+  if (!context) redirect(appRoutes.login('mobile', '/m'));
 
   const snapshot = await getResponderDashboardSnapshot(context.actor, context.user.id).catch(
     error => {

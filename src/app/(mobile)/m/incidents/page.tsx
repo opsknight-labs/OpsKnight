@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Prisma } from '@prisma/client';
+import { appRoutes } from '@/lib/app-routes';
 import { Plus, SearchX } from 'lucide-react';
 import MobileIncidentList, { type IncidentFilter } from '@/components/mobile/MobileIncidentList';
 import MobileIncidentFilters from '@/components/mobile/MobileIncidentFilters';
@@ -50,7 +51,7 @@ export default async function MobileIncidentsPage(props: {
   }>;
 }) {
   const context = await getRequestActorContext();
-  if (!context) redirect('/login?callbackUrl=/m/incidents');
+  if (!context) redirect(appRoutes.login('mobile', '/m/incidents'));
 
   const searchParams = await props.searchParams;
   const query = searchParams?.q?.trim() || '';

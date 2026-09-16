@@ -244,38 +244,9 @@
   letter-spacing: -0.015em;
 }
 
-.mobile-header-icon-button,
-.mobile-header-system-button {
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid transparent;
-  border-radius: 0.75rem;
-  background: transparent;
-  color: hsl(var(--ui-muted-foreground));
-  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
-}
-
-.mobile-header-icon-button:hover,
-.mobile-header-system-button:hover {
-  border-color: hsl(var(--ui-border));
-  background: hsl(var(--ui-accent));
-  color: hsl(var(--ui-foreground));
-}
-
-.mobile-header-icon-button svg,
-.mobile-header-system-button svg {
-  width: 19px;
-  height: 19px;
-}
-
-.mobile-header-system-button[data-status='ok'] { color: #059669; }
-.mobile-header-system-button[data-status='warning'] { color: #d97706; }
-.mobile-header-system-button[data-status='danger'] { color: #e11d48; }
+/* Header action geometry now lives on MobileHeaderAction (Tailwind utility
+   classes), shared by back/create/search/status so none of them can drift
+   into its own card-like border/shadow/size again. */
 
 /* Bottom navigation is a dedicated app-frame row, not a fixed child of a
  * scrolling document. This prevents iOS/Android scroll and browser-chrome
@@ -338,6 +309,7 @@
 }
 
 .mobile-nav-label {
+  width: 100%;
   max-width: 100%;
   white-space: nowrap;
   font-size: clamp(0.56rem, 2.2vw, 0.65rem);
