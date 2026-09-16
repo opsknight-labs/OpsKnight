@@ -77,6 +77,20 @@ describe('Incident Collaboration Policy Hierarchy & Matrix Certification', () =>
       expect(res.isDisabled).toBe(true);
       expect(res.effectiveProviders).toEqual([]);
     });
+
+    it('Service-level war room creation is disabled by default (owner discretion)', () => {
+      // By default, services have warRoomsEnabled = false and empty providers
+      const res = resolveEffectiveWarRoomProviders({
+        globalProviders: ['SLACK', 'MICROSOFT_TEAMS'],
+        serviceProviders: [], // Default unconfigured service
+        availableProviders: ['SLACK', 'MICROSOFT_TEAMS'],
+        globalWarRoomsEnabled: true,
+        serviceWarRoomsEnabled: false, // Default is disabled
+      });
+
+      expect(res.isDisabled).toBe(true);
+      expect(res.effectiveProviders).toEqual([]);
+    });
   });
 
   describe('Meeting Provider Policy & Meeting-Only Certification', () => {
