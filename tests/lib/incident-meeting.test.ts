@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as teamsAuth from '@/lib/microsoft-teams/auth';
+import * as teamsClient from '@/lib/microsoft-teams/client';
+import { WarRoomRetryableError } from '@/lib/war-room/errors';
 import {
   MeetingProviderRegistry,
   TeamsMeetingAdapter,
@@ -190,5 +193,144 @@ describe('Incident Meeting Store & Provisioning Lifecycle', () => {
         organizerEmail: 'incident-organizer@example.com',
       })
     ).resolves.toBeUndefined();
+  });
+
+  it('handles 50 concurrent provisioning calls safely with single winner claim', async () => {
+    const incidentId = 'inc-concurrent-claim-test';
+    const promises = Array.from({ length: 50 }, (_, i) =>
+      provisionIncidentMeeting({
+        incidentId,
+        incidentTitle: `Concurrent Test ${i}`,
+        provider: 'JITSI',
+        generation: 1,
+      })
+    );
+
+    const results = await Promise.all(promises);
+    expect(results).toHaveLength(50);
+    const first = results[0];
+    expect(first.state).toBe('READY');
+    for (const r of results) {
+      expect(r.id).toBe(first.id);
+      expect(r.generation).toBe(first.generation);
+      expect(r.joinUrl).toBe(first.joinUrl);
+    }
+  });
+
+  it('Teams meeting close classifies 204 as success and 404 as idempotent completion', async () => {
+    const adapter = new TeamsMeetingAdapter();
+    vi.spyOn(teamsAuth, 'getMicrosoftTeamsConfig').mockResolvedValue({
+      config: {
+        id: 'default',
+        enabled: true,
+        tenantId: 'mock-tenant-id',
+        defaultMeetingOrganizerUpn: 'organizer@example.com',
+      } as never,
+      clientSecret: 'secret',
+    });
+    vi.spyOn(teamsClient, 'getMicrosoftTeamsGraphAccessToken').mockResolvedValue('mock-token');
+
+    // 204 No Content
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      adapter.closeMeeting({
+        providerMeetingId: 'meet-204-id',
+        organizerEmail: 'organizer@example.com',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/onlineMeetings/meet-204-id'),
+      expect.objectContaining({ method: 'DELETE' })
+    );
+
+    // 404 Not Found (idempotent completion)
+    fetchSpy.mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await expect(
+      adapter.closeMeeting({
+        providerMeetingId: 'meet-404-id',
+        organizerEmail: 'organizer@example.com',
+      })
+    ).resolves.toBeUndefined();
+
+    fetchSpy.mockRestore();
+    vi.restoreAllMocks();
+  });
+
+  it('Teams meeting close classifies 429 and 5xx as retryable errors with Retry-After support', async () => {
+    const adapter = new TeamsMeetingAdapter();
+    vi.spyOn(teamsAuth, 'getMicrosoftTeamsConfig').mockResolvedValue({
+      config: {
+        id: 'default',
+        enabled: true,
+        tenantId: 'mock-tenant-id',
+        defaultMeetingOrganizerUpn: 'organizer@example.com',
+      } as never,
+      clientSecret: 'secret',
+    });
+    vi.spyOn(teamsClient, 'getMicrosoftTeamsGraphAccessToken').mockResolvedValue('mock-token');
+
+    // 429 Too Many Requests
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(null, {
+        status: 429,
+        headers: { 'Retry-After': '45' },
+      })
+    );
+
+    let caughtError: unknown;
+    try {
+      await adapter.closeMeeting({
+        providerMeetingId: 'meet-429-id',
+        organizerEmail: 'organizer@example.com',
+      });
+    } catch (e) {
+      caughtError = e;
+    }
+    expect(caughtError).toBeInstanceOf(WarRoomRetryableError);
+    expect((caughtError as WarRoomRetryableError).retryAfterMs).toBe(45_000);
+
+    // 503 Server Error
+    fetchSpy.mockResolvedValueOnce(new Response(null, { status: 503 }));
+    await expect(
+      adapter.closeMeeting({
+        providerMeetingId: 'meet-503-id',
+        organizerEmail: 'organizer@example.com',
+      })
+    ).rejects.toBeInstanceOf(WarRoomRetryableError);
+
+    fetchSpy.mockRestore();
+    vi.restoreAllMocks();
+  });
+
+  it('Teams meeting close classifies 401/403 as terminal permission failure', async () => {
+    const adapter = new TeamsMeetingAdapter();
+    vi.spyOn(teamsAuth, 'getMicrosoftTeamsConfig').mockResolvedValue({
+      config: {
+        id: 'default',
+        enabled: true,
+        tenantId: 'mock-tenant-id',
+        defaultMeetingOrganizerUpn: 'organizer@example.com',
+      } as never,
+      clientSecret: 'secret',
+    });
+    vi.spyOn(teamsClient, 'getMicrosoftTeamsGraphAccessToken').mockResolvedValue('mock-token');
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('ApplicationAccessPolicy missing', { status: 403 }));
+
+    await expect(
+      adapter.closeMeeting({
+        providerMeetingId: 'meet-403-id',
+        organizerEmail: 'organizer@example.com',
+      })
+    ).rejects.toThrow(/permission denied/i);
+
+    fetchSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 });

@@ -13,6 +13,7 @@
 import { generateBridgeUrl } from '@/lib/war-room/bridge';
 import { getMicrosoftTeamsConfig } from '@/lib/microsoft-teams/auth';
 import { getMicrosoftTeamsGraphAccessToken } from '@/lib/microsoft-teams/client';
+import { WarRoomRetryableError } from '@/lib/war-room/errors';
 import type { IncidentMeetingProvider, IncidentMeetingReadiness } from './types';
 import prisma from '@/lib/prisma';
 
@@ -248,33 +249,91 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
   }
 
   async closeMeeting(params: CloseMeetingParams): Promise<void> {
+    const { providerMeetingId, organizerEmail } = params;
+    if (!providerMeetingId) return;
+
+    const resolved = await getMicrosoftTeamsConfig();
+    if (!resolved || !resolved.config.enabled) return;
+    const tenantId = resolved.config.tenantId;
+    if (!tenantId) return;
+
+    const defaultOrganizer = (resolved.config as { defaultMeetingOrganizerUpn?: string | null })
+      ?.defaultMeetingOrganizerUpn;
+    const organizerUpn = organizerEmail || defaultOrganizer?.trim();
+    if (!organizerUpn) return;
+
+    let token: string | null;
     try {
-      const { providerMeetingId, organizerEmail } = params;
-      if (!providerMeetingId) return;
+      token = await getMicrosoftTeamsGraphAccessToken(tenantId);
+    } catch (e) {
+      throw new WarRoomRetryableError(
+        `Failed to acquire Graph token for meeting close: ${(e as Error).message}`,
+        10_000
+      );
+    }
+    if (!token) {
+      throw new WarRoomRetryableError('Empty Graph token acquired for meeting close', 10_000);
+    }
 
-      const resolved = await getMicrosoftTeamsConfig();
-      if (!resolved || !resolved.config.enabled) return;
-      const tenantId = resolved.config.tenantId;
-      if (!tenantId) return;
-
-      const defaultOrganizer = (resolved.config as { defaultMeetingOrganizerUpn?: string | null })
-        ?.defaultMeetingOrganizerUpn;
-      const organizerUpn = organizerEmail || defaultOrganizer?.trim();
-      if (!organizerUpn) return;
-
-      const token = await getMicrosoftTeamsGraphAccessToken(tenantId);
-      if (!token) return;
-
-      await fetch(
+    let res: Response;
+    try {
+      res = await fetch(
         `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(organizerUpn)}/onlineMeetings/${encodeURIComponent(providerMeetingId)}`,
         {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         }
-      ).catch(() => null);
-    } catch {
-      // Non-fatal error during cleanup
+      );
+    } catch (netErr) {
+      throw new WarRoomRetryableError(
+        `Network error while deleting Teams online meeting: ${(netErr as Error).message}`,
+        5_000
+      );
     }
+
+    // 204 No Content: Successful deletion per Graph API specification
+    if (res.status === 204) {
+      return;
+    }
+
+    // 404 Not Found: Idempotent completion (meeting already deleted or nonexistent)
+    if (res.status === 404) {
+      return;
+    }
+
+    // 429 Too Many Requests: Rate limited -> retryable, honor Retry-After
+    if (res.status === 429) {
+      const retryHeader = res.headers.get('Retry-After');
+      const retrySeconds = retryHeader ? parseInt(retryHeader, 10) : 30;
+      const retryAfterMs =
+        Number.isFinite(retrySeconds) && retrySeconds > 0 ? retrySeconds * 1000 : 30_000;
+      throw new WarRoomRetryableError(
+        'Microsoft Graph rate limit exceeded (429) on meeting delete',
+        retryAfterMs
+      );
+    }
+
+    // 5xx Server Error: Transient -> retryable
+    if (res.status >= 500) {
+      throw new WarRoomRetryableError(
+        `Microsoft Graph server error (${res.status}) on meeting delete`,
+        15_000
+      );
+    }
+
+    // 401 / 403: Permission / authorization failure -> terminal
+    if (res.status === 401 || res.status === 403) {
+      const errBody = await res.text().catch(() => '');
+      throw new Error(
+        `Microsoft Graph permission denied (${res.status}) on meeting delete: ${errBody.slice(0, 200)}`
+      );
+    }
+
+    // Other 4xx: Terminal client error
+    const errBody = await res.text().catch(() => '');
+    throw new Error(
+      `Microsoft Graph returned unexpected status (${res.status}) on meeting delete: ${errBody.slice(0, 200)}`
+    );
   }
 
   async createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult> {

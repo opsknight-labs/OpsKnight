@@ -137,10 +137,6 @@ export async function getIncidentCollaborationView(
 
   const canManageWarRooms = Boolean(userPermissions?.isResponderOrAbove);
 
-  // Group rooms by provider
-  const slackRooms = warRooms.filter(r => r.provider === 'SLACK');
-  const teamsRooms = warRooms.filter(r => r.provider === 'MICROSOFT_TEAMS');
-
   // Integration connectivity
   const hasSlackIntegration = Boolean(
     (incident.service?.slackIntegration?.workspaceId &&

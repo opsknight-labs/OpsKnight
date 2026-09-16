@@ -316,38 +316,57 @@ export async function requestMeetingProvision(params: {
         const externalId = `opsknight:${incidentId}:${targetGeneration}`;
         const provisioningToken = crypto.randomUUID();
 
-        let record;
-        let createdByThisTx = false;
-
-        try {
-          record = await tx.incidentMeeting.create({
-            data: {
-              id: meetingId,
-              incidentId,
-              provider: provider as never,
-              generation: targetGeneration,
-              state: 'PROVISIONING',
-              health: 'HEALTHY',
-              externalId,
-              joinUrl: current?.joinUrl || '',
-              provisioningToken,
-              provisioningStartedAt: new Date(),
-            },
+        let isWinner = false;
+        if (typeof tx.incidentMeeting.createMany === 'function') {
+          const insertResult = await tx.incidentMeeting.createMany({
+            data: [
+              {
+                id: meetingId,
+                incidentId,
+                provider: provider as never,
+                generation: targetGeneration,
+                state: 'PROVISIONING',
+                health: 'HEALTHY',
+                externalId,
+                joinUrl: current?.joinUrl || '',
+                provisioningToken,
+                provisioningStartedAt: new Date(),
+              },
+            ],
+            skipDuplicates: true,
           });
-          createdByThisTx = true;
-        } catch {
-          // Unique conflict on [incidentId, generation]: another concurrent transaction claimed this generation!
-          // Load the winner's record and return it WITHOUT creating a second job.
-          const existingClaim = await tx.incidentMeeting.findUnique({
-            where: { incidentId_generation: { incidentId, generation: targetGeneration } },
-          });
-          if (existingClaim) {
-            return mapRecordToView(existingClaim);
+          isWinner = insertResult.count > 0;
+        } else {
+          try {
+            await tx.incidentMeeting.create({
+              data: {
+                id: meetingId,
+                incidentId,
+                provider: provider as never,
+                generation: targetGeneration,
+                state: 'PROVISIONING',
+                health: 'HEALTHY',
+                externalId,
+                joinUrl: current?.joinUrl || '',
+                provisioningToken,
+                provisioningStartedAt: new Date(),
+              },
+            });
+            isWinner = true;
+          } catch {
+            isWinner = false;
           }
-          throw new Error('Failed to claim meeting provisioning due to concurrent collision.');
         }
 
-        if (createdByThisTx) {
+        const activeRecord = await tx.incidentMeeting.findUnique({
+          where: { incidentId_generation: { incidentId, generation: targetGeneration } },
+        });
+
+        if (!activeRecord) {
+          throw new Error('Failed to retrieve incident meeting claim.');
+        }
+
+        if (isWinner) {
           await tx.backgroundJob.create({
             data: {
               type: 'MEETING_PROVISION',
@@ -367,7 +386,7 @@ export async function requestMeetingProvision(params: {
           });
         }
 
-        return mapRecordToView(record);
+        return mapRecordToView(activeRecord);
       });
 
       memoryMeetingCache.set(incidentId, meetingView);
@@ -722,60 +741,39 @@ export async function executeMeetingProvision(params: {
 }
 
 /**
- * Close an active incident meeting with atomic state settlement.
- * Invokes external provider meeting termination if supported (e.g. Teams online meeting).
+ * Atomic settlement of a meeting to CLOSED state in DB and cache.
  */
-export async function closeIncidentMeeting(incidentId: string): Promise<void> {
+async function settleMeetingClosed(
+  incidentId: string,
+  errorData?: { lastErrorCode?: string | null; lastErrorMessage?: string | null }
+): Promise<void> {
   const current = await getIncidentMeeting(incidentId);
-  if (!current || current.state === 'CLOSED') return;
-
-  // If provider adapter supports external termination, enqueue durable background job
-  if (current.provider && current.provider !== 'NONE' && current.actions.supportsExternalClose) {
-    if (prisma?.backgroundJob?.create && current.providerMeetingId) {
-      await prisma.backgroundJob
-        .create({
-          data: {
-            type: 'MEETING_CLOSE',
-            status: 'PENDING',
-            scheduledAt: new Date(),
-            maxAttempts: 3,
-            payload: {
-              incidentId,
-              provider: current.provider,
-              providerMeetingId: current.providerMeetingId,
-              organizerEmail: current.organizerEmail || null,
-            },
-          },
-        })
-        .catch(() => null);
-    }
-    // Also attempt cleanup directly in test environments or if job queue is unavailable
-    try {
-      await MeetingProviderRegistry.closeMeeting(current.provider, {
-        providerMeetingId: current.providerMeetingId,
-        organizerEmail: current.organizerEmail,
-        externalId: current.externalId,
-      });
-    } catch {
-      // Non-fatal, local close must still complete
-    }
-  }
-
   const closedMeeting: IncidentMeetingView = {
-    ...current,
+    ...(current || {
+      id: `meet_${incidentId}_1`,
+      incidentId,
+      generation: 1,
+      provider: 'NONE',
+      state: 'CLOSED',
+      health: 'HEALTHY',
+      externalId: `opsknight:${incidentId}:1`,
+      joinUrl: '',
+      createdAt: new Date().toISOString(),
+    }),
     state: 'CLOSED',
     closedAt: new Date().toISOString(),
+    lastErrorCode: errorData?.lastErrorCode ?? null,
+    lastErrorMessage: errorData?.lastErrorMessage ?? null,
     actions: {
       canJoin: false,
       canProvision: false,
       canRetry: false,
       canClose: false,
-      supportsExternalClose: current.actions.supportsExternalClose,
-      closeLabel: current.actions.closeLabel,
+      supportsExternalClose: current?.actions.supportsExternalClose ?? false,
+      closeLabel: current?.actions.closeLabel ?? 'Detach Bridge',
     },
   };
 
-  // Clear provisioning token and transition to CLOSED atomically
   if (prisma?.incidentMeeting?.updateMany) {
     try {
       await prisma.incidentMeeting.updateMany({
@@ -784,6 +782,8 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
           state: 'CLOSED',
           closedAt: new Date(),
           provisioningToken: null,
+          lastErrorCode: errorData?.lastErrorCode ?? null,
+          lastErrorMessage: errorData?.lastErrorMessage ?? null,
         },
       });
     } catch (e) {
@@ -797,7 +797,95 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
 }
 
 /**
+ * Close an active incident meeting.
+ * For providers with external termination (e.g. Teams), transitions state to CLOSING
+ * and delegates external Graph DELETE to the durable MEETING_CLOSE background job lane.
+ * For static-link providers (Zoom, Meet, Jitsi), settles directly to CLOSED without external traffic.
+ */
+export async function closeIncidentMeeting(incidentId: string): Promise<void> {
+  const current = await getIncidentMeeting(incidentId);
+  if (!current || current.state === 'CLOSED') return;
+
+  // If provider adapter supports external termination, enqueue durable background job
+  if (
+    current.provider &&
+    current.provider !== 'NONE' &&
+    current.actions.supportsExternalClose &&
+    current.providerMeetingId
+  ) {
+    // Transition to CLOSING so UI and API reflect that external cleanup is in progress
+    if (prisma?.incidentMeeting?.updateMany) {
+      try {
+        await prisma.incidentMeeting.updateMany({
+          where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'REQUESTED'] } },
+          data: {
+            state: 'CLOSING',
+          },
+        });
+      } catch (e) {
+        if (process.env.NODE_ENV !== 'test') {
+          throw e;
+        }
+      }
+    }
+
+    const closingMeeting: IncidentMeetingView = {
+      ...current,
+      state: 'CLOSING',
+      actions: {
+        ...current.actions,
+        canJoin: false,
+        canClose: false,
+        canRetry: false,
+        canProvision: false,
+      },
+    };
+    memoryMeetingCache.set(incidentId, closingMeeting);
+
+    if (prisma?.backgroundJob?.create) {
+      await prisma.backgroundJob
+        .create({
+          data: {
+            type: 'MEETING_CLOSE',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 5,
+            payload: {
+              incidentId,
+              provider: current.provider,
+              providerMeetingId: current.providerMeetingId,
+              organizerEmail: current.organizerEmail || null,
+            },
+          },
+        })
+        .catch(() => null);
+    }
+
+    // In unit test environment without a running worker daemon, execute synchronously
+    if (process.env.NODE_ENV === 'test') {
+      await executeMeetingCloseJob({
+        incidentId,
+        provider: current.provider,
+        providerMeetingId: current.providerMeetingId,
+        organizerEmail: current.organizerEmail || null,
+      });
+    }
+
+    return;
+  }
+
+  // Static bridge providers (Zoom, Meet, Jitsi) or meetings without external lifecycle:
+  // Immediately settle locally to CLOSED without background job or external provider calls.
+  await settleMeetingClosed(incidentId);
+}
+
+/**
  * Background worker execution for durable MEETING_CLOSE jobs.
+ * Only the worker executes the external provider deletion.
+ * Classifies outcomes:
+ * - 204 / 404: success -> settles to CLOSED
+ * - 429 / 5xx / network: throws WarRoomRetryableError -> queue reschedules with backoff
+ * - terminal (401/403): settles to CLOSED with PROVIDER_CLOSE_FAILED error metadata
  */
 export async function executeMeetingCloseJob(params: {
   incidentId: string;
@@ -805,11 +893,26 @@ export async function executeMeetingCloseJob(params: {
   providerMeetingId?: string | null;
   organizerEmail?: string | null;
 }): Promise<void> {
-  if (!params.providerMeetingId || params.provider === 'NONE') return;
-  await MeetingProviderRegistry.closeMeeting(params.provider, {
-    providerMeetingId: params.providerMeetingId,
-    organizerEmail: params.organizerEmail,
-  });
+  if (!params.providerMeetingId || params.provider === 'NONE') {
+    await settleMeetingClosed(params.incidentId);
+    return;
+  }
+
+  try {
+    await MeetingProviderRegistry.closeMeeting(params.provider, {
+      providerMeetingId: params.providerMeetingId,
+      organizerEmail: params.organizerEmail,
+    });
+    await settleMeetingClosed(params.incidentId);
+  } catch (err) {
+    if (err instanceof Error && err.name === 'WarRoomRetryableError') {
+      throw err;
+    }
+    await settleMeetingClosed(params.incidentId, {
+      lastErrorCode: 'PROVIDER_CLOSE_FAILED',
+      lastErrorMessage: err instanceof Error ? err.message : 'Provider close failed',
+    });
+  }
 }
 
 /**
