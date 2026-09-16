@@ -35,6 +35,9 @@ export const CAPABILITIES = {
   REPORT_EXPORT: 'report.export',
   USER_READ_ALL: 'user.read.all',
   POLICY_READ_ALL: 'policy.read.all',
+  PRIVACY_READ: 'privacy.read',
+  PRIVACY_REQUESTS_MANAGE: 'privacy.requests.manage',
+  PRIVACY_EXPORT: 'privacy.export',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
@@ -85,6 +88,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.REPORT_EXPORT,
   CAPABILITIES.USER_READ_ALL,
   CAPABILITIES.POLICY_READ_ALL,
+  // Auditors may view privacy request state but never export or modify it.
+  CAPABILITIES.PRIVACY_READ,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_CREATE_SCOPED,

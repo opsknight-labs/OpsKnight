@@ -45,6 +45,42 @@ enum AuditEntityType {
   CUSTOM_FIELD
   STATUS_PAGE
   SYSTEM_CONFIG
+  PRIVACY_REQUEST
+  PRIVACY_EXPORT_ARTIFACT
+}
+
+// Data subject a privacy request concerns. Only USER is operable in Phase 2;
+// STATUS_SUBSCRIBER exists so the schema doesn't need another migration for it.
+enum PrivacyRequestSubjectType {
+  USER
+  STATUS_SUBSCRIBER
+}
+
+enum PrivacyRequestType {
+  ACCESS
+  RECTIFICATION
+  ERASURE
+  RESTRICTION
+  OBJECTION
+  PORTABILITY
+}
+
+enum PrivacyRequestStatus {
+  RECEIVED
+  IDENTITY_VERIFICATION
+  IN_REVIEW
+  PROCESSING
+  BLOCKED
+  COMPLETED
+  REJECTED
+}
+
+enum PrivacyExportArtifactStatus {
+  PENDING
+  READY
+  DOWNLOADED
+  EXPIRED
+  FAILED
 }
 
 enum UserTokenType {
@@ -411,6 +447,8 @@ model User {
   dashboards                  Dashboard[]
   assignedActionItems         ActionItem[]
   tokens                      UserToken[]
+  privacyRequestsAssigned     PrivacyRequest[]             @relation("PrivacyRequestAssignedTo")
+  privacyRequestsRequested    PrivacyRequest[]             @relation("PrivacyRequestRequestedBy")
 
   @@index([email])
   @@index([role, status])
@@ -2376,4 +2414,59 @@ model ChatOpsConfig {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   @@unique([id])
+}
+
+// Centralized DSAR (Data Subject Access Request) workflow record.
+// All lifecycle transitions must go through transitionPrivacyRequest() —
+// no route or UI action should write status/timestamps directly.
+model PrivacyRequest {
+  id              String                    @id @default(cuid())
+  subjectType     PrivacyRequestSubjectType @default(USER)
+  subjectId       String
+  requestType     PrivacyRequestType
+  status          PrivacyRequestStatus      @default(RECEIVED)
+  requestedAt     DateTime                  @default(now())
+  verifiedAt      DateTime?
+  completedAt     DateTime?
+  requestedById   String?
+  assignedToId    String?
+  notes           String?
+  rejectionReason String?
+  metadata        Json?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  requestedBy     User?                   @relation("PrivacyRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  assignedTo      User?                   @relation("PrivacyRequestAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  exportArtifacts PrivacyExportArtifact[]
+
+  @@index([subjectType, subjectId])
+  @@index([status, requestType])
+  @@index([assignedToId])
+  @@index([createdAt])
+}
+
+// A generated, encrypted-at-rest export artifact tied 1:1 to a PrivacyRequest.
+// Short-lived by design: expiresAt is enforced both by the download route and
+// a cleanup job, never by client-side trust.
+model PrivacyExportArtifact {
+  id               String                      @id @default(cuid())
+  requestId        String
+  status           PrivacyExportArtifactStatus @default(PENDING)
+  storageKey       String?
+  // Encrypted (AES-256-GCM envelope) base64 zip payload. Phase 2 stores the
+  // artifact inline rather than introducing an object-storage dependency.
+  encryptedPayload String?
+  checksum         String?
+  sizeBytes        Int?
+  downloadCount    Int                         @default(0)
+  failureReason    String?
+  createdAt        DateTime                    @default(now())
+  expiresAt        DateTime
+  lastDownloadedAt DateTime?
+
+  request PrivacyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([status, expiresAt])
 }
