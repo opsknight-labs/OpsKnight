@@ -21,8 +21,10 @@ export async function POST(
   } catch {
     return jsonError('Authentication required', 401);
   }
-  if (user.role !== 'ADMIN' && user.role !== 'RESPONDER') {
-    return jsonError('Admin or Responder access required', 403);
+  // Admin Control Plane — mutations are ADMIN-only. A future incident-scoped
+  // repair capability for responders would require assertCanModifyIncident().
+  if (user.role !== 'ADMIN') {
+    return jsonError('Admin access required', 403);
   }
 
   const { warRoomId } = await context.params;

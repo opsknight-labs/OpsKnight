@@ -55,6 +55,7 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
       return;
     }
     setExpandedId(warRoomId);
+    // eslint-disable-next-line security/detect-object-injection -- warRoomId is a validated DB id used as a keyed cache, not an object prototype pollute
     if (diagnostics[warRoomId] !== undefined) return;
     setLoadingId(warRoomId);
     try {
@@ -175,11 +176,11 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
         <div className="rounded-lg border bg-muted/20 p-4 text-xs space-y-3">
           {loadingId === expandedId ? (
             <div className="flex items-center gap-2 text-muted-foreground"><Clock3 className="h-4 w-4 animate-spin" />Loading diagnostics…</div>
-          ) : diagnostics[expandedId] ? (
-            <DiagnosticsDetail diag={diagnostics[expandedId]!} />
-          ) : (
-            <div className="text-muted-foreground">Unable to load diagnostics for this war room.</div>
-          )}
+          ) : (() => {
+              // eslint-disable-next-line security/detect-object-injection -- expandedId validated against DB ids, not prototype pollution
+              const diag = expandedId ? diagnostics[expandedId] : undefined;
+              return diag ? <DiagnosticsDetail diag={diag} /> : <div className="text-muted-foreground">Unable to load diagnostics for this war room.</div>;
+            })()}
         </div>
       )}
 

@@ -31,10 +31,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const snapshots = await getWarRoomOperationalSnapshots(Number.isFinite(limit) ? limit : 100);
-    const filtered = provider ? snapshots.filter(s => s.provider === provider) : snapshots;
-    const summary = summarizeOperationalHealth(filtered);
-    return jsonOk({ snapshots: filtered, summary }, 200, { 'Cache-Control': 'private, no-store', Vary: 'Cookie' });
+    const snapshots = await getWarRoomOperationalSnapshots(Number.isFinite(limit) ? limit : 100, { provider: provider ?? undefined });
+    const summary = summarizeOperationalHealth(snapshots);
+    return jsonOk({ snapshots, summary }, 200, { 'Cache-Control': 'private, no-store', Vary: 'Cookie' });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : 'Unable to load war-room operations', 500);
   }

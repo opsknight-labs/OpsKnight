@@ -23,30 +23,50 @@ vi.mock('@/lib/microsoft-teams/graph/channels', () => ({
   findWarRoomChannel: vi.fn(),
   warRoomMarker: vi.fn((incidentId: string, generation: number) => `wr:${incidentId}:g${generation}`),
 }));
+vi.mock('@/lib/war-room/engine', () => ({
+  requestWarRoomProjectionNeutral: vi.fn(async () => 5),
+}));
 
 import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
-import { addOperationalMetric } from '@/lib/metrics/operational/registry';
+import { addOperationalMetric, OPERATIONAL_METRICS } from '@/lib/metrics/operational/registry';
 import { getCurrentUser } from '@/lib/rbac';
 import { getChannelById, findWarRoomChannel } from '@/lib/microsoft-teams/graph/channels';
+import { requestWarRoomProjectionNeutral } from '@/lib/war-room/engine';
 
 // Ensure setup.ts mockPrisma includes war-room models (older setup lacks them)
 {
   const pAny = prisma as unknown as Record<string, unknown>;
   const ensureModel = (name: string) => {
-    if (!pAny[name]) {
-      pAny[name] = {
-        findMany: vi.fn().mockResolvedValue([]),
-        findFirst: vi.fn().mockResolvedValue(null),
-        findUnique: vi.fn().mockResolvedValue(null),
-        create: vi.fn().mockResolvedValue({ id: 'new-id' }),
-        update: vi.fn().mockResolvedValue({}),
-        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-        delete: vi.fn().mockResolvedValue({}),
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
-        upsert: vi.fn().mockResolvedValue({}),
-        count: vi.fn().mockResolvedValue(0),
-      };
+    // eslint-disable-next-line security/detect-object-injection -- name is a known model literal, not user input
+    const existing = pAny[name] as Record<string, unknown> | undefined;
+    // Add missing methods without replacing existing mocks (preserves in-test overrides).
+    const defaults: Record<string, unknown> = {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'new-id' }),
+      update: vi.fn().mockResolvedValue({}),
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      delete: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      upsert: vi.fn().mockResolvedValue({}),
+      count: vi.fn().mockResolvedValue(0),
+      groupBy: vi.fn().mockResolvedValue([]),
+      $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
+    };
+    if (!existing) {
+      // eslint-disable-next-line security/detect-object-injection -- known model literal
+      pAny[name] = defaults;
+    } else {
+      for (const [k, v] of Object.entries(defaults)) {
+        // eslint-disable-next-line security/detect-object-injection -- known defaults keys, not user input
+        if (!(k in existing)) (existing as Record<string, unknown>)[k] = v;
+      }
+      // Ensure backgroundJob.$transaction-like on prisma root for requestWarRoomProjectionNeutral
+      if (name === 'incidentWarRoom' && !('$transaction' in (pAny as Record<string, unknown>))) {
+        (pAny as Record<string, unknown>).$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma));
+      }
     }
   };
   ensureModel('incidentWarRoom');
@@ -55,12 +75,17 @@ import { getChannelById, findWarRoomChannel } from '@/lib/microsoft-teams/graph/
   ensureModel('microsoftTeamsDestination');
   ensureModel('microsoftTeamsInstallation');
   ensureModel('incident');
+  ensureModel('backgroundJob');
+  // Top-level $transaction for engine.requestWarRoomProjectionNeutral
+  const pRoot = prisma as unknown as Record<string, unknown>;
+  if (!pRoot.$transaction) {
+    pRoot.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prisma));
+  }
 }
 import { classifyOperationalHealth, toOperationalSnapshot } from '@/lib/war-room/operations/health';
 import { summarizeOperationalHealth } from '@/lib/war-room/operations/summary';
 import { getWarRoomDiagnosticsSnapshot, getWarRoomOperationalSnapshots } from '@/lib/war-room/operations/diagnostics';
 import { enqueueWarRoomRepair } from '@/lib/war-room/operations/repair';
-import { OPERATIONAL_METRICS } from '@/lib/metrics/operational/registry';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -367,7 +392,9 @@ describe('diagnostics — detail contract', () => {
     expect(raw).not.toMatch(/clientSecret/i);
     expect(raw).not.toMatch(/botToken/i);
     expect(raw).not.toMatch(/accessToken/i);
-    expect(diag!.provisioning.provisioningToken).toBe('lease-abc');
+    expect(raw).not.toMatch(/lease-abc/);
+    expect(diag!.provisioning.hasProvisioningToken).toBe(true);
+    expect((diag!.provisioning as unknown as Record<string, unknown>).provisioningToken).toBeUndefined();
     expect(diag!.cleanup.externalCleanupPending).toBe(true);
     expect(diag!.cleanup.externalCleanupReason).toBe('CLOSE_ORPHAN');
     expect(diag!.incidentTitle).toBe('Payments outage');
@@ -485,28 +512,26 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
 
   it('RETRY_PROJECTION increments projection only when READY/CLOSING and dedupes by version', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
-    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock)
-      .mockResolvedValueOnce(baseRoom({ state: 'READY', projectionVersion: 4 }) as never)
-      .mockResolvedValueOnce({ projectionVersion: 5 } as never);
-    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
-    vi.mocked(prisma.incidentWarRoom.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
-    vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-proj' } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'READY', projectionVersion: 4 }) as never);
+    vi.mocked(requestWarRoomProjectionNeutral as unknown as Mock).mockResolvedValue(5 as never);
+    // Helper already enqueued the job; lookup reuses it (no fallback create)
+    vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'job-proj' } as never);
 
     const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PROJECTION', actorId: 'admin-1' });
     expect(res.accepted).toBe(true);
     expect(res.jobType).toBe('WAR_ROOM_PROJECT');
-    expect(prisma.incidentWarRoom.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { projectionVersion: { increment: 1 } } }));
-    const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data.payload;
-    expect(payload.projectionVersion).toBe(5);
+    expect(requestWarRoomProjectionNeutral).toHaveBeenCalledWith('wr-1');
+    expect(res.jobId).toBe('job-proj');
   });
 
   it('RETRY_PROJECTION is idempotent — coalesces by warRoomId+projectionVersion', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN' } as never);
     vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom({ state: 'READY', projectionVersion: 4 }) as never);
+    vi.mocked(requestWarRoomProjectionNeutral as unknown as Mock).mockResolvedValue(null as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue({ id: 'existing-proj' } as never);
     const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RETRY_PROJECTION', actorId: 'admin-1' });
     expect(res.jobId).toBe('existing-proj');
-    expect(prisma.incidentWarRoom.updateMany).not.toHaveBeenCalled();
+    expect(requestWarRoomProjectionNeutral).toHaveBeenCalledWith('wr-1');
   });
 
   it('RETRY_PROJECTION rejected when not READY/CLOSING', async () => {
@@ -570,16 +595,20 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
     expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'WAR_ROOM_EXTERNAL_CLEANUP_RETRY_REQUESTED' }));
   });
 
-  it('RBAC: requires ADMIN or RESPONDER — viewer is rejected', async () => {
+  it('RBAC: requires ADMIN — viewer and responder are rejected', async () => {
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'viewer-1', role: 'VIEWER', email: 'v@test.test' } as never);
     vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue(baseRoom() as never);
     const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'viewer-1' });
     expect(res.accepted).toBe(false);
     expect(res.reasonCode).toBe('FORBIDDEN');
     vi.mocked(getCurrentUser).mockResolvedValue({ id: 'resp-1', role: 'RESPONDER', email: 'r@test.test' } as never);
+    const resp = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'resp-1' });
+    expect(resp.accepted).toBe(false);
+    expect(resp.reasonCode).toBe('FORBIDDEN');
+    vi.mocked(getCurrentUser).mockResolvedValue({ id: 'admin-1', role: 'ADMIN', email: 'admin@test.test' } as never);
     vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mockResolvedValue(null);
     vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-ok' } as never);
-    const ok = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'resp-1' });
+    const ok = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'RECONCILE', actorId: 'admin-1' });
     expect(ok.accepted).toBe(true);
   });
 
@@ -772,6 +801,7 @@ describe('static contracts — no regressions', () => {
       'src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts',
     ];
     for (const file of srcFiles) {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- allowlisted srcFiles literals, not user input
       const content = fs.readFileSync(path.resolve(file), 'utf8');
       expect(content).not.toMatch(/process\.env\.OPSKNIGHT_WAR_ROOM/);
       expect(content).not.toMatch(/process\.env\.WAR_ROOM_/);
@@ -794,7 +824,7 @@ describe('static contracts — no regressions', () => {
 
 // ── RBAC on Admin APIs — static guard check ──────────────────────────────
 describe('Admin API RBAC — static guard check', () => {
-  it('war-room read APIs require ADMIN; repair requires ADMIN|RESPONDER', () => {
+  it('war-room read + repair APIs require ADMIN (future responder needs assertCanModifyIncident)', () => {
     const listRoute = fs.readFileSync(path.resolve('src/app/api/admin/war-rooms/route.ts'), 'utf8');
     expect(listRoute).toMatch(/getCurrentUser/);
     expect(listRoute).toMatch(/role !== 'ADMIN'/);
@@ -804,7 +834,12 @@ describe('Admin API RBAC — static guard check', () => {
     expect(diagRoute).toMatch(/role !== 'ADMIN'/);
 
     const repairRoute = fs.readFileSync(path.resolve('src/app/api/admin/war-rooms/[warRoomId]/repair/route.ts'), 'utf8');
-    expect(repairRoute).toMatch(/ADMIN.*RESPONDER|RESPONDER.*ADMIN/);
+    expect(repairRoute).toMatch(/role !== 'ADMIN'/);
+    expect(repairRoute).not.toMatch(/RESPONDER/);
     expect(repairRoute).toMatch(/z\.object|bodySchema/);
+
+    const repairLib = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
+    expect(repairLib).toMatch(/role !== 'ADMIN'/);
+    expect(repairLib).not.toMatch(/RESPONDER/);
   });
 });

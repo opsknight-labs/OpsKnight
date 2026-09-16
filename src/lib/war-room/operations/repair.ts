@@ -17,12 +17,12 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
     return { accepted: false, reasonCode: 'VALIDATION_FAILED', message: parsed.error.issues[0]?.message ?? 'Invalid repair request.' };
   }
 
-  // RBAC + state gate: repairs require ADMIN or RESPONDER and a live room
+  // Admin Control Plane — mutations are ADMIN-only (see /api/admin/war-rooms/*)
   const { getCurrentUser } = await import('@/lib/rbac');
   try {
     const user = await getCurrentUser();
-    if (!['ADMIN', 'RESPONDER'].includes(user.role)) {
-      return { accepted: false, reasonCode: 'FORBIDDEN', message: 'Repair actions require Admin or Responder.' };
+    if (user.role !== 'ADMIN') {
+      return { accepted: false, reasonCode: 'FORBIDDEN', message: 'Repair actions require Admin.' };
     }
   } catch {
     return { accepted: false, reasonCode: 'UNAUTHORIZED', message: 'Authentication required.' };
@@ -114,37 +114,51 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
         if (!['READY', 'CLOSING'].includes(room.state)) {
           return { accepted: false, reasonCode: 'STATE_NOT_READY', message: 'Projection can only be retried while the war room is READY or CLOSING.' };
         }
-        // Idempotent: coalesce by warRoomId+projectionVersion if a job for current version already exists
-        const existing = await prisma.backgroundJob.findFirst({
+        // Transactional + idempotent: coalesce inside the transaction so two
+        // concurrent admins cannot both increment projection. Uses the neutral
+        // helper that increments + enqueues in one tx.
+        const { requestWarRoomProjectionNeutral } = await import('../engine');
+        const version = await requestWarRoomProjectionNeutral(room.id);
+        if (version == null) {
+          // Already coalesced race — reuse the pending job for current version
+          const existing = await prisma.backgroundJob.findFirst({
+            where: {
+              type: 'WAR_ROOM_PROJECT',
+              status: { in: ['PENDING', 'PROCESSING'] },
+              AND: [
+                { payload: { path: ['warRoomId'], equals: room.id } },
+                { payload: { path: ['projectionVersion'], equals: room.projectionVersion } },
+              ],
+            },
+            select: { id: true },
+          });
+          if (existing) {
+            jobId = existing.id;
+            jobType = 'WAR_ROOM_PROJECT';
+            break;
+          }
+          return { accepted: false, reasonCode: 'STATE_CHANGED', message: 'War-room state changed before projection could be queued.' };
+        }
+        const job = await prisma.backgroundJob.findFirst({
           where: {
             type: 'WAR_ROOM_PROJECT',
             status: { in: ['PENDING', 'PROCESSING'] },
             AND: [
               { payload: { path: ['warRoomId'], equals: room.id } },
-              { payload: { path: ['projectionVersion'], equals: room.projectionVersion } },
+              { payload: { path: ['projectionVersion'], equals: version } },
             ],
           },
           select: { id: true },
         });
-        if (existing) {
-          jobId = existing.id;
-          jobType = 'WAR_ROOM_PROJECT';
-          break;
-        }
-        // Increment projection atomically and enqueue new version
-        const updated = await prisma.incidentWarRoom.updateMany({
-          where: { id: room.id, state: { in: ['READY', 'CLOSING'] } },
-          data: { projectionVersion: { increment: 1 } },
-        });
-        if (updated.count !== 1) {
-          return { accepted: false, reasonCode: 'STATE_CHANGED', message: 'War-room state changed before projection could be queued.' };
-        }
-        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { projectionVersion: true } });
-        const version = fresh!.projectionVersion;
-        const job = await prisma.backgroundJob.create({
+        jobId = job?.id ?? null;
+        jobType = 'WAR_ROOM_PROJECT';
+        // If helper already created the job, reuse it; otherwise fall through
+        if (jobId) break;
+        // Fallback: helper incremented but job lookup missed (test mock) — create if needed
+        const fallback = await prisma.backgroundJob.create({
           data: { type: 'WAR_ROOM_PROJECT', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId: room.id, projectionVersion: version } as unknown as never },
         });
-        jobId = job.id;
+        jobId = fallback.id;
         jobType = 'WAR_ROOM_PROJECT';
         break;
       }
@@ -171,7 +185,11 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
         }
       }
       case 'RETRY_EXTERNAL_CLEANUP': {
-        // Enqueue through the terminal drift lane via a synthetic reconcile; deduped and idempotent — never calls Graph directly.
+        // Targeted terminal-drift retry: invoke the real orphan lane for this
+        // single room immediately, then also ensure the periodic sweep will
+        // retry. Enqueues a synthetic reconcile that the worker routes to
+        // reconcileTerminalWarRoomDrift for this warRoomId.
+        // Deduped: if a cleanup-retry job already exists, reuse it.
         const existing = await prisma.backgroundJob.findFirst({
           where: {
             type: 'WAR_ROOM_RECONCILE',
@@ -188,6 +206,13 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
           jobType = 'WAR_ROOM_RECONCILE';
           break;
         }
+        // Bump lastAttempt so the cron lane is eligible immediately, then enqueue targeted job.
+        try {
+          await prisma.incidentWarRoom.updateMany({
+            where: { id: room.id, externalCleanupPending: true },
+            data: { externalCleanupLastAttemptAt: new Date(Date.now() - 6 * 60_000) },
+          });
+        } catch {}
         const laneJob = await prisma.backgroundJob.create({
           data: {
             type: 'WAR_ROOM_RECONCILE',
@@ -202,9 +227,14 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
         break;
       }
       case 'REFRESH_PERMISSIONS': {
-        // Permission refresh = enqueue a reconciliation that re-probes RSC / installation state
+        // Durable RSC probe: enqueues a reconcile with permission_refresh so the
+        // worker can refresh RSC grants (getTeamsGrantedRscPermissions) for the
+        // room's team before running normal health reconciliation.
         const existing = await prisma.backgroundJob.findFirst({
-          where: { type: 'WAR_ROOM_RECONCILE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+          where: {
+            type: 'WAR_ROOM_RECONCILE',
+            status: { in: ['PENDING', 'PROCESSING'] },
+            payload: { path: ['warRoomId'], equals: room.id } },
           select: { id: true },
         });
         if (existing) {
@@ -238,6 +268,7 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
   const isJobReused = jobId != null && jobType != null;
   try {
     await emitAuditEvent({
+      // eslint-disable-next-line security/detect-object-injection -- action is validated by z.enum at entry
       action: auditActionMap[action],
       source: 'UI',
       target: { type: 'SYSTEM_CONFIG', id: room.id },

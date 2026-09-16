@@ -59,7 +59,8 @@ export type WarRoomDiagnosticsSnapshot = WarRoomOperationalSnapshot & {
     channelName: string | null;
   } | null;
   provisioning: {
-    provisioningToken: string | null;
+    // Fencing token is never surfaced — only presence is exposed.
+    hasProvisioningToken: boolean;
     provisioningStartedAt: string | null;
     createAttemptedAt: string | null;
     plannedExternalName: string | null;
