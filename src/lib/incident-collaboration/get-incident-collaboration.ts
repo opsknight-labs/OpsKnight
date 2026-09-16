@@ -13,6 +13,7 @@ import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import type {
   IncidentCollaborationView,
+  IncidentMeetingView,
   IncidentWarRoomHistoryItem,
   IncidentWarRoomParticipantView,
   IncidentWarRoomProviderView,
@@ -26,10 +27,13 @@ import {
   getGlobalWarRoomPolicy,
   getServiceWarRoomPolicy,
   resolveEffectiveWarRoomProviders,
+  resolveEffectiveMeetingProvider,
 } from './policy';
 import { deriveProviderCanCreate, deriveWarRoomActions } from './capabilities';
 import { getProviderDeepLinkUrl } from './urls';
 import { PROVIDER_PRESENTATION } from './presentation';
+import { getIncidentMeeting } from './meeting-store';
+import { generateBridgeUrl } from '@/lib/war-room/bridge';
 
 export type GetIncidentCollaborationInput = {
   incidentId: string;
@@ -41,45 +45,53 @@ export async function getIncidentCollaborationView(
 ): Promise<IncidentCollaborationView> {
   const { incidentId } = input;
 
-  const [incident, globalPolicy, globalSlackIntegration, teamsConfig, warRooms, userPermissions] =
-    await Promise.all([
-      prisma.incident.findUnique({
-        where: { id: incidentId },
-        include: {
-          service: {
-            include: {
-              slackIntegration: {
-                select: { id: true, enabled: true, workspaceId: true },
-              },
+  const [
+    incident,
+    globalPolicy,
+    globalSlackIntegration,
+    teamsConfig,
+    warRooms,
+    userPermissions,
+    persistedMeeting,
+  ] = await Promise.all([
+    prisma.incident.findUnique({
+      where: { id: incidentId },
+      include: {
+        service: {
+          include: {
+            slackIntegration: {
+              select: { id: true, enabled: true, workspaceId: true },
             },
           },
         },
-      }),
-      getGlobalWarRoomPolicy(),
-      prisma.slackIntegration.findFirst({
-        where: { enabled: true, services: { none: {} } },
-        select: { id: true, workspaceId: true, enabled: true },
-      }),
-      prisma.microsoftTeamsConfig.findUnique({
-        where: { id: 'default' },
-        select: { enabled: true, warRoomsEnabled: true },
-      }),
-      prisma.incidentWarRoom.findMany({
-        where: { incidentId },
-        orderBy: [{ generation: 'desc' }, { createdAt: 'desc' }],
-        include: {
-          participants: {
-            orderBy: { createdAt: 'asc' },
-            include: {
-              user: {
-                select: { id: true, name: true, email: true, avatarUrl: true },
-              },
+      },
+    }),
+    getGlobalWarRoomPolicy(),
+    prisma.slackIntegration.findFirst({
+      where: { enabled: true, services: { none: {} } },
+      select: { id: true, workspaceId: true, enabled: true },
+    }),
+    prisma.microsoftTeamsConfig.findUnique({
+      where: { id: 'default' },
+      select: { enabled: true, warRoomsEnabled: true },
+    }),
+    prisma.incidentWarRoom.findMany({
+      where: { incidentId },
+      orderBy: [{ generation: 'desc' }, { createdAt: 'desc' }],
+      include: {
+        participants: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            user: {
+              select: { id: true, name: true, email: true, avatarUrl: true },
             },
           },
         },
-      }),
-      getUserPermissions(),
-    ]);
+      },
+    }),
+    getUserPermissions(),
+    getIncidentMeeting(incidentId),
+  ]);
 
   if (!incident) {
     return {
@@ -93,8 +105,9 @@ export async function getIncidentCollaborationView(
         totalHistoricalRooms: 0,
       },
       providers: [],
+      meeting: null,
       history: [],
-      permissions: { canManageWarRooms: false },
+      permissions: { canManageWarRooms: false, canManageMeeting: false },
     };
   }
 
@@ -394,8 +407,82 @@ export async function getIncidentCollaborationView(
     },
   };
 
-  // Root visibility: visible only if AT LEAST ONE provider is visible
-  const isAnyProviderVisible = isSlackVisible || isTeamsVisible;
+  // Meeting resolution
+  const canManageMeeting = canManageWarRooms;
+  const meetingResolution = resolveEffectiveMeetingProvider({
+    globalMeetingProvider: globalPolicy.defaultMeetingProvider,
+    serviceMeetingProvider: servicePolicy ? (servicePolicy.meetingProvider ?? null) : null,
+    isTeamsMeetingAvailable: isTeamsConnected,
+    globalWarRoomsEnabled: globalPolicy.enabled,
+    serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : true,
+  });
+
+  let meeting: IncidentMeetingView | null = persistedMeeting;
+
+  if (
+    !meeting &&
+    meetingResolution.effectiveProvider !== 'NONE' &&
+    meetingResolution.effectiveProvider !== 'MICROSOFT_TEAMS'
+  ) {
+    const customUrl = incident.service?.warRoomCustomBridgeUrl || null;
+    const joinUrl = generateBridgeUrl(incident.id, meetingResolution.effectiveProvider, customUrl);
+    if (joinUrl) {
+      meeting = {
+        id: `meet_${incident.id}_1`,
+        incidentId: incident.id,
+        generation: 1,
+        provider: meetingResolution.effectiveProvider,
+        state: 'READY',
+        health: 'HEALTHY',
+        externalId: `opsknight:${incident.id}:1`,
+        joinUrl,
+        joinWebUrl: joinUrl,
+        createdAt: incident.createdAt.toISOString(),
+        actions: {
+          canJoin: true,
+          canRetry: false,
+          canClose: canManageMeeting && incident.status !== 'RESOLVED',
+        },
+      };
+    }
+  } else if (
+    !meeting &&
+    meetingResolution.isUnavailable &&
+    meetingResolution.desiredProvider === 'MICROSOFT_TEAMS'
+  ) {
+    meeting = {
+      id: `meet_${incident.id}_1`,
+      incidentId: incident.id,
+      generation: 1,
+      provider: 'MICROSOFT_TEAMS',
+      state: 'FAILED',
+      health: 'UNAVAILABLE',
+      externalId: `opsknight:${incident.id}:1`,
+      joinUrl: '',
+      createdAt: incident.createdAt.toISOString(),
+      lastErrorCode: 'TEAMS_CONFIG_MISSING',
+      lastErrorMessage:
+        meetingResolution.unavailableReason ||
+        'Microsoft Teams online meetings are not configured or lack Microsoft Graph permissions.',
+      actions: {
+        canJoin: false,
+        canRetry: canManageMeeting && incident.status !== 'RESOLVED',
+        canClose: false,
+      },
+    };
+  } else if (meeting) {
+    meeting = {
+      ...meeting,
+      actions: {
+        canJoin: meeting.state === 'READY',
+        canRetry: meeting.state === 'FAILED' && canManageMeeting && incident.status !== 'RESOLVED',
+        canClose: meeting.state === 'READY' && canManageMeeting && incident.status !== 'RESOLVED',
+      },
+    };
+  }
+
+  // Root visibility: visible only if AT LEAST ONE provider is visible or meeting is active
+  const isAnyProviderVisible = isSlackVisible || isTeamsVisible || Boolean(meeting);
 
   // Active rooms summary
   const activeRooms = [currentSlackRoom, currentTeamsRoom].filter(
@@ -425,9 +512,11 @@ export async function getIncidentCollaborationView(
       totalHistoricalRooms: allHistory.length,
     },
     providers: [slackProviderView, teamsProviderView].filter(p => p.visible),
+    meeting,
     history: allHistory,
     permissions: {
       canManageWarRooms,
+      canManageMeeting,
     },
   };
 }

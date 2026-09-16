@@ -54,6 +54,12 @@ const PRIORITY_OPTIONS = [
 
 const VIDEO_BRIDGE_OPTIONS = [
   {
+    value: 'MICROSOFT_TEAMS',
+    label: 'Microsoft Teams Meeting',
+    badge: 'Native Graph Bridge',
+    desc: 'Instant Microsoft Graph online meeting created per incident.',
+  },
+  {
     value: 'JITSI',
     label: 'Jitsi Meet',
     badge: 'Instant 0-Setup',
@@ -80,6 +86,14 @@ const VIDEO_BRIDGE_OPTIONS = [
 ];
 
 const PROVIDER_HINTS: Record<string, { placeholder: string; hint: string; examples: string[] }> = {
+  MICROSOFT_TEAMS: {
+    placeholder: 'Auto-generated via Microsoft Graph (Leave empty for instant online meeting)',
+    hint: 'Generates a native Microsoft Teams online meeting bridge with dial-in audio conferencing via Microsoft Graph.',
+    examples: [
+      'Default (Leave empty): Native Microsoft Graph Online Meeting created per incident',
+      'Static Link: https://teams.microsoft.com/l/meetup-join/...',
+    ],
+  },
   JITSI: {
     placeholder:
       'https://meet.jit.si/opsknight-inc-{incidentId} (Leave empty for default instant room)',

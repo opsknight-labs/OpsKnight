@@ -11,7 +11,10 @@ import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/uniqu
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
 import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
 import { setServiceWarRoomPolicy } from '@/lib/incident-collaboration/policy';
-import type { WarRoomProviderSet } from '@/lib/incident-collaboration/types';
+import type {
+  WarRoomProviderSet,
+  IncidentMeetingProvider,
+} from '@/lib/incident-collaboration/types';
 
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
 function serviceSettingsRedirect(serviceId: string) {
@@ -210,7 +213,14 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
   redirect(serviceSettingsRedirect(serviceId));
 }
 
-const ALLOWED_VIDEO_BRIDGES = new Set(['INHERIT', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']);
+const ALLOWED_VIDEO_BRIDGES = new Set([
+  'INHERIT',
+  'MICROSOFT_TEAMS',
+  'JITSI',
+  'ZOOM',
+  'GOOGLE_MEET',
+  'NONE',
+]);
 
 export async function updateServiceChatOpsSettings(
   prevStateOrServiceId: { success?: boolean; error?: string | null } | string | undefined,
@@ -298,6 +308,7 @@ export async function updateServiceChatOpsSettings(
       serviceId,
       {
         serviceProviders,
+        meetingProvider: (warRoomVideoBridge as IncidentMeetingProvider) ?? null,
         warRoomsEnabled,
         autoCreate: autoCreateWarRoom,
       },

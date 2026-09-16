@@ -17,14 +17,99 @@ import type { Prisma } from '@prisma/client';
 import type {
   WarRoomProviderName,
   WarRoomProviderSet,
+  IncidentMeetingProvider,
   ServiceWarRoomPolicy,
   GlobalWarRoomPolicy,
 } from './types';
 
 export const GLOBAL_WAR_ROOM_POLICY_KEY = 'war_room_global_default_providers';
+export const GLOBAL_MEETING_POLICY_KEY = 'meeting_global_default_provider';
 export const SERVICE_WAR_ROOM_POLICY_PREFIX = 'service_war_room_policy:';
 
 export const ALL_WAR_ROOM_PROVIDERS: WarRoomProviderSet = ['SLACK', 'MICROSOFT_TEAMS'];
+export const ALL_MEETING_PROVIDERS: IncidentMeetingProvider[] = [
+  'MICROSOFT_TEAMS',
+  'ZOOM',
+  'GOOGLE_MEET',
+  'JITSI',
+  'NONE',
+];
+
+/**
+ * Resolve effective meeting provider deterministically.
+ * Pure function with no side effects.
+ *
+ * Strict invariant: NO SILENT FALLBACK.
+ * If Microsoft Teams Meeting is configured but unavailable, report error rather than
+ * substituting another provider.
+ */
+export function resolveEffectiveMeetingProvider(params: {
+  globalMeetingProvider: IncidentMeetingProvider;
+  serviceMeetingProvider: IncidentMeetingProvider | null;
+  isTeamsMeetingAvailable: boolean;
+  globalWarRoomsEnabled: boolean;
+  serviceWarRoomsEnabled: boolean;
+}): {
+  effectiveProvider: IncidentMeetingProvider;
+  desiredProvider: IncidentMeetingProvider;
+  isUnavailable: boolean;
+  unavailableReason?: string;
+  isDisabled: boolean;
+  isInherited: boolean;
+} {
+  const {
+    globalMeetingProvider,
+    serviceMeetingProvider,
+    isTeamsMeetingAvailable,
+    globalWarRoomsEnabled,
+    serviceWarRoomsEnabled,
+  } = params;
+
+  const isInherited = serviceMeetingProvider === null || serviceMeetingProvider === undefined;
+  const desiredProvider: IncidentMeetingProvider = isInherited
+    ? globalMeetingProvider
+    : serviceMeetingProvider;
+
+  if (!globalWarRoomsEnabled || !serviceWarRoomsEnabled || desiredProvider === 'NONE') {
+    return {
+      effectiveProvider: 'NONE',
+      desiredProvider,
+      isUnavailable: false,
+      isDisabled: true,
+      isInherited,
+    };
+  }
+
+  if (desiredProvider === 'MICROSOFT_TEAMS') {
+    if (!isTeamsMeetingAvailable) {
+      return {
+        effectiveProvider: 'NONE',
+        desiredProvider,
+        isUnavailable: true,
+        unavailableReason:
+          'Microsoft Teams online meetings are not configured or lack Microsoft Graph permissions.',
+        isDisabled: false,
+        isInherited,
+      };
+    }
+    return {
+      effectiveProvider: 'MICROSOFT_TEAMS',
+      desiredProvider,
+      isUnavailable: false,
+      isDisabled: false,
+      isInherited,
+    };
+  }
+
+  // JITSI, ZOOM, GOOGLE_MEET are self-contained or link-based
+  return {
+    effectiveProvider: desiredProvider,
+    desiredProvider,
+    isUnavailable: false,
+    isDisabled: false,
+    isInherited,
+  };
+}
 
 /**
  * Resolve effective war room providers deterministically.
@@ -84,12 +169,12 @@ export function resolveEffectiveWarRoomProviders(params: {
  * Fetch global default war room provider policy.
  */
 export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
-  const [chatOpsConfig, defaultProvidersRow] = await Promise.all([
+  const [chatOpsConfig, defaultProvidersRow, defaultMeetingRow] = await Promise.all([
     prisma?.chatOpsConfig?.findUnique
       ? prisma.chatOpsConfig
           .findUnique({
             where: { id: 'default' },
-            select: { enabled: true },
+            select: { enabled: true, defaultVideoBridge: true },
           })
           .catch(() => null)
       : Promise.resolve(null),
@@ -97,6 +182,14 @@ export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
       ? prisma.systemConfig
           .findUnique({
             where: { key: GLOBAL_WAR_ROOM_POLICY_KEY },
+            select: { value: true },
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
+    prisma?.systemConfig?.findUnique
+      ? prisma.systemConfig
+          .findUnique({
+            where: { key: GLOBAL_MEETING_POLICY_KEY },
             select: { value: true },
           })
           .catch(() => null)
@@ -114,9 +207,24 @@ export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
     }
   }
 
+  let defaultMeetingProvider: IncidentMeetingProvider = 'JITSI';
+  if (
+    defaultMeetingRow?.value &&
+    typeof defaultMeetingRow.value === 'string' &&
+    ALL_MEETING_PROVIDERS.includes(defaultMeetingRow.value as IncidentMeetingProvider)
+  ) {
+    defaultMeetingProvider = defaultMeetingRow.value as IncidentMeetingProvider;
+  } else if (
+    chatOpsConfig?.defaultVideoBridge &&
+    ALL_MEETING_PROVIDERS.includes(chatOpsConfig.defaultVideoBridge as IncidentMeetingProvider)
+  ) {
+    defaultMeetingProvider = chatOpsConfig.defaultVideoBridge as IncidentMeetingProvider;
+  }
+
   return {
     enabled: Boolean(chatOpsConfig?.enabled),
     defaultProviders,
+    defaultMeetingProvider,
   };
 }
 
@@ -145,6 +253,39 @@ export async function setGlobalDefaultWarRoomProviders(
 }
 
 /**
+ * Set global default meeting provider.
+ */
+export async function setGlobalMeetingProvider(
+  meetingProvider: IncidentMeetingProvider,
+  userId?: string,
+  tx?: Prisma.TransactionClient
+): Promise<void> {
+  const client = tx || prisma;
+  if (!client?.systemConfig?.upsert) return;
+  await client.systemConfig.upsert({
+    where: { key: GLOBAL_MEETING_POLICY_KEY },
+    create: {
+      key: GLOBAL_MEETING_POLICY_KEY,
+      value: meetingProvider,
+      updatedBy: userId || null,
+    },
+    update: {
+      value: meetingProvider,
+      updatedBy: userId || null,
+    },
+  });
+
+  if (client?.chatOpsConfig?.update) {
+    await client.chatOpsConfig
+      .update({
+        where: { id: 'default' },
+        data: { defaultVideoBridge: meetingProvider },
+      })
+      .catch(() => null);
+  }
+}
+
+/**
  * Fetch service-level war room provider policy.
  */
 export async function getServiceWarRoomPolicy(serviceId: string): Promise<ServiceWarRoomPolicy> {
@@ -156,6 +297,7 @@ export async function getServiceWarRoomPolicy(serviceId: string): Promise<Servic
             select: {
               autoCreateWarRoom: true,
               microsoftTeamsWarRoomAutoCreate: true,
+              warRoomVideoBridge: true,
             },
           })
           .catch(() => null)
@@ -172,6 +314,7 @@ export async function getServiceWarRoomPolicy(serviceId: string): Promise<Servic
 
   // Default for services is DISABLED - enabling war rooms is on user discretion
   let serviceProviders: WarRoomProviderSet | null = [];
+  let meetingProvider: IncidentMeetingProvider | null = null;
   let warRoomsEnabled = false;
   let autoCreate = false;
 
@@ -184,16 +327,30 @@ export async function getServiceWarRoomPolicy(serviceId: string): Promise<Servic
         ALL_WAR_ROOM_PROVIDERS.includes(p as WarRoomProviderName)
       );
     }
+    if (val.meetingProvider === null) {
+      meetingProvider = null;
+    } else if (
+      typeof val.meetingProvider === 'string' &&
+      ALL_MEETING_PROVIDERS.includes(val.meetingProvider as IncidentMeetingProvider)
+    ) {
+      meetingProvider = val.meetingProvider as IncidentMeetingProvider;
+    }
     if (typeof val.warRoomsEnabled === 'boolean') {
       warRoomsEnabled = val.warRoomsEnabled;
     }
     if (typeof val.autoCreate === 'boolean') {
       autoCreate = val.autoCreate;
     }
+  } else if (
+    service?.warRoomVideoBridge &&
+    ALL_MEETING_PROVIDERS.includes(service.warRoomVideoBridge as IncidentMeetingProvider)
+  ) {
+    meetingProvider = service.warRoomVideoBridge as IncidentMeetingProvider;
   }
 
   return {
     serviceProviders,
+    meetingProvider,
     warRoomsEnabled,
     autoCreate,
   };
@@ -206,6 +363,7 @@ export async function setServiceWarRoomPolicy(
   serviceId: string,
   policy: {
     serviceProviders: WarRoomProviderSet | null;
+    meetingProvider?: IncidentMeetingProvider | null;
     warRoomsEnabled?: boolean;
     autoCreate?: boolean;
   },
@@ -216,6 +374,8 @@ export async function setServiceWarRoomPolicy(
   const current = await getServiceWarRoomPolicy(serviceId);
   const updated: ServiceWarRoomPolicy = {
     serviceProviders: policy.serviceProviders,
+    meetingProvider:
+      policy.meetingProvider !== undefined ? policy.meetingProvider : current.meetingProvider,
     warRoomsEnabled: policy.warRoomsEnabled ?? current.warRoomsEnabled,
     autoCreate: policy.autoCreate ?? current.autoCreate,
   };
@@ -250,6 +410,9 @@ export async function setServiceWarRoomPolicy(
         data: {
           autoCreateWarRoom: updated.autoCreate && isSlackEnabled,
           microsoftTeamsWarRoomAutoCreate: updated.autoCreate && isTeamsEnabled,
+          ...(updated.meetingProvider !== undefined
+            ? { warRoomVideoBridge: updated.meetingProvider }
+            : {}),
         },
       })
       .catch(() => null);

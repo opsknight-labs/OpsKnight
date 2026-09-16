@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveEffectiveWarRoomProviders,
+  resolveEffectiveMeetingProvider,
   getServiceWarRoomPolicy,
 } from '@/lib/incident-collaboration/policy';
 
@@ -107,5 +108,78 @@ describe('Incident War Room Policy Resolver', () => {
     expect(policy.warRoomsEnabled).toBe(false);
     expect(policy.serviceProviders).toEqual([]);
     expect(policy.autoCreate).toBe(false);
+  });
+});
+
+describe('Incident Meeting Policy Resolver', () => {
+  it('inherits global default meeting provider when serviceMeetingProvider is null', () => {
+    const result = resolveEffectiveMeetingProvider({
+      globalMeetingProvider: 'JITSI',
+      serviceMeetingProvider: null,
+      isTeamsMeetingAvailable: true,
+      globalWarRoomsEnabled: true,
+      serviceWarRoomsEnabled: true,
+    });
+
+    expect(result.isInherited).toBe(true);
+    expect(result.isDisabled).toBe(false);
+    expect(result.effectiveProvider).toBe('JITSI');
+  });
+
+  it('allows service to override meeting provider to MICROSOFT_TEAMS', () => {
+    const result = resolveEffectiveMeetingProvider({
+      globalMeetingProvider: 'JITSI',
+      serviceMeetingProvider: 'MICROSOFT_TEAMS',
+      isTeamsMeetingAvailable: true,
+      globalWarRoomsEnabled: true,
+      serviceWarRoomsEnabled: true,
+    });
+
+    expect(result.isInherited).toBe(false);
+    expect(result.isDisabled).toBe(false);
+    expect(result.effectiveProvider).toBe('MICROSOFT_TEAMS');
+    expect(result.isUnavailable).toBe(false);
+  });
+
+  it('strictly rejects silent fallback when Microsoft Teams Meeting is desired but unavailable', () => {
+    const result = resolveEffectiveMeetingProvider({
+      globalMeetingProvider: 'MICROSOFT_TEAMS',
+      serviceMeetingProvider: null,
+      isTeamsMeetingAvailable: false, // Graph permissions missing or app disabled
+      globalWarRoomsEnabled: true,
+      serviceWarRoomsEnabled: true,
+    });
+
+    // Invariant: MUST NOT fall back to Jitsi or Zoom!
+    expect(result.effectiveProvider).toBe('NONE');
+    expect(result.desiredProvider).toBe('MICROSOFT_TEAMS');
+    expect(result.isUnavailable).toBe(true);
+    expect(result.unavailableReason).toContain('Microsoft Graph');
+  });
+
+  it('disables meeting when service sets meeting provider to NONE', () => {
+    const result = resolveEffectiveMeetingProvider({
+      globalMeetingProvider: 'JITSI',
+      serviceMeetingProvider: 'NONE',
+      isTeamsMeetingAvailable: true,
+      globalWarRoomsEnabled: true,
+      serviceWarRoomsEnabled: true,
+    });
+
+    expect(result.isDisabled).toBe(true);
+    expect(result.effectiveProvider).toBe('NONE');
+  });
+
+  it('disables meeting when global feature is disabled', () => {
+    const result = resolveEffectiveMeetingProvider({
+      globalMeetingProvider: 'MICROSOFT_TEAMS',
+      serviceMeetingProvider: null,
+      isTeamsMeetingAvailable: true,
+      globalWarRoomsEnabled: false,
+      serviceWarRoomsEnabled: true,
+    });
+
+    expect(result.isDisabled).toBe(true);
+    expect(result.effectiveProvider).toBe('NONE');
   });
 });

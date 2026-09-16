@@ -76,6 +76,7 @@ describe('ChatOpsSettingsPage Component', () => {
     // Video War Room
 
     expect(screen.getByText('Video War Room Bridge')).toBeInTheDocument();
+    expect(screen.getByText('Microsoft Teams Meeting')).toBeInTheDocument();
     expect(screen.getByText('Jitsi Meet')).toBeInTheDocument();
     expect(screen.getByText('Zoom Meeting')).toBeInTheDocument();
     expect(screen.getByText('Google Meet')).toBeInTheDocument();
@@ -87,7 +88,7 @@ describe('ChatOpsSettingsPage Component', () => {
     // Default Provider selector when both are connected
     expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
     expect(screen.getByDisplayValue('SLACK')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('MICROSOFT_TEAMS')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('MICROSOFT_TEAMS').length).toBe(2);
     expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
   });
 

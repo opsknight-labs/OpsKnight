@@ -15,10 +15,13 @@ export function generateBridgeUrl(
   if (customTemplate && customTemplate.trim()) {
     let urlStr = customTemplate.trim();
     if (!/^https?:\/\//i.test(urlStr)) urlStr = `https://${urlStr}`;
-    if (urlStr.includes('{incidentId}')) formattedUrl = urlStr.replace(/\{incidentId\}/g, incidentId);
+    if (urlStr.includes('{incidentId}'))
+      formattedUrl = urlStr.replace(/\{incidentId\}/g, incidentId);
     else formattedUrl = urlStr;
   }
   switch (provider) {
+    case 'MICROSOFT_TEAMS':
+      return formattedUrl || null;
     case 'JITSI':
       return formattedUrl || `https://meet.jit.si/opsknight-inc-${shortId}`;
     case 'ZOOM':

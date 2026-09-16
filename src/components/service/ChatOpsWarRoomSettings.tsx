@@ -22,6 +22,7 @@ import type { WarRoomProviderSet, ServiceWarRoomPolicy } from '@/lib/incident-co
 
 const VIDEO_BRIDGE_OPTIONS = [
   { value: 'INHERIT', label: 'Inherit Global' },
+  { value: 'MICROSOFT_TEAMS', label: 'Microsoft Teams Meeting' },
   { value: 'JITSI', label: 'Jitsi Meet' },
   { value: 'ZOOM', label: 'Zoom' },
   { value: 'GOOGLE_MEET', label: 'Google Meet' },

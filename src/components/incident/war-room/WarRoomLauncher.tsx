@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/shadcn/button';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
-import { Plus, AlertTriangle, Users } from 'lucide-react';
+import { Plus, AlertTriangle, Users, Video } from 'lucide-react';
 import { IncidentWarRoomManager } from './IncidentWarRoomManager';
 import { useIncidentWarRooms } from './useIncidentWarRooms';
 import type {
@@ -117,7 +117,21 @@ export function WarRoomLauncher({
       );
     }
 
-    // 3. No active rooms, but create capability exists
+    // 3. Active meeting ready without active chat rooms
+    if (collaboration.meeting?.state === 'READY') {
+      return (
+        <div className="flex items-center gap-1.5">
+          {collaboration.meeting.provider === 'MICROSOFT_TEAMS' ? (
+            <MicrosoftTeamsLogo className="h-4.5 w-4.5 shrink-0" />
+          ) : (
+            <Video className="h-4 w-4 shrink-0 text-emerald-500" />
+          )}
+          <span className="font-semibold">Join Meeting</span>
+        </div>
+      );
+    }
+
+    // 4. No active rooms, but create capability exists
     if (canCreateAny) {
       return (
         <div className="flex items-center gap-1.5">
@@ -127,7 +141,7 @@ export function WarRoomLauncher({
       );
     }
 
-    // 4. Historical rooms exist, but no active room and cannot create
+    // 5. Historical rooms exist, but no active room and cannot create
     if (collaboration.history.length > 0) {
       return (
         <div className="flex items-center gap-1.5">

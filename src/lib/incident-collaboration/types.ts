@@ -96,8 +96,47 @@ export type IncidentWarRoomHistoryItem = {
 
 export type WarRoomProviderSet = WarRoomProviderName[];
 
+export type IncidentMeetingProvider = 'MICROSOFT_TEAMS' | 'ZOOM' | 'GOOGLE_MEET' | 'JITSI' | 'NONE';
+
+export type IncidentMeetingState =
+  | 'REQUESTED'
+  | 'PROVISIONING'
+  | 'READY'
+  | 'CLOSING'
+  | 'CLOSED'
+  | 'FAILED';
+
+export type IncidentMeetingHealth = 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
+
+export type IncidentMeetingActions = {
+  canJoin: boolean;
+  canRetry: boolean;
+  canClose: boolean;
+};
+
+export type IncidentMeetingView = {
+  id: string;
+  incidentId: string;
+  generation: number;
+  provider: IncidentMeetingProvider;
+  state: IncidentMeetingState;
+  health: IncidentMeetingHealth;
+  externalId: string;
+  joinUrl: string;
+  joinWebUrl?: string | null;
+  conferenceId?: string | null;
+  tollNumber?: string | null;
+  organizerEmail?: string | null;
+  createdAt: string;
+  closedAt?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+  actions: IncidentMeetingActions;
+};
+
 export type ServiceWarRoomPolicy = {
   serviceProviders: WarRoomProviderSet | null;
+  meetingProvider?: IncidentMeetingProvider | null;
   warRoomsEnabled: boolean;
   autoCreate: boolean;
 };
@@ -105,6 +144,7 @@ export type ServiceWarRoomPolicy = {
 export type GlobalWarRoomPolicy = {
   enabled: boolean;
   defaultProviders: WarRoomProviderSet;
+  defaultMeetingProvider: IncidentMeetingProvider;
 };
 
 export type IncidentWarRoomProviderView = {
@@ -134,6 +174,7 @@ export type IncidentCollaborationSummary = {
 
 export type IncidentCollaborationPermissions = {
   canManageWarRooms: boolean;
+  canManageMeeting: boolean;
 };
 
 export type IncidentCollaborationView = {
@@ -142,6 +183,7 @@ export type IncidentCollaborationView = {
   incidentStatus: string;
   summary: IncidentCollaborationSummary;
   providers: IncidentWarRoomProviderView[];
+  meeting: IncidentMeetingView | null;
   history: IncidentWarRoomHistoryItem[];
   permissions: IncidentCollaborationPermissions;
 };

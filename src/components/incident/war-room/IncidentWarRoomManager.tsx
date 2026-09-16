@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/shadcn/button';
 import { Plus, Users } from 'lucide-react';
 import { WarRoomProviderCard } from './WarRoomProviderCard';
+import { IncidentMeetingCard } from './IncidentMeetingCard';
 import { WarRoomCreateDialog } from './WarRoomCreateDialog';
 import { WarRoomHistory } from './WarRoomHistory';
 import type {
@@ -103,6 +104,27 @@ export function IncidentWarRoomManager({
 
           {/* Grey background layer for cards */}
           <div className="flex-1 overflow-y-auto bg-zinc-50/70 dark:bg-zinc-950 p-3 sm:p-4 space-y-4">
+            {/* Audio / Video War Room Bridge */}
+            {collaboration.meeting && (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-0.5">
+                  <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 tracking-tight">
+                    Audio / Video War Room Bridge
+                  </h3>
+                </div>
+                <IncidentMeetingCard
+                  meeting={collaboration.meeting}
+                  onAction={async action => {
+                    await fetch(`/api/incidents/${collaboration.incidentId}/meeting`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ action }),
+                    });
+                  }}
+                />
+              </div>
+            )}
+
             {/* Active War Rooms */}
             {activeProviders.length > 0 ? (
               <div className="space-y-2.5">
