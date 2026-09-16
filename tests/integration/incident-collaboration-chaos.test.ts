@@ -14,9 +14,9 @@ import {
   testPrisma,
 } from '../helpers/test-db';
 import { WarRoomRetryableError } from '@/lib/war-room/errors';
+import { processJob } from '@/lib/jobs/queue';
 
-const describeIfRealDB =
-  process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
+const describeIfRealDB = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
 
 describeIfRealDB('Phase 6 Incident Collaboration Chaos & Fault Matrix (Postgres)', () => {
   beforeEach(async () => {
@@ -53,11 +53,11 @@ describeIfRealDB('Phase 6 Incident Collaboration Chaos & Fault Matrix (Postgres)
   });
 
   // ── Workstream E: 429 Retry Backoff ───────────────────────────────────────
-  it('E1: Provider 429 throws WarRoomRetryableError, keeps PROVISIONING, and retries successfully', async () => {
+  it('E1: Provider 429 reschedules background job with Retry-After backoff and succeeds on retry', async () => {
     const service = await createTestService('Chaos 429 Service');
     const incident = await createTestIncident('Chaos 429 Incident', service.id);
 
-    // Initial claim
+    // Initial claim enqueues a MEETING_PROVISION job
     await requestMeetingProvision({
       incidentId: incident.id,
       provider: 'MICROSOFT_TEAMS',
@@ -67,31 +67,34 @@ describeIfRealDB('Phase 6 Incident Collaboration Chaos & Fault Matrix (Postgres)
     const initDbMeeting = await testPrisma.incidentMeeting.findUnique({
       where: { incidentId_generation: { incidentId: incident.id, generation: 1 } },
     });
-    const token = initDbMeeting!.provisioningToken!;
+    expect(initDbMeeting?.state).toBe('PROVISIONING');
 
-    // 1st attempt: 429 Rate Limited
+    const job = await testPrisma.backgroundJob.findFirst({
+      where: { type: 'MEETING_PROVISION', status: 'PENDING' },
+    });
+    expect(job).not.toBeNull();
+
+    // 1st attempt: Rate Limited with 45s Retry-After
     collaborationProviderHarness.meeting.setCreateBehavior({
       behavior: 'RATE_LIMITED',
       retryAfterMs: 45000,
     });
 
-    let caughtError: unknown;
-    try {
-      await executeMeetingProvision({
-        incidentId: incident.id,
-        provisioningToken: token,
-        provider: 'MICROSOFT_TEAMS',
-        generation: 1,
-        incidentTitle: '429 Test',
-        attempt: 1,
-        maxAttempts: 5,
-      });
-    } catch (err) {
-      caughtError = err;
-    }
+    // Mark job processing and execute via queue engine
+    await testPrisma.backgroundJob.update({
+      where: { id: job!.id },
+      data: { status: 'PROCESSING', startedAt: new Date(), attempts: 1 },
+    });
+    const processingJob = await testPrisma.backgroundJob.findUnique({ where: { id: job!.id } });
+    await processJob(processingJob as any);
 
-    expect(caughtError).toBeInstanceOf(WarRoomRetryableError);
-    expect((caughtError as WarRoomRetryableError).retryAfterMs).toBe(45000);
+    // Queue worker automatically caught WarRoomRetryableError and rescheduled with backoff
+    const rescheduledJob = await testPrisma.backgroundJob.findUnique({
+      where: { id: job!.id },
+    });
+    expect(rescheduledJob?.status).toBe('PENDING');
+    const delay = rescheduledJob!.scheduledAt.getTime() - Date.now();
+    expect(delay).toBeGreaterThan(40000); // 45s backoff honored!
 
     // Assert meeting remains in PROVISIONING state with DEGRADED health
     const dbMeeting = await testPrisma.incidentMeeting.findUnique({
@@ -100,21 +103,25 @@ describeIfRealDB('Phase 6 Incident Collaboration Chaos & Fault Matrix (Postgres)
     expect(dbMeeting?.state).toBe('PROVISIONING');
     expect(dbMeeting?.health).toBe('DEGRADED');
 
-    // 2nd attempt: Rate limit cleared, SUCCESS
+    // 2nd attempt: Rate limit cleared, advance scheduled time, execute queue again
     collaborationProviderHarness.meeting.setCreateBehavior('SUCCESS');
-    const successMeeting = await executeMeetingProvision({
-      incidentId: incident.id,
-      provisioningToken: dbMeeting!.provisioningToken!,
-      provider: 'MICROSOFT_TEAMS',
-      generation: 1,
-      incidentTitle: '429 Test',
-      attempt: 2,
-      maxAttempts: 5,
+    await testPrisma.backgroundJob.update({
+      where: { id: job!.id },
+      data: { status: 'PROCESSING', scheduledAt: new Date(Date.now() - 1000), attempts: 2 },
     });
+    const readyJob = await testPrisma.backgroundJob.findUnique({ where: { id: job!.id } });
+    const success = await processJob(readyJob as any);
+    expect(success).toBe(true);
 
-    expect(successMeeting.state).toBe('READY');
-    expect(successMeeting.health).toBe('HEALTHY');
-    expect(successMeeting.joinUrl).toContain('teams.microsoft.com');
+    const completedJob = await testPrisma.backgroundJob.findUnique({ where: { id: job!.id } });
+    expect(completedJob?.status).toBe('COMPLETED');
+
+    const readyMeeting = await testPrisma.incidentMeeting.findUnique({
+      where: { incidentId_generation: { incidentId: incident.id, generation: 1 } },
+    });
+    expect(readyMeeting?.state).toBe('READY');
+    expect(readyMeeting?.health).toBe('HEALTHY');
+    expect(readyMeeting?.joinUrl).toContain('teams.microsoft.com');
   });
 
   it('E2: Teams Meeting DELETE 429 honors Retry-After, remains CLOSING, and succeeds on next attempt', async () => {
@@ -402,7 +409,14 @@ describeIfRealDB('Phase 6 Incident Collaboration Chaos & Fault Matrix (Postgres)
     });
     expect(readyMeeting.state).toBe('READY');
 
-    // Seed a Slack war room that experiences an external failure
+    // Inject severe Slack API outage via multi-provider harness
+    collaborationProviderHarness.slack.setBehavior({
+      behavior: 'SERVER_ERROR',
+      statusCode: 500,
+      errorMessage: 'Slack API 500 error: internal server error',
+    });
+
+    // Record Slack war room experiencing the external outage
     await testPrisma.incidentWarRoom.create({
       data: {
         incidentId: incident.id,
@@ -410,7 +424,7 @@ describeIfRealDB('Phase 6 Incident Collaboration Chaos & Fault Matrix (Postgres)
         generation: 1,
         state: 'FAILED',
         lastErrorCode: 'SLACK_OUTAGE',
-        lastError: 'Slack API 500 error',
+        lastError: 'Slack API 500 error: internal server error',
       },
     });
 

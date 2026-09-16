@@ -177,8 +177,40 @@ export class MockMeetingProviderHarness implements MeetingProviderAdapter {
   }
 }
 
+export class MockWarRoomProviderHarness {
+  private provisionBehavior: BehaviorConfig = { behavior: 'SUCCESS' };
+  private closeBehavior: BehaviorConfig = { behavior: 'SUCCESS' };
+  public provisionCalls: Array<Record<string, unknown>> = [];
+  public closeCalls: Array<Record<string, unknown>> = [];
+
+  setBehavior(config: BehaviorConfig | ProviderFaultBehavior): void {
+    this.provisionBehavior = typeof config === 'string' ? { behavior: config } : config;
+  }
+
+  setCloseBehavior(config: BehaviorConfig | ProviderFaultBehavior): void {
+    this.closeBehavior = typeof config === 'string' ? { behavior: config } : config;
+  }
+
+  getProvisionBehavior(): BehaviorConfig {
+    return this.provisionBehavior;
+  }
+
+  getCloseBehavior(): BehaviorConfig {
+    return this.closeBehavior;
+  }
+
+  reset(): void {
+    this.provisionBehavior = { behavior: 'SUCCESS' };
+    this.closeBehavior = { behavior: 'SUCCESS' };
+    this.provisionCalls = [];
+    this.closeCalls = [];
+  }
+}
+
 export class CollaborationProviderHarness {
   public meeting = new MockMeetingProviderHarness();
+  public slack = new MockWarRoomProviderHarness();
+  public teamsRoom = new MockWarRoomProviderHarness();
 
   install(): void {
     MeetingProviderRegistry.register(this.meeting);
@@ -186,12 +218,16 @@ export class CollaborationProviderHarness {
 
   restore(): void {
     this.meeting.reset();
+    this.slack.reset();
+    this.teamsRoom.reset();
     // Restore default TeamsMeetingAdapter
     MeetingProviderRegistry.register(new TeamsMeetingAdapter());
   }
 
   reset(): void {
     this.meeting.reset();
+    this.slack.reset();
+    this.teamsRoom.reset();
   }
 }
 

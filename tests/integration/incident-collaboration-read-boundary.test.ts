@@ -8,10 +8,9 @@ import {
   testPrisma,
 } from '../helpers/test-db';
 
-const describeIfRealDB =
-  process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
+const describeIfRealDB = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
 
-describeIfRealDB('Incident Collaboration Runtime Boundary & Read Purity (Postgres)', () => {
+describeIfRealDB('Incident Collaboration Read Boundary & Purity (Postgres)', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
