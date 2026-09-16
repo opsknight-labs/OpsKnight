@@ -180,9 +180,9 @@ export function toOperationalSnapshot(input: {
   installCountForProvider?: number | null;
   rscUnknown?: boolean | null;
 }): WarRoomOperationalSnapshot {
-  const participantDrift = input.participantDrift ?? input.participantCounts
+  const participantDrift = input.participantDrift ?? (input.participantCounts
     ? (input.participantCounts!.pending + input.participantCounts!.failed + (input.participantCounts?.desiredStale ?? 0))
-    : 0;
+    : 0);
   const classified = classifyOperationalHealth({
     state: input.state,
     healthState: input.health,
