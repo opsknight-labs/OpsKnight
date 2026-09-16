@@ -37,13 +37,13 @@ export function WarRoomLifecycleBadge({ state, className }: WarRoomLifecycleBadg
       role="status"
       aria-label={`War room lifecycle: ${presentation.label}`}
       className={cn(
-        'inline-flex items-center gap-1.5 font-medium text-xs px-2.5 py-0.5',
+        'inline-flex items-center gap-1 font-mono font-bold text-[9px] tracking-wider uppercase px-1.5 py-0.5 rounded border leading-none',
         toneClasses,
         className
       )}
     >
       {isTransitioning ? (
-        <Loader2 className="h-3 w-3 animate-spin shrink-0" aria-hidden="true" />
+        <Loader2 className="h-2.5 w-2.5 animate-spin shrink-0" aria-hidden="true" />
       ) : presentation.tone === 'success' ? (
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" aria-hidden="true" />
       ) : null}

@@ -53,12 +53,12 @@ export function WarRoomHealthBadge({
       role="status"
       aria-label={`War room health: ${presentation.label}`}
       className={cn(
-        'inline-flex items-center gap-1.5 font-medium text-xs px-2 py-0.5',
+        'inline-flex items-center gap-1 font-mono font-bold text-[9px] tracking-wider uppercase px-1.5 py-0.5 rounded border leading-none',
         toneClasses,
         className
       )}
     >
-      {showIcon && <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />}
+      {showIcon && <Icon className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />}
       <span>{presentation.label}</span>
     </Badge>
   );

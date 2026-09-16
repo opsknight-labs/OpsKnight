@@ -25,19 +25,22 @@ export function WarRoomProviderHeader({
   className,
 }: WarRoomProviderHeaderProps) {
   const meta = PROVIDER_PRESENTATION[provider];
+  const isSlack = provider === 'SLACK';
 
   return (
     <div className={`flex items-center justify-between gap-2 ${className || ''}`}>
-      <div className="flex items-center gap-2 min-w-0">
-        <div className="shrink-0">
-          {provider === 'SLACK' ? (
-            <SlackLogo className="h-5 w-5" />
-          ) : (
-            <MicrosoftTeamsLogo className="h-5 w-5" />
-          )}
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div
+          className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-2xs border shrink-0 ${
+            isSlack
+              ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900/50 text-amber-600 dark:text-amber-400'
+              : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400'
+          }`}
+        >
+          {isSlack ? <SlackLogo className="h-4 w-4" /> : <MicrosoftTeamsLogo className="h-4 w-4" />}
         </div>
         <div className="min-w-0">
-          <span className="font-semibold text-foreground text-sm truncate block">
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs truncate block">
             {meta.displayName}
           </span>
         </div>
