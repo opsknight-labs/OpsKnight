@@ -23,7 +23,9 @@ import {
   DialogFooter,
 } from '@/components/ui/shadcn/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/shadcn/sheet';
-import { SlackLogo, JiraLogo } from '@/components/common/BrandLogos';
+import { JiraLogo } from '@/components/common/BrandLogos';
+import { WarRoomLauncher } from '@/components/incident/war-room/WarRoomLauncher';
+import type { IncidentCollaborationView } from '@/lib/incident-collaboration/types';
 import ResolveIncidentModal, { type ResolvingIncidentData } from '../ResolveIncidentModal';
 import SnoozeDurationDialog from './SnoozeDurationDialog';
 import IncidentTags from './IncidentTags';
@@ -35,8 +37,6 @@ import {
   syncIncidentJiraIssue,
 } from '@/app/(app)/incidents/jira/actions';
 import { isJiraStatusDone } from '@/lib/jira-validation';
-import { errorFromResponse } from '@/lib/client-error';
-import { toUserFacingError } from '@/lib/user-facing-error';
 import {
   Check,
   X,
@@ -48,11 +48,9 @@ import {
   MoreHorizontal,
   FileText,
   ExternalLink,
-  Video,
   Plus,
   Loader2,
   AlertCircle,
-  Archive,
   Trash2,
   RefreshCw,
 } from 'lucide-react';
@@ -97,13 +95,7 @@ type IncidentCommandBarProps = {
   resolvingIncident: ResolvingIncidentData;
   postmortemHref: string;
   postmortemExists: boolean;
-  warRoom?: {
-    slackChannelId: string | null;
-    slackChannelName: string | null;
-    warRoomUrl: string | null;
-    warRoomArchivedAt: Date | string | null;
-    enabled?: boolean;
-  } | null;
+  collaboration?: IncidentCollaborationView;
   jira?: {
     links: JiraLinkItem[];
     enabled: boolean;
@@ -126,11 +118,6 @@ function formatResumeIn(snoozedUntil: Date | null): string | null {
   return `resumes in ${hours}h ${remMins}m`;
 }
 
-function displayError(error: unknown, fallback: string): string {
-  const friendly = toUserFacingError(error, fallback);
-  return friendly.description ? `${friendly.title} ${friendly.description}` : friendly.title;
-}
-
 export default function IncidentCommandBar({
   incidentId,
   currentStatus,
@@ -145,7 +132,7 @@ export default function IncidentCommandBar({
   resolvingIncident,
   postmortemHref,
   postmortemExists,
-  warRoom,
+  collaboration,
   jira,
   tags = [],
   jiraCapability,
@@ -154,10 +141,7 @@ export default function IncidentCommandBar({
   const [showSnoozeDialog, setShowSnoozeDialog] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [showMobileMore, setShowMobileMore] = useState(false);
-  const [isWarRoomPending, startWarRoomTransition] = useTransition();
-  const [warRoomError, setWarRoomError] = useState<string | null>(null);
   const [showJiraDialog, setShowJiraDialog] = useState(false);
-  const [showSlackDialog, setShowSlackDialog] = useState(false);
   const [jiraLinkKey, setJiraLinkKey] = useState('');
   const [isJiraPending, startJiraTransition] = useTransition();
   const [jiraError, setJiraError] = useState<string | null>(null);
@@ -175,10 +159,7 @@ export default function IncidentCommandBar({
   const showUnsnooze = canManage && isSnoozed;
   const showResolve = canManage && !isResolved;
 
-  const isWarRoomArchived = Boolean(warRoom?.warRoomArchivedAt);
-  const hasActiveWarRoom = Boolean(warRoom?.slackChannelId) && !isWarRoomArchived;
-  const warRoomEnabled = warRoom?.enabled ?? false;
-  const hasVisibleWarRoom = hasActiveWarRoom || (warRoomEnabled && canManage);
+  const hasVisibleWarRoom = Boolean(collaboration?.visible);
 
   const jiraLinks = jira?.links || [];
   const primaryJira = jiraLinks[0];
@@ -191,40 +172,6 @@ export default function IncidentCommandBar({
     jiraCapability.canLink;
   const hasAnyIntegrations =
     hasVisibleWarRoom || Boolean(primaryJira) || jiraCapability.showOperationalJira;
-
-  const handleCreateWarRoom = () => {
-    setWarRoomError(null);
-    startWarRoomTransition(async () => {
-      try {
-        const response = await fetch('/api/slack/war-room', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ incidentId, action: 'create' }),
-        });
-        if (!response.ok) throw await errorFromResponse(response, 'Failed to create war-room');
-        router.refresh();
-      } catch (error: unknown) {
-        setWarRoomError(displayError(error, 'Failed to create war-room'));
-      }
-    });
-  };
-
-  const handleArchiveWarRoom = () => {
-    setWarRoomError(null);
-    startWarRoomTransition(async () => {
-      try {
-        const response = await fetch('/api/slack/war-room', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ incidentId, action: 'archive' }),
-        });
-        if (!response.ok) throw await errorFromResponse(response, 'Failed to archive war-room');
-        router.refresh();
-      } catch (error: unknown) {
-        setWarRoomError(displayError(error, 'Failed to archive war-room'));
-      }
-    });
-  };
 
   const handleCreateJira = () => {
     if (!jiraCapability.canCreate) return;
@@ -408,72 +355,7 @@ export default function IncidentCommandBar({
                 Integrations:
               </span>
 
-              {hasActiveWarRoom ? (
-                <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 text-sm font-medium shadow-xs">
-                  <SlackLogo className="h-4 w-4 shrink-0" />
-                  <a
-                    href={`slack://channel?team=&id=${warRoom?.slackChannelId}`}
-                    className="hover:underline font-semibold"
-                    title="Open in Slack App"
-                  >
-                    #{warRoom?.slackChannelName || 'war-room'}
-                  </a>
-                  <a
-                    href={`https://slack.com/app_redirect?channel=${warRoom?.slackChannelId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open in Web Browser"
-                    className="text-emerald-700 hover:text-emerald-900"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                  {warRoom?.warRoomUrl && (
-                    <a
-                      href={warRoom.warRoomUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Join Video Huddle"
-                      className="ml-1 pl-2 border-l border-emerald-300 text-emerald-800 hover:text-emerald-950 inline-flex items-center gap-1.5 font-semibold"
-                    >
-                      <Video className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>Huddle</span>
-                    </a>
-                  )}
-                  {canManage && isResolved && (
-                    <button
-                      type="button"
-                      onClick={handleArchiveWarRoom}
-                      disabled={isWarRoomPending}
-                      title="Archive War-Room"
-                      className="ml-1 pl-2 border-l border-emerald-300 text-emerald-700 hover:text-rose-600 transition-colors"
-                    >
-                      {isWarRoomPending ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Archive className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                  )}
-                </div>
-              ) : warRoomEnabled ? (
-                canManage && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleCreateWarRoom}
-                    disabled={isWarRoomPending}
-                    className="h-9 gap-2 px-3 text-sm font-medium bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-xs hover:border-slate-300 transition-all"
-                  >
-                    {isWarRoomPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-                    ) : (
-                      <SlackLogo className="h-4 w-4 shrink-0" />
-                    )}
-                    <span>{isWarRoomArchived ? 'Re-open War-Room' : 'Create War-Room'}</span>
-                  </Button>
-                )
-              ) : null}
+              {collaboration?.visible && <WarRoomLauncher collaboration={collaboration} />}
 
               {primaryJira ? (
                 <div className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-blue-50 text-blue-900 border border-blue-200 text-sm font-medium shadow-xs">
@@ -549,12 +431,6 @@ export default function IncidentCommandBar({
                 </Button>
               ) : null}
 
-              {warRoomError && (
-                <span className="text-xs text-rose-600 inline-flex items-center gap-1 font-medium">
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  {warRoomError}
-                </span>
-              )}
               <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 shrink-0 hidden md:block" />
             </>
           )}
@@ -656,14 +532,8 @@ export default function IncidentCommandBar({
                   <span>Resolve incident</span>
                 </Button>
               )}
-              {hasActiveWarRoom && (
-                <a
-                  href={`slack://channel?team=&id=${warRoom?.slackChannelId}`}
-                  className="h-11 w-11 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0"
-                  title="Open Slack"
-                >
-                  <SlackLogo className="h-5 w-5" />
-                </a>
+              {collaboration?.visible && (
+                <WarRoomLauncher collaboration={collaboration} presentation="mobile" />
               )}
               <Button
                 type="button"
@@ -689,37 +559,6 @@ export default function IncidentCommandBar({
             <IncidentTags incidentId={incidentId} tags={tags} canManage={canManage} variant="bar" />
           </div>
           <div className="flex flex-col gap-2 py-2">
-            {canManage &&
-              !hasActiveWarRoom &&
-              (warRoomEnabled ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11 justify-start gap-2.5 text-sm font-medium"
-                  onClick={() => {
-                    setShowMobileMore(false);
-                    handleCreateWarRoom();
-                  }}
-                  disabled={isWarRoomPending}
-                >
-                  <SlackLogo className="h-4 w-4" />
-                  <span>{isWarRoomArchived ? 'Re-open War-Room' : 'Create Slack War-Room'}</span>
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full h-11 justify-start gap-2.5 text-sm font-medium"
-                  onClick={() => {
-                    setShowMobileMore(false);
-                    setShowSlackDialog(true);
-                  }}
-                >
-                  <SlackLogo className="h-4 w-4" />
-                  <span>Connect Slack</span>
-                </Button>
-              ))}
-
             {!primaryJira && jiraCapability.canLink && (
               <Button
                 type="button"
@@ -781,36 +620,6 @@ export default function IncidentCommandBar({
           </div>
         </SheetContent>
       </Sheet>
-
-      <Dialog open={showSlackDialog} onOpenChange={setShowSlackDialog}>
-        <DialogContent className="sm:max-w-[440px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <SlackLogo className="h-5 w-5" />
-              <span>Connect Slack Workspace</span>
-            </DialogTitle>
-            <DialogDescription>
-              Slack ChatOps integration requires desktop configuration to connect your Slack
-              workspace and authorize war room management.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 pt-2">
-            <Button asChild className="w-full h-11">
-              <Link href="/settings/integrations/slack" onClick={() => setShowSlackDialog(false)}>
-                Open Desktop Settings
-              </Link>
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full h-11"
-              onClick={() => setShowSlackDialog(false)}
-            >
-              Dismiss
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {(primaryJira || hasOperationalJira) && (
         <Dialog open={showJiraDialog} onOpenChange={setShowJiraDialog}>

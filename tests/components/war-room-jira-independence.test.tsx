@@ -39,12 +39,35 @@ describe('IncidentCommandBar integration independence', () => {
         resolvingIncident={{} as never}
         postmortemHref="/postmortems/incident-1"
         postmortemExists={false}
-        warRoom={{
-          slackChannelId: null,
-          slackChannelName: null,
-          warRoomUrl: null,
-          warRoomArchivedAt: null,
-          enabled: true,
+        collaboration={{
+          visible: true,
+          incidentId: 'incident-1',
+          incidentStatus: 'OPEN',
+          providers: [
+            {
+              provider: 'SLACK',
+              displayName: 'Slack',
+              subtitle: 'Incident channel in Slack',
+              availability: 'AVAILABLE',
+              visible: true,
+              canCreate: true,
+              unavailableReason: null,
+              currentRoom: null,
+              historyCount: 0,
+              history: [],
+              supportedOptions: { supportsPrivateRooms: true },
+            },
+          ],
+          history: [],
+          summary: {
+            activeRooms: 0,
+            transitioningRooms: 0,
+            attentionRequired: 0,
+            totalHistoricalRooms: 0,
+          },
+          permissions: {
+            canManageWarRooms: true,
+          },
         }}
         jira={{
           links: [],
@@ -57,11 +80,7 @@ describe('IncidentCommandBar integration independence', () => {
       />
     );
 
-    expect(screen.getByText('Create War-Room')).toBeInTheDocument();
+    expect(screen.getAllByText('Create war room').length).toBeGreaterThan(0);
     expect(screen.queryByText('Link Jira Issue')).not.toBeInTheDocument();
-
-    const moreButtons = screen.getAllByLabelText('More incident actions');
-    fireEvent.click(moreButtons[moreButtons.length - 1]);
-    expect(screen.getByText('Create Slack War-Room')).toBeInTheDocument();
   });
 });
