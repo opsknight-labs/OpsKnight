@@ -804,29 +804,64 @@ async function settleMeetingClosed(
  */
 export async function closeIncidentMeeting(incidentId: string): Promise<void> {
   const current = await getIncidentMeeting(incidentId);
-  if (!current || current.state === 'CLOSED') return;
+  if (!current || current.state === 'CLOSED' || current.state === 'CLOSING') return;
 
-  // If provider adapter supports external termination, enqueue durable background job
+  // If provider adapter supports external termination, atomically transition to CLOSING and enqueue durable background job
   if (
     current.provider &&
     current.provider !== 'NONE' &&
     current.actions.supportsExternalClose &&
     current.providerMeetingId
   ) {
-    // Transition to CLOSING so UI and API reflect that external cleanup is in progress
-    if (prisma?.incidentMeeting?.updateMany) {
+    let claimedByThisTx = false;
+
+    if (prisma?.$transaction && prisma?.incidentMeeting && prisma?.backgroundJob) {
       try {
-        await prisma.incidentMeeting.updateMany({
-          where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'REQUESTED'] } },
-          data: {
-            state: 'CLOSING',
-          },
+        await prisma.$transaction(async tx => {
+          const updateResult = await tx.incidentMeeting.updateMany({
+            where: {
+              incidentId,
+              state: { in: ['READY', 'PROVISIONING', 'REQUESTED'] },
+            },
+            data: {
+              state: 'CLOSING',
+            },
+          });
+
+          if (updateResult.count === 0) {
+            // Another concurrent request won the claim or meeting is no longer closeable
+            return;
+          }
+
+          claimedByThisTx = true;
+
+          await tx.backgroundJob.create({
+            data: {
+              type: 'MEETING_CLOSE',
+              status: 'PENDING',
+              scheduledAt: new Date(),
+              maxAttempts: 5,
+              payload: {
+                incidentId,
+                provider: current.provider,
+                providerMeetingId: current.providerMeetingId,
+                organizerEmail: current.organizerEmail || null,
+              },
+            },
+          });
         });
-      } catch (e) {
+      } catch (err) {
         if (process.env.NODE_ENV !== 'test') {
-          throw e;
+          throw err;
         }
       }
+    } else {
+      // Mock / fallback environment without transaction support
+      claimedByThisTx = true;
+    }
+
+    if (!claimedByThisTx) {
+      return;
     }
 
     const closingMeeting: IncidentMeetingView = {
@@ -842,27 +877,8 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
     };
     memoryMeetingCache.set(incidentId, closingMeeting);
 
-    if (prisma?.backgroundJob?.create) {
-      await prisma.backgroundJob
-        .create({
-          data: {
-            type: 'MEETING_CLOSE',
-            status: 'PENDING',
-            scheduledAt: new Date(),
-            maxAttempts: 5,
-            payload: {
-              incidentId,
-              provider: current.provider,
-              providerMeetingId: current.providerMeetingId,
-              organizerEmail: current.organizerEmail || null,
-            },
-          },
-        })
-        .catch(() => null);
-    }
-
-    // In unit test environment without a running worker daemon, execute synchronously
-    if (process.env.NODE_ENV === 'test') {
+    // In unit test environment without a real DB and without a running worker daemon, execute synchronously
+    if (process.env.NODE_ENV === 'test' && process.env.VITEST_USE_REAL_DB !== '1') {
       await executeMeetingCloseJob({
         incidentId,
         provider: current.provider,
@@ -916,15 +932,28 @@ export async function executeMeetingCloseJob(params: {
 }
 
 /**
+ * Settles an incident meeting to CLOSED when background close retries are exhausted,
+ * capturing explicit provider cleanup debt on the record.
+ */
+export async function settleMeetingCloseFailure(incidentId: string, error: string): Promise<void> {
+  await settleMeetingClosed(incidentId, {
+    lastErrorCode: 'PROVIDER_CLOSE_FAILED',
+    lastErrorMessage: `External meeting cleanup failed: ${error.slice(0, 300)}`,
+  });
+}
+
+/**
  * Background orphan recovery:
- * Checks for orphaned PROVISIONING meetings older than 15 minutes where no active
- * BackgroundJob of type MEETING_PROVISION exists with that token.
+ * Checks for orphaned PROVISIONING or CLOSING meetings older than 15 minutes where no active
+ * BackgroundJob exists with that token or incidentId.
  * Owned by background reconciliation, NOT by read paths.
  */
 export async function reconcileStalledMeetingProvisions(): Promise<number> {
   if (!prisma?.incidentMeeting?.findMany || !prisma?.backgroundJob?.findMany) return 0;
 
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+  let recoveredCount = 0;
+
   const stalledMeetings = await prisma.incidentMeeting.findMany({
     where: {
       state: 'PROVISIONING',
@@ -932,7 +961,6 @@ export async function reconcileStalledMeetingProvisions(): Promise<number> {
     },
   });
 
-  let recoveredCount = 0;
   for (const m of stalledMeetings) {
     if (!m.provisioningToken) continue;
 
@@ -960,6 +988,34 @@ export async function reconcileStalledMeetingProvisions(): Promise<number> {
           lastErrorCode: 'ORPHANED_PROVISIONING',
           lastErrorMessage: 'Provisioning stalled with no active background worker.',
         },
+      });
+      recoveredCount++;
+    }
+  }
+
+  const stalledClosing = await prisma.incidentMeeting.findMany({
+    where: {
+      state: 'CLOSING',
+      updatedAt: { lt: fifteenMinutesAgo },
+    },
+  });
+
+  for (const m of stalledClosing) {
+    const activeCloseJobs = await prisma.backgroundJob.findMany({
+      where: {
+        type: 'MEETING_CLOSE',
+        status: { in: ['PENDING', 'PROCESSING'] },
+      },
+    });
+
+    const hasActiveCloseJob = activeCloseJobs.some(
+      j => (j.payload as { incidentId?: string })?.incidentId === m.incidentId
+    );
+
+    if (!hasActiveCloseJob) {
+      await settleMeetingClosed(m.incidentId, {
+        lastErrorCode: 'PROVIDER_CLOSE_ORPHANED',
+        lastErrorMessage: 'Meeting close stalled with no active background worker.',
       });
       recoveredCount++;
     }

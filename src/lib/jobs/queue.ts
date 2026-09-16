@@ -449,6 +449,22 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
       await settleWarRoomProjectionFailure(warRoomIdValue, versionValue);
     }
   }
+  if (!shouldRetry && job.type === 'MEETING_CLOSE') {
+    const incidentId = payloadValue(job.payload, 'incidentId');
+    if (typeof incidentId === 'string') {
+      try {
+        const { settleMeetingCloseFailure } =
+          await import('../incident-collaboration/meeting-store');
+        await settleMeetingCloseFailure(incidentId, error);
+      } catch (settleErr) {
+        logger.warn('jobs.meeting_close_failure_settlement_failed', {
+          jobId: job.id,
+          incidentId,
+          error: settleErr instanceof Error ? settleErr.message : String(settleErr),
+        });
+      }
+    }
+  }
 }
 
 export async function markJobFailed(jobId: string, error: string): Promise<void> {

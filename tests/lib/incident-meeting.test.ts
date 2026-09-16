@@ -14,6 +14,7 @@ import {
   getIncidentMeeting,
   closeIncidentMeeting,
   executeMeetingCloseJob,
+  settleMeetingCloseFailure,
 } from '@/lib/incident-collaboration/meeting-store';
 
 describe('Meeting Provider Registry and Adapters', () => {
@@ -332,5 +333,46 @@ describe('Incident Meeting Store & Provisioning Lifecycle', () => {
 
     fetchSpy.mockRestore();
     vi.restoreAllMocks();
+  });
+
+  it('settleMeetingCloseFailure transitions meeting to CLOSED with explicit cleanup debt', async () => {
+    const incidentId = 'inc-exhaust-retry-test';
+    await provisionIncidentMeeting({
+      incidentId,
+      incidentTitle: 'Retry Exhaustion Test',
+      provider: 'JITSI',
+      generation: 1,
+    });
+
+    await settleMeetingCloseFailure(
+      incidentId,
+      'Microsoft Graph service unavailable after 5 retries'
+    );
+
+    const meeting = await getIncidentMeeting(incidentId);
+    expect(meeting?.state).toBe('CLOSED');
+    expect(meeting?.lastErrorCode).toBe('PROVIDER_CLOSE_FAILED');
+    expect(meeting?.lastErrorMessage).toContain('External meeting cleanup failed');
+  });
+
+  it('closeIncidentMeeting exits immediately when meeting is already CLOSED or CLOSING', async () => {
+    const incidentId = 'inc-duplicate-close-test';
+    await provisionIncidentMeeting({
+      incidentId,
+      incidentTitle: 'Duplicate Close Test',
+      provider: 'JITSI',
+      generation: 1,
+    });
+
+    // First close
+    await closeIncidentMeeting(incidentId);
+    const closed1 = await getIncidentMeeting(incidentId);
+    expect(closed1?.state).toBe('CLOSED');
+
+    // Second close should cleanly no-op
+    await expect(closeIncidentMeeting(incidentId)).resolves.toBeUndefined();
+    const closed2 = await getIncidentMeeting(incidentId);
+    expect(closed2?.state).toBe('CLOSED');
+    expect(closed2?.closedAt).toBe(closed1?.closedAt);
   });
 });
