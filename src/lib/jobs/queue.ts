@@ -455,7 +455,12 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
       try {
         const { settleMeetingCloseFailure } =
           await import('../incident-collaboration/meeting-store');
-        await settleMeetingCloseFailure(incidentId, error);
+        const rawClose = job.payload as Record<string, unknown>;
+        await settleMeetingCloseFailure(incidentId, error, {
+          meetingId: typeof rawClose.meetingId === 'string' ? rawClose.meetingId : undefined,
+          generation: typeof rawClose.generation === 'number' ? rawClose.generation : undefined,
+          closeToken: typeof rawClose.closeToken === 'string' ? rawClose.closeToken : undefined,
+        });
       } catch (settleErr) {
         logger.warn('jobs.meeting_close_failure_settlement_failed', {
           jobId: job.id,
@@ -626,6 +631,10 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         const rawClose = job.payload as Record<string, unknown>;
         await executeMeetingCloseJob({
           incidentId: requiredPayloadString(job.payload, 'incidentId'),
+          meetingId: typeof rawClose.meetingId === 'string' ? rawClose.meetingId : undefined,
+          generation: typeof rawClose.generation === 'number' ? rawClose.generation : undefined,
+          closeToken: typeof rawClose.closeToken === 'string' ? rawClose.closeToken : undefined,
+          cleanupRepair: Boolean(rawClose.cleanupRepair),
           provider: (rawClose.provider as never) || 'MICROSOFT_TEAMS',
           providerMeetingId:
             typeof rawClose.providerMeetingId === 'string' ? rawClose.providerMeetingId : null,

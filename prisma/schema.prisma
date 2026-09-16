@@ -904,9 +904,11 @@ model IncidentMeeting {
   provisioningToken     String?
   provisioningStartedAt DateTime?
   closeStartedAt        DateTime?
+  closeToken            String?
   readyAt               DateTime?
   closedAt              DateTime?
   cleanupAttemptedAt    DateTime?
+  cleanupRetryCount     Int                     @default(0)
   lastReconciledAt      DateTime?
   externalCleanupPending Boolean                @default(false)
   lastErrorCode         String?

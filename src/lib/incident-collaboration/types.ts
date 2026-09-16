@@ -142,7 +142,9 @@ export type IncidentMeetingView = {
   readyAt?: string | null;
   closedAt?: string | null;
   closeStartedAt?: string | null;
+  closeToken?: string | null;
   cleanupAttemptedAt?: string | null;
+  cleanupRetryCount?: number;
   lastReconciledAt?: string | null;
   externalCleanupPending?: boolean;
   lastErrorCode?: string | null;
