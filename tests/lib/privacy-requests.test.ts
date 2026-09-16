@@ -43,6 +43,7 @@ import {
   assignPrivacyRequest,
   createPrivacyRequest,
   isAutomatedPrivacyRequestType,
+  listPrivacyRequests,
   transitionPrivacyRequest,
 } from '@/lib/privacy/requests';
 
@@ -72,7 +73,15 @@ function baseRequest(overrides: Partial<Record<string, unknown>> = {}) {
 describe('privacy request lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.userFindUnique.mockResolvedValue({ email: 'actor@example.com', name: 'Actor' });
+    // Default: satisfies subject-existence checks, the audit actor snapshot
+    // lookup, and assignee-eligibility checks unless a test overrides it.
+    mocks.userFindUnique.mockResolvedValue({
+      id: 'cuser00000001',
+      email: 'actor@example.com',
+      name: 'Actor',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+    });
   });
 
   describe('isAutomatedPrivacyRequestType', () => {
@@ -120,6 +129,18 @@ describe('privacy request lifecycle', () => {
       ).rejects.toThrow();
       expect(mocks.privacyRequestCreate).not.toHaveBeenCalled();
     });
+
+    it('rejects a USER subject that does not exist', async () => {
+      mocks.userFindUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        createPrivacyRequest(
+          { subjectType: 'USER', subjectId: 'cuserMissing01', requestType: 'ACCESS' },
+          ACTOR
+        )
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+      expect(mocks.privacyRequestCreate).not.toHaveBeenCalled();
+    });
   });
 
   describe('transitionPrivacyRequest', () => {
@@ -151,6 +172,49 @@ describe('privacy request lifecycle', () => {
           }),
         })
       );
+    });
+
+    it('stamps verifiedAt only on a successful IDENTITY_VERIFICATION -> IN_REVIEW transition', async () => {
+      const current = baseRequest({ status: 'IDENTITY_VERIFICATION', verifiedAt: null });
+      mocks.privacyRequestFindUnique.mockResolvedValue(current);
+      mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.privacyRequestFindUniqueOrThrow.mockResolvedValue(
+        baseRequest({ status: 'IN_REVIEW', verifiedAt: new Date() })
+      );
+
+      await transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'IN_REVIEW' }, ACTOR);
+
+      expect(mocks.privacyRequestUpdateMany).toHaveBeenCalledWith({
+        where: { id: 'creq00000001', status: 'IDENTITY_VERIFICATION' },
+        data: expect.objectContaining({ verifiedAt: expect.any(Date) }),
+      });
+    });
+
+    it('never stamps verifiedAt when identity verification is blocked or rejected', async () => {
+      mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.privacyRequestFindUniqueOrThrow.mockResolvedValue(baseRequest({ status: 'BLOCKED' }));
+
+      mocks.privacyRequestFindUnique.mockResolvedValue(
+        baseRequest({ status: 'IDENTITY_VERIFICATION', verifiedAt: null })
+      );
+      await transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'BLOCKED' }, ACTOR);
+      let updateCall = mocks.privacyRequestUpdateMany.mock.calls.at(-1)![0];
+      expect(updateCall.data).not.toHaveProperty('verifiedAt');
+
+      mocks.privacyRequestFindUnique.mockResolvedValue(
+        baseRequest({ status: 'IDENTITY_VERIFICATION', verifiedAt: null })
+      );
+      mocks.privacyRequestFindUniqueOrThrow.mockResolvedValue(baseRequest({ status: 'REJECTED' }));
+      await transitionPrivacyRequest(
+        {
+          requestId: 'creq00000001',
+          toStatus: 'REJECTED',
+          rejectionReason: 'No response from subject',
+        },
+        ACTOR
+      );
+      updateCall = mocks.privacyRequestUpdateMany.mock.calls.at(-1)![0];
+      expect(updateCall.data).not.toHaveProperty('verifiedAt');
     });
 
     it('rejects an invalid transition (e.g. RECEIVED -> COMPLETED)', async () => {
@@ -227,6 +291,11 @@ describe('privacy request lifecycle', () => {
           data: expect.objectContaining({ action: 'privacy.request.rejected' }),
         })
       );
+      // The free-text reason must never be copied into the longer-lived audit
+      // trail — only that a reason was supplied.
+      const auditPayload = JSON.stringify(mocks.auditCreate.mock.calls.at(-1));
+      expect(auditPayload).toContain('reasonProvided');
+      expect(auditPayload).not.toContain('Cannot verify identity');
     });
 
     it('emits privacy.request.completed and stamps completedAt when finishing processing', async () => {
@@ -310,6 +379,59 @@ describe('privacy request lifecycle', () => {
       await expect(
         assignPrivacyRequest({ requestId: 'creqmissing01', assignedToId: 'cadmin0000002' }, ACTOR)
       ).rejects.toMatchObject({ code: 'PRIVACY_REQUEST_NOT_FOUND' });
+    });
+
+    it('refuses to assign to a user without privacy.requests.manage capability', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ assignedToId: null }));
+      mocks.userFindUnique.mockResolvedValueOnce({
+        id: 'cauditor000001',
+        role: 'AUDITOR',
+        status: 'ACTIVE',
+      });
+
+      await expect(
+        assignPrivacyRequest({ requestId: 'creq00000001', assignedToId: 'cauditor000001' }, ACTOR)
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+      expect(mocks.privacyRequestUpdate).not.toHaveBeenCalled();
+    });
+
+    it('refuses to assign to a deactivated eligible user', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ assignedToId: null }));
+      mocks.userFindUnique.mockResolvedValueOnce({
+        id: 'cadmin0000003',
+        role: 'ADMIN',
+        status: 'DISABLED',
+      });
+
+      await expect(
+        assignPrivacyRequest({ requestId: 'creq00000001', assignedToId: 'cadmin0000003' }, ACTOR)
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+      expect(mocks.privacyRequestUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listPrivacyRequests', () => {
+    it('requests one extra row to detect more pages and returns a nextCursor', async () => {
+      const rows = Array.from({ length: 3 }, (_, i) => baseRequest({ id: `creqpage0000${i}` }));
+      mocks.privacyRequestFindMany.mockResolvedValue(rows);
+
+      const { requests, nextCursor } = await listPrivacyRequests({ limit: 2 });
+
+      expect(mocks.privacyRequestFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 3 })
+      );
+      expect(requests).toHaveLength(2);
+      expect(nextCursor).toBe(rows[1].id);
+    });
+
+    it('returns a null cursor when there is no further page', async () => {
+      const rows = [baseRequest()];
+      mocks.privacyRequestFindMany.mockResolvedValue(rows);
+
+      const { requests, nextCursor } = await listPrivacyRequests({ limit: 50 });
+
+      expect(requests).toHaveLength(1);
+      expect(nextCursor).toBeNull();
     });
   });
 });

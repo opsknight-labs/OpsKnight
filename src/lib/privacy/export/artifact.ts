@@ -8,6 +8,9 @@ import { isAutomatedPrivacyRequestType } from '@/lib/privacy/requests';
 import { generateSubjectExport } from './exporter';
 
 export const EXPORT_ARTIFACT_TTL_HOURS = 72;
+// Stored inline (encrypted, base64) in PostgreSQL rather than object storage —
+// keep exports well clear of Postgres's practical row/column size comfort zone.
+export const MAX_EXPORT_ARTIFACT_BYTES = 200 * 1024 * 1024; // 200 MB
 
 export interface ExportActor {
   id: string;
@@ -28,6 +31,15 @@ export async function createExportArtifact(requestId: string, actor: ExportActor
       userMessage: `${request.requestType} requests are not yet automated and require manual fulfilment.`,
     });
   }
+  // An export must never be generated ahead of, or instead of, verifying who is
+  // actually asking. PROCESSING is the only status reached after review has
+  // explicitly approved fulfilment.
+  if (!request.verifiedAt || request.status !== 'PROCESSING') {
+    throw new AppError({
+      code: 'PRIVACY_EXPORT_PREREQUISITES_NOT_MET',
+      details: { verified: Boolean(request.verifiedAt), status: request.status },
+    });
+  }
 
   await emitAuditEvent({
     action: 'privacy.export.started',
@@ -43,6 +55,13 @@ export async function createExportArtifact(requestId: string, actor: ExportActor
       subjectType: request.subjectType,
       subjectId: request.subjectId,
     });
+    if (generated.sizeBytes > MAX_EXPORT_ARTIFACT_BYTES) {
+      throw new AppError({
+        code: 'PAYLOAD_TOO_LARGE',
+        userMessage: 'The generated export exceeds the maximum supported size.',
+        details: { sizeBytes: generated.sizeBytes, maxBytes: MAX_EXPORT_ARTIFACT_BYTES },
+      });
+    }
   } catch (error) {
     const failureReason = error instanceof Error ? error.message : 'Unknown export failure';
     const failed = await prisma.privacyExportArtifact.create({

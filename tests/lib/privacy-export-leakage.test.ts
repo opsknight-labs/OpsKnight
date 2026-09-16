@@ -19,10 +19,13 @@ const fixtures = vi.hoisted(() => {
     const projected: Row = {};
     for (const [key, value] of Object.entries(select)) {
       if (value === true) {
+        // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own select map, not external input
         projected[key] = row[key];
       } else if (value && typeof value === 'object' && 'select' in value) {
+        // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own select map, not external input
         const nested = row[key];
         const nestedSelect = (value as { select: Record<string, unknown> }).select;
+        // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own select map, not external input
         projected[key] = Array.isArray(nested)
           ? nested.map(item => applySelect(item as Row, nestedSelect))
           : nested
@@ -38,6 +41,7 @@ const fixtures = vi.hoisted(() => {
       if (key === 'OR' && Array.isArray(expected)) {
         return expected.some(clause => matchesWhere(row, clause as Record<string, unknown>));
       }
+      // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own where clause, not external input
       return row[key] === expected;
     });
   }
@@ -47,14 +51,33 @@ const fixtures = vi.hoisted(() => {
       async ({
         where,
         select,
+        cursor,
+        skip,
+        take,
       }: {
         where?: Record<string, unknown>;
         select?: Record<string, unknown>;
+        cursor?: { id: string };
+        skip?: number;
+        take?: number;
       }) => {
         const matched = where ? rows.filter(row => matchesWhere(row, where)) : rows;
-        return matched.map(row => applySelect(row, select));
+        const sorted = [...matched].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        let page = sorted;
+        if (cursor) {
+          const cursorIndex = sorted.findIndex(row => row.id === cursor.id);
+          page = cursorIndex === -1 ? [] : sorted.slice(cursorIndex + (skip ?? 0));
+        }
+        if (typeof take === 'number') page = page.slice(0, take);
+        return page.map(row => applySelect(row, select));
       }
     );
+  }
+
+  function makeCount(rows: Row[]) {
+    return vi.fn(async ({ where }: { where?: Record<string, unknown> }) => {
+      return where ? rows.filter(row => matchesWhere(row, where)).length : rows.length;
+    });
   }
 
   function makeFindUnique(rows: Row[]) {
@@ -265,8 +288,8 @@ const fixtures = vi.hoisted(() => {
     incidentNote: { findMany: makeFindMany(INCIDENT_NOTES) },
     onCallShift: { findMany: makeFindMany(ON_CALL_SHIFTS) },
     onCallOverride: { findMany: makeFindMany(OVERRIDES) },
-    notification: { findMany: makeFindMany(NOTIFICATIONS) },
-    auditLog: { findMany: makeFindMany(AUDIT_EVENTS) },
+    notification: { findMany: makeFindMany(NOTIFICATIONS), count: makeCount(NOTIFICATIONS) },
+    auditLog: { findMany: makeFindMany(AUDIT_EVENTS), count: makeCount(AUDIT_EVENTS) },
   };
 
   return { USER_A, USER_B, mockPrisma };
@@ -285,6 +308,7 @@ async function unzipToText(
   const zip = await JSZip.loadAsync(buffer);
   const files: Record<string, string> = {};
   for (const [name, entry] of Object.entries(zip.files)) {
+    // eslint-disable-next-line security/detect-object-injection -- name comes from JSZip's own file listing, not external input
     files[name] = await entry.async('text');
   }
   return { files, combined: Object.values(files).join('\n') };
@@ -393,5 +417,35 @@ describe('generateSubjectExport leakage protection', () => {
         subjectId: 'sub-1',
       })
     ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+  });
+
+  it('marks the manifest PARTIAL and reports true totals when a domain is truncated', async () => {
+    // Simulate a subject with far more notifications/audit events than were
+    // actually exported: the database says there are more than we fetched.
+    fixtures.mockPrisma.notification.count.mockResolvedValueOnce(50_000);
+    fixtures.mockPrisma.auditLog.count.mockResolvedValueOnce(50_000);
+
+    const generated = await generateSubjectExport({
+      requestId: 'creq00000005',
+      subjectType: 'USER',
+      subjectId: USER_A.id,
+    });
+
+    const { files } = await unzipToText(generated.buffer);
+    const manifest = JSON.parse(files['manifest.json']);
+    const notifications = JSON.parse(files['notifications.json']);
+    const auditEvents = JSON.parse(files['audit-events.json']);
+
+    expect(manifest.completeness).toBe('PARTIAL');
+    expect(manifest.domainSummary).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ domain: 'notifications', totalCount: 50_000, truncated: true }),
+        expect.objectContaining({ domain: 'audit-events', totalCount: 50_000, truncated: true }),
+      ])
+    );
+    // Every truncated file must be honest about it inline, not just in the manifest.
+    expect(notifications.truncated).toBe(true);
+    expect(notifications.totalCount).toBe(50_000);
+    expect(auditEvents.truncated).toBe(true);
   });
 });

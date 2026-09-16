@@ -49,13 +49,17 @@ describe('privacy requests API authorization', () => {
 
   it('GET returns the request list when the caller has privacy.read', async () => {
     mocks.assertCapability.mockResolvedValue({ id: 'cactor0000001' });
-    mocks.listPrivacyRequests.mockResolvedValue([{ id: 'creq00000001', status: 'RECEIVED' }]);
+    mocks.listPrivacyRequests.mockResolvedValue({
+      requests: [{ id: 'creq00000001', status: 'RECEIVED' }],
+      nextCursor: null,
+    });
 
     const response = await GET(makeRequest('https://example.com/api/compliance/privacy-requests'));
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body.data.requests).toHaveLength(1);
+    expect(body.data.nextCursor).toBeNull();
   });
 
   it('POST returns 403 when the caller lacks privacy.requests.manage (read-only auditor)', async () => {

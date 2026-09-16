@@ -532,6 +532,15 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  PRIVACY_EXPORT_PREREQUISITES_NOT_MET: {
+    status: 409,
+    category: 'conflict',
+    userMessage:
+      'This request must complete identity verification and be in Processing status before an export can be generated.',
+    action: 'Verify identity and move the request to Processing, then try again.',
+    retryable: false,
+    exposure: 'public',
+  },
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type AppErrorCode = keyof typeof ERROR_REGISTRY;

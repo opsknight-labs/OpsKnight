@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { ShieldCheck } from 'lucide-react';
 import prisma from '@/lib/prisma';
-import { CAPABILITIES } from '@/lib/authorization';
+import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { getUserPermissions } from '@/lib/rbac';
 import { listPrivacyRequests } from '@/lib/privacy/requests';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
@@ -13,15 +13,26 @@ export default async function PrivacyRequestsPage() {
     redirect('/settings');
   }
   const canManage = permissions.capabilities.includes(CAPABILITIES.PRIVACY_REQUESTS_MANAGE);
+  const canExport = permissions.capabilities.includes(CAPABILITIES.PRIVACY_EXPORT);
 
-  const [requests, assignableUsers] = await Promise.all([
+  const [{ requests, nextCursor }, operatorCandidates, subjectUsers] = await Promise.all([
     listPrivacyRequests(),
     prisma.user.findMany({
       where: { role: { in: ['ADMIN', 'AUDITOR'] }, status: 'ACTIVE' },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, role: true },
       orderBy: { name: 'asc' },
     }),
+    prisma.user.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: 'asc' },
+      take: 500,
+    }),
   ]);
+  // Assignment is restricted server-side too; only show eligible operators here.
+  const assignableUsers = operatorCandidates.filter(user =>
+    hasCapability(user.role as AppRole, CAPABILITIES.PRIVACY_REQUESTS_MANAGE)
+  );
 
   return (
     <div className="space-y-6 pb-12">
@@ -52,8 +63,11 @@ export default async function PrivacyRequestsPage() {
 
       <PrivacyRequestsBoard
         initialRequests={requests}
+        initialNextCursor={nextCursor}
         assignableUsers={assignableUsers}
+        subjectUsers={subjectUsers}
         canManage={canManage}
+        canExport={canExport}
       />
     </div>
   );

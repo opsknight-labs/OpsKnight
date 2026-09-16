@@ -6,7 +6,7 @@ import { AppError } from '@/lib/errors/app-error';
 import * as domains from './domains';
 import * as serializers from './serializers';
 import { assertNoSecretLikeKeys } from './redaction';
-import { buildManifest } from './manifest';
+import { buildManifest, type ExportDomainSummary } from './manifest';
 
 export interface GenerateSubjectExportInput {
   requestId: string;
@@ -88,11 +88,57 @@ export async function generateSubjectExport(
     assertNoSecretLikeKeys(content, name);
   }
 
+  const domainSummary: ExportDomainSummary[] = [
+    {
+      domain: 'identities',
+      exportedCount: identities.length,
+      totalCount: identities.length,
+      truncated: false,
+    },
+    {
+      domain: 'memberships',
+      exportedCount: memberships.length,
+      totalCount: memberships.length,
+      truncated: false,
+    },
+    {
+      domain: 'incidents',
+      exportedCount: incidents.length,
+      totalCount: incidents.length,
+      truncated: false,
+    },
+    {
+      domain: 'incident-notes',
+      exportedCount: incidentNotes.length,
+      totalCount: incidentNotes.length,
+      truncated: false,
+    },
+    {
+      domain: 'schedules',
+      exportedCount: schedules.shifts.length + schedules.overrides.length,
+      totalCount: schedules.shifts.length + schedules.overrides.length,
+      truncated: false,
+    },
+    {
+      domain: 'notifications',
+      exportedCount: notifications.items.length,
+      totalCount: notifications.totalCount,
+      truncated: notifications.truncated,
+    },
+    {
+      domain: 'audit-events',
+      exportedCount: auditEvents.items.length,
+      totalCount: auditEvents.totalCount,
+      truncated: auditEvents.truncated,
+    },
+  ];
+
   const manifest = buildManifest({
     requestId: input.requestId,
     subjectType: input.subjectType,
     subjectId: input.subjectId,
     generatedAt: new Date(),
+    domainSummary,
   });
 
   const zip = new JSZip();

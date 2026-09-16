@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus } from 'lucide-react';
+import { FileArchive, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
+import ResponderCombobox from '@/components/ResponderCombobox';
+import PrivacyRequestDetailDialog from './PrivacyRequestDetailDialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
@@ -61,6 +63,7 @@ export type PrivacyRequestRow = {
   requestType: PrivacyRequestType;
   status: PrivacyRequestStatus;
   requestedAt: string | Date;
+  verifiedAt: string | Date | null;
   notes: string | null;
   rejectionReason: string | null;
   requestedBy: RequestUser | null;
@@ -99,16 +102,25 @@ async function readJson(response: Response) {
 
 export default function PrivacyRequestsBoard({
   initialRequests,
+  initialNextCursor,
   assignableUsers,
+  subjectUsers,
   canManage,
+  canExport,
 }: {
   initialRequests: PrivacyRequestRow[];
+  initialNextCursor: string | null;
   assignableUsers: RequestUser[];
+  subjectUsers: RequestUser[];
   canManage: boolean;
+  canExport: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [requests, setRequests] = useState(initialRequests);
+  const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [createOpen, setCreateOpen] = useState(false);
   const [subjectType, setSubjectType] = useState<'USER' | 'STATUS_SUBSCRIBER'>('USER');
   const [subjectId, setSubjectId] = useState('');
@@ -116,12 +128,37 @@ export default function PrivacyRequestsBoard({
   const [notes, setNotes] = useState('');
   const [rejectDrafts, setRejectDrafts] = useState<Record<string, string>>({});
 
-  const requests = initialRequests;
+  useEffect(() => {
+    setRequests(initialRequests);
+    setNextCursor(initialNextCursor);
+  }, [initialRequests, initialNextCursor]);
 
   const openCount = useMemo(
     () => requests.filter(r => r.status !== 'COMPLETED' && r.status !== 'REJECTED').length,
     [requests]
   );
+
+  function loadMore() {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/compliance/privacy-requests?cursor=${encodeURIComponent(nextCursor)}`,
+          { cache: 'no-store' }
+        );
+        const body = await readJson(response);
+        if (!response.ok) {
+          showToast(body?.error ?? 'Failed to load more requests.', 'error');
+          return;
+        }
+        setRequests(prev => [...prev, ...(body.data.requests as PrivacyRequestRow[])]);
+        setNextCursor(body.data.nextCursor ?? null);
+      } finally {
+        setIsLoadingMore(false);
+      }
+    })();
+  }
 
   function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -217,7 +254,10 @@ export default function PrivacyRequestsBoard({
                     <Label>Subject type</Label>
                     <Select
                       value={subjectType}
-                      onValueChange={v => setSubjectType(v as typeof subjectType)}
+                      onValueChange={v => {
+                        setSubjectType(v as typeof subjectType);
+                        setSubjectId('');
+                      }}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -230,14 +270,27 @@ export default function PrivacyRequestsBoard({
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="subjectId">Subject ID</Label>
-                    <Input
-                      id="subjectId"
-                      value={subjectId}
-                      onChange={e => setSubjectId(e.target.value)}
-                      placeholder="cuid of the user or subscriber"
-                      required
-                    />
+                    <Label htmlFor="subjectId">Subject</Label>
+                    {subjectType === 'USER' ? (
+                      <ResponderCombobox
+                        users={subjectUsers}
+                        selectedUserId={subjectId || undefined}
+                        onSelect={setSubjectId}
+                        label="Select subject"
+                        placeholder="Search by name or email…"
+                        emptyMessage="No matching users."
+                        className="w-full justify-between"
+                        ariaLabel="Select privacy request subject"
+                      />
+                    ) : (
+                      <Input
+                        id="subjectId"
+                        value={subjectId}
+                        onChange={e => setSubjectId(e.target.value)}
+                        placeholder="cuid of the status page subscriber"
+                        required
+                      />
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -306,6 +359,7 @@ export default function PrivacyRequestsBoard({
                 <TableHead>Status</TableHead>
                 <TableHead>Assigned to</TableHead>
                 <TableHead>Requested</TableHead>
+                <TableHead>Export</TableHead>
                 {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
@@ -313,7 +367,7 @@ export default function PrivacyRequestsBoard({
               {requests.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={canManage ? 6 : 5}
+                    colSpan={canManage ? 7 : 6}
                     className="py-8 text-center text-muted-foreground"
                   >
                     No privacy requests yet.
@@ -369,6 +423,21 @@ export default function PrivacyRequestsBoard({
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(req.requestedAt).toLocaleString()}
                     </TableCell>
+                    <TableCell>
+                      <PrivacyRequestDetailDialog
+                        requestId={req.id}
+                        canManage={canManage}
+                        canExport={canExport}
+                        automated={AUTOMATED_TYPES.includes(req.requestType)}
+                        exportEligible={req.status === 'PROCESSING' && Boolean(req.verifiedAt)}
+                        trigger={
+                          <Button size="sm" variant="outline">
+                            <FileArchive className="mr-1.5 h-4 w-4" />
+                            Manage
+                          </Button>
+                        }
+                      />
+                    </TableCell>
                     {canManage && (
                       <TableCell className="text-right">
                         {isTerminal ? (
@@ -422,6 +491,15 @@ export default function PrivacyRequestsBoard({
             </TableBody>
           </Table>
         </div>
+
+        {nextCursor && (
+          <div className="flex justify-center">
+            <Button size="sm" variant="outline" onClick={loadMore} disabled={isLoadingMore}>
+              {isLoadingMore && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Load more
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -1,9 +1,8 @@
 -- DSAR (Data Subject Access Request) workflow foundation.
 -- Adds PrivacyRequest + PrivacyExportArtifact. All status/timestamp writes must
 -- go through transitionPrivacyRequest() in application code, not direct SQL.
-
-ALTER TYPE "AuditEntityType" ADD VALUE 'PRIVACY_REQUEST';
-ALTER TYPE "AuditEntityType" ADD VALUE 'PRIVACY_EXPORT_ARTIFACT';
+-- The AuditEntityType enum values these tables rely on were added in the
+-- preceding migration (20260916000000_privacy_audit_entity_types).
 
 CREATE TYPE "PrivacyRequestSubjectType" AS ENUM ('USER', 'STATUS_SUBSCRIBER');
 CREATE TYPE "PrivacyRequestType" AS ENUM ('ACCESS', 'RECTIFICATION', 'ERASURE', 'RESTRICTION', 'OBJECTION', 'PORTABILITY');

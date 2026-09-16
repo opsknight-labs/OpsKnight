@@ -9,6 +9,7 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
 import { AppError } from '@/lib/errors/app-error';
+import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 
 /**
  * Request types that Phase 2 can actually fulfil end to end. Every other type
@@ -86,6 +87,22 @@ export interface PrivacyRequestActor {
 export async function createPrivacyRequest(input: unknown, actor: PrivacyRequestActor) {
   const parsed = createPrivacyRequestSchema.parse(input);
 
+  // A request that concerns nobody is a data-integrity bug, not just a typo —
+  // fail loudly instead of silently tracking a request for a phantom subject.
+  if (parsed.subjectType === 'USER') {
+    const subject = await prisma.user.findUnique({
+      where: { id: parsed.subjectId },
+      select: { id: true },
+    });
+    if (!subject) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage: 'The specified user could not be found.',
+        fields: [{ field: 'subjectId', message: 'No user exists with this ID.' }],
+      });
+    }
+  }
+
   return prisma.$transaction(async tx => {
     const request = await tx.privacyRequest.create({
       data: {
@@ -155,7 +172,10 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
     const now = new Date();
     const data: Record<string, unknown> = { status: parsed.toStatus };
     if (parsed.notes !== undefined) data.notes = parsed.notes;
-    if (current.status === 'IDENTITY_VERIFICATION' && parsed.toStatus !== 'IDENTITY_VERIFICATION') {
+    // Only a successful verification (-> IN_REVIEW) counts as verified. Moving
+    // out of IDENTITY_VERIFICATION into BLOCKED/REJECTED must NOT stamp
+    // verifiedAt — export gating relies on this being a true verification signal.
+    if (current.status === 'IDENTITY_VERIFICATION' && parsed.toStatus === 'IN_REVIEW') {
       data.verifiedAt = current.verifiedAt ?? now;
     }
     if (parsed.toStatus === 'COMPLETED') data.completedAt = now;
@@ -187,8 +207,13 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
         actor: { type: 'USER', id: actor.id },
         oldValue: { status: current.status },
         newValue: { status: updated.status },
+        // Rejection reasons are free text an operator may fill with personal or
+        // sensitive detail. Record only that one was supplied, never the text
+        // itself — the reason lives on the request row, not the audit trail.
         metadata:
-          parsed.toStatus === 'REJECTED' ? { rejectionReason: parsed.rejectionReason } : undefined,
+          parsed.toStatus === 'REJECTED'
+            ? { reasonProvided: Boolean(parsed.rejectionReason) }
+            : undefined,
       },
       tx
     );
@@ -200,6 +225,25 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
 /** Reassigns request ownership. Does not touch status/subject. */
 export async function assignPrivacyRequest(input: unknown, actor: PrivacyRequestActor) {
   const parsed = assignPrivacyRequestSchema.parse(input);
+
+  if (parsed.assignedToId) {
+    const assignee = await prisma.user.findUnique({
+      where: { id: parsed.assignedToId },
+      select: { id: true, role: true, status: true },
+    });
+    if (
+      !assignee ||
+      assignee.status !== 'ACTIVE' ||
+      !hasCapability(assignee.role as AppRole, CAPABILITIES.PRIVACY_REQUESTS_MANAGE)
+    ) {
+      throw new AppError({
+        code: 'VALIDATION_FAILED',
+        userMessage:
+          'Requests can only be assigned to an active user with privacy request management access.',
+        fields: [{ field: 'assignedToId', message: 'Not an eligible privacy operator.' }],
+      });
+    }
+  }
 
   return prisma.$transaction(async tx => {
     const current = await tx.privacyRequest.findUnique({ where: { id: parsed.requestId } });
@@ -244,6 +288,7 @@ export async function getPrivacyRequest(requestId: string) {
           downloadCount: true,
           sizeBytes: true,
           checksum: true,
+          failureReason: true,
         },
       },
     },
@@ -253,17 +298,25 @@ export async function getPrivacyRequest(requestId: string) {
 export async function listPrivacyRequests(filters?: {
   status?: PrivacyRequestStatus;
   requestType?: PrivacyRequestType;
+  cursor?: string;
+  limit?: number;
 }) {
-  return prisma.privacyRequest.findMany({
+  const limit = Math.min(Math.max(filters?.limit ?? 50, 1), 100);
+  const requests = await prisma.privacyRequest.findMany({
     where: {
       status: filters?.status,
       requestType: filters?.requestType,
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     include: {
       requestedBy: { select: { id: true, name: true, email: true } },
       assignedTo: { select: { id: true, name: true, email: true } },
     },
-    take: 200,
+    take: limit + 1,
+    ...(filters?.cursor ? { cursor: { id: filters.cursor }, skip: 1 } : {}),
   });
+
+  const hasMore = requests.length > limit;
+  const page = hasMore ? requests.slice(0, limit) : requests;
+  return { requests: page, nextCursor: hasMore ? page[page.length - 1].id : null };
 }

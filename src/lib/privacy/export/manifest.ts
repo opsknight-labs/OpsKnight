@@ -34,14 +34,23 @@ export const SECURITY_EXCLUSIONS = [
   'email/SMS verification tokens',
 ] as const;
 
+export interface ExportDomainSummary {
+  domain: string;
+  exportedCount: number;
+  totalCount: number;
+  truncated: boolean;
+}
+
 export interface ExportManifestInput {
   requestId: string;
   subjectType: string;
   subjectId: string;
   generatedAt: Date;
+  domainSummary: ExportDomainSummary[];
 }
 
 export function buildManifest(input: ExportManifestInput) {
+  const truncated = input.domainSummary.some(domain => domain.truncated);
   return {
     exportVersion: EXPORT_FORMAT_VERSION,
     generatedAt: input.generatedAt.toISOString(),
@@ -51,10 +60,19 @@ export function buildManifest(input: ExportManifestInput) {
     includedDomains: INCLUDED_DOMAINS,
     excludedDomains: EXCLUDED_DOMAINS,
     securityExclusions: SECURITY_EXCLUSIONS,
+    // Per-domain counts so a partial export can never be mistaken for a
+    // complete one — each file also carries its own totalCount/truncated.
+    domainSummary: input.domainSummary,
+    completeness: truncated ? 'PARTIAL' : 'COMPLETE',
     limitations: [
       'This export reflects direct database relations only; it is not a guarantee of completeness.',
       'Security credentials (see securityExclusions) are intentionally excluded from every export.',
       'A missing or empty domain does not prove the absence of related data.',
+      ...(truncated
+        ? [
+            'One or more domains exceeded the per-export safety limit and were truncated; see domainSummary for exact counts. This export is PARTIAL, not complete.',
+          ]
+        : []),
     ],
   };
 }

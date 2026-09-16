@@ -22,6 +22,8 @@ const listQuerySchema = z.object({
   requestType: z
     .enum(['ACCESS', 'RECTIFICATION', 'ERASURE', 'RESTRICTION', 'OBJECTION', 'PORTABILITY'])
     .optional(),
+  cursor: z.string().cuid().optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -31,6 +33,8 @@ export async function GET(request: NextRequest) {
     const parsed = listQuerySchema.safeParse({
       status: request.nextUrl.searchParams.get('status') ?? undefined,
       requestType: request.nextUrl.searchParams.get('requestType') ?? undefined,
+      cursor: request.nextUrl.searchParams.get('cursor') ?? undefined,
+      limit: request.nextUrl.searchParams.get('limit') ?? undefined,
     });
     if (!parsed.success) {
       return jsonError(
@@ -45,11 +49,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const requests = await listPrivacyRequests({
+    const { requests, nextCursor } = await listPrivacyRequests({
       status: parsed.data.status as PrivacyRequestStatus | undefined,
       requestType: parsed.data.requestType as PrivacyRequestType | undefined,
+      cursor: parsed.data.cursor,
+      limit: parsed.data.limit,
     });
-    return jsonOk({ requests }, 200, { 'Cache-Control': 'private, no-store' });
+    return jsonOk({ requests, nextCursor }, 200, { 'Cache-Control': 'private, no-store' });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
     return jsonError('Failed to list privacy requests', 500);

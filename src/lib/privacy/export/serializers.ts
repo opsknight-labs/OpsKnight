@@ -103,24 +103,34 @@ export function serializeSchedules(schedules: Awaited2<typeof fetchSchedules>) {
 }
 
 export function serializeNotifications(notifications: Awaited2<typeof fetchNotifications>) {
-  return notifications.map(notification => ({
-    id: notification.id,
-    incidentId: notification.incidentId,
-    channel: notification.channel,
-    status: notification.status,
-    category: notification.category,
-    scheduledAt: iso(notification.scheduledAt),
-    sentAt: iso(notification.sentAt),
-    deliveredAt: iso(notification.deliveredAt),
-    failedAt: iso(notification.failedAt),
-  }));
+  return {
+    totalCount: notifications.totalCount,
+    exportedCount: notifications.items.length,
+    truncated: notifications.truncated,
+    records: notifications.items.map(notification => ({
+      id: notification.id,
+      incidentId: notification.incidentId,
+      channel: notification.channel,
+      status: notification.status,
+      category: notification.category,
+      scheduledAt: iso(notification.scheduledAt),
+      sentAt: iso(notification.sentAt),
+      deliveredAt: iso(notification.deliveredAt),
+      failedAt: iso(notification.failedAt),
+    })),
+  };
 }
 
 export function serializeAuditEvents(events: Awaited2<typeof fetchAuditEvents>) {
-  return events.map(event => ({
-    id: event.id,
-    action: event.action,
-    entityType: event.entityType,
-    createdAt: iso(event.createdAt),
-  }));
+  return {
+    totalCount: events.totalCount,
+    exportedCount: events.items.length,
+    truncated: events.truncated,
+    records: events.items.map(event => ({
+      id: event.id,
+      action: event.action,
+      entityType: event.entityType,
+      createdAt: iso(event.createdAt),
+    })),
+  };
 }

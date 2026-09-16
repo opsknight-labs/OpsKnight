@@ -62,6 +62,7 @@ function baseRequest(overrides: Partial<Record<string, unknown>> = {}) {
     subjectId: 'cuserA0000001',
     requestType: 'ACCESS',
     status: 'PROCESSING',
+    verifiedAt: new Date('2026-09-01T00:00:00.000Z'),
     ...overrides,
   };
 }
@@ -112,6 +113,24 @@ describe('privacy export artifact lifecycle', () => {
       });
     });
 
+    it('refuses to generate an export before identity verification has completed', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ verifiedAt: null }));
+
+      await expect(createExportArtifact(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+        code: 'PRIVACY_EXPORT_PREREQUISITES_NOT_MET',
+      });
+      expect(mocks.generateSubjectExport).not.toHaveBeenCalled();
+    });
+
+    it('refuses to generate an export when the request is not in PROCESSING', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ status: 'IN_REVIEW' }));
+
+      await expect(createExportArtifact(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+        code: 'PRIVACY_EXPORT_PREREQUISITES_NOT_MET',
+      });
+      expect(mocks.generateSubjectExport).not.toHaveBeenCalled();
+    });
+
     it('creates a READY artifact, never returns the encrypted payload, and audits start+completion', async () => {
       mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
       mocks.generateSubjectExport.mockResolvedValue({
@@ -149,6 +168,30 @@ describe('privacy export artifact lifecycle', () => {
 
       expect(mocks.artifactCreate).toHaveBeenCalledWith({
         data: expect.objectContaining({ status: 'FAILED', failureReason: 'boom' }),
+      });
+      const actions = mocks.auditCreate.mock.calls.map(call => call[0].data.action);
+      expect(actions).toEqual(['privacy.export.started', 'privacy.export.failed']);
+    });
+
+    it('fails the export and never stores an artifact larger than the configured size guard', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+      mocks.generateSubjectExport.mockResolvedValue({
+        buffer: Buffer.from('zip-bytes'),
+        checksum: 'sha256-abc',
+        sizeBytes: 300 * 1024 * 1024,
+      });
+      mocks.artifactCreate.mockResolvedValue(
+        baseArtifact({
+          status: 'FAILED',
+          failureReason: 'The generated export exceeds the maximum supported size.',
+        })
+      );
+
+      await expect(createExportArtifact(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+        code: 'PAYLOAD_TOO_LARGE',
+      });
+      expect(mocks.artifactCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({ status: 'FAILED' }),
       });
       const actions = mocks.auditCreate.mock.calls.map(call => call[0].data.action);
       expect(actions).toEqual(['privacy.export.started', 'privacy.export.failed']);
