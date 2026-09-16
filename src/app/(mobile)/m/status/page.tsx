@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { appRoutes } from '@/lib/app-routes';
 import {
   AlertTriangle,
   ArrowRight,
@@ -53,7 +54,7 @@ function announcementIcon(type: string) {
 
 export default async function MobileStatusPage() {
   const context = await getRequestActorContext();
-  if (!context) redirect('/login?callbackUrl=/m/status');
+  if (!context) redirect(appRoutes.login('mobile', '/m/status'));
 
   const snapshot = await getInternalOperationalStatusSnapshot(context.actor).catch(error => {
     logger.error('mobile.status.snapshotUnavailable', {

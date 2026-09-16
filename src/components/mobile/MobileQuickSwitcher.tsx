@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   AlertTriangle,
   FileText,
@@ -10,6 +11,7 @@ import {
   Shield,
   User,
   Users,
+  X,
   type LucideProps,
 } from 'lucide-react';
 import {
@@ -21,12 +23,8 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/shadcn/command';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from '@/components/ui/shadcn/dialog';
+import MobileHeaderAction from '@/components/mobile/MobileHeaderAction';
+import { useKeyboardSafeSheetGeometry } from '@/hooks/useKeyboardSafeSheetGeometry';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { readCache, writeCache } from '@/lib/mobile-cache';
@@ -96,6 +94,9 @@ export default function MobileQuickSwitcher() {
   const [searchError, setSearchError] = useState('');
   const [recents, setRecents] = useState<RecentItem[]>([]);
   const searchGeneration = useRef(0);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const { maxHeight: sheetMaxHeight, bottomOffset: sheetBottomOffset } =
+    useKeyboardSafeSheetGeometry(open);
   const hasQuery = query.trim().length >= MIN_QUERY_LENGTH;
 
   useEffect(() => {
@@ -189,118 +190,149 @@ export default function MobileQuickSwitcher() {
 
   return (
     <>
-      <button
-        type="button"
-        className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label="Search OpsKnight"
+      <MobileHeaderAction
+        ref={triggerRef}
+        icon={<Search className="h-5 w-5" aria-hidden="true" />}
+        label="Search OpsKnight"
         onClick={() => setOpen(true)}
+      />
+
+      <DialogPrimitive.Root
+        open={open}
+        onOpenChange={next => {
+          setOpen(next);
+          if (!next) triggerRef.current?.focus();
+        }}
       >
-        <Search className="h-4 w-4" aria-hidden="true" />
-      </button>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:animate-none" />
+          <DialogPrimitive.Content
+            className="fixed inset-x-0 z-50 flex flex-col overflow-hidden rounded-t-3xl border border-border bg-popover text-popover-foreground shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:animate-none motion-reduce:transition-none"
+            style={{
+              maxHeight: sheetMaxHeight ? `${sheetMaxHeight}px` : 'calc(100dvh - 0.75rem)',
+              bottom: sheetBottomOffset,
+            }}
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
+              <DialogPrimitive.Title className="text-sm font-semibold text-foreground">
+                Search
+              </DialogPrimitive.Title>
+              <DialogPrimitive.Description className="sr-only">
+                Search incidents, services, teams, users, policies and postmortems.
+              </DialogPrimitive.Description>
+              <DialogPrimitive.Close asChild>
+                <button
+                  type="button"
+                  aria-label="Close search"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </DialogPrimitive.Close>
+            </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="top-auto bottom-0 left-0 w-full max-w-none translate-x-0 translate-y-0 gap-0 rounded-t-2xl border-x-0 border-b-0 border-border bg-popover p-0 text-popover-foreground shadow-2xl sm:bottom-auto sm:left-1/2 sm:top-24 sm:w-[min(92vw,32rem)] sm:max-w-lg sm:-translate-x-1/2 sm:rounded-2xl sm:border">
-          <DialogTitle className="sr-only">Quick switcher</DialogTitle>
-          <DialogDescription className="sr-only">
-            Search incidents, services, teams, users, policies and postmortems.
-          </DialogDescription>
-          <Command shouldFilter={false} className="bg-transparent">
-            <CommandInput
-              placeholder="Search incidents, services, teams…"
-              value={query}
-              onValueChange={setQuery}
-              autoFocus
-            />
-            <CommandList className="max-h-[min(68dvh,32rem)] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-              <CommandEmpty>
-                {isLoading ? 'Searching…' : searchError || 'No results found.'}
-              </CommandEmpty>
+            <Command shouldFilter={false} className="flex min-h-0 flex-1 flex-col bg-transparent">
+              <CommandInput
+                placeholder="Search incidents, services, teams…"
+                value={query}
+                onValueChange={setQuery}
+                className="h-12 text-base"
+                autoFocus
+              />
+              <CommandList className="flex-1 overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+                <CommandEmpty>
+                  {isLoading ? 'Searching…' : searchError || 'No results found.'}
+                </CommandEmpty>
 
-              {!hasQuery ? (
-                <>
-                  {recentItems.length > 0 ? (
-                    <CommandGroup heading="Recent">
-                      {recentItems.map(item => {
-                        const meta = typeMeta[item.type];
-                        return (
-                          <CommandItem
-                            key={`${item.type}-${item.id}`}
-                            onSelect={() => handleSelect(item)}
-                            className="min-h-11 gap-3 py-3"
-                          >
-                            <meta.Icon
-                              className={cn('h-4 w-4 shrink-0', meta.tone)}
-                              aria-hidden="true"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <span className="block truncate font-medium">{item.title}</span>
-                              {item.subtitle ? (
-                                <span className="block truncate text-xs text-muted-foreground">
-                                  {item.subtitle}
-                                </span>
-                              ) : null}
-                            </div>
-                            <span className="text-[10px] uppercase text-muted-foreground">
-                              {meta.label}
-                            </span>
-                          </CommandItem>
-                        );
-                      })}
-                      <CommandSeparator />
+                {!hasQuery ? (
+                  <>
+                    {recentItems.length > 0 ? (
+                      <CommandGroup heading="Recent">
+                        {recentItems.map(item => {
+                          const meta = typeMeta[item.type];
+                          return (
+                            <CommandItem
+                              key={`${item.type}-${item.id}`}
+                              onSelect={() => handleSelect(item)}
+                              className="min-h-12 gap-3 py-3"
+                            >
+                              <meta.Icon
+                                className={cn('h-4 w-4 shrink-0', meta.tone)}
+                                aria-hidden="true"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <span className="block truncate font-medium">{item.title}</span>
+                                {item.subtitle ? (
+                                  <span className="block truncate text-xs text-muted-foreground">
+                                    {item.subtitle}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <span className="text-[10px] uppercase text-muted-foreground">
+                                {meta.label}
+                              </span>
+                            </CommandItem>
+                          );
+                        })}
+                        <CommandSeparator />
+                      </CommandGroup>
+                    ) : null}
+                    <CommandGroup heading="Explore">
+                      {quickLinks.map(link => (
+                        <CommandItem
+                          key={link.href}
+                          onSelect={() => {
+                            setOpen(false);
+                            router.push(link.href);
+                          }}
+                          className="min-h-12 py-3"
+                        >
+                          <Search
+                            className="mr-2 h-4 w-4 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <span className="font-medium">{link.label}</span>
+                        </CommandItem>
+                      ))}
                     </CommandGroup>
-                  ) : null}
-                  <CommandGroup heading="Explore">
-                    {quickLinks.map(link => (
-                      <CommandItem
-                        key={link.href}
-                        onSelect={() => {
-                          setOpen(false);
-                          router.push(link.href);
-                        }}
-                        className="min-h-11 py-3"
-                      >
-                        <Search className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <span className="font-medium">{link.label}</span>
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </>
-              ) : null}
+                  </>
+                ) : null}
 
-              {hasQuery && results.length > 0 ? (
-                <CommandGroup heading="Results">
-                  {results.map(item => {
-                    const meta = typeMeta[item.type];
-                    return (
-                      <CommandItem
-                        key={`${item.type}-${item.id}`}
-                        onSelect={() => handleSelect(item)}
-                        className="min-h-11 gap-3 py-3"
-                      >
-                        <meta.Icon
-                          className={cn('h-4 w-4 shrink-0', meta.tone)}
-                          aria-hidden="true"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">{item.title}</span>
-                          {item.subtitle ? (
-                            <span className="block truncate text-xs text-muted-foreground">
-                              {item.subtitle}
-                            </span>
-                          ) : null}
-                        </div>
-                        <span className="text-[10px] uppercase text-muted-foreground">
-                          {meta.label}
-                        </span>
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              ) : null}
-            </CommandList>
-          </Command>
-        </DialogContent>
-      </Dialog>
+                {hasQuery && results.length > 0 ? (
+                  <CommandGroup heading="Results">
+                    {results.map(item => {
+                      const meta = typeMeta[item.type];
+                      return (
+                        <CommandItem
+                          key={`${item.type}-${item.id}`}
+                          onSelect={() => handleSelect(item)}
+                          className="min-h-12 gap-3 py-3"
+                        >
+                          <meta.Icon
+                            className={cn('h-4 w-4 shrink-0', meta.tone)}
+                            aria-hidden="true"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate font-medium">{item.title}</span>
+                            {item.subtitle ? (
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {item.subtitle}
+                              </span>
+                            ) : null}
+                          </div>
+                          <span className="text-[10px] uppercase text-muted-foreground">
+                            {meta.label}
+                          </span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                ) : null}
+              </CommandList>
+            </Command>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </>
   );
 }

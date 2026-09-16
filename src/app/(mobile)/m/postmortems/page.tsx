@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ChevronRight, FileText } from 'lucide-react';
+import { appRoutes } from '@/lib/app-routes';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileTime from '@/components/mobile/MobileTime';
@@ -16,7 +17,7 @@ export default async function MobilePostmortemsPage() {
     getRequestActorContext(),
     getUserPermissions(),
   ]);
-  if (!context) redirect('/login?callbackUrl=/m/postmortems');
+  if (!context) redirect(appRoutes.login('mobile', '/m/postmortems'));
 
   const postmortemAccess = postmortemReadWhere(context.actor);
   const postmortems = await prisma.postmortem.findMany({

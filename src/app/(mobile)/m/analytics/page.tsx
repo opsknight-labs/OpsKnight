@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Activity, ArrowRight, BarChart3 } from 'lucide-react';
+import { appRoutes } from '@/lib/app-routes';
 import EmptyState from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/shadcn/card';
 import MobileTime from '@/components/mobile/MobileTime';
@@ -54,7 +55,7 @@ export default async function MobileAnalyticsPage({
   searchParams?: Promise<{ range?: string }>;
 }) {
   const context = await getRequestActorContext();
-  if (!context) redirect('/login?callbackUrl=/m/analytics');
+  if (!context) redirect(appRoutes.login('mobile', '/m/analytics'));
 
   const params = await searchParams;
   const range = normalizeRange(params?.range);

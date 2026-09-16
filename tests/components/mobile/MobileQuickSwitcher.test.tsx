@@ -4,6 +4,35 @@ import MobileQuickSwitcher from '@/components/mobile/MobileQuickSwitcher';
 
 const mockFetch = vi.fn();
 
+type MockVisualViewport = {
+  height: number;
+  offsetTop: number;
+  addEventListener: (type: string, cb: () => void) => void;
+  removeEventListener: (type: string, cb: () => void) => void;
+  dispatch: (type: 'resize' | 'scroll') => void;
+};
+
+function mockVisualViewport(height: number, offsetTop = 0): MockVisualViewport {
+  const listeners = new Map<string, Array<() => void>>();
+  const viewport: MockVisualViewport = {
+    height,
+    offsetTop,
+    addEventListener: (type, cb) => {
+      const existing = listeners.get(type) ?? [];
+      existing.push(cb);
+      listeners.set(type, existing);
+    },
+    removeEventListener: (type, cb) => {
+      listeners.set(type, (listeners.get(type) ?? []).filter(l => l !== cb));
+    },
+    dispatch: type => {
+      for (const cb of listeners.get(type) ?? []) cb();
+    },
+  };
+  Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+  return viewport;
+}
+
 describe('MobileQuickSwitcher', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', mockFetch);
@@ -13,12 +42,75 @@ describe('MobileQuickSwitcher', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    Reflect.deleteProperty(window, 'visualViewport');
   });
 
   it('opens the quick switcher overlay', () => {
     render(<MobileQuickSwitcher />);
     fireEvent.click(screen.getByLabelText('Search OpsKnight'));
     expect(screen.getByPlaceholderText('Search incidents, services, teams…')).toBeInTheDocument();
+  });
+
+  // Regression guard: an earlier version floored the sheet height at 280px,
+  // which could exceed a visual viewport shrunk by the on-screen keyboard
+  // (e.g. 240px), pushing content behind the keyboard.
+  it('never lets the sheet height exceed the visible viewport when the keyboard opens', () => {
+    mockVisualViewport(240);
+    render(<MobileQuickSwitcher />);
+    fireEvent.click(screen.getByLabelText('Search OpsKnight'));
+
+    const sheet = screen.getByRole('dialog');
+    const maxHeight = parseInt(sheet.style.maxHeight, 10);
+    expect(maxHeight).toBeLessThanOrEqual(240);
+  });
+
+  it('lifts the sheet above the keyboard using the visual viewport offset', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    mockVisualViewport(500, 0);
+    render(<MobileQuickSwitcher />);
+    fireEvent.click(screen.getByLabelText('Search OpsKnight'));
+
+    const sheet = screen.getByRole('dialog');
+    expect(sheet.style.bottom).toBe('300px');
+  });
+
+  it('recalculates geometry live when the keyboard opens after the sheet is already visible', () => {
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+    const viewport = mockVisualViewport(800, 0);
+    render(<MobileQuickSwitcher />);
+    fireEvent.click(screen.getByLabelText('Search OpsKnight'));
+
+    const sheet = screen.getByRole('dialog');
+    expect(sheet.style.bottom).toBe('0px');
+
+    // Keyboard opens: visual viewport shrinks and is pushed down from the top.
+    viewport.height = 500;
+    viewport.offsetTop = 20;
+    act(() => viewport.dispatch('resize'));
+
+    expect(parseInt(sheet.style.maxHeight, 10)).toBeLessThanOrEqual(500);
+    expect(sheet.style.bottom).toBe(`${800 - 500 - 20}px`);
+  });
+
+  it('returns focus to the search trigger when the sheet closes', () => {
+    render(<MobileQuickSwitcher />);
+    const trigger = screen.getByLabelText('Search OpsKnight');
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByLabelText('Close search'));
+    expect(trigger).toHaveFocus();
+  });
+
+  it('renders a real 44x44 close control and a 48px/16px input', () => {
+    render(<MobileQuickSwitcher />);
+    fireEvent.click(screen.getByLabelText('Search OpsKnight'));
+
+    const close = screen.getByLabelText('Close search');
+    expect(close.className).toContain('h-11');
+    expect(close.className).toContain('w-11');
+
+    const input = screen.getByRole('combobox');
+    expect(input.className).toContain('h-12');
+    expect(input.className).toContain('text-base');
   });
 
   it('fetches and renders search results', async () => {
