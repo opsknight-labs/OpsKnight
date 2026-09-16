@@ -3,7 +3,6 @@
 import { useActionState, useState, useEffect, useMemo } from 'react';
 import { useFormStatus } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { saveChatOpsConfig } from '@/app/(app)/settings/integrations/chatops/actions';
 import type { SettingsActionState } from '@/lib/settings-result';
 import { Button } from '@/components/ui/shadcn/button';
@@ -11,24 +10,20 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Switch } from '@/components/ui/shadcn/switch';
-import { SlackLogo } from '@/components/common/BrandLogos';
 import {
   CheckCircle2,
   Loader2,
   XCircle,
   Video,
-  Hash,
   Archive,
   AlertTriangle,
-  Info,
   Check,
-  Sparkles,
-  ArrowRight,
-  ExternalLink,
-  MessageSquare,
   Zap,
   RefreshCw,
+  Sliders,
 } from 'lucide-react';
+import { WarRoomProviderStatus, type ProviderStatusProps } from './chatops/WarRoomProviderStatus';
+import { WarRoomProviderCapabilities } from './chatops/WarRoomProviderCapabilities';
 
 type ChatOpsConfigView = {
   enabled: boolean;
@@ -142,11 +137,11 @@ function SubmitButton({ disabled, isDirty }: { disabled: boolean; isDirty: boole
 export default function ChatOpsSettingsPage({
   config,
   isAdmin,
-  isSlackConnected,
+  providerStatus,
 }: {
   config: ChatOpsConfigView;
   isAdmin: boolean;
-  isSlackConnected: boolean;
+  providerStatus: ProviderStatusProps;
 }) {
   const router = useRouter();
   const [state, formAction] = useActionState<SettingsActionState, FormData>(saveChatOpsConfig, {
@@ -265,10 +260,18 @@ export default function ChatOpsSettingsPage({
             <div className="space-y-1 min-w-0">
               <p className="font-semibold">Settings changed elsewhere</p>
               <p>{state.error}</p>
-              <p className="opacity-80">Your unsaved ChatOps edits are preserved. Reload before saving again.</p>
+              <p className="opacity-80">
+                Your unsaved ChatOps edits are preserved. Reload before saving again.
+              </p>
             </div>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => window.location.reload()} className="gap-1.5 shrink-0">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => window.location.reload()}
+            className="gap-1.5 shrink-0"
+          >
             <RefreshCw className="h-3.5 w-3.5" />
             Reload latest
           </Button>
@@ -276,7 +279,10 @@ export default function ChatOpsSettingsPage({
       )}
 
       {state?.error && state.code !== 'SETTINGS_CHANGED' && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-3 shadow-sm" role="alert">
+        <div
+          className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-3 shadow-sm"
+          role="alert"
+        >
           <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
           <div className="space-y-1 min-w-0">
             <p className="font-semibold">Configuration Error</p>
@@ -286,80 +292,50 @@ export default function ChatOpsSettingsPage({
       )}
 
       {state?.success && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-800 dark:text-emerald-200 flex items-start gap-3 shadow-sm" role="status" aria-live="polite">
+        <div
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs text-emerald-800 dark:text-emerald-200 flex items-start gap-3 shadow-sm"
+          role="status"
+          aria-live="polite"
+        >
           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
           <div className="space-y-1 min-w-0">
             <p className="font-semibold">Configuration Saved</p>
-            <p>ChatOps channel rules and video war room settings updated successfully.</p>
+            <p>War room collaboration policies and video bridge settings updated successfully.</p>
           </div>
         </div>
       )}
 
-      {!isSlackConnected ? (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs text-rose-900 dark:text-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-            <div className="space-y-0.5">
-              <p className="font-semibold">Slack Integration Not Connected</p>
-              <p className="text-rose-800 dark:text-rose-300">
-                ChatOps requires an active Slack bot integration to create dedicated incident
-                channels and post war room cards.
-              </p>
-            </div>
-          </div>
-          <Link
-            href="/settings/integrations/slack"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs shrink-0 self-start sm:self-auto transition-colors shadow-sm"
-          >
-            <span>Connect Slack Integration</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      ) : (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-xs text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold">Slack Bot Integration Connected</span>
-            <span className="text-muted-foreground hidden sm:inline">•</span>
-            <span className="text-muted-foreground hidden sm:inline">
-              Bot has channel management and messaging scopes
-            </span>
-          </div>
-          <Link
-            href="/settings/integrations/slack"
-            className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
-          >
-            <span>Manage Slack App</span>
-            <ExternalLink className="h-3 w-3" />
-          </Link>
-        </div>
-      )}
+      {/* Dynamic Connected Providers Section */}
+      <WarRoomProviderStatus slack={providerStatus.slack} teams={providerStatus.teams} />
 
+      {/* Global War Room Policy Section */}
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-[#4A154B]/10 border border-[#4A154B]/20 text-[#4A154B] dark:text-[#E01E5A] shrink-0">
-              <SlackLogo className="h-5 w-5" />
+            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
+              <Sliders className="h-5 w-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-semibold text-foreground">
-                  Incident Channel Automation
+                  War Room & Collaboration Policy
                 </h3>
                 <Badge
-                  variant={enabled ? 'success' : 'neutral'}
+                  variant={enabled ? 'default' : 'secondary'}
                   className="text-[10px] font-medium"
                 >
                   {enabled ? 'Active' : 'Paused'}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Automatically provisions dedicated Slack incident channels when alerts trigger.
+                Controls global creation permissions, automated room triggers, and naming
+                conventions.
               </p>
             </div>
           </div>
         </div>
 
+        {/* Global Enablement Switch */}
         <div className="rounded-lg border bg-muted/20 p-3.5 flex items-center justify-between gap-4">
           <div className="space-y-0.5">
             <Label
@@ -367,381 +343,298 @@ export default function ChatOpsSettingsPage({
               className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5"
             >
               <Zap className="h-3.5 w-3.5 text-primary" />
-              Enable ChatOps Workflows
+              Enable War Room Provisioning
             </Label>
             <p className="text-[11px] text-muted-foreground">
-              Proactively creates Slack channels and invites incident responders upon incident
-              creation.
+              Allows OpsKnight to provision incident collaboration rooms and sync responders across
+              connected providers.
             </p>
           </div>
           <Switch
             id="chatops-enabled-switch"
             checked={enabled}
             onCheckedChange={setEnabled}
-            disabled={!isAdmin || !isSlackConnected}
+            disabled={!isAdmin}
           />
           <input type="hidden" name="enabled" value={enabled ? 'on' : 'off'} />
         </div>
 
+        {/* Room Naming Policy */}
         <div className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label
                 htmlFor="channelPrefix"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
               >
-                <Hash className="h-3.5 w-3.5" />
-                Slack Channel Prefix
+                Room Name Prefix
               </Label>
               <span className="text-[10px] text-muted-foreground">Max 20 chars</span>
             </div>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-mono text-sm">
-                #
-              </span>
-              <Input
-                id="channelPrefix"
-                name="channelPrefix"
-                value={channelPrefix}
-                onChange={e => setChannelPrefix(e.target.value)}
-                placeholder="inc"
-                className="pl-7 font-mono text-xs h-9 bg-background border-border/80"
-                disabled={!isAdmin}
-                required
-              />
-            </div>
+            <Input
+              id="channelPrefix"
+              name="channelPrefix"
+              value={channelPrefix}
+              onChange={e => setChannelPrefix(e.target.value)}
+              disabled={!isAdmin}
+              placeholder="inc"
+              className="font-mono text-sm h-10"
+              maxLength={20}
+            />
             <p className="text-[11px] text-muted-foreground">
-              Lowercase letters, numbers, and dashes only. e.g.{' '}
-              <code className="bg-muted px-1 py-0.2 rounded font-mono">inc</code>,{' '}
-              <code className="bg-muted px-1 py-0.2 rounded font-mono">incident</code>,{' '}
-              <code className="bg-muted px-1 py-0.2 rounded font-mono">warroom</code>.
+              Prefix applied when naming incident collaboration channels.
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              Live Channel Name Simulation
-            </Label>
-            <div className="rounded-lg border bg-muted/40 p-2.5 flex items-center gap-2">
-              <span className="p-1 rounded bg-background border text-muted-foreground font-mono text-xs">
-                #
-              </span>
-              <span className="font-mono text-xs font-semibold text-foreground truncate">
-                {sanitizedPrefixDisplay}-402-database-latency
-              </span>
-              <Badge
-                variant="outline"
-                className="ml-auto text-[10px] border-border/60 bg-background text-muted-foreground"
-              >
-                Slack Channel
-              </Badge>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Slack channels will be created matching this naming convention.
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-lg border bg-muted/20 p-3.5 flex items-center justify-between gap-4">
-          <div className="space-y-0.5">
-            <Label
-              htmlFor="archive-switch"
-              className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5"
-            >
-              <Archive className="h-3.5 w-3.5 text-muted-foreground" />
-              Auto-Archive Channel on Incident Resolution
-            </Label>
-            <p className="text-[11px] text-muted-foreground">
-              Automatically archives the Slack channel when the incident is resolved to keep
-              workspace channels clean.
-            </p>
-          </div>
-          <Switch
-            id="archive-switch"
-            checked={archiveOnResolve}
-            onCheckedChange={setArchiveOnResolve}
-            disabled={!isAdmin}
-          />
-          <input type="hidden" name="archiveOnResolve" value={archiveOnResolve ? 'on' : 'off'} />
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold text-foreground">Auto-Creation Triggers</h3>
-              <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                Rule Matrix
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Channels and war rooms will be provisioned automatically when new incidents meet any
-              selected condition.
-            </p>
-          </div>
-        </div>
-
-        {selectedPriorities.map(p => (
-          <input
-            key={`hidden-p-${p}`}
-            type="checkbox"
-            name="autoCreateOnPriority"
-            value={p}
-            checked
-            readOnly
-            hidden
-          />
-        ))}
-        {selectedUrgencies.map(u => (
-          <input
-            key={`hidden-u-${u}`}
-            type="checkbox"
-            name="autoCreateOnUrgency"
-            value={u}
-            checked
-            readOnly
-            hidden
-          />
-        ))}
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <MessageSquare className="h-3.5 w-3.5" />
-              Auto-Create on Incident Priority
-            </Label>
-            <span className="text-[11px] text-muted-foreground">
-              {selectedPriorities.length} of {PRIORITY_OPTIONS.length} active
+          <div className="rounded-lg border border-border/80 bg-muted/30 p-3.5 space-y-2">
+            <span className="text-xs font-semibold text-foreground block">
+              Generated Name Preview
             </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-            {PRIORITY_OPTIONS.map(option => {
-              const active = selectedPriorities.includes(option.value);
-              const colorClasses = {
-                rose: active
-                  ? 'border-rose-500/60 bg-rose-500/10 text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/40'
-                  : 'border-border/80 bg-background text-muted-foreground hover:border-border',
-                orange: active
-                  ? 'border-orange-500/60 bg-orange-500/10 text-orange-700 dark:text-orange-300 ring-1 ring-orange-500/40'
-                  : 'border-border/80 bg-background text-muted-foreground hover:border-border',
-                amber: active
-                  ? 'border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/40'
-                  : 'border-border/80 bg-background text-muted-foreground hover:border-border',
-                blue: active
-                  ? 'border-blue-500/60 bg-blue-500/10 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/40'
-                  : 'border-border/80 bg-background text-muted-foreground hover:border-border',
-                slate: active
-                  ? 'border-slate-500/60 bg-slate-500/10 text-slate-700 dark:text-slate-300 ring-1 ring-slate-500/40'
-                  : 'border-border/80 bg-background text-muted-foreground hover:border-border',
-              }[option.color];
-
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => togglePriority(option.value)}
-                  disabled={!isAdmin}
-                  className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all ${colorClasses}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold">{option.label}</span>
-                    {active && <Check className="h-3 w-3" />}
-                  </div>
-                  <span className="text-[11px] opacity-80">{option.name}</span>
-                </button>
-              );
-            })}
+            <div className="space-y-1.5 text-xs font-mono">
+              <div className="flex items-center justify-between py-1 border-b border-border/40">
+                <span className="text-muted-foreground font-sans">Slack:</span>
+                <span className="text-primary font-semibold">
+                  #{sanitizedPrefixDisplay}-payments-api-a82c
+                </span>
+              </div>
+              <div className="flex items-center justify-between py-1">
+                <span className="text-muted-foreground font-sans">Teams:</span>
+                <span className="text-primary font-semibold">
+                  {sanitizedPrefixDisplay}-payments-api-a82c
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* Automatic Creation Policy */}
+        <div className="space-y-4 pt-4 border-t">
+          <div>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-foreground">
+              Automatic Creation Rules
+            </h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              OpsKnight will automatically request a collaboration war room when an incident meets
+              either threshold.
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Priority Triggers */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-muted-foreground block">
+                Trigger on Priority
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {PRIORITY_OPTIONS.map(opt => {
+                  const isSelected = selectedPriorities.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => togglePriority(opt.value)}
+                      disabled={!isAdmin}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                          : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/80'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                      <span className="text-[10px] font-normal opacity-80">{opt.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedPriorities.map(p => (
+                <input key={p} type="hidden" name="autoCreateOnPriority" value={p} />
+              ))}
+            </div>
+
+            {/* Urgency Triggers */}
+            <div className="space-y-2">
+              <span className="text-xs font-semibold text-muted-foreground block">
+                Trigger on Urgency
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {URGENCY_OPTIONS.map(opt => {
+                  const isSelected = selectedUrgencies.includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => toggleUrgency(opt.value)}
+                      disabled={!isAdmin}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                          : 'bg-muted/40 text-muted-foreground border-border hover:bg-muted/80'
+                      }`}
+                    >
+                      <span>{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedUrgencies.map(u => (
+                <input key={u} type="hidden" name="autoCreateOnUrgency" value={u} />
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3 rounded-lg bg-muted/40 border text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Active policy: </span>
+            {selectedPriorities.length > 0 || selectedUrgencies.length > 0 ? (
+              <span>
+                War rooms will be automatically requested for incidents with{' '}
+                {selectedPriorities.length > 0 && `priority ${selectedPriorities.join(', ')}`}
+                {selectedPriorities.length > 0 && selectedUrgencies.length > 0 && ' or '}
+                {selectedUrgencies.length > 0 && `urgency ${selectedUrgencies.join(', ')}`}.
+              </span>
+            ) : (
+              <span>No automatic triggers set. War rooms are created manually by operators.</span>
+            )}
+          </div>
+        </div>
+
+        {/* War Room Lifecycle Setting */}
         <div className="space-y-3 pt-4 border-t">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5" />
-              Auto-Create on Incident Urgency
-            </Label>
-            <span className="text-[11px] text-muted-foreground">
-              {selectedUrgencies.length} of {URGENCY_OPTIONS.length} active
-            </span>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="archiveOnResolve"
+                className="text-xs font-semibold text-foreground cursor-pointer flex items-center gap-1.5"
+              >
+                <Archive className="h-3.5 w-3.5 text-primary" />
+                Close Collaboration on Resolution
+              </Label>
+              <p className="text-[11px] text-muted-foreground">
+                When an incident is resolved, automatically initiate channel closing and archival
+                where supported.
+              </p>
+            </div>
+            <Switch
+              id="archiveOnResolve"
+              checked={archiveOnResolve}
+              onCheckedChange={setArchiveOnResolve}
+              disabled={!isAdmin}
+            />
+            <input type="hidden" name="archiveOnResolve" value={archiveOnResolve ? 'on' : 'off'} />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {URGENCY_OPTIONS.map(option => {
-              const active = selectedUrgencies.includes(option.value);
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => toggleUrgency(option.value)}
-                  disabled={!isAdmin}
-                  className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all ${
-                    active
-                      ? 'border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/40'
-                      : 'border-border/80 bg-background text-muted-foreground hover:border-border'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold">{option.label} Urgency</span>
-                    {active && <Check className="h-3 w-3" />}
-                  </div>
-                  <span className="text-[11px] opacity-80">{option.desc}</span>
-                </button>
-              );
-            })}
+          <div className="grid sm:grid-cols-2 gap-2 text-[11px] text-muted-foreground bg-muted/20 p-3 rounded-lg border">
+            <div>
+              <span className="font-semibold text-foreground block">Slack</span>
+              <span>Channel is automatically archived if bot permissions allow.</span>
+            </div>
+            <div>
+              <span className="font-semibold text-foreground block">Microsoft Teams</span>
+              <span>OpsKnight marks war room closed; channel follows provider retention.</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-semibold text-foreground">Video War Room Bridge</h3>
-              <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                Live Collaboration
-              </Badge>
+      {/* Video Collaboration Section */}
+      <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
+              <Video className="h-5 w-5" />
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Generates an instant video bridge link posted inside Slack and the incident timeline.
-            </p>
+            <div>
+              <h3 className="text-sm font-bold text-foreground">Video War Room Bridge</h3>
+              <p className="text-xs text-muted-foreground">
+                Configure instant video conference bridges linked in ChatOps cards and incident
+                headers.
+              </p>
+            </div>
           </div>
         </div>
 
-        <input type="hidden" name="defaultVideoBridge" value={selectedBridge} />
-
-        <div className="space-y-3">
-          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Video className="h-3.5 w-3.5" />
-            Video Bridge Provider
-          </Label>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {VIDEO_BRIDGE_OPTIONS.map(provider => {
-              const active = selectedBridge === provider.value;
-              return (
-                <button
-                  key={provider.value}
-                  type="button"
-                  onClick={() => isAdmin && setSelectedBridge(provider.value)}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {VIDEO_BRIDGE_OPTIONS.map(opt => {
+            const isSelected = selectedBridge === opt.value;
+            return (
+              <label
+                key={opt.value}
+                className={`flex flex-col justify-between p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  isSelected
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                    : 'border-border bg-card hover:bg-muted/30'
+                }`}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">{opt.label}</span>
+                    <Badge variant="outline" className="text-[9px] px-1 py-0 font-normal">
+                      {opt.badge}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">{opt.desc}</p>
+                </div>
+                <input
+                  type="radio"
+                  name="defaultVideoBridge"
+                  value={opt.value}
+                  checked={isSelected}
+                  onChange={() => setSelectedBridge(opt.value)}
                   disabled={!isAdmin}
-                  className={`p-3.5 rounded-lg border text-left flex items-start gap-3 transition-all ${
-                    active
-                      ? 'border-primary/60 bg-primary/5 ring-1 ring-primary/40 shadow-sm'
-                      : 'border-border/80 bg-background hover:border-border'
-                  }`}
-                >
-                  <div
-                    className={`mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
-                      active
-                        ? 'border-primary bg-primary'
-                        : 'border-muted-foreground/50 bg-background'
-                    }`}
-                  >
-                    {active && <div className="h-1.5 w-1.5 rounded-full bg-primary-foreground" />}
-                  </div>
-                  <div className="space-y-1 min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`text-xs font-semibold ${active ? 'text-foreground' : 'text-muted-foreground'}`}
-                      >
-                        {provider.label}
-                      </span>
-                      <Badge variant="outline" className="text-[10px] border-border/80">
-                        {provider.badge}
-                      </Badge>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      {provider.desc}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  className="sr-only"
+                />
+              </label>
+            );
+          })}
         </div>
 
         {selectedBridge !== 'NONE' && (
-          <div className="space-y-3 pt-4 border-t">
-            <div className="flex items-center justify-between">
-              <Label
-                htmlFor="customBridgeUrlTemplate"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                {selectedBridge === 'JITSI'
-                  ? 'Custom Jitsi Domain / URL Template (Optional)'
-                  : 'Meeting URL or Template'}
-              </Label>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-muted-foreground">Insert:</span>
-                <button
-                  type="button"
-                  onClick={() => insertVariable('{incidentId}')}
-                  className="px-1.5 py-0.5 rounded bg-muted hover:bg-muted/80 text-[10px] font-mono text-primary transition-colors border"
-                >
-                  +{'{incidentId}'}
-                </button>
-              </div>
-            </div>
+          <div className="space-y-2 pt-2">
+            <Label
+              htmlFor="customBridgeUrlTemplate"
+              className="text-xs font-semibold text-foreground"
+            >
+              Bridge URL Template (Optional)
+            </Label>
             <Input
               id="customBridgeUrlTemplate"
               name="customBridgeUrlTemplate"
               value={customUrl}
               onChange={e => setCustomUrl(e.target.value)}
-              placeholder={activeHint.placeholder}
-              className="font-mono text-xs h-9 bg-background border-border/80"
               disabled={!isAdmin}
+              placeholder={activeHint.placeholder}
+              className="text-xs font-mono h-9"
             />
-
-            <div className="rounded-lg border bg-muted/20 p-3.5 space-y-2 text-xs">
-              <div className="flex items-center gap-1.5 font-medium text-foreground">
-                <Info className="h-3.5 w-3.5 text-blue-500" />
-                <span>Provider Guidance & Supported Formats</span>
+            <p className="text-[11px] text-muted-foreground">{activeHint.hint}</p>
+            {activeHint.examples.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
+                <span className="text-muted-foreground">Insert variable:</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-[10px] font-mono px-2"
+                  onClick={() => insertVariable('{incidentId}')}
+                  disabled={!isAdmin}
+                >
+                  +{'{incidentId}'}
+                </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">{activeHint.hint}</p>
-              {activeHint.examples.length > 0 && (
-                <div className="pt-2 border-t space-y-1">
-                  <span className="font-semibold text-[11px] text-muted-foreground">Examples:</span>
-                  <ul className="space-y-1 text-[11px] text-muted-foreground font-mono">
-                    {activeHint.examples.map((ex, i) => (
-                      <li key={i} className="flex items-center gap-1.5">
-                        <span className="text-muted-foreground/60">•</span>
-                        <code className="bg-background px-1 py-0.5 rounded border border-border/60">
-                          {ex}
-                        </code>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         )}
       </div>
 
-      <div className="sticky bottom-4 z-10 bg-card/95 backdrop-blur-md shadow-lg border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="text-xs text-muted-foreground flex items-center gap-2">
-          {isDirty && (
-            <Badge
-              variant="outline"
-              className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/40 bg-amber-500/10"
-            >
-              Unsaved Changes
-            </Badge>
-          )}
-          <span>
-            {config
-              ? `Last modified on ${new Date(config.updatedAt).toLocaleDateString()}`
-              : 'Configure ChatOps rules to automate incident collaboration.'}
-          </span>
-        </div>
+      {/* Provider Capabilities Reference */}
+      <WarRoomProviderCapabilities />
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
-          <SubmitButton
-            disabled={!isAdmin || state?.code === 'SETTINGS_CHANGED'}
-            isDirty={isDirty}
-          />
+      {/* Form Submission Footer */}
+      {isAdmin && (
+        <div className="flex items-center justify-between p-4 rounded-xl border bg-card shadow-xs">
+          <span className="text-xs text-muted-foreground">
+            {isDirty ? 'You have unsaved changes' : 'All settings saved'}
+          </span>
+          <SubmitButton disabled={!isAdmin} isDirty={isDirty} />
         </div>
-      </div>
+      )}
     </form>
   );
 }
