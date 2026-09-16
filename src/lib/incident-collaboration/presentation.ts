@@ -113,23 +113,49 @@ export const PROVIDER_PRESENTATION: Record<
 export function getLifecyclePresentation(
   state: WarRoomPresentationLifecycle
 ): LifecyclePresentation {
-  return (
-    LIFECYCLE_PRESENTATION[state] ?? {
-      label: state,
-      tone: 'neutral',
-      description: '',
-    }
-  );
+  switch (state) {
+    case 'REQUESTED':
+      return LIFECYCLE_PRESENTATION.REQUESTED;
+    case 'PROVISIONING':
+      return LIFECYCLE_PRESENTATION.PROVISIONING;
+    case 'AMBIGUOUS':
+      return LIFECYCLE_PRESENTATION.AMBIGUOUS;
+    case 'READY':
+      return LIFECYCLE_PRESENTATION.READY;
+    case 'CLOSING':
+      return LIFECYCLE_PRESENTATION.CLOSING;
+    case 'CLOSED':
+      return LIFECYCLE_PRESENTATION.CLOSED;
+    case 'ARCHIVED':
+      return LIFECYCLE_PRESENTATION.ARCHIVED;
+    case 'FAILED':
+      return LIFECYCLE_PRESENTATION.FAILED;
+    default:
+      return {
+        label: state,
+        tone: 'neutral',
+        description: '',
+      };
+  }
 }
 
 export function getHealthPresentation(health: WarRoomPresentationHealth): HealthPresentation {
-  return (
-    HEALTH_PRESENTATION[health] ?? {
-      label: health,
-      tone: 'neutral',
-      description: '',
-    }
-  );
+  switch (health) {
+    case 'HEALTHY':
+      return HEALTH_PRESENTATION.HEALTHY;
+    case 'DEGRADED':
+      return HEALTH_PRESENTATION.DEGRADED;
+    case 'MISSING':
+      return HEALTH_PRESENTATION.MISSING;
+    case 'PERMISSION_ERROR':
+      return HEALTH_PRESENTATION.PERMISSION_ERROR;
+    default:
+      return {
+        label: health,
+        tone: 'neutral',
+        description: '',
+      };
+  }
 }
 
 export function toUserFacingWarRoomError(

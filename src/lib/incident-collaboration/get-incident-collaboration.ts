@@ -33,7 +33,6 @@ import { deriveProviderCanCreate, deriveWarRoomActions } from './capabilities';
 import { getProviderDeepLinkUrl } from './urls';
 import { PROVIDER_PRESENTATION } from './presentation';
 import { getIncidentMeeting } from './meeting-store';
-import { generateBridgeUrl } from '@/lib/war-room/bridge';
 
 export type GetIncidentCollaborationInput = {
   incidentId: string;

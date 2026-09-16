@@ -24,7 +24,8 @@ export function WarRoomProviderHeader({
   health,
   className,
 }: WarRoomProviderHeaderProps) {
-  const meta = PROVIDER_PRESENTATION[provider];
+  const meta =
+    provider === 'SLACK' ? PROVIDER_PRESENTATION.SLACK : PROVIDER_PRESENTATION.MICROSOFT_TEAMS;
   const isSlack = provider === 'SLACK';
 
   return (
