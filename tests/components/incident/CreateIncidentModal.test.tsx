@@ -167,12 +167,12 @@ describe('CreateIncidentModal', () => {
     await screen.findByText('Declare Incident');
 
     // Click Low Urgency button by title
-    const lowUrgencyBtn = screen.getByTitle(/Non-disruptive, quiet-hours-aware/i);
+    const lowUrgencyBtn = await screen.findByTitle(/Non-disruptive, quiet-hours-aware/i);
     fireEvent.click(lowUrgencyBtn);
     expect(lowUrgencyBtn.getAttribute('aria-pressed')).toBe('true');
 
     // Click P2 Priority button by title
-    const p2Btn = screen.getByTitle(/P2 \(High\)/i);
+    const p2Btn = await screen.findByTitle(/P2 \(High\)/i);
     fireEvent.click(p2Btn);
     expect(p2Btn.getAttribute('aria-pressed')).toBe('true');
   });
