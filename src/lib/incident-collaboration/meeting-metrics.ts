@@ -156,3 +156,75 @@ export function setMeetingHealthGauge(
   assertBoundedLabels(labels);
   setOperationalGauge('opsknight_meeting_health', Math.max(0, count), labels);
 }
+
+const ALL_PROVIDERS: IncidentMeetingProvider[] = [
+  'MICROSOFT_TEAMS',
+  'ZOOM',
+  'GOOGLE_MEET',
+  'JITSI',
+  'NONE',
+];
+
+const ALL_STATES = ['REQUESTED', 'PROVISIONING', 'READY', 'CLOSING', 'CLOSED', 'FAILED'];
+
+const ALL_HEALTHS = ['HEALTHY', 'DEGRADED', 'UNAVAILABLE'];
+
+/**
+ * Periodically produce snapshot gauges from the database for:
+ * - provider x state
+ * - provider x health
+ * - provider x cleanup debt
+ * Explicitly writes zeros for missing bounded combinations to prevent stale gauges.
+ */
+export async function collectIncidentCollaborationMetricsFromDB(): Promise<void> {
+  const prisma = (await import('@/lib/prisma')).default;
+  if (!prisma?.incidentMeeting?.groupBy) return;
+
+  try {
+    const [stateGroups, healthGroups, debtGroups] = await Promise.all([
+      prisma.incidentMeeting.groupBy({
+        by: ['provider', 'state'],
+        _count: { id: true },
+      }),
+      prisma.incidentMeeting.groupBy({
+        by: ['provider', 'health'],
+        _count: { id: true },
+      }),
+      prisma.incidentMeeting.groupBy({
+        by: ['provider'],
+        where: { externalCleanupPending: true },
+        _count: { id: true },
+      }),
+    ]);
+
+    const stateMap = new Map<string, number>();
+    for (const g of stateGroups) {
+      stateMap.set(`${g.provider}:${g.state}`, g._count.id);
+    }
+
+    const healthMap = new Map<string, number>();
+    for (const g of healthGroups) {
+      healthMap.set(`${g.provider}:${g.health}`, g._count.id);
+    }
+
+    const debtMap = new Map<string, number>();
+    for (const g of debtGroups) {
+      debtMap.set(g.provider, g._count.id);
+    }
+
+    // Explicitly write zero for all bounded combinations
+    for (const provider of ALL_PROVIDERS) {
+      setMeetingCleanupPendingGauge(provider, debtMap.get(provider) ?? 0);
+
+      for (const state of ALL_STATES) {
+        setMeetingStateGauge(provider, state, stateMap.get(`${provider}:${state}`) ?? 0);
+      }
+
+      for (const health of ALL_HEALTHS) {
+        setMeetingHealthGauge(provider, health, healthMap.get(`${provider}:${health}`) ?? 0);
+      }
+    }
+  } catch {
+    // Non-blocking in degraded DB or unit test environment
+  }
+}

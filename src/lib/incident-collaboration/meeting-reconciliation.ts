@@ -143,7 +143,12 @@ export async function reconcileIncidentMeeting(
     ? activeProvisionTokens.has(meeting.provisioningToken)
     : false;
   const hasCloseJob = activeClosingIncidentIds.has(meeting.incidentId);
-  const ageMs = now - (meeting.provisioningStartedAt?.getTime() ?? meeting.createdAt.getTime());
+  const closingTimestamp = meeting.closeStartedAt ?? meeting.updatedAt ?? meeting.createdAt;
+  const provisioningTimestamp = meeting.provisioningStartedAt ?? meeting.createdAt;
+  const ageMs =
+    meeting.state === 'CLOSING'
+      ? now - (closingTimestamp ? new Date(closingTimestamp).getTime() : now)
+      : now - (provisioningTimestamp ? new Date(provisioningTimestamp).getTime() : now);
 
   // Detect orphaned PROVISIONING
   if (meeting.state === 'PROVISIONING' && !hasProvisionJob && ageMs > 15 * 60 * 1000) {
@@ -233,7 +238,7 @@ export async function reconcileIncidentMeeting(
 }
 
 /**
- * Reconcile all stalled meeting provisions across all incidents using a single batch query.
+ * Reconcile all stalled meeting provisions and closes across all incidents using a single batch query.
  */
 export async function reconcileStalledMeetingProvisions(): Promise<number> {
   if (!prisma?.incidentMeeting?.findMany || !prisma?.incidentMeeting?.updateMany) return 0;
@@ -241,43 +246,82 @@ export async function reconcileStalledMeetingProvisions(): Promise<number> {
   const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
   const stalledMeetings = await prisma.incidentMeeting.findMany({
     where: {
-      state: 'PROVISIONING',
-      provisioningStartedAt: { lt: fifteenMinutesAgo },
+      OR: [
+        {
+          state: 'PROVISIONING',
+          provisioningStartedAt: { lt: fifteenMinutesAgo },
+        },
+        {
+          state: 'CLOSING',
+          closeStartedAt: { lt: fifteenMinutesAgo },
+        },
+      ],
     },
   });
 
   if (stalledMeetings.length === 0) return 0;
 
-  const { activeProvisionTokens } = await loadActiveMeetingJobSets();
+  const { activeProvisionTokens, activeClosingIncidentIds } = await loadActiveMeetingJobSets();
   let recoveredCount = 0;
 
   for (const m of stalledMeetings) {
-    if (!m.provisioningToken) continue;
-    if (!activeProvisionTokens.has(m.provisioningToken)) {
-      const res = await prisma.incidentMeeting.updateMany({
-        where: {
-          id: m.id,
-          state: 'PROVISIONING',
-          provisioningToken: m.provisioningToken,
-        },
-        data: {
-          state: 'FAILED',
-          health: 'UNAVAILABLE',
-          lastErrorCode: 'ORPHANED_PROVISIONING',
-          lastErrorMessage: 'Provisioning stalled with no active background worker.',
-          lastReconciledAt: new Date(),
-        },
-      });
-      if (res.count > 0) {
-        recoveredCount++;
-        recordMeetingReconciliationOutcome(m.provider as IncidentMeetingProvider, 'failed');
-        await emitMeetingAuditEvent({
-          action: 'MEETING_RECONCILE_SUCCEEDED',
-          incidentId: m.incidentId,
-          provider: m.provider as IncidentMeetingProvider,
-          generation: m.generation,
-          reason: 'ORPHANED_PROVISIONING',
+    if (m.state === 'CLOSING') {
+      if (!activeClosingIncidentIds.has(m.incidentId)) {
+        const res = await prisma.incidentMeeting.updateMany({
+          where: {
+            id: m.id,
+            state: 'CLOSING',
+          },
+          data: {
+            state: 'CLOSED',
+            health: 'DEGRADED',
+            externalCleanupPending: true,
+            closedAt: new Date(),
+            lastErrorCode: 'ORPHANED_CLOSING',
+            lastErrorMessage: 'Close operation timed out without active background worker.',
+            lastReconciledAt: new Date(),
+          },
         });
+        if (res.count > 0) {
+          recoveredCount++;
+          recordMeetingReconciliationOutcome(m.provider as IncidentMeetingProvider, 'retry');
+          await emitMeetingAuditEvent({
+            action: 'MEETING_RECONCILE_SUCCEEDED',
+            incidentId: m.incidentId,
+            provider: m.provider as IncidentMeetingProvider,
+            generation: m.generation,
+            reason: 'ORPHANED_CLOSING',
+          });
+        }
+      }
+    } else {
+      if (!m.provisioningToken) continue;
+      if (!activeProvisionTokens.has(m.provisioningToken)) {
+        const res = await prisma.incidentMeeting.updateMany({
+          where: {
+            id: m.id,
+            state: 'PROVISIONING',
+            provisioningToken: m.provisioningToken,
+          },
+          data: {
+            state: 'FAILED',
+            health: 'UNAVAILABLE',
+            lastErrorCode: 'ORPHANED_PROVISIONING',
+            lastErrorMessage: 'Provisioning stalled with no active background worker.',
+            lastReconciledAt: new Date(),
+          },
+        });
+        if (res.count > 0) {
+          recoveredCount++;
+          recordMeetingReconciliationOutcome(m.provider as IncidentMeetingProvider, 'failed');
+          await emitMeetingAuditEvent({
+            action: 'MEETING_RECONCILE_SUCCEEDED',
+            incidentId: m.incidentId,
+            provider: m.provider as IncidentMeetingProvider,
+            generation: m.generation,
+            reason: 'ORPHANED_PROVISIONING',
+          });
+        }
       }
     }
   }
@@ -287,8 +331,9 @@ export async function reconcileStalledMeetingProvisions(): Promise<number> {
 
 /**
  * Reconcile closed meetings with unresolved external cleanup debt.
+ * Automatically schedules cleanup retry jobs for due debt items up to maxRetries.
  */
-export async function reconcileMeetingCleanupDebt(): Promise<number> {
+export async function reconcileMeetingCleanupDebt(maxRetries: number = 3): Promise<number> {
   if (!prisma?.incidentMeeting?.findMany) return 0;
 
   const debtMeetings = await prisma.incidentMeeting.findMany({
@@ -298,10 +343,45 @@ export async function reconcileMeetingCleanupDebt(): Promise<number> {
     },
   });
 
-  // Update telemetry gauge
-  const providerCounts: Record<string, number> = {};
+  const { activeClosingIncidentIds } = await loadActiveMeetingJobSets();
+  let retriedCount = 0;
+
   for (const m of debtMeetings) {
-    providerCounts[m.provider] = (providerCounts[m.provider] || 0) + 1;
+    if (activeClosingIncidentIds.has(m.incidentId)) {
+      continue;
+    }
+
+    const attempts = m.cleanupRetryCount ?? 0;
+    if (attempts >= maxRetries) {
+      continue; // Terminal debt requiring operator intervention
+    }
+
+    const lastAttempt = m.cleanupAttemptedAt?.getTime() ?? m.closedAt?.getTime() ?? 0;
+    const backoffMs = Math.min(15 * 60 * 1000, Math.pow(2, attempts) * 60 * 1000);
+    if (Date.now() - lastAttempt < backoffMs) {
+      continue;
+    }
+
+    const res = await retryIncidentMeetingCleanup(m.id);
+    if (res.success) {
+      retriedCount++;
+      activeClosingIncidentIds.add(m.incidentId);
+    }
+  }
+
+  // Update telemetry gauge for ALL known providers, writing 0 for providers without debt
+  const providerCounts: Record<IncidentMeetingProvider, number> = {
+    MICROSOFT_TEAMS: 0,
+    ZOOM: 0,
+    GOOGLE_MEET: 0,
+    JITSI: 0,
+    NONE: 0,
+  };
+  for (const m of debtMeetings) {
+    const prov = m.provider as IncidentMeetingProvider;
+    if (prov in providerCounts) {
+      providerCounts[prov]++;
+    }
   }
   for (const [provider, count] of Object.entries(providerCounts)) {
     setMeetingCleanupPendingGauge(provider as IncidentMeetingProvider, count);
@@ -371,7 +451,27 @@ export async function retryIncidentMeetingCleanup(
     return { success: false, error: 'Provider does not support external meeting termination' };
   }
 
+  const closeToken = crypto.randomUUID();
   try {
+    const claimResult = await prisma.incidentMeeting.updateMany({
+      where: {
+        id: meeting.id,
+        generation: meeting.generation,
+        state: 'CLOSED',
+        externalCleanupPending: true,
+      },
+      data: {
+        closeToken,
+        cleanupAttemptedAt: new Date(),
+        lastReconciledAt: new Date(),
+        cleanupRetryCount: { increment: 1 },
+      },
+    });
+
+    if (claimResult.count === 0) {
+      return { success: false, error: 'Meeting cleanup already claimed or no longer pending' };
+    }
+
     const job = await prisma.backgroundJob.create({
       data: {
         type: 'MEETING_CLOSE',
@@ -379,20 +479,16 @@ export async function retryIncidentMeetingCleanup(
         scheduledAt: new Date(),
         maxAttempts: 5,
         payload: {
+          meetingId: meeting.id,
           incidentId: meeting.incidentId,
+          generation: meeting.generation,
+          closeToken,
+          cleanupRepair: true,
           provider: meeting.provider,
           providerMeetingId: meeting.providerMeetingId,
           organizerEmail: meeting.organizerEmail || null,
           reason: 'external_cleanup_retry',
         },
-      },
-    });
-
-    await prisma.incidentMeeting.update({
-      where: { id: meeting.id },
-      data: {
-        cleanupAttemptedAt: new Date(),
-        lastReconciledAt: new Date(),
       },
     });
 
