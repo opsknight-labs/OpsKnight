@@ -26,40 +26,109 @@ describe('ChatOpsSettingsPage Component', () => {
     vi.clearAllMocks();
   });
 
-  it('renders Slack disconnected warning when Slack is not connected', () => {
-    render(<ChatOpsSettingsPage config={mockConfig} isAdmin={true} isSlackConnected={false} />);
+  it('renders neutral message when no providers are connected', () => {
+    render(
+      <ChatOpsSettingsPage
+        config={mockConfig}
+        isAdmin={true}
+        providerStatus={{
+          slack: { connected: false },
+          teams: { connected: false, warRoomsEnabled: false, destinationsCount: 0 },
+        }}
+      />
+    );
 
-    expect(screen.getByText('Slack Integration Not Connected')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Connect Slack Integration/i })).toBeInTheDocument();
+    expect(screen.getByText('No collaboration provider is configured yet')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Connect Slack/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Configure Teams/i })).toBeInTheDocument();
   });
 
-  it('renders all cards and live simulation when Slack is connected', () => {
-    render(<ChatOpsSettingsPage config={mockConfig} isAdmin={true} isSlackConnected={true} />);
+  it('renders provider status cards, policy settings, video bridge, and provider capabilities table', () => {
+    render(
+      <ChatOpsSettingsPage
+        config={mockConfig}
+        isAdmin={true}
+        providerStatus={{
+          slack: { connected: true, workspaceName: 'OpsKnight Dev' },
+          teams: { connected: true, warRoomsEnabled: true, destinationsCount: 2 },
+        }}
+      />
+    );
 
-    // Slack connection banner
-    expect(screen.getByText('Slack Bot Integration Connected')).toBeInTheDocument();
+    // Connected providers
+    expect(screen.getByText('Connected Providers')).toBeInTheDocument();
+    expect(screen.getAllByText('Slack').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Microsoft Teams').length).toBeGreaterThan(0);
 
-    // Card 1: Channel automation and live simulation pill
-    expect(screen.getByText('Incident Channel Automation')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Slack Channel Prefix/i)).toBeInTheDocument();
-    expect(screen.getByText('Live Channel Name Simulation')).toBeInTheDocument();
-    expect(screen.getByText(/inc-402-database-latency/i)).toBeInTheDocument();
+    // War room policy
+    expect(screen.getByText('War Room & Collaboration Policy')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Room Name Prefix/i)).toBeInTheDocument();
+    expect(screen.getByText('Generated Name Preview')).toBeInTheDocument();
+    expect(screen.getAllByText(/inc-payments-api-a82c/i).length).toBe(2);
 
-    // Card 2: Auto-creation triggers
-    expect(screen.getByText('Auto-Creation Triggers')).toBeInTheDocument();
-    expect(screen.getByText(/Auto-Create on Incident Priority/i)).toBeInTheDocument();
-    expect(screen.getByText(/Auto-Create on Incident Urgency/i)).toBeInTheDocument();
+    // Auto-creation policy
+
+    expect(screen.getByText('Automatic Creation Rules')).toBeInTheDocument();
     expect(screen.getByText('P1')).toBeInTheDocument();
     expect(screen.getByText('P2')).toBeInTheDocument();
-    expect(screen.getByText('High Urgency')).toBeInTheDocument();
+    expect(screen.getAllByText('High').length).toBeGreaterThan(0);
 
-    // Card 3: Video War Room
+    // Video War Room
+
     expect(screen.getByText('Video War Room Bridge')).toBeInTheDocument();
+    expect(screen.getByText('Microsoft Teams Meeting')).toBeInTheDocument();
     expect(screen.getByText('Jitsi Meet')).toBeInTheDocument();
     expect(screen.getByText('Zoom Meeting')).toBeInTheDocument();
     expect(screen.getByText('Google Meet')).toBeInTheDocument();
 
-    // Sticky Action Bar
-    expect(screen.getByRole('button', { name: /Save Changes/i })).toBeInTheDocument();
+    // Provider Capabilities Table
+    expect(screen.getByText('Provider Capabilities')).toBeInTheDocument();
+    expect(screen.getByText('Interactive ChatOps')).toBeInTheDocument();
+
+    // Default Provider selector when both are connected
+    expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SLACK')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('MICROSOFT_TEAMS').length).toBe(2);
+    expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
+  });
+
+  it('renders explicit provider choices with availability badges when only Slack is connected', () => {
+    render(
+      <ChatOpsSettingsPage
+        config={mockConfig}
+        isAdmin={true}
+        providerStatus={{
+          slack: { connected: true, workspaceName: 'OpsKnight Dev' },
+          teams: { connected: false, warRoomsEnabled: false, destinationsCount: 0 },
+        }}
+      />
+    );
+
+    expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
+    expect(screen.getAllByText('Connected').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SLACK')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('MICROSOFT_TEAMS').length).toBe(2);
+    expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
+  });
+
+  it('renders explicit provider choices with availability badges when only Teams is connected', () => {
+    render(
+      <ChatOpsSettingsPage
+        config={mockConfig}
+        isAdmin={true}
+        providerStatus={{
+          slack: { connected: false },
+          teams: { connected: true, warRoomsEnabled: true, destinationsCount: 1 },
+        }}
+      />
+    );
+
+    expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
+    expect(screen.getAllByText('Connected').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SLACK')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('MICROSOFT_TEAMS').length).toBe(2);
+    expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
   });
 });

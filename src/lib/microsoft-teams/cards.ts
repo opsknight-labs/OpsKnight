@@ -38,6 +38,13 @@ export type MicrosoftTeamsIncidentCardInput = {
 export type MicrosoftTeamsCardOptions = {
   /** When true, render card with actions disabled (e.g. resolved terminal state). */
   disableActions?: boolean;
+  meeting?: {
+    provider: string;
+    joinUrl: string;
+    joinWebUrl?: string | null;
+    conferenceId?: string | null;
+    tollNumber?: string | null;
+  } | null;
   interactive?: {
     destinationId: string;
     messageGeneration: number;
@@ -343,6 +350,21 @@ function safeIncidentDescription(value: string | null | undefined, maxLen = 280)
   return trimmed.slice(0, maxLen - 1) + '…';
 }
 
+function formatTeamsMeetingLabel(provider?: string | null): string {
+  switch (provider) {
+    case 'MICROSOFT_TEAMS':
+      return 'Teams';
+    case 'ZOOM':
+      return 'Zoom';
+    case 'GOOGLE_MEET':
+      return 'Google Meet';
+    case 'JITSI':
+      return 'Jitsi';
+    default:
+      return 'Video';
+  }
+}
+
 /**
  * War-room incident card — capability-aware.
  *
@@ -482,6 +504,22 @@ export function buildMicrosoftTeamsIncidentCard(
                 } as const,
               ]
             : []),
+          ...(options?.meeting?.joinUrl && !disableActions
+            ? [
+                {
+                  type: 'Container',
+                  style: 'accent',
+                  spacing: 'Medium',
+                  items: [
+                    {
+                      type: 'TextBlock',
+                      text: `📹 **Video Bridge**: [Join ${formatTeamsMeetingLabel(options.meeting.provider)} Meeting](${safeTeamsUrl(options.meeting.joinUrl)})`,
+                      wrap: true,
+                    },
+                  ],
+                } as const,
+              ]
+            : []),
           {
             type: 'TextBlock',
             text: foot,
@@ -495,6 +533,16 @@ export function buildMicrosoftTeamsIncidentCard(
     ],
     actions: [
       ...chatOpsActions,
+      ...(options?.meeting?.joinUrl && !disableActions
+        ? [
+            {
+              type: 'Action.OpenUrl' as const,
+              title: `Join ${formatTeamsMeetingLabel(options.meeting.provider)} Meeting`,
+              url: safeTeamsUrl(options.meeting.joinUrl),
+              style: 'positive' as const,
+            },
+          ]
+        : []),
       {
         type: 'Action.OpenUrl',
         title: 'View Incident ↗',

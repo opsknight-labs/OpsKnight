@@ -49,7 +49,9 @@ export type JobType =
   | 'WAR_ROOM_PROJECT'
   | 'WAR_ROOM_RECONCILE'
   | 'WAR_ROOM_CLOSE'
-  | 'WAR_ROOM_PROVIDER_EVENT';
+  | 'WAR_ROOM_PROVIDER_EVENT'
+  | 'MEETING_PROVISION'
+  | 'MEETING_CLOSE';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -195,7 +197,7 @@ export async function scheduleJob(
   }
   const job = await prisma.backgroundJob.create({
     data: {
-      type,
+      type: type as never,
       status: 'PENDING',
       scheduledAt,
       payload: payload as Prisma.InputJsonObject,
@@ -447,6 +449,22 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
       await settleWarRoomProjectionFailure(warRoomIdValue, versionValue);
     }
   }
+  if (!shouldRetry && job.type === 'MEETING_CLOSE') {
+    const incidentId = payloadValue(job.payload, 'incidentId');
+    if (typeof incidentId === 'string') {
+      try {
+        const { settleMeetingCloseFailure } =
+          await import('../incident-collaboration/meeting-store');
+        await settleMeetingCloseFailure(incidentId, error);
+      } catch (settleErr) {
+        logger.warn('jobs.meeting_close_failure_settlement_failed', {
+          jobId: job.id,
+          incidentId,
+          error: settleErr instanceof Error ? settleErr.message : String(settleErr),
+        });
+      }
+    }
+  }
 }
 
 export async function markJobFailed(jobId: string, error: string): Promise<void> {
@@ -576,6 +594,47 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         }
         return markWarRoomJobCompleted(job.id);
       }
+      case 'MEETING_PROVISION': {
+        if (
+          typeof payloadValue(job.payload, 'incidentId') !== 'string' ||
+          typeof payloadValue(job.payload, 'provisioningToken') !== 'string'
+        )
+          throw new Error('Meeting provision job is missing incidentId or provisioningToken');
+        const { executeMeetingProvision } = await import('../incident-collaboration/meeting-store');
+        const rawMeeting = job.payload as Record<string, unknown>;
+        await executeMeetingProvision({
+          incidentId: requiredPayloadString(job.payload, 'incidentId'),
+          provisioningToken: requiredPayloadString(job.payload, 'provisioningToken'),
+          provider: rawMeeting.provider as never,
+          generation: typeof rawMeeting.generation === 'number' ? rawMeeting.generation : undefined,
+          incidentTitle:
+            typeof rawMeeting.incidentTitle === 'string' ? rawMeeting.incidentTitle : undefined,
+          incidentNumber:
+            typeof rawMeeting.incidentNumber === 'number' ? rawMeeting.incidentNumber : undefined,
+          customTemplate:
+            typeof rawMeeting.customTemplate === 'string' ? rawMeeting.customTemplate : null,
+          attempt: job.attempts,
+          maxAttempts: job.maxAttempts,
+        });
+        await markJobCompleted(job.id);
+        return true;
+      }
+      case 'MEETING_CLOSE': {
+        if (typeof payloadValue(job.payload, 'incidentId') !== 'string')
+          throw new Error('Meeting close job is missing incidentId');
+        const { executeMeetingCloseJob } = await import('../incident-collaboration/meeting-store');
+        const rawClose = job.payload as Record<string, unknown>;
+        await executeMeetingCloseJob({
+          incidentId: requiredPayloadString(job.payload, 'incidentId'),
+          provider: (rawClose.provider as never) || 'MICROSOFT_TEAMS',
+          providerMeetingId:
+            typeof rawClose.providerMeetingId === 'string' ? rawClose.providerMeetingId : null,
+          organizerEmail:
+            typeof rawClose.organizerEmail === 'string' ? rawClose.organizerEmail : null,
+        });
+        await markJobCompleted(job.id);
+        return true;
+      }
       case 'WAR_ROOM_PARTICIPANT_SYNC': {
         if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
           throw new Error('War-room participant sync job is missing warRoomId');
@@ -609,8 +668,11 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           return markWarRoomJobCompleted(job.id);
         }
         if (raw.reason === 'external_cleanup_retry') {
-          const { reconcileTerminalWarRoomDriftForRoom } = await import('../war-room/terminal-cleanup');
-          await reconcileTerminalWarRoomDriftForRoom(requiredPayloadString(job.payload, 'warRoomId'));
+          const { reconcileTerminalWarRoomDriftForRoom } =
+            await import('../war-room/terminal-cleanup');
+          await reconcileTerminalWarRoomDriftForRoom(
+            requiredPayloadString(job.payload, 'warRoomId')
+          );
           return markWarRoomJobCompleted(job.id);
         }
         if (raw.reason === 'permission_refresh') {
@@ -624,30 +686,54 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
               where: { id: requiredPayloadString(job.payload, 'warRoomId') },
               select: { provider: true, providerTenantId: true, providerContainerId: true },
             });
-            if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId && room.providerContainerId) {
+            if (
+              room?.provider === 'MICROSOFT_TEAMS' &&
+              room.providerTenantId &&
+              room.providerContainerId
+            ) {
               const { getTeamsWarRoomRscGrantState } = await import('../microsoft-teams/client');
-              const { MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS } = await import('../microsoft-teams/app-manifest');
+              const { MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS } =
+                await import('../microsoft-teams/app-manifest');
               const requiredPermissions = [...MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS];
               await getTeamsWarRoomRscGrantState({
                 tenantId: room.providerTenantId,
                 teamId: room.providerContainerId,
                 requiredPermissions,
-              }).catch(() => { probeSucceeded = false; return null; });
+              }).catch(() => {
+                probeSucceeded = false;
+                return null;
+              });
             } else if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId) {
               const { getTeamsGrantedRscPermissions } = await import('../microsoft-teams/client');
-              await getTeamsGrantedRscPermissions({ explicitTenantId: room.providerTenantId }).catch(() => { probeSucceeded = false; return null; });
+              await getTeamsGrantedRscPermissions({
+                explicitTenantId: room.providerTenantId,
+              }).catch(() => {
+                probeSucceeded = false;
+                return null;
+              });
             }
-          } catch { probeSucceeded = false; }
+          } catch {
+            probeSucceeded = false;
+          }
           const { reconcileWarRoom } = await import('../war-room/engine');
           await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
           try {
             const { emitAuditEvent: emitWarRoomAudit } = await import('../audit');
             await emitWarRoomAudit({
-              action: probeSucceeded ? 'TEAMS_PERMISSION_REFRESH_SUCCEEDED' : 'TEAMS_PERMISSION_REFRESH_FAILED',
+              action: probeSucceeded
+                ? 'TEAMS_PERMISSION_REFRESH_SUCCEEDED'
+                : 'TEAMS_PERMISSION_REFRESH_FAILED',
               source: 'BACKGROUND',
-              target: { type: 'SYSTEM_CONFIG', id: requiredPayloadString(job.payload, 'warRoomId') },
+              target: {
+                type: 'SYSTEM_CONFIG',
+                id: requiredPayloadString(job.payload, 'warRoomId'),
+              },
               actor: { type: 'SYSTEM' },
-              metadata: { warRoomId: requiredPayloadString(job.payload, 'warRoomId'), reason: 'permission_refresh', result: probeSucceeded ? 'succeeded' : 'failed' } as unknown as never,
+              metadata: {
+                warRoomId: requiredPayloadString(job.payload, 'warRoomId'),
+                reason: 'permission_refresh',
+                result: probeSucceeded ? 'succeeded' : 'failed',
+              } as unknown as never,
             });
           } catch {}
           return markWarRoomJobCompleted(job.id);
@@ -660,25 +746,47 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
               select: { provider: true },
             });
             if (room?.provider === 'MICROSOFT_TEAMS') {
-              const { probeMicrosoftTeamsChannelHealth } = await import('../war-room/providers/microsoft-teams/operations');
-              const probeResult = await probeMicrosoftTeamsChannelHealth(requiredPayloadString(job.payload, 'warRoomId')).catch(() => { probeProbeOk = false; return null; }) as { health?: string } | null;
-              if (probeResult && probeResult.health !== 'HEALTHY' && probeResult.health !== 'MISSING' && probeResult.health !== 'PERMISSION_ERROR') {
+              const { probeMicrosoftTeamsChannelHealth } =
+                await import('../war-room/providers/microsoft-teams/operations');
+              const probeResult = (await probeMicrosoftTeamsChannelHealth(
+                requiredPayloadString(job.payload, 'warRoomId')
+              ).catch(() => {
+                probeProbeOk = false;
+                return null;
+              })) as { health?: string } | null;
+              if (
+                probeResult &&
+                probeResult.health !== 'HEALTHY' &&
+                probeResult.health !== 'MISSING' &&
+                probeResult.health !== 'PERMISSION_ERROR'
+              ) {
                 // DEGRADED/UNKNOWN treated as not healthy for audit; still reconcile
                 probeProbeOk = false;
               }
               if (!probeResult) probeProbeOk = false;
             }
-          } catch { probeProbeOk = false; }
+          } catch {
+            probeProbeOk = false;
+          }
           const { reconcileWarRoom } = await import('../war-room/engine');
           await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
           try {
             const { emitAuditEvent: emitWarRoomAudit } = await import('../audit');
             await emitWarRoomAudit({
-              action: probeProbeOk ? 'TEAMS_CHANNEL_VERIFICATION_SUCCEEDED' : 'TEAMS_CHANNEL_VERIFICATION_FAILED',
+              action: probeProbeOk
+                ? 'TEAMS_CHANNEL_VERIFICATION_SUCCEEDED'
+                : 'TEAMS_CHANNEL_VERIFICATION_FAILED',
               source: 'BACKGROUND',
-              target: { type: 'SYSTEM_CONFIG', id: requiredPayloadString(job.payload, 'warRoomId') },
+              target: {
+                type: 'SYSTEM_CONFIG',
+                id: requiredPayloadString(job.payload, 'warRoomId'),
+              },
               actor: { type: 'SYSTEM' },
-              metadata: { warRoomId: requiredPayloadString(job.payload, 'warRoomId'), reason: 'connection_test', result: probeProbeOk ? 'succeeded' : 'failed' } as unknown as never,
+              metadata: {
+                warRoomId: requiredPayloadString(job.payload, 'warRoomId'),
+                reason: 'connection_test',
+                result: probeProbeOk ? 'succeeded' : 'failed',
+              } as unknown as never,
             });
           } catch {}
           return markWarRoomJobCompleted(job.id);
@@ -692,7 +800,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           throw new Error('War-room close job is missing warRoomId');
         const { finalizeWarRoomCloseNeutral } = await import('../war-room/engine');
         const rawClose = job.payload as Record<string, unknown>;
-        const incidentId = typeof rawClose.incidentId === 'string' ? rawClose.incidentId : undefined;
+        const incidentId =
+          typeof rawClose.incidentId === 'string' ? rawClose.incidentId : undefined;
         const tv = rawClose.terminalProjectionVersion;
         const terminalProjectionVersion =
           typeof tv === 'number' && Number.isInteger(tv) ? tv : undefined;
@@ -953,7 +1062,9 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
       job.type === 'WAR_ROOM_PARTICIPANT_SYNC' ||
       job.type === 'WAR_ROOM_RECONCILE' ||
       job.type === 'WAR_ROOM_CLOSE' ||
-      job.type === 'WAR_ROOM_PROVIDER_EVENT';
+      job.type === 'WAR_ROOM_PROVIDER_EVENT' ||
+      job.type === 'MEETING_PROVISION' ||
+      job.type === 'MEETING_CLOSE';
     if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
       const retryBudgetNeutral =

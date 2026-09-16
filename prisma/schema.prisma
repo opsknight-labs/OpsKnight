@@ -144,6 +144,29 @@ enum WarRoomHealthState {
   PERMISSION_ERROR
 }
 
+enum IncidentMeetingProvider {
+  MICROSOFT_TEAMS
+  ZOOM
+  GOOGLE_MEET
+  JITSI
+  NONE
+}
+
+enum IncidentMeetingState {
+  REQUESTED
+  PROVISIONING
+  READY
+  CLOSING
+  CLOSED
+  FAILED
+}
+
+enum IncidentMeetingHealth {
+  HEALTHY
+  DEGRADED
+  UNAVAILABLE
+}
+
 enum NotificationTrafficClass {
   CRITICAL
   TRANSACTIONAL
@@ -679,6 +702,7 @@ model MicrosoftTeamsConfig {
   interactiveEnabled Boolean            @default(false)
   warRoomsEnabled    Boolean            @default(false)
   defaultWarRoomMembershipType WarRoomMembershipType @default(STANDARD)
+  defaultMeetingOrganizerUpn String?
   createdAt    DateTime                 @default(now())
   updatedAt    DateTime                 @updatedAt
   updatedBy    String?
@@ -821,8 +845,38 @@ model IncidentWarRoom {
   @@index([incidentId, provider, state])
   @@index([provider, providerTenantId, providerContainerId, providerChannelId])
   @@index([state, provisioningStartedAt])
-  @@index([provider, health, lastReconciledAt])
   @@index([state, health, externalCleanupPending, lastReconciledAt])
+}
+
+model IncidentMeeting {
+  id                    String                  @id @default(cuid())
+  incidentId            String
+  provider              IncidentMeetingProvider
+  generation            Int                     @default(1)
+  state                 IncidentMeetingState    @default(REQUESTED)
+  health                IncidentMeetingHealth   @default(HEALTHY)
+  externalId            String                  @unique
+  joinUrl               String
+  joinWebUrl            String?
+  conferenceId          String?
+  tollNumber            String?
+  tollFreeNumber        String?
+  organizerEmail        String?
+  providerMeetingId     String?
+  provisioningToken     String?
+  provisioningStartedAt DateTime?
+  readyAt               DateTime?
+  closedAt              DateTime?
+  lastErrorCode         String?
+  lastErrorMessage      String?
+  metadata              Json?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  incident              Incident                @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, generation])
+  @@index([incidentId, state])
+  @@index([provider, externalId])
 }
 
 model WarRoomParticipant {
@@ -1004,6 +1058,7 @@ model Incident {
   pinnedMessages          SlackPinnedMessage[]
   microsoftTeamsMessages  MicrosoftTeamsIncidentMessage[]
   warRooms                IncidentWarRoom[]
+  meetings                IncidentMeeting[]
   slaPauses               IncidentSlaPause[]
   @@index([dedupKey])
   @@index([serviceId, dedupKey, status])
@@ -1707,6 +1762,8 @@ enum JobType {
   WAR_ROOM_RECONCILE
   WAR_ROOM_CLOSE
   WAR_ROOM_PROVIDER_EVENT
+  MEETING_PROVISION
+  MEETING_CLOSE
 }
 
 enum JobStatus {

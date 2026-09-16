@@ -18,7 +18,10 @@ export async function provisionWarRoom(
   provisioningToken: string,
   opts?: { reconciliationOnly?: boolean }
 ): Promise<void> {
-  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true } });
+  const room = await prisma.incidentWarRoom.findUnique({
+    where: { id: warRoomId },
+    select: { state: true },
+  });
   // Normal create path must not race to READY once a durable close has won.
   // Reconciliation-only jobs are the explicit exception: they are marker-only
   // lookups for AMBIGUOUS/CLOSING that must NEVER POST a new room.
@@ -54,7 +57,10 @@ export async function reconcileWarRoom(warRoomId: string): Promise<void> {
 // ── Neutral lifecycle operations (routes must not branch on provider) ──
 
 /** Ensure a marker-only reconciliation (WAR_ROOM_PROVISION) exists for this room. */
-export async function ensureWarRoomReconciliationJob(warRoomId: string, provisioningToken: string): Promise<void> {
+export async function ensureWarRoomReconciliationJob(
+  warRoomId: string,
+  provisioningToken: string
+): Promise<void> {
   // Token + flag aware dedupe: only suppress when an identical reconciliationOnly
   // job for this warRoomId+token already exists. A stale generic WAR_ROOM_PROVISION
   // or a different token must not swallow the durable handoff.
@@ -87,17 +93,31 @@ export async function ensureWarRoomReconciliationJob(warRoomId: string, provisio
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
 function isClosingReconciliationExpired(createAttemptedAt: Date | null): boolean {
-  return createAttemptedAt != null && Date.now() >= createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
+  return (
+    createAttemptedAt != null &&
+    Date.now() >= createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS
+  );
 }
 
 /** Repair helper: ensure a CLOSING room has its durable close jobs (crash-gap recovery). */
 async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
-    select: { state: true, health: true, projectionVersion: true, lastProjectedVersion: true, createAttemptedAt: true, providerChannelId: true, provisioningToken: true },
+    select: {
+      state: true,
+      health: true,
+      projectionVersion: true,
+      lastProjectedVersion: true,
+      createAttemptedAt: true,
+      providerChannelId: true,
+      provisioningToken: true,
+    },
   });
   if (!room || room.state !== 'CLOSING') return;
-  const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
+  const createUnresolved =
+    room.createAttemptedAt != null &&
+    room.providerChannelId == null &&
+    room.provisioningToken != null;
   const reconciliationExpired = isClosingReconciliationExpired(room.createAttemptedAt);
   // CLOSING + unresolved create: identity not yet adopted. No terminal projection
   // should run until the provisioning reconcile resolves the external create —
@@ -116,7 +136,8 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
       data: {
         health: 'DEGRADED',
         lastErrorCode: 'RECONCILIATION_EXPIRED_UNVERIFIED',
-        lastError: 'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
+        lastError:
+          'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
         provisioningToken: null,
         externalCleanupPending: true,
         externalCleanupReason: 'RECONCILIATION_EXPIRED_UNVERIFIED',
@@ -125,7 +146,11 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
     });
   }
   const existingClose = await prisma.backgroundJob.findFirst({
-    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    where: {
+      type: 'WAR_ROOM_CLOSE',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      payload: { path: ['warRoomId'], equals: warRoomId },
+    },
     select: { id: true, payload: true },
   });
   // If close job already exists, ensure a project job for the EXACT terminal version also exists
@@ -134,8 +159,13 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
   if (existingClose) {
     const liveUnresolved = createUnresolved && !reconciliationExpired;
     if (liveUnresolved) return;
-    const rawPayload = existingClose.payload as unknown as { terminalProjectionVersion?: number } | null;
-    const terminalVersion: number | null = typeof rawPayload?.terminalProjectionVersion === 'number' ? rawPayload.terminalProjectionVersion : null;
+    const rawPayload = existingClose.payload as unknown as {
+      terminalProjectionVersion?: number;
+    } | null;
+    const terminalVersion: number | null =
+      typeof rawPayload?.terminalProjectionVersion === 'number'
+        ? rawPayload.terminalProjectionVersion
+        : null;
     const lastProjected = room.lastProjectedVersion ?? 0;
     if (terminalVersion != null) {
       if (lastProjected >= terminalVersion) return; // already satisfied
@@ -152,7 +182,10 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
       });
       if (existingExactProj) return;
       await prisma.$transaction(async tx => {
-        const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true } });
+        const fresh = await tx.incidentWarRoom.findUnique({
+          where: { id: warRoomId },
+          select: { state: true },
+        });
         if (!fresh || fresh.state !== 'CLOSING') return;
         const stillExact = await tx.backgroundJob.findFirst({
           where: {
@@ -180,12 +213,19 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
     }
     // Legacy close without terminalProjectionVersion — fall back to any active project check
     const existingAnyProj = await prisma.backgroundJob.findFirst({
-      where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      where: {
+        type: 'WAR_ROOM_PROJECT',
+        status: { in: ['PENDING', 'PROCESSING'] },
+        payload: { path: ['warRoomId'], equals: warRoomId },
+      },
       select: { id: true },
     });
     if (existingAnyProj) return;
     await prisma.$transaction(async tx => {
-      const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true } });
+      const fresh = await tx.incidentWarRoom.findUnique({
+        where: { id: warRoomId },
+        select: { state: true, projectionVersion: true },
+      });
       if (!fresh || fresh.state !== 'CLOSING') return;
       await tx.backgroundJob.create({
         data: {
@@ -211,7 +251,11 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
     });
     if (!fresh || fresh.state !== 'CLOSING') return;
     const stillNoClose = await tx.backgroundJob.findFirst({
-      where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      where: {
+        type: 'WAR_ROOM_CLOSE',
+        status: { in: ['PENDING', 'PROCESSING'] },
+        payload: { path: ['warRoomId'], equals: warRoomId },
+      },
       select: { id: true },
     });
     if (stillNoClose) return;
@@ -223,7 +267,10 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
         data: { projectionVersion: { increment: 1 } },
       });
       if (inc.count === 1) {
-        const after = await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: warRoomId }, select: { projectionVersion: true } });
+        const after = await tx.incidentWarRoom.findUniqueOrThrow({
+          where: { id: warRoomId },
+          select: { projectionVersion: true },
+        });
         terminal = after.projectionVersion;
       }
     }
@@ -242,7 +289,12 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
         status: 'PENDING',
         scheduledAt: new Date(Date.now() + 2_000),
         maxAttempts: 5,
-        payload: { warRoomId, incidentId, closeGeneration: Date.now(), terminalProjectionVersion: terminal } as unknown as never,
+        payload: {
+          warRoomId,
+          incidentId,
+          closeGeneration: Date.now(),
+          terminalProjectionVersion: terminal,
+        } as unknown as never,
       },
     });
   });
@@ -256,8 +308,21 @@ async function repairWarRoomCloseJobs(warRoomId: string, incidentId: string): Pr
  * Transient archive failures keep the room in CLOSING for queue retry; ambiguous is surfaced as DEGRADED.
  * Initiation is atomic: CLOSING + projection increment + both jobs in one serializable transaction.
  */
-export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId: string }): Promise<boolean> {
-  const room = await prisma.incidentWarRoom.findFirst({ where: { id: input.warRoomId, incidentId: input.incidentId }, select: { id: true, provider: true, state: true, provisioningToken: true, createAttemptedAt: true, closeRequestedAt: true } });
+export async function closeWarRoomNeutral(input: {
+  incidentId: string;
+  warRoomId: string;
+}): Promise<boolean> {
+  const room = await prisma.incidentWarRoom.findFirst({
+    where: { id: input.warRoomId, incidentId: input.incidentId },
+    select: {
+      id: true,
+      provider: true,
+      state: true,
+      provisioningToken: true,
+      createAttemptedAt: true,
+      closeRequestedAt: true,
+    },
+  });
   if (!room) return false;
   if (room.state === 'CLOSED' || room.state === 'ARCHIVED') return true; // idempotent no-op
   if (room.state === 'CLOSING') {
@@ -283,17 +348,26 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
   const result = await runSerializableTransaction(async tx => {
     const existing = await tx.incidentWarRoom.findUnique({
       where: { id: input.warRoomId },
-      select: { incidentId: true, provider: true, state: true, createAttemptedAt: true, provisioningToken: true },
+      select: {
+        incidentId: true,
+        provider: true,
+        state: true,
+        createAttemptedAt: true,
+        provisioningToken: true,
+      },
     });
     if (!existing) return { initiated: false as const };
-    if (existing.incidentId !== input.incidentId || existing.provider !== room.provider) return { initiated: false as const };
-    if (!['READY', 'PROVISIONING', 'FAILED'].includes(existing.state)) return { initiated: false as const };
+    if (existing.incidentId !== input.incidentId || existing.provider !== room.provider)
+      return { initiated: false as const };
+    if (!['READY', 'PROVISIONING', 'FAILED'].includes(existing.state))
+      return { initiated: false as const };
 
     // CLOSING with unresolved in-flight create must not have been raced before
     // we own CLOSING — let the winner's provisioning token handle the late
     // response. The data update below preserves provisioningToken when needed.
 
-    const preserveProvisioningFence = existing.state === 'PROVISIONING' && existing.createAttemptedAt != null;
+    const preserveProvisioningFence =
+      existing.state === 'PROVISIONING' && existing.createAttemptedAt != null;
     const data: Record<string, unknown> = {
       state: 'CLOSING',
       closeRequestedAt: new Date(),
@@ -305,7 +379,12 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
       (data as Record<string, unknown>).provisioningStartedAt = null;
     }
     const changed = await tx.incidentWarRoom.updateMany({
-      where: { id: input.warRoomId, incidentId: input.incidentId, provider: room.provider as never, state: { in: ['READY', 'PROVISIONING', 'FAILED'] } },
+      where: {
+        id: input.warRoomId,
+        incidentId: input.incidentId,
+        provider: room.provider as never,
+        state: { in: ['READY', 'PROVISIONING', 'FAILED'] },
+      },
       data: data as never,
     });
     if (changed.count !== 1) return { initiated: false as const };
@@ -323,10 +402,17 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
           status: 'PENDING',
           scheduledAt: new Date(),
           maxAttempts: 6,
-          payload: { warRoomId: input.warRoomId, provisioningToken: existing.provisioningToken ?? room.provisioningToken, reconciliationOnly: true } as unknown as never,
+          payload: {
+            warRoomId: input.warRoomId,
+            provisioningToken: existing.provisioningToken ?? room.provisioningToken,
+            reconciliationOnly: true,
+          } as unknown as never,
         },
       });
-      return { initiated: true as const, deferred: true as const } as { initiated: true; deferred: true };
+      return { initiated: true as const, deferred: true as const } as {
+        initiated: true;
+        deferred: true;
+      };
     }
     // Increment projection in same tx so crash cannot leave CLOSING without terminal version.
     const projChanged = await tx.incidentWarRoom.updateMany({
@@ -334,7 +420,10 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
       data: { projectionVersion: { increment: 1 } },
     });
     if (projChanged.count !== 1) return { initiated: false as const };
-    const fresh = await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: input.warRoomId }, select: { projectionVersion: true } });
+    const fresh = await tx.incidentWarRoom.findUniqueOrThrow({
+      where: { id: input.warRoomId },
+      select: { projectionVersion: true },
+    });
     const terminalProjectionVersion = fresh.projectionVersion;
     await tx.backgroundJob.create({
       data: {
@@ -342,7 +431,10 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
         status: 'PENDING',
         scheduledAt: new Date(),
         maxAttempts: 5,
-        payload: { warRoomId: input.warRoomId, projectionVersion: terminalProjectionVersion } as unknown as never,
+        payload: {
+          warRoomId: input.warRoomId,
+          projectionVersion: terminalProjectionVersion,
+        } as unknown as never,
       },
     });
     await tx.backgroundJob.create({
@@ -351,10 +443,18 @@ export async function closeWarRoomNeutral(input: { incidentId: string; warRoomId
         status: 'PENDING',
         scheduledAt: new Date(Date.now() + 2_000),
         maxAttempts: 5,
-        payload: { warRoomId: input.warRoomId, incidentId: input.incidentId, closeGeneration: Date.now(), terminalProjectionVersion } as unknown as never,
+        payload: {
+          warRoomId: input.warRoomId,
+          incidentId: input.incidentId,
+          closeGeneration: Date.now(),
+          terminalProjectionVersion,
+        } as unknown as never,
       },
     });
-    return { initiated: true as const, terminalProjectionVersion } as { initiated: true; terminalProjectionVersion: number };
+    return { initiated: true as const, terminalProjectionVersion } as {
+      initiated: true;
+      terminalProjectionVersion: number;
+    };
   });
   return (result as { initiated: boolean }).initiated;
 }
@@ -366,7 +466,11 @@ export async function closeIncidentWarRoomsNeutral(
 ): Promise<{ closed: number; skipped: number }> {
   const providerFilter = opts?.provider ? { provider: opts.provider as never } : {};
   const rooms = await prisma.incidentWarRoom.findMany({
-    where: { incidentId, state: { in: ['READY', 'PROVISIONING', 'FAILED', 'CLOSING', 'AMBIGUOUS'] }, ...providerFilter },
+    where: {
+      incidentId,
+      state: { in: ['READY', 'PROVISIONING', 'FAILED', 'CLOSING', 'AMBIGUOUS'] },
+      ...providerFilter,
+    },
     select: { id: true, provider: true, state: true },
   });
   let closed = 0;
@@ -375,6 +479,10 @@ export async function closeIncidentWarRoomsNeutral(
     const ok = await closeWarRoomNeutral({ incidentId, warRoomId: room.id });
     if (ok) closed++;
     else skipped++;
+  }
+  if (!opts?.provider) {
+    const { closeIncidentMeeting } = await import('../incident-collaboration/meeting-store');
+    await closeIncidentMeeting(incidentId).catch(() => null);
   }
   return { closed, skipped };
 }
@@ -393,19 +501,36 @@ export async function closeProviderWarRoomsNeutral(
  * was already set. Atomically queue terminal projection + WAR_ROOM_CLOSE
  * under closeRequestedAt's ownership.
  */
-export async function ensureTerminalCloseJobsAfterClosingAdoption(warRoomId: string, incidentId: string): Promise<void> {
-  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true, closeRequestedAt: true } });
+export async function ensureTerminalCloseJobsAfterClosingAdoption(
+  warRoomId: string,
+  incidentId: string
+): Promise<void> {
+  const room = await prisma.incidentWarRoom.findUnique({
+    where: { id: warRoomId },
+    select: { state: true, projectionVersion: true, closeRequestedAt: true },
+  });
   if (!room || room.state !== 'CLOSING' || room.closeRequestedAt == null) return;
   const existing = await prisma.backgroundJob.findFirst({
-    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    where: {
+      type: 'WAR_ROOM_CLOSE',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      payload: { path: ['warRoomId'], equals: warRoomId },
+    },
     select: { id: true },
   });
   if (existing) return;
   await prisma.$transaction(async tx => {
-    const fresh = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { state: true, projectionVersion: true, closeRequestedAt: true } });
+    const fresh = await tx.incidentWarRoom.findUnique({
+      where: { id: warRoomId },
+      select: { state: true, projectionVersion: true, closeRequestedAt: true },
+    });
     if (!fresh || fresh.state !== 'CLOSING' || fresh.closeRequestedAt == null) return;
     const stillNoClose = await tx.backgroundJob.findFirst({
-      where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      where: {
+        type: 'WAR_ROOM_CLOSE',
+        status: { in: ['PENDING', 'PROCESSING'] },
+        payload: { path: ['warRoomId'], equals: warRoomId },
+      },
       select: { id: true },
     });
     if (stillNoClose) return;
@@ -414,20 +539,51 @@ export async function ensureTerminalCloseJobsAfterClosingAdoption(warRoomId: str
       data: { projectionVersion: { increment: 1 } },
     });
     // If increment collides (e.g. another path incremented first), just read current.
-    const withVersion = changed.count === 1
-      ? await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: warRoomId }, select: { projectionVersion: true } })
-      : await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: warRoomId }, select: { projectionVersion: true } });
+    const withVersion =
+      changed.count === 1
+        ? await tx.incidentWarRoom.findUniqueOrThrow({
+            where: { id: warRoomId },
+            select: { projectionVersion: true },
+          })
+        : await tx.incidentWarRoom.findUniqueOrThrow({
+            where: { id: warRoomId },
+            select: { projectionVersion: true },
+          });
     await tx.backgroundJob.create({
-      data: { type: 'WAR_ROOM_PROJECT', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId, projectionVersion: withVersion.projectionVersion } as unknown as never },
+      data: {
+        type: 'WAR_ROOM_PROJECT',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 5,
+        payload: {
+          warRoomId,
+          projectionVersion: withVersion.projectionVersion,
+        } as unknown as never,
+      },
     });
     await tx.backgroundJob.create({
-      data: { type: 'WAR_ROOM_CLOSE', status: 'PENDING', scheduledAt: new Date(Date.now() + 2_000), maxAttempts: 5, payload: { warRoomId, incidentId, closeGeneration: Date.now(), terminalProjectionVersion: withVersion.projectionVersion } as unknown as never },
+      data: {
+        type: 'WAR_ROOM_CLOSE',
+        status: 'PENDING',
+        scheduledAt: new Date(Date.now() + 2_000),
+        maxAttempts: 5,
+        payload: {
+          warRoomId,
+          incidentId,
+          closeGeneration: Date.now(),
+          terminalProjectionVersion: withVersion.projectionVersion,
+        } as unknown as never,
+      },
     });
   });
 }
 
 /** Finalizes a CLOSING room: waits for the terminal projection to settle, then provider archive, then CLOSED/ARCHIVED. Called by WAR_ROOM_CLOSE worker and WAR_ROOM_RECONCILE(close). */
-export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?: string, expectedTerminalProjectionVersion?: number | null): Promise<void> {
+export async function finalizeWarRoomCloseNeutral(
+  warRoomId: string,
+  incidentId?: string,
+  expectedTerminalProjectionVersion?: number | null
+): Promise<void> {
   const room = await prisma.incidentWarRoom.findUnique({
     where: { id: warRoomId },
     select: {
@@ -457,7 +613,10 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
   // must close locally as DEGRADED (unverified) and leave provider drift for
   // asynchronous cleanup; otherwise CLOSING would be held forever when
   // credentials are removed or the provider is persistently unavailable.
-  const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
+  const createUnresolved =
+    room.createAttemptedAt != null &&
+    room.providerChannelId == null &&
+    room.provisioningToken != null;
   const reconciliationExpired = isClosingReconciliationExpired(room.createAttemptedAt);
   if (createUnresolved && reconciliationExpired) {
     await prisma.incidentWarRoom.updateMany({
@@ -465,7 +624,8 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
       data: {
         health: 'DEGRADED',
         lastErrorCode: 'RECONCILIATION_EXPIRED_UNVERIFIED',
-        lastError: 'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
+        lastError:
+          'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED. Provider drift will be reconciled asynchronously.',
         provisioningToken: null,
         externalCleanupPending: true,
         externalCleanupReason: 'RECONCILIATION_EXPIRED_UNVERIFIED',
@@ -485,11 +645,23 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
     room.lastErrorCode.startsWith('RECONCILIATION_EXPIRED_')
   ) {
     try {
-      const freshDebt = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { externalCleanupPending: true, lastErrorCode: true } });
-      if (freshDebt && !freshDebt.externalCleanupPending && typeof freshDebt.lastErrorCode === 'string' && freshDebt.lastErrorCode.startsWith('RECONCILIATION_EXPIRED_')) {
+      const freshDebt = await prisma.incidentWarRoom.findUnique({
+        where: { id: warRoomId },
+        select: { externalCleanupPending: true, lastErrorCode: true },
+      });
+      if (
+        freshDebt &&
+        !freshDebt.externalCleanupPending &&
+        typeof freshDebt.lastErrorCode === 'string' &&
+        freshDebt.lastErrorCode.startsWith('RECONCILIATION_EXPIRED_')
+      ) {
         await prisma.incidentWarRoom.updateMany({
           where: { id: warRoomId, externalCleanupPending: false },
-          data: { externalCleanupPending: true, externalCleanupReason: freshDebt.lastErrorCode, externalCleanupLastAttemptAt: new Date() },
+          data: {
+            externalCleanupPending: true,
+            externalCleanupReason: freshDebt.lastErrorCode,
+            externalCleanupLastAttemptAt: new Date(),
+          },
         });
       }
     } catch {}
@@ -501,7 +673,11 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
     } else {
       await ensureWarRoomReconciliationJob(warRoomId, room.provisioningToken!);
       const { WarRoomRetryableError } = await import('./errors');
-      throw new WarRoomRetryableError('Unresolved external create outcome — waiting for provisioning reconciliation before terminal close.', 5000, true);
+      throw new WarRoomRetryableError(
+        'Unresolved external create outcome — waiting for provisioning reconciliation before terminal close.',
+        5000,
+        true
+      );
     }
   }
 
@@ -513,12 +689,17 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
   // lastProjectedVersion advances only on successful provider apply (complete*Projection), so
   // projectionVersion alone (queued-at) + lease==null does NOT mean completed.
   if (expectedTerminalProjectionVersion != null) {
-    const lastProjected = (room as { lastProjectedVersion?: number | null }).lastProjectedVersion ?? 0;
+    const lastProjected =
+      (room as { lastProjectedVersion?: number | null }).lastProjectedVersion ?? 0;
     if (lastProjected < expectedTerminalProjectionVersion) {
       const hasActiveProjection = room.projectionLeaseToken != null;
       if (hasActiveProjection) {
         const { WarRoomRetryableError } = await import('./errors');
-        throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
+        throw new WarRoomRetryableError(
+          'Terminal projection still in flight; retrying close after it settles.',
+          3000,
+          true
+        );
       }
       // Lease cleared but still behind — either projection job is still pending or it was terminally settled as DEGRADED.
       // If a WAR_ROOM_PROJECT job for the EXACT expected terminal version is still PENDING/PROCESSING, retry budget-neutral.
@@ -547,7 +728,11 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
       if (room.health !== 'DEGRADED') {
         await prisma.incidentWarRoom.updateMany({
           where: { id: warRoomId, state: 'CLOSING' },
-          data: { health: 'DEGRADED', lastErrorCode: 'CLOSE_PROJECTION_DEGRADED', lastError: `Closing with degraded terminal projection (lastProjected=${lastProjected}, expected=${expectedTerminalProjectionVersion}); archiving anyway.` },
+          data: {
+            health: 'DEGRADED',
+            lastErrorCode: 'CLOSE_PROJECTION_DEGRADED',
+            lastError: `Closing with degraded terminal projection (lastProjected=${lastProjected}, expected=${expectedTerminalProjectionVersion}); archiving anyway.`,
+          },
         });
       }
       // Fall through to archive/close.
@@ -556,7 +741,11 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
     const hasActiveProjection = room.projectionLeaseToken != null;
     if (hasActiveProjection) {
       const { WarRoomRetryableError } = await import('./errors');
-      throw new WarRoomRetryableError('Terminal projection still in flight; retrying close after it settles.', 3000, true);
+      throw new WarRoomRetryableError(
+        'Terminal projection still in flight; retrying close after it settles.',
+        3000,
+        true
+      );
     }
   }
 
@@ -564,7 +753,10 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
     const result = await adapter.archive(warRoomId);
     if (!result.ok) {
       if (result.code === 'AMBIGUOUS_SIDE_EFFECT') {
-        await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { health: 'DEGRADED', lastErrorCode: 'CLOSE_AMBIGUOUS', lastError: result.message } });
+        await prisma.incidentWarRoom.updateMany({
+          where: { id: warRoomId, state: 'CLOSING' },
+          data: { health: 'DEGRADED', lastErrorCode: 'CLOSE_AMBIGUOUS', lastError: result.message },
+        });
         const { WarRoomRetryableError } = await import('./errors');
         throw new WarRoomRetryableError(result.message, result.retryAfterMs, true);
       }
@@ -577,57 +769,112 @@ export async function finalizeWarRoomCloseNeutral(warRoomId: string, incidentId?
         const cap = adapter.capabilities.archiveRoom;
         await runSerializableTransaction(async tx => {
           const { settleWarRoomClosed } = await import('./repository');
-          await settleWarRoomClosed(tx, { incidentId: effectiveIncidentId, warRoomId, provider: room.provider });
+          await settleWarRoomClosed(tx, {
+            incidentId: effectiveIncidentId,
+            warRoomId,
+            provider: room.provider,
+          });
           if (cap) {
-            await tx.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { state: 'ARCHIVED', archivedAt: new Date() } });
+            await tx.incidentWarRoom.updateMany({
+              where: { id: warRoomId },
+              data: { state: 'ARCHIVED', archivedAt: new Date() },
+            });
           }
         });
         return;
       }
-      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { health: 'DEGRADED', lastErrorCode: result.code, lastError: result.message } });
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: warRoomId, state: 'CLOSING' },
+        data: { health: 'DEGRADED', lastErrorCode: result.code, lastError: result.message },
+      });
       const { WarRoomRetryableError } = await import('./errors');
       throw new WarRoomRetryableError(result.message, result.retryAfterMs);
     }
     const { runSerializableTransaction } = await import('@/lib/db-utils');
     await runSerializableTransaction(async tx => {
-      await tx.incidentWarRoom.updateMany({ where: { id: warRoomId, state: 'CLOSING' }, data: { state: 'ARCHIVED', archivedAt: new Date(), closedAt: new Date(), provisioningToken: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null } });
+      await tx.incidentWarRoom.updateMany({
+        where: { id: warRoomId, state: 'CLOSING' },
+        data: {
+          state: 'ARCHIVED',
+          archivedAt: new Date(),
+          closedAt: new Date(),
+          provisioningToken: null,
+          projectionLeaseToken: null,
+          projectionLeaseExpiresAt: null,
+        },
+      });
     });
     return;
   }
 
   const { runSerializableTransaction } = await import('@/lib/db-utils');
   const { settleWarRoomClosed } = await import('./repository');
-  await runSerializableTransaction(tx => settleWarRoomClosed(tx, { incidentId: effectiveIncidentId, warRoomId, provider: room.provider }));
+  await runSerializableTransaction(tx =>
+    settleWarRoomClosed(tx, { incidentId: effectiveIncidentId, warRoomId, provider: room.provider })
+  );
 }
 
 export async function requestWarRoomProjectionNeutral(warRoomId: string): Promise<number | null> {
   return prisma.$transaction(async tx => {
-    const room = await tx.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { provider: true, state: true } });
+    const room = await tx.incidentWarRoom.findUnique({
+      where: { id: warRoomId },
+      select: { provider: true, state: true },
+    });
     if (!room || !['READY', 'CLOSING'].includes(room.state)) return null;
     const changed = await tx.incidentWarRoom.updateMany({
       where: { id: warRoomId, state: { in: ['READY', 'CLOSING'] } },
       data: { projectionVersion: { increment: 1 } },
     });
     if (changed.count !== 1) return null;
-    const fresh = await tx.incidentWarRoom.findUniqueOrThrow({ where: { id: warRoomId }, select: { projectionVersion: true } });
+    const fresh = await tx.incidentWarRoom.findUniqueOrThrow({
+      where: { id: warRoomId },
+      select: { projectionVersion: true },
+    });
     await tx.backgroundJob.create({
-      data: { type: 'WAR_ROOM_PROJECT', status: 'PENDING', scheduledAt: new Date(), maxAttempts: 5, payload: { warRoomId, projectionVersion: fresh.projectionVersion } },
+      data: {
+        type: 'WAR_ROOM_PROJECT',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 5,
+        payload: { warRoomId, projectionVersion: fresh.projectionVersion },
+      },
     });
     return fresh.projectionVersion;
   });
 }
 
-export async function abandonAmbiguousWarRoomCardNeutral(incidentId: string, warRoomId: string): Promise<{ abandoned: boolean; warning: string }> {
-  const room = await prisma.incidentWarRoom.findFirst({ where: { id: warRoomId, incidentId, health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_CARD_CREATE' }, select: { id: true, provider: true } });
+export async function abandonAmbiguousWarRoomCardNeutral(
+  incidentId: string,
+  warRoomId: string
+): Promise<{ abandoned: boolean; warning: string }> {
+  const room = await prisma.incidentWarRoom.findFirst({
+    where: {
+      id: warRoomId,
+      incidentId,
+      health: 'DEGRADED',
+      lastErrorCode: 'AMBIGUOUS_CARD_CREATE',
+    },
+    select: { id: true, provider: true },
+  });
   if (!room) return { abandoned: false, warning: 'War room is not in an ambiguous card state.' };
   await prisma.incidentWarRoom.updateMany({
     where: { id: warRoomId, lastErrorCode: 'AMBIGUOUS_CARD_CREATE' },
-    data: { commandCreateAttemptedAt: null, commandMessageId: null, commandConversationId: null, health: 'HEALTHY', lastErrorCode: null, lastError: null, projectionLeaseToken: null, projectionLeaseExpiresAt: null },
+    data: {
+      commandCreateAttemptedAt: null,
+      commandMessageId: null,
+      commandConversationId: null,
+      health: 'HEALTHY',
+      lastErrorCode: null,
+      lastError: null,
+      projectionLeaseToken: null,
+      projectionLeaseExpiresAt: null,
+    },
   });
   await requestWarRoomProjectionNeutral(warRoomId);
-  const warning = room.provider === 'SLACK'
-    ? 'Ambiguous Slack card abandoned. A duplicate card may still exist; delete it manually if so.'
-    : 'Ambiguous card abandoned. A duplicate card may still exist in the Teams channel; delete it manually if so.';
+  const warning =
+    room.provider === 'SLACK'
+      ? 'Ambiguous Slack card abandoned. A duplicate card may still exist; delete it manually if so.'
+      : 'Ambiguous card abandoned. A duplicate card may still exist in the Teams channel; delete it manually if so.';
   return { abandoned: true, warning };
 }
 
@@ -650,21 +897,33 @@ export async function abandonAmbiguousWarRoomCardNeutral(incidentId: string, war
  */
 async function isClosingOrphan(warRoomId: string): Promise<boolean> {
   const closeRow = await prisma.backgroundJob.findFirst({
-    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    where: {
+      type: 'WAR_ROOM_CLOSE',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      payload: { path: ['warRoomId'], equals: warRoomId },
+    },
     select: { payload: true },
   });
   if (!closeRow) return true; // missing close — orphan (or live-unresolved no-close, repairWarRoomCloseJobs will decide)
   const raw = closeRow.payload as unknown as { terminalProjectionVersion?: number } | null;
-  const terminal = typeof raw?.terminalProjectionVersion === 'number' ? raw.terminalProjectionVersion : null;
+  const terminal =
+    typeof raw?.terminalProjectionVersion === 'number' ? raw.terminalProjectionVersion : null;
   if (terminal == null) {
     // Legacy close without version — any active project suffices
     const anyProj = await prisma.backgroundJob.findFirst({
-      where: { type: 'WAR_ROOM_PROJECT', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+      where: {
+        type: 'WAR_ROOM_PROJECT',
+        status: { in: ['PENDING', 'PROCESSING'] },
+        payload: { path: ['warRoomId'], equals: warRoomId },
+      },
       select: { id: true },
     });
     return !anyProj ? true : false; // if a project exists, may still need deeper check but treat as non-orphan for sweep
   }
-  const room = await prisma.incidentWarRoom.findUnique({ where: { id: warRoomId }, select: { lastProjectedVersion: true } });
+  const room = await prisma.incidentWarRoom.findUnique({
+    where: { id: warRoomId },
+    select: { lastProjectedVersion: true },
+  });
   const lastProjected = room?.lastProjectedVersion ?? 0;
   if (lastProjected >= terminal) return false; // already satisfied
   const exactProj = await prisma.backgroundJob.findFirst({
@@ -687,7 +946,10 @@ async function isReconciliationOrphan(warRoomId: string): Promise<boolean> {
     select: { createAttemptedAt: true, providerChannelId: true, provisioningToken: true },
   });
   if (!room) return false;
-  const createUnresolved = room.createAttemptedAt != null && room.providerChannelId == null && room.provisioningToken != null;
+  const createUnresolved =
+    room.createAttemptedAt != null &&
+    room.providerChannelId == null &&
+    room.provisioningToken != null;
   const expired = isClosingReconciliationExpired(room.createAttemptedAt);
   if (!createUnresolved || expired) return false;
   const recon = await prisma.backgroundJob.findFirst({
@@ -705,7 +967,9 @@ async function isReconciliationOrphan(warRoomId: string): Promise<boolean> {
   return !recon;
 }
 
-export async function repairOrphanedClosingWarRooms(limit = 20): Promise<{ checked: number; repaired: number }> {
+export async function repairOrphanedClosingWarRooms(
+  limit = 20
+): Promise<{ checked: number; repaired: number }> {
   const cap = Math.max(1, Math.min(limit, 100));
   const pageSize = 50;
   const maxPages = 10;
@@ -729,11 +993,18 @@ export async function repairOrphanedClosingWarRooms(limit = 20): Promise<{ check
     for (const room of batch) {
       if (repaired >= cap) break;
       // Determine if this specific room is an orphan before invoking repair
-      const [closingOrphan, reconOrphan] = await Promise.all([isClosingOrphan(room.id), isReconciliationOrphan(room.id)]);
+      const [closingOrphan, reconOrphan] = await Promise.all([
+        isClosingOrphan(room.id),
+        isReconciliationOrphan(room.id),
+      ]);
       if (!closingOrphan && !reconOrphan) continue;
 
       const beforeClose = await prisma.backgroundJob.findFirst({
-        where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+        where: {
+          type: 'WAR_ROOM_CLOSE',
+          status: { in: ['PENDING', 'PROCESSING'] },
+          payload: { path: ['warRoomId'], equals: room.id },
+        },
         select: { id: true },
       });
       const beforeRecon = reconOrphan
@@ -754,7 +1025,11 @@ export async function repairOrphanedClosingWarRooms(limit = 20): Promise<{ check
       await repairWarRoomCloseJobs(room.id, room.incidentId);
 
       const afterClose = await prisma.backgroundJob.findFirst({
-        where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+        where: {
+          type: 'WAR_ROOM_CLOSE',
+          status: { in: ['PENDING', 'PROCESSING'] },
+          payload: { path: ['warRoomId'], equals: room.id },
+        },
         select: { id: true },
       });
       const afterRecon = await prisma.backgroundJob.findFirst({
@@ -775,11 +1050,16 @@ export async function repairOrphanedClosingWarRooms(limit = 20): Promise<{ check
       let projectRepaired = false;
       if (beforeClose && afterClose && !reconRepaired) {
         const closeRow = await prisma.backgroundJob.findFirst({
-          where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: room.id } },
+          where: {
+            type: 'WAR_ROOM_CLOSE',
+            status: { in: ['PENDING', 'PROCESSING'] },
+            payload: { path: ['warRoomId'], equals: room.id },
+          },
           select: { payload: true },
         });
         const raw = closeRow?.payload as unknown as { terminalProjectionVersion?: number } | null;
-        const terminal = typeof raw?.terminalProjectionVersion === 'number' ? raw.terminalProjectionVersion : null;
+        const terminal =
+          typeof raw?.terminalProjectionVersion === 'number' ? raw.terminalProjectionVersion : null;
         if (terminal != null) {
           // If before we had no exact project and now we do, that is a repair
           // We already know isClosingOrphan was true, so after should have exact project
@@ -841,7 +1121,12 @@ export async function recoverOrphanedWarRoomDeliveries(): Promise<number> {
   let recovered = 0;
   for (const orphan of orphans) {
     try {
-      await scheduleJob('WAR_ROOM_PROVIDER_EVENT', new Date(), { deliveryId: orphan.id } as unknown as Record<string, unknown>, 5);
+      await scheduleJob(
+        'WAR_ROOM_PROVIDER_EVENT',
+        new Date(),
+        { deliveryId: orphan.id } as unknown as Record<string, unknown>,
+        5
+      );
       recovered++;
     } catch {}
   }
@@ -855,12 +1140,20 @@ export async function handleIncidentWarRoomProviderEvent(input: {
   idempotencyKey?: string;
   // legacy job still passes provider/event/idempotencyKey
 }): Promise<void> {
-  const { claimWarRoomDelivery, claimWarRoomDeliveryById, completeWarRoomDelivery, releaseWarRoomDeliveryForRetry, validateDeliveryLease } = await import('./delivery');
+  const {
+    claimWarRoomDelivery,
+    claimWarRoomDeliveryById,
+    completeWarRoomDelivery,
+    releaseWarRoomDeliveryForRetry,
+    validateDeliveryLease,
+  } = await import('./delivery');
   let deliveryId: string | null = input.deliveryId ?? null;
   let leaseToken: string | null = null;
-  let resolvedProvider: WarRoomProviderName | null = (input.provider as WarRoomProviderName) ?? null;
+  let resolvedProvider: WarRoomProviderName | null =
+    (input.provider as WarRoomProviderName) ?? null;
   let resolvedEvent: WarRoomIncidentEvent | null = input.event ?? null;
-  let resolvedIdempotencyKey: string | null = input.idempotencyKey ?? input.event?.idempotencyKey ?? null;
+  let resolvedIdempotencyKey: string | null =
+    input.idempotencyKey ?? input.event?.idempotencyKey ?? null;
 
   // Resolve delivery by id when available (new durable contract)
   if (deliveryId) {
@@ -876,18 +1169,32 @@ export async function handleIncidentWarRoomProviderEvent(input: {
     resolvedEvent = row.eventPayload as unknown as WarRoomIncidentEvent;
   } else {
     // Fallback for rolling deploy — resolve from provider+key
-    const fallbackKey = resolvedIdempotencyKey ?? (resolvedEvent ? warRoomIdempotencyKey(resolvedEvent as never) : null);
-    if (!resolvedProvider || !fallbackKey || !resolvedEvent) throw new Error('War-room provider event missing deliveryId');
+    const fallbackKey =
+      resolvedIdempotencyKey ??
+      (resolvedEvent ? warRoomIdempotencyKey(resolvedEvent as never) : null);
+    if (!resolvedProvider || !fallbackKey || !resolvedEvent)
+      throw new Error('War-room provider event missing deliveryId');
     resolvedIdempotencyKey = fallbackKey;
     const existing = await prisma.warRoomProviderEventDelivery.findUnique({
-      where: { provider_idempotencyKey: { provider: resolvedProvider as never, idempotencyKey: fallbackKey } },
+      where: {
+        provider_idempotencyKey: {
+          provider: resolvedProvider as never,
+          idempotencyKey: fallbackKey,
+        },
+      },
       select: { id: true, status: true },
     });
     if (existing?.status === 'COMPLETED') return;
     if (existing?.status === 'FAILED') return;
     if (!existing) {
       const { ensureWarRoomDelivery } = await import('./delivery');
-      const created = await ensureWarRoomDelivery({ provider: resolvedProvider, idempotencyKey: fallbackKey, incidentId: resolvedEvent.incidentId, kind: resolvedEvent.kind, eventPayload: { ...resolvedEvent, idempotencyKey: fallbackKey } });
+      const created = await ensureWarRoomDelivery({
+        provider: resolvedProvider,
+        idempotencyKey: fallbackKey,
+        incidentId: resolvedEvent.incidentId,
+        kind: resolvedEvent.kind,
+        eventPayload: { ...resolvedEvent, idempotencyKey: fallbackKey },
+      });
       deliveryId = created.id;
     } else {
       deliveryId = existing.id;
@@ -899,7 +1206,10 @@ export async function handleIncidentWarRoomProviderEvent(input: {
   if (input.deliveryId) {
     claimed = await claimWarRoomDeliveryById(deliveryId!);
   } else {
-    claimed = await claimWarRoomDelivery({ provider: resolvedProvider!, idempotencyKey: resolvedIdempotencyKey! });
+    claimed = await claimWarRoomDelivery({
+      provider: resolvedProvider!,
+      idempotencyKey: resolvedIdempotencyKey!,
+    });
   }
   if (!claimed) return;
   deliveryId = claimed.id;
@@ -907,7 +1217,10 @@ export async function handleIncidentWarRoomProviderEvent(input: {
 
   // Ensure we have event for adapter
   if (!resolvedEvent || !resolvedProvider || !resolvedIdempotencyKey) {
-    const row = await prisma.warRoomProviderEventDelivery.findUnique({ where: { id: deliveryId }, select: { provider: true, idempotencyKey: true, eventPayload: true } });
+    const row = await prisma.warRoomProviderEventDelivery.findUnique({
+      where: { id: deliveryId },
+      select: { provider: true, idempotencyKey: true, eventPayload: true },
+    });
     if (!row) throw new Error('Delivery disappeared after claim');
     resolvedProvider = row.provider as WarRoomProviderName;
     resolvedIdempotencyKey = row.idempotencyKey;
@@ -916,15 +1229,26 @@ export async function handleIncidentWarRoomProviderEvent(input: {
 
   try {
     const adapter = getWarRoomProvider(resolvedProvider);
-    const event = resolvedIdempotencyKey ? ({ ...resolvedEvent, idempotencyKey: resolvedIdempotencyKey } as WarRoomIncidentEvent) : resolvedEvent;
-    const result = await adapter.handleIncidentEvent(event, { deliveryId, deliveryLeaseToken: leaseToken, idempotencyKey: resolvedIdempotencyKey });
+    const event = resolvedIdempotencyKey
+      ? ({ ...resolvedEvent, idempotencyKey: resolvedIdempotencyKey } as WarRoomIncidentEvent)
+      : resolvedEvent;
+    const result = await adapter.handleIncidentEvent(event, {
+      deliveryId,
+      deliveryLeaseToken: leaseToken,
+      idempotencyKey: resolvedIdempotencyKey,
+    });
     if (!result.ok) {
       if (result.code === 'AMBIGUOUS_SIDE_EFFECT') {
         const valid = await validateDeliveryLease(deliveryId, leaseToken);
         if (!valid) return;
         await prisma.warRoomProviderEventDelivery.updateMany({
           where: { id: deliveryId, leaseToken },
-          data: { status: 'COMPLETED', completedAt: new Date(), leaseToken: null, leaseExpiresAt: null },
+          data: {
+            status: 'COMPLETED',
+            completedAt: new Date(),
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
         });
         try {
           const { ensureWarRoomStage, markStageAmbiguous } = await import('./delivery');

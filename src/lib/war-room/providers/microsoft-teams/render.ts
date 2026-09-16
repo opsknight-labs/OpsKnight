@@ -24,7 +24,7 @@ export function renderMicrosoftTeamsWarRoomProjection(
     refreshUserIds?: string[];
     slaAckRemainingMs?: number | null;
     slaResolveRemainingMs?: number | null;
-  },
+  }
 ) {
   // Prefer the rich incident-card builder when destination context is present
   // (war-room and canonical cards both need serviceUrl/bot identity + refresh).
@@ -32,7 +32,8 @@ export function renderMicrosoftTeamsWarRoomProjection(
   // assert phase/action policy.
   if (opts?.destinationId != null && opts.messageGeneration != null) {
     const phase = model.phase;
-    const eventType: 'triggered' | 'acknowledged' | 'resolved' = phase === 'RESOLVED' ? 'resolved' : phase === 'ACKNOWLEDGED' ? 'acknowledged' : 'triggered';
+    const eventType: 'triggered' | 'acknowledged' | 'resolved' =
+      phase === 'RESOLVED' ? 'resolved' : phase === 'ACKNOWLEDGED' ? 'acknowledged' : 'triggered';
     const incident = {
       id: model.incident.id,
       title: model.incident.title,
@@ -54,13 +55,16 @@ export function renderMicrosoftTeamsWarRoomProjection(
     // projection offered.
     const offered = new Set(model.actions as readonly ChatOpsActionKind[]);
     const capabilities: Record<string, boolean> = {};
-    for (const [kind, meta] of Object.entries(CHATOPS_ACTIONS) as Array<[ChatOpsActionKind, (typeof CHATOPS_ACTIONS)[ChatOpsActionKind]]>) {
+    for (const [kind, meta] of Object.entries(CHATOPS_ACTIONS) as Array<
+      [ChatOpsActionKind, (typeof CHATOPS_ACTIONS)[ChatOpsActionKind]]
+    >) {
       if (meta.capability) capabilities[meta.capability] = offered.has(kind);
     }
     return buildMicrosoftTeamsIncidentCard(
       { incident, eventType },
       {
         disableActions: phase === 'RESOLVED',
+        meeting: model.meeting,
         interactive: {
           destinationId: opts.destinationId,
           messageGeneration: opts.messageGeneration,
@@ -68,13 +72,19 @@ export function renderMicrosoftTeamsWarRoomProjection(
           ...(opts.refreshUserIds?.length ? { refreshUserIds: opts.refreshUserIds } : {}),
           capabilities: capabilities as never,
         },
-      },
+      }
     );
   }
 
   // Minimal contract-driven card — no transport context, no SLA, no refresh.
   // Used by `war-room-projection-model.test.ts` and other pure unit tests.
-  const actions = model.actions.map(kind => {
+  const actions: Array<{
+    type: string;
+    title: string;
+    verb?: string;
+    data?: Record<string, unknown>;
+    url?: string;
+  }> = model.actions.map(kind => {
     const meta = CHATOPS_ACTIONS[kind as ChatOpsActionKind];
     // ShowCard actions (note/priority/snooze) require a card host — without
     // destination context we emit a plain Execute so tests can assert length
@@ -92,6 +102,24 @@ export function renderMicrosoftTeamsWarRoomProjection(
       data: { incidentId: model.incident.id },
     };
   });
+  if (model.meeting?.joinUrl && model.phase !== 'RESOLVED') {
+    const p = model.meeting.provider;
+    const label =
+      p === 'MICROSOFT_TEAMS'
+        ? 'Teams'
+        : p === 'ZOOM'
+          ? 'Zoom'
+          : p === 'GOOGLE_MEET'
+            ? 'Google Meet'
+            : p === 'JITSI'
+              ? 'Jitsi'
+              : 'Video';
+    actions.unshift({
+      type: 'Action.OpenUrl',
+      title: `Join ${label} Meeting`,
+      url: model.meeting.joinUrl,
+    });
+  }
   return {
     type: 'AdaptiveCard',
     version: '1.5',
@@ -103,7 +131,9 @@ export function renderMicrosoftTeamsWarRoomProjection(
           { title: 'Status', value: model.incident.status },
           { title: 'Urgency', value: model.incident.urgency },
           { title: 'Service', value: model.incident.serviceName },
-          ...(model.incident.assigneeName ? [{ title: 'Assignee', value: model.incident.assigneeName }] : []),
+          ...(model.incident.assigneeName
+            ? [{ title: 'Assignee', value: model.incident.assigneeName }]
+            : []),
         ],
       },
     ],

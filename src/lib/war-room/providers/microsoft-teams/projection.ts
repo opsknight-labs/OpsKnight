@@ -257,6 +257,19 @@ export async function projectMicrosoftTeamsWarRoomCard(
     canJoinResponder: false,
     canRead: false,
   } as const;
+  const { getIncidentMeeting } = await import('@/lib/incident-collaboration/meeting-store');
+  const activeMeeting = await getIncidentMeeting(incidentRecord.id).catch(() => null);
+  const meetingProjection =
+    activeMeeting?.state === 'READY' && activeMeeting.joinUrl
+      ? {
+          provider: activeMeeting.provider,
+          joinUrl: activeMeeting.joinUrl,
+          joinWebUrl: activeMeeting.joinWebUrl,
+          conferenceId: activeMeeting.conferenceId,
+          tollNumber: activeMeeting.tollNumber,
+        }
+      : null;
+
   const model = buildWarRoomProjection(
     {
       id: incidentRecord.id,
@@ -272,7 +285,7 @@ export async function projectMicrosoftTeamsWarRoomCard(
       acknowledgedAt: incidentRecord.acknowledgedAt,
       resolvedAt: incidentRecord.resolvedAt,
     },
-    { capabilities: sharedCapFailClosed }
+    { capabilities: sharedCapFailClosed, meeting: meetingProjection }
   );
   // eventType derived from canonical phase — model.phase is the single source of truth.
   const eventType =
@@ -316,6 +329,7 @@ export async function projectMicrosoftTeamsWarRoomCard(
         incident,
         eventType,
         disableActions: eventType === 'resolved',
+        meeting: meetingProjection,
         interactive,
         beforeCreateAttempt: async () => {
           const marked = await prisma.incidentWarRoom.updateMany({
@@ -439,6 +453,7 @@ export async function projectMicrosoftTeamsWarRoomCard(
       incident,
       eventType,
       disableActions: eventType === 'resolved',
+      meeting: meetingProjection,
       interactive,
     });
     if (!updated.success) {

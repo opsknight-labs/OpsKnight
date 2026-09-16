@@ -3,9 +3,9 @@ import { getUserPermissions } from '@/lib/rbac';
 import { redirect } from 'next/navigation';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { SlackLogo } from '@/components/common/BrandLogos';
-import { Shield, MessageSquare, Video, Archive, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Shield, MessageSquare, Video, Archive, Users, Hash } from 'lucide-react';
 import ChatOpsSettingsPage from '@/components/settings/ChatOpsSettingsPage';
+import { getGlobalWarRoomPolicy } from '@/lib/incident-collaboration/policy';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -15,15 +15,28 @@ export default async function GlobalChatOpsIntegrationPage() {
   if (!permissions) redirect('/login');
   if (!permissions.isAdmin) redirect('/settings');
 
-  const config = await prisma.chatOpsConfig.findUnique({
-    where: { id: 'default' },
-  });
-
-  const slackIntegration = await prisma.slackIntegration.findFirst({
-    where: { services: { none: {} }, enabled: true },
-  });
+  const [config, slackIntegration, teamsConfig, teamsDestinationsCount, globalWarRoomPolicy] =
+    await Promise.all([
+      prisma.chatOpsConfig.findUnique({
+        where: { id: 'default' },
+      }),
+      prisma.slackIntegration.findFirst({
+        where: { services: { none: {} }, enabled: true },
+      }),
+      prisma.microsoftTeamsConfig.findUnique({
+        where: { id: 'default' },
+      }),
+      prisma.microsoftTeamsDestination.count({
+        where: { enabled: true, warRoomEnabled: true },
+      }),
+      getGlobalWarRoomPolicy(),
+    ]);
 
   const isSlackConnected = !!slackIntegration?.botToken;
+  const isTeamsConnected = !!teamsConfig?.enabled;
+  const isTeamsWarRoomsEnabled = !!teamsConfig?.warRoomsEnabled;
+
+  const connectedProvidersCount = [isSlackConnected, isTeamsConnected].filter(Boolean).length;
   const channelPrefix = config?.channelPrefix || 'inc';
   const hasTriggers =
     (config?.autoCreateOnPriority?.length ?? 0) > 0 ||
@@ -35,20 +48,21 @@ export default async function GlobalChatOpsIntegrationPage() {
       : 'Manual only';
 
   const bridgeLabelMap: Record<string, string> = {
+    MICROSOFT_TEAMS: 'Teams Meeting',
     JITSI: 'Jitsi Meet',
     ZOOM: 'Zoom',
     GOOGLE_MEET: 'Google Meet',
     NONE: 'Disabled',
   };
-  const bridgeDisplay = bridgeLabelMap[config?.defaultVideoBridge ?? 'JITSI'] || 'Jitsi Meet';
+  const bridgeDisplay = bridgeLabelMap[config?.defaultVideoBridge ?? 'JITSI'] || 'Teams Meeting';
 
   return (
     <div className="space-y-6">
       <DetailHeroBanner
-        breadcrumb={{ label: 'Settings', href: '/settings', current: 'ChatOps Integration' }}
-        tag="REAL-TIME INCIDENT COLLABORATION"
-        title="ChatOps & Incident War Rooms"
-        subtitle="Automate dedicated Slack incident channels, multi-responder paging, and instant video war rooms."
+        breadcrumb={{ label: 'Settings', href: '/settings', current: 'War Rooms & ChatOps' }}
+        tag="INCIDENT COLLABORATION"
+        title="War Rooms & ChatOps"
+        subtitle="Centralize how OpsKnight creates and manages incident collaboration rooms across connected providers."
         badges={
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
@@ -61,33 +75,26 @@ export default async function GlobalChatOpsIntegrationPage() {
             <Badge
               variant="outline"
               className={`text-[10px] font-semibold ${
-                isSlackConnected
+                connectedProvidersCount > 0
                   ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-100'
-                  : 'border-rose-400/60 bg-rose-400/15 text-rose-100'
+                  : 'border-amber-400/60 bg-amber-400/15 text-amber-100'
               }`}
             >
-              {isSlackConnected ? (
-                <>
-                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                  Slack Connected
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Slack Disconnected
-                </>
-              )}
+              <Users className="h-3 w-3 mr-1" />
+              {connectedProvidersCount === 0
+                ? 'No Providers Connected'
+                : `${connectedProvidersCount} Provider${connectedProvidersCount > 1 ? 's' : ''} Connected`}
             </Badge>
           </div>
         }
         statsPlacement="bottom"
         stats={[
           {
-            label: 'Channel Prefix',
-            value: `#${channelPrefix}-`,
-            icon: <SlackLogo className="h-4 w-4" />,
+            label: 'Room Name Prefix',
+            value: `${channelPrefix}-`,
+            icon: <Hash className="h-4 w-4" />,
             valueClassName: 'text-primary-foreground font-mono text-xs',
-            subtext: config?.enabled ? 'Engine active' : 'Engine paused',
+            subtext: config?.enabled ? 'Provisioning active' : 'Provisioning paused',
           },
           {
             label: 'Auto-Create Triggers',
@@ -96,7 +103,7 @@ export default async function GlobalChatOpsIntegrationPage() {
             valueClassName: hasTriggers
               ? 'text-emerald-300 font-mono text-xs'
               : 'text-primary-foreground/70',
-            subtext: hasTriggers ? 'Auto-spawn on incident' : 'No triggers set',
+            subtext: hasTriggers ? 'Auto-request on incident' : 'No triggers set',
           },
           {
             label: 'Video War Room',
@@ -110,13 +117,13 @@ export default async function GlobalChatOpsIntegrationPage() {
               config?.defaultVideoBridge === 'NONE' ? 'Video bridge off' : 'Instant meeting link',
           },
           {
-            label: 'Channel Lifecycle',
-            value: config?.archiveOnResolve ? 'Auto-Archive' : 'Persistent',
+            label: 'Lifecycle Behavior',
+            value: config?.archiveOnResolve ? 'Auto-Close' : 'Persistent',
             icon: <Archive className="h-4 w-4" />,
             valueClassName: config?.archiveOnResolve
               ? 'text-emerald-300'
               : 'text-primary-foreground/70',
-            subtext: config?.archiveOnResolve ? 'Archived upon resolution' : 'Retained in Slack',
+            subtext: config?.archiveOnResolve ? 'Close on resolution' : 'Retained in channel',
           },
         ]}
       />
@@ -124,7 +131,18 @@ export default async function GlobalChatOpsIntegrationPage() {
       <ChatOpsSettingsPage
         config={config}
         isAdmin={permissions.isAdmin}
-        isSlackConnected={isSlackConnected}
+        defaultProviders={globalWarRoomPolicy.defaultProviders}
+        providerStatus={{
+          slack: {
+            connected: isSlackConnected,
+            workspaceName: slackIntegration?.workspaceName || null,
+          },
+          teams: {
+            connected: isTeamsConnected,
+            warRoomsEnabled: isTeamsWarRoomsEnabled,
+            destinationsCount: teamsDestinationsCount,
+          },
+        }}
       />
     </div>
   );
