@@ -42,6 +42,8 @@ export function WarRoomLauncher({
     pendingAction: hookPendingAction,
     handleCreate: hookCreate,
     handleAction: hookAction,
+    handleMeetingAction: hookMeetingAction,
+    refreshCollaboration: hookRefresh,
   } = useIncidentWarRooms(initialCollaboration);
 
   const effectiveOnAction = externalOnAction || hookAction;
@@ -181,6 +183,8 @@ export function WarRoomLauncher({
         presentation={presentation}
         onAction={effectiveOnAction}
         onCreate={effectiveOnCreate}
+        onMeetingAction={hookMeetingAction}
+        onRefresh={hookRefresh}
         pendingAction={effectivePendingAction}
         isCreatePending={effectiveIsCreatePending}
       />

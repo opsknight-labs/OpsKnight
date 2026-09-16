@@ -419,64 +419,37 @@ export async function getIncidentCollaborationView(
 
   let meeting: IncidentMeetingView | null = persistedMeeting;
 
-  if (
-    !meeting &&
-    meetingResolution.effectiveProvider !== 'NONE' &&
-    meetingResolution.effectiveProvider !== 'MICROSOFT_TEAMS'
-  ) {
-    const customUrl = incident.service?.warRoomCustomBridgeUrl || null;
-    const joinUrl = generateBridgeUrl(incident.id, meetingResolution.effectiveProvider, customUrl);
-    if (joinUrl) {
-      meeting = {
-        id: `meet_${incident.id}_1`,
-        incidentId: incident.id,
-        generation: 1,
-        provider: meetingResolution.effectiveProvider,
-        state: 'READY',
-        health: 'HEALTHY',
-        externalId: `opsknight:${incident.id}:1`,
-        joinUrl,
-        joinWebUrl: joinUrl,
-        createdAt: incident.createdAt.toISOString(),
-        actions: {
-          canJoin: true,
-          canRetry: false,
-          canClose: canManageMeeting && incident.status !== 'RESOLVED',
-        },
-      };
-    }
-  } else if (
-    !meeting &&
-    meetingResolution.isUnavailable &&
-    meetingResolution.desiredProvider === 'MICROSOFT_TEAMS'
-  ) {
+  if (!meeting && meetingResolution.effectiveProvider !== 'NONE' && !meetingResolution.isDisabled) {
+    // Unprovisioned meeting bridge path:
+    // Expose initial capability card so operator can click "Provision Meeting Bridge"
+    const canProvision = canManageMeeting && incident.status !== 'RESOLVED';
     meeting = {
-      id: `meet_${incident.id}_1`,
+      id: `pending_meet_${incident.id}`,
       incidentId: incident.id,
       generation: 1,
-      provider: 'MICROSOFT_TEAMS',
-      state: 'FAILED',
-      health: 'UNAVAILABLE',
+      provider: meetingResolution.effectiveProvider,
+      state: 'REQUESTED',
+      health: meetingResolution.isUnavailable ? 'UNAVAILABLE' : 'HEALTHY',
       externalId: `opsknight:${incident.id}:1`,
       joinUrl: '',
       createdAt: incident.createdAt.toISOString(),
-      lastErrorCode: 'TEAMS_CONFIG_MISSING',
-      lastErrorMessage:
-        meetingResolution.unavailableReason ||
-        'Microsoft Teams online meetings are not configured or lack Microsoft Graph permissions.',
+      lastErrorCode: meetingResolution.isUnavailable ? 'MEETING_UNAVAILABLE' : null,
+      lastErrorMessage: meetingResolution.unavailableReason || null,
       actions: {
         canJoin: false,
-        canRetry: canManageMeeting && incident.status !== 'RESOLVED',
+        canRetry: false,
         canClose: false,
+        canProvision: canProvision && !meetingResolution.isUnavailable,
       },
     };
   } else if (meeting) {
     meeting = {
       ...meeting,
       actions: {
-        canJoin: meeting.state === 'READY',
+        canJoin: meeting.state === 'READY' && Boolean(meeting.joinUrl),
         canRetry: meeting.state === 'FAILED' && canManageMeeting && incident.status !== 'RESOLVED',
         canClose: meeting.state === 'READY' && canManageMeeting && incident.status !== 'RESOLVED',
+        canProvision: false,
       },
     };
   }

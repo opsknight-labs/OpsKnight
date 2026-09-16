@@ -92,7 +92,7 @@ describe('ChatOpsSettingsPage Component', () => {
     expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
   });
 
-  it('renders static default notice when only Slack is connected', () => {
+  it('renders explicit provider choices with availability badges when only Slack is connected', () => {
     render(
       <ChatOpsSettingsPage
         config={mockConfig}
@@ -105,14 +105,14 @@ describe('ChatOpsSettingsPage Component', () => {
     );
 
     expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
-    expect(screen.getByText('Only Connected Provider')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Slack is currently the only connected war room provider/i)
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: /Both/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Connected').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SLACK')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('MICROSOFT_TEAMS').length).toBe(2);
+    expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
   });
 
-  it('renders static default notice when only Teams is connected', () => {
+  it('renders explicit provider choices with availability badges when only Teams is connected', () => {
     render(
       <ChatOpsSettingsPage
         config={mockConfig}
@@ -125,10 +125,10 @@ describe('ChatOpsSettingsPage Component', () => {
     );
 
     expect(screen.getByText('Default War Room Provider')).toBeInTheDocument();
-    expect(screen.getByText('Only Connected Provider')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Microsoft Teams is currently the only connected war room provider/i)
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('radio', { name: /Both/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Connected').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SLACK')).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue('MICROSOFT_TEAMS').length).toBe(2);
+    expect(screen.getByDisplayValue('BOTH')).toBeInTheDocument();
   });
 });

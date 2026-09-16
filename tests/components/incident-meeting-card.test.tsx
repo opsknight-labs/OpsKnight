@@ -19,6 +19,7 @@ describe('IncidentMeetingCard Component', () => {
     createdAt: new Date().toISOString(),
     actions: {
       canJoin: true,
+      canProvision: false,
       canRetry: false,
       canClose: true,
     },
@@ -37,6 +38,33 @@ describe('IncidentMeetingCard Component', () => {
     expect(screen.getByRole('button', { name: /Copy Link/i })).toBeInTheDocument();
   });
 
+  it('renders requested state with start meeting bridge button and invokes onAction', async () => {
+    const onAction = vi.fn();
+    const requestedMeeting: IncidentMeetingView = {
+      ...readyMeeting,
+      state: 'REQUESTED',
+      health: 'HEALTHY',
+      joinUrl: '',
+      actions: {
+        canJoin: false,
+        canProvision: true,
+        canRetry: false,
+        canClose: false,
+      },
+    };
+
+    render(<IncidentMeetingCard meeting={requestedMeeting} onAction={onAction} />);
+
+    expect(screen.getByText('Not started')).toBeInTheDocument();
+    const startBtn = screen.getByRole('button', { name: /Start Meeting Bridge/i });
+    expect(startBtn).toBeInTheDocument();
+
+    await React.act(async () => {
+      fireEvent.click(startBtn);
+    });
+    expect(onAction).toHaveBeenCalledWith('PROVISION');
+  });
+
   it('renders failed meeting with error message and retry button', async () => {
     const onAction = vi.fn();
     const failedMeeting: IncidentMeetingView = {
@@ -48,6 +76,7 @@ describe('IncidentMeetingCard Component', () => {
       lastErrorMessage: 'Microsoft Entra permissions missing.',
       actions: {
         canJoin: false,
+        canProvision: false,
         canRetry: true,
         canClose: false,
       },
@@ -74,6 +103,7 @@ describe('IncidentMeetingCard Component', () => {
       joinUrl: '',
       actions: {
         canJoin: false,
+        canProvision: false,
         canRetry: false,
         canClose: false,
       },

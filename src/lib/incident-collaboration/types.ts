@@ -112,6 +112,7 @@ export type IncidentMeetingActions = {
   canJoin: boolean;
   canRetry: boolean;
   canClose: boolean;
+  canProvision: boolean;
 };
 
 export type IncidentMeetingView = {

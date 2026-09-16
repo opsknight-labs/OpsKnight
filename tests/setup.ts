@@ -112,6 +112,7 @@ const mockPrisma = {
   microsoftTeamsDestination: createMockModel(),
   systemConfig: createMockModel(),
   incidentWarRoom: createMockModel(),
+  incidentMeeting: createMockModel(),
   chatOpsConfig: createMockModel(),
   $transaction: vi
     .fn()

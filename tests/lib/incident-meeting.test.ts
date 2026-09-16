@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   MeetingProviderRegistry,
   TeamsMeetingAdapter,
@@ -9,7 +9,6 @@ import {
 import {
   provisionIncidentMeeting,
   getIncidentMeeting,
-  saveIncidentMeeting,
   closeIncidentMeeting,
 } from '@/lib/incident-collaboration/meeting-store';
 

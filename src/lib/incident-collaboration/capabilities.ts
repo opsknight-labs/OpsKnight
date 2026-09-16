@@ -63,3 +63,60 @@ export function deriveProviderCanCreate(options: {
 
   return true;
 }
+
+/**
+ * Authoritative Server-Side Collaboration Capabilities Resolver.
+ * MUST be invoked at mutation time by POST /war-rooms and POST /meeting
+ * to guarantee that requests cannot bypass service-level policies.
+ */
+export async function getIncidentCollaborationCapabilities(params: {
+  incidentId: string;
+  userId?: string;
+}): Promise<{
+  canManageWarRooms: boolean;
+  canManageMeeting: boolean;
+  incidentStatus: string;
+  providers: Array<{
+    provider: 'SLACK' | 'MICROSOFT_TEAMS';
+    canCreate: boolean;
+    availability: WarRoomProviderAvailability;
+    reason?: string | null;
+  }>;
+  meeting: {
+    effectiveProvider: string;
+    desiredProvider: string;
+    canProvision: boolean;
+    canClose: boolean;
+    canRetry: boolean;
+    isUnavailable: boolean;
+    unavailableReason?: string;
+  };
+}> {
+  const { getIncidentCollaborationView } = await import('./get-incident-collaboration');
+  const view = await getIncidentCollaborationView({
+    incidentId: params.incidentId,
+    userId: params.userId,
+  });
+
+  return {
+    canManageWarRooms: view.permissions.canManageWarRooms,
+    canManageMeeting: view.permissions.canManageMeeting,
+    incidentStatus: view.incidentStatus,
+    providers: view.providers.map(p => ({
+      provider: p.provider,
+      canCreate: p.canCreate,
+      availability: p.availability,
+      reason: p.unavailableReason,
+    })),
+    meeting: {
+      effectiveProvider: view.meeting?.provider || 'NONE',
+      desiredProvider: view.meeting?.provider || 'NONE',
+      canProvision:
+        view.permissions.canManageMeeting && ['OPEN', 'ACKNOWLEDGED'].includes(view.incidentStatus),
+      canClose: Boolean(view.meeting?.actions.canClose),
+      canRetry: Boolean(view.meeting?.actions.canRetry),
+      isUnavailable: view.meeting?.health === 'UNAVAILABLE',
+      unavailableReason: view.meeting?.lastErrorMessage || undefined,
+    },
+  };
+}

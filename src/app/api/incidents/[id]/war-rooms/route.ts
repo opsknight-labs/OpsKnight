@@ -93,6 +93,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         );
       }
 
+      // Check authoritative server-side capability resolver
+      const { getIncidentCollaborationCapabilities } =
+        await import('@/lib/incident-collaboration/capabilities');
+      const capabilities = await getIncidentCollaborationCapabilities({ incidentId });
+      const targetProviderCap = capabilities.providers.find(p => p.provider === provider);
+
+      if (!targetProviderCap || !targetProviderCap.canCreate) {
+        return jsonError(
+          new AppError({
+            code: 'INCIDENT_MODIFY_DENIED',
+            userMessage:
+              targetProviderCap?.reason ||
+              `War room creation for ${provider} is not permitted by policy.`,
+          })
+        );
+      }
+
       // Check if there is already an active or in-progress room for this provider
       const existingActive = await prisma.incidentWarRoom.findFirst({
         where: {
@@ -111,6 +128,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           })
         );
       }
+
+      const options = (body?.options as { membershipType?: 'STANDARD' | 'PRIVATE' }) || undefined;
 
       if (provider === 'SLACK') {
         const result = await requestSlackWarRoom(incidentId, {
@@ -134,6 +153,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         const result = await requestMicrosoftTeamsWarRoom(incidentId, {
           manual: true,
           allowNewGeneration: true,
+          membershipType: options?.membershipType,
         });
 
         if (!result.accepted) {

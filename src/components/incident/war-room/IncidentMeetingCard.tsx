@@ -21,7 +21,7 @@ import { notify } from '@/lib/toast';
 
 type IncidentMeetingCardProps = {
   meeting: IncidentMeetingView;
-  onAction?: (action: 'RETRY' | 'CLOSE') => Promise<void> | void;
+  onAction?: (action: 'PROVISION' | 'RETRY' | 'CLOSE') => Promise<void> | void;
   className?: string;
 };
 
@@ -41,14 +41,29 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
     }
   };
 
+  const handleProvision = async () => {
+    if (!onAction) return;
+    setPendingAction('PROVISION');
+    try {
+      await onAction('PROVISION');
+      notify.success('Provisioning meeting bridge...');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to provision meeting';
+      notify.error(msg);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
   const handleRetry = async () => {
     if (!onAction) return;
     setPendingAction('RETRY');
     try {
       await onAction('RETRY');
       notify.success('Retrying meeting provisioning...');
-    } catch {
-      notify.error('Failed to retry meeting provisioning');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to retry meeting provisioning';
+      notify.error(msg);
     } finally {
       setPendingAction(null);
     }
@@ -60,8 +75,9 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
     try {
       await onAction('CLOSE');
       notify.success('Meeting closed');
-    } catch {
-      notify.error('Failed to close meeting');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to close meeting';
+      notify.error(msg);
     } finally {
       setPendingAction(null);
     }
@@ -123,6 +139,14 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
                 >
                   <Loader2 className="h-2.5 w-2.5 animate-spin" />
                   Generating
+                </Badge>
+              )}
+              {meeting.state === 'REQUESTED' && (
+                <Badge
+                  variant="outline"
+                  className="text-[9.5px] px-1.5 py-0 h-4 border-blue-500/40 text-blue-600 dark:text-blue-400 bg-blue-500/10 font-normal shrink-0"
+                >
+                  Not started
                 </Badge>
               )}
               {meeting.state === 'FAILED' && (
@@ -192,6 +216,23 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2 pt-1">
+        {meeting.actions.canProvision && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleProvision}
+            disabled={pendingAction === 'PROVISION'}
+            className="h-7 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            {pendingAction === 'PROVISION' ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Video className="h-3 w-3 shrink-0" />
+            )}
+            <span>Start Meeting Bridge</span>
+          </Button>
+        )}
+
         {meeting.actions.canJoin && meeting.joinUrl && (
           <Button
             asChild

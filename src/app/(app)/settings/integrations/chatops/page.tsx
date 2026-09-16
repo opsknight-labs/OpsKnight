@@ -48,12 +48,13 @@ export default async function GlobalChatOpsIntegrationPage() {
       : 'Manual only';
 
   const bridgeLabelMap: Record<string, string> = {
+    MICROSOFT_TEAMS: 'Teams Meeting',
     JITSI: 'Jitsi Meet',
     ZOOM: 'Zoom',
     GOOGLE_MEET: 'Google Meet',
     NONE: 'Disabled',
   };
-  const bridgeDisplay = bridgeLabelMap[config?.defaultVideoBridge ?? 'JITSI'] || 'Jitsi Meet';
+  const bridgeDisplay = bridgeLabelMap[config?.defaultVideoBridge ?? 'JITSI'] || 'Teams Meeting';
 
   return (
     <div className="space-y-6">

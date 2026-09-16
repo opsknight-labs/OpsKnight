@@ -70,8 +70,14 @@ export default function MobileOperationalContextCard({
     permissions: { canManageWarRooms: false, canManageMeeting: false },
   };
 
-  const { collaboration, pendingAction, handleCreate, handleAction } =
-    useIncidentWarRooms(dummyCollaboration);
+  const {
+    collaboration,
+    pendingAction,
+    handleCreate,
+    handleAction,
+    handleMeetingAction,
+    refreshCollaboration,
+  } = useIncidentWarRooms(dummyCollaboration);
 
   const effectiveCollaboration = initialCollaboration ? collaboration : undefined;
 
@@ -226,6 +232,8 @@ export default function MobileOperationalContextCard({
           presentation="mobile"
           onAction={handleAction}
           onCreate={handleCreate}
+          onMeetingAction={handleMeetingAction}
+          onRefresh={refreshCollaboration}
           pendingAction={
             pendingAction ? { roomId: pendingAction.roomId, action: pendingAction.action } : null
           }

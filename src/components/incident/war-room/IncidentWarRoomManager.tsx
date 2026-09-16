@@ -30,6 +30,8 @@ type IncidentWarRoomManagerProps = {
     provider: WarRoomProviderName,
     options?: { membershipType?: 'STANDARD' | 'PRIVATE' }
   ) => Promise<void> | void;
+  onMeetingAction?: (action: 'PROVISION' | 'RETRY' | 'CLOSE') => Promise<void> | void;
+  onRefresh?: () => Promise<void> | void;
   pendingAction?: { roomId?: string; action: string } | null;
   isCreatePending?: boolean;
 };
@@ -41,6 +43,8 @@ export function IncidentWarRoomManager({
   presentation = 'desktop',
   onAction = () => {},
   onCreate = () => {},
+  onMeetingAction,
+  onRefresh,
   pendingAction,
   isCreatePending,
 }: IncidentWarRoomManagerProps) {
@@ -115,11 +119,24 @@ export function IncidentWarRoomManager({
                 <IncidentMeetingCard
                   meeting={collaboration.meeting}
                   onAction={async action => {
-                    await fetch(`/api/incidents/${collaboration.incidentId}/meeting`, {
+                    if (onMeetingAction) {
+                      await onMeetingAction(action);
+                      return;
+                    }
+                    const res = await fetch(`/api/incidents/${collaboration.incidentId}/meeting`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ action }),
                     });
+                    const json = await res.json();
+                    if (!res.ok || !json.data?.success) {
+                      throw new Error(
+                        json.error?.message || `Failed to execute meeting action ${action}.`
+                      );
+                    }
+                    if (onRefresh) {
+                      await onRefresh();
+                    }
                   }}
                 />
               </div>

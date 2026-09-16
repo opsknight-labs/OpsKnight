@@ -341,11 +341,34 @@ export async function getServiceWarRoomPolicy(serviceId: string): Promise<Servic
     if (typeof val.autoCreate === 'boolean') {
       autoCreate = val.autoCreate;
     }
-  } else if (
-    service?.warRoomVideoBridge &&
-    ALL_MEETING_PROVIDERS.includes(service.warRoomVideoBridge as IncidentMeetingProvider)
-  ) {
-    meetingProvider = service.warRoomVideoBridge as IncidentMeetingProvider;
+  } else if (service) {
+    // Legacy migration compatibility: If existing service has autoCreate flags true,
+    // prevent split-brain where background engines auto-create while UI says Disabled.
+    const hasLegacySlack = service.autoCreateWarRoom;
+    const hasLegacyTeams = service.microsoftTeamsWarRoomAutoCreate;
+
+    if (hasLegacySlack || hasLegacyTeams) {
+      warRoomsEnabled = true;
+      autoCreate = true;
+      if (hasLegacySlack && hasLegacyTeams) {
+        serviceProviders = null; // Inherit global default
+      } else if (hasLegacySlack) {
+        serviceProviders = ['SLACK'];
+      } else {
+        serviceProviders = ['MICROSOFT_TEAMS'];
+      }
+    } else {
+      warRoomsEnabled = false;
+      autoCreate = false;
+      serviceProviders = [];
+    }
+
+    if (
+      service.warRoomVideoBridge &&
+      ALL_MEETING_PROVIDERS.includes(service.warRoomVideoBridge as IncidentMeetingProvider)
+    ) {
+      meetingProvider = service.warRoomVideoBridge as IncidentMeetingProvider;
+    }
   }
 
   return {

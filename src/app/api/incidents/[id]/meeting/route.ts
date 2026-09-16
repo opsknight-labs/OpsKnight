@@ -80,6 +80,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     }
 
     if (action === 'PROVISION' || action === 'RETRY') {
+      const { getIncidentCollaborationCapabilities } =
+        await import('@/lib/incident-collaboration/capabilities');
+      const capabilities = await getIncidentCollaborationCapabilities({ incidentId });
+
+      if (!capabilities.canManageMeeting) {
+        return jsonError(
+          new AppError({
+            code: 'INCIDENT_MODIFY_DENIED',
+            userMessage: 'You do not have permission to manage meeting bridges.',
+          })
+        );
+      }
+
       const [globalPolicy, servicePolicy, teamsConfig] = await Promise.all([
         getGlobalWarRoomPolicy(),
         incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
@@ -99,16 +112,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : true,
       });
 
+      if (resolution.isDisabled || resolution.effectiveProvider === 'NONE') {
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: 'Meeting bridge is disabled for this service or organization.',
+          })
+        );
+      }
+
+      // If caller supplied a specific provider, ensure it is permitted (must match effective provider)
       const requestedProvider =
         typeof body?.provider === 'string'
           ? (body.provider as IncidentMeetingProvider)
           : resolution.effectiveProvider;
 
-      if (requestedProvider === 'NONE' || resolution.isDisabled) {
+      if (requestedProvider !== resolution.effectiveProvider) {
         return jsonError(
           new AppError({
             code: 'VALIDATION_FAILED',
-            userMessage: 'Meeting bridge is disabled for this service or organization.',
+            userMessage: `Provider ${requestedProvider} does not match the effective meeting policy (${resolution.effectiveProvider}).`,
           })
         );
       }

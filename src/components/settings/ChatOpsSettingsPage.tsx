@@ -252,13 +252,15 @@ export default function ChatOpsSettingsPage({
   ]);
 
   const activeHint =
-    selectedBridge === 'ZOOM'
-      ? PROVIDER_HINTS.ZOOM
-      : selectedBridge === 'GOOGLE_MEET'
-        ? PROVIDER_HINTS.GOOGLE_MEET
-        : selectedBridge === 'NONE'
-          ? PROVIDER_HINTS.NONE
-          : PROVIDER_HINTS.JITSI;
+    selectedBridge === 'MICROSOFT_TEAMS'
+      ? PROVIDER_HINTS.MICROSOFT_TEAMS
+      : selectedBridge === 'ZOOM'
+        ? PROVIDER_HINTS.ZOOM
+        : selectedBridge === 'GOOGLE_MEET'
+          ? PROVIDER_HINTS.GOOGLE_MEET
+          : selectedBridge === 'NONE'
+            ? PROVIDER_HINTS.NONE
+            : PROVIDER_HINTS.JITSI;
 
   const toggleUrgency = (val: string) => {
     if (!isAdmin) return;
@@ -408,159 +410,135 @@ export default function ChatOpsSettingsPage({
             </p>
           </div>
 
-          {!providerStatus.slack.connected && !providerStatus.teams.connected ? (
-            <div className="rounded-lg border border-dashed p-3.5 bg-muted/20 text-xs text-muted-foreground">
-              No chat providers connected yet. Connect Slack or configure Microsoft Teams to
-              activate war rooms.
-              <input type="hidden" name="defaultProviders" value="BOTH" />
-            </div>
-          ) : providerStatus.slack.connected && !providerStatus.teams.connected ? (
-            <div className="flex items-center justify-between gap-3 p-3.5 rounded-lg border bg-muted/20">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-md bg-[#4A154B]/10 border border-[#4A154B]/20 shrink-0">
-                  <SlackLogo className="h-4 w-4" />
-                </div>
-                <div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {/* Slack Option */}
+            <label
+              className={`flex flex-col justify-between p-3.5 rounded-lg border cursor-pointer transition-all ${
+                selectedDefaultOption === 'SLACK'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border bg-card hover:bg-muted/30'
+              }`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-foreground">Slack</span>
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-normal">
-                      Only Connected Provider
-                    </Badge>
+                    <SlackLogo className="h-4 w-4" />
+                    <span className="text-xs font-bold text-foreground">Slack</span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground block mt-0.5">
-                    Slack is currently the only connected war room provider.
-                  </span>
-                </div>
-              </div>
-              <input type="hidden" name="defaultProviders" value="SLACK" />
-            </div>
-          ) : !providerStatus.slack.connected && providerStatus.teams.connected ? (
-            <div className="flex items-center justify-between gap-3 p-3.5 rounded-lg border bg-muted/20">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-md bg-[#5B5FC7]/10 border border-[#5B5FC7]/20 shrink-0">
-                  <MicrosoftTeamsLogo className="h-4 w-4" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-foreground">Microsoft Teams</span>
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-normal">
-                      Only Connected Provider
-                    </Badge>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground block mt-0.5">
-                    Microsoft Teams is currently the only connected war room provider.
-                  </span>
-                </div>
-              </div>
-              <input type="hidden" name="defaultProviders" value="MICROSOFT_TEAMS" />
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-3">
-              {/* Slack Option */}
-              <label
-                className={`flex flex-col justify-between p-3.5 rounded-lg border cursor-pointer transition-all ${
-                  selectedDefaultOption === 'SLACK'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                    : 'border-border bg-card hover:bg-muted/30'
-                }`}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <SlackLogo className="h-4 w-4" />
-                      <span className="text-xs font-bold text-foreground">Slack</span>
-                    </div>
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-normal">
-                      Single
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground leading-snug">
-                    Provision dedicated incident channels in Slack by default.
-                  </p>
-                </div>
-                <input
-                  type="radio"
-                  name="defaultProviders"
-                  value="SLACK"
-                  checked={selectedDefaultOption === 'SLACK'}
-                  onChange={() => setSelectedDefaultOption('SLACK')}
-                  disabled={!isAdmin}
-                  className="sr-only"
-                />
-              </label>
-
-              {/* Microsoft Teams Option */}
-              <label
-                className={`flex flex-col justify-between p-3.5 rounded-lg border cursor-pointer transition-all ${
-                  selectedDefaultOption === 'MICROSOFT_TEAMS'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                    : 'border-border bg-card hover:bg-muted/30'
-                }`}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <MicrosoftTeamsLogo className="h-4 w-4" />
-                      <span className="text-xs font-bold text-foreground">Microsoft Teams</span>
-                    </div>
-                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 font-normal">
-                      Single
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground leading-snug">
-                    Provision dedicated incident channels in Microsoft Teams by default.
-                  </p>
-                </div>
-                <input
-                  type="radio"
-                  name="defaultProviders"
-                  value="MICROSOFT_TEAMS"
-                  checked={selectedDefaultOption === 'MICROSOFT_TEAMS'}
-                  onChange={() => setSelectedDefaultOption('MICROSOFT_TEAMS')}
-                  disabled={!isAdmin}
-                  className="sr-only"
-                />
-              </label>
-
-              {/* Both Option */}
-              <label
-                className={`flex flex-col justify-between p-3.5 rounded-lg border cursor-pointer transition-all ${
-                  selectedDefaultOption === 'BOTH'
-                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                    : 'border-border bg-card hover:bg-muted/30'
-                }`}
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <SlackLogo className="h-3.5 w-3.5" />
-                      <span className="text-muted-foreground text-xs">+</span>
-                      <MicrosoftTeamsLogo className="h-3.5 w-3.5" />
-                      <span className="text-xs font-bold text-foreground ml-1">Both</span>
-                    </div>
+                  {providerStatus.slack.connected ? (
                     <Badge
                       variant="outline"
-                      className="text-[9px] px-1.5 py-0 font-normal border-primary/40 text-primary"
+                      className="text-[9px] px-1.5 py-0 font-normal border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
                     >
-                      Multi-platform
+                      Connected
                     </Badge>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground leading-snug">
-                    Simultaneously provision incident war rooms across both Slack and Teams.
-                  </p>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1.5 py-0 font-normal border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5"
+                    >
+                      Unavailable
+                    </Badge>
+                  )}
                 </div>
-                <input
-                  type="radio"
-                  name="defaultProviders"
-                  value="BOTH"
-                  checked={selectedDefaultOption === 'BOTH'}
-                  onChange={() => setSelectedDefaultOption('BOTH')}
-                  disabled={!isAdmin}
-                  className="sr-only"
-                />
-              </label>
-            </div>
-          )}
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Provision dedicated incident channels in Slack by default.
+                </p>
+              </div>
+              <input
+                type="radio"
+                name="defaultProviders"
+                value="SLACK"
+                checked={selectedDefaultOption === 'SLACK'}
+                onChange={() => setSelectedDefaultOption('SLACK')}
+                disabled={!isAdmin}
+                className="sr-only"
+              />
+            </label>
+
+            {/* Microsoft Teams Option */}
+            <label
+              className={`flex flex-col justify-between p-3.5 rounded-lg border cursor-pointer transition-all ${
+                selectedDefaultOption === 'MICROSOFT_TEAMS'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border bg-card hover:bg-muted/30'
+              }`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MicrosoftTeamsLogo className="h-4 w-4" />
+                    <span className="text-xs font-bold text-foreground">Microsoft Teams</span>
+                  </div>
+                  {providerStatus.teams.connected ? (
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1.5 py-0 font-normal border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5"
+                    >
+                      Connected
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] px-1.5 py-0 font-normal border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/5"
+                    >
+                      Unavailable
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Provision dedicated incident channels in Microsoft Teams by default.
+                </p>
+              </div>
+              <input
+                type="radio"
+                name="defaultProviders"
+                value="MICROSOFT_TEAMS"
+                checked={selectedDefaultOption === 'MICROSOFT_TEAMS'}
+                onChange={() => setSelectedDefaultOption('MICROSOFT_TEAMS')}
+                disabled={!isAdmin}
+                className="sr-only"
+              />
+            </label>
+
+            {/* Both Option */}
+            <label
+              className={`flex flex-col justify-between p-3.5 rounded-lg border cursor-pointer transition-all ${
+                selectedDefaultOption === 'BOTH'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                  : 'border-border bg-card hover:bg-muted/30'
+              }`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <SlackLogo className="h-3.5 w-3.5" />
+                    <span className="text-muted-foreground text-xs">+</span>
+                    <MicrosoftTeamsLogo className="h-3.5 w-3.5" />
+                    <span className="text-xs font-bold text-foreground ml-1">Both</span>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1.5 py-0 font-normal border-primary/40 text-primary"
+                  >
+                    Multi-platform
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  Simultaneously provision incident war rooms across both Slack and Teams.
+                </p>
+              </div>
+              <input
+                type="radio"
+                name="defaultProviders"
+                value="BOTH"
+                checked={selectedDefaultOption === 'BOTH'}
+                onChange={() => setSelectedDefaultOption('BOTH')}
+                disabled={!isAdmin}
+                className="sr-only"
+              />
+            </label>
+          </div>
         </div>
 
         {/* Room Naming Policy */}

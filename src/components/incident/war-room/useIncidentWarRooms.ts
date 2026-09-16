@@ -25,12 +25,16 @@ export function useIncidentWarRooms(initialCollaboration: IncidentCollaborationV
     setCollaboration(initialCollaboration);
   }, [initialCollaboration]);
 
-  // Determine if any room is in a transitional lifecycle state
-  const hasTransitionalState = collaboration.providers.some(p => {
-    const room = p.currentRoom;
-    if (!room) return false;
-    return ['REQUESTED', 'PROVISIONING', 'AMBIGUOUS', 'CLOSING'].includes(room.state);
-  });
+  // Determine if any room or meeting is in a transitional lifecycle state
+  const hasTransitionalState =
+    collaboration.providers.some(p => {
+      const room = p.currentRoom;
+      if (!room) return false;
+      return ['REQUESTED', 'PROVISIONING', 'AMBIGUOUS', 'CLOSING'].includes(room.state);
+    }) ||
+    Boolean(
+      collaboration.meeting && ['PROVISIONING', 'CLOSING'].includes(collaboration.meeting.state)
+    );
 
   // Track elapsed polling duration to implement exponential/stepped backoff
   const pollStartRef = useRef<number | null>(null);
@@ -238,12 +242,79 @@ export function useIncidentWarRooms(initialCollaboration: IncidentCollaborationV
     [collaboration.incidentId, fetchLatestCollaboration, router]
   );
 
+  // Meeting Action Handler (PROVISION, RETRY, CLOSE)
+  const handleMeetingAction = useCallback(
+    async (action: 'PROVISION' | 'RETRY' | 'CLOSE') => {
+      setError(null);
+      setPendingAction({ action: `MEETING_${action}` });
+
+      // Optimistic update
+      if (action === 'PROVISION' || action === 'RETRY') {
+        setCollaboration(prev => {
+          if (!prev.meeting) return prev;
+          return {
+            ...prev,
+            meeting: {
+              ...prev.meeting,
+              state: 'PROVISIONING',
+            },
+          };
+        });
+      } else if (action === 'CLOSE') {
+        setCollaboration(prev => {
+          if (!prev.meeting) return prev;
+          return {
+            ...prev,
+            meeting: {
+              ...prev.meeting,
+              state: 'CLOSED',
+              actions: {
+                ...prev.meeting.actions,
+                canClose: false,
+                canJoin: false,
+                canRetry: false,
+                canProvision: false,
+              },
+            },
+          };
+        });
+      }
+
+      try {
+        const res = await fetch(`/api/incidents/${collaboration.incidentId}/meeting`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+
+        const json = await res.json();
+        if (!res.ok || !json.data?.success) {
+          throw new Error(json.error?.message || `Failed to execute meeting action ${action}.`);
+        }
+
+        pollStartRef.current = Date.now();
+        await fetchLatestCollaboration();
+        router.refresh();
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : `Failed to execute meeting action ${action}.`;
+        setError(msg);
+        await fetchLatestCollaboration();
+        throw err;
+      } finally {
+        setPendingAction(null);
+      }
+    },
+    [collaboration.incidentId, fetchLatestCollaboration, router]
+  );
+
   return {
     collaboration,
     pendingAction,
     error,
     handleCreate,
     handleAction,
+    handleMeetingAction,
     refreshCollaboration: fetchLatestCollaboration,
   };
 }
