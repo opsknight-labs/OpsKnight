@@ -17,3 +17,13 @@ export function getWarRoomProvider(provider: WarRoomProviderName): WarRoomProvid
 export function listWarRoomProviders(): readonly WarRoomProviderAdapter[] {
   return [...providers.values()];
 }
+
+export function registerWarRoomProvider(adapter: WarRoomProviderAdapter): void {
+  providers.set(adapter.provider, adapter);
+}
+
+export function resetWarRoomProviders(): void {
+  providers.clear();
+  providers.set(microsoftTeamsWarRoomAdapter.provider, microsoftTeamsWarRoomAdapter);
+  providers.set(slackWarRoomAdapter.provider, slackWarRoomAdapter);
+}

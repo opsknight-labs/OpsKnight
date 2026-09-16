@@ -19,6 +19,7 @@ import {
   type MeetingMetricRetryReason,
 } from './meeting-metrics';
 import { emitMeetingAuditEvent } from './meeting-audit';
+import { WarRoomRetryableError } from '@/lib/war-room/errors';
 export {
   reconcileIncidentMeeting,
   reconcileStalledMeetingProvisions,
@@ -34,11 +35,13 @@ const memoryMeetingCache = new Map<string, IncidentMeetingView>();
 
 function classifyRetryReason(error: unknown): MeetingMetricRetryReason {
   const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
-  if (msg.includes('429') || msg.includes('rate limit')) return 'rate_limit';
+  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('ratelimit'))
+    return 'rate_limit';
   if (msg.includes('401') || msg.includes('403') || msg.includes('permission')) return 'permission';
   if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('504'))
     return 'provider_5xx';
-  if (msg.includes('timeout')) return 'timeout';
+  if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('timedout'))
+    return 'timeout';
   return 'network';
 }
 
@@ -510,12 +513,23 @@ export async function requestMeetingProvision(params: {
 
 export function isRetryableMeetingError(error: unknown): boolean {
   if (!error) return false;
+  if (
+    error instanceof WarRoomRetryableError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (('name' in error && error.name === 'WarRoomRetryableError') ||
+        ('retryable' in error && Boolean((error as { retryable?: boolean }).retryable))))
+  ) {
+    return true;
+  }
   const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return (
     msg.includes('429') ||
     msg.includes('rate limit') ||
     msg.includes('ratelimit') ||
     msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('timedout') ||
     msg.includes('fetch') ||
     msg.includes('network') ||
     msg.includes('econnreset') ||
