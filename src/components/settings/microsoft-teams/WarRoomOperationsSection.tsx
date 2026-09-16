@@ -41,7 +41,6 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<Record<string, WarRoomDiagnosticsSnapshot | null>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [repairing, setRepairing] = useState<string | null>(null);
 
   const healthy = snapshots.filter(s => s.operationalHealth === 'HEALTHY').length;
   const degraded = snapshots.filter(s => s.operationalHealth === 'DEGRADED').length;
@@ -229,13 +228,16 @@ function RepairActions({ warRoomId, state }: { warRoomId: string; state: string 
   );
 }
 
-function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
-  const Row = ({ label, value }: { label: string; value: string | null | undefined }) => (
+function DiagnosticsRow({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
     <div className="flex gap-2">
       <span className="w-36 shrink-0 text-muted-foreground">{label}</span>
       <span className="font-mono break-all">{value ?? '—'}</span>
     </div>
   );
+}
+
+function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 font-semibold">
@@ -245,44 +247,44 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Incident / Provider</div>
-          <Row label="Incident" value={`${diag.incidentTitle ?? diag.incidentId} (${diag.incidentStatus ?? '—'})`} />
-          <Row label="Provider" value={diag.provider} />
-          <Row label="Generation" value={String(diag.generation)} />
-          <Row label="State" value={diag.state} />
-          <Row label="Health" value={`${diag.operationalHealth} / ${diag.healthState}`} />
-          <Row label="Health reason" value={diag.healthReasonCode ? `${diag.healthReasonCode}: ${diag.healthReasonMessage ?? ''}` : diag.lastErrorCode ? `${diag.lastErrorCode}: ${diag.lastError ?? ''}`.slice(0, 200) : '—'} />
+          <DiagnosticsRow label="Incident" value={`${diag.incidentTitle ?? diag.incidentId} (${diag.incidentStatus ?? '—'})`} />
+          <DiagnosticsRow label="Provider" value={diag.provider} />
+          <DiagnosticsRow label="Generation" value={String(diag.generation)} />
+          <DiagnosticsRow label="State" value={diag.state} />
+          <DiagnosticsRow label="Health" value={`${diag.operationalHealth} / ${diag.healthState}`} />
+          <DiagnosticsRow label="Health reason" value={diag.healthReasonCode ? `${diag.healthReasonCode}: ${diag.healthReasonMessage ?? ''}` : diag.lastErrorCode ? `${diag.lastErrorCode}: ${diag.lastError ?? ''}`.slice(0, 200) : '—'} />
         </div>
         <div className="space-y-1">
           <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Destination / Channel</div>
-          <Row label="Destination" value={diag.destination ? `${diag.destination.id ?? '—'} ${diag.destination.enabled ? 'enabled' : 'disabled'} warRoom:${diag.destination.warRoomEnabled ? 'on' : 'off'}` : diag.destinationId ?? '—'} />
-          <Row label="Tenant" value={diag.providerTenantId} />
-          <Row label="Team" value={diag.providerContainerId ?? diag.destination?.teamId ?? '—'} />
-          <Row label="Channel" value={diag.providerChannelId ? `${diag.providerChannelId} (${diag.providerChannelName ?? ''})` : '—'} />
-          <Row label="Channel URL" value={(diag as unknown as { providerChannelUrl?: string | null }).providerChannelUrl ?? '—'} />
+          <DiagnosticsRow label="Destination" value={diag.destination ? `${diag.destination.id ?? '—'} ${diag.destination.enabled ? 'enabled' : 'disabled'} warRoom:${diag.destination.warRoomEnabled ? 'on' : 'off'}` : diag.destinationId ?? '—'} />
+          <DiagnosticsRow label="Tenant" value={diag.providerTenantId} />
+          <DiagnosticsRow label="Team" value={diag.providerContainerId ?? diag.destination?.teamId ?? '—'} />
+          <DiagnosticsRow label="Channel" value={diag.providerChannelId ? `${diag.providerChannelId} (${diag.providerChannelName ?? ''})` : '—'} />
+          <DiagnosticsRow label="Channel URL" value={(diag as unknown as { providerChannelUrl?: string | null }).providerChannelUrl ?? '—'} />
         </div>
         <div className="space-y-1">
           <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Projection</div>
-          <Row label="Version" value={`${diag.lastProjectedVersion}/${diag.projectionVersion} lag ${diag.projectionLag}`} />
-          <Row label="Last projected" value={diag.lastProjectedAt} />
-          <Row label="Last reconciled" value={diag.lastReconciledAt} />
+          <DiagnosticsRow label="Version" value={`${diag.lastProjectedVersion}/${diag.projectionVersion} lag ${diag.projectionLag}`} />
+          <DiagnosticsRow label="Last projected" value={diag.lastProjectedAt} />
+          <DiagnosticsRow label="Last reconciled" value={diag.lastReconciledAt} />
         </div>
         <div className="space-y-1">
           <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Participant sync</div>
-          <Row label="Counts" value={`present ${diag.participantCounts.present}/${diag.participantCounts.desired} pending ${diag.participantCounts.pending} failed ${diag.participantCounts.failed} stale ${diag.participantCounts.desiredStale} drift ${diag.participantDrift}`} />
-          <Row label="Members" value={diag.participants.length === 0 ? '—' : diag.participants.map(p => `${p.source}:${p.state}${p.lastErrorCode ? `(${p.lastErrorCode})` : ''}`).join(', ').slice(0, 400)} />
+          <DiagnosticsRow label="Counts" value={`present ${diag.participantCounts.present}/${diag.participantCounts.desired} pending ${diag.participantCounts.pending} failed ${diag.participantCounts.failed} stale ${diag.participantCounts.desiredStale} drift ${diag.participantDrift}`} />
+          <DiagnosticsRow label="Members" value={diag.participants.length === 0 ? '—' : diag.participants.map(p => `${p.source}:${p.state}${p.lastErrorCode ? `(${p.lastErrorCode})` : ''}`).join(', ').slice(0, 400)} />
         </div>
         <div className="space-y-1">
           <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Provisioning</div>
-          <Row label="Create attempted" value={diag.provisioning.createAttemptedAt} />
-          <Row label="Planned name" value={diag.provisioning.plannedExternalName} />
-          <Row label="Command message" value={diag.provisioning.commandMessageId ? `${diag.provisioning.commandMessageId} (${diag.provisioning.commandConversationId ?? ''})` : '—'} />
+          <DiagnosticsRow label="Create attempted" value={diag.provisioning.createAttemptedAt} />
+          <DiagnosticsRow label="Planned name" value={diag.provisioning.plannedExternalName} />
+          <DiagnosticsRow label="Command message" value={diag.provisioning.commandMessageId ? `${diag.provisioning.commandMessageId} (${diag.provisioning.commandConversationId ?? ''})` : '—'} />
         </div>
         <div className="space-y-1">
           <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Closing / Cleanup</div>
-          <Row label="Close requested" value={diag.closing?.closeRequestedAt ?? '—'} />
-          <Row label="Closed / Archived" value={`${diag.closing?.closedAt ?? '—'} / ${diag.closing?.archivedAt ?? '—'}`} />
-          <Row label="Cleanup pending" value={diag.cleanup.externalCleanupPending ? `${diag.cleanup.externalCleanupReason ?? 'pending'} @ ${diag.cleanup.externalCleanupLastAttemptAt ?? '—'}` : 'false'} />
-          <Row label="Cleanup completed" value={diag.cleanup.externalCleanupCompletedAt} />
+          <DiagnosticsRow label="Close requested" value={diag.closing?.closeRequestedAt ?? '—'} />
+          <DiagnosticsRow label="Closed / Archived" value={`${diag.closing?.closedAt ?? '—'} / ${diag.closing?.archivedAt ?? '—'}`} />
+          <DiagnosticsRow label="Cleanup pending" value={diag.cleanup.externalCleanupPending ? `${diag.cleanup.externalCleanupReason ?? 'pending'} @ ${diag.cleanup.externalCleanupLastAttemptAt ?? '—'}` : 'false'} />
+          <DiagnosticsRow label="Cleanup completed" value={diag.cleanup.externalCleanupCompletedAt} />
         </div>
       </div>
       <RepairActions warRoomId={diag.warRoomId} state={diag.state} />

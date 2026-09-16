@@ -1,5 +1,4 @@
-import type { IntegrationHealthSummary, OperationalHealth } from './types';
-import type { WarRoomOperationalSnapshot } from './types';
+import type { IntegrationHealthSummary, OperationalHealth, WarRoomOperationalSnapshot } from './types';
 
 export function summarizeOperationalHealth(
   snapshots: readonly WarRoomOperationalSnapshot[]
