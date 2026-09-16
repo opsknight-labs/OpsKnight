@@ -57,13 +57,7 @@ export function resolveEffectiveMeetingProvider(params: {
   isDisabled: boolean;
   isInherited: boolean;
 } {
-  const {
-    globalMeetingProvider,
-    serviceMeetingProvider,
-    isTeamsMeetingAvailable,
-    globalWarRoomsEnabled,
-    serviceWarRoomsEnabled,
-  } = params;
+  const { globalMeetingProvider, serviceMeetingProvider, isTeamsMeetingAvailable } = params;
 
   const isInherited = serviceMeetingProvider === null || serviceMeetingProvider === undefined;
   const desiredProvider: IncidentMeetingProvider = isInherited

@@ -78,9 +78,8 @@ export async function requestMicrosoftTeamsWarRoom(
     });
 
     if (
-      !intent.manual &&
-      (!effectivePolicy.effectiveProviders.includes('MICROSOFT_TEAMS') ||
-        effectivePolicy.isDisabled)
+      !effectivePolicy.effectiveProviders.includes('MICROSOFT_TEAMS') ||
+      effectivePolicy.isDisabled
     ) {
       return { accepted: false, code: 'PROVIDER_POLICY_EXCLUDED' };
     }

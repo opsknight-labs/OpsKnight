@@ -596,6 +596,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
             typeof rawMeeting.incidentNumber === 'number' ? rawMeeting.incidentNumber : undefined,
           customTemplate:
             typeof rawMeeting.customTemplate === 'string' ? rawMeeting.customTemplate : null,
+          attempt: job.attempts,
+          maxAttempts: job.maxAttempts,
         });
         await markJobCompleted(job.id);
         return true;

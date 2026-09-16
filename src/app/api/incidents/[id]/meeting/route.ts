@@ -5,7 +5,6 @@ import { AppError, isAppError } from '@/lib/errors';
 import { assertCanViewIncident, assertCanModifyIncident } from '@/lib/rbac';
 import {
   getIncidentMeeting,
-  provisionIncidentMeeting,
   requestMeetingProvision,
   closeIncidentMeeting,
 } from '@/lib/incident-collaboration/meeting-store';
@@ -99,11 +98,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
         prisma.microsoftTeamsConfig.findUnique({
           where: { id: 'default' },
-          select: { enabled: true, warRoomsEnabled: true },
+          select: { enabled: true },
         }),
       ]);
 
-      const isTeamsAvailable = Boolean(teamsConfig?.enabled && teamsConfig?.warRoomsEnabled);
+      const isTeamsAvailable = Boolean(teamsConfig?.enabled);
 
       const resolution = resolveEffectiveMeetingProvider({
         globalMeetingProvider: globalPolicy.defaultMeetingProvider,

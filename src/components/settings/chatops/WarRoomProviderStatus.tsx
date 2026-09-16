@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { ExternalLink, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 
 export type ProviderStatusProps = {
   slack: {

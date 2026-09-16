@@ -392,6 +392,19 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
         incidentId: payload.incidentId,
         incidentEventId: payload.sourceEventId,
       });
+      try {
+        const { maybeAutoProvisionIncidentMeeting } =
+          await import('./incident-collaboration/meeting-store');
+        await maybeAutoProvisionIncidentMeeting(payload.incidentId);
+      } catch (err) {
+        logger.warn(
+          '[IncidentCollaboration] Failed to auto-provision meeting on incident trigger',
+          {
+            incidentId: payload.incidentId,
+            error: err instanceof Error ? err.message : String(err),
+          }
+        );
+      }
       return;
     }
     case 'TRIGGER_STATUS_PAGE':

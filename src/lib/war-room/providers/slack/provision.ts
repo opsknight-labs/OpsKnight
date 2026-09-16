@@ -15,7 +15,12 @@ import {
   slackApiCall,
   slackWarRoomMarker,
 } from './client';
-import { generateBridgeUrl } from '../../bridge';
+
+function getSlackChannelUrl(channelId: string, workspaceId?: string | null): string {
+  return workspaceId
+    ? `https://slack.com/app_redirect?channel=${channelId}&team=${workspaceId}`
+    : `https://slack.com/app_redirect?channel=${channelId}`;
+}
 
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
@@ -189,10 +194,7 @@ export async function requestSlackWarRoom(
       serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : false,
     });
 
-    if (
-      !intent.manual &&
-      (!effectivePolicy.effectiveProviders.includes('SLACK') || effectivePolicy.isDisabled)
-    ) {
+    if (!effectivePolicy.effectiveProviders.includes('SLACK') || effectivePolicy.isDisabled) {
       return { accepted: false as const, code: 'PROVIDER_POLICY_EXCLUDED' };
     }
 
@@ -564,11 +566,7 @@ export async function provisionSlackWarRoom(
         (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null
       );
       if (lookup.status === 'FOUND') {
-        const warRoomUrl = generateBridgeUrl(
-          incident.id,
-          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
-          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
-        );
+        const channelUrl = getSlackChannelUrl(lookup.channel.id, slackWorkspaceId);
         const adoption = await runSerializableTransaction(tx =>
           adoptWarRoomChannel(tx, {
             warRoomId: room.id,
@@ -576,7 +574,7 @@ export async function provisionSlackWarRoom(
             providerTenantId: slackWorkspaceId,
             channelId: lookup.channel.id,
             channelName: lookup.channel.name,
-            channelUrl: warRoomUrl,
+            channelUrl,
           })
         );
         if (adoption === 'READY') {
@@ -742,11 +740,7 @@ export async function provisionSlackWarRoom(
         (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null
       );
       if (ambLookup.status === 'FOUND') {
-        const warRoomUrl = generateBridgeUrl(
-          incident.id,
-          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
-          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
-        );
+        const channelUrl = getSlackChannelUrl(ambLookup.channel.id, slackWorkspaceId);
         const adoption = await runSerializableTransaction(tx =>
           adoptWarRoomChannel(tx, {
             warRoomId: room.id,
@@ -754,7 +748,7 @@ export async function provisionSlackWarRoom(
             providerTenantId: slackWorkspaceId,
             channelId: ambLookup.channel.id,
             channelName: ambLookup.channel.name,
-            channelUrl: warRoomUrl,
+            channelUrl,
           })
         );
         if (adoption === 'READY') {
@@ -909,11 +903,7 @@ export async function provisionSlackWarRoom(
         () => null
       );
       if (altExisting) {
-        const warRoomUrl = generateBridgeUrl(
-          incident.id,
-          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
-          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
-        );
+        const channelUrl = getSlackChannelUrl(altExisting.id, slackWorkspaceId);
         const adoption = await runSerializableTransaction(tx =>
           adoptWarRoomChannel(tx, {
             warRoomId: room.id,
@@ -921,7 +911,7 @@ export async function provisionSlackWarRoom(
             providerTenantId: slackWorkspaceId,
             channelId: altExisting.id,
             channelName: altExisting.name,
-            channelUrl: warRoomUrl,
+            channelUrl,
           })
         );
         if (adoption === 'READY') {
@@ -984,9 +974,7 @@ export async function provisionSlackWarRoom(
     purpose: marker,
   }).catch(() => {});
 
-  const videoBridge = incident.service.warRoomVideoBridge || config.defaultVideoBridge;
-  const customUrl = incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate;
-  const warRoomUrl = generateBridgeUrl(incident.id, videoBridge, customUrl);
+  const channelUrl = getSlackChannelUrl(channelId, slackWorkspaceId);
 
   // Welcome message is separate from the canonical card (which is projected via WAR_ROOM_PROJECT).
   const welcomeBlocks = [
@@ -1042,7 +1030,7 @@ export async function provisionSlackWarRoom(
       providerTenantId: slackWorkspaceId,
       channelId,
       channelName: effectiveChannelName,
-      channelUrl: warRoomUrl,
+      channelUrl,
     })
   );
 
@@ -1084,7 +1072,7 @@ export async function provisionSlackWarRoom(
     .create({
       data: {
         incidentId: incident.id,
-        message: `War-room channel #${effectiveChannelName} created${warRoomUrl ? ` with video bridge` : ''}`,
+        message: `War-room channel #${effectiveChannelName} created`,
       },
     })
     .catch(() => {});

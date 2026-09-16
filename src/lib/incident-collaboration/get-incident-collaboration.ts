@@ -144,14 +144,15 @@ export async function getIncidentCollaborationView(
       incident.service?.slackIntegration?.enabled !== false) ||
     globalSlackIntegration?.workspaceId
   );
-  const isSlackConnected = hasSlackIntegration && globalPolicy.enabled;
-  const isTeamsConnected = Boolean(
+  const isSlackConnected = Boolean(hasSlackIntegration && globalPolicy.enabled);
+  const isTeamsIntegrationEnabled = Boolean(teamsConfig?.enabled);
+  const isTeamsChatConnected = Boolean(
     teamsConfig?.enabled && teamsConfig?.warRoomsEnabled && globalPolicy.enabled
   );
 
   const availableIntegrations: WarRoomProviderName[] = [];
   if (isSlackConnected) availableIntegrations.push('SLACK');
-  if (isTeamsConnected) availableIntegrations.push('MICROSOFT_TEAMS');
+  if (isTeamsChatConnected) availableIntegrations.push('MICROSOFT_TEAMS');
 
   // Resolve 4-layer provider policy: Global Default + Service Override + Availability
   const policyResolution = resolveEffectiveWarRoomProviders({
@@ -411,7 +412,7 @@ export async function getIncidentCollaborationView(
   const meetingResolution = resolveEffectiveMeetingProvider({
     globalMeetingProvider: globalPolicy.defaultMeetingProvider,
     serviceMeetingProvider: servicePolicy ? (servicePolicy.meetingProvider ?? null) : null,
-    isTeamsMeetingAvailable: isTeamsConnected,
+    isTeamsMeetingAvailable: isTeamsIntegrationEnabled,
     globalWarRoomsEnabled: globalPolicy.enabled,
     serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : true,
   });

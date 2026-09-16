@@ -82,6 +82,33 @@ export async function getIncidentMeeting(incidentId: string): Promise<IncidentMe
         orderBy: { generation: 'desc' },
       });
       if (record) {
+        if (
+          record.state === 'PROVISIONING' &&
+          record.provisioningStartedAt &&
+          Date.now() - new Date(record.provisioningStartedAt).getTime() > 120_000
+        ) {
+          try {
+            await prisma.incidentMeeting.updateMany({
+              where: {
+                id: record.id,
+                state: 'PROVISIONING',
+                provisioningToken: record.provisioningToken,
+              },
+              data: {
+                state: 'FAILED',
+                health: 'UNAVAILABLE',
+                lastErrorCode: 'PROVISIONING_TIMEOUT',
+                lastErrorMessage: 'Meeting provisioning timed out after 2 minutes.',
+              },
+            });
+            record.state = 'FAILED' as never;
+            record.health = 'UNAVAILABLE' as never;
+            record.lastErrorCode = 'PROVISIONING_TIMEOUT';
+            record.lastErrorMessage = 'Meeting provisioning timed out after 2 minutes.';
+          } catch {
+            // Ignore if concurrently updated
+          }
+        }
         const view = mapRecordToView(record);
         memoryMeetingCache.set(incidentId, view);
         return view;
@@ -328,6 +355,58 @@ export async function requestMeetingProvision(params: {
     },
   };
 
+  // Transactional Enqueue: Write PROVISIONING and enqueue background job atomically
+  if (prisma?.incidentMeeting && prisma?.backgroundJob) {
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.incidentMeeting.upsert({
+          where: { incidentId_generation: { incidentId, generation } },
+          create: {
+            id: meetingId,
+            incidentId,
+            provider: provider as never,
+            generation,
+            state: 'PROVISIONING',
+            health: 'HEALTHY',
+            externalId,
+            joinUrl: existing?.joinUrl || '',
+            provisioningToken,
+            provisioningStartedAt: new Date(),
+          },
+          update: {
+            state: 'PROVISIONING',
+            health: 'HEALTHY',
+            provisioningToken,
+            provisioningStartedAt: new Date(),
+          },
+        });
+
+        await tx.backgroundJob.create({
+          data: {
+            type: 'MEETING_PROVISION',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 5,
+            payload: {
+              incidentId,
+              provisioningToken,
+              provider,
+              generation,
+              incidentTitle,
+              incidentNumber,
+              customTemplate: customTemplate || null,
+            },
+          },
+        });
+      });
+
+      memoryMeetingCache.set(incidentId, initialMeeting);
+      return initialMeeting;
+    } catch {
+      // Fall through to fallback path below
+    }
+  }
+
   await saveIncidentMeeting(initialMeeting);
 
   if (prisma?.incidentMeeting?.updateMany) {
@@ -369,6 +448,25 @@ export async function requestMeetingProvision(params: {
   return initialMeeting;
 }
 
+export function isRetryableMeetingError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    msg.includes('429') ||
+    msg.includes('rate limit') ||
+    msg.includes('ratelimit') ||
+    msg.includes('timeout') ||
+    msg.includes('fetch') ||
+    msg.includes('network') ||
+    msg.includes('econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('500') ||
+    msg.includes('502') ||
+    msg.includes('503') ||
+    msg.includes('504')
+  );
+}
+
 /**
  * Execute meeting provisioning with atomic CAS fencing.
  * Called either synchronously by provisionIncidentMeeting or asynchronously by the MEETING_PROVISION job worker.
@@ -382,6 +480,8 @@ export async function executeMeetingProvision(params: {
   incidentTitle?: string;
   incidentNumber?: number;
   customTemplate?: string | null;
+  attempt?: number;
+  maxAttempts?: number;
 }): Promise<IncidentMeetingView> {
   const {
     incidentId,
@@ -553,6 +653,30 @@ export async function executeMeetingProvision(params: {
     return readyMeeting;
   } catch (error) {
     const errorMessage = (error as Error).message || 'Failed to provision meeting bridge.';
+    const isRetryable = isRetryableMeetingError(error);
+    const hasMoreAttempts =
+      params.attempt != null && params.maxAttempts != null && params.attempt < params.maxAttempts;
+
+    if (isRetryable && hasMoreAttempts) {
+      if (prisma?.incidentMeeting?.updateMany) {
+        await prisma.incidentMeeting
+          .updateMany({
+            where: {
+              incidentId,
+              generation: gen,
+              state: 'PROVISIONING',
+              provisioningToken,
+            },
+            data: {
+              health: 'DEGRADED',
+              lastErrorCode: 'PROVISION_RETRYABLE_ERROR',
+              lastErrorMessage: errorMessage,
+            },
+          })
+          .catch(() => null);
+      }
+      throw error;
+    }
 
     if (prisma?.incidentMeeting?.updateMany) {
       const updateResult = await prisma.incidentMeeting.updateMany({
@@ -686,4 +810,74 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
       })
       .catch(() => null);
   }
+}
+
+/**
+ * Automatically provision incident meeting bridge when autoCreate is enabled by policy.
+ * Symmetrically invoked by TRIGGER_WAR_ROOM event side-effect alongside chat room creation.
+ */
+export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Promise<void> {
+  if (!prisma?.incident?.findUnique) return;
+
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    include: {
+      service: {
+        select: {
+          id: true,
+          name: true,
+          autoCreateWarRoom: true,
+          warRoomVideoBridge: true,
+          warRoomCustomBridgeUrl: true,
+        },
+      },
+    },
+  });
+
+  if (!incident || !['OPEN', 'ACKNOWLEDGED'].includes(incident.status)) return;
+
+  const existing = await getIncidentMeeting(incidentId);
+  if (existing && ['READY', 'PROVISIONING', 'REQUESTED'].includes(existing.state)) {
+    return; // Already active or provisioning
+  }
+
+  const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveEffectiveMeetingProvider } =
+    await import('./policy');
+
+  const [globalPolicy, servicePolicy, teamsConfig] = await Promise.all([
+    getGlobalWarRoomPolicy(),
+    incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
+    prisma.microsoftTeamsConfig?.findUnique
+      ? prisma.microsoftTeamsConfig.findUnique({
+          where: { id: 'default' },
+          select: { enabled: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const autoCreate = servicePolicy?.autoCreate ?? incident.service?.autoCreateWarRoom ?? false;
+  if (!autoCreate) return;
+
+  const isTeamsMeetingAvailable = Boolean(teamsConfig?.enabled);
+
+  const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
+
+  const resolution = resolveEffectiveMeetingProvider({
+    globalMeetingProvider: globalPolicy.defaultMeetingProvider,
+    serviceMeetingProvider: servicePolicy?.meetingProvider ?? null,
+    isTeamsMeetingAvailable,
+    globalWarRoomsEnabled: globalPolicy.enabled,
+    serviceWarRoomsEnabled: servicePolicy?.warRoomsEnabled ?? true,
+  });
+
+  if (resolution.isDisabled || resolution.effectiveProvider === 'NONE') {
+    return;
+  }
+
+  await requestMeetingProvision({
+    incidentId,
+    provider: resolution.effectiveProvider,
+    incidentTitle: incident.title,
+    customTemplate,
+  });
 }

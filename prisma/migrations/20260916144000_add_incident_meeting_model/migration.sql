@@ -10,9 +10,6 @@ CREATE TYPE "IncidentMeetingHealth" AS ENUM ('HEALTHY', 'DEGRADED', 'UNAVAILABLE
 -- AlterTable
 ALTER TABLE "MicrosoftTeamsConfig" ADD COLUMN "defaultMeetingOrganizerUpn" TEXT;
 
--- AlterEnum
-ALTER TYPE "JobType" ADD VALUE 'MEETING_PROVISION';
-
 -- CreateTable
 CREATE TABLE "IncidentMeeting" (
     "id" TEXT NOT NULL,
