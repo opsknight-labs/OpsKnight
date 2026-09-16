@@ -95,9 +95,11 @@ export default function MobileQuickSwitcher() {
   const searchGeneration = useRef(0);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   // iOS/Android keyboards shrink the visual viewport without reliably
-  // resizing `100dvh`; track it directly so the sheet never extends behind
-  // the keyboard instead of fitting the actually-usable area above it.
+  // resizing `100dvh`; track it directly so the sheet is capped to the
+  // actually-visible area and lifted above the keyboard, instead of
+  // extending behind it.
   const [sheetMaxHeight, setSheetMaxHeight] = useState<number | null>(null);
+  const [sheetBottomOffset, setSheetBottomOffset] = useState(0);
   const hasQuery = query.trim().length >= MIN_QUERY_LENGTH;
 
   useEffect(() => {
@@ -130,10 +132,21 @@ export default function MobileQuickSwitcher() {
   useEffect(() => {
     if (!open || typeof window === 'undefined' || !window.visualViewport) {
       setSheetMaxHeight(null);
+      setSheetBottomOffset(0);
       return;
     }
     const viewport = window.visualViewport;
-    const update = () => setSheetMaxHeight(Math.max(280, Math.round(viewport.height) - 12));
+    const update = () => {
+      // The viewport itself is authoritative: never floor this above what is
+      // actually visible, or the sheet can extend behind the keyboard.
+      setSheetMaxHeight(Math.max(0, Math.round(viewport.height) - 12));
+      // `fixed bottom-0` anchors to the layout viewport, which does not move
+      // when the keyboard opens. Lift the sheet by however much the visual
+      // viewport has been pushed up/shrunk so it stays above the keyboard.
+      setSheetBottomOffset(
+        Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop))
+      );
+    };
     update();
     viewport.addEventListener('resize', update);
     viewport.addEventListener('scroll', update);
@@ -222,15 +235,14 @@ export default function MobileQuickSwitcher() {
         }}
       >
         <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:animate-none" />
           <DialogPrimitive.Content
-            className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-3xl border border-border bg-popover text-popover-foreground shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-            style={{ maxHeight: sheetMaxHeight ? `${sheetMaxHeight}px` : 'calc(100dvh - 0.75rem)' }}
+            className="fixed inset-x-0 z-50 flex flex-col overflow-hidden rounded-t-3xl border border-border bg-popover text-popover-foreground shadow-2xl duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in data-[state=closed]:slide-out-to-bottom-8 data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 motion-reduce:animate-none motion-reduce:transition-none"
+            style={{
+              maxHeight: sheetMaxHeight ? `${sheetMaxHeight}px` : 'calc(100dvh - 0.75rem)',
+              bottom: sheetBottomOffset,
+            }}
           >
-            <div
-              aria-hidden="true"
-              className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-border"
-            />
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
               <DialogPrimitive.Title className="text-sm font-semibold text-foreground">
                 Search
@@ -250,15 +262,13 @@ export default function MobileQuickSwitcher() {
             </div>
 
             <Command shouldFilter={false} className="flex min-h-0 flex-1 flex-col bg-transparent">
-              <div className="shrink-0 border-b border-border px-2">
-                <CommandInput
-                  placeholder="Search incidents, services, teams…"
-                  value={query}
-                  onValueChange={setQuery}
-                  className="h-12 text-base"
-                  autoFocus
-                />
-              </div>
+              <CommandInput
+                placeholder="Search incidents, services, teams…"
+                value={query}
+                onValueChange={setQuery}
+                className="h-12 text-base"
+                autoFocus
+              />
               <CommandList className="flex-1 overflow-y-auto pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
                 <CommandEmpty>
                   {isLoading ? 'Searching…' : searchError || 'No results found.'}
