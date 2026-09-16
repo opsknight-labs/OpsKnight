@@ -48,6 +48,7 @@
     "ops": "node ./scripts/OpsKnight.mjs",
     "build:scripts": "tsc scripts/auto-recover-migrations.ts --rootDir . --outDir scripts/dist --module commonjs --target es2020 --esModuleInterop --skipLibCheck",
     "backfill:action-items": "ts-node --project tsconfig.script.json scripts/backfill-action-items.ts",
+    "certify:collaboration": "ts-node -r tsconfig-paths/register --project tsconfig.script.json scripts/certify-incident-collaboration.ts",
     "prisma:validate": "node scripts/validate-migrations.cjs",
     "prisma:health": "node scripts/check-migration-health.cjs",
     "prisma:auto-recover": "node --loader ts-node/esm scripts/auto-recover-migrations.ts",
