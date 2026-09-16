@@ -91,7 +91,6 @@ function renderIncident(jiraCapability: JiraCapability, links: JiraLinkItem[] = 
       resolvingIncident={{} as never}
       postmortemHref="/postmortems/incident-1"
       postmortemExists={false}
-      warRoom={null}
       jira={{
         links,
         enabled: jiraCapability.rawEnabled,
@@ -109,11 +108,7 @@ function openMobileActions() {
   fireEvent.click(triggers[triggers.length - 1]);
 }
 
-function PostmortemActionItemsHarness({
-  initialItems = [],
-}: {
-  initialItems?: ActionItem[];
-}) {
+function PostmortemActionItemsHarness({ initialItems = [] }: { initialItems?: ActionItem[] }) {
   const [items, setItems] = useState<ActionItem[]>(initialItems);
   return (
     <PostmortemActionItems

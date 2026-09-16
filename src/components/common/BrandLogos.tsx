@@ -34,7 +34,12 @@ export function SlackLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
 
 export function MicrosoftTeamsLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-label="Microsoft Teams logo" fill="none">
+    <svg
+      viewBox="1.5 1 19.2 18.2"
+      className={className}
+      aria-label="Microsoft Teams logo"
+      fill="none"
+    >
       {/* Secondary participant behind */}
       <circle cx="16.5" cy="5.5" r="2.25" fill="#505AC9" />
       <path d="M14.5 9h4c1.1 0 2 .9 2 2v2.5a.5.5 0 0 1-.5.5h-5.5V9z" fill="#505AC9" />

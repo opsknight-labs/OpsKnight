@@ -20,10 +20,9 @@ describe('IncidentQuickLinksCard', () => {
       id: 'team-1',
       name: 'Core Infra',
     },
-    warRoomUrl: 'https://meet.jit.si/opsknight-warroom-123',
   };
 
-  it('renders standard service, policy, analytics, team, and war room quick links', () => {
+  it('renders standard service, policy, analytics, and team quick links', () => {
     render(<IncidentQuickLinksCard {...defaultProps} />);
 
     expect(screen.getByText('Quick Links')).toBeInTheDocument();
@@ -31,7 +30,6 @@ describe('IncidentQuickLinksCard', () => {
     expect(screen.getByText('Critical Escalation')).toBeInTheDocument();
     expect(screen.getByText('Incident Analytics')).toBeInTheDocument();
     expect(screen.getByText('Core Infra')).toBeInTheDocument();
-    expect(screen.getByText('Join War Room')).toBeInTheDocument();
   });
 
   it('does not render any duplicate postmortem link in the sidebar quick links', () => {

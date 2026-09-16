@@ -6,7 +6,10 @@ import prisma from '@/lib/prisma';
 import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import { logAudit } from '@/lib/audit';
 import { encrypt, decrypt } from '@/lib/encryption';
-import { revokeMicrosoftTeamsOperations, revokeMicrosoftTeamsWarRoomProvisioning } from '@/lib/microsoft-teams/lifecycle';
+import {
+  revokeMicrosoftTeamsOperations,
+  revokeMicrosoftTeamsWarRoomProvisioning,
+} from '@/lib/microsoft-teams/lifecycle';
 
 /**
  * Console-UI only Teams app credentials. No .env secret.
@@ -18,37 +21,66 @@ export async function saveMicrosoftTeamsConfig(
   try {
     await assertAdmin();
   } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.' };
+    return {
+      error: error instanceof Error ? error.message : 'Unauthorized. Admin access required.',
+    };
   }
 
   const clientIdRaw = (formData.get('clientId') as string | null)?.trim() ?? '';
   const clientSecretRaw = (formData.get('clientSecret') as string | null) ?? '';
   const tenantIdRaw = (formData.get('tenantId') as string | null)?.trim() || null;
+  const defaultMeetingOrganizerUpnRaw =
+    (formData.get('defaultMeetingOrganizerUpn') as string | null)?.trim() || null;
   const enabledValue = formData.get('enabled');
   const interactiveEnabledValue = formData.get('interactiveEnabled');
   const warRoomsEnabledValue = formData.get('warRoomsEnabled');
 
   // Strict validation — Zod is required by AGENTS.md §4 for every Server Action.
   const microsoftTeamsConfigSchema = z.object({
-    clientId: z.string().trim().uuid('Client ID must be a valid Azure Application (client) ID (GUID).'),
+    clientId: z
+      .string()
+      .trim()
+      .uuid('Client ID must be a valid Azure Application (client) ID (GUID).'),
     tenantId: z.string().trim().uuid('Tenant ID must be a valid Azure tenant GUID.').nullable(),
     tenantMode: z.literal('SINGLE'),
+    defaultMeetingOrganizerUpn: z
+      .string()
+      .trim()
+      .email('Organizer UPN must be a valid email or User Principal Name.')
+      .or(z.literal(''))
+      .nullable()
+      .optional(),
     enabledValue: z.string().nullable().optional(),
     interactiveEnabledValue: z.string().nullable().optional(),
     warRoomsEnabledValue: z.string().nullable().optional(),
   });
-  const existingEarly = await (prisma as unknown as Record<string, unknown> & { microsoftTeamsConfig: { findFirst: (a: unknown) => Promise<{ id: string; clientSecret: string; tenantId: string | null; clientId: string } | null> } }).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never) as
+  const existingEarly = (await (
+    prisma as unknown as Record<string, unknown> & {
+      microsoftTeamsConfig: {
+        findFirst: (
+          a: unknown
+        ) => Promise<{
+          id: string;
+          clientSecret: string;
+          tenantId: string | null;
+          clientId: string;
+        } | null>;
+      };
+    }
+  ).microsoftTeamsConfig?.findFirst?.({ orderBy: { updatedAt: 'desc' } } as unknown as never)) as
     | { id: string; clientSecret: string; clientId: string }
     | null
     | undefined;
   // Allow rotating secret without re-entering clientId: reuse existing clientId when present and input is empty.
-  const resolvedClientId = clientIdRaw || (existingEarly as unknown as { clientId?: string } | null)?.clientId || '';
+  const resolvedClientId =
+    clientIdRaw || (existingEarly as unknown as { clientId?: string } | null)?.clientId || '';
   const parsed = microsoftTeamsConfigSchema.safeParse({
     clientId: resolvedClientId,
     tenantId: tenantIdRaw,
     // Teams credentials are scoped to one verified tenant. Keep the authority
     // model explicit instead of accepting an implicit multi-tenant fallback.
     tenantMode: 'SINGLE',
+    defaultMeetingOrganizerUpn: defaultMeetingOrganizerUpnRaw,
     enabledValue: enabledValue as string | null,
     interactiveEnabledValue: interactiveEnabledValue as string | null,
     warRoomsEnabledValue: warRoomsEnabledValue as string | null,
@@ -57,7 +89,11 @@ export async function saveMicrosoftTeamsConfig(
     return { error: parsed.error.issues[0]?.message ?? 'Invalid Teams configuration.' };
   }
   const { tenantId } = parsed.data;
-  if (!tenantId) return { error: 'Tenant ID is required for this single-tenant Teams integration.' };
+  const defaultMeetingOrganizerUpn = parsed.data.defaultMeetingOrganizerUpn
+    ? parsed.data.defaultMeetingOrganizerUpn.trim()
+    : null;
+  if (!tenantId)
+    return { error: 'Tenant ID is required for this single-tenant Teams integration.' };
   const tenantMode = parsed.data.tenantMode;
   const enabled = enabledValue === 'on' || enabledValue === 'true' || enabledValue === null;
   const interactiveEnabled = interactiveEnabledValue === 'on' || interactiveEnabledValue === 'true';
@@ -65,7 +101,9 @@ export async function saveMicrosoftTeamsConfig(
   const effectiveClientId = parsed.data.clientId;
   const existing = existingEarly;
 
-  let encryptedSecret: string | undefined = (existing as unknown as { clientSecret?: string } | null)?.clientSecret;
+  let encryptedSecret: string | undefined = (
+    existing as unknown as { clientSecret?: string } | null
+  )?.clientSecret;
   const trimmedSecret = clientSecretRaw.trim();
   const isPlaceholder = trimmedSecret === '********' || trimmedSecret === '';
   if (!isPlaceholder && trimmedSecret) {
@@ -87,16 +125,23 @@ export async function saveMicrosoftTeamsConfig(
 
   const existingId = (existing as unknown as { id?: string } | null)?.id || 'default';
   const priorClientId = (existing as unknown as { clientId?: string } | null)?.clientId ?? null;
-  const priorTenantId = (existing as unknown as { tenantId?: string | null } | null)?.tenantId ?? null;
-  const priorTenantMode = (existing as unknown as { tenantMode?: string } | null)?.tenantMode ?? null;
+  const priorTenantId =
+    (existing as unknown as { tenantId?: string | null } | null)?.tenantId ?? null;
+  const priorTenantMode =
+    (existing as unknown as { tenantMode?: string } | null)?.tenantMode ?? null;
   const clientIdChanged = priorClientId != null && priorClientId !== effectiveClientId;
   const tenantChanged = priorTenantId !== (tenantId || null) || priorTenantMode !== tenantMode;
-  const warRoomsDisabled = Boolean((existing as unknown as { warRoomsEnabled?: boolean } | null)?.warRoomsEnabled) && !warRoomsEnabled;
+  const warRoomsDisabled =
+    Boolean((existing as unknown as { warRoomsEnabled?: boolean } | null)?.warRoomsEnabled) &&
+    !warRoomsEnabled;
 
   await prisma.$transaction(async tx => {
     const txAny = tx as unknown as {
       microsoftTeamsConfig: { upsert: (a: unknown) => Promise<unknown> };
-      microsoftTeamsInstallation: { findMany: (a: unknown) => Promise<Array<{ id: string }>>; updateMany: (a: unknown) => Promise<unknown> };
+      microsoftTeamsInstallation: {
+        findMany: (a: unknown) => Promise<Array<{ id: string }>>;
+        updateMany: (a: unknown) => Promise<unknown>;
+      };
       microsoftTeamsDestination: { updateMany: (a: unknown) => Promise<unknown> };
     };
     await txAny.microsoftTeamsConfig.upsert({
@@ -110,6 +155,7 @@ export async function saveMicrosoftTeamsConfig(
         enabled: enabledValue ? enabled : true,
         interactiveEnabled,
         warRoomsEnabled,
+        defaultMeetingOrganizerUpn,
         updatedBy: actorId,
       },
       update: {
@@ -120,6 +166,7 @@ export async function saveMicrosoftTeamsConfig(
         enabled,
         interactiveEnabled,
         warRoomsEnabled,
+        defaultMeetingOrganizerUpn,
         updatedBy: actorId,
       },
     } as unknown as never);
@@ -127,12 +174,19 @@ export async function saveMicrosoftTeamsConfig(
     // Config identity change invalidates prior installations/destinations + queued deliveries.
     // A stale destinations row with an old tenantId/Graph token would silently fail or mis-deliver.
     if ((clientIdChanged || tenantChanged) && existing) {
-      const allInsts = await txAny.microsoftTeamsInstallation.findMany({ select: { id: true } } as never);
+      const allInsts = await txAny.microsoftTeamsInstallation.findMany({
+        select: { id: true },
+      } as never);
       const instIds = allInsts.map(r => r.id);
       if (instIds.length > 0) {
-        await txAny.microsoftTeamsInstallation.updateMany({ where: { id: { in: instIds } }, data: { enabled: false } });
+        await txAny.microsoftTeamsInstallation.updateMany({
+          where: { id: { in: instIds } },
+          data: { enabled: false },
+        });
       }
-      await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false, interactiveEnabled: false } });
+      await tx.microsoftTeamsDestination.updateMany({
+        data: { enabled: false, interactiveEnabled: false },
+      });
       await revokeMicrosoftTeamsOperations(tx, {
         reason: 'Microsoft Teams credential identity changed',
       });

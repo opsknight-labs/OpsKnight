@@ -70,6 +70,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'create') {
+      const { getIncidentCollaborationCapabilities } =
+        await import('@/lib/incident-collaboration/capabilities');
+      const capabilities = await getIncidentCollaborationCapabilities({
+        incidentId,
+        userId: permissions.id,
+      });
+      const slackCap = capabilities.providers.find(p => p.provider === 'SLACK');
+      if (!slackCap || !slackCap.canCreate) {
+        return jsonError(
+          new AppError({
+            code: 'INCIDENT_MODIFY_DENIED',
+            userMessage: slackCap?.reason || 'Slack war room creation is not permitted by policy.',
+          })
+        );
+      }
+
       // Explicit operator action — not subject to the auto-creation thresholds.
       // Durable provision: 202 while the worker owns `conversations.create`
       // and reconciliation; 200 only when the channel already existed (READY).

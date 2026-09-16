@@ -9,8 +9,18 @@ import { adoptWarRoomChannel, claimWarRoomProvisioning } from '../../repository'
 import { evaluateWarRoomPolicy } from '../../policy';
 import { projectSlackWarRoomToLegacyIncident } from '../../slack-compatibility';
 import { WarRoomRetryableError } from '../../errors';
-import { findExistingSlackChannel, findSlackWarRoomForTerminalCleanup, slackApiCall, slackWarRoomMarker } from './client';
-import { generateBridgeUrl } from '../../bridge';
+import {
+  findExistingSlackChannel,
+  findSlackWarRoomForTerminalCleanup,
+  slackApiCall,
+  slackWarRoomMarker,
+} from './client';
+
+function getSlackChannelUrl(channelId: string, workspaceId?: string | null): string {
+  return workspaceId
+    ? `https://slack.com/app_redirect?channel=${channelId}&team=${workspaceId}`
+    : `https://slack.com/app_redirect?channel=${channelId}`;
+}
 
 const AMBIGUOUS_RECONCILIATION_WINDOW_MS = 15 * 60_000;
 
@@ -26,7 +36,11 @@ function slugify(name: string, maxLen = 40): string {
     .slice(0, maxLen);
 }
 
-function slackChannelName(config: { channelPrefix?: string | null }, serviceName: string, incidentId: string): string {
+function slackChannelName(
+  config: { channelPrefix?: string | null },
+  serviceName: string,
+  incidentId: string
+): string {
   const serviceSlug = slugify(serviceName);
   const idSuffix = incidentId.slice(-6);
   const safePrefix =
@@ -39,7 +53,13 @@ function slackChannelName(config: { channelPrefix?: string | null }, serviceName
   return `${safePrefix}-${idSuffix}-${serviceSlug}`.slice(0, 80);
 }
 
-function classifySlackCreateResult(result: { ok: boolean; error?: string; httpStatus?: number; transportFailure?: boolean; sideEffectAmbiguous?: boolean }): 'SUCCESS' | 'AMBIGUOUS' | 'RETRYABLE_NOT_AMBIGUOUS' | 'TERMINAL' | 'NAME_TAKEN' {
+function classifySlackCreateResult(result: {
+  ok: boolean;
+  error?: string;
+  httpStatus?: number;
+  transportFailure?: boolean;
+  sideEffectAmbiguous?: boolean;
+}): 'SUCCESS' | 'AMBIGUOUS' | 'RETRYABLE_NOT_AMBIGUOUS' | 'TERMINAL' | 'NAME_TAKEN' {
   if (result.ok) return 'SUCCESS';
   if (result.error === 'name_taken') return 'NAME_TAKEN';
   // Structured transport ambiguity wins over string parsing — this is the fix for
@@ -62,7 +82,12 @@ function classifySlackCreateResult(result: { ok: boolean; error?: string; httpSt
   return 'TERMINAL';
 }
 
-async function markFailed(id: string, provisioningToken: string, code: string, message: string): Promise<void> {
+async function markFailed(
+  id: string,
+  provisioningToken: string,
+  code: string,
+  message: string
+): Promise<void> {
   await prisma.incidentWarRoom.updateMany({
     where: { id, provisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
     data: {
@@ -87,7 +112,11 @@ async function ensureTerminalCloseHandoff(warRoomId: string, incidentId: string)
     ensureError = e;
   }
   const existing = await prisma.backgroundJob.findFirst({
-    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    where: {
+      type: 'WAR_ROOM_CLOSE',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      payload: { path: ['warRoomId'], equals: warRoomId },
+    },
     select: { id: true },
   });
   if (existing) return;
@@ -97,13 +126,21 @@ async function ensureTerminalCloseHandoff(warRoomId: string, incidentId: string)
   // Fallback repair path: idempotent neutral close (also durable, may throw).
   await closeWarRoomNeutral({ incidentId, warRoomId });
   const afterRepair = await prisma.backgroundJob.findFirst({
-    where: { type: 'WAR_ROOM_CLOSE', status: { in: ['PENDING', 'PROCESSING'] }, payload: { path: ['warRoomId'], equals: warRoomId } },
+    where: {
+      type: 'WAR_ROOM_CLOSE',
+      status: { in: ['PENDING', 'PROCESSING'] },
+      payload: { path: ['warRoomId'], equals: warRoomId },
+    },
     select: { id: true },
   });
   if (!afterRepair) {
     // P2002 duplicate race: another worker already inserted. Retries are
     // exactly what we want — treat as success.
-    throw new WarRoomRetryableError('Terminal close ownership not yet durable; retrying.', 2000, true);
+    throw new WarRoomRetryableError(
+      'Terminal close ownership not yet durable; retrying.',
+      2000,
+      true
+    );
   }
 }
 
@@ -112,7 +149,10 @@ export async function requestSlackWarRoom(
   incidentId: string,
   intent: { manual: boolean; allowNewGeneration: boolean }
 ): Promise<RequestResult> {
-  let claimedResult: { claimed: boolean; warRoom: { id: string; state: string; provisioningToken: string | null } } | null = null;
+  let claimedResult: {
+    claimed: boolean;
+    warRoom: { id: string; state: string; provisioningToken: string | null };
+  } | null = null;
 
   const result = await runSerializableTransaction(async tx => {
     const incident = await tx.incident.findUnique({
@@ -138,11 +178,37 @@ export async function requestSlackWarRoom(
     const slackWorkspaceId =
       incident.service.slackIntegration?.workspaceId || globalIntegration?.workspaceId || null;
 
+    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveEffectiveWarRoomProviders } =
+      await import('@/lib/incident-collaboration/policy');
+
+    const [globalPolicy, servicePolicy] = await Promise.all([
+      getGlobalWarRoomPolicy(),
+      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
+    ]);
+
+    const effectivePolicy = resolveEffectiveWarRoomProviders({
+      globalProviders: globalPolicy.defaultProviders,
+      serviceProviders: servicePolicy ? servicePolicy.serviceProviders : null,
+      availableProviders: ['SLACK'],
+      globalWarRoomsEnabled: globalPolicy.enabled,
+      serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : false,
+    });
+
+    if (!effectivePolicy.effectiveProviders.includes('SLACK') || effectivePolicy.isDisabled) {
+      return { accepted: false as const, code: 'PROVIDER_POLICY_EXCLUDED' };
+    }
+
+    const effectiveAutoCreate = Boolean(
+      (servicePolicy?.autoCreate ?? incident.service.autoCreateWarRoom) &&
+      effectivePolicy.effectiveProviders.includes('SLACK') &&
+      !effectivePolicy.isDisabled
+    );
+
     const destination = slackWorkspaceId
       ? {
           enabled: true,
           warRoomEnabled: true,
-          autoCreate: incident.service.autoCreateWarRoom,
+          autoCreate: effectiveAutoCreate,
           membershipType: 'STANDARD' as const,
         }
       : null;
@@ -158,7 +224,7 @@ export async function requestSlackWarRoom(
         priority: policyIncident?.priority ?? incident.priority,
         visibility: policyIncident?.visibility ?? 'PUBLIC',
       },
-      service: { autoCreate: incident.service.autoCreateWarRoom },
+      service: { autoCreate: effectiveAutoCreate },
       destination,
       config: {
         enabled: Boolean(config?.enabled),
@@ -192,7 +258,11 @@ export async function requestSlackWarRoom(
 
     if (claimed.claimed) {
       await tx.incidentWarRoom.updateMany({
-        where: { id: claimed.warRoom.id, provisioningToken: claimed.warRoom.provisioningToken!, state: 'PROVISIONING' },
+        where: {
+          id: claimed.warRoom.id,
+          provisioningToken: claimed.warRoom.provisioningToken!,
+          state: 'PROVISIONING',
+        },
         data: {
           providerTenantId: slackWorkspaceId,
           membershipType: decision.membershipType,
@@ -229,7 +299,10 @@ export async function requestSlackWarRoom(
   return result;
 }
 
-async function findExistingChannel(botToken: string, channelName: string): Promise<{ id: string; name: string } | null> {
+async function findExistingChannel(
+  botToken: string,
+  channelName: string
+): Promise<{ id: string; name: string } | null> {
   return findExistingSlackChannel(botToken, channelName);
 }
 
@@ -284,7 +357,12 @@ export async function provisionSlackWarRoom(
 
   // Slack declares privateRooms:false — never provision a PRIVATE room even if racing overrides fill it.
   if (!reconciliationOnly && room.membershipType === 'PRIVATE') {
-    await markFailed(room.id, expectedProvisioningToken, 'PRIVATE_WAR_ROOM_UNSUPPORTED', 'Slack war rooms do not support private rooms.');
+    await markFailed(
+      room.id,
+      expectedProvisioningToken,
+      'PRIVATE_WAR_ROOM_UNSUPPORTED',
+      'Slack war rooms do not support private rooms.'
+    );
     return;
   }
 
@@ -298,15 +376,24 @@ export async function provisionSlackWarRoom(
     });
     if (!currentIncident || !['OPEN', 'ACKNOWLEDGED'].includes(currentIncident.status)) {
       if (room.state === 'AMBIGUOUS') return;
-      await markFailed(room.id, expectedProvisioningToken, 'INCIDENT_NOT_ACTIVE', 'Incident is no longer active.');
+      await markFailed(
+        room.id,
+        expectedProvisioningToken,
+        'INCIDENT_NOT_ACTIVE',
+        'Incident is no longer active.'
+      );
       return;
     }
   }
 
   const config = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
-  const isClosingReconciliation = reconciliationOnly && room.state === 'CLOSING' && room.createAttemptedAt != null;
-  const closingReconciliationDeadline = isClosingReconciliation ? room.createAttemptedAt!.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS : 0;
-  const closingReconciliationExpired = isClosingReconciliation && Date.now() >= closingReconciliationDeadline;
+  const isClosingReconciliation =
+    reconciliationOnly && room.state === 'CLOSING' && room.createAttemptedAt != null;
+  const closingReconciliationDeadline = isClosingReconciliation
+    ? room.createAttemptedAt!.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS
+    : 0;
+  const closingReconciliationExpired =
+    isClosingReconciliation && Date.now() >= closingReconciliationDeadline;
   if (!config?.enabled) {
     if (isClosingReconciliation) {
       if (closingReconciliationExpired) {
@@ -315,14 +402,18 @@ export async function provisionSlackWarRoom(
           data: {
             health: 'DEGRADED',
             lastErrorCode: 'RECONCILIATION_EXPIRED_CHATOPS_DISABLED',
-            lastError: 'ChatOps disabled beyond reconciliation window; closing locally as DEGRADED with unverified external outcome. Provider drift will be reconciled asynchronously.',
+            lastError:
+              'ChatOps disabled beyond reconciliation window; closing locally as DEGRADED with unverified external outcome. Provider drift will be reconciled asynchronously.',
             provisioningToken: null,
             externalCleanupPending: true,
             externalCleanupReason: 'RECONCILIATION_EXPIRED_CHATOPS_DISABLED',
             externalCleanupLastAttemptAt: new Date(),
           },
         });
-        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+        const fresh = await prisma.incidentWarRoom.findUnique({
+          where: { id: room.id },
+          select: { incidentId: true },
+        });
         if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
         return;
       }
@@ -334,12 +425,22 @@ export async function provisionSlackWarRoom(
         data: {
           health: 'DEGRADED',
           lastErrorCode: 'CHATOPS_DISABLED_DURING_CLOSE_RECONCILIATION',
-          lastError: 'ChatOps is disabled but CLOSING reconciliation keeps retrying until marker resolved.',
+          lastError:
+            'ChatOps is disabled but CLOSING reconciliation keeps retrying until marker resolved.',
         },
       });
-      throw new WarRoomRetryableError('ChatOps disabled during CLOSING reconciliation; retrying.', 30_000, true);
+      throw new WarRoomRetryableError(
+        'ChatOps disabled during CLOSING reconciliation; retrying.',
+        30_000,
+        true
+      );
     }
-    await markFailed(room.id, expectedProvisioningToken, 'CHATOPS_DISABLED', 'ChatOps is not enabled');
+    await markFailed(
+      room.id,
+      expectedProvisioningToken,
+      'CHATOPS_DISABLED',
+      'ChatOps is not enabled'
+    );
     return;
   }
 
@@ -352,14 +453,18 @@ export async function provisionSlackWarRoom(
           data: {
             health: 'DEGRADED',
             lastErrorCode: 'RECONCILIATION_EXPIRED_SLACK_BOT_TOKEN_MISSING',
-            lastError: 'No Slack bot token beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
+            lastError:
+              'No Slack bot token beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
             provisioningToken: null,
             externalCleanupPending: true,
             externalCleanupReason: 'RECONCILIATION_EXPIRED_SLACK_BOT_TOKEN_MISSING',
             externalCleanupLastAttemptAt: new Date(),
           },
         });
-        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+        const fresh = await prisma.incidentWarRoom.findUnique({
+          where: { id: room.id },
+          select: { incidentId: true },
+        });
         if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
         return;
       }
@@ -371,9 +476,18 @@ export async function provisionSlackWarRoom(
           lastError: 'No Slack bot token during CLOSING reconciliation; keeping CLOSING for retry.',
         },
       });
-      throw new WarRoomRetryableError('No Slack bot token during CLOSING reconciliation; retrying.', 30_000, true);
+      throw new WarRoomRetryableError(
+        'No Slack bot token during CLOSING reconciliation; retrying.',
+        30_000,
+        true
+      );
     }
-    await markFailed(room.id, expectedProvisioningToken, 'SLACK_BOT_TOKEN_MISSING', 'No Slack bot token configured');
+    await markFailed(
+      room.id,
+      expectedProvisioningToken,
+      'SLACK_BOT_TOKEN_MISSING',
+      'No Slack bot token configured'
+    );
     return;
   }
 
@@ -395,14 +509,18 @@ export async function provisionSlackWarRoom(
           data: {
             health: 'DEGRADED',
             lastErrorCode: 'RECONCILIATION_EXPIRED_SLACK_WORKSPACE_MISSING',
-            lastError: 'No Slack workspace beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
+            lastError:
+              'No Slack workspace beyond reconciliation window; closing locally as DEGRADED with unverified external outcome.',
             provisioningToken: null,
             externalCleanupPending: true,
             externalCleanupReason: 'RECONCILIATION_EXPIRED_SLACK_WORKSPACE_MISSING',
             externalCleanupLastAttemptAt: new Date(),
           },
         });
-        const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+        const fresh = await prisma.incidentWarRoom.findUnique({
+          where: { id: room.id },
+          select: { incidentId: true },
+        });
         if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
         return;
       }
@@ -414,9 +532,18 @@ export async function provisionSlackWarRoom(
           lastError: 'No Slack workspace during CLOSING reconciliation; keeping CLOSING for retry.',
         },
       });
-      throw new WarRoomRetryableError('No Slack workspace during CLOSING reconciliation; retrying.', 30_000, true);
+      throw new WarRoomRetryableError(
+        'No Slack workspace during CLOSING reconciliation; retrying.',
+        30_000,
+        true
+      );
     }
-    await markFailed(room.id, expectedProvisioningToken, 'SLACK_WORKSPACE_MISSING', 'No Slack workspace installation configured');
+    await markFailed(
+      room.id,
+      expectedProvisioningToken,
+      'SLACK_WORKSPACE_MISSING',
+      'No Slack workspace installation configured'
+    );
     return;
   }
 
@@ -430,15 +557,16 @@ export async function provisionSlackWarRoom(
   //    UNAVAILABLE → keep debt / retry (or DEGRADED+debt at deadline)
   //    NOT_FOUND → fall through to deadline / creation logic
   try {
-    const needsMarkerScan = Boolean(room.createAttemptedAt) || room.state === 'AMBIGUOUS' || reconciliationOnly;
+    const needsMarkerScan =
+      Boolean(room.createAttemptedAt) || room.state === 'AMBIGUOUS' || reconciliationOnly;
     if (needsMarkerScan) {
-      const lookup = await findSlackWarRoomForTerminalCleanup(botToken, marker, (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null);
+      const lookup = await findSlackWarRoomForTerminalCleanup(
+        botToken,
+        marker,
+        (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null
+      );
       if (lookup.status === 'FOUND') {
-        const warRoomUrl = generateBridgeUrl(
-          incident.id,
-          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
-          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
-        );
+        const channelUrl = getSlackChannelUrl(lookup.channel.id, slackWorkspaceId);
         const adoption = await runSerializableTransaction(tx =>
           adoptWarRoomChannel(tx, {
             warRoomId: room.id,
@@ -446,25 +574,36 @@ export async function provisionSlackWarRoom(
             providerTenantId: slackWorkspaceId,
             channelId: lookup.channel.id,
             channelName: lookup.channel.name,
-            channelUrl: warRoomUrl,
+            channelUrl,
           })
         );
         if (adoption === 'READY') {
           await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
-          const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
+          const { projectIncidentWarRoomParticipants } =
+            await import('../../participant-desired-state');
           const { scheduleJob } = await import('@/lib/jobs/queue');
           const { requestSlackWarRoomProjection } = await import('./projection');
           await projectIncidentWarRoomParticipants(room.id);
           await scheduleJob('WAR_ROOM_PARTICIPANT_SYNC', new Date(), { warRoomId: room.id }, 5);
           await requestSlackWarRoomProjection(room.id).catch(err =>
-            logger.warn('[ChatOps] Failed to queue Slack projection after reconciliation', { error: err })
+            logger.warn('[ChatOps] Failed to queue Slack projection after reconciliation', {
+              error: err,
+            })
           );
-          await prisma.incidentEvent.create({
-            data: { incidentId: incident.id, message: `War-room channel #${lookup.channel.name} reconciled` },
-          }).catch(() => {});
+          await prisma.incidentEvent
+            .create({
+              data: {
+                incidentId: incident.id,
+                message: `War-room channel #${lookup.channel.name} reconciled`,
+              },
+            })
+            .catch(() => {});
         } else if (adoption === 'CLOSING') {
           await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
-          const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+          const fresh = await prisma.incidentWarRoom.findUnique({
+            where: { id: room.id },
+            select: { incidentId: true },
+          });
           if (fresh) {
             await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
           }
@@ -479,9 +618,16 @@ export async function provisionSlackWarRoom(
         if (reconciliationOnly && room.state === 'CLOSING' && room.createAttemptedAt) {
           if (closingReconciliationExpired) {
             await prisma.incidentWarRoom.updateMany({
-              where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
+              where: {
+                id: room.id,
+                provisioningToken: expectedProvisioningToken,
+                state: 'CLOSING',
+              },
               data: {
-                health: lookup.code === 'PERMISSION_DENIED' || lookup.code === 'AUTH_FAILED' ? 'PERMISSION_ERROR' : 'DEGRADED',
+                health:
+                  lookup.code === 'PERMISSION_DENIED' || lookup.code === 'AUTH_FAILED'
+                    ? 'PERMISSION_ERROR'
+                    : 'DEGRADED',
                 lastErrorCode: `RECONCILIATION_EXPIRED_SLACK_LOOKUP_${lookup.code}`,
                 lastError: `Slack reconciliation lookup ${lookup.code} beyond window; closing locally as DEGRADED with unverified external outcome. Provider drift will be reconciled asynchronously.`,
                 provisioningToken: null,
@@ -490,22 +636,39 @@ export async function provisionSlackWarRoom(
                 externalCleanupLastAttemptAt: new Date(),
               },
             });
-            const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+            const fresh = await prisma.incidentWarRoom.findUnique({
+              where: { id: room.id },
+              select: { incidentId: true },
+            });
             if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
             return;
           }
           await prisma.incidentWarRoom.updateMany({
             where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
             data: {
-              health: lookup.code === 'PERMISSION_DENIED' || lookup.code === 'AUTH_FAILED' ? 'PERMISSION_ERROR' : 'DEGRADED',
+              health:
+                lookup.code === 'PERMISSION_DENIED' || lookup.code === 'AUTH_FAILED'
+                  ? 'PERMISSION_ERROR'
+                  : 'DEGRADED',
               lastErrorCode: `RECONCILIATION_LOOKUP_${lookup.code}`,
-              lastError: (lookup.error ?? `Slack reconciliation lookup ${lookup.code} unavailable; will retry.`).slice(0, 1000),
+              lastError: (
+                lookup.error ??
+                `Slack reconciliation lookup ${lookup.code} unavailable; will retry.`
+              ).slice(0, 1000),
             },
           });
-          throw new WarRoomRetryableError(lookup.error ?? `Slack reconciliation lookup unavailable (${lookup.code}); will retry.`, 30_000, true);
+          throw new WarRoomRetryableError(
+            lookup.error ?? `Slack reconciliation lookup unavailable (${lookup.code}); will retry.`,
+            30_000,
+            true
+          );
         }
         // Normal AMBIGUOUS / pre-POST path — retry boundedly, do not POST.
-        throw new WarRoomRetryableError(lookup.error ?? `Slack reconciliation lookup unavailable (${lookup.code}); will retry.`, 30_000, true);
+        throw new WarRoomRetryableError(
+          lookup.error ?? `Slack reconciliation lookup unavailable (${lookup.code}); will retry.`,
+          30_000,
+          true
+        );
       }
       // NOT_FOUND → fall through to reconciliationOnly deadline handling or AMBIGUOUS gate.
     }
@@ -520,7 +683,11 @@ export async function provisionSlackWarRoom(
       const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
       const remaining = deadline - Date.now();
       if (remaining > 0) {
-        throw new WarRoomRetryableError('Reconciling CLOSING Slack channel-create by marker/planned name.', Math.min(60_000, remaining), true);
+        throw new WarRoomRetryableError(
+          'Reconciling CLOSING Slack channel-create by marker/planned name.',
+          Math.min(60_000, remaining),
+          true
+        );
       }
       // Window exhausted — authoritative NOT_FOUND. Clear fencing token so
       // finalizeWarRoomCloseNeutral can proceed to ARCHIVED/CLOSED (NOT_FOUND is idempotent).
@@ -528,11 +695,15 @@ export async function provisionSlackWarRoom(
         where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'CLOSING' },
         data: {
           lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED',
-          lastError: 'No Slack channel was found by marker/planned name during reconciliation window; closing without external channel.',
+          lastError:
+            'No Slack channel was found by marker/planned name during reconciliation window; closing without external channel.',
           provisioningToken: null,
         },
       });
-      const freshClose = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+      const freshClose = await prisma.incidentWarRoom.findUnique({
+        where: { id: room.id },
+        select: { incidentId: true },
+      });
       if (freshClose) {
         // Do not swallow durability failures — the reconciliation job must only
         // complete when terminal ownership is durable, otherwise it must retry.
@@ -548,7 +719,11 @@ export async function provisionSlackWarRoom(
     const deadline = room.createAttemptedAt.getTime() + AMBIGUOUS_RECONCILIATION_WINDOW_MS;
     const remaining = deadline - Date.now();
     await prisma.incidentWarRoom.updateMany({
-      where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
+      where: {
+        id: room.id,
+        provisioningToken: expectedProvisioningToken,
+        state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
+      },
       data: {
         state: 'AMBIGUOUS',
         lastErrorCode: remaining > 0 ? 'CREATE_OUTCOME_RECONCILING' : 'CREATE_OUTCOME_UNRESOLVED',
@@ -559,13 +734,13 @@ export async function provisionSlackWarRoom(
       },
     });
     if (remaining > 0) {
-      const ambLookup = await findSlackWarRoomForTerminalCleanup(botToken, marker, (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null);
+      const ambLookup = await findSlackWarRoomForTerminalCleanup(
+        botToken,
+        marker,
+        (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null
+      );
       if (ambLookup.status === 'FOUND') {
-        const warRoomUrl = generateBridgeUrl(
-          incident.id,
-          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
-          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
-        );
+        const channelUrl = getSlackChannelUrl(ambLookup.channel.id, slackWorkspaceId);
         const adoption = await runSerializableTransaction(tx =>
           adoptWarRoomChannel(tx, {
             warRoomId: room.id,
@@ -573,12 +748,13 @@ export async function provisionSlackWarRoom(
             providerTenantId: slackWorkspaceId,
             channelId: ambLookup.channel.id,
             channelName: ambLookup.channel.name,
-            channelUrl: warRoomUrl,
+            channelUrl,
           })
         );
         if (adoption === 'READY') {
           await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
-          const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
+          const { projectIncidentWarRoomParticipants } =
+            await import('../../participant-desired-state');
           const { scheduleJob } = await import('@/lib/jobs/queue');
           const { requestSlackWarRoomProjection } = await import('./projection');
           await projectIncidentWarRoomParticipants(room.id);
@@ -586,20 +762,42 @@ export async function provisionSlackWarRoom(
           await requestSlackWarRoomProjection(room.id).catch(() => {});
         } else if (adoption === 'CLOSING') {
           await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
-          const fresh = await prisma.incidentWarRoom.findUnique({ where: { id: room.id }, select: { incidentId: true } });
+          const fresh = await prisma.incidentWarRoom.findUnique({
+            where: { id: room.id },
+            select: { incidentId: true },
+          });
           if (fresh) await ensureTerminalCloseHandoff(room.id, fresh.incidentId);
         }
         return;
       }
       if (ambLookup.status === 'UNAVAILABLE') {
-        throw new WarRoomRetryableError(ambLookup.error ?? `Slack AMBIGUOUS lookup unavailable (${ambLookup.code}); will retry.`, 30_000, true);
+        throw new WarRoomRetryableError(
+          ambLookup.error ?? `Slack AMBIGUOUS lookup unavailable (${ambLookup.code}); will retry.`,
+          30_000,
+          true
+        );
       }
-      throw new WarRoomRetryableError('Reconciling ambiguous Slack channel-create by marker/planned name.', Math.min(60_000, remaining), true);
+      throw new WarRoomRetryableError(
+        'Reconciling ambiguous Slack channel-create by marker/planned name.',
+        Math.min(60_000, remaining),
+        true
+      );
     }
     if (remaining <= 0) {
       await prisma.incidentWarRoom.updateMany({
-        where: { id: room.id, provisioningToken: expectedProvisioningToken, state: 'AMBIGUOUS', createAttemptedAt: { not: null } },
-        data: { state: 'FAILED', provisioningToken: null, lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED', lastError: 'No Slack channel was found by marker/planned name during reconciliation window.' },
+        where: {
+          id: room.id,
+          provisioningToken: expectedProvisioningToken,
+          state: 'AMBIGUOUS',
+          createAttemptedAt: { not: null },
+        },
+        data: {
+          state: 'FAILED',
+          provisioningToken: null,
+          lastErrorCode: 'CREATE_RECONCILIATION_EXHAUSTED',
+          lastError:
+            'No Slack channel was found by marker/planned name during reconciliation window.',
+        },
       });
       await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
       // If close was requested while AMBIGUOUS, continue neutral close from now-Failed.
@@ -618,7 +816,8 @@ export async function provisionSlackWarRoom(
   // 3) Persist plannedExternalName durably BEFORE any conversations.create.
   // This is the durable alternate identity per generation. Slack cannot store the
   // marker atomically with create, so we use this unique name as the reconciliation anchor.
-  const currentPlanned = (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null;
+  const currentPlanned =
+    (room as unknown as { plannedExternalName?: string | null }).plannedExternalName ?? null;
   if (!currentPlanned) {
     // First attempt for this generation: suffix comes from provisioningToken hash so it is
     // unique per generation/incident and stable across retries. Stored before POST.
@@ -637,20 +836,34 @@ export async function provisionSlackWarRoom(
     where: { id: room.id },
     select: { provisioningToken: true, state: true },
   });
-  if (!freshRoom || freshRoom.provisioningToken !== expectedProvisioningToken || !['PROVISIONING', 'AMBIGUOUS'].includes(freshRoom.state)) return;
+  if (
+    !freshRoom ||
+    freshRoom.provisioningToken !== expectedProvisioningToken ||
+    !['PROVISIONING', 'AMBIGUOUS'].includes(freshRoom.state)
+  )
+    return;
 
   // Mark attempt durably before POST
   const operationId = expectedProvisioningToken;
   const renewed = await prisma.incidentWarRoom.updateMany({
-    where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
-    data: { provisioningStartedAt: new Date(), createAttemptedAt: new Date(), createOperationId: operationId },
+    where: {
+      id: room.id,
+      provisioningToken: expectedProvisioningToken,
+      state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
+    },
+    data: {
+      provisioningStartedAt: new Date(),
+      createAttemptedAt: new Date(),
+      createOperationId: operationId,
+    },
   });
   if (renewed.count !== 1) return;
 
   // First create for this generation uses the durable plannedExternalName, not the
   // generic base. The base is a collision-prone hint; posting it would orphan the
   // channel when a lost-response retry adopts the suffixed identity instead.
-  const plannedForCreate = (room as unknown as { plannedExternalName?: string | null }).plannedExternalName!;
+  const plannedForCreate = (room as unknown as { plannedExternalName?: string | null })
+    .plannedExternalName!;
   const effectiveChannelName = plannedForCreate;
   const createResult = await slackApiCall('conversations.create', botToken, {
     name: effectiveChannelName,
@@ -662,9 +875,18 @@ export async function provisionSlackWarRoom(
     if (cls === 'AMBIGUOUS') {
       await prisma.incidentWarRoom.updateMany({
         where: { id: room.id, provisioningToken: expectedProvisioningToken },
-        data: { state: 'AMBIGUOUS', lastErrorCode: 'SLACK_CREATE_AMBIGUOUS', lastError: createResult.error ?? `Slack create ambiguous (HTTP ${createResult.httpStatus ?? '?'})` },
+        data: {
+          state: 'AMBIGUOUS',
+          lastErrorCode: 'SLACK_CREATE_AMBIGUOUS',
+          lastError:
+            createResult.error ?? `Slack create ambiguous (HTTP ${createResult.httpStatus ?? '?'})`,
+        },
       });
-      throw new WarRoomRetryableError(createResult.error ?? 'Slack create ambiguous', undefined, true);
+      throw new WarRoomRetryableError(
+        createResult.error ?? 'Slack create ambiguous',
+        undefined,
+        true
+      );
     }
 
     // For any non-name_taken terminal failure, adopt ONLY if we find the persisted
@@ -677,13 +899,11 @@ export async function provisionSlackWarRoom(
       // Planned name collision — unique per-generation name is taken.
       // First try to adopt the existing channel with that exact name
       // (lost-response retry where channel was created but response lost).
-      const altExisting = await findExistingChannel(botToken, effectiveChannelName).catch(() => null);
+      const altExisting = await findExistingChannel(botToken, effectiveChannelName).catch(
+        () => null
+      );
       if (altExisting) {
-        const warRoomUrl = generateBridgeUrl(
-          incident.id,
-          incident.service.warRoomVideoBridge || config.defaultVideoBridge,
-          incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate
-        );
+        const channelUrl = getSlackChannelUrl(altExisting.id, slackWorkspaceId);
         const adoption = await runSerializableTransaction(tx =>
           adoptWarRoomChannel(tx, {
             warRoomId: room.id,
@@ -691,12 +911,13 @@ export async function provisionSlackWarRoom(
             providerTenantId: slackWorkspaceId,
             channelId: altExisting.id,
             channelName: altExisting.name,
-            channelUrl: warRoomUrl,
+            channelUrl,
           })
         );
         if (adoption === 'READY') {
           await projectSlackWarRoomToLegacyIncident(room.id).catch(() => {});
-          const { projectIncidentWarRoomParticipants } = await import('../../participant-desired-state');
+          const { projectIncidentWarRoomParticipants } =
+            await import('../../participant-desired-state');
           const { scheduleJob } = await import('@/lib/jobs/queue');
           const { requestSlackWarRoomProjection } = await import('./projection');
           await projectIncidentWarRoomParticipants(room.id);
@@ -727,7 +948,12 @@ export async function provisionSlackWarRoom(
 
   const channelId = createResult.channel?.id;
   if (!channelId) {
-    await markFailed(room.id, expectedProvisioningToken, 'SLACK_PROVISION_FAILED', 'No channel ID returned from Slack');
+    await markFailed(
+      room.id,
+      expectedProvisioningToken,
+      'SLACK_PROVISION_FAILED',
+      'No channel ID returned from Slack'
+    );
     return;
   }
 
@@ -748,14 +974,21 @@ export async function provisionSlackWarRoom(
     purpose: marker,
   }).catch(() => {});
 
-  const videoBridge = incident.service.warRoomVideoBridge || config.defaultVideoBridge;
-  const customUrl = incident.service.warRoomCustomBridgeUrl || config.customBridgeUrlTemplate;
-  const warRoomUrl = generateBridgeUrl(incident.id, videoBridge, customUrl);
+  const channelUrl = getSlackChannelUrl(channelId, slackWorkspaceId);
 
   // Welcome message is separate from the canonical card (which is projected via WAR_ROOM_PROJECT).
   const welcomeBlocks = [
-    { type: 'header', text: { type: 'plain_text', text: '👋 Welcome to your Incident War Room!', emoji: true } },
-    { type: 'section', text: { type: 'mrkdwn', text: `This channel was automatically provisioned to coordinate resolution for *${incident.title}*.` } },
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: '👋 Welcome to your Incident War Room!', emoji: true },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `This channel was automatically provisioned to coordinate resolution for *${incident.title}*.`,
+      },
+    },
     { type: 'divider' },
     {
       type: 'section',
@@ -797,15 +1030,26 @@ export async function provisionSlackWarRoom(
       providerTenantId: slackWorkspaceId,
       channelId,
       channelName: effectiveChannelName,
-      channelUrl: warRoomUrl,
+      channelUrl,
     })
   );
 
   if (adoption === 'FENCED') {
-    logger.warn('[ChatOps] War-room completion lease was lost', { incidentId: incident.id, channelId });
+    logger.warn('[ChatOps] War-room completion lease was lost', {
+      incidentId: incident.id,
+      channelId,
+    });
     await prisma.incidentWarRoom.updateMany({
-      where: { id: room.id, provisioningToken: expectedProvisioningToken, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
-      data: { state: 'AMBIGUOUS', lastErrorCode: 'DATABASE_COMMIT_FAILED', lastError: 'Channel may have been created; reconcile by name before retrying.' },
+      where: {
+        id: room.id,
+        provisioningToken: expectedProvisioningToken,
+        state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
+      },
+      data: {
+        state: 'AMBIGUOUS',
+        lastErrorCode: 'DATABASE_COMMIT_FAILED',
+        lastError: 'Channel may have been created; reconcile by name before retrying.',
+      },
     });
     return;
   }
@@ -828,10 +1072,14 @@ export async function provisionSlackWarRoom(
     .create({
       data: {
         incidentId: incident.id,
-        message: `War-room channel #${effectiveChannelName} created${warRoomUrl ? ` with video bridge` : ''}`,
+        message: `War-room channel #${effectiveChannelName} created`,
       },
     })
     .catch(() => {});
 
-  logger.info('[ChatOps] War-room provisioned', { incidentId: incident.id, channelId, channelName: effectiveChannelName });
+  logger.info('[ChatOps] War-room provisioned', {
+    incidentId: incident.id,
+    channelId,
+    channelName: effectiveChannelName,
+  });
 }

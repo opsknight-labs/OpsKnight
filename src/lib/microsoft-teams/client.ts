@@ -1,10 +1,22 @@
 import { logger } from '@/lib/logger';
 import { retryFetch } from '@/lib/retry';
-import { buildMicrosoftTeamsIncidentCard, type MicrosoftTeamsCardOptions, type MicrosoftTeamsIncidentCardInput } from './cards';
+import {
+  buildMicrosoftTeamsIncidentCard,
+  type MicrosoftTeamsCardOptions,
+  type MicrosoftTeamsIncidentCardInput,
+} from './cards';
 import { getMicrosoftTeamsConfig } from './auth';
 import { normalizeTrustedMicrosoftTeamsServiceUrl } from './service-url';
 
-export type TeamsDeliveryResult = { success: true; providerMessageId?: string; conversationId?: string } | { success: false; error: string; statusCode?: number; retryAfterMs?: number; errorCode?: string };
+export type TeamsDeliveryResult =
+  | { success: true; providerMessageId?: string; conversationId?: string }
+  | {
+      success: false;
+      error: string;
+      statusCode?: number;
+      retryAfterMs?: number;
+      errorCode?: string;
+    };
 
 type GraphToken = { access_token: string; expires_in: number };
 
@@ -32,7 +44,13 @@ function getCachedToken(cache: TokenCache, clientId: string, tenantId: string): 
   return entry.token;
 }
 
-function putCachedToken(cache: TokenCache, clientId: string, tenantId: string, token: string, expiresIn: number): void {
+function putCachedToken(
+  cache: TokenCache,
+  clientId: string,
+  tenantId: string,
+  token: string,
+  expiresIn: number
+): void {
   const key = tokenCacheKey(clientId, tenantId);
   if (cache.size >= TOKEN_CACHE_MAX) {
     const firstKey = cache.keys().next().value as string | undefined;
@@ -71,7 +89,9 @@ async function acquireToken(
 ): Promise<string | null> {
   const normalizedTenant = tenantId.trim();
   if (!normalizedTenant) {
-    logger.warn(`[MicrosoftTeams] ${label} token requires explicit tenantId — refusing /common fallback`);
+    logger.warn(
+      `[MicrosoftTeams] ${label} token requires explicit tenantId — refusing /common fallback`
+    );
     return null;
   }
   const cached = getCachedToken(cache, clientId, normalizedTenant);
@@ -85,12 +105,19 @@ async function acquireToken(
   try {
     const res = await retryFetch(
       `https://login.microsoftonline.com/${encodeURIComponent(normalizedTenant)}/oauth2/v2.0/token`,
-      { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() },
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      },
       { maxAttempts: 2, initialDelayMs: 800 }
     );
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      logger.warn(`[MicrosoftTeams] ${label} token failed`, { status: res.status, body: text.slice(0, 400) });
+      logger.warn(`[MicrosoftTeams] ${label} token failed`, {
+        status: res.status,
+        body: text.slice(0, 400),
+      });
       return null;
     }
     const data = (await res.json()) as GraphToken;
@@ -102,8 +129,19 @@ async function acquireToken(
   }
 }
 
-async function graphToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
-  return acquireToken(graphTokenCache, 'https://graph.microsoft.com/.default', clientId, clientSecret, tenantId, 'Graph');
+async function graphToken(
+  clientId: string,
+  clientSecret: string,
+  tenantId: string
+): Promise<string | null> {
+  return acquireToken(
+    graphTokenCache,
+    'https://graph.microsoft.com/.default',
+    clientId,
+    clientSecret,
+    tenantId,
+    'Graph'
+  );
 }
 
 /** Server-only token seam for narrowly scoped Graph adapters. */
@@ -112,11 +150,25 @@ export async function getMicrosoftTeamsGraphAccessToken(tenantId: string): Promi
   if (!resolved || !tenantId.trim()) return null;
   return graphToken(resolved.config.clientId, resolved.clientSecret, tenantId.trim());
 }
-async function botToken(clientId: string, clientSecret: string, tenantId: string): Promise<string | null> {
-  return acquireToken(botTokenCache, 'https://api.botframework.com/.default', clientId, clientSecret, tenantId, 'Bot');
+async function botToken(
+  clientId: string,
+  clientSecret: string,
+  tenantId: string
+): Promise<string | null> {
+  return acquireToken(
+    botTokenCache,
+    'https://api.botframework.com/.default',
+    clientId,
+    clientSecret,
+    tenantId,
+    'Bot'
+  );
 }
 
-function resolveTenantForCall(explicitTenantId: string | undefined, configTenantId: string | null | undefined): string | null {
+function resolveTenantForCall(
+  explicitTenantId: string | undefined,
+  configTenantId: string | null | undefined
+): string | null {
   const t = explicitTenantId?.trim() || configTenantId?.trim() || '';
   return t || null;
 }
@@ -128,18 +180,32 @@ function resolveTenantForCall(explicitTenantId: string | undefined, configTenant
 async function resolveServiceUrlForDestination(
   tenantId: string,
   teamId: string
-): Promise<{ serviceUrl: string | null; conversationId: string | null; botRecipientId: string | null }> {
+): Promise<{
+  serviceUrl: string | null;
+  conversationId: string | null;
+  botRecipientId: string | null;
+}> {
   try {
     const prismaForInstall = (await import('@/lib/prisma')).default as unknown as {
       microsoftTeamsInstallation: {
-        findFirst: (a: unknown) => Promise<{ serviceUrl: string | null; conversationId: string | null; botRecipientId: string | null } | null>;
+        findFirst: (
+          a: unknown
+        ) => Promise<{
+          serviceUrl: string | null;
+          conversationId: string | null;
+          botRecipientId: string | null;
+        } | null>;
       };
     };
     const inst = await prismaForInstall.microsoftTeamsInstallation.findFirst({
       where: { tenantId, teamId, enabled: true },
       select: { serviceUrl: true, conversationId: true, botRecipientId: true },
     } as never);
-    return { serviceUrl: inst?.serviceUrl ?? null, conversationId: inst?.conversationId ?? null, botRecipientId: inst?.botRecipientId ?? null };
+    return {
+      serviceUrl: inst?.serviceUrl ?? null,
+      conversationId: inst?.conversationId ?? null,
+      botRecipientId: inst?.botRecipientId ?? null,
+    };
   } catch {
     return { serviceUrl: null, conversationId: null, botRecipientId: null };
   }
@@ -159,13 +225,24 @@ async function sendBotActivity(args: {
 }): Promise<TeamsDeliveryResult> {
   const normalizedServiceUrl = normalizeTrustedMicrosoftTeamsServiceUrl(args.serviceUrl);
   if (!normalizedServiceUrl) {
-    return { success: false, error: 'Teams serviceUrl is not configured for this Team — bot not installed', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
+    return {
+      success: false,
+      error: 'Teams serviceUrl is not configured for this Team — bot not installed',
+      errorCode: 'APP_NOT_INSTALLED',
+      statusCode: 422,
+    };
   }
   let token: string | null = null;
   try {
     token = await botToken(args.clientId, args.clientSecret, args.tenantId);
   } catch {}
-  if (!token) return { success: false, error: 'Failed to acquire Bot Framework token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
+  if (!token)
+    return {
+      success: false,
+      error: 'Failed to acquire Bot Framework token',
+      errorCode: 'GRAPH_TOKEN_FAILED',
+      statusCode: 503,
+    };
 
   const card = JSON.parse(args.cardJson) as unknown;
 
@@ -192,7 +269,12 @@ async function sendBotActivity(args: {
   // activity. Do not guess it from the Entra application id.
   const botAddressId = (args.botRecipientId ?? '').trim();
   if (!botAddressId) {
-    return { success: false, error: 'Teams installation is missing its bot recipient identity — reinstall the app', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
+    return {
+      success: false,
+      error: 'Teams installation is missing its bot recipient identity — reinstall the app',
+      errorCode: 'APP_NOT_INSTALLED',
+      statusCode: 422,
+    };
   }
 
   const createEndpoint = `${normalizedServiceUrl}/v3/conversations`;
@@ -236,21 +318,60 @@ async function sendBotActivity(args: {
     const code = text.slice(0, 600) || `HTTP ${createRes.status}`;
     const status = createRes.status;
     const retryAfterMs = parseRetryAfter(createRes);
-    if (status === 429) return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
-    if (status === 404) return { success: false, error: 'Teams channel not found', errorCode: 'CHANNEL_NOT_FOUND', statusCode: 404 };
-    if (status === 401 || status === 403) return { success: false, error: 'Teams authorization failed', errorCode: 'AUTH_EXPIRED', statusCode: status };
-    return { success: false, error: code, errorCode: `http_${status}`, statusCode: status, retryAfterMs };
+    if (status === 429)
+      return {
+        success: false,
+        error: 'Teams rate limited',
+        errorCode: 'RATE_LIMITED',
+        statusCode: 429,
+        retryAfterMs,
+      };
+    if (status === 404)
+      return {
+        success: false,
+        error: 'Teams channel not found',
+        errorCode: 'CHANNEL_NOT_FOUND',
+        statusCode: 404,
+      };
+    if (status === 401 || status === 403)
+      return {
+        success: false,
+        error: 'Teams authorization failed',
+        errorCode: 'AUTH_EXPIRED',
+        statusCode: status,
+      };
+    return {
+      success: false,
+      error: code,
+      errorCode: `http_${status}`,
+      statusCode: status,
+      retryAfterMs,
+    };
   }
 
   try {
-    const data = (await createRes.json()) as { id?: string; activityId?: string; conversation?: { id?: string }; serviceUrl?: string };
+    const data = (await createRes.json()) as {
+      id?: string;
+      activityId?: string;
+      conversation?: { id?: string };
+      serviceUrl?: string;
+    };
     // Connector: `id` = conversationId, `activityId` = activity/messageId. Some SDKs nest under `conversation`.
-    const conversationId = typeof data?.id === 'string' && data.id.trim() ? data.id.trim() : typeof data?.conversation?.id === 'string' ? data.conversation.id.trim() : undefined;
-    const providerMessageId = typeof data?.activityId === 'string' && data.activityId.trim() ? data.activityId.trim() : undefined;
+    const conversationId =
+      typeof data?.id === 'string' && data.id.trim()
+        ? data.id.trim()
+        : typeof data?.conversation?.id === 'string'
+          ? data.conversation.id.trim()
+          : undefined;
+    const providerMessageId =
+      typeof data?.activityId === 'string' && data.activityId.trim()
+        ? data.activityId.trim()
+        : undefined;
     if (!conversationId || !providerMessageId) {
       return {
         success: false,
-        error: 'Teams accepted the create request but did not return both conversationId and activityId',
+        error:
+          'Teams accepted the create request but did not return both conversationId and activityId',
         errorCode: 'AMBIGUOUS_SIDE_EFFECT',
         statusCode: createRes.status,
       };
@@ -279,21 +400,40 @@ async function updateBotActivity(args: {
   tenantId: string;
 }): Promise<TeamsDeliveryResult> {
   const rawServiceUrl = (args.serviceUrl ?? '').trim();
-  let serviceUrl = rawServiceUrl ? normalizeTrustedMicrosoftTeamsServiceUrl(rawServiceUrl) ?? '' : '';
+  let serviceUrl = rawServiceUrl
+    ? (normalizeTrustedMicrosoftTeamsServiceUrl(rawServiceUrl) ?? '')
+    : '';
   if (!serviceUrl) {
     const resolved = await resolveServiceUrlForDestination(args.tenantId, args.teamId);
-    serviceUrl = resolved.serviceUrl ? normalizeTrustedMicrosoftTeamsServiceUrl(resolved.serviceUrl) ?? '' : '';
+    serviceUrl = resolved.serviceUrl
+      ? (normalizeTrustedMicrosoftTeamsServiceUrl(resolved.serviceUrl) ?? '')
+      : '';
   }
   if (!serviceUrl) {
-    return { success: false, error: 'Teams serviceUrl is not configured — cannot update card', errorCode: 'APP_NOT_INSTALLED', statusCode: 422 };
+    return {
+      success: false,
+      error: 'Teams serviceUrl is not configured — cannot update card',
+      errorCode: 'APP_NOT_INSTALLED',
+      statusCode: 422,
+    };
   }
   const token = await botToken(args.clientId, args.clientSecret, args.tenantId);
-  if (!token) return { success: false, error: 'Failed to acquire Bot Framework token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
+  if (!token)
+    return {
+      success: false,
+      error: 'Failed to acquire Bot Framework token',
+      errorCode: 'GRAPH_TOKEN_FAILED',
+      statusCode: 503,
+    };
 
   const card = JSON.parse(args.cardJson) as unknown;
   const conversationId = args.conversationId?.trim();
   if (!conversationId) {
-    return { success: false, error: 'Stored Teams message reference is missing its conversation ID', errorCode: 'MESSAGE_REFERENCE_INVALID' };
+    return {
+      success: false,
+      error: 'Stored Teams message reference is missing its conversation ID',
+      errorCode: 'MESSAGE_REFERENCE_INVALID',
+    };
   }
 
   // Bot Framework update: PUT {serviceUrl}/v3/conversations/{conversationId}/activities/{activityId}
@@ -321,19 +461,46 @@ async function updateBotActivity(args: {
       const raw = res.headers?.get?.('Retry-After');
       const n = raw ? Number.parseInt(raw, 10) : NaN;
       const retryAfterMs = Number.isFinite(n) && n > 0 ? n * 1000 : undefined;
-      return { success: false, error: 'Teams rate limited', errorCode: 'RATE_LIMITED', statusCode: 429, retryAfterMs };
+      return {
+        success: false,
+        error: 'Teams rate limited',
+        errorCode: 'RATE_LIMITED',
+        statusCode: 429,
+        retryAfterMs,
+      };
     }
     // Bot Connector returns 403 when the bot is removed or not allowed to edit; treat as MESSAGE_NOT_FOUND for recover path,
     // except preserve PATCH_NOT_SUPPORTED compat for callers that expect DEGRADED on Graph.
-    if (s === 404) return { success: false, error: 'Teams message not found', errorCode: 'MESSAGE_NOT_FOUND', statusCode: 404 };
+    if (s === 404)
+      return {
+        success: false,
+        error: 'Teams message not found',
+        errorCode: 'MESSAGE_NOT_FOUND',
+        statusCode: 404,
+      };
     if (s === 403) {
       // Distinguish between auth expiry and removal — surface as AUTH_EXPIRED so caller can re-probe.
       if (/not.?found|does not exist/i.test(text)) {
-        return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: 'MESSAGE_NOT_FOUND', statusCode: 404 };
+        return {
+          success: false,
+          error: text.slice(0, 600) || `HTTP ${s}`,
+          errorCode: 'MESSAGE_NOT_FOUND',
+          statusCode: 404,
+        };
       }
-      return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: 'AUTH_EXPIRED', statusCode: s };
+      return {
+        success: false,
+        error: text.slice(0, 600) || `HTTP ${s}`,
+        errorCode: 'AUTH_EXPIRED',
+        statusCode: s,
+      };
     }
-    return { success: false, error: text.slice(0, 600) || `HTTP ${s}`, errorCode: `http_${s}`, statusCode: s };
+    return {
+      success: false,
+      error: text.slice(0, 600) || `HTTP ${s}`,
+      errorCode: `http_${s}`,
+      statusCode: s,
+    };
   }
   return { success: true, providerMessageId: args.messageId, conversationId };
 }
@@ -349,17 +516,30 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
   incident: MicrosoftTeamsIncidentCardInput['incident'];
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
   disableActions?: boolean;
+  meeting?: MicrosoftTeamsCardOptions['meeting'];
   beforeCreateAttempt?: () => Promise<void>;
   interactive?: MicrosoftTeamsCardOptions['interactive'];
 }): Promise<TeamsDeliveryResult> {
   const resolved = await getMicrosoftTeamsConfig();
-  if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
+  if (!resolved)
+    return {
+      success: false,
+      error: 'Microsoft Teams is not configured',
+      errorCode: 'NOT_CONFIGURED',
+      statusCode: 422,
+    };
   const tenantId = resolveTenantForCall(args.tenantId, resolved.config.tenantId);
-  if (!tenantId) return { success: false, error: 'Teams tenant is not configured', errorCode: 'TENANT_REQUIRED', statusCode: 422 };
+  if (!tenantId)
+    return {
+      success: false,
+      error: 'Teams tenant is not configured',
+      errorCode: 'TENANT_REQUIRED',
+      statusCode: 422,
+    };
 
   const cardObj = buildMicrosoftTeamsIncidentCard(
     { incident: args.incident, eventType: args.eventType },
-    { disableActions: args.disableActions, interactive: args.interactive },
+    { disableActions: args.disableActions, meeting: args.meeting, interactive: args.interactive }
   );
   // Resolve serviceUrl + botRecipientId from Installation (verified via Bot Framework conversationUpdate).
   // Send path uses tenantId+teamId to avoid trusting channel-scoped caller input alone.
@@ -379,10 +559,10 @@ export async function sendMicrosoftTeamsIncidentCard(args: {
     channelId: args.channelId,
     cardJson: JSON.stringify(cardObj),
     incidentId: args.incident.id,
+    beforeCreateAttempt: args.beforeCreateAttempt,
     clientId: resolved.config.clientId,
     clientSecret: resolved.clientSecret,
     tenantId,
-    beforeCreateAttempt: args.beforeCreateAttempt,
   });
 }
 
@@ -395,16 +575,29 @@ export async function updateMicrosoftTeamsIncidentCard(args: {
   incident: MicrosoftTeamsIncidentCardInput['incident'];
   eventType: MicrosoftTeamsIncidentCardInput['eventType'];
   disableActions?: boolean;
+  meeting?: MicrosoftTeamsCardOptions['meeting'];
   interactive?: MicrosoftTeamsCardOptions['interactive'];
 }): Promise<TeamsDeliveryResult> {
   const resolved = await getMicrosoftTeamsConfig();
-  if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
+  if (!resolved)
+    return {
+      success: false,
+      error: 'Microsoft Teams is not configured',
+      errorCode: 'NOT_CONFIGURED',
+      statusCode: 422,
+    };
   const tenantId = resolveTenantForCall(args.tenantId, resolved.config.tenantId);
-  if (!tenantId) return { success: false, error: 'Teams tenant is not configured', errorCode: 'TENANT_REQUIRED', statusCode: 422 };
+  if (!tenantId)
+    return {
+      success: false,
+      error: 'Teams tenant is not configured',
+      errorCode: 'TENANT_REQUIRED',
+      statusCode: 422,
+    };
 
   const cardObj = buildMicrosoftTeamsIncidentCard(
     { incident: args.incident, eventType: args.eventType },
-    { disableActions: args.disableActions, interactive: args.interactive },
+    { disableActions: args.disableActions, meeting: args.meeting, interactive: args.interactive }
   );
   return updateBotActivity({
     teamId: args.teamId,
@@ -419,24 +612,54 @@ export async function updateMicrosoftTeamsIncidentCard(args: {
   });
 }
 
-export async function testMicrosoftTeamsConnection(destinationId: string): Promise<TeamsDeliveryResult> {
+export async function testMicrosoftTeamsConnection(
+  destinationId: string
+): Promise<TeamsDeliveryResult> {
   const prisma = (await import('@/lib/prisma')).default;
   const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: destinationId } });
-  if (!dest) return { success: false, error: 'Destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
+  if (!dest)
+    return {
+      success: false,
+      error: 'Destination not found',
+      errorCode: 'DESTINATION_NOT_FOUND',
+      statusCode: 404,
+    };
   const resolved = await getMicrosoftTeamsConfig();
-  if (!resolved) return { success: false, error: 'Microsoft Teams is not configured', errorCode: 'NOT_CONFIGURED', statusCode: 422 };
+  if (!resolved)
+    return {
+      success: false,
+      error: 'Microsoft Teams is not configured',
+      errorCode: 'NOT_CONFIGURED',
+      statusCode: 422,
+    };
   const tenantId = resolveTenantForCall(dest.tenantId, resolved.config.tenantId);
-  if (!tenantId) return { success: false, error: 'Teams tenant is not configured for this destination', errorCode: 'TENANT_REQUIRED', statusCode: 422 };
+  if (!tenantId)
+    return {
+      success: false,
+      error: 'Teams tenant is not configured for this destination',
+      errorCode: 'TENANT_REQUIRED',
+      statusCode: 422,
+    };
   const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
-  if (!token) return { success: false, error: 'Failed to acquire Graph token', errorCode: 'GRAPH_TOKEN_FAILED', statusCode: 503 };
+  if (!token)
+    return {
+      success: false,
+      error: 'Failed to acquire Graph token',
+      errorCode: 'GRAPH_TOKEN_FAILED',
+      statusCode: 503,
+    };
   const res = await retryFetch(
     `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(dest.teamId)}/channels/${encodeURIComponent(dest.channelId)}`,
     { headers: { Authorization: `Bearer ${token}` } },
-    { maxAttempts: 2, initialDelayMs: 600 },
+    { maxAttempts: 2, initialDelayMs: 600 }
   );
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    return { success: false, error: text.slice(0, 600) || `HTTP ${res.status}`, statusCode: res.status };
+    return {
+      success: false,
+      error: text.slice(0, 600) || `HTTP ${res.status}`,
+      statusCode: res.status,
+    };
   }
   return { success: true };
 }
@@ -479,29 +702,68 @@ export async function getTeamsWarRoomRscGrantState(input: {
   const tenantId = input.tenantId.trim();
   const teamId = input.teamId.trim();
   if (!resolved || !tenantId || !teamId) {
-    return { granted: null, missing: required, unknown: true, error: !resolved ? 'NOT_CONFIGURED' : 'TEAM_OR_TENANT_REQUIRED', installations: [] };
+    return {
+      granted: null,
+      missing: required,
+      unknown: true,
+      error: !resolved ? 'NOT_CONFIGURED' : 'TEAM_OR_TENANT_REQUIRED',
+      installations: [],
+    };
   }
   const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
-  if (!token) return { granted: null, missing: required, unknown: true, error: 'GRAPH_TOKEN_FAILED', installations: [] };
+  if (!token)
+    return {
+      granted: null,
+      missing: required,
+      unknown: true,
+      error: 'GRAPH_TOKEN_FAILED',
+      installations: [],
+    };
   try {
     const response = await retryFetch(
       `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(teamId)}/installedApps?$expand=teamsAppDefinition&$select=id,consentedPermissionSet`,
       { headers: { Authorization: `Bearer ${token}` } },
-      { maxAttempts: 2, initialDelayMs: 500 },
+      { maxAttempts: 2, initialDelayMs: 500 }
     );
     if (!response.ok) {
-      const error = response.status === 401 ? 'GRAPH_TOKEN_FAILED' : response.status === 403 ? 'RSC_GRANTS_UNREADABLE' : response.status === 404 ? 'TEAM_NOT_FOUND' : `http_${response.status}`;
-      return { granted: null, missing: required, unknown: true, error, installations: [{ teamId, teamName: null, granted: null, missing: required, unknown: true, error }] };
+      const error =
+        response.status === 401
+          ? 'GRAPH_TOKEN_FAILED'
+          : response.status === 403
+            ? 'RSC_GRANTS_UNREADABLE'
+            : response.status === 404
+              ? 'TEAM_NOT_FOUND'
+              : `http_${response.status}`;
+      return {
+        granted: null,
+        missing: required,
+        unknown: true,
+        error,
+        installations: [
+          { teamId, teamName: null, granted: null, missing: required, unknown: true, error },
+        ],
+      };
     }
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       value?: Array<{
         teamsAppDefinition?: { teamsAppId?: string | null } | null;
-        consentedPermissionSet?: { resourceSpecificPermissions?: Array<{ permissionValue?: string | null; permissionType?: string | null }> | null } | null;
+        consentedPermissionSet?: {
+          resourceSpecificPermissions?: Array<{
+            permissionValue?: string | null;
+            permissionType?: string | null;
+          }> | null;
+        } | null;
       }>;
     };
-    const app = body.value?.find(installation => installation.teamsAppDefinition?.teamsAppId === resolved.config.clientId);
+    const app = body.value?.find(
+      installation => installation.teamsAppDefinition?.teamsAppId === resolved.config.clientId
+    );
     const granted = (app?.consentedPermissionSet?.resourceSpecificPermissions ?? [])
-      .filter(permission => permission.permissionType?.toLowerCase() === 'application' && typeof permission.permissionValue === 'string')
+      .filter(
+        permission =>
+          permission.permissionType?.toLowerCase() === 'application' &&
+          typeof permission.permissionValue === 'string'
+      )
       .map(permission => permission.permissionValue!);
     const missing = required.filter(permission => !granted.includes(permission));
     return {
@@ -511,8 +773,17 @@ export async function getTeamsWarRoomRscGrantState(input: {
       installations: [{ teamId, teamName: null, granted, missing, unknown: false }],
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
-    return { granted: null, missing: required, unknown: true, error: message, installations: [{ teamId, teamName: null, granted: null, missing: required, unknown: true, error: message }] };
+    const message =
+      error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200);
+    return {
+      granted: null,
+      missing: required,
+      unknown: true,
+      error: message,
+      installations: [
+        { teamId, teamName: null, granted: null, missing: required, unknown: true, error: message },
+      ],
+    };
   }
 }
 
@@ -524,16 +795,34 @@ export async function getTeamsGrantedRscPermissions(options?: {
 
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) {
-    return { granted: null, missing: required, unknown: true, error: 'NOT_CONFIGURED', installations: [] };
+    return {
+      granted: null,
+      missing: required,
+      unknown: true,
+      error: 'NOT_CONFIGURED',
+      installations: [],
+    };
   }
   const tenantId = resolveTenantForCall(options?.explicitTenantId, resolved.config.tenantId);
   if (!tenantId) {
-    return { granted: null, missing: required, unknown: true, error: 'TENANT_REQUIRED', installations: [] };
+    return {
+      granted: null,
+      missing: required,
+      unknown: true,
+      error: 'TENANT_REQUIRED',
+      installations: [],
+    };
   }
 
   const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
   if (!token) {
-    return { granted: null, missing: required, unknown: true, error: 'GRAPH_TOKEN_FAILED', installations: [] };
+    return {
+      granted: null,
+      missing: required,
+      unknown: true,
+      error: 'GRAPH_TOKEN_FAILED',
+      installations: [],
+    };
   }
 
   // Probe the exact capability OpsKnight needs. The permissionGrants endpoint
@@ -541,7 +830,9 @@ export async function getTeamsGrantedRscPermissions(options?: {
   // RSC creates a circular and misleading health check.
   try {
     const prismaForTeams = (await import('@/lib/prisma')).default as unknown as {
-      microsoftTeamsInstallation: { findMany: (a: unknown) => Promise<Array<{ teamId: string; teamName: string | null }>> };
+      microsoftTeamsInstallation: {
+        findMany: (a: unknown) => Promise<Array<{ teamId: string; teamName: string | null }>>;
+      };
     };
     const installations = await prismaForTeams.microsoftTeamsInstallation.findMany({
       where: { tenantId, enabled: true },
@@ -551,7 +842,13 @@ export async function getTeamsGrantedRscPermissions(options?: {
     });
 
     if (installations.length === 0) {
-      return { granted: null, missing: required, unknown: true, error: 'NO_TEAMS_INSTALLED', installations: [] };
+      return {
+        granted: null,
+        missing: required,
+        unknown: true,
+        error: 'NO_TEAMS_INSTALLED',
+        installations: [],
+      };
     }
 
     const installationStates: TeamsRscInstallationState[] = [];
@@ -560,12 +857,15 @@ export async function getTeamsGrantedRscPermissions(options?: {
       const res = await retryFetch(
         `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(inst.teamId)}/channels?$top=1&$select=id`,
         { headers: { Authorization: `Bearer ${token}` } },
-        { maxAttempts: 2, initialDelayMs: 500 },
+        { maxAttempts: 2, initialDelayMs: 500 }
       );
       if (!res.ok) {
-        const error = res.status === 401 || res.status === 403
-          ? 'CHANNEL_DISCOVERY_PERMISSION_DENIED'
-          : res.status === 404 ? 'TEAM_NOT_FOUND' : `http_${res.status}`;
+        const error =
+          res.status === 401 || res.status === 403
+            ? 'CHANNEL_DISCOVERY_PERMISSION_DENIED'
+            : res.status === 404
+              ? 'TEAM_NOT_FOUND'
+              : `http_${res.status}`;
         installationStates.push({
           teamId: inst.teamId,
           teamName: inst.teamName,
@@ -589,16 +889,26 @@ export async function getTeamsGrantedRscPermissions(options?: {
           unknown: false,
         });
       } catch {
-        installationStates.push({ teamId: inst.teamId, teamName: inst.teamName, granted: null, missing: required, unknown: true, error: 'INVALID_RESPONSE' });
+        installationStates.push({
+          teamId: inst.teamId,
+          teamName: inst.teamName,
+          granted: null,
+          missing: required,
+          unknown: true,
+          error: 'INVALID_RESPONSE',
+        });
       }
     }
 
     const unknown = installationStates.some(state => state.unknown);
     const missing = [...new Set(installationStates.flatMap(state => state.missing))];
     const knownStates = installationStates.filter(state => !state.unknown && state.granted);
-    const granted = unknown || knownStates.length === 0
-      ? null
-      : required.filter(permission => knownStates.every(state => state.granted!.includes(permission)));
+    const granted =
+      unknown || knownStates.length === 0
+        ? null
+        : required.filter(permission =>
+            knownStates.every(state => state.granted!.includes(permission))
+          );
     return {
       granted,
       missing,
@@ -625,7 +935,10 @@ export async function getTeamsGrantedRscPermissions(options?: {
  */
 export async function listMicrosoftTeamsForDiscovery(options?: {
   tenantId?: string;
-}): Promise<{ teams: Array<{ id: string; displayName: string; description?: string | null }>; error?: string }> {
+}): Promise<{
+  teams: Array<{ id: string; displayName: string; description?: string | null }>;
+  error?: string;
+}> {
   const resolved = await getMicrosoftTeamsConfig();
   if (!resolved) return { teams: [], error: 'NOT_CONFIGURED' };
   const tenantId = resolveTenantForCall(options?.tenantId, resolved.config.tenantId);
@@ -661,8 +974,11 @@ export async function listMicrosoftTeamsForDiscovery(options?: {
 
 export async function listMicrosoftTeamsChannelsForDiscovery(
   teamId: string,
-  options?: { tenantId?: string },
-): Promise<{ channels: Array<{ id: string; displayName: string; description?: string | null }>; error?: string }> {
+  options?: { tenantId?: string }
+): Promise<{
+  channels: Array<{ id: string; displayName: string; description?: string | null }>;
+  error?: string;
+}> {
   const tid = teamId.trim();
   if (!tid) return { channels: [], error: 'teamId is required' };
   const resolved = await getMicrosoftTeamsConfig();
@@ -672,7 +988,9 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
   let tenantId = resolveTenantForCall(options?.tenantId, resolved.config.tenantId);
   if (!tenantId) {
     const prismaForLookup = (await import('@/lib/prisma')).default as unknown as {
-      microsoftTeamsInstallation: { findFirst: (a: unknown) => Promise<{ tenantId: string } | null> };
+      microsoftTeamsInstallation: {
+        findFirst: (a: unknown) => Promise<{ tenantId: string } | null>;
+      };
     };
     const inst = await prismaForLookup.microsoftTeamsInstallation.findFirst({
       where: { teamId: tid, enabled: true },
@@ -694,7 +1012,8 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
   if (!token) return { channels: [], error: 'GRAPH_TOKEN_FAILED' };
   const channels: Array<{ id: string; displayName: string; description?: string | null }> = [];
   const seen = new Set<string>();
-  let nextUrl: string | null = `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(tid)}/channels?$top=100&$select=id,displayName,description`;
+  let nextUrl: string | null =
+    `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(tid)}/channels?$top=100&$select=id,displayName,description`;
   // Bound traversal so a malformed or cyclic provider response cannot monopolize a worker.
   for (let page = 0; nextUrl && page < 10 && channels.length < 1_000; page += 1) {
     const parsedUrl = new URL(nextUrl);
@@ -704,7 +1023,7 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
     const res = await retryFetch(
       nextUrl,
       { headers: { Authorization: `Bearer ${token}` } },
-      { maxAttempts: 2, initialDelayMs: 600 },
+      { maxAttempts: 2, initialDelayMs: 600 }
     );
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -715,11 +1034,16 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
         value?: Array<{ id: string; displayName: string; description?: string | null }>;
         '@odata.nextLink'?: string;
       };
-      if (!Array.isArray(data.value)) return { channels: [], error: 'Failed to parse channels list' };
+      if (!Array.isArray(data.value))
+        return { channels: [], error: 'Failed to parse channels list' };
       for (const channel of data.value) {
         if (!channel.id || !channel.displayName || seen.has(channel.id)) continue;
         seen.add(channel.id);
-        channels.push({ id: channel.id, displayName: channel.displayName, description: channel.description ?? null });
+        channels.push({
+          id: channel.id,
+          displayName: channel.displayName,
+          description: channel.description ?? null,
+        });
       }
       nextUrl = typeof data['@odata.nextLink'] === 'string' ? data['@odata.nextLink'] : null;
     } catch {

@@ -107,6 +107,13 @@ const mockPrisma = {
   userDevice: createMockModel(),
   dashboard: createMockModel(),
   jiraConfig: createMockModel(),
+  microsoftTeamsConfig: createMockModel(),
+  microsoftTeamsInstallation: createMockModel(),
+  microsoftTeamsDestination: createMockModel(),
+  systemConfig: createMockModel(),
+  incidentWarRoom: createMockModel(),
+  incidentMeeting: createMockModel(),
+  chatOpsConfig: createMockModel(),
   $transaction: vi
     .fn()
     .mockImplementation((cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
