@@ -14,6 +14,7 @@ export default async function PrivacyRequestsPage() {
   }
   const canManage = permissions.capabilities.includes(CAPABILITIES.PRIVACY_REQUESTS_MANAGE);
   const canExport = permissions.capabilities.includes(CAPABILITIES.PRIVACY_EXPORT);
+  const canErase = permissions.capabilities.includes(CAPABILITIES.PRIVACY_ERASURE);
 
   const [{ requests, nextCursor }, operatorCandidates, subjectUsers] = await Promise.all([
     listPrivacyRequests(),
@@ -40,7 +41,7 @@ export default async function PrivacyRequestsPage() {
         breadcrumb={{ label: 'Settings', href: '/settings', current: 'Privacy Requests' }}
         tag="Data subject access requests"
         title="Privacy Requests"
-        subtitle="Receive, verify, and fulfil data subject requests. Only Access and Portability are automated in this release; other request types require manual review."
+        subtitle="Receive, verify, and fulfil data subject requests. Access, Portability, and Erasure are automated in this release; other request types require manual review."
         icon={
           <div className="rounded-2xl border border-primary-foreground/25 bg-primary-foreground/15 p-3.5 text-primary-foreground">
             <ShieldCheck className="h-8 w-8" />
@@ -68,6 +69,7 @@ export default async function PrivacyRequestsPage() {
         subjectUsers={subjectUsers}
         canManage={canManage}
         canExport={canExport}
+        canErase={canErase}
       />
     </div>
   );

@@ -70,7 +70,7 @@ export type PrivacyRequestRow = {
   assignedTo: RequestUser | null;
 };
 
-const AUTOMATED_TYPES: readonly PrivacyRequestType[] = ['ACCESS', 'PORTABILITY'];
+const AUTOMATED_TYPES: readonly PrivacyRequestType[] = ['ACCESS', 'PORTABILITY', 'ERASURE'];
 
 /** Only USER subjects are automated in Phase 2 — matches generateSubjectExport()'s own guard. */
 export function isAutomatedRequest(
@@ -114,6 +114,7 @@ export default function PrivacyRequestsBoard({
   subjectUsers,
   canManage,
   canExport,
+  canErase,
 }: {
   initialRequests: PrivacyRequestRow[];
   initialNextCursor: string | null;
@@ -121,6 +122,7 @@ export default function PrivacyRequestsBoard({
   subjectUsers: RequestUser[];
   canManage: boolean;
   canExport: boolean;
+  canErase: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -439,6 +441,7 @@ export default function PrivacyRequestsBoard({
                         requestId={req.id}
                         canManage={canManage}
                         canExport={canExport}
+                        canErase={canErase}
                         automated={automated}
                         exportEligible={req.status === 'PROCESSING' && Boolean(req.verifiedAt)}
                         trigger={

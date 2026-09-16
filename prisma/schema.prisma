@@ -47,6 +47,7 @@ enum AuditEntityType {
   SYSTEM_CONFIG
   PRIVACY_REQUEST
   PRIVACY_EXPORT_ARTIFACT
+  PRIVACY_ERASURE_EXECUTION
 }
 
 // Data subject a privacy request concerns. Only USER is operable in Phase 2;
@@ -80,6 +81,14 @@ enum PrivacyExportArtifactStatus {
   READY
   DOWNLOADED
   EXPIRED
+  FAILED
+}
+
+enum PrivacyErasureExecutionStatus {
+  PENDING
+  RUNNING
+  PARTIAL
+  COMPLETED
   FAILED
 }
 
@@ -2493,9 +2502,10 @@ model PrivacyRequest {
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 
-  requestedBy     User?                   @relation("PrivacyRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
-  assignedTo      User?                   @relation("PrivacyRequestAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
-  exportArtifacts PrivacyExportArtifact[]
+  requestedBy       User?                   @relation("PrivacyRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  assignedTo        User?                   @relation("PrivacyRequestAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  exportArtifacts   PrivacyExportArtifact[]
+  erasureExecution  PrivacyErasureExecution?
 
   @@index([subjectType, subjectId])
   @@index([status, requestType])
@@ -2526,4 +2536,26 @@ model PrivacyExportArtifact {
 
   @@index([requestId])
   @@index([status, expiresAt])
+}
+
+// Tracks execution of an ERASURE request. One row per request (unique
+// requestId) so re-invoking execute() is naturally idempotent: a COMPLETED
+// execution short-circuits without touching any data a second time.
+// resultSummary stores only per-domain counts (see src/lib/privacy/erasure/policy.ts)
+// — never subject PII.
+model PrivacyErasureExecution {
+  id             String                        @id @default(cuid())
+  requestId      String                        @unique
+  status         PrivacyErasureExecutionStatus @default(PENDING)
+  planVersion    Int                           @default(1)
+  resultSummary  Json?
+  failureCode    String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  request PrivacyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }

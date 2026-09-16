@@ -38,6 +38,7 @@ export const CAPABILITIES = {
   PRIVACY_READ: 'privacy.read',
   PRIVACY_REQUESTS_MANAGE: 'privacy.requests.manage',
   PRIVACY_EXPORT: 'privacy.export',
+  PRIVACY_ERASURE: 'privacy.erasure',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
