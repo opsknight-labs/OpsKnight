@@ -111,20 +111,25 @@ export const PROVIDER_PRESENTATION: Record<
 };
 
 export function getProviderPresentation(provider: WarRoomProviderName) {
-  if (provider in PROVIDER_PRESENTATION) {
-    return PROVIDER_PRESENTATION[provider];
+  switch (provider) {
+    case 'SLACK':
+      return PROVIDER_PRESENTATION.SLACK;
+    case 'MICROSOFT_TEAMS':
+      return PROVIDER_PRESENTATION.MICROSOFT_TEAMS;
+    default: {
+      const formatted = String(provider)
+        .toLowerCase()
+        .split('_')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+      return {
+        displayName: formatted,
+        subtitle: `${formatted} incident channel`,
+        createActionLabel: `Create ${formatted} channel`,
+        openActionLabel: `Open in ${formatted}`,
+      };
+    }
   }
-  const formatted = String(provider)
-    .toLowerCase()
-    .split('_')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-  return {
-    displayName: formatted,
-    subtitle: `${formatted} incident channel`,
-    createActionLabel: `Create ${formatted} channel`,
-    openActionLabel: `Open in ${formatted}`,
-  };
 }
 
 export function getLifecyclePresentation(

@@ -50,7 +50,8 @@ export type JobType =
   | 'WAR_ROOM_RECONCILE'
   | 'WAR_ROOM_CLOSE'
   | 'WAR_ROOM_PROVIDER_EVENT'
-  | 'MEETING_PROVISION';
+  | 'MEETING_PROVISION'
+  | 'MEETING_CLOSE';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -602,6 +603,22 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
         await markJobCompleted(job.id);
         return true;
       }
+      case 'MEETING_CLOSE': {
+        if (typeof payloadValue(job.payload, 'incidentId') !== 'string')
+          throw new Error('Meeting close job is missing incidentId');
+        const { executeMeetingCloseJob } = await import('../incident-collaboration/meeting-store');
+        const rawClose = job.payload as Record<string, unknown>;
+        await executeMeetingCloseJob({
+          incidentId: requiredPayloadString(job.payload, 'incidentId'),
+          provider: (rawClose.provider as never) || 'MICROSOFT_TEAMS',
+          providerMeetingId:
+            typeof rawClose.providerMeetingId === 'string' ? rawClose.providerMeetingId : null,
+          organizerEmail:
+            typeof rawClose.organizerEmail === 'string' ? rawClose.organizerEmail : null,
+        });
+        await markJobCompleted(job.id);
+        return true;
+      }
       case 'WAR_ROOM_PARTICIPANT_SYNC': {
         if (typeof payloadValue(job.payload, 'warRoomId') !== 'string')
           throw new Error('War-room participant sync job is missing warRoomId');
@@ -1030,7 +1047,8 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
       job.type === 'WAR_ROOM_RECONCILE' ||
       job.type === 'WAR_ROOM_CLOSE' ||
       job.type === 'WAR_ROOM_PROVIDER_EVENT' ||
-      job.type === 'MEETING_PROVISION';
+      job.type === 'MEETING_PROVISION' ||
+      job.type === 'MEETING_CLOSE';
     if (isWarRoomJob && error instanceof Error && error.name === 'WarRoomRetryableError') {
       const retryAfterMs = (error as Error & { retryAfterMs?: unknown }).retryAfterMs;
       const retryBudgetNeutral =

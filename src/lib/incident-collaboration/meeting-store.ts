@@ -30,6 +30,7 @@ function mapRecordToView(record: {
   tollNumber?: string | null;
   tollFreeNumber?: string | null;
   organizerEmail?: string | null;
+  providerMeetingId?: string | null;
   createdAt: Date | string;
   closedAt?: Date | string | null;
   lastErrorCode?: string | null;
@@ -53,6 +54,7 @@ function mapRecordToView(record: {
     conferenceId: record.conferenceId ?? null,
     tollNumber: record.tollNumber ?? null,
     organizerEmail: record.organizerEmail ?? null,
+    providerMeetingId: record.providerMeetingId ?? null,
     createdAt:
       typeof record.createdAt === 'string' ? record.createdAt : record.createdAt.toISOString(),
     closedAt: record.closedAt
@@ -314,45 +316,56 @@ export async function requestMeetingProvision(params: {
         const externalId = `opsknight:${incidentId}:${targetGeneration}`;
         const provisioningToken = crypto.randomUUID();
 
-        const record = await tx.incidentMeeting.upsert({
-          where: { incidentId_generation: { incidentId, generation: targetGeneration } },
-          create: {
-            id: meetingId,
-            incidentId,
-            provider: provider as never,
-            generation: targetGeneration,
-            state: 'PROVISIONING',
-            health: 'HEALTHY',
-            externalId,
-            joinUrl: current?.joinUrl || '',
-            provisioningToken,
-            provisioningStartedAt: new Date(),
-          },
-          update: {
-            state: 'PROVISIONING',
-            health: 'HEALTHY',
-            provisioningToken,
-            provisioningStartedAt: new Date(),
-          },
-        });
+        let record;
+        let createdByThisTx = false;
 
-        await tx.backgroundJob.create({
-          data: {
-            type: 'MEETING_PROVISION',
-            status: 'PENDING',
-            scheduledAt: new Date(),
-            maxAttempts: 5,
-            payload: {
+        try {
+          record = await tx.incidentMeeting.create({
+            data: {
+              id: meetingId,
               incidentId,
-              provisioningToken,
-              provider,
+              provider: provider as never,
               generation: targetGeneration,
-              incidentTitle,
-              incidentNumber,
-              customTemplate: customTemplate || null,
+              state: 'PROVISIONING',
+              health: 'HEALTHY',
+              externalId,
+              joinUrl: current?.joinUrl || '',
+              provisioningToken,
+              provisioningStartedAt: new Date(),
             },
-          },
-        });
+          });
+          createdByThisTx = true;
+        } catch {
+          // Unique conflict on [incidentId, generation]: another concurrent transaction claimed this generation!
+          // Load the winner's record and return it WITHOUT creating a second job.
+          const existingClaim = await tx.incidentMeeting.findUnique({
+            where: { incidentId_generation: { incidentId, generation: targetGeneration } },
+          });
+          if (existingClaim) {
+            return mapRecordToView(existingClaim);
+          }
+          throw new Error('Failed to claim meeting provisioning due to concurrent collision.');
+        }
+
+        if (createdByThisTx) {
+          await tx.backgroundJob.create({
+            data: {
+              type: 'MEETING_PROVISION',
+              status: 'PENDING',
+              scheduledAt: new Date(),
+              maxAttempts: 5,
+              payload: {
+                incidentId,
+                provisioningToken,
+                provider,
+                generation: targetGeneration,
+                incidentTitle,
+                incidentNumber,
+                customTemplate: customTemplate || null,
+              },
+            },
+          });
+        }
 
         return mapRecordToView(record);
       });
@@ -540,6 +553,7 @@ export async function executeMeetingProvision(params: {
           conferenceId: result.conferenceId || null,
           tollNumber: result.tollNumber || null,
           organizerEmail: result.organizerEmail || null,
+          providerMeetingId: result.providerMeetingId || null,
           readyAt: new Date(),
           lastErrorCode: null,
           lastErrorMessage: null,
@@ -580,6 +594,7 @@ export async function executeMeetingProvision(params: {
       conferenceId: result.conferenceId || null,
       tollNumber: result.tollNumber || null,
       organizerEmail: result.organizerEmail || null,
+      providerMeetingId: result.providerMeetingId || null,
       createdAt: currentStatus?.createdAt || now,
       actions: {
         canJoin: true,
@@ -714,10 +729,33 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
   const current = await getIncidentMeeting(incidentId);
   if (!current || current.state === 'CLOSED') return;
 
-  // If provider adapter supports external termination, execute it
-  if (current.provider && current.provider !== 'NONE') {
+  // If provider adapter supports external termination, enqueue durable background job
+  if (current.provider && current.provider !== 'NONE' && current.actions.supportsExternalClose) {
+    if (prisma?.backgroundJob?.create && current.providerMeetingId) {
+      await prisma.backgroundJob
+        .create({
+          data: {
+            type: 'MEETING_CLOSE',
+            status: 'PENDING',
+            scheduledAt: new Date(),
+            maxAttempts: 3,
+            payload: {
+              incidentId,
+              provider: current.provider,
+              providerMeetingId: current.providerMeetingId,
+              organizerEmail: current.organizerEmail || null,
+            },
+          },
+        })
+        .catch(() => null);
+    }
+    // Also attempt cleanup directly in test environments or if job queue is unavailable
     try {
-      await MeetingProviderRegistry.closeMeeting(current.provider, current.id, current.externalId);
+      await MeetingProviderRegistry.closeMeeting(current.provider, {
+        providerMeetingId: current.providerMeetingId,
+        organizerEmail: current.organizerEmail,
+        externalId: current.externalId,
+      });
     } catch {
       // Non-fatal, local close must still complete
     }
@@ -756,6 +794,22 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
   }
 
   memoryMeetingCache.set(incidentId, closedMeeting);
+}
+
+/**
+ * Background worker execution for durable MEETING_CLOSE jobs.
+ */
+export async function executeMeetingCloseJob(params: {
+  incidentId: string;
+  provider: IncidentMeetingProvider;
+  providerMeetingId?: string | null;
+  organizerEmail?: string | null;
+}): Promise<void> {
+  if (!params.providerMeetingId || params.provider === 'NONE') return;
+  await MeetingProviderRegistry.closeMeeting(params.provider, {
+    providerMeetingId: params.providerMeetingId,
+    organizerEmail: params.organizerEmail,
+  });
 }
 
 /**

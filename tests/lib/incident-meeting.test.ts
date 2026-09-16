@@ -10,6 +10,7 @@ import {
   provisionIncidentMeeting,
   getIncidentMeeting,
   closeIncidentMeeting,
+  executeMeetingCloseJob,
 } from '@/lib/incident-collaboration/meeting-store';
 
 describe('Meeting Provider Registry and Adapters', () => {
@@ -178,5 +179,16 @@ describe('Incident Meeting Store & Provisioning Lifecycle', () => {
     expect(read2?.state).toBe('READY');
     expect(read1?.joinUrl).toBe(read2?.joinUrl);
     expect(read1?.id).toBe(read2?.id);
+  });
+
+  it('executeMeetingCloseJob executes cleanly without throwing', async () => {
+    await expect(
+      executeMeetingCloseJob({
+        incidentId: 'inc-test-close-worker',
+        provider: 'MICROSOFT_TEAMS',
+        providerMeetingId: 'fake-graph-meeting-id-12345',
+        organizerEmail: 'incident-organizer@example.com',
+      })
+    ).resolves.toBeUndefined();
   });
 });

@@ -41,6 +41,12 @@ export interface MeetingAvailabilityResult {
   reason?: string;
 }
 
+export type CloseMeetingParams = {
+  providerMeetingId?: string | null;
+  organizerEmail?: string | null;
+  externalId?: string;
+};
+
 export interface MeetingProviderAdapter {
   readonly provider: IncidentMeetingProvider;
   readonly supportsExternalClose?: boolean;
@@ -49,7 +55,7 @@ export interface MeetingProviderAdapter {
     incidentId?: string
   ): Promise<MeetingAvailabilityResult>;
   createOrGetMeeting(input: CreateOrGetMeetingInput): Promise<MeetingResult>;
-  closeMeeting?(meetingId: string, externalId?: string): Promise<void>;
+  closeMeeting?(params: CloseMeetingParams): Promise<void>;
 }
 
 async function resolveGlobalCustomBridgeTemplate(): Promise<string | null> {
@@ -226,7 +232,12 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
         };
       }
 
-      return { available: true, readiness: 'READY' };
+      return {
+        available: true,
+        readiness: 'CONFIGURED',
+        reason:
+          'Entra credentials verified. Meeting creation permissions will be validated upon launch.',
+      };
     } catch (e) {
       return {
         available: false,
@@ -236,8 +247,11 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
     }
   }
 
-  async closeMeeting(meetingId: string, externalId?: string): Promise<void> {
+  async closeMeeting(params: CloseMeetingParams): Promise<void> {
     try {
+      const { providerMeetingId, organizerEmail } = params;
+      if (!providerMeetingId) return;
+
       const resolved = await getMicrosoftTeamsConfig();
       if (!resolved || !resolved.config.enabled) return;
       const tenantId = resolved.config.tenantId;
@@ -245,21 +259,19 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
 
       const defaultOrganizer = (resolved.config as { defaultMeetingOrganizerUpn?: string | null })
         ?.defaultMeetingOrganizerUpn;
-      const organizer = defaultOrganizer?.trim() ? { userId: defaultOrganizer.trim() } : null;
-      if (!organizer) return;
+      const organizerUpn = organizerEmail || defaultOrganizer?.trim();
+      if (!organizerUpn) return;
 
       const token = await getMicrosoftTeamsGraphAccessToken(tenantId);
       if (!token) return;
 
-      if (meetingId && !meetingId.startsWith('meet_') && !meetingId.startsWith('opsknight:')) {
-        await fetch(
-          `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(organizer.userId)}/onlineMeetings/${encodeURIComponent(meetingId)}`,
-          {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        ).catch(() => null);
-      }
+      await fetch(
+        `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(organizerUpn)}/onlineMeetings/${encodeURIComponent(providerMeetingId)}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      ).catch(() => null);
     } catch {
       // Non-fatal error during cleanup
     }
@@ -600,12 +612,11 @@ export class MeetingProviderRegistry {
 
   static async closeMeeting(
     provider: IncidentMeetingProvider,
-    meetingId: string,
-    externalId?: string
+    params: CloseMeetingParams
   ): Promise<void> {
     const adapter = this.getAdapter(provider);
     if (adapter?.closeMeeting) {
-      await adapter.closeMeeting(meetingId, externalId);
+      await adapter.closeMeeting(params);
     }
   }
 }

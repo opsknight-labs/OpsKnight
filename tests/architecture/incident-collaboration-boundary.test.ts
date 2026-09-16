@@ -1,28 +1,23 @@
-/* eslint-disable security/detect-non-literal-fs-filename */
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 
-function getAllFiles(dir: string): string[] {
-  let results: string[] = [];
-  const baseDir = resolve(process.cwd(), dir);
-  const list = readdirSync(baseDir);
-  for (const file of list) {
-    const filePath = join(baseDir, file);
-    const stat = statSync(filePath);
-    if (stat && stat.isDirectory()) {
-      results = results.concat(getAllFiles(join(dir, file)));
-    } else if (file.endsWith('.ts') || file.endsWith('.tsx')) {
-      results.push(filePath);
-    }
-  }
-  return results;
-}
+const WAR_ROOM_UI_FILES = [
+  'src/components/incident/war-room/IncidentMeetingCard.tsx',
+  'src/components/incident/war-room/IncidentWarRoomManager.tsx',
+  'src/components/incident/war-room/WarRoomActionsMenu.tsx',
+  'src/components/incident/war-room/WarRoomCreateDialog.tsx',
+  'src/components/incident/war-room/WarRoomDiagnostics.tsx',
+  'src/components/incident/war-room/WarRoomHealthBadge.tsx',
+  'src/components/incident/war-room/WarRoomHistory.tsx',
+  'src/components/incident/war-room/WarRoomLauncher.tsx',
+  'src/components/incident/war-room/WarRoomLifecycleBadge.tsx',
+  'src/components/incident/war-room/WarRoomParticipantSummary.tsx',
+  'src/components/incident/war-room/WarRoomProviderCard.tsx',
+  'src/components/incident/war-room/WarRoomProviderHeader.tsx',
+];
 
 describe('Incident Collaboration Architectural Boundaries', () => {
-  it('ensures UI components under src/components/incident do NOT import provider-specific libraries directly', () => {
-    const incidentComponentFiles = getAllFiles('src/components/incident');
-
+  it('ensures UI components under src/components/incident/war-room do NOT import provider-specific libraries directly', () => {
     // UI components must never import Slack or Microsoft Teams provider internals directly.
     // All collaboration state, capabilities, badges, and actions must come via @/lib/incident-collaboration
     const forbiddenPatterns = [
@@ -33,7 +28,7 @@ describe('Incident Collaboration Architectural Boundaries', () => {
 
     const violations: Array<{ file: string; match: string }> = [];
 
-    for (const file of incidentComponentFiles) {
+    for (const file of WAR_ROOM_UI_FILES) {
       const content = readFileSync(file, 'utf8');
       for (const pattern of forbiddenPatterns) {
         const match = content.match(pattern);

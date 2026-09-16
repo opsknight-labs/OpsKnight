@@ -13,6 +13,7 @@ import prisma from '@/lib/prisma';
 import { getUserPermissions } from '@/lib/rbac';
 import type {
   IncidentCollaborationView,
+  IncidentMeetingReadiness,
   IncidentMeetingView,
   IncidentWarRoomHistoryItem,
   IncidentWarRoomParticipantView,
@@ -31,7 +32,7 @@ import {
 } from './policy';
 import { deriveProviderCanCreate, deriveWarRoomActions } from './capabilities';
 import { getProviderDeepLinkUrl } from './urls';
-import { PROVIDER_PRESENTATION } from './presentation';
+import { getProviderPresentation } from './presentation';
 import { getIncidentMeeting } from './meeting-store';
 
 export type GetIncidentCollaborationInput = {
@@ -72,7 +73,7 @@ export async function getIncidentCollaborationView(
     }),
     prisma.microsoftTeamsConfig.findUnique({
       where: { id: 'default' },
-      select: { enabled: true, warRoomsEnabled: true },
+      select: { enabled: true, warRoomsEnabled: true, defaultMeetingOrganizerUpn: true },
     }),
     prisma.incidentWarRoom.findMany({
       where: { incidentId },
@@ -109,6 +110,8 @@ export async function getIncidentCollaborationView(
       permissions: { canManageWarRooms: false, canManageMeeting: false },
     };
   }
+
+  const incidentStatus = incident.status;
 
   // Fetch service policy if incident has a service
   const servicePolicy = incident.serviceId
@@ -305,107 +308,81 @@ export async function getIncidentCollaborationView(
     };
   }
 
-  // Build Slack Provider View
-  const latestSlackRoom = slackRooms[0] ?? null;
-  const isSlackActiveOrTransitional =
-    latestSlackRoom &&
-    ['REQUESTED', 'PROVISIONING', 'AMBIGUOUS', 'READY', 'CLOSING'].includes(latestSlackRoom.state);
+  // Derive provider views via generic provider-neutral pattern
+  function buildProviderView(provider: WarRoomProviderName): IncidentWarRoomProviderView {
+    const isSlack = provider === 'SLACK';
+    const isTeams = provider === 'MICROSOFT_TEAMS';
+    const presentation = getProviderPresentation(provider);
+    const rooms = warRooms.filter(r => r.provider === provider);
+    const availability = isSlack
+      ? slackAvailability
+      : isTeams
+        ? teamsAvailability
+        : ('NOT_CONFIGURED' as WarRoomProviderAvailability);
+    const unavailableReason = isSlack
+      ? slackUnavailableReason
+      : isTeams
+        ? teamsUnavailableReason
+        : 'Provider not configured';
+    const enabledForService = isSlack ? isSlackDesired : isTeams ? isTeamsDesired : false;
+    const destinationAvailable = isSlack
+      ? slackDestinationAvailable
+      : isTeams
+        ? teamsDestinationAvailable
+        : false;
 
-  const currentSlackRoom = isSlackActiveOrTransitional
-    ? mapRoomToView(latestSlackRoom, slackAvailability)
-    : null;
+    const latestRoom = rooms[0] ?? null;
+    const isActiveOrTransitional =
+      latestRoom &&
+      ['REQUESTED', 'PROVISIONING', 'AMBIGUOUS', 'READY', 'CLOSING'].includes(latestRoom.state);
 
-  const historicalSlackRooms = latestSlackRoom
-    ? (isSlackActiveOrTransitional ? slackRooms.slice(1) : slackRooms).map(mapRoomToHistoryItem)
-    : [];
+    const currentRoom = isActiveOrTransitional ? mapRoomToView(latestRoom, availability) : null;
+    const history = latestRoom
+      ? (isActiveOrTransitional ? rooms.slice(1) : rooms).map(mapRoomToHistoryItem)
+      : [];
 
-  const slackCanCreate =
-    isSlackDesired &&
-    deriveProviderCanCreate({
-      availability: slackAvailability,
-      incidentStatus: incident.status,
-      canManage: canManageWarRooms,
-      latestRoomState: latestSlackRoom
-        ? (latestSlackRoom.state as WarRoomPresentationLifecycle)
-        : null,
-    });
+    const canCreate =
+      enabledForService &&
+      deriveProviderCanCreate({
+        availability,
+        incidentStatus,
+        canManage: canManageWarRooms,
+        latestRoomState: latestRoom ? (latestRoom.state as WarRoomPresentationLifecycle) : null,
+      });
 
-  // Strict visibility rule for Slack:
-  // 1. If desired for service: visible if canCreate OR active room OR historical room exists
-  // 2. If NOT desired for service: visible ONLY if an existing or historical room exists
-  const isSlackVisible =
-    (isSlackDesired &&
-      (slackCanCreate || currentSlackRoom !== null || historicalSlackRooms.length > 0)) ||
-    slackRooms.length > 0;
+    const visible =
+      (enabledForService && (canCreate || currentRoom !== null || history.length > 0)) ||
+      rooms.length > 0;
 
-  const slackProviderView: IncidentWarRoomProviderView = {
-    provider: 'SLACK',
-    displayName: PROVIDER_PRESENTATION.SLACK.displayName,
-    subtitle: PROVIDER_PRESENTATION.SLACK.subtitle,
-    availability: slackAvailability,
-    visible: isSlackVisible,
-    canCreate: slackCanCreate,
-    enabledForService: isSlackDesired,
-    destinationAvailable: slackDestinationAvailable,
-    unavailableReason: slackUnavailableReason,
-    currentRoom: currentSlackRoom,
-    historyCount: historicalSlackRooms.length,
-    history: historicalSlackRooms,
-    supportedOptions: {
-      supportsPrivateRooms: false,
-    },
-  };
+    return {
+      provider,
+      displayName: presentation.displayName,
+      subtitle: presentation.subtitle,
+      availability,
+      visible,
+      canCreate,
+      enabledForService,
+      destinationAvailable,
+      unavailableReason,
+      currentRoom,
+      historyCount: history.length,
+      history,
+      supportedOptions: {
+        supportsPrivateRooms: isTeams,
+      },
+    };
+  }
 
-  // Build Teams Provider View
-  const latestTeamsRoom = teamsRooms[0] ?? null;
-  const isTeamsActiveOrTransitional =
-    latestTeamsRoom &&
-    ['REQUESTED', 'PROVISIONING', 'AMBIGUOUS', 'READY', 'CLOSING'].includes(latestTeamsRoom.state);
-
-  const currentTeamsRoom = isTeamsActiveOrTransitional
-    ? mapRoomToView(latestTeamsRoom, teamsAvailability)
-    : null;
-
-  const historicalTeamsRooms = latestTeamsRoom
-    ? (isTeamsActiveOrTransitional ? teamsRooms.slice(1) : teamsRooms).map(mapRoomToHistoryItem)
-    : [];
-
-  const teamsCanCreate =
-    isTeamsDesired &&
-    deriveProviderCanCreate({
-      availability: teamsAvailability,
-      incidentStatus: incident.status,
-      canManage: canManageWarRooms,
-      latestRoomState: latestTeamsRoom
-        ? (latestTeamsRoom.state as WarRoomPresentationLifecycle)
-        : null,
-    });
-
-  // Strict visibility rule for Teams:
-  // 1. If desired for service: visible if canCreate OR active room OR historical room exists
-  // 2. If NOT desired for service: visible ONLY if an existing or historical room exists
-  const isTeamsVisible =
-    (isTeamsDesired &&
-      (teamsCanCreate || currentTeamsRoom !== null || historicalTeamsRooms.length > 0)) ||
-    teamsRooms.length > 0;
-
-  const teamsProviderView: IncidentWarRoomProviderView = {
-    provider: 'MICROSOFT_TEAMS',
-    displayName: PROVIDER_PRESENTATION.MICROSOFT_TEAMS.displayName,
-    subtitle: PROVIDER_PRESENTATION.MICROSOFT_TEAMS.subtitle,
-    availability: teamsAvailability,
-    visible: isTeamsVisible,
-    canCreate: teamsCanCreate,
-    enabledForService: isTeamsDesired,
-    destinationAvailable: teamsDestinationAvailable,
-    unavailableReason: teamsUnavailableReason,
-    currentRoom: currentTeamsRoom,
-    historyCount: historicalTeamsRooms.length,
-    history: historicalTeamsRooms,
-    supportedOptions: {
-      supportsPrivateRooms: true,
-    },
-  };
+  const SUPPORTED_WAR_ROOM_PROVIDERS: WarRoomProviderName[] = ['SLACK', 'MICROSOFT_TEAMS'];
+  const providerViews = SUPPORTED_WAR_ROOM_PROVIDERS.map(buildProviderView);
+  const slackProviderView = providerViews.find(p => p.provider === 'SLACK')!;
+  const teamsProviderView = providerViews.find(p => p.provider === 'MICROSOFT_TEAMS')!;
+  const currentSlackRoom = slackProviderView.currentRoom;
+  const currentTeamsRoom = teamsProviderView.currentRoom;
+  const isSlackVisible = slackProviderView.visible;
+  const isTeamsVisible = teamsProviderView.visible;
+  const historicalSlackRooms = slackProviderView.history;
+  const historicalTeamsRooms = teamsProviderView.history;
 
   // Meeting resolution
   const canManageMeeting = canManageWarRooms;
@@ -420,36 +397,67 @@ export async function getIncidentCollaborationView(
   let meeting: IncidentMeetingView | null = persistedMeeting;
 
   if (!meeting && meetingResolution.effectiveProvider !== 'NONE' && !meetingResolution.isDisabled) {
-    const { MeetingProviderRegistry } = await import('./meeting-registry');
     const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
-    const availability = await MeetingProviderRegistry.isAvailable(
-      meetingResolution.effectiveProvider,
-      customTemplate,
-      incident.id
-    );
+    const provider = meetingResolution.effectiveProvider;
+    let isAvailable = !meetingResolution.isUnavailable;
+    let readiness: IncidentMeetingReadiness = 'READY';
+    let reason: string | null = meetingResolution.unavailableReason || null;
 
-    const isAvailable = availability.available && !meetingResolution.isUnavailable;
-    const canProvision = canManageMeeting && incident.status !== 'RESOLVED';
-    const isTeams = meetingResolution.effectiveProvider === 'MICROSOFT_TEAMS';
+    if (provider === 'MICROSOFT_TEAMS') {
+      if (!isTeamsIntegrationEnabled) {
+        isAvailable = false;
+        readiness = 'UNAVAILABLE';
+        reason = 'Microsoft Teams integration is not enabled in settings.';
+      } else if (!teamsConfig?.defaultMeetingOrganizerUpn?.trim()) {
+        isAvailable = false;
+        readiness = 'ORGANIZER_REQUIRED';
+        reason = 'Teams meeting organizer UPN is required in ChatOps settings.';
+      } else {
+        // Configured with organizer UPN from DB; authorization is verified when provisioning
+        isAvailable = true;
+        readiness = 'CONFIGURED';
+        reason = null;
+      }
+    } else if (provider === 'ZOOM' || provider === 'GOOGLE_MEET') {
+      const hasTemplate = Boolean(
+        customTemplate || globalPolicy.defaultMeetingProvider === provider
+      );
+      if (!hasTemplate) {
+        isAvailable = false;
+        readiness = 'UNAVAILABLE';
+        reason = `${provider === 'ZOOM' ? 'Zoom' : 'Google Meet'} bridge template is not configured.`;
+      } else {
+        isAvailable = true;
+        readiness = 'READY';
+      }
+    } else if (provider === 'JITSI') {
+      isAvailable = true;
+      readiness = 'READY';
+    }
+
+    const canProvision = canManageMeeting && incident.status !== 'RESOLVED' && isAvailable;
+    const isTeams = provider === 'MICROSOFT_TEAMS';
 
     meeting = {
       id: `pending_meet_${incident.id}`,
       incidentId: incident.id,
       generation: 1,
-      provider: meetingResolution.effectiveProvider,
+      provider,
       state: 'REQUESTED',
       health: isAvailable ? 'HEALTHY' : 'UNAVAILABLE',
       externalId: `opsknight:${incident.id}:1`,
       joinUrl: '',
+      providerMeetingId: null,
+      organizerEmail: isTeams ? teamsConfig?.defaultMeetingOrganizerUpn?.trim() || null : null,
       createdAt: incident.createdAt.toISOString(),
-      lastErrorCode: !isAvailable ? availability.readiness || 'MEETING_UNAVAILABLE' : null,
-      lastErrorMessage: availability.reason || meetingResolution.unavailableReason || null,
-      readiness: availability.readiness || (isAvailable ? 'READY' : 'UNAVAILABLE'),
+      lastErrorCode: !isAvailable ? readiness : null,
+      lastErrorMessage: reason,
+      readiness,
       actions: {
         canJoin: false,
         canRetry: false,
         canClose: false,
-        canProvision: canProvision && isAvailable,
+        canProvision,
         supportsExternalClose: isTeams,
         closeLabel: isTeams ? 'End Meeting' : 'Detach Bridge',
       },
@@ -502,7 +510,7 @@ export async function getIncidentCollaborationView(
       attentionRequired,
       totalHistoricalRooms: allHistory.length,
     },
-    providers: [slackProviderView, teamsProviderView].filter(p => p.visible),
+    providers: providerViews.filter(p => p.visible),
     meeting,
     history: allHistory,
     permissions: {

@@ -9,6 +9,7 @@ import type {
   IncidentWarRoomActions,
   WarRoomPresentationLifecycle,
   WarRoomProviderAvailability,
+  WarRoomProviderName,
 } from './types';
 
 export function deriveWarRoomActions(options: {
@@ -77,7 +78,7 @@ export async function getIncidentCollaborationCapabilities(params: {
   canManageMeeting: boolean;
   incidentStatus: string;
   providers: Array<{
-    provider: 'SLACK' | 'MICROSOFT_TEAMS';
+    provider: WarRoomProviderName;
     canCreate: boolean;
     availability: WarRoomProviderAvailability;
     reason?: string | null;

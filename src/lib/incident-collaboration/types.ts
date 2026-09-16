@@ -137,6 +137,7 @@ export type IncidentMeetingView = {
   conferenceId?: string | null;
   tollNumber?: string | null;
   organizerEmail?: string | null;
+  providerMeetingId?: string | null;
   createdAt: string;
   closedAt?: string | null;
   lastErrorCode?: string | null;
