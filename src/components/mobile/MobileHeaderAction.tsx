@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { forwardRef, type ReactNode, type Ref } from 'react';
 import { cn } from '@/lib/utils';
 
 type MobileHeaderActionTone = 'default' | 'ok' | 'warning' | 'danger';
@@ -36,30 +36,38 @@ function toneClassName(tone: MobileHeaderActionTone): string {
  * There is deliberately no `className` escape hatch: use `tone` for color
  * variation, otherwise every consumer must look identical.
  */
-export default function MobileHeaderAction({
-  icon,
-  label,
-  href,
-  onClick,
-  tone = 'default',
-  title,
-}: MobileHeaderActionProps) {
-  const classes = cn(
-    'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent bg-transparent transition-[color,background-color,border-color,transform] duration-150 active:scale-95 motion-reduce:active:scale-100 hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    toneClassName(tone)
-  );
+export default forwardRef<HTMLButtonElement | HTMLAnchorElement, MobileHeaderActionProps>(
+  function MobileHeaderAction({ icon, label, href, onClick, tone = 'default', title }, ref) {
+    const classes = cn(
+      'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent bg-transparent transition-[color,background-color,border-color,transform] duration-150 active:scale-95 motion-reduce:active:scale-100 hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+      toneClassName(tone)
+    );
 
-  if (href) {
+    if (href) {
+      return (
+        <Link
+          href={href}
+          className={classes}
+          aria-label={label}
+          title={title}
+          ref={ref as Ref<HTMLAnchorElement>}
+        >
+          {icon}
+        </Link>
+      );
+    }
+
     return (
-      <Link href={href} className={classes} aria-label={label} title={title}>
+      <button
+        type="button"
+        className={classes}
+        aria-label={label}
+        title={title}
+        onClick={onClick}
+        ref={ref as Ref<HTMLButtonElement>}
+      >
         {icon}
-      </Link>
+      </button>
     );
   }
-
-  return (
-    <button type="button" className={classes} aria-label={label} title={title} onClick={onClick}>
-      {icon}
-    </button>
-  );
-}
+);
