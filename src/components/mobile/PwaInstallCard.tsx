@@ -16,34 +16,31 @@ function isIosSafari(userAgent: string) {
   return isIos && isSafari;
 }
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export default function PwaInstallCard() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isIos, setIsIos] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-
-    // Check if iOS Safari
-    const ua = window.navigator.userAgent.toLowerCase();
-    const ios =
-      /iphone|ipad|ipod/.test(ua) &&
-      ua.includes('safari') &&
-      !ua.includes('crios') &&
-      !ua.includes('fxios');
-    setIsIos(ios);
+    setIsIos(isIosSafari(window.navigator.userAgent));
 
     // Check if already standalone
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true;
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
     setIsStandalone(standalone);
 
     // Listen for install prompt on Android/Desktop
-    const handleBeforeInstallPrompt = (e: any) => {
+    const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -56,7 +53,7 @@ export default function PwaInstallCard() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
 
-    deferredPrompt.prompt();
+    await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
 
     if (outcome === 'accepted') {

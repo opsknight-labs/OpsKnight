@@ -191,13 +191,13 @@ export async function checkResponsiveIntegrity(
 
           if ((isButton || isInput) && !isExcluded) {
             // Check computed or bounding dimensions
-            if (rect.height < 44 - opts.tolerance) {
+            if (rect.height < 44 - opts.tolerance || rect.width < 44 - opts.tolerance) {
               // Only report if it's within viewport bounds
               if (rect.top >= 0 && rect.bottom <= viewportHeight + 100) {
                 violations.push({
                   type: 'TOUCH_TARGET_BELOW_44PX',
                   selector: getPath(el),
-                  details: `Interactive element height (${Math.round(rect.height)}px) is below 44px touch target guideline`,
+                  details: `Interactive element size (${Math.round(rect.width)}x${Math.round(rect.height)}px) is below the 44x44px touch target guideline`,
                   rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
                 });
               }

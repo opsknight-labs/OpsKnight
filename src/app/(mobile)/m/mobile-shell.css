@@ -110,6 +110,7 @@
 }
 
 .responsive-page {
+  container-name: mobile-page;
   container-type: inline-size;
   width: 100%;
   min-width: 0;
@@ -125,7 +126,18 @@
   overflow-wrap: break-word;
 }
 
-/* Opt-in for genuinely unbreakable long tokens: URLs, IDs, hashes, emails. */
+/*
+ * Long-content wrapping strategy, pick the narrowest one that applies:
+ * - `truncate` (Tailwind, single line + ellipsis): names, emails, titles.
+ * - `break-words`/default `break-word` above: normal prose that may rarely
+ *   contain one long token (descriptions, comments).
+ * - `.mobile-break-anywhere`: ONLY for fields that are routinely a single
+ *   unbroken long token with no ellipsis affordance (webhook URLs, API
+ *   keys, hashes, raw IDs). Prefer this over reintroducing a page-wide
+ *   `overflow-wrap: anywhere`, which is what caused the original bug.
+ * - Horizontal scroll container: tabular/code content where wrapping at
+ *   all would be more confusing than scrolling.
+ */
 .mobile-break-anywhere {
   overflow-wrap: anywhere;
 }
@@ -134,6 +146,7 @@
    default; stacks icon-over-label only once the control itself is narrow
    enough that a row layout could no longer fit a full label. */
 .mobile-segmented-control {
+  container-name: mobile-segmented;
   container-type: inline-size;
 }
 
@@ -141,7 +154,7 @@
   flex-direction: row;
 }
 
-@container (max-width: 300px) {
+@container mobile-segmented (max-width: 300px) {
   .mobile-segmented-option {
     flex-direction: column;
     gap: 2px;
@@ -149,7 +162,7 @@
 }
 
 /* Container query utilities for inline-size responsiveness */
-@container (max-width: 359px) {
+@container mobile-page (max-width: 359px) {
   .cq-stack-compact {
     flex-direction: column !important;
     align-items: stretch !important;

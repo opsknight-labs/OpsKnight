@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Fingerprint } from 'lucide-react';
 import MobileSettingCard from '@/components/mobile/MobileSettingCard';
-import { Switch } from '@/components/ui/shadcn/switch';
+import { MobileSwitch } from '@/components/mobile/MobileSwitch';
 import { logger } from '@/lib/logger';
 import {
   getOrCreateAppLockUserHandle,
@@ -97,7 +97,7 @@ export default function MobileBiometricToggle() {
       title="App Lock"
       status={isEnabled ? 'On' : 'Off'}
       action={
-        <Switch
+        <MobileSwitch
           checked={isEnabled}
           disabled={busy}
           onCheckedChange={checked => {

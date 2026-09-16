@@ -451,6 +451,29 @@ export default function PushNotificationToggle() {
 
   if (pushState === 'UNSUPPORTED') return null;
 
+  // Precise per-state label so distinct conditions (blocked, needs sign-in,
+  // needs repair, in progress) never all collapse into a generic "Disabled".
+  function pushStatusLabel(state: Exclude<PushState, 'UNSUPPORTED'>): string {
+    switch (state) {
+      case 'PERMISSION_REQUIRED':
+        return 'Off';
+      case 'INSTALL_REQUIRED':
+        return 'Install required';
+      case 'PERMISSION_DENIED':
+        return 'Blocked';
+      case 'AUTH_REQUIRED':
+        return 'Sign-in required';
+      case 'REGISTERING':
+        return 'Enabling…';
+      case 'REGISTERED':
+        return 'On';
+      case 'REPAIR_REQUIRED':
+        return 'Needs repair';
+      case 'ERROR':
+        return 'Needs attention';
+    }
+  }
+
   const hint =
     platform === 'ios'
       ? isStandalone
@@ -472,17 +495,13 @@ export default function PushNotificationToggle() {
         )
       }
       title="Push notifications"
-      status={pushState === 'REGISTERED' ? 'Enabled' : 'Disabled'}
+      status={pushStatusLabel(pushState)}
       action={
-        pushState === 'INSTALL_REQUIRED' ? (
-          <span className="inline-flex min-h-9 items-center rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-            Install first
-          </span>
-        ) : pushState === 'PERMISSION_DENIED' ? (
-          <span className="inline-flex min-h-9 items-center rounded-lg border border-rose-300 bg-rose-50 px-2.5 text-xs font-semibold text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
-            Blocked
-          </span>
-        ) : pushState === 'AUTH_REQUIRED' ? (
+        // Install-required/blocked are already communicated by the status
+        // line above; the action slot only needs a control when there is
+        // one to take.
+        pushState === 'INSTALL_REQUIRED' || pushState === 'PERMISSION_DENIED' ? null : pushState ===
+            'AUTH_REQUIRED' ? (
           <Button
             type="button"
             size="sm"
