@@ -85,18 +85,22 @@ export function resolveEffectiveWarRoomProviders(params: {
  */
 export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
   const [chatOpsConfig, defaultProvidersRow] = await Promise.all([
-    prisma.chatOpsConfig
-      .findUnique({
-        where: { id: 'default' },
-        select: { enabled: true },
-      })
-      .catch(() => null),
-    prisma.systemConfig
-      .findUnique({
-        where: { key: GLOBAL_WAR_ROOM_POLICY_KEY },
-        select: { value: true },
-      })
-      .catch(() => null),
+    prisma?.chatOpsConfig?.findUnique
+      ? prisma.chatOpsConfig
+          .findUnique({
+            where: { id: 'default' },
+            select: { enabled: true },
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
+    prisma?.systemConfig?.findUnique
+      ? prisma.systemConfig
+          .findUnique({
+            where: { key: GLOBAL_WAR_ROOM_POLICY_KEY },
+            select: { value: true },
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   let defaultProviders: WarRoomProviderSet = ['SLACK', 'MICROSOFT_TEAMS'];
@@ -125,6 +129,7 @@ export async function setGlobalDefaultWarRoomProviders(
   tx?: Prisma.TransactionClient
 ): Promise<void> {
   const client = tx || prisma;
+  if (!client?.systemConfig?.upsert) return;
   await client.systemConfig.upsert({
     where: { key: GLOBAL_WAR_ROOM_POLICY_KEY },
     create: {
@@ -144,19 +149,25 @@ export async function setGlobalDefaultWarRoomProviders(
  */
 export async function getServiceWarRoomPolicy(serviceId: string): Promise<ServiceWarRoomPolicy> {
   const [service, configRow] = await Promise.all([
-    prisma.service.findUnique({
-      where: { id: serviceId },
-      select: {
-        autoCreateWarRoom: true,
-        microsoftTeamsWarRoomAutoCreate: true,
-      },
-    }),
-    prisma.systemConfig
-      .findUnique({
-        where: { key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}` },
-        select: { value: true },
-      })
-      .catch(() => null),
+    prisma?.service?.findUnique
+      ? prisma.service
+          .findUnique({
+            where: { id: serviceId },
+            select: {
+              autoCreateWarRoom: true,
+              microsoftTeamsWarRoomAutoCreate: true,
+            },
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
+    prisma?.systemConfig?.findUnique
+      ? prisma.systemConfig
+          .findUnique({
+            where: { key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}` },
+            select: { value: true },
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   let serviceProviders: WarRoomProviderSet | null = null;
@@ -208,18 +219,20 @@ export async function setServiceWarRoomPolicy(
     autoCreate: policy.autoCreate ?? current.autoCreate,
   };
 
-  await client.systemConfig.upsert({
-    where: { key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}` },
-    create: {
-      key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}`,
-      value: updated as unknown as object,
-      updatedBy: userId || null,
-    },
-    update: {
-      value: updated as unknown as object,
-      updatedBy: userId || null,
-    },
-  });
+  if (client?.systemConfig?.upsert) {
+    await client.systemConfig.upsert({
+      where: { key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}` },
+      create: {
+        key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}`,
+        value: updated as unknown as object,
+        updatedBy: userId || null,
+      },
+      update: {
+        value: updated as unknown as object,
+        updatedBy: userId || null,
+      },
+    });
+  }
 
   // Keep Prisma Service boolean fields synchronized for backward-compatibility
   const isSlackEnabled =
@@ -229,13 +242,15 @@ export async function setServiceWarRoomPolicy(
     updated.warRoomsEnabled &&
     (updated.serviceProviders === null || updated.serviceProviders.includes('MICROSOFT_TEAMS'));
 
-  await client.service
-    .update({
-      where: { id: serviceId },
-      data: {
-        autoCreateWarRoom: updated.autoCreate && isSlackEnabled,
-        microsoftTeamsWarRoomAutoCreate: updated.autoCreate && isTeamsEnabled,
-      },
-    })
-    .catch(() => null);
+  if (client?.service?.update) {
+    await client.service
+      .update({
+        where: { id: serviceId },
+        data: {
+          autoCreateWarRoom: updated.autoCreate && isSlackEnabled,
+          microsoftTeamsWarRoomAutoCreate: updated.autoCreate && isTeamsEnabled,
+        },
+      })
+      .catch(() => null);
+  }
 }
