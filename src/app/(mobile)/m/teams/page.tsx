@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { redirect } from 'next/navigation';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import MobileTeamsClient from '@/components/mobile/MobileTeamsClient';
+import { appRoutes } from '@/lib/app-routes';
 import { incidentReadWhere, teamReadWhere } from '@/lib/authorization-filters';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 
@@ -13,7 +14,7 @@ export default async function MobileTeamsPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const context = await getRequestActorContext();
-  if (!context) redirect('/login?callbackUrl=/m/teams');
+  if (!context) redirect(appRoutes.login('mobile', '/m/teams'));
 
   const params = await searchParams;
   const query = params.q?.trim() || '';

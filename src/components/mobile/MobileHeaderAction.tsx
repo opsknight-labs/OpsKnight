@@ -13,7 +13,6 @@ type MobileHeaderActionProps = {
   onClick?: () => void;
   tone?: MobileHeaderActionTone;
   title?: string;
-  className?: string;
 };
 
 function toneClassName(tone: MobileHeaderActionTone): string {
@@ -34,6 +33,8 @@ function toneClassName(tone: MobileHeaderActionTone): string {
  * geometry: 44x44 touch target, radius, focus ring and pressed feedback. No
  * individual action may opt into its own card-like border/shadow/background,
  * which is what previously made search look like a separate larger control.
+ * There is deliberately no `className` escape hatch: use `tone` for color
+ * variation, otherwise every consumer must look identical.
  */
 export default function MobileHeaderAction({
   icon,
@@ -42,12 +43,10 @@ export default function MobileHeaderAction({
   onClick,
   tone = 'default',
   title,
-  className,
 }: MobileHeaderActionProps) {
   const classes = cn(
-    'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent bg-transparent transition-colors active:scale-95 hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-    toneClassName(tone),
-    className
+    'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-transparent bg-transparent transition-[color,background-color,border-color,transform] duration-150 active:scale-95 motion-reduce:active:scale-100 hover:border-border hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    toneClassName(tone)
   );
 
   if (href) {

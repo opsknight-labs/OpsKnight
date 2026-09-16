@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ChevronRight, Users } from 'lucide-react';
+import { appRoutes } from '@/lib/app-routes';
 import { MobileAvatar } from '@/components/mobile/MobileUtils';
 import { MobileSearchWithParams } from '@/components/mobile/MobileSearchParams';
 import EmptyState from '@/components/ui/EmptyState';
@@ -17,7 +18,7 @@ export default async function MobileUsersPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   const context = await getRequestActorContext();
-  if (!context) redirect('/login?callbackUrl=/m/users');
+  if (!context) redirect(appRoutes.login('mobile', '/m/users'));
 
   const params = await searchParams;
   const query = params.q?.trim() || '';

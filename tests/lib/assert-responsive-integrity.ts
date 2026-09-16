@@ -187,9 +187,14 @@ export async function checkResponsiveIntegrity(
           const isButton = el.tagName === 'BUTTON' || el.getAttribute('role') === 'button';
           const isInput =
             el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA';
+          // Anchors aren't covered by isButton/isInput, which previously made the
+          // app-chrome nav/header links invisible to this check entirely. Scope
+          // the anchor check to those two chrome regions rather than every link
+          // on the page, since ordinary inline text links are not touch targets.
+          const isChromeNavLink = el.tagName === 'A' && Boolean(el.closest('.mobile-header, .mobile-nav'));
           const isExcluded = opts.exclusions.some(sel => el.matches(sel));
 
-          if ((isButton || isInput) && !isExcluded) {
+          if ((isButton || isInput || isChromeNavLink) && !isExcluded) {
             // Check computed or bounding dimensions
             if (rect.height < 44 - opts.tolerance || rect.width < 44 - opts.tolerance) {
               // Only report if it's within viewport bounds
@@ -260,7 +265,6 @@ export async function checkResponsiveIntegrity(
       exclusions: options.touchTargetExclusions ?? [
         'input[type="checkbox"]',
         'input[type="radio"]',
-        '.mobile-nav-item',
         '[data-touch-exempt]',
         'button.absolute',
       ],
