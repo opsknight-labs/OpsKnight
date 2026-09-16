@@ -487,6 +487,60 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  PRIVACY_REQUEST_NOT_FOUND: {
+    status: 404,
+    category: 'not_found',
+    userMessage: 'The requested privacy request could not be found.',
+    retryable: false,
+    exposure: 'public',
+  },
+  PRIVACY_REQUEST_INVALID_TRANSITION: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'This privacy request status change is not allowed from the current state.',
+    action: 'Refresh the request and choose a valid action.',
+    retryable: false,
+    exposure: 'public',
+  },
+  PRIVACY_REQUEST_STATE_CONFLICT: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'The privacy request changed before this action completed.',
+    action: 'Refresh the request and try again.',
+    retryable: true,
+    exposure: 'public',
+  },
+  PRIVACY_EXPORT_NOT_READY: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'This export is not ready to download yet.',
+    retryable: true,
+    exposure: 'public',
+  },
+  PRIVACY_EXPORT_EXPIRED: {
+    status: 410,
+    category: 'not_found',
+    userMessage: 'This export has expired and is no longer available.',
+    action: 'Generate a new export.',
+    retryable: false,
+    exposure: 'public',
+  },
+  PRIVACY_EXPORT_NOT_FOUND: {
+    status: 404,
+    category: 'not_found',
+    userMessage: 'The requested export could not be found.',
+    retryable: false,
+    exposure: 'public',
+  },
+  PRIVACY_EXPORT_PREREQUISITES_NOT_MET: {
+    status: 409,
+    category: 'conflict',
+    userMessage:
+      'This request must complete identity verification and be in Processing status before an export can be generated.',
+    action: 'Verify identity and move the request to Processing, then try again.',
+    retryable: false,
+    exposure: 'public',
+  },
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type AppErrorCode = keyof typeof ERROR_REGISTRY;

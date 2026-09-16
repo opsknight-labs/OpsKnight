@@ -35,6 +35,8 @@ export const USER_REFERENCE_POLICY = {
   dashboards: { deactivate: 'REPORT', delete: 'BLOCK' },
   assignedActionItems: { deactivate: 'REPORT', delete: 'BLOCK' },
   tokens: { deactivate: 'REVOKE', delete: 'SET_NULL' },
+  privacyRequestsAssigned: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  privacyRequestsRequested: { deactivate: 'KEEP', delete: 'SET_NULL' },
 } as const;
 
 export type UserReferenceName = keyof typeof USER_REFERENCE_POLICY;

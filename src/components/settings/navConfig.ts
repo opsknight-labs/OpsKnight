@@ -141,6 +141,16 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         badge: 'Admin',
         keywords: ['compliance', 'privacy', 'cra', 'gdpr', 'soc 2', 'iso', 'evidence', 'sbom'],
       },
+      {
+        id: 'privacy-requests',
+        label: 'Privacy Requests',
+        description: 'Track and fulfil data subject access, portability, and other DSAR requests',
+        href: '/settings/privacy-requests',
+        icon: 'shield',
+        requiresAdminOrAuditor: true,
+        badge: 'Admin',
+        keywords: ['privacy', 'dsar', 'gdpr', 'access request', 'export', 'erasure', 'subject'],
+      },
     ],
   },
   {
@@ -161,8 +171,7 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
       {
         id: 'microsoft-teams',
         label: 'Microsoft Teams',
-        description:
-          'Connect Azure AD app to broadcast incident Adaptive Cards to Teams channels',
+        description: 'Connect Azure AD app to broadcast incident Adaptive Cards to Teams channels',
         href: '/settings/integrations/microsoft-teams',
         icon: 'microsoft-teams',
         requiresAdmin: true,

@@ -389,7 +389,9 @@ async function runOnce() {
       const { repairOrphanedClosingWarRooms } = await import('./war-room/engine');
       warRoomClosingRepair = await repairOrphanedClosingWarRooms(20);
     } catch (error) {
-      logger.warn('[Cron] War-room CLOSING orphan repair failed', { error: error instanceof Error ? error.message : String(error) });
+      logger.warn('[Cron] War-room CLOSING orphan repair failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     logger.info('[Cron] Critical tasks processed', {
@@ -452,6 +454,8 @@ async function runOnce() {
     const rateLimitCleanup = await cleanupExpiredRateLimits();
     const { cleanupExpiredNotificationCapacityData } = await import('./notification-fanout');
     const notificationCapacityCleanup = await cleanupExpiredNotificationCapacityData();
+    const { expireDuePrivacyExportArtifacts } = await import('./privacy/export/artifact');
+    const privacyExportArtifactsExpired = await expireDuePrivacyExportArtifacts();
     let jobsCleaned = false;
     if (Date.now() - lastJobCleanup > 24 * 60 * 60 * 1000) {
       await cleanupOldJobs(7);
@@ -462,6 +466,7 @@ async function runOnce() {
       tokenCleanup,
       rateLimitCleanup,
       notificationCapacityCleanup,
+      privacyExportArtifactsExpired,
       jobsCleaned,
     });
 
