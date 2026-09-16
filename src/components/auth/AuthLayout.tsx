@@ -23,7 +23,18 @@ export function AuthLayout({ children, showAnimation = true, isSuccess = false }
         )}
 
         {showAnimation && (
-          <div className="relative h-[clamp(92px,18dvh,150px)] w-full shrink-0 overflow-hidden border-b border-[#1a202c] max-h-[500px]:hidden lg:hidden">
+          <div
+            className={cn(
+              // Phone widths (<sm): no decorative banner at all — authentication
+              // controls own the viewport. Tablet (sm-lg): a smaller banner.
+              // Desktop (lg+): the full side animation above renders instead.
+              'relative hidden w-full shrink-0 overflow-hidden border-b border-[#1a202c] sm:block lg:hidden',
+              'sm:h-[clamp(72px,12dvh,120px)]',
+              // Short viewports (phones in landscape, small tablets): drop the
+              // banner before compressing the actual auth controls below it.
+              '[@media(max-height:640px)]:hidden'
+            )}
+          >
             <LoginAnimation variant="banner" resolved={isSuccess} />
           </div>
         )}
