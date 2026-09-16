@@ -14,6 +14,15 @@ import {
   settingsChangedState,
   type SettingsActionState,
 } from '@/lib/settings-result';
+import {
+  getGlobalWarRoomPolicy,
+  setGlobalDefaultWarRoomProviders,
+  setGlobalMeetingProvider,
+} from '@/lib/incident-collaboration/policy';
+import type {
+  WarRoomProviderSet,
+  IncidentMeetingProvider,
+} from '@/lib/incident-collaboration/types';
 
 const ALLOWED_BRIDGE_TEMPLATE_VARIABLES = new Set(['incidentId']);
 
@@ -24,7 +33,7 @@ const ChatOpsConfigSchema = z
     autoCreateOnUrgency: z.array(z.enum(['HIGH', 'MEDIUM', 'LOW'])).max(3),
     autoCreateOnPriority: z.array(z.enum(['P1', 'P2', 'P3', 'P4', 'P5'])).max(5),
     archiveOnResolve: z.boolean(),
-    defaultVideoBridge: z.enum(['JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']),
+    defaultVideoBridge: z.enum(['MICROSOFT_TEAMS', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']),
     customBridgeUrlTemplate: z.string().trim().max(2048),
   })
   .superRefine((value, ctx) => {
@@ -104,8 +113,21 @@ export async function saveChatOpsConfig(
       };
     }
 
+    const defaultProvidersOption = (formData.get('defaultProviders') as string | null) ?? 'BOTH';
+    let defaultProviders: WarRoomProviderSet = ['SLACK', 'MICROSOFT_TEAMS'];
+    if (defaultProvidersOption === 'SLACK') {
+      defaultProviders = ['SLACK'];
+    } else if (defaultProvidersOption === 'MICROSOFT_TEAMS') {
+      defaultProviders = ['MICROSOFT_TEAMS'];
+    } else {
+      defaultProviders = ['SLACK', 'MICROSOFT_TEAMS'];
+    }
+
     const next = parsed.data;
-    const existing = await prisma.chatOpsConfig.findUnique({ where: { id: 'default' } });
+    const [existing, existingGlobalPolicy] = await Promise.all([
+      prisma.chatOpsConfig.findUnique({ where: { id: 'default' } }),
+      getGlobalWarRoomPolicy(),
+    ]);
     const expectedRevision = parseSettingsRevision(expectedUpdatedAt);
     if (existing && !expectedRevision) return settingsChangedState(expectedUpdatedAt);
     if (!existing && expectedRevision) return settingsChangedState(expectedUpdatedAt);
@@ -130,6 +152,13 @@ export async function saveChatOpsConfig(
         });
       }
 
+      await setGlobalDefaultWarRoomProviders(defaultProviders, actor.id, tx);
+      await setGlobalMeetingProvider(
+        next.defaultVideoBridge as IncidentMeetingProvider,
+        actor.id,
+        tx
+      );
+
       await logAudit(
         {
           action: 'chatops.config.updated',
@@ -145,6 +174,7 @@ export async function saveChatOpsConfig(
                 archiveOnResolve: existing.archiveOnResolve,
                 defaultVideoBridge: existing.defaultVideoBridge,
                 customBridgeUrlTemplate: existing.customBridgeUrlTemplate,
+                defaultProviders: existingGlobalPolicy.defaultProviders,
               }
             : null,
           newValue: {
@@ -155,6 +185,7 @@ export async function saveChatOpsConfig(
             archiveOnResolve: next.archiveOnResolve,
             defaultVideoBridge: next.defaultVideoBridge,
             customBridgeUrlTemplate: next.customBridgeUrlTemplate || null,
+            defaultProviders,
           },
         },
         tx

@@ -10,6 +10,11 @@ import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
 import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
+import { setServiceWarRoomPolicy } from '@/lib/incident-collaboration/policy';
+import type {
+  WarRoomProviderSet,
+  IncidentMeetingProvider,
+} from '@/lib/incident-collaboration/types';
 
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
 function serviceSettingsRedirect(serviceId: string) {
@@ -208,7 +213,14 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
   redirect(serviceSettingsRedirect(serviceId));
 }
 
-const ALLOWED_VIDEO_BRIDGES = new Set(['INHERIT', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']);
+const ALLOWED_VIDEO_BRIDGES = new Set([
+  'INHERIT',
+  'MICROSOFT_TEAMS',
+  'JITSI',
+  'ZOOM',
+  'GOOGLE_MEET',
+  'NONE',
+]);
 
 export async function updateServiceChatOpsSettings(
   prevStateOrServiceId: { success?: boolean; error?: string | null } | string | undefined,
@@ -260,6 +272,29 @@ export async function updateServiceChatOpsSettings(
 
     const autoCreateWarRoom = formData.get('autoCreateWarRoom') === 'on';
 
+    const rawProviderMode = String(formData.get('providerMode') ?? 'INHERIT').trim();
+    let serviceProviders: WarRoomProviderSet | null = null;
+    let warRoomsEnabled = true;
+
+    if (rawProviderMode === 'SLACK') {
+      serviceProviders = ['SLACK'];
+    } else if (rawProviderMode === 'MICROSOFT_TEAMS') {
+      serviceProviders = ['MICROSOFT_TEAMS'];
+    } else if (rawProviderMode === 'BOTH') {
+      serviceProviders = ['SLACK', 'MICROSOFT_TEAMS'];
+    } else if (rawProviderMode === 'DISABLED') {
+      serviceProviders = [];
+      warRoomsEnabled = false;
+    } else {
+      // 'INHERIT'
+      serviceProviders = null;
+      warRoomsEnabled = true;
+    }
+
+    if (formData.has('warRoomsEnabled')) {
+      warRoomsEnabled = ['on', 'true'].includes(String(formData.get('warRoomsEnabled')));
+    }
+
     await prisma.service.update({
       where: { id: serviceId },
       data: {
@@ -268,6 +303,17 @@ export async function updateServiceChatOpsSettings(
         warRoomCustomBridgeUrl,
       },
     });
+
+    await setServiceWarRoomPolicy(
+      serviceId,
+      {
+        serviceProviders,
+        meetingProvider: (warRoomVideoBridge as IncidentMeetingProvider) ?? null,
+        warRoomsEnabled,
+        autoCreate: autoCreateWarRoom,
+      },
+      currentUser.id
+    );
 
     await logAudit({
       action: 'service.chatops.updated',
@@ -278,6 +324,8 @@ export async function updateServiceChatOpsSettings(
         autoCreateWarRoom,
         warRoomVideoBridge,
         hasCustomBridgeUrl: Boolean(warRoomCustomBridgeUrl),
+        serviceProviders,
+        warRoomsEnabled,
       },
     });
 

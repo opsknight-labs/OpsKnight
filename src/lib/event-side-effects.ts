@@ -330,7 +330,11 @@ async function ensureLifecycleWarRoom(payload: EventSideEffectPayload): Promise<
   });
   if (!incident || incident.status !== 'OPEN') return;
   const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-  await handleIncidentWarRoomEvent({ kind: 'ENSURE', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
+  await handleIncidentWarRoomEvent({
+    kind: 'ENSURE',
+    incidentId: payload.incidentId,
+    incidentEventId: payload.sourceEventId,
+  });
   await syncLifecycleWarRoom(payload);
 }
 async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): Promise<void> {
@@ -345,11 +349,19 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
     incident.resolvedAt?.toISOString() !== lifecycle.transitionAt
   )
     return;
+  // Close active incident meeting bridge on resolution
+  const { closeIncidentMeeting } = await import('./incident-collaboration/meeting-store');
+  await closeIncidentMeeting(payload.incidentId).catch(() => null);
+
   // Provider-neutral archive: route through the war-room outbox so
   // TRIGGER/ENSURE/ARCHIVE share the same durable delivery semantics
   // (idempotency + fencing). Adapters then call closeIncidentWarRoomsNeutral.
   const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-  await handleIncidentWarRoomEvent({ kind: 'ARCHIVE', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
+  await handleIncidentWarRoomEvent({
+    kind: 'ARCHIVE',
+    incidentId: payload.incidentId,
+    incidentEventId: payload.sourceEventId,
+  });
 }
 
 export async function processEventSideEffect(payload: EventSideEffectPayload): Promise<void> {
@@ -375,7 +387,24 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
       return;
     case 'TRIGGER_WAR_ROOM': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-      await handleIncidentWarRoomEvent({ kind: 'TRIGGER', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
+      await handleIncidentWarRoomEvent({
+        kind: 'TRIGGER',
+        incidentId: payload.incidentId,
+        incidentEventId: payload.sourceEventId,
+      });
+      try {
+        const { maybeAutoProvisionIncidentMeeting } =
+          await import('./incident-collaboration/meeting-store');
+        await maybeAutoProvisionIncidentMeeting(payload.incidentId);
+      } catch (err) {
+        logger.warn(
+          '[IncidentCollaboration] Failed to auto-provision meeting on incident trigger',
+          {
+            incidentId: payload.incidentId,
+            error: err instanceof Error ? err.message : String(err),
+          }
+        );
+      }
       return;
     }
     case 'TRIGGER_STATUS_PAGE':
@@ -538,7 +567,11 @@ export async function processEventSideEffect(payload: EventSideEffectPayload): P
     }
     case 'WAR_ROOM_TOPIC': {
       const { handleIncidentWarRoomEvent } = await import('./war-room/engine');
-      await handleIncidentWarRoomEvent({ kind: 'TOPIC', incidentId: payload.incidentId, incidentEventId: payload.sourceEventId });
+      await handleIncidentWarRoomEvent({
+        kind: 'TOPIC',
+        incidentId: payload.incidentId,
+        incidentEventId: payload.sourceEventId,
+      });
       return;
     }
     case 'WAR_ROOM_INVITE_USER': {

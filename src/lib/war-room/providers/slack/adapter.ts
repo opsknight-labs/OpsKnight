@@ -25,9 +25,13 @@ const expectedSlackRequestSkips = new Set([
   'AUTO_CREATE_DISABLED',
   'THRESHOLD_NOT_MET',
   'PRIVATE_DOWNGRADE_DENIED',
+  'PROVIDER_POLICY_EXCLUDED',
 ]);
 
-async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deliveryId?: string; deliveryLeaseToken?: string; idempotencyKey?: string }) {
+async function handleIncidentEvent(
+  event: WarRoomIncidentEvent,
+  context?: { deliveryId?: string; deliveryLeaseToken?: string; idempotencyKey?: string }
+) {
   if (event.kind === 'TRIGGER' || event.kind === 'ENSURE') {
     const { requestSlackWarRoom } = await import('./provision');
     const result = await requestSlackWarRoom(event.incidentId, {
@@ -44,76 +48,142 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
   const deliveryLeaseToken = context?.deliveryLeaseToken ?? null;
   let stageApi: typeof import('../../delivery') | null = null;
   if (deliveryId) {
-    try { stageApi = await import('../../delivery'); } catch {}
+    try {
+      stageApi = await import('../../delivery');
+    } catch {}
   }
   const stageCompleted = async (stage: string) => {
     if (!deliveryId || !stageApi) return false;
-    try { return await stageApi.stageAlreadyCompleted(deliveryId, stage); } catch { return false; }
+    try {
+      return await stageApi.stageAlreadyCompleted(deliveryId, stage);
+    } catch {
+      return false;
+    }
   };
   const stageIsAmbiguous = async (stage: string) => {
     if (!deliveryId || !stageApi) return false;
     try {
       const s = await stageApi.getWarRoomStage(deliveryId, stage);
       return s?.status === 'AMBIGUOUS';
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   };
   // Fenced execution: begin stage atomically → call provider → COMPLETED | AMBIGUOUS | FAILED.
   // If fencing DB is down we fail-closed (do not call provider). Stale ATTEMPTING that never
   // completed is treated as AMBIGUOUS — never re-posted blindly.
   const runFencedStage = async (
     stage: string,
-    providerCall: () => Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean; transportFailure?: boolean; httpStatus?: number }>
-  ): Promise<{ success: boolean; error?: string; sideEffectAmbiguous?: boolean } | { __fenced: true } | { __ambiguous: true; error: string }> => {
+    providerCall: () => Promise<{
+      success: boolean;
+      error?: string;
+      sideEffectAmbiguous?: boolean;
+      transportFailure?: boolean;
+      httpStatus?: number;
+    }>
+  ): Promise<
+    | { success: boolean; error?: string; sideEffectAmbiguous?: boolean }
+    | { __fenced: true }
+    | { __ambiguous: true; error: string }
+  > => {
     if (!deliveryId || !stageApi) {
       return providerCall();
     }
     if (await stageCompleted(stage)) return { success: true };
-    if (await stageIsAmbiguous(stage)) return { __ambiguous: true, error: 'Stage is ambiguous; reconciling before retry.' } as const;
+    if (await stageIsAmbiguous(stage))
+      return { __ambiguous: true, error: 'Stage is ambiguous; reconciling before retry.' } as const;
     // Pre-flight lease check — fail-closed if DB unavailable (throw retryable)
     if (deliveryLeaseToken) {
       const { validateDeliveryLease } = await import('../../delivery');
       let ok: boolean;
-      try { ok = await validateDeliveryLease(deliveryId, deliveryLeaseToken); } catch (e) { throw e; }
+      try {
+        ok = await validateDeliveryLease(deliveryId, deliveryLeaseToken);
+      } catch (e) {
+        throw e;
+      }
       if (!ok) return { __fenced: true } as const;
     }
     // Atomically claim stage — fail-closed on DB error (do not fall through to providerCall)
     let claimed: { claimed: boolean; operationId: string; stageLeaseToken: string };
     try {
-      claimed = await stageApi.claimWarRoomStageAttempt(deliveryId, stage, deliveryLeaseToken ?? undefined);
+      claimed = await stageApi.claimWarRoomStageAttempt(
+        deliveryId,
+        stage,
+        deliveryLeaseToken ?? undefined
+      );
     } catch (e) {
       throw e;
     }
     if (!claimed.claimed) {
       const isCompleted = await stageApi.stageAlreadyCompleted(deliveryId, stage);
       if (isCompleted) return { success: true };
-      if (await stageIsAmbiguous(stage)) return { __ambiguous: true, error: 'Stage is ambiguous; reconciling before retry.' } as const;
+      if (await stageIsAmbiguous(stage))
+        return {
+          __ambiguous: true,
+          error: 'Stage is ambiguous; reconciling before retry.',
+        } as const;
       return { __fenced: true } as const;
     }
     const { operationId, stageLeaseToken } = claimed;
     // Perform provider operation once
     const res = await providerCall();
     // Ambiguous transport (timeout/network) — settlement must be considered successful side-effect, never retried blindly
-    const ambiguousTransport = res.sideEffectAmbiguous || res.transportFailure || (res.httpStatus != null && res.httpStatus >= 500 && !res.success);
+    const ambiguousTransport =
+      res.sideEffectAmbiguous ||
+      res.transportFailure ||
+      (res.httpStatus != null && res.httpStatus >= 500 && !res.success);
     // Validate lease freshness before committing outcome — stale worker must not settle
     if (deliveryLeaseToken) {
       try {
         const { validateDeliveryLease } = await import('../../delivery');
         const stillValid = await validateDeliveryLease(deliveryId, deliveryLeaseToken);
         if (!stillValid) {
-          try { await stageApi.markStageAmbiguous(deliveryId, stage, 'Delivery lease lost after provider call; treating stage as ambiguous.', operationId, stageLeaseToken); } catch {}
+          try {
+            await stageApi.markStageAmbiguous(
+              deliveryId,
+              stage,
+              'Delivery lease lost after provider call; treating stage as ambiguous.',
+              operationId,
+              stageLeaseToken
+            );
+          } catch {}
           return { __fenced: true } as const;
         }
       } catch {}
     }
     if (res.success) {
-      try { await stageApi.completeWarRoomStage(deliveryId, stage, deliveryLeaseToken ?? undefined, operationId, stageLeaseToken); } catch {}
+      try {
+        await stageApi.completeWarRoomStage(
+          deliveryId,
+          stage,
+          deliveryLeaseToken ?? undefined,
+          operationId,
+          stageLeaseToken
+        );
+      } catch {}
       return res;
     }
     if (res.sideEffectAmbiguous || ambiguousTransport) {
-      try { await stageApi.markStageAmbiguous(deliveryId, stage, res.error ?? 'ambiguous', operationId, stageLeaseToken); } catch {}
+      try {
+        await stageApi.markStageAmbiguous(
+          deliveryId,
+          stage,
+          res.error ?? 'ambiguous',
+          operationId,
+          stageLeaseToken
+        );
+      } catch {}
       return { __ambiguous: true, error: res.error ?? 'Slack operation ambiguous' } as const;
     }
-    try { await stageApi.failWarRoomStage(deliveryId, stage, res.error ?? 'failed', operationId, stageLeaseToken); } catch {}
+    try {
+      await stageApi.failWarRoomStage(
+        deliveryId,
+        stage,
+        res.error ?? 'failed',
+        operationId,
+        stageLeaseToken
+      );
+    } catch {}
     return res;
   };
 
@@ -133,7 +203,9 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
       const msgStage = 'slack:lifecycle:message';
       const topicStage = 'slack:lifecycle:topic';
       // Message stage — fenced
-      const msgOutcome = await runFencedStage(msgStage, () => lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message));
+      const msgOutcome = await runFencedStage(msgStage, () =>
+        lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message)
+      );
       if ('__fenced' in (msgOutcome as Record<string, unknown>)) {
         result = { success: true };
         break;
@@ -142,18 +214,39 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
         const amb = msgOutcome as unknown as { __ambiguous: true; error: string };
         try {
           const prisma = (await import('@/lib/prisma')).default;
-          const room = await prisma.incidentWarRoom.findFirst({ where: { incidentId: event.incidentId, provider: 'SLACK', state: { in: ['READY', 'CLOSING'] } }, select: { id: true } });
-          if (room) await prisma.incidentWarRoom.updateMany({ where: { id: room.id }, data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT', lastError: 'Slack timeline message outcome is ambiguous; reconciling before retry.' } });
+          const room = await prisma.incidentWarRoom.findFirst({
+            where: {
+              incidentId: event.incidentId,
+              provider: 'SLACK',
+              state: { in: ['READY', 'CLOSING'] },
+            },
+            select: { id: true },
+          });
+          if (room)
+            await prisma.incidentWarRoom.updateMany({
+              where: { id: room.id },
+              data: {
+                health: 'DEGRADED',
+                lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT',
+                lastError: 'Slack timeline message outcome is ambiguous; reconciling before retry.',
+              },
+            });
         } catch {}
         return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: amb.error };
       }
-      const msgRes = msgOutcome as { success: boolean; error?: string; sideEffectAmbiguous?: boolean };
+      const msgRes = msgOutcome as {
+        success: boolean;
+        error?: string;
+        sideEffectAmbiguous?: boolean;
+      };
       if (!msgRes.success) {
         result = msgRes;
         break;
       }
       // Topic stage — fenced
-      const topicOutcome = await runFencedStage(topicStage, () => lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status));
+      const topicOutcome = await runFencedStage(topicStage, () =>
+        lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status)
+      );
       if ('__fenced' in (topicOutcome as Record<string, unknown>)) {
         result = { success: true };
         break;
@@ -162,12 +255,31 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
         const amb = topicOutcome as unknown as { __ambiguous: true; error: string };
         try {
           const prisma = (await import('@/lib/prisma')).default;
-          const room = await prisma.incidentWarRoom.findFirst({ where: { incidentId: event.incidentId, provider: 'SLACK', state: { in: ['READY', 'CLOSING'] } }, select: { id: true } });
-          if (room) await prisma.incidentWarRoom.updateMany({ where: { id: room.id }, data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT', lastError: amb.error } });
+          const room = await prisma.incidentWarRoom.findFirst({
+            where: {
+              incidentId: event.incidentId,
+              provider: 'SLACK',
+              state: { in: ['READY', 'CLOSING'] },
+            },
+            select: { id: true },
+          });
+          if (room)
+            await prisma.incidentWarRoom.updateMany({
+              where: { id: room.id },
+              data: {
+                health: 'DEGRADED',
+                lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT',
+                lastError: amb.error,
+              },
+            });
         } catch {}
         return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: amb.error };
       }
-      const topicRes = topicOutcome as { success: boolean; error?: string; sideEffectAmbiguous?: boolean };
+      const topicRes = topicOutcome as {
+        success: boolean;
+        error?: string;
+        sideEffectAmbiguous?: boolean;
+      };
       if (!topicRes.success) {
         result = topicRes;
         break;
@@ -181,7 +293,9 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
     }
     case 'MESSAGE': {
       const msgStage = 'slack:message';
-      const msgOutcome = await runFencedStage(msgStage, () => lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message));
+      const msgOutcome = await runFencedStage(msgStage, () =>
+        lifecycle.postSlackWarRoomUpdate(event.incidentId, event.message)
+      );
       if ('__fenced' in (msgOutcome as Record<string, unknown>)) {
         result = { success: true };
         break;
@@ -190,12 +304,31 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
         const amb = msgOutcome as unknown as { __ambiguous: true; error: string };
         try {
           const prisma = (await import('@/lib/prisma')).default;
-          const room = await prisma.incidentWarRoom.findFirst({ where: { incidentId: event.incidentId, provider: 'SLACK', state: { in: ['READY', 'CLOSING'] } }, select: { id: true } });
-          if (room) await prisma.incidentWarRoom.updateMany({ where: { id: room.id }, data: { health: 'DEGRADED', lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT', lastError: 'Slack message outcome is ambiguous; reconciling before retry.' } });
+          const room = await prisma.incidentWarRoom.findFirst({
+            where: {
+              incidentId: event.incidentId,
+              provider: 'SLACK',
+              state: { in: ['READY', 'CLOSING'] },
+            },
+            select: { id: true },
+          });
+          if (room)
+            await prisma.incidentWarRoom.updateMany({
+              where: { id: room.id },
+              data: {
+                health: 'DEGRADED',
+                lastErrorCode: 'AMBIGUOUS_SIDE_EFFECT',
+                lastError: 'Slack message outcome is ambiguous; reconciling before retry.',
+              },
+            });
         } catch {}
         return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: amb.error };
       }
-      const msgRes = msgOutcome as { success: boolean; error?: string; sideEffectAmbiguous?: boolean };
+      const msgRes = msgOutcome as {
+        success: boolean;
+        error?: string;
+        sideEffectAmbiguous?: boolean;
+      };
       if (!msgRes.success) {
         result = msgRes;
         break;
@@ -209,7 +342,9 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
     }
     case 'TOPIC': {
       const topicStage = 'slack:topic';
-      const topicOutcome = await runFencedStage(topicStage, () => lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status));
+      const topicOutcome = await runFencedStage(topicStage, () =>
+        lifecycle.updateSlackWarRoomTopic(event.incidentId, event.status)
+      );
       if ('__fenced' in (topicOutcome as Record<string, unknown>)) {
         result = { success: true };
         break;
@@ -218,7 +353,11 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
         const amb = topicOutcome as unknown as { __ambiguous: true; error: string };
         return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: amb.error };
       }
-      const topicRes = topicOutcome as { success: boolean; error?: string; sideEffectAmbiguous?: boolean };
+      const topicRes = topicOutcome as {
+        success: boolean;
+        error?: string;
+        sideEffectAmbiguous?: boolean;
+      };
       if (!topicRes.success) {
         result = topicRes;
         break;
@@ -239,16 +378,20 @@ async function handleIncidentEvent(event: WarRoomIncidentEvent, context?: { deli
     default:
       return { ok: true as const, value: undefined };
   }
-  if ((result!).success || expectedSkips.some(reason => (result!).error?.includes(reason))) {
+  if (result!.success || expectedSkips.some(reason => result!.error?.includes(reason))) {
     return { ok: true as const, value: undefined };
   }
-  if ((result!).sideEffectAmbiguous) {
-    return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: (result!).error ?? 'Slack operation ambiguous' };
+  if (result!.sideEffectAmbiguous) {
+    return {
+      ok: false as const,
+      code: 'AMBIGUOUS_SIDE_EFFECT' as const,
+      message: result!.error ?? 'Slack operation ambiguous',
+    };
   }
   return {
     ok: false as const,
     code: 'TRANSIENT' as const,
-    message: (result!).error ?? 'Slack war-room operation failed.',
+    message: result!.error ?? 'Slack war-room operation failed.',
   };
 }
 
@@ -292,10 +435,29 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
     const { archiveExternalSlackRoom } = await import('./lifecycle');
     const r = await archiveExternalSlackRoom(warRoomId);
     if (r.ok) return { ok: true as const, value: undefined };
-    if (r.code === 'NOT_FOUND') return { ok: false as const, code: 'NOT_FOUND' as const, message: r.message ?? 'Archive failed' };
-    if (r.code === 'AMBIGUOUS_SIDE_EFFECT') return { ok: false as const, code: 'AMBIGUOUS_SIDE_EFFECT' as const, message: r.message ?? 'Archive ambiguous' };
-    if (r.code === 'RATE_LIMITED') return { ok: false as const, code: 'RATE_LIMITED' as const, message: r.message ?? 'Rate limited' };
-    return { ok: false as const, code: 'TRANSIENT' as const, message: r.message ?? 'Archive failed' };
+    if (r.code === 'NOT_FOUND')
+      return {
+        ok: false as const,
+        code: 'NOT_FOUND' as const,
+        message: r.message ?? 'Archive failed',
+      };
+    if (r.code === 'AMBIGUOUS_SIDE_EFFECT')
+      return {
+        ok: false as const,
+        code: 'AMBIGUOUS_SIDE_EFFECT' as const,
+        message: r.message ?? 'Archive ambiguous',
+      };
+    if (r.code === 'RATE_LIMITED')
+      return {
+        ok: false as const,
+        code: 'RATE_LIMITED' as const,
+        message: r.message ?? 'Rate limited',
+      };
+    return {
+      ok: false as const,
+      code: 'TRANSIENT' as const,
+      message: r.message ?? 'Archive failed',
+    };
   },
   handleIncidentEvent,
 };

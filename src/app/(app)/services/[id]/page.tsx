@@ -61,6 +61,10 @@ import DeleteIntegrationButton from '@/components/service/DeleteIntegrationButto
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
 import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
+import {
+  getGlobalWarRoomPolicy,
+  getServiceWarRoomPolicy,
+} from '@/lib/incident-collaboration/policy';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
 import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
@@ -197,6 +201,9 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     globalSlackIntegration,
     jiraConfig,
     chatOpsConfig,
+    globalWarRoomPolicy,
+    serviceWarRoomPolicy,
+    teamsDestination,
     incidentSlaPolicy,
     workspaceIncidentSlaPolicy,
     incidentClassificationPolicy,
@@ -278,6 +285,14 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       ? prisma.chatOpsConfig.findUnique({
           where: { id: 'default' },
           select: { enabled: true },
+        })
+      : Promise.resolve(null),
+    canManageService ? getGlobalWarRoomPolicy() : Promise.resolve(null),
+    canManageService ? getServiceWarRoomPolicy(id) : Promise.resolve(null),
+    canManageService
+      ? prisma.microsoftTeamsDestination.findFirst({
+          where: { serviceId: id, enabled: true, warRoomEnabled: true },
+          select: { id: true, teamName: true, channelName: true },
         })
       : Promise.resolve(null),
     prisma.incidentSlaPolicy.findFirst({
@@ -1013,6 +1028,18 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
             chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}
             canManage={canManageService}
+            globalDefaultProviders={globalWarRoomPolicy?.defaultProviders}
+            servicePolicy={serviceWarRoomPolicy || undefined}
+            slackDestination={{
+              configured: Boolean(service.slackChannel || globalSlackIntegration?.enabled),
+              channelOrWorkspace:
+                service.slackChannel || globalSlackIntegration?.workspaceName || null,
+            }}
+            teamsDestination={{
+              configured: Boolean(teamsDestination),
+              teamOrChannelName:
+                teamsDestination?.channelName || teamsDestination?.teamName || null,
+            }}
           />
 
           {/* Jira Integration Mapping */}
