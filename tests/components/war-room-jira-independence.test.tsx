@@ -67,8 +67,10 @@ describe('IncidentCommandBar integration independence', () => {
             attentionRequired: 0,
             totalHistoricalRooms: 0,
           },
+          meeting: null,
           permissions: {
             canManageWarRooms: true,
+            canManageMeeting: true,
           },
         }}
         jira={{

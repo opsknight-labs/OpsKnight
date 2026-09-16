@@ -20,8 +20,9 @@ describe('WarRoomLauncher component', () => {
         totalHistoricalRooms: 0,
       },
       providers: [],
+      meeting: null,
       history: [],
-      permissions: { canManageWarRooms: true },
+      permissions: { canManageWarRooms: true, canManageMeeting: true },
     };
 
     const { container } = render(<WarRoomLauncher collaboration={hiddenCollab} />);
@@ -56,8 +57,9 @@ describe('WarRoomLauncher component', () => {
           supportedOptions: { supportsPrivateRooms: false },
         },
       ],
+      meeting: null,
       history: [],
-      permissions: { canManageWarRooms: true },
+      permissions: { canManageWarRooms: true, canManageMeeting: true },
     };
 
     render(<WarRoomLauncher collaboration={createCollab} />);
@@ -127,8 +129,9 @@ describe('WarRoomLauncher component', () => {
           supportedOptions: { supportsPrivateRooms: false },
         },
       ],
+      meeting: null,
       history: [],
-      permissions: { canManageWarRooms: true },
+      permissions: { canManageWarRooms: true, canManageMeeting: true },
     };
 
     render(<WarRoomLauncher collaboration={activeCollab} />);

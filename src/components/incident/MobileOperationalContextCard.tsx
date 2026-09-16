@@ -65,8 +65,9 @@ export default function MobileOperationalContextCard({
       totalHistoricalRooms: 0,
     },
     providers: [],
+    meeting: null,
     history: [],
-    permissions: { canManageWarRooms: false },
+    permissions: { canManageWarRooms: false, canManageMeeting: false },
   };
 
   const { collaboration, pendingAction, handleCreate, handleAction } =
