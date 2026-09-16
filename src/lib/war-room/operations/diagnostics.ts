@@ -206,6 +206,34 @@ export async function getWarRoomOperationalSnapshots(
   return snapshots;
 }
 
+/**
+ * Fleet-wide operational summary — unbounded, not limited to the paginated window.
+ * Loads all rooms for the provider (or all providers) and classifies each via the
+ * deterministic health classifier, so `DRIFTED` on room #101 is not hidden behind a
+ * `HEALTHY` latest-100 window.
+ */
+export async function getWarRoomFleetOperationalSummary(
+  opts?: { provider?: string; rscUnknownByContainerId?: Map<string, boolean> }
+): Promise<import('./types').IntegrationHealthSummary[]> {
+  const { summarizeOperationalHealth } = await import('./summary');
+  const where: Record<string, unknown> = {};
+  if (opts?.provider && ['SLACK', 'MICROSOFT_TEAMS'].includes(opts.provider)) {
+    where.provider = opts.provider;
+  }
+  const rooms = await prisma.incidentWarRoom.findMany({
+    where: Object.keys(where).length > 0 ? (where as never) : undefined,
+    include: { participants: { select: { state: true, desiredVersion: true, lastSyncAt: true } } },
+  } as never) as unknown as Array<Record<string, unknown> & { participants?: Array<Record<string, unknown>> }>;
+  if (rooms.length === 0) return [];
+  const ctx = await loadBulkContext(rooms as unknown as Array<Record<string, unknown>>, opts?.rscUnknownByContainerId ?? null);
+  const snapshots: import('./types').WarRoomOperationalSnapshot[] = [];
+  for (const room of rooms) {
+    const participants = (room.participants as Array<Record<string, unknown>>) ?? [];
+    snapshots.push(enrichOperationalFromBulk(room as unknown as Record<string, unknown>, participants, ctx));
+  }
+  return summarizeOperationalHealth(snapshots);
+}
+
 /** Unbounded cleanup-debt count per provider — not limited to the paginated window. */
 export async function getWarRoomCleanupPendingCounts(): Promise<Record<string, number>> {
   try {

@@ -268,20 +268,28 @@ export async function enqueueWarRoomRepair(input: WarRoomRepairRequest): Promise
     return { accepted: false, reasonCode: 'ENQUEUE_FAILED', message: error instanceof Error ? error.message : String(error) };
   }
 
-  // Structured audit — actor/provider/warRoomId/incidentId/action/result/reason/timestamp + auto vs operator
-  const auditActionMap: Record<WarRoomRepairAction, string> = {
-    TEST_CONNECTION: 'TEAMS_CONNECTION_TESTED',
-    RECONCILE: 'WAR_ROOM_RECONCILIATION_REQUESTED',
-    RETRY_PROJECTION: 'WAR_ROOM_PROJECTION_RETRY_REQUESTED',
-    RETRY_PARTICIPANT_SYNC: 'WAR_ROOM_PARTICIPANT_SYNC_REQUESTED',
-    RETRY_EXTERNAL_CLEANUP: 'WAR_ROOM_EXTERNAL_CLEANUP_RETRY_REQUESTED',
-    REFRESH_PERMISSIONS: 'TEAMS_PERMISSIONS_REFRESHED',
-  };
+  function auditActionForRequest(a: WarRoomRepairAction): string {
+    switch (a) {
+      case 'TEST_CONNECTION':
+        return 'TEAMS_CHANNEL_VERIFICATION_REQUESTED';
+      case 'RECONCILE':
+        return 'WAR_ROOM_RECONCILIATION_REQUESTED';
+      case 'RETRY_PROJECTION':
+        return 'WAR_ROOM_PROJECTION_RETRY_REQUESTED';
+      case 'RETRY_PARTICIPANT_SYNC':
+        return 'WAR_ROOM_PARTICIPANT_SYNC_REQUESTED';
+      case 'RETRY_EXTERNAL_CLEANUP':
+        return 'WAR_ROOM_EXTERNAL_CLEANUP_RETRY_REQUESTED';
+      case 'REFRESH_PERMISSIONS':
+        return 'TEAMS_PERMISSION_REFRESH_REQUESTED';
+      default:
+        return 'WAR_ROOM_REPAIR_REQUESTED';
+    }
+  }
   const isJobReused = jobId != null && jobType != null;
   try {
     await emitAuditEvent({
-      // eslint-disable-next-line security/detect-object-injection -- action is validated by z.enum at entry
-      action: auditActionMap[action],
+      action: auditActionForRequest(action),
       source: 'UI',
       target: { type: 'SYSTEM_CONFIG', id: room.id },
       actor: { type: 'USER', id: input.actorId, email: input.actorEmail ?? undefined },

@@ -25,6 +25,18 @@ vi.mock('@/lib/microsoft-teams/graph/channels', () => ({
 }));
 vi.mock('@/lib/war-room/engine', () => ({
   requestWarRoomProjectionNeutral: vi.fn(async () => 5),
+  reconcileWarRoom: vi.fn(async () => undefined),
+  finalizeWarRoomCloseNeutral: vi.fn(async () => undefined),
+  syncWarRoomParticipants: vi.fn(async () => undefined),
+  projectWarRoom: vi.fn(async () => undefined),
+  provisionWarRoom: vi.fn(async () => undefined),
+}));
+vi.mock('@/lib/war-room/terminal-cleanup', () => ({
+  reconcileTerminalWarRoomDriftForRoom: vi.fn(async () => 'cleaned'),
+}));
+vi.mock('@/lib/microsoft-teams/client', () => ({
+  getTeamsWarRoomRscGrantState: vi.fn(async () => ({ granted: [], missing: [], unknown: false })),
+  getTeamsGrantedRscPermissions: vi.fn(async () => ({ granted: [], missing: [], unknown: false })),
 }));
 
 import prisma from '@/lib/prisma';
@@ -563,10 +575,10 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
     vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-test' } as never);
     const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'TEST_CONNECTION', actorId: 'admin-1' });
     expect(res.jobType).toBe('WAR_ROOM_RECONCILE');
-    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_CONNECTION_TESTED' }));
+    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_CHANNEL_VERIFICATION_REQUESTED' }));
     const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data.payload;
     expect(payload.reason).toBe('connection_test');
-    const repairSource = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
+    const repairSource = fs.readFileSync('src/lib/war-room/operations/repair.ts', 'utf8');
     expect(repairSource).not.toMatch(/microsoftTeamsGraphRequest|getChannelById|findWarRoomChannel/);
   });
 
@@ -577,7 +589,7 @@ describe('repair — UI → Admin API → RBAC+state → enqueue canonical durab
     vi.mocked(prisma.backgroundJob.create as unknown as Mock).mockResolvedValue({ id: 'job-perm' } as never);
     const res = await enqueueWarRoomRepair({ warRoomId: 'wr-1', action: 'REFRESH_PERMISSIONS', actorId: 'admin-1' });
     expect(res.accepted).toBe(true);
-    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_PERMISSIONS_REFRESHED' }));
+    expect(vi.mocked(emitAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({ action: 'TEAMS_PERMISSION_REFRESH_REQUESTED' }));
     const payload = vi.mocked(prisma.backgroundJob.create as unknown as Mock).mock.calls[0][0].data.payload;
     expect(payload.reason).toBe('permission_refresh');
     const findCall = vi.mocked(prisma.backgroundJob.findFirst as unknown as Mock).mock.calls[0]?.[0];
@@ -875,5 +887,142 @@ describe('Admin API RBAC — static guard check', () => {
     const repairLib = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
     expect(repairLib).toMatch(/role !== 'ADMIN'/);
     expect(repairLib).not.toMatch(/RESPONDER/);
+  });
+});
+
+// ── Worker execution — processJob reason routing ─────────────────────────
+describe('worker — processJob reason routing (enqueue → processJob → engine/adapter)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('external_cleanup_retry routes to reconcileTerminalWarRoomDriftForRoom', async () => {
+    const { processJob } = await import('@/lib/jobs/queue');
+    const { reconcileTerminalWarRoomDriftForRoom } = await import('@/lib/war-room/terminal-cleanup');
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
+    const ok = await processJob({
+      id: 'job-cleanup',
+      type: 'WAR_ROOM_RECONCILE',
+      status: 'PROCESSING',
+      attempts: 0,
+      maxAttempts: 3,
+      payload: { warRoomId: 'wr-1', reason: 'external_cleanup_retry' },
+    } as never);
+    expect(ok).toBe(true);
+    expect(vi.mocked(reconcileTerminalWarRoomDriftForRoom as unknown as Mock)).toHaveBeenCalledWith('wr-1');
+  });
+
+  it('permission_refresh probes full RSC grant set then reconcileWarRoom and emits completion audit', async () => {
+    const { processJob } = await import('@/lib/jobs/queue');
+    const { reconcileWarRoom } = await import('@/lib/war-room/engine');
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({
+      provider: 'MICROSOFT_TEAMS',
+      providerTenantId: 'tenant-1',
+      providerContainerId: 'team-1',
+    } as never);
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
+    const ok = await processJob({
+      id: 'job-perm',
+      type: 'WAR_ROOM_RECONCILE',
+      status: 'PROCESSING',
+      attempts: 0,
+      maxAttempts: 3,
+      payload: { warRoomId: 'wr-1', reason: 'permission_refresh' },
+    } as never);
+    expect(ok).toBe(true);
+    const { getTeamsWarRoomRscGrantState } = await import('@/lib/microsoft-teams/client');
+    expect(vi.mocked(getTeamsWarRoomRscGrantState as unknown as Mock)).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: 'tenant-1',
+      teamId: 'team-1',
+    }));
+    expect(vi.mocked(reconcileWarRoom as unknown as Mock)).toHaveBeenCalledWith('wr-1');
+  });
+
+  it('connection_test probes Teams channel health then reconcileWarRoom and emits completion audit', async () => {
+    const { processJob } = await import('@/lib/jobs/queue');
+    const { reconcileWarRoom } = await import('@/lib/war-room/engine');
+    const teamsOps = await import('@/lib/war-room/providers/microsoft-teams/operations');
+    const probeSpy = vi.spyOn(teamsOps, 'probeMicrosoftTeamsChannelHealth').mockResolvedValue({ health: 'HEALTHY', code: null, message: null } as never);
+    vi.mocked(prisma.incidentWarRoom.findUnique as unknown as Mock).mockResolvedValue({ provider: 'MICROSOFT_TEAMS' } as never);
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
+    const ok = await processJob({
+      id: 'job-probe',
+      type: 'WAR_ROOM_RECONCILE',
+      status: 'PROCESSING',
+      attempts: 0,
+      maxAttempts: 3,
+      payload: { warRoomId: 'wr-1', reason: 'connection_test' },
+    } as never);
+    expect(ok).toBe(true);
+    expect(probeSpy).toHaveBeenCalledWith('wr-1');
+    expect(vi.mocked(reconcileWarRoom as unknown as Mock)).toHaveBeenCalledWith('wr-1');
+    probeSpy.mockRestore();
+  });
+
+  it('generic reconcile (no reason) still calls reconcileWarRoom', async () => {
+    const { processJob } = await import('@/lib/jobs/queue');
+    const { reconcileWarRoom } = await import('@/lib/war-room/engine');
+    vi.mocked(prisma.backgroundJob.updateMany as unknown as Mock).mockResolvedValue({ count: 1 } as never);
+    const ok = await processJob({
+      id: 'job-generic',
+      type: 'WAR_ROOM_RECONCILE',
+      status: 'PROCESSING',
+      attempts: 0,
+      maxAttempts: 3,
+      payload: { warRoomId: 'wr-1' },
+    } as never);
+    expect(ok).toBe(true);
+    expect(vi.mocked(reconcileWarRoom as unknown as Mock)).toHaveBeenCalledWith('wr-1');
+  });
+});
+
+// ── Fleet aggregate — unbounded summary vs paginated table ───────────────
+describe('fleet aggregate — unbounded health summary', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('getWarRoomFleetOperationalSummary reflects health outside the latest-100 window', async () => {
+    const { getWarRoomFleetOperationalSummary } = await import('@/lib/war-room/operations/diagnostics');
+    // 101 rooms: 100 HEALTHY + 1 DRIFTED past the window
+    const rooms = Array.from({ length: 101 }, (_, i) => ({
+      id: `wr-${i}`,
+      incidentId: `inc-${i}`,
+      provider: 'MICROSOFT_TEAMS',
+      generation: 1,
+      state: i === 100 ? 'CLOSED' : 'READY',
+      health: 'HEALTHY',
+      projectionVersion: 1,
+      lastProjectedVersion: 1,
+      lastProjectedAt: new Date(),
+      lastReconciledAt: new Date(),
+      lastErrorCode: i === 100 ? 'CHANNEL_MISSING' : null,
+      lastError: null,
+      externalCleanupPending: i === 100,
+      externalCleanupReason: i === 100 ? 'CLOSE_ORPHAN' : null,
+      providerTenantId: 't',
+      providerContainerId: 'team',
+      providerChannelId: i === 100 ? null : 'ch',
+      providerChannelName: 'chan',
+      destinationId: null,
+      installationId: null,
+      participants: [],
+    }));
+    vi.mocked(prisma.incidentWarRoom.findMany as unknown as Mock).mockResolvedValue(rooms as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsConfig: { findFirst: Mock } }).microsoftTeamsConfig.findFirst as unknown as Mock).mockResolvedValue({ enabled: true, warRoomsEnabled: true } as never);
+    vi.mocked((prisma as unknown as { microsoftTeamsInstallation: { count: Mock } }).microsoftTeamsInstallation.count as unknown as Mock).mockResolvedValue(1 as never);
+    const summary = await getWarRoomFleetOperationalSummary({ provider: 'MICROSOFT_TEAMS' });
+    const teams = summary.find(s => s.provider === 'MICROSOFT_TEAMS')!;
+    expect(teams.totalRooms).toBe(101);
+    expect(teams.operationalHealth).toBe('DRIFTED');
+    expect(teams.driftedRooms).toBe(1);
+  });
+
+  it('enqueue audit uses REQUESTED (not succeeded) — success is only at worker completion', async () => {
+    const repairSource = fs.readFileSync(path.resolve('src/lib/war-room/operations/repair.ts'), 'utf8');
+    expect(repairSource).toMatch(/TEAMS_CHANNEL_VERIFICATION_REQUESTED/);
+    expect(repairSource).toMatch(/TEAMS_PERMISSION_REFRESH_REQUESTED/);
+    expect(repairSource).not.toMatch(/TEAMS_CONNECTION_TESTED/);
+    // The old TEAMS_PERMISSIONS_REFRESHED was the enqueue name; now it must be REQUESTED
+    expect(repairSource).not.toMatch(/['"]TEAMS_PERMISSIONS_REFRESHED['"]/);
+    const queueSource = fs.readFileSync(path.resolve('src/lib/jobs/queue.ts'), 'utf8');
+    expect(queueSource).toMatch(/TEAMS_PERMISSION_REFRESH_SUCCEEDED/);
+    expect(queueSource).toMatch(/TEAMS_CHANNEL_VERIFICATION_SUCCEEDED/);
   });
 });

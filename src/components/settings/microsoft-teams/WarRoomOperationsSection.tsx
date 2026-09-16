@@ -35,19 +35,21 @@ function stateBadgeVariant(state: string): string {
 
 type Props = {
   snapshots: WarRoomOperationalSnapshot[];
+  fleetSummary?: import('@/lib/war-room/operations/types').IntegrationHealthSummary | null;
 };
 
-export default function WarRoomOperationsSection({ snapshots }: Props) {
+export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [diagnostics, setDiagnostics] = useState<Record<string, WarRoomDiagnosticsSnapshot | null>>({});
+  const [diagnostics, setDiagnostics] = useState<Map<string, WarRoomDiagnosticsSnapshot | null>>(new Map());
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const healthy = snapshots.filter(s => s.operationalHealth === 'HEALTHY').length;
-  const degraded = snapshots.filter(s => s.operationalHealth === 'DEGRADED').length;
-  const drifted = snapshots.filter(s => s.operationalHealth === 'DRIFTED').length;
-  const unavailable = snapshots.filter(s => s.operationalHealth === 'UNAVAILABLE').length;
-  const unknown = snapshots.filter(s => s.operationalHealth === 'UNKNOWN').length;
-  const cleanupPending = snapshots.filter(s => s.externalCleanupPending).length;
+  // Fleet summary is authoritative for counts; the paginated table is only a view.
+  const healthy = fleetSummary ? fleetSummary.healthyRooms : snapshots.filter(s => s.operationalHealth === 'HEALTHY').length;
+  const degraded = fleetSummary ? fleetSummary.degradedRooms : snapshots.filter(s => s.operationalHealth === 'DEGRADED').length;
+  const drifted = fleetSummary ? fleetSummary.driftedRooms : snapshots.filter(s => s.operationalHealth === 'DRIFTED').length;
+  const unavailable = fleetSummary ? fleetSummary.unavailableRooms : snapshots.filter(s => s.operationalHealth === 'UNAVAILABLE').length;
+  const unknown = fleetSummary ? fleetSummary.unknownRooms : snapshots.filter(s => s.operationalHealth === 'UNKNOWN').length;
+  const cleanupPending = fleetSummary ? fleetSummary.externalCleanupPending : snapshots.filter(s => s.externalCleanupPending).length;
 
   const toggle = async (warRoomId: string) => {
     if (expandedId === warRoomId) {
@@ -55,19 +57,30 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
       return;
     }
     setExpandedId(warRoomId);
-    // eslint-disable-next-line security/detect-object-injection -- warRoomId is a validated DB id used as a keyed cache, not an object prototype pollute
-    if (diagnostics[warRoomId] !== undefined) return;
+    if (diagnostics.has(warRoomId)) return;
     setLoadingId(warRoomId);
     try {
       const res = await fetch(`/api/admin/war-rooms/${encodeURIComponent(warRoomId)}`, { headers: { 'Content-Type': 'application/json' } });
       const body = await res.json().catch(() => null) as { data?: WarRoomDiagnosticsSnapshot } | null;
       if (res.ok && body?.data) {
-        setDiagnostics(prev => ({ ...prev, [warRoomId]: body.data as WarRoomDiagnosticsSnapshot }));
+        setDiagnostics(prev => {
+          const next = new Map(prev);
+          next.set(warRoomId, body.data as WarRoomDiagnosticsSnapshot);
+          return next;
+        });
       } else {
-        setDiagnostics(prev => ({ ...prev, [warRoomId]: null }));
+        setDiagnostics(prev => {
+          const next = new Map(prev);
+          next.set(warRoomId, null);
+          return next;
+        });
       }
     } catch {
-      setDiagnostics(prev => ({ ...prev, [warRoomId]: null }));
+      setDiagnostics(prev => {
+        const next = new Map(prev);
+        next.set(warRoomId, null);
+        return next;
+      });
     } finally {
       setLoadingId(null);
     }
@@ -177,8 +190,7 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
           {loadingId === expandedId ? (
             <div className="flex items-center gap-2 text-muted-foreground"><Clock3 className="h-4 w-4 animate-spin" />Loading diagnostics…</div>
           ) : (() => {
-              // eslint-disable-next-line security/detect-object-injection -- expandedId validated against DB ids, not prototype pollution
-              const diag = expandedId ? diagnostics[expandedId] : undefined;
+              const diag = expandedId ? (diagnostics.get(expandedId) ?? undefined) : undefined;
               return diag ? <DiagnosticsDetail diag={diag} /> : <div className="text-muted-foreground">Unable to load diagnostics for this war room.</div>;
             })()}
         </div>

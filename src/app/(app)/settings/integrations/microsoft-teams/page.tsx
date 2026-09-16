@@ -103,18 +103,22 @@ export default async function MicrosoftTeamsIntegrationRoute() {
     rscUnknownByContainerId.set(String(row.teamId), Boolean(row.unknown));
   }
   let warRoomSnapshots: Awaited<ReturnType<typeof getWarRoomOperationalSnapshots>> | null = null;
+  let fleetSummary: import('@/lib/war-room/operations/types').IntegrationHealthSummary[] | null = null;
   let warRoomDiagnosticsError: string | null = null;
   let cleanupPendingCounts: Record<string, number> = {};
   try {
-    [warRoomSnapshots, cleanupPendingCounts] = await Promise.all([
+    const diagnosticsMod = await import('@/lib/war-room/operations/diagnostics');
+    [warRoomSnapshots, fleetSummary, cleanupPendingCounts] = await Promise.all([
       getWarRoomOperationalSnapshots(100, { provider: 'MICROSOFT_TEAMS', rscUnknownByContainerId }),
-      (await import('@/lib/war-room/operations/diagnostics')).getWarRoomCleanupPendingCounts().catch(() => ({} as Record<string, number>)),
+      diagnosticsMod.getWarRoomFleetOperationalSummary({ provider: 'MICROSOFT_TEAMS', rscUnknownByContainerId }).catch(() => null as import('@/lib/war-room/operations/types').IntegrationHealthSummary[] | null),
+      diagnosticsMod.getWarRoomCleanupPendingCounts().catch(() => ({} as Record<string, number>)),
     ]);
   } catch (err) {
     warRoomDiagnosticsError = err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300);
     warRoomSnapshots = null;
   }
-  const operationalSummary = warRoomSnapshots ? summarizeOperationalHealth(warRoomSnapshots) : [];
+  // Fleet summary is authoritative for health; paginated snapshots only drive the table.
+  const operationalSummary = fleetSummary ?? (warRoomSnapshots ? summarizeOperationalHealth(warRoomSnapshots) : []);
   const teamsSummary = operationalSummary.find(s => s.provider === 'MICROSOFT_TEAMS') ?? null;
   // Missing evidence must be UNKNOWN, never implicitly healthy. DB/diagnostics failure → UNKNOWN.
   const integrationHealthForEmpty: import('@/lib/war-room/operations/types').OperationalHealth = !isConnected
@@ -128,9 +132,10 @@ export default async function MicrosoftTeamsIntegrationRoute() {
           : 'HEALTHY';
   const operationalHealthLabel: import('@/lib/war-room/operations/types').OperationalHealth =
     warRoomDiagnosticsError ? 'UNKNOWN' as const : (teamsSummary?.operationalHealth ?? integrationHealthForEmpty);
-  const totalWarRooms = warRoomSnapshots ? warRoomSnapshots.length : 0;
+  // Fleet totals are authoritative; the paginated table is only a view (limit 100).
+  const totalWarRooms = teamsSummary?.totalRooms ?? (warRoomSnapshots ? warRoomSnapshots.length : 0);
   // Unbounded debt — not limited to the paginated 100 window
-  const warRoomCleanupPending = cleanupPendingCounts['MICROSOFT_TEAMS'] ?? (warRoomSnapshots ? warRoomSnapshots.filter(s => s.externalCleanupPending).length : 0);
+  const warRoomCleanupPending = cleanupPendingCounts['MICROSOFT_TEAMS'] ?? teamsSummary?.externalCleanupPending ?? (warRoomSnapshots ? warRoomSnapshots.filter(s => s.externalCleanupPending).length : 0);
 
   return (
     <div className="space-y-6">
@@ -311,7 +316,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
             <div className="mt-1 text-xs text-amber-800">Operational evidence could not be loaded — health is reported as UNKNOWN. {warRoomDiagnosticsError}</div>
           </div>
         ) : (
-          <WarRoomOperationsSection snapshots={(warRoomSnapshots ?? []) as unknown as import('@/lib/war-room/operations/types').WarRoomOperationalSnapshot[]} />
+          <WarRoomOperationsSection snapshots={(warRoomSnapshots ?? []) as unknown as import('@/lib/war-room/operations/types').WarRoomOperationalSnapshot[]} fleetSummary={teamsSummary} />
         )}
       </section>
 
