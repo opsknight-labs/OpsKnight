@@ -12,6 +12,20 @@ const mocks = vi.hoisted(() => {
   });
   const txPrivacyErasureUpdate = vi.fn().mockResolvedValue({ id: 'exec-1' });
 
+  // Helpers for the authoritative in-tx blocker revalidation
+  // (discoverErasureBlockersTx). Defaults to "no blockers" so existing happy-path
+  // tests stay green; individual tests override these to inject blockers.
+  const txUserFindUnique = vi.fn().mockResolvedValue({ role: 'USER', status: 'ACTIVE' });
+  const txUserCount = vi.fn().mockResolvedValue(2);
+  const txTeamMemberFindMany = vi.fn().mockResolvedValue([] as unknown[]);
+  const txTeamMemberGroupBy = vi.fn().mockResolvedValue([] as unknown[]);
+  const txOnCallLayerUserCount = vi.fn().mockResolvedValue(0);
+  const txOnCallShiftCount = vi.fn().mockResolvedValue(0);
+  const txOnCallOverrideCount = vi.fn().mockResolvedValue(0);
+  const txEscalationRuleCount = vi.fn().mockResolvedValue(0);
+  const txActionItemCount = vi.fn().mockResolvedValue(0);
+  const txIncidentCount = vi.fn().mockResolvedValue(0);
+
   const tx = {
     privacyRequest: { findUnique: txPrivacyRequestFindUnique },
     privacyErasureExecution: {
@@ -21,11 +35,25 @@ const mocks = vi.hoisted(() => {
       update: txPrivacyErasureUpdate,
     },
     auditLog: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    teamMember: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    teamMember: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      findMany: txTeamMemberFindMany,
+      groupBy: txTeamMemberGroupBy,
+    },
     incidentWatcher: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    onCallShift: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    onCallLayerUser: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    onCallOverride: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    onCallShift: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      count: txOnCallShiftCount,
+    },
+    onCallLayerUser: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      count: txOnCallLayerUserCount,
+    },
+    onCallOverride: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      count: txOnCallOverrideCount,
+    },
+    escalationRule: { count: txEscalationRuleCount },
     oidcConfig: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     slackIntegration: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     slackOAuthConfig: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -37,11 +65,15 @@ const mocks = vi.hoisted(() => {
     incidentNote: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     postmortem: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     incidentTemplate: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    actionItem: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    actionItem: { count: txActionItemCount, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     notification: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    incident: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    incident: { count: txIncidentCount, updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     userToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    user: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
+    user: {
+      findUnique: txUserFindUnique,
+      count: txUserCount,
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
   };
 
   const privacyRequestFindUnique = vi.fn();
@@ -83,6 +115,16 @@ const mocks = vi.hoisted(() => {
     txPrivacyErasureUpdateMany,
     txPrivacyRequestFindUnique,
     txPrivacyErasureUpdate,
+    txUserFindUnique,
+    txUserCount,
+    txTeamMemberFindMany,
+    txTeamMemberGroupBy,
+    txOnCallLayerUserCount,
+    txOnCallShiftCount,
+    txOnCallOverrideCount,
+    txEscalationRuleCount,
+    txActionItemCount,
+    txIncidentCount,
     privacyRequestFindUnique,
     executionFindUnique,
     executionFindUniqueOrThrow,
@@ -105,7 +147,10 @@ vi.mock('@/lib/prisma', () => ({ default: mocks.mockPrisma }));
 vi.mock('@/lib/db-utils', () => ({ runSerializableTransaction: mocks.runSerializableTransaction }));
 vi.mock('@/lib/db-locks', () => ({
   acquireAdvisoryLock: mocks.acquireAdvisoryLock,
-  LOCK_KEYS: { PRIVACY_ERASURE: BigInt(9141007) },
+  LOCK_KEYS: {
+    PRIVACY_ERASURE: BigInt(9141007),
+    USER_ADMIN_INVARIANT: BigInt(9141003),
+  },
 }));
 vi.mock('@/lib/privacy/erasure/plan', () => ({
   buildSubjectErasurePlan: mocks.buildSubjectErasurePlan,
@@ -159,6 +204,10 @@ describe('executeErasure', () => {
     mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
     mocks.txPrivacyErasureCreate.mockResolvedValue({ id: 'exec-1', status: 'RUNNING' });
     mocks.txPrivacyErasureUpdateMany.mockResolvedValue({ count: 1 });
+    mocks.txPrivacyRequestFindUnique.mockResolvedValue({
+      status: 'PROCESSING',
+      verifiedAt: new Date('2026-09-01T00:00:00.000Z'),
+    });
     mocks.executionFindUniqueOrThrow.mockResolvedValue({
       id: 'exec-1',
       status: 'RUNNING',
@@ -177,37 +226,45 @@ describe('executeErasure', () => {
       })
     );
     mocks.transitionPrivacyRequest.mockResolvedValue({});
-    // reset tx leaf mocks that get .mock.calls inspected
-    for (const bucket of [
-      mocks.tx.auditLog,
-      mocks.tx.teamMember,
-      mocks.tx.incidentWatcher,
-      mocks.tx.onCallShift,
-      mocks.tx.onCallLayerUser,
-      mocks.tx.onCallOverride,
-      mocks.tx.oidcConfig,
-      mocks.tx.slackIntegration,
-      mocks.tx.slackOAuthConfig,
-      mocks.tx.notificationProvider,
-      mocks.tx.microsoftTeamsConfig,
-      mocks.tx.microsoftTeamsInstallation,
-      mocks.tx.microsoftTeamsDestination,
-      mocks.tx.team,
-      mocks.tx.incidentNote,
-      mocks.tx.postmortem,
-      mocks.tx.incidentTemplate,
-      mocks.tx.actionItem,
-      mocks.tx.notification,
-      mocks.tx.incident,
-      mocks.tx.userToken,
-      mocks.tx.user,
-    ]) {
-      for (const fn of Object.values(bucket)) {
-        if (typeof fn === 'function' && 'mockResolvedValue' in fn) {
-          (fn as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 } as never);
-        }
-      }
-    }
+    // In-tx authoritative blocker revalidation defaults to "no blockers" so the
+    // happy-path tests stay green. Individual regression tests override these
+    // to inject a stale-plan race.
+    mocks.txUserFindUnique.mockResolvedValue({ role: 'USER', status: 'ACTIVE' } as never);
+    mocks.txUserCount.mockResolvedValue(2 as never);
+    mocks.txTeamMemberFindMany.mockResolvedValue([] as never);
+    mocks.txTeamMemberGroupBy.mockResolvedValue([] as never);
+    mocks.txOnCallLayerUserCount.mockResolvedValue(0 as never);
+    mocks.txOnCallShiftCount.mockResolvedValue(0 as never);
+    mocks.txOnCallOverrideCount.mockResolvedValue(0 as never);
+    mocks.txEscalationRuleCount.mockResolvedValue(0 as never);
+    mocks.txActionItemCount.mockResolvedValue(0 as never);
+    mocks.txIncidentCount.mockResolvedValue(0 as never);
+    mocks.txPrivacyErasureUpdate.mockResolvedValue({ id: 'exec-1' } as never);
+
+    // Reset the destructive-mutation leaf mocks that get .mock.calls inspected.
+    // Only the deleteMany/updateMany leaves are reset here; count/findMany
+    // leaves for the in-tx revalidation are controlled above.
+    mocks.tx.auditLog.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.teamMember.deleteMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.incidentWatcher.deleteMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.onCallShift.deleteMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.onCallLayerUser.deleteMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.onCallOverride.deleteMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.oidcConfig.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.slackIntegration.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.slackOAuthConfig.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.notificationProvider.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.microsoftTeamsConfig.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.microsoftTeamsInstallation.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.microsoftTeamsDestination.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.team.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.incidentNote.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.postmortem.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.incidentTemplate.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.actionItem.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.notification.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.incident.updateMany.mockResolvedValue({ count: 0 } as never);
+    mocks.tx.userToken.deleteMany.mockResolvedValue({ count: 0 } as never);
     mocks.tx.user.deleteMany.mockResolvedValue({ count: 1 } as never);
     mocks.runSerializableTransaction.mockImplementation(
       async (callback: (tx: unknown) => unknown) => callback(mocks.tx)
@@ -451,5 +508,83 @@ describe('executeErasure', () => {
         data: expect.objectContaining({ manualReviewRequired: true }),
       })
     );
+  });
+
+  // --- P0 stale-plan race: authoritative in-tx revalidation ------------------
+  // The plan is built *before* the destructive SERIALIZABLE transaction. A
+  // shift/assignment/etc created between the plan and the tx, or a concurrent
+  // erasure that removed the other active admin, must still block.
+
+  it('blocks inside the destructive transaction when a stale plan missed a newly-created active shift', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    // Pre-transaction plan says safe (no blockers).
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    // In-tx snapshot sees a newly-created active/future shift.
+    mocks.txOnCallShiftCount.mockResolvedValue(1);
+
+    await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+      code: 'PRIVACY_ERASURE_BLOCKED',
+      details: expect.objectContaining({
+        blockingConditions: expect.arrayContaining([
+          expect.stringContaining('active/future on-call shift'),
+        ]),
+      }),
+    } as unknown as Record<string, unknown>);
+
+    // Must NOT have deleted anything — the tx threw before any mutation.
+    expect(mocks.tx.user.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.tx.onCallShift.deleteMany).not.toHaveBeenCalled();
+    // Execution is marked FAILED so a retry observes a terminal state, not a leaked RUNNING.
+    expect(mocks.executionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'exec-1' },
+        data: expect.objectContaining({ status: 'FAILED', failureCode: 'BLOCKED' }),
+      })
+    );
+  });
+
+  it('blocks inside the destructive transaction when the subject became the last active admin after the plan', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    // In-tx snapshot: subject is an ACTIVE ADMIN and is now the last one.
+    mocks.txUserFindUnique.mockResolvedValue({ role: 'ADMIN', status: 'ACTIVE' } as never);
+    mocks.txUserCount.mockResolvedValue(1 as never);
+
+    await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
+      code: 'PRIVACY_ERASURE_BLOCKED',
+      details: expect.objectContaining({
+        blockingConditions: expect.arrayContaining([
+          expect.stringContaining('last admin'),
+        ]),
+      }),
+    } as unknown as Record<string, unknown>);
+
+    expect(mocks.tx.user.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.executionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'exec-1' },
+        data: expect.objectContaining({ status: 'FAILED', failureCode: 'BLOCKED' }),
+      })
+    );
+  });
+
+  it('holds USER_ADMIN_INVARIANT before PRIVACY_ERASURE in the destructive transaction', async () => {
+    mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest());
+    mocks.txPrivacyErasureFindUnique.mockResolvedValue(null);
+    mocks.buildSubjectErasurePlan.mockResolvedValue(eligiblePlan());
+    mocks.verifySubjectErasure.mockResolvedValue({ verified: true, issues: [] });
+
+    await executeErasure(REQUEST_ID, ACTOR);
+
+    // The destructive tx acquires USER_ADMIN_INVARIANT first so the erasure
+    // serializes with the canonical admin-invariant writers.
+    const lockCalls = mocks.acquireAdvisoryLock.mock.calls.map(call => String(call[1]));
+    // Only the destructive transaction acquires locks; claimExecution does not.
+    expect(lockCalls).toEqual([
+      String(BigInt(9141003)), // USER_ADMIN_INVARIANT
+      String(BigInt(9141007)), // PRIVACY_ERASURE
+    ]);
   });
 });

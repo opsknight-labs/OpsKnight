@@ -10,7 +10,7 @@ import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 import { transitionPrivacyRequest } from '@/lib/privacy/requests';
 import { buildSubjectErasurePlan } from './plan';
 import { verifySubjectErasure } from './verify';
-import type { ErasureDomainCounts } from './discover';
+import { discoverErasureBlockersTx, type ErasureDomainCounts } from './discover';
 
 export interface ErasureActor {
   id: string;
@@ -200,6 +200,10 @@ export async function executeErasure(
 
   const subjectId = request.subjectId;
   let destructiveMutationCommitted = false;
+  // Tracks whether a PRIVACY_ERASURE_BLOCKED failure has already been
+  // persisted as execution FAILED (so the shared catch branch can be
+  // idempotent and avoid a duplicate audit event).
+  let blockedFailurePersisted = false;
 
   try {
     const subjectRow = await prisma.user.findUnique({
@@ -214,6 +218,7 @@ export async function executeErasure(
       const plan = await buildSubjectErasurePlan(subjectId);
       if (!plan.canExecute) {
         await markClaimFailed('BLOCKED', 'BLOCKED');
+        blockedFailurePersisted = true;
         throw new AppError({
           code: 'PRIVACY_ERASURE_BLOCKED',
           details: { blockingConditions: plan.blockingConditions },
@@ -242,6 +247,13 @@ export async function executeErasure(
       });
 
       await runSerializableTransaction(async tx => {
+        // Must hold USER_ADMIN_INVARIANT *before* PRIVACY_ERASURE so the
+        // erasure serializes with the canonical admin-invariant writers in
+        // src/lib/users/admin-invariants.ts (which hold USER_ADMIN_INVARIANT).
+        // Without this, two concurrent erasures of the last two active admins
+        // can both pass the pre-transaction plan check and then delete 2/2
+        // admins through PRIVACY_ERASURE alone.
+        await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
         await acquireAdvisoryLock(tx, LOCK_KEYS.PRIVACY_ERASURE);
 
         // Re-validate the request is still PROCESSING inside the same
@@ -256,6 +268,21 @@ export async function executeErasure(
           throw new AppError({
             code: 'PRIVACY_ERASURE_PREREQUISITES_NOT_MET',
             details: { status: fresh?.status ?? null, verified: Boolean(fresh?.verifiedAt) },
+          });
+        }
+
+        // Final authoritative revalidation of every destructive blocker
+        // against the same SERIALIZABLE snapshot and under the same
+        // advisory locks that the delete will use. A shift, override,
+        // layer assignment, escalation ownership, incident assignment,
+        // open action item, or last-admin/sole-owner state materialized
+        // between buildSubjectErasurePlan() and this transaction must
+        // block here rather than be silently deleted.
+        const freshBlockers = await discoverErasureBlockersTx(tx, subjectId);
+        if (freshBlockers.length > 0) {
+          throw new AppError({
+            code: 'PRIVACY_ERASURE_BLOCKED',
+            details: { blockingConditions: freshBlockers },
           });
         }
 
@@ -467,7 +494,21 @@ export async function executeErasure(
     return { executionId: completed.id, status: 'COMPLETED', domainCounts, manualReviewRequired };
   } catch (error) {
     if (error instanceof AppError && error.code === 'PRIVACY_ERASURE_BLOCKED') {
-      // Already recorded (FAILED/BLOCKED) above before this was thrown.
+      // Two origins share this code: (a) the pre-transaction plan check,
+      // which already persisted FAILED/ BLOCKED above (blockedFailurePersisted
+      // = true), and (b) the authoritative in-transaction revalidation added
+      // for the P0 stale-plan race, which fires *inside* the SERIALIZABLE
+      // transaction and therefore has not persisted anything yet — the tx
+      // rolled back on throw. Persist once so retries observe FAILED rather
+      // than a leaked RUNNING execution.
+      if (!blockedFailurePersisted && !destructiveMutationCommitted) {
+        try {
+          await markClaimFailed('BLOCKED', 'BLOCKED');
+        } catch {
+          // Best-effort: the original BLOCKED error is what matters to the
+          // caller; a failure to mark the execution must not mask it.
+        }
+      }
       throw error;
     }
 
