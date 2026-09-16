@@ -67,6 +67,7 @@ const mockPrisma = vi.hoisted(() => ({
   current: null as unknown as ReturnType<typeof buildMockPrisma>,
 }));
 vi.mock('@/lib/prisma', () => ({
+  // eslint-disable-next-line security/detect-object-injection -- test-only proxy delegates to a typed mock bucket, not user input
   default: new Proxy({}, { get: (_t, prop) => (mockPrisma.current as never)[prop] }),
 }));
 
