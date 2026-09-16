@@ -160,6 +160,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                             avatarUrl={userAvatar}
                             gender={userGender}
                             userId={userId}
+                            legalNotice={<LegalSourceNotice />}
                           />
                         </div>
                       </AppHeader>
@@ -191,9 +192,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </UserAvatarProvider>
         </TimezoneProvider>
         <SessionTimeoutWarning warningMinutes={5} />
-        {/* AGPL source-code notice: only in the authenticated desktop shell.
-            Not rendered on mobile (/m), login, or status pages. */}
-        <LegalSourceNotice />
       </AppErrorBoundary>
     </AuthenticatedClientProviders>
   );
