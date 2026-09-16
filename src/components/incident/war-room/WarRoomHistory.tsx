@@ -6,6 +6,7 @@ import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { WarRoomLifecycleBadge } from './WarRoomLifecycleBadge';
 import type { IncidentWarRoomHistoryItem } from '@/lib/incident-collaboration/types';
 import { PROVIDER_PRESENTATION } from '@/lib/incident-collaboration/presentation';
+import { cn } from '@/lib/utils';
 
 type WarRoomHistoryProps = {
   history: IncidentWarRoomHistoryItem[];
@@ -18,7 +19,12 @@ export function WarRoomHistory({ history, className }: WarRoomHistoryProps) {
   if (history.length === 0) return null;
 
   return (
-    <div className={`rounded-xl border border-border bg-card p-4 space-y-3 ${className || ''}`}>
+    <div
+      className={cn(
+        'rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/80 dark:bg-zinc-900/60 p-3.5 space-y-3 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 shadow-2xs',
+        className
+      )}
+    >
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -41,7 +47,7 @@ export function WarRoomHistory({ history, className }: WarRoomHistoryProps) {
       </button>
 
       {expanded && (
-        <ul className="divide-y divide-border/60 rounded-lg border border-border/70 bg-muted/20 px-3 py-1 space-y-1 list-none text-xs">
+        <ul className="divide-y divide-zinc-200/60 dark:divide-zinc-800/60 rounded-lg border border-zinc-200/70 dark:border-zinc-800/70 bg-zinc-50/90 dark:bg-zinc-800/40 px-3 py-1 space-y-1 list-none text-xs">
           {history.map(item => {
             const meta = PROVIDER_PRESENTATION[item.provider];
             const timestamp = item.closedAt || item.archivedAt || item.createdAt;

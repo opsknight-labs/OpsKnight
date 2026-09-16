@@ -84,7 +84,7 @@ export function WarRoomCreateDialog({
                     {providerView.provider === 'SLACK' ? (
                       <SlackLogo className="h-5 w-5 shrink-0" />
                     ) : (
-                      <MicrosoftTeamsLogo className="h-5 w-5 shrink-0" />
+                      <MicrosoftTeamsLogo className="h-6 w-6 shrink-0" />
                     )}
                     <div>
                       <h4 className="font-semibold text-sm text-foreground">{meta.displayName}</h4>

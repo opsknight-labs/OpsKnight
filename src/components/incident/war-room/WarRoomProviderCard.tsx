@@ -48,15 +48,17 @@ export function WarRoomProviderCard({
       room.health === 'MISSING' ||
       room.state === 'FAILED'
     ) {
-      return 'bg-white dark:bg-zinc-900 border-rose-200 dark:border-rose-900/40 border-l-[3.5px] border-l-rose-500 hover:border-rose-300 dark:hover:border-rose-800/60';
+      return 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-rose-200 dark:border-rose-900/40 border-l-[3.5px] border-l-rose-500 hover:border-rose-300 dark:hover:border-rose-800/60 hover:shadow-xs';
     }
     if (room.health === 'DEGRADED' || isTransitioning) {
-      return 'bg-white dark:bg-zinc-900 border-amber-200 dark:border-amber-900/40 border-l-[3.5px] border-l-amber-500 hover:border-amber-300 dark:hover:border-amber-800/60';
+      return 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-amber-200 dark:border-amber-900/40 border-l-[3.5px] border-l-amber-500 hover:border-amber-300 dark:hover:border-amber-800/60 hover:shadow-xs';
     }
     if (room.state === 'READY') {
-      return 'bg-white dark:bg-zinc-900 border-border border-l-[3.5px] border-l-emerald-500 hover:border-border/80';
+      return isSlack
+        ? 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-emerald-200/80 dark:border-emerald-900/40 border-l-[3.5px] border-l-emerald-500 hover:border-emerald-300 dark:hover:border-emerald-800/60 hover:shadow-xs'
+        : 'bg-white dark:bg-zinc-900 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/60 border-indigo-200/80 dark:border-indigo-900/40 border-l-[3.5px] border-l-indigo-500 hover:border-indigo-300 dark:hover:border-indigo-800/60 hover:shadow-xs';
     }
-    return 'bg-white/80 dark:bg-zinc-900/60 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100';
+    return 'bg-white/80 dark:bg-zinc-900/60 hover:bg-white dark:hover:bg-zinc-800/80 border-zinc-200/80 dark:border-zinc-800/80 border-l-[3.5px] border-l-zinc-300 dark:border-l-zinc-700 opacity-85 hover:opacity-100';
   })();
 
   return (
@@ -81,9 +83,9 @@ export function WarRoomProviderCard({
             )}
           >
             {isSlack ? (
-              <SlackLogo className="h-4 w-4" />
+              <SlackLogo className="h-4.5 w-4.5" />
             ) : (
-              <MicrosoftTeamsLogo className="h-4 w-4" />
+              <MicrosoftTeamsLogo className="h-5 w-5" />
             )}
           </div>
         </div>
@@ -94,7 +96,7 @@ export function WarRoomProviderCard({
             <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
               <span
                 className={cn(
-                  'text-[9px] font-mono font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border leading-none shrink-0',
+                  'text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded border leading-none shrink-0',
                   isSlack
                     ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-500/30'
                     : 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/15 dark:text-indigo-300 dark:border-indigo-500/30'
@@ -103,7 +105,7 @@ export function WarRoomProviderCard({
                 {meta.displayName}
               </span>
               {room.membershipType === 'PRIVATE' && (
-                <span className="text-[9px] font-mono font-bold tracking-wider uppercase px-1.5 py-0.5 rounded border leading-none shrink-0 bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700">
+                <span className="text-[10px] font-semibold tracking-wide uppercase px-1.5 py-0.5 rounded border leading-none shrink-0 bg-zinc-100 text-zinc-600 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700">
                   Private
                 </span>
               )}
@@ -166,9 +168,9 @@ export function WarRoomProviderCard({
         </div>
       )}
 
-      {/* Responders / Participant Summary */}
+      {/* Responders / Participant Summary with grey background layer */}
       {room.participants && (
-        <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/80">
+        <div className="rounded-lg bg-zinc-50/90 dark:bg-zinc-800/40 p-2.5 border border-zinc-200/70 dark:border-zinc-800/60">
           <WarRoomParticipantSummary participants={room.participants} />
         </div>
       )}

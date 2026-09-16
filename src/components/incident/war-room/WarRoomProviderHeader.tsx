@@ -37,7 +37,11 @@ export function WarRoomProviderHeader({
               : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400'
           }`}
         >
-          {isSlack ? <SlackLogo className="h-4 w-4" /> : <MicrosoftTeamsLogo className="h-4 w-4" />}
+          {isSlack ? (
+            <SlackLogo className="h-4.5 w-4.5" />
+          ) : (
+            <MicrosoftTeamsLogo className="h-5 w-5" />
+          )}
         </div>
         <div className="min-w-0">
           <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-xs truncate block">

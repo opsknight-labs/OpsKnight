@@ -80,7 +80,7 @@ export function WarRoomLauncher({
                 {p.provider === 'SLACK' ? (
                   <SlackLogo className="h-4 w-4" />
                 ) : (
-                  <MicrosoftTeamsLogo className="h-4 w-4" />
+                  <MicrosoftTeamsLogo className="h-4.5 w-4.5" />
                 )}
               </span>
             ))}
@@ -104,7 +104,7 @@ export function WarRoomLauncher({
           {p.provider === 'SLACK' ? (
             <SlackLogo className="h-4 w-4 shrink-0" />
           ) : (
-            <MicrosoftTeamsLogo className="h-4 w-4 shrink-0" />
+            <MicrosoftTeamsLogo className="h-4.5 w-4.5 shrink-0" />
           )}
           <span className="font-semibold">War room</span>
           {attentionRequired > 0 && (
