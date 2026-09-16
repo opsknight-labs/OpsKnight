@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { notify as toast } from '@/lib/toast';
 import type { WarRoomDiagnosticsSnapshot, WarRoomOperationalSnapshot } from '@/lib/war-room/operations/types';
-import { Activity, ChevronDown, ChevronRight, AlertTriangle, ShieldCheck, Clock3, Layers, Users } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, AlertTriangle, ShieldCheck, Clock3, Layers, Users, Wrench, RefreshCw, Send, Layers2, UserPlus, Trash2 } from 'lucide-react';
 
 function healthBadgeVariant(health: string): string {
   switch (health) {
@@ -40,6 +41,7 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<Record<string, WarRoomDiagnosticsSnapshot | null>>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [repairing, setRepairing] = useState<string | null>(null);
 
   const healthy = snapshots.filter(s => s.operationalHealth === 'HEALTHY').length;
   const degraded = snapshots.filter(s => s.operationalHealth === 'DEGRADED').length;
@@ -187,6 +189,46 @@ export default function WarRoomOperationsSection({ snapshots }: Props) {
   );
 }
 
+function RepairActions({ warRoomId, state }: { warRoomId: string; state: string }) {
+  const [pending, setPending] = useState<string | null>(null);
+  const run = async (action: string) => {
+    setPending(action);
+    try {
+      const res = await fetch(`/api/admin/war-rooms/${encodeURIComponent(warRoomId)}/repair`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const body = await res.json().catch(() => ({})) as { error?: string; data?: { jobId?: string; jobType?: string } };
+      if (res.ok) {
+        toast.success(`${action} enqueued${body?.data?.jobType ? ` (${body.data.jobType})` : ''} — durable engine will apply via adapter.`);
+      } else {
+        toast.error(body?.error ?? `${action} was not accepted (${res.status})`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Repair request failed');
+    } finally {
+      setPending(null);
+    }
+  };
+  const projectionDisabled = !['READY', 'CLOSING'].includes(state);
+  const participantDisabled = !['READY', 'CLOSING'].includes(state);
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-2">
+      <div className="flex items-center gap-2 text-xs font-semibold"><Wrench className="h-3.5 w-3.5" /> Safe repair actions</div>
+      <p className="text-[11px] text-muted-foreground">UI → Admin API → RBAC + state gate → enqueue canonical durable job → existing engine → adapter. Idempotent; never calls Graph directly. Duplicate requests reuse the pending job.</p>
+      <div className="flex flex-wrap gap-1.5">
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('TEST_CONNECTION')}><Send className="h-3 w-3 mr-1" />{pending === 'TEST_CONNECTION' ? 'Queuing…' : 'Test connection'}</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('RECONCILE')}><RefreshCw className="h-3 w-3 mr-1" />{pending === 'RECONCILE' ? 'Queuing…' : 'Reconcile'}</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null || projectionDisabled} onClick={() => run('RETRY_PROJECTION')} title={projectionDisabled ? 'Only while READY or CLOSING' : undefined}><Layers2 className="h-3 w-3 mr-1" />Retry projection</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null || participantDisabled} onClick={() => run('RETRY_PARTICIPANT_SYNC')} title={participantDisabled ? 'Only while READY or CLOSING' : undefined}><UserPlus className="h-3 w-3 mr-1" />Retry participant sync</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('RETRY_EXTERNAL_CLEANUP')}><Trash2 className="h-3 w-3 mr-1" />Retry external cleanup</Button>
+        <Button variant="outline" size="sm" className="h-7 text-[11px]" disabled={pending !== null} onClick={() => run('REFRESH_PERMISSIONS')}><ShieldCheck className="h-3 w-3 mr-1" />Refresh permissions</Button>
+      </div>
+    </div>
+  );
+}
+
 function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
   const Row = ({ label, value }: { label: string; value: string | null | undefined }) => (
     <div className="flex gap-2">
@@ -243,6 +285,7 @@ function DiagnosticsDetail({ diag }: { diag: WarRoomDiagnosticsSnapshot }) {
           <Row label="Cleanup completed" value={diag.cleanup.externalCleanupCompletedAt} />
         </div>
       </div>
+      <RepairActions warRoomId={diag.warRoomId} state={diag.state} />
       <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
         <ShieldCheck className="h-3 w-3" />No secrets or tokens are surfaced in diagnostics.
       </div>
