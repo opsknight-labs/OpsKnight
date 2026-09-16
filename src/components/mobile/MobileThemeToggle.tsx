@@ -3,7 +3,7 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useSyncExternalStore } from 'react';
-import MobileCard from '@/components/mobile/MobileCard';
+import MobileSettingCard from '@/components/mobile/MobileSettingCard';
 import { cn } from '@/lib/utils';
 import { haptics } from '@/lib/haptics';
 
@@ -27,23 +27,15 @@ export default function MobileThemeToggle() {
   const resolvedLabel = mounted ? (resolvedTheme === 'dark' ? 'Dark' : 'Light') : 'System';
 
   return (
-    <MobileCard variant="default" padding="md" className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-foreground">Appearance</div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {selected === 'system'
-              ? `Following system · ${resolvedLabel}`
-              : `${resolvedLabel} mode`}
-          </p>
-        </div>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-          {resolvedTheme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-        </span>
-      </div>
-
+    <MobileSettingCard
+      icon={resolvedTheme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+      title="Appearance"
+      status={
+        selected === 'system' ? `Following system · ${resolvedLabel}` : `${resolvedLabel} mode`
+      }
+    >
       <div
-        className="grid grid-cols-3 rounded-xl bg-muted p-1"
+        className="mobile-segmented-control grid grid-cols-3 rounded-xl bg-muted p-1"
         role="radiogroup"
         aria-label="Appearance"
       >
@@ -62,18 +54,18 @@ export default function MobileThemeToggle() {
                 setTheme(option.value);
               }}
               className={cn(
-                'inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
+                'mobile-segmented-option inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60',
                 active
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{option.label}</span>
+              <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span className="whitespace-nowrap">{option.label}</span>
             </button>
           );
         })}
       </div>
-    </MobileCard>
+    </MobileSettingCard>
   );
 }

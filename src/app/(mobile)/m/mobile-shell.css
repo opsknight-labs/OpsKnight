@@ -114,7 +114,38 @@
   width: 100%;
   min-width: 0;
   margin-inline: auto;
+  /*
+   * `break-word` (not `anywhere`) on purpose: `anywhere` factors mid-word
+   * break points into min-content sizing, which lets flex/grid tracks (e.g.
+   * the Appearance segmented control) shrink below a short label's natural
+   * width and forces it to split ("System" -> "Syste/m"). `break-word` still
+   * prevents horizontal overflow but only breaks a word as a last resort,
+   * without affecting intrinsic sizing.
+   */
+  overflow-wrap: break-word;
+}
+
+/* Opt-in for genuinely unbreakable long tokens: URLs, IDs, hashes, emails. */
+.mobile-break-anywhere {
   overflow-wrap: anywhere;
+}
+
+/* Mobile segmented control (e.g. Appearance Light/System/Dark). Row layout by
+   default; stacks icon-over-label only once the control itself is narrow
+   enough that a row layout could no longer fit a full label. */
+.mobile-segmented-control {
+  container-type: inline-size;
+}
+
+.mobile-segmented-option {
+  flex-direction: row;
+}
+
+@container (max-width: 300px) {
+  .mobile-segmented-option {
+    flex-direction: column;
+    gap: 2px;
+  }
 }
 
 /* Container query utilities for inline-size responsiveness */
