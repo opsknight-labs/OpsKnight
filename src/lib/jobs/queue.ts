@@ -608,6 +608,81 @@ export async function processJob(job: QueuedJob | null): Promise<boolean> {
           );
           return markWarRoomJobCompleted(job.id);
         }
+        if (raw.reason === 'external_cleanup_retry') {
+          const { reconcileTerminalWarRoomDriftForRoom } = await import('../war-room/terminal-cleanup');
+          await reconcileTerminalWarRoomDriftForRoom(requiredPayloadString(job.payload, 'warRoomId'));
+          return markWarRoomJobCompleted(job.id);
+        }
+        if (raw.reason === 'permission_refresh') {
+          // Durable RSC probe for the room's team before normal health reconcile.
+          // Must check the exact capability contract (create + lifecycle + membership)
+          // rather than the single default permission; otherwise a missing TeamsAppInstallation.Read
+          // would be invisible and the probe would incorrectly report healthy.
+          let probeSucceeded = true;
+          try {
+            const room = await prisma.incidentWarRoom.findUnique({
+              where: { id: requiredPayloadString(job.payload, 'warRoomId') },
+              select: { provider: true, providerTenantId: true, providerContainerId: true },
+            });
+            if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId && room.providerContainerId) {
+              const { getTeamsWarRoomRscGrantState } = await import('../microsoft-teams/client');
+              const { MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS } = await import('../microsoft-teams/app-manifest');
+              const requiredPermissions = [...MICROSOFT_TEAMS_WAR_ROOM_ALL_RSC_PERMISSIONS];
+              await getTeamsWarRoomRscGrantState({
+                tenantId: room.providerTenantId,
+                teamId: room.providerContainerId,
+                requiredPermissions,
+              }).catch(() => { probeSucceeded = false; return null; });
+            } else if (room?.provider === 'MICROSOFT_TEAMS' && room.providerTenantId) {
+              const { getTeamsGrantedRscPermissions } = await import('../microsoft-teams/client');
+              await getTeamsGrantedRscPermissions({ explicitTenantId: room.providerTenantId }).catch(() => { probeSucceeded = false; return null; });
+            }
+          } catch { probeSucceeded = false; }
+          const { reconcileWarRoom } = await import('../war-room/engine');
+          await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
+          try {
+            const { emitAuditEvent: emitWarRoomAudit } = await import('../audit');
+            await emitWarRoomAudit({
+              action: probeSucceeded ? 'TEAMS_PERMISSION_REFRESH_SUCCEEDED' : 'TEAMS_PERMISSION_REFRESH_FAILED',
+              source: 'BACKGROUND',
+              target: { type: 'SYSTEM_CONFIG', id: requiredPayloadString(job.payload, 'warRoomId') },
+              actor: { type: 'SYSTEM' },
+              metadata: { warRoomId: requiredPayloadString(job.payload, 'warRoomId'), reason: 'permission_refresh', result: probeSucceeded ? 'succeeded' : 'failed' } as unknown as never,
+            });
+          } catch {}
+          return markWarRoomJobCompleted(job.id);
+        }
+        if (raw.reason === 'connection_test') {
+          let probeProbeOk = true;
+          try {
+            const room = await prisma.incidentWarRoom.findUnique({
+              where: { id: requiredPayloadString(job.payload, 'warRoomId') },
+              select: { provider: true },
+            });
+            if (room?.provider === 'MICROSOFT_TEAMS') {
+              const { probeMicrosoftTeamsChannelHealth } = await import('../war-room/providers/microsoft-teams/operations');
+              const probeResult = await probeMicrosoftTeamsChannelHealth(requiredPayloadString(job.payload, 'warRoomId')).catch(() => { probeProbeOk = false; return null; }) as { health?: string } | null;
+              if (probeResult && probeResult.health !== 'HEALTHY' && probeResult.health !== 'MISSING' && probeResult.health !== 'PERMISSION_ERROR') {
+                // DEGRADED/UNKNOWN treated as not healthy for audit; still reconcile
+                probeProbeOk = false;
+              }
+              if (!probeResult) probeProbeOk = false;
+            }
+          } catch { probeProbeOk = false; }
+          const { reconcileWarRoom } = await import('../war-room/engine');
+          await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
+          try {
+            const { emitAuditEvent: emitWarRoomAudit } = await import('../audit');
+            await emitWarRoomAudit({
+              action: probeProbeOk ? 'TEAMS_CHANNEL_VERIFICATION_SUCCEEDED' : 'TEAMS_CHANNEL_VERIFICATION_FAILED',
+              source: 'BACKGROUND',
+              target: { type: 'SYSTEM_CONFIG', id: requiredPayloadString(job.payload, 'warRoomId') },
+              actor: { type: 'SYSTEM' },
+              metadata: { warRoomId: requiredPayloadString(job.payload, 'warRoomId'), reason: 'connection_test', result: probeProbeOk ? 'succeeded' : 'failed' } as unknown as never,
+            });
+          } catch {}
+          return markWarRoomJobCompleted(job.id);
+        }
         const { reconcileWarRoom } = await import('../war-room/engine');
         await reconcileWarRoom(requiredPayloadString(job.payload, 'warRoomId'));
         return markWarRoomJobCompleted(job.id);

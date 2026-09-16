@@ -48,6 +48,43 @@ export const OPERATIONAL_METRICS = [
     name: 'opsknight_chatops_refresh_total', help: 'ChatOps adaptive-card refresh requests by provider and outcome',
     kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
   },
+  // ── Phase 5 operational metrics (labels are allowlisted — never incidentId/userId/channelId/tenantId) ──
+  {
+    name: 'opsknight_war_room_health', help: 'War-room operational health by provider, state, and operational health status',
+    kind: 'gauge', labels: ['provider', 'state', 'health'], scope: 'cluster_snapshot', estimatedMaxSeries: 120,
+  },
+  {
+    name: 'opsknight_war_room_state', help: 'War-room distribution by provider and lifecycle state',
+    kind: 'gauge', labels: ['provider', 'state'], scope: 'cluster_snapshot', estimatedMaxSeries: 40,
+  },
+  {
+    name: 'opsknight_war_room_projection_lag_seconds', help: 'War-room projection lag in seconds by provider',
+    kind: 'gauge', labels: ['provider'], scope: 'cluster_snapshot', estimatedMaxSeries: 4,
+  },
+  {
+    name: 'opsknight_war_room_participant_sync_total', help: 'War-room participant sync outcomes by provider and result',
+    kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 16,
+  },
+  {
+    name: 'opsknight_war_room_participant_drift', help: 'War rooms with participant drift by provider',
+    kind: 'gauge', labels: ['provider'], scope: 'cluster_snapshot', estimatedMaxSeries: 4,
+  },
+  {
+    name: 'opsknight_chatops_action_latency_seconds', help: 'ChatOps action latency by provider',
+    kind: 'histogram', labels: ['provider'], scope: 'counter', estimatedMaxSeries: 8, buckets: [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
+  },
+  {
+    name: 'opsknight_provider_rate_limits_total', help: 'Provider rate-limit responses by provider',
+    kind: 'counter', labels: ['provider'], scope: 'counter', estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_provider_permission_failures_total', help: 'Provider permission failures by provider',
+    kind: 'counter', labels: ['provider'], scope: 'counter', estimatedMaxSeries: 8,
+  },
+  {
+    name: 'opsknight_external_cleanup_pending', help: 'War rooms with pending external cleanup by provider',
+    kind: 'gauge', labels: ['provider'], scope: 'cluster_snapshot', estimatedMaxSeries: 4,
+  },
   {
     name: 'opsknight_war_room_reconciliation_total', help: 'War-room reconciliation requests and outcomes',
     kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
@@ -58,10 +95,6 @@ export const OPERATIONAL_METRICS = [
   },
   {
     name: 'opsknight_war_room_projection_total', help: 'War-room projection outcomes',
-    kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
-  },
-  {
-    name: 'opsknight_war_room_participant_sync_total', help: 'War-room participant sync outcomes',
     kind: 'counter', labels: ['provider', 'result'], scope: 'counter', estimatedMaxSeries: 12,
   },
   {
