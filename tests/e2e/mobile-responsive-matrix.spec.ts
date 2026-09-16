@@ -1,12 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { assertResponsiveIntegrity } from '../lib/assert-responsive-integrity';
+import { assertResponsiveIntegrity, assertSingleLineLabels } from '../lib/assert-responsive-integrity';
 import { VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
 
 const prisma = new PrismaClient();
 const FIXTURE_EMAIL = 'mobile-matrix-fixture@example.invalid';
 const FIXTURE_PASSWORD = 'Mobile-matrix-harbor-472!';
+
+let matrixServiceId = '';
 
 async function clearRateLimits() {
   await prisma.rateLimit.deleteMany();
@@ -19,6 +21,24 @@ async function login(page: import('@playwright/test').Page) {
   await page.locator('form button[type="submit"]').click();
   await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
   await expect(page.locator('.mobile-nav')).toBeVisible();
+}
+
+// Forces the App Lock card to render (and therefore be measured by the
+// responsive-integrity touch-target check) even in headless CI, where
+// a real platform authenticator is never available.
+async function mockPlatformAuthenticator(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    class MockPublicKeyCredential {
+      static isUserVerifyingPlatformAuthenticatorAvailable() {
+        return Promise.resolve(true);
+      }
+    }
+    Object.defineProperty(window, 'PublicKeyCredential', {
+      configurable: true,
+      writable: true,
+      value: MockPublicKeyCredential,
+    });
+  });
 }
 
 test.describe('mobile responsive visual integrity matrix', () => {
@@ -46,6 +66,7 @@ test.describe('mobile responsive visual integrity matrix', () => {
       update: { status: 'OPERATIONAL' },
       create: { name: 'Matrix Service', status: 'OPERATIONAL' },
     });
+    matrixServiceId = service.id;
 
     await prisma.incident.upsert({
       where: { id: 'mobile-matrix-incident-fixture' },
@@ -120,6 +141,7 @@ test.describe('mobile responsive visual integrity matrix', () => {
     test(`dashboard and core pages maintain integrity at ${vp.width}px (${vp.name})`, async ({
       page,
     }) => {
+      await mockPlatformAuthenticator(page);
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await login(page);
 
@@ -152,6 +174,8 @@ test.describe('mobile responsive visual integrity matrix', () => {
       // 6. More / Settings
       await page.goto('/m/more');
       await assertResponsiveIntegrity(page);
+      // Regression guard: Appearance's Light/System/Dark labels must never split mid-word.
+      await assertSingleLineLabels(page, '.mobile-segmented-option span');
       await page.screenshot({ path: `screenshots/responsive/more-${vp.width}.png` });
 
       // 7. Schedules
@@ -163,6 +187,34 @@ test.describe('mobile responsive visual integrity matrix', () => {
       await page.goto('/m/services');
       await assertResponsiveIntegrity(page);
       await page.screenshot({ path: `screenshots/responsive/services-${vp.width}.png` });
+
+      // 9. Service detail
+      await page.goto(`/m/services/${matrixServiceId}`);
+      await assertResponsiveIntegrity(page);
+
+      // 10. Status
+      await page.goto('/m/status');
+      await assertResponsiveIntegrity(page);
+
+      // 11. Users
+      await page.goto('/m/users');
+      await assertResponsiveIntegrity(page);
+
+      // 12. Teams
+      await page.goto('/m/teams');
+      await assertResponsiveIntegrity(page);
+
+      // 13. Policies
+      await page.goto('/m/policies');
+      await assertResponsiveIntegrity(page);
+
+      // 14. Postmortems
+      await page.goto('/m/postmortems');
+      await assertResponsiveIntegrity(page);
+
+      // 15. Analytics
+      await page.goto('/m/analytics');
+      await assertResponsiveIntegrity(page);
     });
   }
 });

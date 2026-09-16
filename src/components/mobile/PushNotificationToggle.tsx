@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, BellOff, CircleAlert, Send, Wrench } from 'lucide-react';
-import { Card } from '@/components/ui/shadcn/card';
+import MobileSettingCard from '@/components/mobile/MobileSettingCard';
 import { Button } from '@/components/ui/shadcn/button';
 import { errorFromResponse, toClientAppError } from '@/lib/client-error';
 import { toUserFacingError } from '@/lib/user-facing-error';
@@ -451,6 +451,29 @@ export default function PushNotificationToggle() {
 
   if (pushState === 'UNSUPPORTED') return null;
 
+  // Precise per-state label so distinct conditions (blocked, needs sign-in,
+  // needs repair, in progress) never all collapse into a generic "Disabled".
+  function pushStatusLabel(state: Exclude<PushState, 'UNSUPPORTED'>): string {
+    switch (state) {
+      case 'PERMISSION_REQUIRED':
+        return 'Off';
+      case 'INSTALL_REQUIRED':
+        return 'Install required';
+      case 'PERMISSION_DENIED':
+        return 'Blocked';
+      case 'AUTH_REQUIRED':
+        return 'Sign-in required';
+      case 'REGISTERING':
+        return 'Enabling…';
+      case 'REGISTERED':
+        return 'On';
+      case 'REPAIR_REQUIRED':
+        return 'Needs repair';
+      case 'ERROR':
+        return 'Needs attention';
+    }
+  }
+
   const hint =
     platform === 'ios'
       ? isStandalone
@@ -463,83 +486,73 @@ export default function PushNotificationToggle() {
         : 'Browser Push can deliver incident notifications to this device.';
 
   return (
-    <Card className="rounded-xl border-border bg-card p-4 shadow-none">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
-            {pushState === 'REGISTERED' ? (
-              <Bell className="h-5 w-5" aria-hidden="true" />
-            ) : (
-              <BellOff className="h-5 w-5" aria-hidden="true" />
-            )}
-          </span>
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground">Push notifications</h3>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{hint}</p>
-            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              Push delivery is registered per device and remains separate from the lifetime of your
-              interactive login session.
-            </p>
-          </div>
-        </div>
-        <div className="shrink-0">
-          {pushState === 'INSTALL_REQUIRED' ? (
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-amber-300 bg-amber-50 px-2.5 text-xs font-semibold text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-              Install first
-            </span>
-          ) : pushState === 'PERMISSION_DENIED' ? (
-            <span className="inline-flex min-h-9 items-center rounded-lg border border-rose-300 bg-rose-50 px-2.5 text-xs font-semibold text-rose-900 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">
-              Blocked
-            </span>
-          ) : pushState === 'AUTH_REQUIRED' ? (
-            <Button
-              type="button"
-              size="sm"
-              className="min-h-11"
-              onClick={() => {
-                const callback = `${window.location.pathname}${window.location.search}`;
-                router.push(appRoutes.login('mobile', callback));
-              }}
-            >
-              Sign in
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              variant={pushState === 'REGISTERED' ? 'outline' : 'default'}
-              className="min-h-11 gap-1.5"
-              disabled={loading || pushState === 'REGISTERING'}
-              onClick={() =>
-                void (pushState === 'REGISTERED' ? unsubscribe() : subscribeOrRepair())
-              }
-            >
-              {pushState === 'REPAIR_REQUIRED' ? (
-                <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : null}
-              {loading || pushState === 'REGISTERING'
-                ? 'Working…'
-                : pushState === 'REGISTERED'
-                  ? 'Disable'
-                  : pushState === 'REPAIR_REQUIRED'
-                    ? 'Repair'
-                    : 'Enable'}
-            </Button>
-          )}
-        </div>
-      </div>
+    <MobileSettingCard
+      icon={
+        pushState === 'REGISTERED' ? (
+          <Bell className="h-5 w-5" aria-hidden="true" />
+        ) : (
+          <BellOff className="h-5 w-5" aria-hidden="true" />
+        )
+      }
+      title="Push notifications"
+      status={pushStatusLabel(pushState)}
+      action={
+        // Install-required/blocked are already communicated by the status
+        // line above; the action slot only needs a control when there is
+        // one to take.
+        pushState === 'INSTALL_REQUIRED' || pushState === 'PERMISSION_DENIED' ? null : pushState ===
+            'AUTH_REQUIRED' ? (
+          <Button
+            type="button"
+            size="sm"
+            className="min-h-11"
+            onClick={() => {
+              const callback = `${window.location.pathname}${window.location.search}`;
+              router.push(appRoutes.login('mobile', callback));
+            }}
+          >
+            Sign in
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant={pushState === 'REGISTERED' ? 'outline' : 'default'}
+            className="min-h-11 gap-1.5"
+            disabled={loading || pushState === 'REGISTERING'}
+            onClick={() => void (pushState === 'REGISTERED' ? unsubscribe() : subscribeOrRepair())}
+          >
+            {pushState === 'REPAIR_REQUIRED' ? (
+              <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : null}
+            {loading || pushState === 'REGISTERING'
+              ? 'Working…'
+              : pushState === 'REGISTERED'
+                ? 'Disable'
+                : pushState === 'REPAIR_REQUIRED'
+                  ? 'Repair'
+                  : 'Enable'}
+          </Button>
+        )
+      }
+    >
+      <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Push delivery is registered per device and remains separate from the lifetime of your
+        interactive login session.
+      </p>
 
       {error ? (
         <div
           role="alert"
-          className="mt-3 flex items-start gap-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
+          className="flex items-start gap-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/40 dark:text-amber-200"
         >
           <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className="mt-3 border-t border-border pt-3">
+      <div className="border-t border-border pt-3">
         <Button
           type="button"
           variant="secondary"
@@ -557,6 +570,6 @@ export default function PushNotificationToggle() {
           </p>
         ) : null}
       </div>
-    </Card>
+    </MobileSettingCard>
   );
 }

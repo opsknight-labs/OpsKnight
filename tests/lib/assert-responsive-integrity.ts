@@ -191,13 +191,13 @@ export async function checkResponsiveIntegrity(
 
           if ((isButton || isInput) && !isExcluded) {
             // Check computed or bounding dimensions
-            if (rect.height < 44 - opts.tolerance) {
+            if (rect.height < 44 - opts.tolerance || rect.width < 44 - opts.tolerance) {
               // Only report if it's within viewport bounds
               if (rect.top >= 0 && rect.bottom <= viewportHeight + 100) {
                 violations.push({
                   type: 'TOUCH_TARGET_BELOW_44PX',
                   selector: getPath(el),
-                  details: `Interactive element height (${Math.round(rect.height)}px) is below 44px touch target guideline`,
+                  details: `Interactive element size (${Math.round(rect.width)}x${Math.round(rect.height)}px) is below the 44x44px touch target guideline`,
                   rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
                 });
               }
@@ -282,4 +282,29 @@ export async function assertResponsiveIntegrity(
     const summary = violations.map(v => `[${v.type}] ${v.selector}: ${v.details}`).join('\n');
     expect(violations, `Responsive integrity violations found:\n${summary}`).toHaveLength(0);
   }
+}
+
+/**
+ * Regression guard for the mobile segmented-control label wrapping bug
+ * ("System" -> "Syste" / "m"): asserts that every element matched by
+ * `selector` renders its text as a single, unwrapped line.
+ */
+export async function assertSingleLineLabels(page: Page, selector: string): Promise<void> {
+  const wrapped = await page.evaluate(sel => {
+    const elements = Array.from(document.querySelectorAll(sel)) as HTMLElement[];
+    return elements
+      .filter(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return false;
+        const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
+        const singleLineHeight = Number.isFinite(lineHeight) ? lineHeight : rect.height;
+        return rect.height > singleLineHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+      })
+      .map(el => el.textContent?.trim() ?? '(empty)');
+  }, selector);
+
+  expect(
+    wrapped,
+    `Labels matching "${selector}" wrapped or overflowed instead of rendering on one line: ${wrapped.join(', ')}`
+  ).toHaveLength(0);
 }

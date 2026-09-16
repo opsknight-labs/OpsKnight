@@ -27,6 +27,28 @@ describe('MobileThemeToggle', () => {
     expect(screen.getByRole('radio', { name: 'System' })).toBeInTheDocument();
   });
 
+  // Regression guard for the `System` -> `Syste` / `m` mid-word split bug:
+  // labels must render with a nowrap span inside the container-scoped
+  // segmented-control layout, never as free-flowing wrappable text.
+  it('never allows option labels to become wrappable text', () => {
+    vi.mocked(useTheme).mockReturnValue({
+      theme: 'system',
+      resolvedTheme: 'light',
+      systemTheme: 'light',
+      themes: ['light', 'dark', 'system'],
+      setTheme: vi.fn(),
+    });
+    render(<MobileThemeToggle />);
+
+    for (const label of ['Light', 'System', 'Dark']) {
+      const option = screen.getByRole('radio', { name: label });
+      expect(option.className).toContain('mobile-segmented-option');
+      const labelSpan = option.querySelector('span');
+      expect(labelSpan?.className).toContain('whitespace-nowrap');
+      expect(labelSpan?.textContent).toBe(label);
+    }
+  });
+
   it('toggles from light to dark', () => {
     const setTheme = vi.fn();
     vi.mocked(useTheme).mockReturnValue({
