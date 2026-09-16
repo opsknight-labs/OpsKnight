@@ -14,35 +14,38 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const fixtures = vi.hoisted(() => {
   type Row = Record<string, unknown>;
 
+  // Uses Map/Object.entries/Object.fromEntries throughout instead of
+  // `obj[dynamicKey]` bracket access, so this fixture helper never trips
+  // object-injection style static analysis in the first place.
   function applySelect(row: Row, select?: Record<string, unknown>): Row {
     if (!select) return row;
-    const projected: Row = {};
-    for (const [key, value] of Object.entries(select)) {
-      if (value === true) {
-        // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own select map, not external input
-        projected[key] = row[key];
-      } else if (value && typeof value === 'object' && 'select' in value) {
-        // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own select map, not external input
-        const nested = row[key];
-        const nestedSelect = (value as { select: Record<string, unknown> }).select;
-        // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own select map, not external input
-        projected[key] = Array.isArray(nested)
-          ? nested.map(item => applySelect(item as Row, nestedSelect))
-          : nested
-            ? applySelect(nested as Row, nestedSelect)
-            : nested;
+    const selectMap = new Map(Object.entries(select));
+    const projectedEntries = Object.entries(row).flatMap(
+      ([key, rowValue]): Array<[string, unknown]> => {
+        const selectValue = selectMap.get(key);
+        if (selectValue === true) return [[key, rowValue]];
+        if (selectValue && typeof selectValue === 'object' && 'select' in selectValue) {
+          const nestedSelect = (selectValue as { select: Record<string, unknown> }).select;
+          const nestedValue = Array.isArray(rowValue)
+            ? rowValue.map(item => applySelect(item as Row, nestedSelect))
+            : rowValue
+              ? applySelect(rowValue as Row, nestedSelect)
+              : rowValue;
+          return [[key, nestedValue]];
+        }
+        return [];
       }
-    }
-    return projected;
+    );
+    return Object.fromEntries(projectedEntries);
   }
 
   function matchesWhere(row: Row, where: Record<string, unknown>): boolean {
+    const rowMap = new Map(Object.entries(row));
     return Object.entries(where).every(([key, expected]) => {
       if (key === 'OR' && Array.isArray(expected)) {
         return expected.some(clause => matchesWhere(row, clause as Record<string, unknown>));
       }
-      // eslint-disable-next-line security/detect-object-injection -- key comes from a hardcoded fixture's own where clause, not external input
-      return row[key] === expected;
+      return rowMap.get(key) === expected;
     });
   }
 
@@ -306,11 +309,12 @@ async function unzipToText(
   buffer: Buffer
 ): Promise<{ files: Record<string, string>; combined: string }> {
   const zip = await JSZip.loadAsync(buffer);
-  const files: Record<string, string> = {};
-  for (const [name, entry] of Object.entries(zip.files)) {
-    // eslint-disable-next-line security/detect-object-injection -- name comes from JSZip's own file listing, not external input
-    files[name] = await entry.async('text');
-  }
+  const entries = await Promise.all(
+    Object.entries(zip.files).map(
+      async ([name, entry]) => [name, await entry.async('text')] as const
+    )
+  );
+  const files: Record<string, string> = Object.fromEntries(entries);
   return { files, combined: Object.values(files).join('\n') };
 }
 

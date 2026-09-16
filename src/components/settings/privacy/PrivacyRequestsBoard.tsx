@@ -72,6 +72,13 @@ export type PrivacyRequestRow = {
 
 const AUTOMATED_TYPES: readonly PrivacyRequestType[] = ['ACCESS', 'PORTABILITY'];
 
+/** Only USER subjects are automated in Phase 2 — matches generateSubjectExport()'s own guard. */
+export function isAutomatedRequest(
+  request: Pick<PrivacyRequestRow, 'subjectType' | 'requestType'>
+): boolean {
+  return request.subjectType === 'USER' && AUTOMATED_TYPES.includes(request.requestType);
+}
+
 const ALLOWED_TRANSITIONS: Record<PrivacyRequestStatus, readonly PrivacyRequestStatus[]> = {
   RECEIVED: ['IDENTITY_VERIFICATION', 'IN_REVIEW', 'REJECTED'],
   IDENTITY_VERIFICATION: ['IN_REVIEW', 'BLOCKED', 'REJECTED'],
@@ -315,15 +322,18 @@ export default function PrivacyRequestsBoard({
                         ).map(type => (
                           <SelectItem key={type} value={type}>
                             {type}
-                            {!AUTOMATED_TYPES.includes(type) ? ' — not yet automated' : ''}
+                            {!isAutomatedRequest({ subjectType, requestType: type })
+                              ? ' — not yet automated'
+                              : ''}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    {!AUTOMATED_TYPES.includes(requestType) && (
+                    {!isAutomatedRequest({ subjectType, requestType }) && (
                       <p className="text-xs text-amber-600 dark:text-amber-400">
-                        This request type requires manual review; OpsKnight does not automate it
-                        yet.
+                        {subjectType === 'STATUS_SUBSCRIBER'
+                          ? 'Status-page subscriber export is not yet automated; this request requires manual review.'
+                          : 'This request type requires manual review; OpsKnight does not automate it yet.'}
                       </p>
                     )}
                   </div>
@@ -377,6 +387,7 @@ export default function PrivacyRequestsBoard({
               {requests.map(req => {
                 const nextStatuses = ALLOWED_TRANSITIONS[req.status];
                 const isTerminal = nextStatuses.length === 0;
+                const automated = isAutomatedRequest(req);
                 return (
                   <TableRow key={req.id}>
                     <TableCell className="font-mono text-xs">
@@ -385,7 +396,7 @@ export default function PrivacyRequestsBoard({
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <span>{req.requestType}</span>
-                        {!AUTOMATED_TYPES.includes(req.requestType) && (
+                        {!automated && (
                           <Badge variant="outline" className="w-fit text-[10px]">
                             Requires manual review
                           </Badge>
@@ -428,7 +439,7 @@ export default function PrivacyRequestsBoard({
                         requestId={req.id}
                         canManage={canManage}
                         canExport={canExport}
-                        automated={AUTOMATED_TYPES.includes(req.requestType)}
+                        automated={automated}
                         exportEligible={req.status === 'PROCESSING' && Boolean(req.verifiedAt)}
                         trigger={
                           <Button size="sm" variant="outline">

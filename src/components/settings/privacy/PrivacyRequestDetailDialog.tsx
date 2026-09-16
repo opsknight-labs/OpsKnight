@@ -64,8 +64,7 @@ function formatBytes(bytes: number | null): string {
     value /= 1024;
     unitIndex += 1;
   }
-  // eslint-disable-next-line security/detect-object-injection -- unitIndex is bounded [0, units.length - 1] by the loop above
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
+  return `${value.toFixed(1)} ${units.at(unitIndex) ?? 'B'}`;
 }
 
 async function readJson(response: Response) {
@@ -187,7 +186,9 @@ export default function PrivacyRequestDetailDialog({
                     )
                   ) : (
                     <span className="text-amber-600 dark:text-amber-400">
-                      This request type is not yet automated and requires manual fulfilment.
+                      {detail.subjectType === 'STATUS_SUBSCRIBER'
+                        ? 'Status-page subscriber export is not yet automated and requires manual fulfilment.'
+                        : 'This request type is not yet automated and requires manual fulfilment.'}
                     </span>
                   )}
                 </div>
