@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { getAuthOptions } from '@/lib/auth';
 import { getOidcRuntimeCapability } from '@/lib/oidc-validation';
 import { safeInternalCallbackUrl } from '@/lib/auth-redirect';
+import { forcedSignOutUrl } from '@/lib/app-routes';
 import { redirect } from 'next/navigation';
 import { getLocalAuthPolicy } from '@/lib/local-auth-policy';
 import prisma from '@/lib/prisma';
@@ -71,7 +72,7 @@ export default async function LoginPage({
         select: { id: true },
       });
       if (!existingUser) {
-        redirect('/api/auth/signout?callbackUrl=/login');
+        redirect(forcedSignOutUrl(defaultCallbackUrl.startsWith('/m') ? 'mobile' : 'desktop'));
       }
     } catch (error) {
       if (!isNextRedirectError(error)) {
