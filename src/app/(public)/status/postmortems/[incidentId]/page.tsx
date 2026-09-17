@@ -9,6 +9,14 @@ import { canPublishIncidentToStatusPage } from '@/lib/status-page-publication';
 import { serializePublicPostmortem } from '@/lib/status-pages/public-postmortem';
 import { deriveJiraCapability } from '@/lib/jira-capabilities';
 
+import { cookies, headers } from 'next/headers';
+import { getAppUrl } from '@/lib/app-config';
+import {
+  STATUS_SESSION_COOKIE_NAME,
+  hasStatusPageAccess,
+  isRequestToAppHost,
+} from '@/lib/status-pages/status-auth';
+
 const PUBLIC_READ_ONLY_JIRA_CAPABILITY = deriveJiraCapability({
   workspaceState: 'NOT_CONFIGURED',
   canManage: false,
@@ -30,12 +38,47 @@ export async function renderPublicPostmortem(incidentId: string, slug?: string) 
   const statusPage = await resolveStatusPage(slug ? { slug } : { default: true });
   if (!statusPage) notFound();
   if (statusPage?.requireAuth) {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      const callbackUrl = slug
-        ? `/status/${encodeURIComponent(slug)}/postmortems/${incidentId}`
-        : `/status/postmortems/${incidentId}`;
-      redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    const cookieStore = await cookies();
+    const statusCookie = cookieStore.get(STATUS_SESSION_COOKIE_NAME)?.value;
+    const headerStore = await headers();
+    const host =
+      headerStore
+        .get('x-forwarded-host')
+        ?.split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .at(-1) ||
+      headerStore.get('host') ||
+      '';
+    const appUrl = await getAppUrl();
+    const isAppHost = isRequestToAppHost(host, appUrl);
+
+    let isAuthorized = false;
+    if (statusCookie) {
+      isAuthorized = await hasStatusPageAccess({
+        pageId: statusPage.id,
+        statusSessionCookie: statusCookie,
+        isAppHost,
+      });
+    }
+    if (!isAuthorized && isAppHost) {
+      const session = await getServerSession(await getAuthOptions());
+      isAuthorized = !!session;
+    }
+
+    if (!isAuthorized) {
+      if (isAppHost) {
+        const callbackUrl = slug
+          ? `/status/${encodeURIComponent(slug)}/postmortems/${incidentId}`
+          : `/status/postmortems/${incidentId}`;
+        redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      } else {
+        const proto = headerStore.get('x-forwarded-proto') || 'https';
+        const currentUrl = `${proto}://${host}/postmortems/${encodeURIComponent(incidentId)}`;
+        redirect(
+          `${appUrl}/status-auth/start?pageId=${encodeURIComponent(statusPage.id)}&returnTo=${encodeURIComponent(currentUrl)}`
+        );
+      }
     }
   }
 

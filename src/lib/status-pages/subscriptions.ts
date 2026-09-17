@@ -20,6 +20,12 @@ import {
   getStatusPagePublicUrl,
   getStatusPageVerificationUrl,
 } from '@/lib/status-page-url';
+import { getAppUrl } from '@/lib/app-config';
+import {
+  extractStatusSessionToken,
+  hasStatusPageAccess,
+  isRequestToAppHost,
+} from '@/lib/status-pages/status-auth';
 
 function rateLimitError(retryAfter: number) {
   return jsonError(new AppError({ code: 'RATE_LIMIT_EXCEEDED' }), undefined, { retryAfter });
@@ -110,8 +116,28 @@ export async function subscribeStatusPageRequest(req: NextRequest) {
       );
     }
     if (!statusPage.showSubscribe) return jsonError('Subscriptions are disabled.', 404);
-    if (statusPage.requireAuth && !(await getServerSession(await getAuthOptions()))) {
-      return jsonError('Authentication required', 401);
+    if (statusPage.requireAuth) {
+      const cookieHeader = req.headers.get('cookie');
+      const statusToken = extractStatusSessionToken(cookieHeader);
+      const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+      const appUrl = await getAppUrl();
+      const isAppHost = isRequestToAppHost(host, appUrl);
+
+      let isAuthorized = false;
+      if (statusToken) {
+        isAuthorized = await hasStatusPageAccess({
+          pageId: statusPage.id,
+          statusSessionCookie: statusToken,
+          isAppHost,
+        });
+      }
+      if (!isAuthorized && isAppHost) {
+        const session = await getServerSession(await getAuthOptions());
+        isAuthorized = !!session;
+      }
+      if (!isAuthorized) {
+        return jsonError('Authentication required', 401);
+      }
     }
 
     // Industry-standard service picker: optional preferences.selectedServiceIds, validated against page's services

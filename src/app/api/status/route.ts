@@ -12,6 +12,12 @@ import {
   PRIVATE_STATUS_CACHE_CONTROL,
   PUBLIC_STATUS_CACHE_CONTROL,
 } from '@/lib/status-pages/cache-policy';
+import { getAppUrl } from '@/lib/app-config';
+import {
+  extractStatusSessionToken,
+  hasStatusPageAccess,
+  isRequestToAppHost,
+} from '@/lib/status-pages/status-auth';
 
 /**
  * Status Page API
@@ -38,14 +44,18 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
       });
     }
 
-    const needsApiControl = statusPage.statusApiRequireToken === true ||
-      statusPage.statusApiRateLimitEnabled === true || req.headers.has('authorization');
-    const authResult = needsApiControl ? await authorizeStatusApiRequest(req, statusPage.id, {
-      requireToken: statusPage.statusApiRequireToken === true,
-      rateLimitEnabled: statusPage.statusApiRateLimitEnabled === true,
-      rateLimitMax: statusPage.statusApiRateLimitMax ?? 120,
-      rateLimitWindowSec: statusPage.statusApiRateLimitWindowSec ?? 60,
-    }) : { allowed: true };
+    const needsApiControl =
+      statusPage.statusApiRequireToken === true ||
+      statusPage.statusApiRateLimitEnabled === true ||
+      req.headers.has('authorization');
+    const authResult = needsApiControl
+      ? await authorizeStatusApiRequest(req, statusPage.id, {
+          requireToken: statusPage.statusApiRequireToken === true,
+          rateLimitEnabled: statusPage.statusApiRateLimitEnabled === true,
+          rateLimitMax: statusPage.statusApiRateLimitMax ?? 120,
+          rateLimitWindowSec: statusPage.statusApiRateLimitWindowSec ?? 60,
+        })
+      : { allowed: true };
     if (!authResult.allowed) {
       if (authResult.status === 429) {
         return NextResponse.json(
@@ -63,8 +73,25 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
 
     // Check if authentication is required
     if (statusPage.requireAuth) {
-      const session = await getServerSession(await getAuthOptions());
-      if (!session) {
+      const cookieHeader = req.headers.get('cookie');
+      const statusToken = extractStatusSessionToken(cookieHeader);
+      const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+      const appUrl = await getAppUrl();
+      const isAppHost = isRequestToAppHost(host, appUrl);
+
+      let isAuthorized = false;
+      if (statusToken) {
+        isAuthorized = await hasStatusPageAccess({
+          pageId: statusPage.id,
+          statusSessionCookie: statusToken,
+          isAppHost,
+        });
+      }
+      if (!isAuthorized && isAppHost) {
+        const session = await getServerSession(await getAuthOptions());
+        isAuthorized = !!session;
+      }
+      if (!isAuthorized) {
         return jsonError('Authentication required', 401);
       }
     }
@@ -108,7 +135,6 @@ export async function getStatusResponse(req: NextRequest, slug?: string) {
       }
       return jsonOk(responseData, 200, { ...headers, ETag: etag });
     }
-
   } catch (error: unknown) {
     logger.error('api.status.error', {
       error: error instanceof Error ? error.message : String(error),

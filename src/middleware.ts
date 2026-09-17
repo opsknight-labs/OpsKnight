@@ -76,7 +76,7 @@ function isPublicPath(pathname: string) {
   );
 }
 
-function isStatusDomainPath(pathname: string) {
+export function isStatusDomainPath(pathname: string) {
   return (
     pathname === '/' ||
     pathname === '/history' ||
@@ -87,7 +87,55 @@ function isStatusDomainPath(pathname: string) {
   );
 }
 
-function normalizeHostname(value?: string | null) {
+export function isStatusStaticAsset(pathname: string): boolean {
+  return (
+    pathname.startsWith('/_next/') ||
+    pathname === '/favicon.ico' ||
+    pathname === '/icon.svg' ||
+    pathname.startsWith('/icons/') ||
+    pathname === '/robots.txt' ||
+    pathname === '/sitemap.xml' ||
+    pathname === '/manifest.webmanifest' ||
+    /\.(jpg|jpeg|png|webp|avif|gif|svg|ico|css|js|woff|woff2|ttf|eot|webmanifest)$/i.test(pathname)
+  );
+}
+
+export function isAllowedStatusApi(pathname: string, method: string): boolean {
+  if (pathname === '/api/status-page/subscribe' && method === 'POST') return true;
+  if (pathname.startsWith('/api/status-page/logo/') && method === 'GET') return true;
+  if (pathname === '/api/status' && method === 'GET') return true;
+  if (pathname.startsWith('/api/status/')) {
+    if (method === 'GET') return true;
+    if (method === 'POST' && pathname.endsWith('/subscribe')) return true;
+  }
+  return false;
+}
+
+export function isRecognizedAppHost(hostname: string, appHost?: string | null): boolean {
+  if (!hostname) return true;
+  const clean = normalizeHostname(hostname);
+  if (
+    clean === 'localhost' ||
+    clean === '127.0.0.1' ||
+    clean === '[::1]' ||
+    clean.endsWith('.localhost')
+  ) {
+    return true;
+  }
+  if (appHost) {
+    const cleanAppHost = normalizeHostname(appHost);
+    if (cleanAppHost && clean === cleanAppHost) return true;
+  }
+  const defaultEnvAppHost = normalizeHostname(
+    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
+  );
+  if (defaultEnvAppHost && clean === defaultEnvAppHost) {
+    return true;
+  }
+  return false;
+}
+
+export function normalizeHostname(value?: string | null) {
   if (!value) return '';
   const candidate = value.trim().toLowerCase().replace(/\.$/, '');
   if (!candidate || candidate.length > 253 || /[^a-z0-9.:[\]-]/.test(candidate)) return '';
@@ -356,6 +404,79 @@ function applySensitiveAuthHeaders(response: NextResponse, pathname: string) {
   }
 }
 
+export function handleStatusDomainRequest({
+  req,
+  pathname,
+  statusRoute,
+  securityHeaders,
+  forwardedHeaders,
+  requestId,
+}: {
+  req: NextRequest;
+  pathname: string;
+  statusRoute: { pageId: string; slug: string | null; requireAuth: boolean };
+  securityHeaders: Record<string, string>;
+  forwardedHeaders: Headers;
+  requestId: string;
+}): NextResponse {
+  // 1. Static Assets Allowlist
+  if (isStatusStaticAsset(pathname)) {
+    const assetResponse = NextResponse.next({ request: { headers: forwardedHeaders } });
+    assetResponse.headers.set('x-request-id', requestId);
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      assetResponse.headers.set(key, value)
+    );
+    return assetResponse;
+  }
+
+  // 2. Server Action Firewall: Reject any Next-Action request unless targeting verify or unsubscribe
+  if (req.headers.has('next-action')) {
+    const isStatusAction = pathname.startsWith('/verify') || pathname.startsWith('/unsubscribe');
+    if (!isStatusAction) {
+      return new NextResponse('Not Found', { status: 404, headers: securityHeaders });
+    }
+  }
+
+  // 3. Status Auth Callback (runs on status host)
+  if (pathname === '/status-auth/callback') {
+    const callbackResponse = NextResponse.next({ request: { headers: forwardedHeaders } });
+    callbackResponse.headers.set('x-request-id', requestId);
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      callbackResponse.headers.set(key, value)
+    );
+    return callbackResponse;
+  }
+
+  // 4. Allowed Status Surface Pages (Rewrite to public status route)
+  if (isStatusDomainPath(pathname)) {
+    const url = req.nextUrl.clone();
+    const pageRoot = statusRoute.slug ? `/status/${statusRoute.slug}` : '/status';
+    url.pathname = pathname === '/' || pathname === '' ? pageRoot : `${pageRoot}${pathname}`;
+    const rewriteResponse = NextResponse.rewrite(url);
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      rewriteResponse.headers.set(key, value)
+    );
+    rewriteResponse.headers.set('x-request-id', requestId);
+    rewriteResponse.headers.set(
+      'Cache-Control',
+      statusRoute.requireAuth ? PRIVATE_STATUS_CACHE_CONTROL : PUBLIC_STATUS_CACHE_CONTROL
+    );
+    if (statusRoute.requireAuth) rewriteResponse.headers.set('Vary', 'Cookie');
+    return rewriteResponse;
+  }
+
+  // 5. Allowed Status APIs
+  if (isAllowedStatusApi(pathname, req.method)) {
+    const apiResponse = NextResponse.next({ request: { headers: forwardedHeaders } });
+    apiResponse.headers.set('x-request-id', requestId);
+    Object.entries(securityHeaders).forEach(([key, value]) => apiResponse.headers.set(key, value));
+    return apiResponse;
+  }
+
+  // 6. NO FALLTHROUGH: Any other path (/users, /settings, /incidents, /admin, /setup, /login, /api/auth, etc.)
+  return new NextResponse('Not Found', { status: 404, headers: securityHeaders });
+}
+
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const origin = req.headers.get('origin');
@@ -373,67 +494,57 @@ export default async function middleware(req: NextRequest) {
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
 
-  const skipDomainCheck =
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/setup') ||
-    pathname.startsWith('/logs') ||
-    isPublicPath(pathname) ||
-    /\.(jpg|jpeg|png|webp|avif|gif|svg|ico|css|js|woff|woff2|ttf|eot|webmanifest)$/i.test(pathname);
+  const forwardedHost = req.headers
+    .get('x-forwarded-host')
+    ?.split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+    .at(-1);
+  const hostname = normalizeHostname(forwardedHost || req.headers.get('host'));
+  const publishedPage = hostname ? await fetchPublishedStatusDomain(hostname) : null;
+  const statusConfig =
+    publishedPage || usesExternalStatusServingStore() ? null : await fetchStatusDomainConfig();
 
-  if (!skipDomainCheck) {
-    const forwardedHost = req.headers
-      .get('x-forwarded-host')
-      ?.split(',')
-      .map(value => value.trim())
-      .filter(Boolean)
-      .at(-1);
-    const hostname = normalizeHostname(forwardedHost || req.headers.get('host'));
-    const publishedPage = hostname ? await fetchPublishedStatusDomain(hostname) : null;
-    const statusConfig =
-      publishedPage || usesExternalStatusServingStore() ? null : await fetchStatusDomainConfig();
-    if (statusConfig?.enabled) {
-      const matchedPage = statusConfig.pages?.find(page => {
+  let matchedPage: StatusDomainPage | null = null;
+  if (statusConfig?.enabled && hostname) {
+    matchedPage =
+      statusConfig.pages?.find(page => {
         const subdomainHost =
           page.subdomain && statusConfig.appHost
             ? buildSubdomainHost(page.subdomain, statusConfig.appHost)
             : '';
         const customHost = parseHostname(page.customDomain);
         return hostname === subdomainHost || hostname === customHost;
-      });
-      if (hostname && matchedPage && isStatusDomainPath(pathname)) {
-        const url = req.nextUrl.clone();
-        const pageRoot = matchedPage.slug ? `/status/${matchedPage.slug}` : '/status';
-        url.pathname = pathname === '/' || pathname === '' ? pageRoot : `${pageRoot}${pathname}`;
-        const rewriteResponse = NextResponse.rewrite(url);
-        Object.entries(securityHeaders).forEach(([key, value]) =>
-          rewriteResponse.headers.set(key, value)
-        );
-        rewriteResponse.headers.set('x-request-id', requestId);
-        rewriteResponse.headers.set(
-          'Cache-Control',
-          matchedPage.requireAuth ? PRIVATE_STATUS_CACHE_CONTROL : PUBLIC_STATUS_CACHE_CONTROL
-        );
-        if (matchedPage.requireAuth) rewriteResponse.headers.set('Vary', 'Cookie');
-        return rewriteResponse;
+      }) ?? null;
+  }
+
+  const statusRoute = publishedPage
+    ? {
+        pageId: publishedPage.pageId,
+        slug: publishedPage.slug,
+        requireAuth: publishedPage.requireAuth,
       }
-    }
-    if (hostname && publishedPage && isStatusDomainPath(pathname)) {
-      const url = req.nextUrl.clone();
-      const pageRoot = publishedPage.slug ? `/status/${publishedPage.slug}` : '/status';
-      url.pathname = pathname === '/' || pathname === '' ? pageRoot : `${pageRoot}${pathname}`;
-      const rewriteResponse = NextResponse.rewrite(url);
-      Object.entries(securityHeaders).forEach(([key, value]) =>
-        rewriteResponse.headers.set(key, value)
-      );
-      rewriteResponse.headers.set('x-request-id', requestId);
-      rewriteResponse.headers.set(
-        'Cache-Control',
-        publishedPage.requireAuth ? PRIVATE_STATUS_CACHE_CONTROL : PUBLIC_STATUS_CACHE_CONTROL
-      );
-      if (publishedPage.requireAuth) rewriteResponse.headers.set('Vary', 'Cookie');
-      return rewriteResponse;
-    }
+    : matchedPage
+      ? {
+          pageId: matchedPage.id,
+          slug: matchedPage.slug ?? null,
+          requireAuth: !!matchedPage.requireAuth,
+        }
+      : null;
+
+  if (statusRoute) {
+    return handleStatusDomainRequest({
+      req,
+      pathname,
+      statusRoute,
+      securityHeaders,
+      forwardedHeaders,
+      requestId,
+    });
+  }
+
+  if (!isRecognizedAppHost(hostname, statusConfig?.appHost)) {
+    return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
   }
 
   // Old mobile reset links remain valid but converge on the single responsive page.
