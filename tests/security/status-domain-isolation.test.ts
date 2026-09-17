@@ -247,6 +247,47 @@ describe('Status Domain Host Firewall & Isolation', () => {
       expect(res.status).toBe(200);
     });
 
+    it('rejects POST to static asset path on status domain with 404', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.customer.test/_next/static/chunks/main.js', {
+        method: 'POST',
+        headers: { host: 'status.customer.test' },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('rejects Next-Action targeting static asset path on status domain with 404', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.customer.test/_next/static/chunks/main.js', {
+        method: 'POST',
+        headers: {
+          host: 'status.customer.test',
+          'next-action': 'deactivateUser',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('rejects arbitrary app routes with file extensions like /exports/report.js with 404', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.customer.test/exports/report.js', {
+        headers: { host: 'status.customer.test' },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(404);
+    });
+
     it('rejects unallowlisted routes under /api/status/ on status domain with 404 (defense in depth)', async () => {
       setupRouteMocks();
       const { default: middleware } = await import('@/middleware');

@@ -89,16 +89,25 @@ export function isStatusDomainPath(pathname: string) {
 }
 
 export function isStatusStaticAsset(pathname: string): boolean {
-  return (
-    pathname.startsWith('/_next/') ||
+  if (pathname.startsWith('/_next/')) return true;
+  if (
     pathname === '/favicon.ico' ||
     pathname === '/icon.svg' ||
-    pathname.startsWith('/icons/') ||
+    pathname === '/apple-icon.png' ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||
-    pathname === '/manifest.webmanifest' ||
-    /\.(jpg|jpeg|png|webp|avif|gif|svg|ico|css|js|woff|woff2|ttf|eot|webmanifest)$/i.test(pathname)
-  );
+    pathname === '/manifest.webmanifest'
+  ) {
+    return true;
+  }
+  if (
+    pathname.startsWith('/icons/') ||
+    pathname.startsWith('/images/') ||
+    pathname.startsWith('/fonts/')
+  ) {
+    return /\.(jpg|jpeg|png|webp|avif|gif|svg|ico|woff|woff2|ttf|eot)$/i.test(pathname);
+  }
+  return false;
 }
 
 const STATUS_API_EXACT_GET = new Set([
@@ -453,19 +462,22 @@ export function handleStatusDomainRequest({
   forwardedHeaders: Headers;
   requestId: string;
 }): NextResponse {
-  // 1. Static Assets Allowlist
+  // 1. Server Action Firewall: Reject all Next-Action requests on status domains unconditionally (highest priority)
+  if (req.headers.has('next-action')) {
+    return new NextResponse('Not Found', { status: 404, headers: securityHeaders });
+  }
+
+  // 2. Static Assets Allowlist (GET / HEAD only)
   if (isStatusStaticAsset(pathname)) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return new NextResponse('Not Found', { status: 404, headers: securityHeaders });
+    }
     const assetResponse = NextResponse.next({ request: { headers: forwardedHeaders } });
     assetResponse.headers.set('x-request-id', requestId);
     Object.entries(securityHeaders).forEach(([key, value]) =>
       assetResponse.headers.set(key, value)
     );
     return assetResponse;
-  }
-
-  // 2. Server Action Firewall: Reject all Next-Action requests on status domains unconditionally
-  if (req.headers.has('next-action')) {
-    return new NextResponse('Not Found', { status: 404, headers: securityHeaders });
   }
 
   // 3. Status Auth Callback (runs on status host)
