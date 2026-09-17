@@ -207,6 +207,65 @@ export class MockWarRoomProviderHarness {
   }
 }
 
+import { registerWarRoomProvider, resetWarRoomProviders } from '@/lib/war-room/registry';
+import type {
+  WarRoomProviderAdapter,
+  WarRoomProviderCapabilities,
+  ProviderOperationResult,
+  WarRoomIncidentEvent,
+} from '@/lib/war-room/provider';
+import type { WarRoomProviderName } from '@/lib/war-room/types';
+
+export class MockWarRoomProviderAdapter implements WarRoomProviderAdapter {
+  constructor(
+    public readonly provider: WarRoomProviderName,
+    public readonly harness: MockWarRoomProviderHarness
+  ) {}
+
+  readonly capabilities: WarRoomProviderCapabilities = {
+    createRoom: true,
+    privateRooms: true,
+    manageMembers: true,
+    updateRoom: true,
+    archiveRoom: true,
+    interactiveProjection: true,
+    projectionUpdates: true,
+    reconciliation: true,
+  };
+
+  async provision(
+    warRoomId: string,
+    provisioningToken: string,
+    opts?: { reconciliationOnly?: boolean }
+  ): Promise<void> {
+    this.harness.provisionCalls.push({ warRoomId, provisioningToken, opts });
+    const behavior = this.harness.getProvisionBehavior();
+    if (behavior.behavior === 'RATE_LIMITED') {
+      throw new WarRoomRetryableError('Rate limit exceeded (429)', behavior.retryAfterMs ?? 30000);
+    }
+    if (behavior.behavior === 'SERVER_ERROR') {
+      throw new WarRoomRetryableError('500 Internal Server Error', 5000);
+    }
+    if (behavior.behavior === 'PERMISSION_DENIED') {
+      throw new Error('403 Forbidden: Insufficient permissions');
+    }
+    if (behavior.behavior === 'NETWORK_FAILURE') {
+      throw new WarRoomRetryableError('Network timeout', 2000);
+    }
+  }
+
+  async project(warRoomId: string, projectionVersion: number): Promise<void> {}
+  async syncParticipants(warRoomId: string): Promise<void> {}
+  async settleProjectionFailure(warRoomId: string, projectionVersion: number): Promise<void> {}
+  async reconcile(warRoomId: string): Promise<void> {}
+  async archive(warRoomId: string): Promise<ProviderOperationResult<void>> {
+    return { ok: true, value: undefined };
+  }
+  async handleIncidentEvent(event: WarRoomIncidentEvent): Promise<ProviderOperationResult<void>> {
+    return { ok: true, value: undefined };
+  }
+}
+
 export class CollaborationProviderHarness {
   public meeting = new MockMeetingProviderHarness();
   public slack = new MockWarRoomProviderHarness();
@@ -214,14 +273,17 @@ export class CollaborationProviderHarness {
 
   install(): void {
     MeetingProviderRegistry.register(this.meeting);
+    registerWarRoomProvider(new MockWarRoomProviderAdapter('SLACK', this.slack));
+    registerWarRoomProvider(new MockWarRoomProviderAdapter('MICROSOFT_TEAMS', this.teamsRoom));
   }
 
   restore(): void {
     this.meeting.reset();
     this.slack.reset();
     this.teamsRoom.reset();
-    // Restore default TeamsMeetingAdapter
+    // Restore default TeamsMeetingAdapter and default war-room providers
     MeetingProviderRegistry.register(new TeamsMeetingAdapter());
+    resetWarRoomProviders();
   }
 
   reset(): void {

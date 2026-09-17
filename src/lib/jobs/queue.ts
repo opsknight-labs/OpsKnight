@@ -16,7 +16,9 @@ const MAX_RETRY_BACKOFF_MS = 15 * 60 * 1000;
 const PROCESSING_LEASE_HEARTBEAT_MS = 60 * 1000;
 
 function isNonRetryableBackgroundJobError(error: string): boolean {
-  return /message_limit_exceeded|user has not enabled any notification channels/i.test(error);
+  return /message_limit_exceeded|user has not enabled any notification channels|403|401|forbidden|permission|unauthorized/i.test(
+    error
+  );
 }
 
 function isBulkQueueBackpressureError(error: unknown): boolean {
@@ -391,7 +393,13 @@ async function markWarRoomJobCompleted(jobId: string): Promise<boolean> {
 }
 
 async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void> {
-  const shouldRetry = job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
+  const current = await prisma.backgroundJob.findUnique({
+    where: { id: job.id },
+    select: { attempts: true, maxAttempts: true },
+  });
+  const attempts = current?.attempts ?? job.attempts;
+  const maxAttempts = current?.maxAttempts ?? job.maxAttempts;
+  const shouldRetry = attempts < maxAttempts && !isNonRetryableBackgroundJobError(error);
   // Terminal delivery must be settled atomically with the job failure so we never
   // leave BackgroundJob FAILED while delivery stays PENDING (which orphan recovery would revive).
   if (!shouldRetry && job.type === 'WAR_ROOM_PROVIDER_EVENT') {
@@ -433,10 +441,37 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
       failedAt: shouldRetry ? null : new Date(),
       error,
       scheduledAt: shouldRetry
-        ? new Date(Date.now() + Math.min(Math.pow(2, job.attempts) * 30_000, MAX_RETRY_BACKOFF_MS))
+        ? new Date(Date.now() + Math.min(Math.pow(2, attempts) * 30_000, MAX_RETRY_BACKOFF_MS))
         : undefined,
     },
   });
+  if (!shouldRetry && job.type === 'WAR_ROOM_PROVISION') {
+    const warRoomId = payloadValue(job.payload, 'warRoomId');
+    const provisioningToken = payloadValue(job.payload, 'provisioningToken');
+    if (typeof warRoomId === 'string') {
+      try {
+        await prisma.incidentWarRoom.updateMany({
+          where: {
+            id: warRoomId,
+            ...(typeof provisioningToken === 'string' ? { provisioningToken } : {}),
+            state: { in: ['PROVISIONING', 'AMBIGUOUS'] },
+          },
+          data: {
+            state: 'FAILED',
+            lastErrorCode: 'PROVISION_FAILED',
+            lastError: error.slice(0, 1000),
+            provisioningToken: null,
+          },
+        });
+      } catch (warRoomErr) {
+        logger.warn('jobs.war_room_provision_failure_settlement_failed', {
+          jobId: job.id,
+          warRoomId,
+          error: warRoomErr instanceof Error ? warRoomErr.message : String(warRoomErr),
+        });
+      }
+    }
+  }
   if (!shouldRetry && job.type === 'WAR_ROOM_PROJECT') {
     const versionValue = payloadValue(job.payload, 'projectionVersion');
     const warRoomIdValue = payloadValue(job.payload, 'warRoomId');
@@ -460,6 +495,7 @@ async function markWarRoomJobFailed(job: QueuedJob, error: string): Promise<void
           meetingId: typeof rawClose.meetingId === 'string' ? rawClose.meetingId : undefined,
           generation: typeof rawClose.generation === 'number' ? rawClose.generation : undefined,
           closeToken: typeof rawClose.closeToken === 'string' ? rawClose.closeToken : undefined,
+          cleanupRepair: Boolean(rawClose.cleanupRepair),
         });
       } catch (settleErr) {
         logger.warn('jobs.meeting_close_failure_settlement_failed', {
@@ -521,7 +557,12 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
   });
 }
 
-export async function processJob(job: QueuedJob | null): Promise<boolean> {
+export async function processJob(jobInput: QueuedJob | string | null): Promise<boolean> {
+  if (!jobInput) return false;
+  const job: QueuedJob | null =
+    typeof jobInput === 'string'
+      ? ((await prisma.backgroundJob.findUnique({ where: { id: jobInput } })) as QueuedJob | null)
+      : jobInput;
   if (!job) return false;
   let leaseHeartbeat: NodeJS.Timeout | null = null;
   try {

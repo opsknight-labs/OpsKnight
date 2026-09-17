@@ -63,7 +63,7 @@ The platform adheres to strict operational guarantees:
 
 - `GET /api/admin/incident-collaboration`: Operational summary of active/degraded war rooms, canonical meetings, and pending cleanup debt.
 - `POST /api/admin/incident-collaboration/meetings/:meetingId/retry-cleanup`: Dedicated REST endpoint to claim and enqueue cleanup retry for an orphaned meeting resource.
-- `POST /api/admin/incident-collaboration`: Multi-action admin endpoint supporting `{ action: 'retry_cleanup', meetingId }` and `{ action: 'collect_metrics' }`.
+- `POST /api/admin/incident-collaboration`: Admin endpoint supporting `{ action: 'retry_cleanup', meetingId }`.
 - `POST /api/admin/war-rooms/:warRoomId/repair`: Force reconciles and reprojects an out-of-sync war-room channel card.
 
 ### Verification Queries

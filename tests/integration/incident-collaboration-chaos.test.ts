@@ -15,6 +15,7 @@ import {
 } from '../helpers/test-db';
 import { WarRoomRetryableError } from '@/lib/war-room/errors';
 import { processJob } from '@/lib/jobs/queue';
+import { retryIncidentMeetingCleanup } from '@/lib/incident-collaboration/meeting-reconciliation';
 
 const describeIfRealDB = process.env.VITEST_USE_REAL_DB === '1' ? describe : describe.skip;
 
@@ -409,33 +410,186 @@ describeIfRealDB('Phase 6 Incident Collaboration Chaos & Fault Matrix (Postgres)
     });
     expect(readyMeeting.state).toBe('READY');
 
-    // Inject severe Slack API outage via multi-provider harness
+    // Inject Slack API outage via multi-provider harness
     collaborationProviderHarness.slack.setBehavior({
       behavior: 'SERVER_ERROR',
       statusCode: 500,
       errorMessage: 'Slack API 500 error: internal server error',
     });
 
-    // Record Slack war room experiencing the external outage
-    await testPrisma.incidentWarRoom.create({
+    // Create a Slack war room and run through processJob() with the registered mock adapter
+    const slackRoom = await testPrisma.incidentWarRoom.create({
       data: {
         incidentId: incident.id,
         provider: 'SLACK',
         generation: 1,
-        state: 'FAILED',
-        lastErrorCode: 'SLACK_OUTAGE',
-        lastError: 'Slack API 500 error: internal server error',
+        state: 'PROVISIONING',
+        provisioningToken: 'tok-slack-prov',
       },
     });
+
+    const slackJob = await testPrisma.backgroundJob.create({
+      data: {
+        type: 'WAR_ROOM_PROVISION',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 1,
+        payload: {
+          warRoomId: slackRoom.id,
+          provisioningToken: 'tok-slack-prov',
+        },
+      },
+    });
+
+    // Process job through real queue worker
+    await processJob(slackJob.id);
+
+    // Slack war room transitions to FAILED
+    const failedSlackRoom = await testPrisma.incidentWarRoom.findUnique({
+      where: { id: slackRoom.id },
+    });
+    expect(failedSlackRoom?.state).toBe('FAILED');
 
     // Invariant I5: Teams meeting remains READY, healthy, and completely untouched!
     const persistedMeeting = await getIncidentMeeting(incident.id);
     expect(persistedMeeting?.state).toBe('READY');
     expect(persistedMeeting?.health).toBe('HEALTHY');
+  });
 
-    const warRooms = await testPrisma.incidentWarRoom.findMany({
-      where: { incidentId: incident.id },
+  // ── Scenario E6: Cleanup-Repair Terminal Failure Exhaustion ──────────────
+  it('E6: Cleanup-repair retry exhaustion preserves cleanup debt, marks health DEGRADED, and releases closeToken', async () => {
+    const service = await createTestService('Chaos Cleanup Exhaustion Service');
+    const incident = await createTestIncident('Chaos Cleanup Exhaustion Incident', service.id);
+
+    const meeting = await testPrisma.incidentMeeting.create({
+      data: {
+        id: `meet_${incident.id}_1`,
+        incidentId: incident.id,
+        provider: 'MICROSOFT_TEAMS',
+        generation: 1,
+        state: 'CLOSED',
+        health: 'HEALTHY',
+        externalId: `opsknight:${incident.id}:1`,
+        joinUrl: 'https://teams.microsoft.com/l/meetup-join/e6',
+        providerMeetingId: 'ext-meet-debt-e6',
+        externalCleanupPending: true,
+        closeToken: null,
+        cleanupRetryCount: 0,
+      },
     });
-    expect(warRooms.find(r => r.provider === 'SLACK')?.state).toBe('FAILED');
+
+    // Request cleanup retry: claims row and creates MEETING_CLOSE job with cleanupRepair: true
+    const retryResult = await retryIncidentMeetingCleanup(meeting.id);
+    expect(retryResult.success).toBe(true);
+    expect(retryResult.jobId).toBeDefined();
+
+    // Verify row is claimed with closeToken
+    const claimedMeeting = await testPrisma.incidentMeeting.findUnique({
+      where: { id: meeting.id },
+    });
+    expect(claimedMeeting?.closeToken).toBeTruthy();
+    expect(claimedMeeting?.cleanupRetryCount).toBe(1);
+
+    // Mock Graph DELETE failure (500 Server Error)
+    collaborationProviderHarness.meeting.setCloseBehavior('SERVER_ERROR');
+
+    // Set job maxAttempts to 1 so the failure is terminal upon this execution
+    await testPrisma.backgroundJob.update({
+      where: { id: retryResult.jobId! },
+      data: { maxAttempts: 1 },
+    });
+
+    // Process job through queue machinery
+    await processJob(retryResult.jobId!);
+
+    // Terminal failure settlement must have preserved debt, degraded health, and released closeToken
+    const settledMeeting = await testPrisma.incidentMeeting.findUnique({
+      where: { id: meeting.id },
+    });
+    expect(settledMeeting?.state).toBe('CLOSED');
+    expect(settledMeeting?.externalCleanupPending).toBe(true);
+    expect(settledMeeting?.health).toBe('DEGRADED');
+    expect(settledMeeting?.closeToken).toBeNull();
+    expect(settledMeeting?.lastErrorCode).toBe('PROVIDER_CLOSE_FAILED');
+    expect(settledMeeting?.lastErrorMessage).toContain('External meeting cleanup failed');
+  });
+
+  // ── Scenario E7: War Room Provider Chaos (429 Backoff & 403 Terminal Rejection) ──
+  it('E7: War room adapter 429 reschedules with Retry-After backoff and 403 fails without retry', async () => {
+    const service = await createTestService('Chaos War Room Backoff Service');
+    const incident = await createTestIncident('Chaos War Room Backoff Incident', service.id);
+
+    // 1. Rate-limiting (429) backoff
+    collaborationProviderHarness.slack.setBehavior({
+      behavior: 'RATE_LIMITED',
+      retryAfterMs: 45000,
+    });
+
+    const room429 = await testPrisma.incidentWarRoom.create({
+      data: {
+        incidentId: incident.id,
+        provider: 'SLACK',
+        generation: 1,
+        state: 'PROVISIONING',
+        provisioningToken: 'tok-slack-429',
+      },
+    });
+
+    const job429 = await testPrisma.backgroundJob.create({
+      data: {
+        type: 'WAR_ROOM_PROVISION',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 5,
+        payload: {
+          warRoomId: room429.id,
+          provisioningToken: 'tok-slack-429',
+        },
+      },
+    });
+
+    const before = Date.now();
+    await processJob(job429.id);
+
+    const rescheduledJob = await testPrisma.backgroundJob.findUnique({
+      where: { id: job429.id },
+    });
+    expect(rescheduledJob?.status).toBe('PENDING');
+    expect(rescheduledJob?.attempts).toBe(1);
+    expect(rescheduledJob?.scheduledAt.getTime()).toBeGreaterThanOrEqual(before + 40000);
+
+    // 2. Permission Denied (403) terminal failure
+    collaborationProviderHarness.slack.setBehavior('PERMISSION_DENIED');
+
+    const room403 = await testPrisma.incidentWarRoom.create({
+      data: {
+        incidentId: incident.id,
+        provider: 'SLACK',
+        generation: 2,
+        state: 'PROVISIONING',
+        provisioningToken: 'tok-slack-403',
+      },
+    });
+
+    const job403 = await testPrisma.backgroundJob.create({
+      data: {
+        type: 'WAR_ROOM_PROVISION',
+        status: 'PENDING',
+        scheduledAt: new Date(),
+        maxAttempts: 5,
+        payload: {
+          warRoomId: room403.id,
+          provisioningToken: 'tok-slack-403',
+        },
+      },
+    });
+
+    await processJob(job403.id);
+
+    const terminalJob = await testPrisma.backgroundJob.findUnique({
+      where: { id: job403.id },
+    });
+    // Non-retryable error fails immediately without further attempts
+    expect(terminalJob?.status).toBe('FAILED');
   });
 });

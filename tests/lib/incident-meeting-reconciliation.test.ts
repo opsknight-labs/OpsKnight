@@ -277,6 +277,7 @@ describe('Incident Meeting Reconciliation Service', () => {
       } as never);
 
       vi.mocked(prisma.backgroundJob.create).mockResolvedValue({ id: 'job-close-retry' } as never);
+      vi.mocked(prisma.incidentMeeting.updateMany).mockResolvedValue({ count: 1 } as never);
       vi.mocked(prisma.incidentMeeting.update).mockResolvedValue({} as never);
 
       const result = await retryIncidentMeetingCleanup('m1', 'admin-user-id');

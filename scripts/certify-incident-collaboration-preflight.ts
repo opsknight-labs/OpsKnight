@@ -29,7 +29,7 @@ interface CertificationResult {
 
 async function runCertification(): Promise<void> {
   console.log('================================================================');
-  console.log('  OPSKNIGHT INCIDENT COLLABORATION PRODUCTION CERTIFICATION');
+  console.log('  OPSKNIGHT INCIDENT COLLABORATION PREFLIGHT VERIFICATION');
   console.log('================================================================\n');
 
   const results: CertificationResult[] = [];
@@ -189,9 +189,11 @@ async function runCertification(): Promise<void> {
 
   console.log('================================================================');
   if (allPassed) {
-    console.log('  CERTIFICATION STATUS: PASSED (System is production-ready)');
+    console.log('  PREFLIGHT STATUS: PASSED\n');
+    console.log('  Structural prerequisites are satisfied.');
+    console.log('  Real-provider staging certification is still required.');
   } else {
-    console.log('  CERTIFICATION STATUS: FAILED (Address failures before release)');
+    console.log('  PREFLIGHT STATUS: FAILED (Address structural failures before proceeding)');
   }
   console.log('================================================================\n');
 

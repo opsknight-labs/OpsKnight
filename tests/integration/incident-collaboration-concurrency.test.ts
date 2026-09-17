@@ -477,4 +477,149 @@ describeIfRealDB('Phase 6 Concurrency, Fencing, and Lifecycle Races (Postgres)',
     expect(dbMeeting?.state).toBe('CLOSING');
     expect(dbMeeting?.lastErrorCode).toBeNull();
   });
+
+  // ── Scenario B9: Exclusive Transactional Cleanup Retry Claim ───────────────
+  it('B9: 50 simultaneous retryIncidentMeetingCleanup calls produce exactly 1 claim, 1 job, and cleanupRetryCount = 1', async () => {
+    const service = await createTestService('B9 Exclusive Cleanup Service');
+    const incident = await createTestIncident('B9 Exclusive Cleanup Incident', service.id);
+
+    const meeting = await testPrisma.incidentMeeting.create({
+      data: {
+        id: `meet_${incident.id}_1`,
+        incidentId: incident.id,
+        provider: 'MICROSOFT_TEAMS',
+        generation: 1,
+        state: 'CLOSED',
+        health: 'DEGRADED',
+        externalId: `opsknight:${incident.id}:1`,
+        joinUrl: 'https://teams.microsoft.com/l/meetup-join/b9',
+        providerMeetingId: 'teams-meeting-b9',
+        externalCleanupPending: true,
+        closeToken: null,
+        cleanupRetryCount: 0,
+      },
+    });
+
+    // 50 concurrent retry requests (e.g. concurrent admins + background reconciler)
+    const results = await Promise.all(
+      Array.from({ length: 50 }, () => retryIncidentMeetingCleanup(meeting.id))
+    );
+
+    const successfulClaims = results.filter(r => r.success);
+    const rejectedClaims = results.filter(r => !r.success);
+
+    // Exactly 1 winner, 49 rejected
+    expect(successfulClaims).toHaveLength(1);
+    expect(rejectedClaims).toHaveLength(49);
+
+    // Verify exactly 1 durable background job created
+    const jobs = await testPrisma.backgroundJob.findMany({
+      where: {
+        type: 'MEETING_CLOSE',
+        payload: {
+          path: ['meetingId'],
+          equals: meeting.id,
+        },
+      },
+    });
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0].id).toBe(successfulClaims[0].jobId);
+
+    // Verify row state in PostgreSQL
+    const updatedMeeting = await testPrisma.incidentMeeting.findUnique({
+      where: { id: meeting.id },
+    });
+    expect(updatedMeeting?.cleanupRetryCount).toBe(1);
+    expect(updatedMeeting?.closeToken).toBeTruthy();
+  });
+
+  // ── Scenario B10: Rolling Upgrade Safety for Legacy Unfenced Close Jobs ─────
+  it('B10: Rolling upgrade — legacy close jobs resolve by immutable providerMeetingId and safely drop when mismatched or fenced', async () => {
+    const service = await createTestService('B10 Rolling Upgrade Service');
+    const incident = await createTestIncident('B10 Rolling Upgrade Incident', service.id);
+
+    // Gen 1: CLOSED with debt
+    const gen1Meeting = await testPrisma.incidentMeeting.create({
+      data: {
+        id: `meet_${incident.id}_1`,
+        incidentId: incident.id,
+        provider: 'MICROSOFT_TEAMS',
+        generation: 1,
+        state: 'CLOSED',
+        health: 'DEGRADED',
+        externalId: `opsknight:${incident.id}:1`,
+        joinUrl: 'https://teams.microsoft.com/l/meetup-join/b10-gen1',
+        providerMeetingId: 'ext-meet-gen1',
+        externalCleanupPending: true,
+        closeToken: null,
+      },
+    });
+
+    // Gen 2: Active READY meeting
+    const gen2Meeting = await testPrisma.incidentMeeting.create({
+      data: {
+        id: `meet_${incident.id}_2`,
+        incidentId: incident.id,
+        provider: 'MICROSOFT_TEAMS',
+        generation: 2,
+        state: 'READY',
+        health: 'HEALTHY',
+        externalId: `opsknight:${incident.id}:2`,
+        joinUrl: 'https://teams.microsoft.com/l/meetup-join/b10-gen2',
+        providerMeetingId: 'ext-meet-gen2',
+      },
+    });
+
+    // Mock provider close
+    const closeSpy = vi
+      .spyOn(MeetingProviderRegistry, 'closeMeeting')
+      .mockResolvedValue(undefined as never);
+
+    // Legacy job targeting Gen 1: has providerMeetingId but NO generation and NO closeToken
+    const legacyGen1Result = await executeMeetingCloseJob({
+      incidentId: incident.id,
+      provider: 'MICROSOFT_TEAMS',
+      providerMeetingId: 'ext-meet-gen1',
+      cleanupRepair: true,
+    });
+    expect(legacyGen1Result.status).toBe('COMPLETED');
+
+    // Gen 1 healed
+    const healedGen1 = await testPrisma.incidentMeeting.findUnique({
+      where: { id: gen1Meeting.id },
+    });
+    expect(healedGen1?.externalCleanupPending).toBe(false);
+    expect(healedGen1?.health).toBe('HEALTHY');
+
+    // Gen 2 completely untouched!
+    const untouchedGen2 = await testPrisma.incidentMeeting.findUnique({
+      where: { id: gen2Meeting.id },
+    });
+    expect(untouchedGen2?.state).toBe('READY');
+    expect(untouchedGen2?.health).toBe('HEALTHY');
+
+    // Legacy job with unknown providerMeetingId: safely dropped as STALE
+    const unknownResult = await executeMeetingCloseJob({
+      incidentId: incident.id,
+      provider: 'MICROSOFT_TEAMS',
+      providerMeetingId: 'ext-meet-unknown',
+    });
+    expect(unknownResult.status).toBe('STALE');
+
+    // If Gen 2 is CLOSING with a modern closeToken, a mismatched closeToken job is rejected as STALE
+    await testPrisma.incidentMeeting.update({
+      where: { id: gen2Meeting.id },
+      data: { state: 'CLOSING', closeToken: 'modern-fenced-token' },
+    });
+
+    const mismatchedTokenAttempt = await executeMeetingCloseJob({
+      incidentId: incident.id,
+      provider: 'MICROSOFT_TEAMS',
+      providerMeetingId: 'ext-meet-gen2',
+      closeToken: 'older-stale-token',
+    });
+    expect(mismatchedTokenAttempt.status).toBe('STALE');
+
+    closeSpy.mockRestore();
+  });
 });

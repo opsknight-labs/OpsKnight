@@ -24,6 +24,7 @@ export type MeetingAuditAction =
   | 'MEETING_RECONCILE_FAILED'
   | 'MEETING_CLEANUP_RETRY_REQUESTED'
   | 'MEETING_CLEANUP_SUCCEEDED'
+  | 'MEETING_CLEANUP_FAILED'
   | 'MEETING_CLOSE_STALE_DROPPED';
 
 export interface EmitMeetingAuditParams {
