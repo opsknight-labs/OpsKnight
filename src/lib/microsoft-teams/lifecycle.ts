@@ -15,7 +15,7 @@ type TeamsRevocationScope = {
  */
 export async function revokeMicrosoftTeamsOperations(
   tx: Prisma.TransactionClient,
-  scope: TeamsRevocationScope,
+  scope: TeamsRevocationScope
 ): Promise<{ operationIds: string[]; jobsCancelled: number }> {
   const destinationSet = scope.destinationIds ? new Set(scope.destinationIds) : null;
   const candidates = await tx.externalOperation.findMany({
@@ -24,7 +24,8 @@ export async function revokeMicrosoftTeamsOperations(
   });
   const operations = candidates.filter(operation => {
     if (!destinationSet) return true;
-    const destinationId = (operation.requestPayload as Record<string, unknown> | null)?.destinationId;
+    const destinationId = (operation.requestPayload as Record<string, unknown> | null)
+      ?.destinationId;
     return typeof destinationId === 'string' && destinationSet.has(destinationId);
   });
 
@@ -32,8 +33,9 @@ export async function revokeMicrosoftTeamsOperations(
     const request = operation.requestPayload as Record<string, unknown> | null;
     const destinationId = typeof request?.destinationId === 'string' ? request.destinationId : '';
     const result = operation.resultPayload as Record<string, unknown> | null;
-    const remainsAmbiguous = operation.status === 'AMBIGUOUS'
-      || (operation.status === 'PROCESSING' && result?.createAttempted === true);
+    const remainsAmbiguous =
+      operation.status === 'AMBIGUOUS' ||
+      (operation.status === 'PROCESSING' && result?.createAttempted === true);
     if (remainsAmbiguous) {
       await tx.microsoftTeamsIncidentMessage.updateMany({
         where: { destinationId, createOperationId: operation.id },
@@ -45,7 +47,12 @@ export async function revokeMicrosoftTeamsOperations(
       });
       await tx.microsoftTeamsIncidentMessage.updateMany({
         where: { destinationId, createOperationId: operation.id },
-        data: { createState: 'NONE', createOperationId: null, mutationLeaseToken: null, mutationLeaseExpiresAt: null },
+        data: {
+          createState: 'NONE',
+          createOperationId: null,
+          mutationLeaseToken: null,
+          mutationLeaseExpiresAt: null,
+        },
       });
     }
     await tx.externalOperation.update({
@@ -69,10 +76,12 @@ export async function revokeMicrosoftTeamsOperations(
     where: { type: 'EXTERNAL_OPERATION', status: { in: ['PENDING', 'PROCESSING'] } },
     select: { id: true, payload: true },
   });
-  const jobIds = jobs.filter(job => {
-    const operationId = (job.payload as Record<string, unknown> | null)?.operationId;
-    return typeof operationId === 'string' && operationSet.has(operationId);
-  }).map(job => job.id);
+  const jobIds = jobs
+    .filter(job => {
+      const operationId = (job.payload as Record<string, unknown> | null)?.operationId;
+      return typeof operationId === 'string' && operationSet.has(operationId);
+    })
+    .map(job => job.id);
   if (jobIds.length > 0) {
     await tx.backgroundJob.updateMany({
       where: { id: { in: jobIds } },
@@ -95,14 +104,16 @@ export async function revokeMicrosoftTeamsOperations(
  */
 export async function revokeMicrosoftTeamsWarRoomProvisioning(
   tx: Prisma.TransactionClient,
-  scope: TeamsRevocationScope,
+  scope: TeamsRevocationScope
 ): Promise<{ warRoomIds: string[]; jobsCancelled: number }> {
   const destinationSet = scope.destinationIds ? new Set(scope.destinationIds) : null;
   const rooms = await tx.incidentWarRoom.findMany({
     where: { provider: 'MICROSOFT_TEAMS', state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
     select: { id: true, destinationId: true, createAttemptedAt: true },
   });
-  const candidates = rooms.filter(room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId)));
+  const candidates = rooms.filter(
+    room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId))
+  );
   const attemptedIds = candidates.filter(room => room.createAttemptedAt).map(room => room.id);
   const safeIds = candidates.filter(room => !room.createAttemptedAt).map(room => room.id);
   const now = new Date();
@@ -111,7 +122,8 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
     await tx.incidentWarRoom.updateMany({
       where: { id: { in: attemptedIds }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
       data: {
-        state: 'AMBIGUOUS', provisioningToken: null,
+        state: 'AMBIGUOUS',
+        provisioningToken: null,
         lastErrorCode: 'WAR_ROOM_AUTHORITY_REVOKED',
         lastError: `${scope.reason}; channel creation may have completed and requires marker reconciliation.`,
       },
@@ -120,7 +132,12 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
   if (safeIds.length > 0) {
     await tx.incidentWarRoom.updateMany({
       where: { id: { in: safeIds }, state: { in: ['PROVISIONING', 'AMBIGUOUS'] } },
-      data: { state: 'FAILED', provisioningToken: null, lastErrorCode: 'WAR_ROOM_AUTHORITY_REVOKED', lastError: scope.reason },
+      data: {
+        state: 'FAILED',
+        provisioningToken: null,
+        lastErrorCode: 'WAR_ROOM_AUTHORITY_REVOKED',
+        lastError: scope.reason,
+      },
     });
   }
 
@@ -130,7 +147,9 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
     where: { provider: 'MICROSOFT_TEAMS', state: { in: ['READY', 'CLOSING'] } },
     select: { id: true, destinationId: true },
   });
-  const collaborationCandidates = collaborationRooms.filter(room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId)));
+  const collaborationCandidates = collaborationRooms.filter(
+    room => !destinationSet || (room.destinationId && destinationSet.has(room.destinationId))
+  );
   if (collaborationCandidates.length > 0) {
     await tx.incidentWarRoom.updateMany({
       where: { id: { in: collaborationCandidates.map(room => room.id) } },
@@ -144,17 +163,25 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
     });
   }
 
-  const roomIds = [...candidates.map(room => room.id), ...collaborationCandidates.map(room => room.id)];
+  const roomIds = [
+    ...candidates.map(room => room.id),
+    ...collaborationCandidates.map(room => room.id),
+  ];
   if (roomIds.length === 0) return { warRoomIds: [], jobsCancelled: 0 };
   const jobs = await tx.backgroundJob.findMany({
-    where: { type: { in: ['WAR_ROOM_PROVISION', 'WAR_ROOM_PROJECT', 'WAR_ROOM_PARTICIPANT_SYNC'] }, status: { in: ['PENDING', 'PROCESSING'] } },
+    where: {
+      type: { in: ['WAR_ROOM_PROVISION', 'WAR_ROOM_PROJECT', 'WAR_ROOM_PARTICIPANT_SYNC'] },
+      status: { in: ['PENDING', 'PROCESSING'] },
+    },
     select: { id: true, payload: true },
   });
   const roomSet = new Set(roomIds);
-  const jobIds = jobs.filter(job => {
-    const warRoomId = (job.payload as Record<string, unknown> | null)?.warRoomId;
-    return typeof warRoomId === 'string' && roomSet.has(warRoomId);
-  }).map(job => job.id);
+  const jobIds = jobs
+    .filter(job => {
+      const warRoomId = (job.payload as Record<string, unknown> | null)?.warRoomId;
+      return typeof warRoomId === 'string' && roomSet.has(warRoomId);
+    })
+    .map(job => job.id);
   if (jobIds.length > 0) {
     await tx.backgroundJob.updateMany({
       where: { id: { in: jobIds }, status: { in: ['PENDING', 'PROCESSING'] } },
@@ -165,21 +192,28 @@ export async function revokeMicrosoftTeamsWarRoomProvisioning(
   return { warRoomIds: [...new Set(roomIds)], jobsCancelled: jobIds.length };
 }
 
-export async function disconnectMicrosoftTeamsIntegration(actorId: string): Promise<void> {
+export async function disconnectMicrosoftTeamsIntegration(
+  actorId: string,
+  options?: { deleteConfig?: boolean }
+): Promise<void> {
+  const deleteConfig = options?.deleteConfig ?? true;
   await prisma.$transaction(async tx => {
-    const destinations = await tx.microsoftTeamsDestination.findMany({ select: { id: true, serviceId: true } });
+    const destinations = await tx.microsoftTeamsDestination.findMany({
+      select: { id: true, serviceId: true },
+    });
     const routedServices = await tx.service.findMany({
       where: { serviceNotificationChannels: { has: 'MICROSOFT_TEAMS' } },
       select: { id: true, serviceNotificationChannels: true },
     });
-    await tx.microsoftTeamsConfig.updateMany({ data: { enabled: false, interactiveEnabled: false } });
-    await tx.microsoftTeamsInstallation.updateMany({ data: { enabled: false } });
-    await tx.microsoftTeamsDestination.updateMany({ data: { enabled: false, interactiveEnabled: false } });
 
     for (const service of routedServices) {
       await tx.service.update({
         where: { id: service.id },
-        data: { serviceNotificationChannels: service.serviceNotificationChannels.filter(channel => channel !== 'MICROSOFT_TEAMS') },
+        data: {
+          serviceNotificationChannels: service.serviceNotificationChannels.filter(
+            channel => channel !== 'MICROSOFT_TEAMS'
+          ),
+        },
       });
     }
 
@@ -189,11 +223,40 @@ export async function disconnectMicrosoftTeamsIntegration(actorId: string): Prom
     const revokedWarRooms = await revokeMicrosoftTeamsWarRoomProvisioning(tx, {
       reason: 'Microsoft Teams integration disconnected',
     });
-    await emitAuditEvent({
-      action: 'microsoftTeams.integration.disconnected', source: 'UI',
-      target: { type: 'SYSTEM_CONFIG', id: 'microsoft-teams' }, actor: { type: 'USER', id: actorId },
-      metadata: { destinationsDisabled: destinations.length, servicesUpdated: routedServices.length, operationsRevoked: revoked.operationIds.length, jobsCancelled: revoked.jobsCancelled, warRoomsRevoked: revokedWarRooms.warRoomIds.length, warRoomJobsCancelled: revokedWarRooms.jobsCancelled },
-    }, tx);
+
+    if (deleteConfig) {
+      await tx.microsoftTeamsIncidentMessage.deleteMany({});
+      await tx.microsoftTeamsDestination.deleteMany({});
+      await tx.microsoftTeamsInstallation.deleteMany({});
+      await tx.microsoftTeamsConfig.deleteMany({});
+    } else {
+      await tx.microsoftTeamsConfig.updateMany({
+        data: { enabled: false, interactiveEnabled: false },
+      });
+      await tx.microsoftTeamsInstallation.updateMany({ data: { enabled: false } });
+      await tx.microsoftTeamsDestination.updateMany({
+        data: { enabled: false, interactiveEnabled: false },
+      });
+    }
+
+    await emitAuditEvent(
+      {
+        action: 'microsoftTeams.integration.disconnected',
+        source: 'UI',
+        target: { type: 'SYSTEM_CONFIG', id: 'microsoft-teams' },
+        actor: { type: 'USER', id: actorId },
+        metadata: {
+          destinationsAffected: destinations.length,
+          servicesUpdated: routedServices.length,
+          operationsRevoked: revoked.operationIds.length,
+          jobsCancelled: revoked.jobsCancelled,
+          warRoomsRevoked: revokedWarRooms.warRoomIds.length,
+          warRoomJobsCancelled: revokedWarRooms.jobsCancelled,
+          deleted: deleteConfig,
+        },
+      },
+      tx
+    );
   });
   clearMicrosoftTeamsTokenCaches();
 }
