@@ -9,10 +9,54 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { getStatusPageSnapshotByRoute } from '@/lib/status-pages/snapshot';
 
+import { cookies, headers } from 'next/headers';
+import { getAppUrl } from '@/lib/app-config';
+import {
+  STATUS_SESSION_COOKIE_NAME,
+  hasStatusPageAccess,
+  isRequestToAppHost,
+} from '@/lib/status-pages/status-auth';
+
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 const getCachedStatusPageSnapshotByRoute = cache(getStatusPageSnapshotByRoute);
+
+async function checkStatusPageAuthorization(
+  statusPage: { id: string },
+  _slug?: string
+): Promise<boolean> {
+  const cookieStore = await cookies();
+  const statusCookie = cookieStore.get(STATUS_SESSION_COOKIE_NAME)?.value;
+  const headerStore = await headers();
+  const host =
+    headerStore
+      .get('x-forwarded-host')
+      ?.split(',')
+      .map(s => s.trim())
+      .filter(Boolean)
+      .at(-1) ||
+    headerStore.get('host') ||
+    '';
+  const appUrl = await getAppUrl();
+  const isAppHost = isRequestToAppHost(host, appUrl);
+
+  if (statusCookie) {
+    const hasAccess = await hasStatusPageAccess({
+      pageId: statusPage.id,
+      statusSessionCookie: statusCookie,
+      isAppHost,
+    });
+    if (hasAccess) return true;
+  }
+
+  if (isAppHost) {
+    const session = await getServerSession(await getAuthOptions());
+    if (session) return true;
+  }
+
+  return false;
+}
 
 export async function generateMetadata(): Promise<Metadata> {
   return getPublicStatusMetadata();
@@ -26,8 +70,8 @@ export async function getPublicStatusMetadata(slug?: string): Promise<Metadata> 
   }
   // Private pages must not leak identity (title, OG, RSS) before authentication.
   if (statusPage.requireAuth) {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
+    const isAuthorized = await checkStatusPageAuthorization(statusPage, slug);
+    if (!isAuthorized) {
       return {
         title: 'Private Status Page',
         description: 'Service status — authentication required.',
@@ -115,10 +159,30 @@ export async function renderPublicStatusPage(slug?: string) {
     );
   }
   if (statusPage.requireAuth) {
-    const session = await getServerSession(await getAuthOptions());
-    if (!session) {
-      const callbackUrl = slug ? `/status/${encodeURIComponent(slug)}` : '/status';
-      redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+    const isAuthorized = await checkStatusPageAuthorization(statusPage, slug);
+    if (!isAuthorized) {
+      const headerStore = await headers();
+      const host =
+        headerStore
+          .get('x-forwarded-host')
+          ?.split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .at(-1) ||
+        headerStore.get('host') ||
+        '';
+      const appUrl = await getAppUrl();
+      const isAppHost = isRequestToAppHost(host, appUrl);
+      if (isAppHost) {
+        const callbackUrl = slug ? `/status/${encodeURIComponent(slug)}` : '/status';
+        redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+      } else {
+        const proto = headerStore.get('x-forwarded-proto') || 'https';
+        const currentUrl = `${proto}://${host}/`;
+        redirect(
+          `${appUrl}/status-auth/start?pageId=${encodeURIComponent(statusPage.id)}&returnTo=${encodeURIComponent(currentUrl)}`
+        );
+      }
     }
   }
 

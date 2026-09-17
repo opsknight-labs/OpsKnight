@@ -17,6 +17,12 @@ import {
   PRIVATE_STATUS_CACHE_CONTROL,
   PUBLIC_STATUS_CACHE_CONTROL,
 } from '@/lib/status-pages/cache-policy';
+import { getAppUrl } from '@/lib/app-config';
+import {
+  extractStatusSessionToken,
+  hasStatusPageAccess,
+  isRequestToAppHost,
+} from '@/lib/status-pages/status-auth';
 
 /**
  * Get Status Page Historical Data
@@ -80,8 +86,25 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
     }
 
     if (statusPage.requireAuth) {
-      const session = await getServerSession(await getAuthOptions());
-      if (!session) {
+      const cookieHeader = req.headers.get('cookie');
+      const statusToken = extractStatusSessionToken(cookieHeader);
+      const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+      const appUrl = await getAppUrl();
+      const isAppHost = isRequestToAppHost(host, appUrl);
+
+      let isAuthorized = false;
+      if (statusToken) {
+        isAuthorized = await hasStatusPageAccess({
+          pageId: statusPage.id,
+          statusSessionCookie: statusToken,
+          isAppHost,
+        });
+      }
+      if (!isAuthorized && isAppHost) {
+        const session = await getServerSession(await getAuthOptions());
+        isAuthorized = !!session;
+      }
+      if (!isAuthorized) {
         return jsonError('Authentication required', 401);
       }
     }
@@ -110,7 +133,9 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
     // Cursor pagination — prevents silently truncated history.
     const cursor = searchParams.get('cursor');
     const requestedLimitRaw = Number.parseInt(searchParams.get('limit') ?? '50', 10);
-    const limit = Number.isFinite(requestedLimitRaw) ? Math.max(1, Math.min(100, requestedLimitRaw)) : 50;
+    const limit = Number.isFinite(requestedLimitRaw)
+      ? Math.max(1, Math.min(100, requestedLimitRaw))
+      : 50;
     // Overlap semantics: include incidents that were active at any point during the window,
     // not just those created inside it. An incident that started before the window but
     // resolved within it (or is still open) must be visible.
@@ -128,7 +153,11 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
           OR: [
             { resolvedAt: { gte: window.start } },
             { resolvedAt: null, status: { in: openStatuses } },
-            { resolvedAt: null, status: 'RESOLVED' as IncidentStatus, updatedAt: { gte: window.start } },
+            {
+              resolvedAt: null,
+              status: 'RESOLVED' as IncidentStatus,
+              updatedAt: { gte: window.start },
+            },
           ],
         },
       ],
@@ -153,7 +182,7 @@ export async function getStatusHistoryResponse(req: NextRequest, slug?: string) 
       : [];
     const hasMore = rawIncidents.length > limit;
     const pageIncidents = hasMore ? rawIncidents.slice(0, limit) : rawIncidents;
-    const nextCursor = hasMore ? pageIncidents.at(-1)?.id ?? null : null;
+    const nextCursor = hasMore ? (pageIncidents.at(-1)?.id ?? null) : null;
     const incidents = pageIncidents.map(incident =>
       serializePublicStatusIncident(
         incident,

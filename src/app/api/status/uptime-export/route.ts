@@ -12,6 +12,12 @@ import {
   StatusPageReportData,
   StatusPageReportIncident,
 } from '@/lib/status-pages/reports/uptime-report-generator';
+import { getAppUrl } from '@/lib/app-config';
+import {
+  extractStatusSessionToken,
+  hasStatusPageAccess,
+  isRequestToAppHost,
+} from '@/lib/status-pages/status-auth';
 
 export async function GET(req: NextRequest) {
   return getUptimeExportResponse(req);
@@ -48,8 +54,26 @@ export async function getUptimeExportResponse(req: NextRequest, slug?: string) {
       return new NextResponse('Unauthorized', { status: 403 });
     }
     if (targetPage.requireAuth || targetPage.privacyMode === 'PRIVATE') {
-      const session = await getServerSession(await getAuthOptions());
-      if (!session) {
+      const cookieHeader = req.headers.get('cookie');
+      const statusToken = extractStatusSessionToken(cookieHeader);
+      const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+      const appUrl = await getAppUrl();
+      const isAppHost = isRequestToAppHost(host, appUrl);
+
+      let isAuthorized = false;
+      if (statusToken) {
+        isAuthorized = await hasStatusPageAccess({
+          pageId: targetPage.id,
+          statusSessionCookie: statusToken,
+          isAppHost,
+        });
+      }
+      if (!isAuthorized && isAppHost) {
+        const session = await getServerSession(await getAuthOptions());
+        isAuthorized = !!session;
+      }
+
+      if (!isAuthorized) {
         return new NextResponse('Authentication required', {
           status: 401,
           headers: { 'Cache-Control': 'private, no-store', Vary: 'Cookie' },

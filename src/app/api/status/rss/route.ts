@@ -12,6 +12,12 @@ import {
   PRIVATE_STATUS_CACHE_CONTROL,
   PUBLIC_STATUS_CACHE_CONTROL,
 } from '@/lib/status-pages/cache-policy';
+import { getAppUrl } from '@/lib/app-config';
+import {
+  extractStatusSessionToken,
+  hasStatusPageAccess,
+  isRequestToAppHost,
+} from '@/lib/status-pages/status-auth';
 
 export function opaqueRssIncidentGuid(
   baseUrl: string,
@@ -68,8 +74,25 @@ export async function getStatusRssResponse(req: NextRequest, slug?: string) {
 
     // Check if authentication is required
     if (statusPage.requireAuth) {
-      const session = await getServerSession(await getAuthOptions());
-      if (!session) {
+      const cookieHeader = req.headers.get('cookie');
+      const statusToken = extractStatusSessionToken(cookieHeader);
+      const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+      const appUrl = await getAppUrl();
+      const isAppHost = isRequestToAppHost(host, appUrl);
+
+      let isAuthorized = false;
+      if (statusToken) {
+        isAuthorized = await hasStatusPageAccess({
+          pageId: statusPage.id,
+          statusSessionCookie: statusToken,
+          isAppHost,
+        });
+      }
+      if (!isAuthorized && isAppHost) {
+        const session = await getServerSession(await getAuthOptions());
+        isAuthorized = !!session;
+      }
+      if (!isAuthorized) {
         return new NextResponse('Authentication required', { status: 401 });
       }
     }

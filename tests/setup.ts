@@ -98,6 +98,7 @@ const mockPrisma = {
   auditLog: createMockModel(),
   inAppNotification: createMockModel(),
   systemSettings: createMockModel(),
+  statusPage: createMockModel(),
   alert: createMockModel(),
   incidentNote: createMockModel(),
   incidentWatcher: createMockModel(),
