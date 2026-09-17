@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/shadcn/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { Plus, X, Lightbulb, Zap } from 'lucide-react';
+import EscalationPolicyCombobox from '@/components/service/EscalationPolicyCombobox';
 
 type CreateServiceFormProps = {
   teams: Array<{ id: string; name: string }>;
@@ -193,19 +194,14 @@ export default function CreateServiceForm({
                   ?
                 </span>
               </Label>
-              <Select value={escalationPolicyId} onValueChange={setEscalationPolicyId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="No escalation policy" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No escalation policy</SelectItem>
-                  {policies.map(policy => (
-                    <SelectItem key={policy.id} value={policy.id}>
-                      {policy.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <EscalationPolicyCombobox
+                policies={policies}
+                value={escalationPolicyId}
+                onChange={setEscalationPolicyId}
+                id="createServiceEscalationPolicyId"
+                name=""
+                placeholder="No escalation policy"
+              />
               <div className="text-[0.8rem] text-muted-foreground">
                 <Link href="/policies" className="text-primary hover:underline font-medium">
                   Manage policies

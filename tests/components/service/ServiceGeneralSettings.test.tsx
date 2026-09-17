@@ -132,4 +132,30 @@ describe('ServiceGeneralSettings', () => {
     expect(screen.getByLabelText(/primary region/i)).toBeDisabled();
     expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
   });
+
+  it('updates escalation policy when selected from combobox and enables save', () => {
+    render(
+      <ServiceGeneralSettings
+        service={defaultService}
+        teams={mockTeams}
+        policies={mockPolicies}
+        canManageService={true}
+        action={mockAction}
+      />
+    );
+
+    const combobox = screen.getByRole('combobox', {
+      name: /choose policy/i,
+    });
+    expect(combobox).toHaveTextContent('Tier 1 Critical Escalation');
+
+    fireEvent.click(combobox);
+    const standardPolicy = screen.getByText('Standard Business Hours');
+    fireEvent.click(standardPolicy);
+
+    expect(combobox).toHaveTextContent('Standard Business Hours');
+    const saveButton = screen.getByRole('button', { name: /save changes/i });
+    expect(saveButton).not.toBeDisabled();
+    expect(screen.getByText('You have unsaved changes.')).toBeInTheDocument();
+  });
 });

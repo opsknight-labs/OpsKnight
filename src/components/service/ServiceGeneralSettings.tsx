@@ -27,6 +27,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import EscalationPolicyCombobox from '@/components/service/EscalationPolicyCombobox';
 
 interface TeamOption {
   id: string;
@@ -370,21 +371,12 @@ export default function ServiceGeneralSettings({
                   {policies.length} configured
                 </span>
               </Label>
-              <select
-                id="escalationPolicyId"
-                name="escalationPolicyId"
+              <EscalationPolicyCombobox
+                policies={policies}
                 value={escalationPolicyId}
-                onChange={e => setEscalationPolicyId(e.target.value)}
+                onChange={setEscalationPolicyId}
                 disabled={!canManageService || isPending}
-                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">No Policy Attached</option>
-                {policies.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              />
               <p className="text-[10px] text-muted-foreground">
                 Determines the responder paging on-call rotation triggered by alerts for this
                 service.
