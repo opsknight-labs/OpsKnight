@@ -127,11 +127,6 @@ export default function ComplianceClientTabs({
     <div className="space-y-6 pb-12 w-full">
       {/* Canonical DetailHeroBanner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Security & Compliance',
-        }}
         tag="Security Posture & Compliance Frameworks"
         title="Security & Compliance"
         subtitle="Read-only readiness diagnostics across SOC 2, ISO 27001, HIPAA, GDPR, CRA, and workspace security controls."

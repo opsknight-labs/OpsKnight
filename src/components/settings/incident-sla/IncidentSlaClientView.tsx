@@ -127,11 +127,6 @@ export default function IncidentSlaClientView({
     <div className="space-y-6 pb-12 w-full">
       {/* Canonical DetailHeroBanner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Incident SLAs & Response Policies',
-        }}
         tag="Governance & SLA Architecture"
         title="Incident SLAs & Response Policies"
         subtitle="Define acknowledgement and resolution targets, provider alert severity normalization, and operational support windows."

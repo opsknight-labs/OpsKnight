@@ -77,8 +77,8 @@ describe('IncidentSlaClientView', () => {
   it('renders canonical DetailHeroBanner with title, badges, and stats capsules', () => {
     render(<IncidentSlaClientView {...defaultProps} />);
 
-    // Breadcrumbs & Title
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    // Banner Tag & Title
+    expect(screen.getByText('Governance & SLA Architecture')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 1, name: 'Incident SLAs & Response Policies' })
     ).toBeInTheDocument();

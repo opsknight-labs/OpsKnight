@@ -33,6 +33,7 @@ export default function SettingsSubpageNav() {
     if (currentItem) break;
   }
 
+  const isDeepChild = Boolean(currentItem && pathname !== currentItem.href);
   const pageTitle = currentItem?.label ?? 'Settings Detail';
   const sectionTitle = currentSection?.label;
 
@@ -57,10 +58,28 @@ export default function SettingsSubpageNav() {
           </>
         )}
 
-        <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
-        <span className="font-semibold text-foreground truncate max-w-[240px] sm:max-w-none">
-          {pageTitle}
-        </span>
+        {isDeepChild ? (
+          <>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+            <Link
+              href={currentItem?.href || '/settings'}
+              className="font-medium hover:text-foreground transition-colors"
+            >
+              {pageTitle}
+            </Link>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+            <span className="font-semibold text-foreground truncate max-w-[240px] sm:max-w-none">
+              Detail
+            </span>
+          </>
+        ) : (
+          <>
+            <ChevronRight className="h-3 w-3 text-muted-foreground/40 shrink-0" />
+            <span className="font-semibold text-foreground truncate max-w-[240px] sm:max-w-none">
+              {pageTitle}
+            </span>
+          </>
+        )}
       </nav>
 
       <div className="flex items-center gap-2">

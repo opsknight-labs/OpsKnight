@@ -45,7 +45,6 @@ export default async function GlobalChatOpsIntegrationPage() {
   return (
     <div className="space-y-6">
       <DetailHeroBanner
-        breadcrumb={{ label: 'Settings', href: '/settings', current: 'ChatOps Integration' }}
         tag="REAL-TIME INCIDENT COLLABORATION"
         title="ChatOps & Incident War Rooms"
         subtitle="Automate dedicated Slack incident channels, multi-responder paging, and instant video war rooms."

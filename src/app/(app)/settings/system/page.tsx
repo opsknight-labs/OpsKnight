@@ -49,7 +49,6 @@ export default async function SystemSettingsPage() {
       return (
         <div className="space-y-6">
           <DetailHeroBanner
-            breadcrumb={{ label: 'Settings', href: '/settings', current: 'System' }}
             tag="SYSTEM ADMINISTRATION"
             title="System Settings"
             subtitle="Application-wide configuration and defaults."
@@ -383,7 +382,6 @@ export default async function SystemSettingsPage() {
     return (
       <div className="space-y-6">
         <DetailHeroBanner
-          breadcrumb={{ label: 'Settings', href: '/settings', current: 'System' }}
           tag="SYSTEM ADMINISTRATION"
           title="System Settings"
           subtitle="Core application configuration — App URL, SSO, data retention, and environment."

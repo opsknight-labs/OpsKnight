@@ -97,8 +97,8 @@ describe('ComplianceClientTabs', () => {
   it('renders canonical DetailHeroBanner with title, badges, stats capsules, and disclaimer alert', () => {
     render(<ComplianceClientTabs {...defaultProps} />);
 
-    // Breadcrumb & Title
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    // Banner Tag & Title
+    expect(screen.getByText('Security Posture & Compliance Frameworks')).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 1, name: 'Security & Compliance' })
     ).toBeInTheDocument();

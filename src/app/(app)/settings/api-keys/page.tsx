@@ -57,11 +57,6 @@ export default async function ApiKeysSettingsPage() {
     <div className="space-y-6">
       {/* Centralized Glassmorphic Hero Banner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'API Keys',
-        }}
         tag="Programmatic Access & Integration Tokens"
         title="API Keys & Access Tokens"
         subtitle="Generate, rotate, and manage secure API credentials for automation, CI/CD pipelines, and telemetry ingestion."

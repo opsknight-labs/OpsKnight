@@ -36,11 +36,6 @@ export default async function NotificationProviderSettingsPage() {
     <div className="space-y-6">
       {/* 1. Simple Grey Shaded Hero Banner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Notification Providers',
-        }}
         tag="Alerting & Outbound Delivery"
         title="Notification Providers"
         subtitle="Configure SMS (Twilio), Email (Resend/SendGrid/SES/SMTP), Web Push (VAPID), and WhatsApp Business outbound gateways."
