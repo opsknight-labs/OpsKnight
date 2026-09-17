@@ -12,8 +12,8 @@ import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/ji
 import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
 
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
-function serviceSettingsRedirect(serviceId: string) {
-  return `/services/${serviceId}?tab=settings&saved=1`;
+function serviceSettingsRedirect(serviceId: string, tab = 'settings') {
+  return `/services/${serviceId}?tab=${tab}&saved=1`;
 }
 
 export async function createIntegration(formData: FormData) {
@@ -205,7 +205,7 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
   });
 
   revalidatePath(`/services/${serviceId}`);
-  redirect(serviceSettingsRedirect(serviceId));
+  redirect(serviceSettingsRedirect(serviceId, 'notifications'));
 }
 
 const ALLOWED_VIDEO_BRIDGES = new Set(['INHERIT', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']);

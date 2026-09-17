@@ -47,6 +47,7 @@ import {
   Key,
   Terminal,
   Webhook,
+  Bell,
 } from 'lucide-react';
 
 // Custom Components
@@ -767,7 +768,56 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
     </div>
   );
 
-  // --- TAB 4: SETTINGS & CHATOPS CONTENT ---
+  // Count of configured notification channels / webhooks
+  const activeNotificationDestinationsCount =
+    (service.serviceNotificationChannels?.length || 0) +
+    (service.webhookIntegrations?.filter((w: WebhookIntegration) => w.enabled)?.length || 0);
+
+  // --- TAB 4: NOTIFICATIONS CONTENT ---
+  const notificationsContent = (
+    <div className="space-y-6">
+      {isSaved && <ServiceSettingsFlashToast serviceId={id} />}
+
+      {canManageService ? (
+        <ServiceNotificationSettings
+          key={id}
+          serviceId={id}
+          serviceNotificationChannels={service.serviceNotificationChannels || []}
+          slackChannel={service.slackChannel || null}
+          slackWebhookUrl={service.slackWebhookUrl || null}
+          slackIntegration={globalSlackIntegration}
+          webhookIntegrations={(service.webhookIntegrations || []).map((w: WebhookIntegration) => ({
+            id: w.id,
+            name: w.name,
+            type: w.type,
+            url: w.url || '',
+            enabled: w.enabled,
+          }))}
+          serviceNotifyOnTriggered={service.serviceNotifyOnTriggered ?? true}
+          serviceNotifyOnAck={service.serviceNotifyOnAck ?? true}
+          serviceNotifyOnResolved={service.serviceNotifyOnResolved ?? true}
+          serviceNotifyOnSlaBreach={service.serviceNotifyOnSlaBreach ?? false}
+        >
+          <ChatOpsWarRoomSettings
+            serviceId={id}
+            autoCreateWarRoom={service.autoCreateWarRoom ?? true}
+            warRoomVideoBridge={service.warRoomVideoBridge || null}
+            warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
+            chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}
+            canManage={canManageService}
+          />
+        </ServiceNotificationSettings>
+      ) : (
+        <EmptyState
+          icon={<Bell className="h-8 w-8 text-muted-foreground" />}
+          title="Notification settings are restricted"
+          description="Only service managers can view or change notification channels and war room settings."
+        />
+      )}
+    </div>
+  );
+
+  // --- TAB 5: SERVICE SETTINGS CONTENT ---
   const settingsContent = (
     <div className="space-y-6">
       {(isSaved || errorCode === 'duplicate-service') && (
@@ -781,14 +831,19 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
       {canManageService ? (
         <>
-          {/* Core Service Metadata Form */}
-          <Card className="border-border shadow-xs">
-            <CardHeader className="pb-4 border-b bg-muted/20">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Settings className="h-4 w-4 text-primary" />
-                General Service Configuration
+          {/* Card 1: Core Service Metadata Form */}
+          <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+            <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+              <CardTitle className="text-sm font-bold flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
+                  <Settings className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="text-muted-foreground font-mono mr-1.5 text-xs">1.</span>
+                  <span>General Configuration</span>
+                </div>
               </CardTitle>
-              <CardDescription className="text-xs">
+              <CardDescription className="text-xs mt-1">
                 Manage service name, SLA tier, regional placement, and team ownership.
               </CardDescription>
             </CardHeader>
@@ -906,7 +961,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             </CardContent>
           </Card>
 
-          {/* Default Incident Visibility Settings */}
+          {/* Card 2: Default Incident Visibility Settings */}
           <ServiceVisibilitySettings
             key={`visibility-${id}`}
             serviceId={id}
@@ -914,108 +969,97 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             canManage={canManageService}
           />
 
-          {/* Slack & ChatOps Integration Settings */}
+          {/* Section 3: Response Policies & SLAs */}
           {canManageResponsePolicy && (
-            <IncidentSlaPolicySettings
-              scopeKey={`service:${id}`}
-              policy={incidentSlaPolicy}
-              workspacePolicy={workspaceIncidentSlaPolicy}
-              canManage
-            />
-          )}
-          {canManageResponsePolicy && (
-            <IncidentClassificationSettings
-              scopeKey={`service:${id}`}
-              policy={
-                incidentClassificationPolicy
-                  ? {
-                      version: incidentClassificationPolicy.version,
-                      derivePriorityFromUrgency:
-                        incidentClassificationPolicy.derivePriorityFromUrgency,
-                      priorityFallbackMode: incidentClassificationPolicy.priorityFallbackMode as
-                        | 'INHERIT'
-                        | 'ENABLED'
-                        | 'DISABLED',
-                      rules: incidentClassificationPolicy.rules.map(rule => ({
-                        matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
-                        priorityMode: rule.priorityMode as 'INHERIT' | 'FALLBACK' | 'SET' | 'CLEAR',
-                        priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
-                        urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
-                        urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
-                      })),
-                    }
-                  : null
-              }
-            />
-          )}
-          {canManageResponsePolicy && (
-            <ResponsePolicyOperations
-              services={[]}
-              integrations={[]}
-              supportScopeKey={`service:${id}`}
-              showOperations={false}
-              supportVersion={responseSupportHoursPolicy?.version ?? 0}
-              supportTimezone={responseSupportHoursPolicy?.timezone ?? 'UTC'}
-              supportMode={
-                (responseSupportHoursPolicy?.mode as
-                  | 'INHERIT'
-                  | 'ALWAYS'
-                  | 'SCHEDULED'
-                  | undefined) ?? 'INHERIT'
-              }
-              supportWindows={
-                responseSupportHoursPolicy?.windows.map(window => ({
-                  dayOfWeek: window.dayOfWeek,
-                  startMinute: window.startMinute,
-                  endMinute: window.endMinute,
-                })) ?? []
-              }
-              supportExceptions={
-                responseSupportHoursPolicy?.exceptions.map(exception => ({
-                  localDate: exception.localDate.toISOString().slice(0, 10),
-                  available: exception.available,
-                  startMinute: exception.startMinute,
-                  endMinute: exception.endMinute,
-                  label: exception.label,
-                })) ?? []
-              }
-              schedulerMode="LEGACY"
-              schedulerIndexReady={false}
-            />
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
+                  <ShieldCheck className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">
+                    <span className="text-muted-foreground font-mono mr-1.5 text-xs">3.</span>
+                    Response Policies & SLAs
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Target SLA response times, priority classifications, and operational coverage
+                    for this service.
+                  </p>
+                </div>
+              </div>
+
+              <IncidentSlaPolicySettings
+                scopeKey={`service:${id}`}
+                policy={incidentSlaPolicy}
+                workspacePolicy={workspaceIncidentSlaPolicy}
+                canManage
+              />
+
+              <IncidentClassificationSettings
+                scopeKey={`service:${id}`}
+                policy={
+                  incidentClassificationPolicy
+                    ? {
+                        version: incidentClassificationPolicy.version,
+                        derivePriorityFromUrgency:
+                          incidentClassificationPolicy.derivePriorityFromUrgency,
+                        priorityFallbackMode: incidentClassificationPolicy.priorityFallbackMode as
+                          | 'INHERIT'
+                          | 'ENABLED'
+                          | 'DISABLED',
+                        rules: incidentClassificationPolicy.rules.map(rule => ({
+                          matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
+                          priorityMode: rule.priorityMode as
+                            | 'INHERIT'
+                            | 'FALLBACK'
+                            | 'SET'
+                            | 'CLEAR',
+                          priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
+                          urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
+                          urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
+                        })),
+                      }
+                    : null
+                }
+              />
+
+              <ResponsePolicyOperations
+                services={[]}
+                integrations={[]}
+                supportScopeKey={`service:${id}`}
+                showOperations={false}
+                supportVersion={responseSupportHoursPolicy?.version ?? 0}
+                supportTimezone={responseSupportHoursPolicy?.timezone ?? 'UTC'}
+                supportMode={
+                  (responseSupportHoursPolicy?.mode as
+                    | 'INHERIT'
+                    | 'ALWAYS'
+                    | 'SCHEDULED'
+                    | undefined) ?? 'INHERIT'
+                }
+                supportWindows={
+                  responseSupportHoursPolicy?.windows.map(window => ({
+                    dayOfWeek: window.dayOfWeek,
+                    startMinute: window.startMinute,
+                    endMinute: window.endMinute,
+                  })) ?? []
+                }
+                supportExceptions={
+                  responseSupportHoursPolicy?.exceptions.map(exception => ({
+                    localDate: exception.localDate.toISOString().slice(0, 10),
+                    available: exception.available,
+                    startMinute: exception.startMinute,
+                    endMinute: exception.endMinute,
+                    label: exception.label,
+                  })) ?? []
+                }
+                schedulerMode="LEGACY"
+                schedulerIndexReady={false}
+              />
+            </div>
           )}
 
-          <ServiceNotificationSettings
-            key={id}
-            serviceId={id}
-            serviceNotificationChannels={service.serviceNotificationChannels || []}
-            slackChannel={service.slackChannel || null}
-            slackWebhookUrl={service.slackWebhookUrl || null}
-            slackIntegration={globalSlackIntegration}
-            webhookIntegrations={(service.webhookIntegrations || []).map(
-              (w: WebhookIntegration) => ({
-                id: w.id,
-                name: w.name,
-                type: w.type,
-                url: w.url || '',
-                enabled: w.enabled,
-              })
-            )}
-            serviceNotifyOnTriggered={service.serviceNotifyOnTriggered ?? true}
-            serviceNotifyOnAck={service.serviceNotifyOnAck ?? true}
-            serviceNotifyOnResolved={service.serviceNotifyOnResolved ?? true}
-            serviceNotifyOnSlaBreach={service.serviceNotifyOnSlaBreach ?? false}
-          />
-
-          <ChatOpsWarRoomSettings
-            serviceId={id}
-            autoCreateWarRoom={service.autoCreateWarRoom ?? true}
-            warRoomVideoBridge={service.warRoomVideoBridge || null}
-            warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
-            chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}
-            canManage={canManageService}
-          />
-
-          {/* Jira Integration Mapping */}
+          {/* Card 4: Jira Integration Mapping */}
           <JiraServiceMappingSettings
             serviceId={id}
             mapping={service.jiraServiceMapping}
@@ -1023,15 +1067,20 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             canManage={canManageService}
           />
 
-          {/* Danger Zone: Delete Service */}
+          {/* Card 5: Danger Zone: Delete Service */}
           {canDeleteService && (
-            <Card className="border-destructive/30 bg-destructive/5 shadow-xs">
-              <CardHeader className="pb-3 border-b border-destructive/20">
-                <CardTitle className="text-sm font-bold text-destructive flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Danger Zone
+            <Card className="rounded-2xl border border-destructive/30 bg-destructive/5 shadow-xs">
+              <CardHeader className="pb-4 border-b border-destructive/20 bg-destructive/10 dark:bg-destructive/10">
+                <CardTitle className="text-sm font-bold text-destructive flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-destructive/10 text-destructive shrink-0 border border-destructive/20 shadow-2xs">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-destructive/70 font-mono mr-1.5 text-xs">5.</span>
+                    <span>Danger Zone</span>
+                  </div>
                 </CardTitle>
-                <CardDescription className="text-xs text-destructive/80">
+                <CardDescription className="text-xs text-destructive/80 mt-1">
                   Permanently delete this service. This action cannot be undone.
                 </CardDescription>
               </CardHeader>
@@ -1186,9 +1235,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         defaultTab={activeTab}
         activeIncidentCount={activeIncidentsCount}
         integrationCount={service.integrations?.length || 0}
+        notificationsCount={activeNotificationDestinationsCount}
         incidentsContent={incidentsContent}
         escalationContent={escalationContent}
         integrationsContent={integrationsContent}
+        notificationsContent={notificationsContent}
         settingsContent={settingsContent}
       />
     </main>

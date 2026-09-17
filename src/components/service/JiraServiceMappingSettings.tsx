@@ -82,22 +82,29 @@ export default function JiraServiceMappingSettings({
         : ['HIGH'];
 
   return (
-    <Card>
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between gap-4">
+    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+      <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Tickets className="h-4 w-4 text-slate-500" />
-              Jira Workflow Mapping
+            <CardTitle className="text-sm font-bold flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
+                <Tickets className="h-4 w-4" />
+              </div>
+              <div>
+                <span className="text-muted-foreground font-mono mr-1.5 text-xs">4.</span>
+                <span>Jira Workflow Mapping</span>
+              </div>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs mt-1">
               Route this service&apos;s incidents and follow-up work to the right Jira project.
             </CardDescription>
           </div>
-          <Badge variant="default">Workspace connected</Badge>
+          <Badge variant="default" className="text-[10px] font-semibold w-fit px-2.5 py-0.5">
+            Workspace connected
+          </Badge>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-5">
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="serviceId" value={serviceId} />
           {state?.error && (
@@ -108,8 +115,10 @@ export default function JiraServiceMappingSettings({
           )}
 
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="jira-project-key">Project Key</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="jira-project-key" className="text-xs font-semibold">
+                Project Key
+              </Label>
               <Input
                 id="jira-project-key"
                 name="projectKey"
@@ -117,87 +126,107 @@ export default function JiraServiceMappingSettings({
                 placeholder="OPS"
                 disabled={!canManage}
                 required
+                className="text-xs h-9"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="jira-component">Default Component</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="jira-component" className="text-xs font-semibold">
+                Default Component
+              </Label>
               <Input
                 id="jira-component"
                 name="defaultComponent"
                 defaultValue={mapping?.defaultComponent ?? ''}
                 placeholder="API Platform"
                 disabled={!canManage}
+                className="text-xs h-9"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="incident-issue-type">Incident Issue Type</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="incident-issue-type" className="text-xs font-semibold">
+                Incident Issue Type
+              </Label>
               <Input
                 id="incident-issue-type"
                 name="incidentIssueType"
                 defaultValue={mapping?.incidentIssueType ?? 'Bug'}
                 disabled={!canManage}
                 required
+                className="text-xs h-9"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="action-item-issue-type">Action Item Issue Type</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="action-item-issue-type" className="text-xs font-semibold">
+                Action Item Issue Type
+              </Label>
               <Input
                 id="action-item-issue-type"
                 name="actionItemIssueType"
                 defaultValue={mapping?.actionItemIssueType ?? 'Task'}
                 disabled={!canManage}
                 required
+                className="text-xs h-9"
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="jira-labels">Default Labels</Label>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label htmlFor="jira-labels" className="text-xs font-semibold">
+                Default Labels
+              </Label>
               <Input
                 id="jira-labels"
                 name="defaultLabels"
                 defaultValue={mapping?.defaultLabels.join(', ') ?? 'opsknight'}
                 placeholder="opsknight, incident-response"
                 disabled={!canManage}
+                className="text-xs h-9"
               />
             </div>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
+            <label className="flex items-center gap-3 rounded-xl border border-border/80 bg-muted/20 p-3 text-xs cursor-pointer hover:bg-muted/30 transition-colors">
               <input
                 type="checkbox"
                 name="autoCreateIncidentIssue"
                 defaultChecked={mapping?.autoCreateIncidentIssue ?? false}
                 disabled={!canManage}
-                className="h-4 w-4"
+                className="h-4 w-4 rounded border-input text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed"
               />
-              Auto-create Jira issues for new incidents
+              <span className="font-medium text-foreground">
+                Auto-create Jira issues for new incidents
+              </span>
             </label>
-            <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
+            <label className="flex items-center gap-3 rounded-xl border border-border/80 bg-muted/20 p-3 text-xs cursor-pointer hover:bg-muted/30 transition-colors">
               <input
                 type="checkbox"
                 name="syncEnabled"
                 defaultChecked={mapping?.syncEnabled ?? true}
                 disabled={!canManage}
-                className="h-4 w-4"
+                className="h-4 w-4 rounded border-input text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed"
               />
-              Sync Jira status metadata
+              <span className="font-medium text-foreground">Sync Jira status metadata</span>
             </label>
           </div>
 
-          <div className="rounded-md border p-3">
-            <Label className="text-sm font-medium">Auto-create for incident urgency</Label>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-xl border border-border/80 bg-muted/10 p-3.5 space-y-2">
+            <Label className="text-xs font-semibold text-foreground">
+              Auto-create for incident urgency
+            </Label>
+            <div className="grid gap-2 sm:grid-cols-3">
               {URGENCY_OPTIONS.map(option => (
-                <label key={option.value} className="flex items-center gap-2 text-sm">
+                <label
+                  key={option.value}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                >
                   <input
                     type="checkbox"
                     name="autoCreateIncidentUrgencies"
                     value={option.value}
                     defaultChecked={selectedAutoCreateUrgencies.includes(option.value)}
                     disabled={!canManage}
-                    className="h-4 w-4"
+                    className="h-4 w-4 rounded border-input text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed"
                   />
-                  {option.label}
+                  <span>{option.label} Urgency</span>
                 </label>
               ))}
             </div>

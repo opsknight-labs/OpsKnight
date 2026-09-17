@@ -65,25 +65,33 @@ export default function ChatOpsWarRoomSettings({
   }, [state, serviceId]);
 
   return (
-    <Card>
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between gap-4">
+    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+      <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <MessageCircle className="h-4 w-4 text-slate-500" />
-              ChatOps & War Room Settings
+            <CardTitle className="text-sm font-bold flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
+                <MessageCircle className="h-4 w-4" />
+              </div>
+              <div>
+                <span className="text-muted-foreground font-mono mr-1.5 text-xs">3.</span>
+                <span>ChatOps & War Room Settings</span>
+              </div>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs mt-1">
               Configure Slack channel creation and video war rooms for incidents affecting this
               service.
             </CardDescription>
           </div>
-          <Badge variant={chatOpsEnabled ? 'default' : 'secondary'}>
+          <Badge
+            variant={chatOpsEnabled ? 'default' : 'secondary'}
+            className="text-[10px] font-semibold w-fit px-2.5 py-0.5"
+          >
             {chatOpsEnabled ? 'ChatOps Enabled' : 'ChatOps not configured'}
           </Badge>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-5">
         <form action={formAction} className="space-y-4">
           <input type="hidden" name="serviceId" value={serviceId} />
 
@@ -95,17 +103,17 @@ export default function ChatOpsWarRoomSettings({
           )}
 
           <div className="space-y-4">
-            <label className="flex items-center gap-3 rounded-md border p-3 text-sm cursor-pointer">
+            <label className="flex items-center gap-3 rounded-xl border border-border/80 bg-muted/20 p-3.5 text-xs cursor-pointer hover:bg-muted/30 transition-colors">
               <input
                 type="checkbox"
                 name="autoCreateWarRoom"
                 defaultChecked={autoCreateWarRoom}
                 disabled={!canManage}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                className="h-4 w-4 rounded border-input text-primary focus:ring-primary cursor-pointer disabled:cursor-not-allowed"
               />
               <div>
-                <div className="font-medium">Auto-create War Room</div>
-                <div className="text-xs text-muted-foreground">
+                <div className="font-semibold text-foreground text-xs">Auto-create War Room</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
                   Automatically spin up dedicated Slack channel and video bridge when an incident
                   occurs.
                 </div>
@@ -113,14 +121,16 @@ export default function ChatOpsWarRoomSettings({
             </label>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="warRoomVideoBridge">Override Video Bridge</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="warRoomVideoBridge" className="text-xs font-semibold">
+                  Override Video Bridge
+                </Label>
                 <select
                   id="warRoomVideoBridge"
                   name="warRoomVideoBridge"
                   defaultValue={warRoomVideoBridge ?? 'INHERIT'}
                   disabled={!canManage}
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {VIDEO_BRIDGE_OPTIONS.map(option => (
                     <option key={option.value} value={option.value}>
@@ -129,14 +139,17 @@ export default function ChatOpsWarRoomSettings({
                   ))}
                 </select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="warRoomCustomBridgeUrl">Custom Bridge URL</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="warRoomCustomBridgeUrl" className="text-xs font-semibold">
+                  Custom Bridge URL
+                </Label>
                 <Input
                   id="warRoomCustomBridgeUrl"
                   name="warRoomCustomBridgeUrl"
                   defaultValue={warRoomCustomBridgeUrl ?? ''}
                   placeholder="https://meet.company.com/{incidentId}"
                   disabled={!canManage}
+                  className="text-xs h-9"
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Optional. Use <code className="text-xs">{'{incidentId}'}</code> as a placeholder
