@@ -1132,4 +1132,66 @@ describe('Canonical App URL Hierarchy & DB-Backed Host Resolution', () => {
     const oldHostResolved = await resolveStatusPage({ host: 'status.old.example.com' });
     expect(oldHostResolved).toBeNull();
   });
+
+  describe('Internal status-domain config provider and deadlock avoidance', () => {
+    it('bypasses status configuration fetch for /api/status-page/domains on recognized app hosts', async () => {
+      vi.resetModules();
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsknight.test');
+      delete process.env.STATUS_PAGE_EXTERNAL_SERVING_STORE;
+
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://127.0.0.1:3000/api/status-page/domains', {
+        headers: { host: '127.0.0.1:3000' },
+      });
+      const res = await middleware(req);
+
+      // Must pass through directly to route handler, never calling internal fetch recursively
+      expect(res.status).toBe(200);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects /api/status-page/domains on status hosts with 404', async () => {
+      vi.resetModules();
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsknight.com');
+      delete process.env.STATUS_PAGE_EXTERNAL_SERVING_STORE;
+
+      const fetchMock = vi.fn().mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/status-page/domains')) {
+          return Promise.resolve(
+            Response.json({
+              enabled: true,
+              appHost: 'opsknight.com',
+              pages: [
+                {
+                  id: 'status_page_main',
+                  slug: null,
+                  subdomain: 'status',
+                  customDomain: 'status.opsknight.com',
+                  requireAuth: false,
+                  isDefault: true,
+                },
+              ],
+            })
+          );
+        }
+        return Promise.resolve(new Response(null, { status: 404 }));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.opsknight.com/api/status-page/domains', {
+        headers: { host: 'status.opsknight.com' },
+      });
+      const res = await middleware(req);
+
+      // Must be rejected by the status domain firewall with 404
+      expect(res.status).toBe(404);
+    });
+  });
 });
