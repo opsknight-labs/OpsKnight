@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { SETTINGS_NAV_SECTIONS } from '@/components/settings/navConfig';
 import { cn } from '@/lib/utils';
-import { SlackLogo, JiraLogo } from '@/components/common/BrandLogos';
+import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 
 type Props = {
   isAdmin?: boolean;
@@ -50,6 +50,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   building: Building2,
   users: Users,
   slack: SlackLogo,
+  'microsoft-teams': MicrosoftTeamsLogo,
   jira: JiraLogo,
   'message-circle': MessageCircle,
   tickets: Tickets,

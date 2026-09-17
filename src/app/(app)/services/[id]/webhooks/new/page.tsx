@@ -1,6 +1,5 @@
 import prisma from '@/lib/prisma';
 import Link from 'next/link';
-import ServiceTabs from '@/components/service/ServiceTabs';
 import { createWebhookIntegration } from '../actions';
 import {
   Card,
@@ -53,43 +52,51 @@ export default async function NewWebhookPage({
 
   return (
     <main className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
         <Link
           href="/services"
-          className="hover:text-primary transition-colors flex items-center gap-1"
+          className="hover:text-foreground transition-colors flex items-center gap-1"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-3.5 w-3.5" />
           Services
         </Link>
-        <span className="opacity-30">/</span>
-        <Link href={`/services/${id}`} className="hover:text-primary transition-colors">
+        <span className="opacity-40">/</span>
+        <Link
+          href={`/services/${id}?tab=notifications`}
+          className="hover:text-foreground transition-colors"
+        >
           {service.name}
         </Link>
-        <span className="opacity-30">/</span>
+        <span className="opacity-40">/</span>
+        <Link
+          href={`/services/${id}?tab=notifications`}
+          className="hover:text-foreground transition-colors"
+        >
+          Notifications
+        </Link>
+        <span className="opacity-40">/</span>
         <span className="font-medium text-foreground">Add Webhook</span>
       </div>
 
-      <div className="relative overflow-hidden rounded-xl border border-zinc-800/80 bg-gradient-to-b from-[#121216] to-[#09090b] p-4 text-zinc-100 shadow-xl ring-1 ring-white/5 md:p-6">
-        <div className="pointer-events-none absolute -right-24 -top-32 h-72 w-72 rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="relative flex items-start gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-zinc-800/80 text-white border border-zinc-700/80 shadow-xs">
-            <Webhook className="h-5 w-5 text-rose-500" aria-hidden="true" />
+      <div className="relative overflow-hidden rounded-2xl border border-border/80 dark:border-border/60 bg-gradient-to-r from-card via-card to-primary/5 p-5 sm:p-6 shadow-xs">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+            <Webhook className="h-6 w-6" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-400">
-              Inbound Integration
-            </p>
-            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-white md:text-3xl">
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              Outbound Notification
+            </span>
+            <h1 className="mt-1.5 text-xl sm:text-2xl font-extrabold tracking-tight text-foreground">
               Add Webhook Integration
             </h1>
-            <p className="mt-1 text-xs md:text-sm text-zinc-300">
-              Configure a webhook integration for {service.name}
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+              Configure real-time incident event delivery to an external webhook for{' '}
+              <strong className="text-foreground">{service.name}</strong>
             </p>
           </div>
         </div>
       </div>
-
-      <ServiceTabs serviceId={id} />
 
       <div className="max-w-3xl">
         {errorCode === 'duplicate-webhook' && (
@@ -102,10 +109,12 @@ export default async function NewWebhookPage({
           </Alert>
         )}
 
-        <Card>
-          <CardHeader className="border-b pb-6">
-            <CardTitle>Webhook Configuration</CardTitle>
-            <CardDescription>Enter the details for your new webhook integration.</CardDescription>
+        <Card className="rounded-2xl border border-border/80 dark:border-border/60 shadow-xs">
+          <CardHeader className="border-b pb-4 bg-muted/20">
+            <CardTitle className="text-sm font-bold">Webhook Configuration</CardTitle>
+            <CardDescription className="text-xs">
+              Enter the details for your new outbound webhook integration.
+            </CardDescription>
           </CardHeader>
 
           <form action={createWebhookWithId}>
@@ -183,7 +192,7 @@ export default async function NewWebhookPage({
 
             <CardFooter className="flex justify-between border-t p-6 bg-muted/20">
               <Button variant="ghost" asChild>
-                <Link href={`/services/${id}/settings`}>Cancel</Link>
+                <Link href={`/services/${id}?tab=notifications`}>Cancel</Link>
               </Button>
               <Button type="submit">Create Webhook</Button>
             </CardFooter>

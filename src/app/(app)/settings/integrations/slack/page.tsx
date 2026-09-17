@@ -87,7 +87,6 @@ export default async function GlobalSlackIntegrationPage(props: {
     <div className="space-y-6">
       {/* Detail Hero Header */}
       <DetailHeroBanner
-        breadcrumb={{ label: 'Settings', href: '/settings', current: 'Slack Integration' }}
         tag="COLLABORATION ENGINE"
         title="Slack Integration"
         subtitle="Connect your Slack workspace for incident alerts, bi-directional triage, slash commands, and video war rooms."

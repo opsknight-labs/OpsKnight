@@ -56,7 +56,6 @@ export default async function GlobalJiraIntegrationPage() {
   return (
     <div className="space-y-6">
       <DetailHeroBanner
-        breadcrumb={{ label: 'Settings', href: '/settings', current: 'Jira Integration' }}
         tag="ATLASSIAN WORKSPACE INTEGRATION"
         title="Jira Integration"
         subtitle="Connect Atlassian Jira Cloud or Data Center to turn incidents and postmortem action items into tracked engineering issues."

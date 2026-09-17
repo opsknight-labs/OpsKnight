@@ -21,11 +21,6 @@ export default async function NotificationHistoryPage() {
     <div className="space-y-6">
       {/* 1. Shaded Top Hero Banner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: canManageProviders ? 'Notification Providers' : 'Settings',
-          href: canManageProviders ? '/settings/notifications' : '/settings',
-          current: 'History',
-        }}
         tag="Your Account Activity"
         title="Delivery History & Logs"
         subtitle="Personal audit trail of outbound alerts, emails, and push notifications sent to you — not workspace-wide. Scoped to your account only."

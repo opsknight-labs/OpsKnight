@@ -93,11 +93,6 @@ export default async function StatusPageWorkspacePage({
   return (
     <div className="space-y-5">
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: statusPage.name,
-        }}
         tag="Status Page Configuration"
         title={statusPage.name}
         subtitle={

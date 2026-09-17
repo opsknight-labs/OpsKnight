@@ -58,8 +58,9 @@ export async function createWebhookIntegration(serviceId: string, formData: Form
     details: { name: normalizedName, type },
   });
 
-  revalidatePath(`/services/${serviceId}/settings`);
-  redirect(`/services/${serviceId}/settings?saved=1`);
+  revalidatePath(`/services/${serviceId}`);
+  revalidatePath(`/services/${serviceId}/notifications`);
+  redirect(`/services/${serviceId}?tab=notifications&saved=1`);
 }
 
 export async function updateWebhookIntegration(
@@ -103,7 +104,9 @@ export async function updateWebhookIntegration(
     });
   } catch (error) {
     if (error instanceof UniqueNameConflictError) {
-      redirect(`/services/${ownedServiceId}/webhooks/${integrationId}/edit?error=duplicate-webhook`);
+      redirect(
+        `/services/${ownedServiceId}/webhooks/${integrationId}/edit?error=duplicate-webhook`
+      );
     }
     throw error;
   }
@@ -128,9 +131,9 @@ export async function updateWebhookIntegration(
     details: { integrationId, name: normalizedName, type },
   });
 
-  revalidatePath(`/services/${ownedServiceId}/settings`);
-  revalidatePath(`/services/${ownedServiceId}/webhooks`);
-  redirect(`/services/${ownedServiceId}/settings?saved=1`);
+  revalidatePath(`/services/${ownedServiceId}`);
+  revalidatePath(`/services/${ownedServiceId}/notifications`);
+  redirect(`/services/${ownedServiceId}?tab=notifications&saved=1`);
 }
 
 export async function deleteWebhookIntegration(integrationId: string, _serviceId: string) {
@@ -159,5 +162,6 @@ export async function deleteWebhookIntegration(integrationId: string, _serviceId
     details: { integrationId },
   });
 
-  revalidatePath(`/services/${existing.serviceId}/settings`);
+  revalidatePath(`/services/${existing.serviceId}`);
+  revalidatePath(`/services/${existing.serviceId}/notifications`);
 }

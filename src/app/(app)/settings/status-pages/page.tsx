@@ -61,11 +61,6 @@ export default async function StatusPagesControlCenter() {
     <div className="space-y-6">
       {/* Centralized Glassmorphic Hero Banner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Status Pages',
-        }}
         tag="Public Communication & Status Infrastructure"
         title="Status Pages"
         subtitle="Manage independent public communication surfaces. Configure branding, mapped services, custom domains, and subscriber notifications."

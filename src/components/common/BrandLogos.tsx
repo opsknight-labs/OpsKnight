@@ -5,9 +5,16 @@ type BrandLogoProps = {
   size?: number;
 };
 
-export function SlackLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
+export function SlackLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
   return (
-    <svg viewBox="0 0 128 128" className={className} fill="none" aria-label="Slack logo">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 128 128"
+      className={className}
+      fill="none"
+      aria-label="Slack logo"
+    >
       <path d="M26.002 81.996a12.998 12.998 0 1 1-12.998-13h12.998v13z" fill="#E01E5A" />
       <path
         d="M32.503 81.996a12.998 12.998 0 0 1 25.996 0v32.496a12.998 12.998 0 1 1-25.996 0v-32.496z"
@@ -32,9 +39,11 @@ export function SlackLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
   );
 }
 
-export function MicrosoftTeamsLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
+export function MicrosoftTeamsLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
   return (
     <svg
+      width={size}
+      height={size}
       viewBox="1.5 1 19.2 18.2"
       className={className}
       aria-label="Microsoft Teams logo"
@@ -58,13 +67,20 @@ export function MicrosoftTeamsLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
   );
 }
 
-export function JiraLogo({ className = 'h-4 w-4' }: BrandLogoProps) {
+export function JiraLogo({ className = 'h-4 w-4', size }: BrandLogoProps) {
   const id = useId().replace(/:/g, '');
   const gradA = `jira-grad-a-${id}`;
   const gradB = `jira-grad-b-${id}`;
 
   return (
-    <svg viewBox="0 0 128 128" className={className} fill="none" aria-label="Jira logo">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 128 128"
+      className={className}
+      fill="none"
+      aria-label="Jira logo"
+    >
       <defs>
         <linearGradient
           id={gradA}

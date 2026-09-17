@@ -81,17 +81,21 @@ export default function ForgotPasswordPage() {
               <div
                 role="alert"
                 aria-live="assertive"
-                className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-500/20 dark:bg-red-500/10"
+                className="mb-5 flex items-start gap-3 rounded-lg border border-red-200/80 dark:border-red-900/50 bg-red-50/30 dark:bg-red-950/20 p-3 text-xs shadow-xs transition-all"
               >
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
-                <p className="flex-1 text-red-700 dark:text-red-300">{error}</p>
+                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 mt-0.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                </div>
+                <p className="flex-1 text-slate-700 dark:text-slate-300 leading-relaxed pt-0.5">
+                  {error}
+                </p>
                 <button
                   type="button"
                   onClick={() => setError('')}
                   aria-label="Dismiss error"
-                  className="rounded text-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                  className="shrink-0 p-0.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
             )}
