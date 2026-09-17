@@ -7,6 +7,8 @@ import {
 } from '@/lib/status-pages/status-auth';
 import { useSecureCookies } from '@/lib/auth-cookies';
 
+import { normalizeHostname } from '@/lib/status-pages/status-route-resolver';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
@@ -28,7 +30,7 @@ export async function GET(req: NextRequest) {
     req.headers.get('host') ||
     '';
 
-  const cleanHost = host.toLowerCase().split(':')[0] ?? '';
+  const cleanHost = normalizeHostname(host);
   const statusPage = await resolveStatusPage({ host: cleanHost });
 
   if (!statusPage) {

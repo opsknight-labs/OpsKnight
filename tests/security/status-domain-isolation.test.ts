@@ -206,6 +206,35 @@ describe('Status Domain Host Firewall & Isolation', () => {
       expect(res.status).toBe(200);
     });
 
+    it('allows POST /api/status/subscriptions/verify on status domain', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.customer.test/api/status/subscriptions/verify', {
+        method: 'POST',
+        headers: { host: 'status.customer.test' },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(200);
+    });
+
+    it('allows POST /api/status/subscriptions/unsubscribe on status domain', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest(
+        'https://status.customer.test/api/status/subscriptions/unsubscribe',
+        {
+          method: 'POST',
+          headers: { host: 'status.customer.test' },
+        }
+      );
+      const res = await middleware(req);
+
+      expect(res.status).toBe(200);
+    });
+
     it('allows static assets on status domain', async () => {
       setupRouteMocks();
       const { default: middleware } = await import('@/middleware');
@@ -273,6 +302,23 @@ describe('Status Domain Host Firewall & Isolation', () => {
       // must be rejected with 404 and never route into the app plane
       expect(res.status).toBe(404);
     });
+
+    it('CRITICAL SECURITY INVARIANT: spoofed X-Forwarded-Host cannot bypass status firewall for app routes', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      // Attacker connects to status.customer.test with spoofed X-Forwarded-Host
+      const req = new NextRequest('https://status.customer.test/users', {
+        headers: {
+          host: 'status.customer.test',
+          'x-forwarded-host': 'app.internal.com',
+          cookie: 'next-auth.session-token=valid-admin-session',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(404);
+    });
   });
 
   describe('Server Action Firewall', () => {
@@ -308,7 +354,7 @@ describe('Status Domain Host Firewall & Isolation', () => {
       expect(res.status).toBe(404);
     });
 
-    it('allows Server Action requests targeting /verify or /unsubscribe on status domain', async () => {
+    it('unconditionally rejects Server Action requests targeting /verify on status domain', async () => {
       setupRouteMocks();
       const { default: middleware } = await import('@/middleware');
 
@@ -316,15 +362,28 @@ describe('Status Domain Host Firewall & Isolation', () => {
         method: 'POST',
         headers: {
           host: 'status.customer.test',
-          'next-action': 'verify-subscription-action-id',
+          'next-action': 'deactivateUser',
         },
       });
       const res = await middleware(req);
 
-      expect(res.status).toBe(200);
-      expect(res.headers.get('x-middleware-rewrite')).toBe(
-        'https://status.customer.test/status/public-status/verify/sub_abc'
-      );
+      expect(res.status).toBe(404);
+    });
+
+    it('unconditionally rejects Server Action requests targeting /unsubscribe on status domain', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.customer.test/unsubscribe/sub_abc', {
+        method: 'POST',
+        headers: {
+          host: 'status.customer.test',
+          'next-action': 'deactivateUser',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(404);
     });
   });
 
@@ -426,6 +485,23 @@ describe('Status Auth Ticket & Session Cryptography', () => {
       );
       expect(verification).toBeNull();
     });
+
+    it('enforces single-use ticket guarantee: rejects replay of consumed ticket', async () => {
+      const ticket = await createStatusAuthTicket({
+        pageId: 'page_123',
+        targetHost: 'status.customer.test',
+        returnTo: '/history',
+        userId: 'user_admin',
+      });
+
+      // First verification succeeds
+      const first = await verifyStatusAuthTicket(ticket, 'page_123', 'status.customer.test');
+      expect(first).not.toBeNull();
+
+      // Second verification of the exact same ticket within TTL MUST FAIL (replay prevention)
+      const second = await verifyStatusAuthTicket(ticket, 'page_123', 'status.customer.test');
+      expect(second).toBeNull();
+    });
   });
 
   describe('createStatusSessionToken & verifyStatusSessionToken', () => {
@@ -514,5 +590,158 @@ describe('Status Auth Ticket & Session Cryptography', () => {
       expect(isRequestToAppHost('status.customer.test', 'https://app.opsknight.test')).toBe(false);
       expect(isRequestToAppHost(null, 'https://app.opsknight.test')).toBe(true);
     });
+  });
+});
+
+describe('Hostname & Subdomain Resolution (Centralized Resolver)', () => {
+  it('matchesStatusPageDomain matches short subdomain against full hostname', async () => {
+    const { matchesStatusPageDomain, buildSubdomainHost, extractSubdomainFromHost } =
+      await import('@/lib/status-pages/status-route-resolver');
+
+    const page = { subdomain: 'status-opsknight', customDomain: null };
+    expect(matchesStatusPageDomain(page, 'status-opsknight.opsknight.com', 'opsknight.com')).toBe(
+      true
+    );
+    expect(matchesStatusPageDomain(page, 'status-opsknight', 'opsknight.com')).toBe(true);
+    expect(matchesStatusPageDomain(page, 'other.opsknight.com', 'opsknight.com')).toBe(false);
+
+    expect(buildSubdomainHost('status-opsknight', 'opsknight.com')).toBe(
+      'status-opsknight.opsknight.com'
+    );
+    expect(extractSubdomainFromHost('status-opsknight.opsknight.com', 'opsknight.com')).toBe(
+      'status-opsknight'
+    );
+  });
+
+  it('matchesStatusPageDomain matches custom domain against hostname', async () => {
+    const { matchesStatusPageDomain } = await import('@/lib/status-pages/status-route-resolver');
+
+    const page = { customDomain: 'status.acme.com', subdomain: null };
+    expect(matchesStatusPageDomain(page, 'status.acme.com', 'opsknight.com')).toBe(true);
+    expect(matchesStatusPageDomain(page, 'evil.acme.com', 'opsknight.com')).toBe(false);
+  });
+});
+
+describe('End-to-End Status Authentication Handshake & Isolation Flow', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-17T12:00:00Z'));
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsknight.test');
+    vi.stubEnv('STATUS_PAGE_SERVING_STORE_URL', 'https://serving.opsknight.test/v1');
+    vi.stubEnv('STATUS_PAGE_SERVING_STORE_TOKEN', 'secret');
+    vi.stubEnv('STATUS_PAGE_EXTERNAL_SERVING_STORE', 'true');
+    vi.stubEnv('NEXTAUTH_SECRET', 'test-secret-at-least-32-characters-long');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('completes private custom domain login flow with clean returnTo and strict isolation', async () => {
+    // 1. Generate auth ticket
+    const ticket = await createStatusAuthTicket({
+      pageId: 'page_private',
+      targetHost: 'status.customer.test',
+      returnTo: '/',
+      userId: 'user_admin',
+    });
+
+    // 2. Verify ticket on status domain callback (clean returnTo stays /)
+    const verified = await verifyStatusAuthTicket(ticket, 'page_private', 'status.customer.test');
+    expect(verified).not.toBeNull();
+    expect(verified?.returnTo).toBe('/');
+
+    // 3. Mint status session token
+    const sessionToken = await createStatusSessionToken('page_private', verified?.userId);
+    expect(sessionToken).toBeDefined();
+
+    // 4. User has access with status session cookie
+    const hasAccess = await hasStatusPageAccess({
+      pageId: 'page_private',
+      statusSessionCookie: sessionToken,
+    });
+    expect(hasAccess).toBe(true);
+
+    // 5. Replaying the same ticket to mint another session is blocked (single-use)
+    const replayVerified = await verifyStatusAuthTicket(
+      ticket,
+      'page_private',
+      'status.customer.test'
+    );
+    expect(replayVerified).toBeNull();
+
+    // 6. Same browser with old ADMIN NextAuth session on status host:
+    const fetchMock = vi.fn().mockImplementation((url: string | URL) => {
+      const urlStr = String(url);
+      if (urlStr.includes('status.customer.test')) {
+        return Promise.resolve(Response.json(publicRoute));
+      }
+      return Promise.resolve(new Response(null, { status: 404 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { default: middleware } = await import('@/middleware');
+
+    // GET / -> rewrites to public status route
+    const rootRes = await middleware(
+      new NextRequest('https://status.customer.test/', {
+        headers: {
+          host: 'status.customer.test',
+          cookie: `${STATUS_SESSION_COOKIE_NAME}=${sessionToken}`,
+        },
+      })
+    );
+    expect(rootRes.status).toBe(200);
+    expect(rootRes.headers.get('x-middleware-rewrite')).toBe(
+      'https://status.customer.test/status/public-status'
+    );
+
+    // GET /users -> 404 regardless of credentials
+    const usersRes = await middleware(
+      new NextRequest('https://status.customer.test/users', {
+        headers: {
+          host: 'status.customer.test',
+          cookie: `next-auth.session-token=admin-token; ${STATUS_SESSION_COOKIE_NAME}=${sessionToken}`,
+        },
+      })
+    );
+    expect(usersRes.status).toBe(404);
+
+    // POST /verify/anything with Next-Action: deactivateUser -> 404
+    const actionRes = await middleware(
+      new NextRequest('https://status.customer.test/verify/anything', {
+        method: 'POST',
+        headers: {
+          host: 'status.customer.test',
+          'next-action': 'deactivateUser',
+          cookie: 'next-auth.session-token=admin-token',
+        },
+      })
+    );
+    expect(actionRes.status).toBe(404);
+
+    // GET /settings -> 404
+    const settingsRes = await middleware(
+      new NextRequest('https://status.customer.test/settings', {
+        headers: {
+          host: 'status.customer.test',
+          cookie: 'next-auth.session-token=admin-token',
+        },
+      })
+    );
+    expect(settingsRes.status).toBe(404);
+
+    // GET /api/auth/session -> 404
+    const authSessionRes = await middleware(
+      new NextRequest('https://status.customer.test/api/auth/session', {
+        headers: {
+          host: 'status.customer.test',
+          cookie: 'next-auth.session-token=admin-token',
+        },
+      })
+    );
+    expect(authSessionRes.status).toBe(404);
   });
 });

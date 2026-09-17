@@ -178,7 +178,7 @@ export async function renderPublicStatusPage(slug?: string) {
         redirect(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       } else {
         const proto = headerStore.get('x-forwarded-proto') || 'https';
-        const currentUrl = `${proto}://${host}${slug ? `/${encodeURIComponent(slug)}` : '/'}`;
+        const currentUrl = `${proto}://${host}/`;
         redirect(
           `${appUrl}/status-auth/start?pageId=${encodeURIComponent(statusPage.id)}&returnTo=${encodeURIComponent(currentUrl)}`
         );

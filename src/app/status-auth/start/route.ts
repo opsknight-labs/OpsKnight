@@ -4,13 +4,12 @@ import { getAuthOptions } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { getAppUrl } from '@/lib/app-config';
 import { createStatusAuthTicket } from '@/lib/status-pages/status-auth';
+import {
+  normalizeHostname,
+  matchesStatusPageDomain,
+} from '@/lib/status-pages/status-route-resolver';
 
 export const dynamic = 'force-dynamic';
-
-function normalizeHost(value?: string | null): string {
-  if (!value) return '';
-  return value.trim().toLowerCase().split(':')[0] ?? '';
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -46,17 +45,15 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Invalid returnTo URL', { status: 400 });
   }
 
-  const targetHost = normalizeHost(targetUrl.host);
-  const appHost = normalizeHost(new URL(appUrl).host);
-  const customHost = normalizeHost(statusPage.customDomain);
-  const subHost = statusPage.subdomain ? normalizeHost(`${statusPage.subdomain}.${appHost}`) : '';
+  const targetHost = normalizeHostname(targetUrl.host);
+  const appHost = normalizeHostname(new URL(appUrl).host);
 
   const isAllowedHost =
     targetHost === appHost ||
     targetHost === 'localhost' ||
     targetHost === '127.0.0.1' ||
-    (customHost && targetHost === customHost) ||
-    (subHost && targetHost === subHost);
+    targetHost.endsWith('.localhost') ||
+    matchesStatusPageDomain(statusPage, targetHost, appHost);
 
   if (!isAllowedHost) {
     return new NextResponse('Untrusted returnTo host for this status page', { status: 400 });

@@ -87,8 +87,20 @@ export async function createStatusAuthTicket(params: {
   return `${data}.${sig}`;
 }
 
+const consumedTicketNonces = new Map<string, number>();
+
+function pruneExpiredTicketNonces() {
+  const now = Date.now();
+  for (const [nonce, exp] of consumedTicketNonces.entries()) {
+    if (exp < now) {
+      consumedTicketNonces.delete(nonce);
+    }
+  }
+}
+
 /**
  * Verify and unpack an authorization ticket on the status domain callback.
+ * Enforces cryptographic signature, host binding, expiration, and single-use nonce consumption.
  */
 export async function verifyStatusAuthTicket(
   ticket: string,
@@ -123,6 +135,17 @@ export async function verifyStatusAuthTicket(
     if (payload.targetHost && payload.targetHost !== cleanHost) {
       return null;
     }
+
+    if (!payload.nonce || typeof payload.nonce !== 'string') {
+      return null;
+    }
+
+    // Single-use guarantee: reject replayed tickets
+    pruneExpiredTicketNonces();
+    if (consumedTicketNonces.has(payload.nonce)) {
+      return null;
+    }
+    consumedTicketNonces.set(payload.nonce, payload.exp);
 
     return payload;
   } catch {

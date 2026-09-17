@@ -1,4 +1,10 @@
 import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
+import {
+  normalizeHostname,
+  matchesStatusPageDomain,
+  extractSubdomainFromHost,
+} from '@/lib/status-pages/status-route-resolver';
 
 export type StatusPageIdentity =
   | { id: string }
@@ -6,12 +12,32 @@ export type StatusPageIdentity =
   | { host: string }
   | { default: true };
 
-function normalizedHost(value: string): string {
-  return value.trim().toLowerCase().split(':')[0] ?? '';
-}
-
 export function statusPageSlugMatches(actualSlug: string | null, expectedSlug?: string): boolean {
   return expectedSlug === undefined || actualSlug === expectedSlug;
+}
+
+export interface ResolvedStatusRoute {
+  pageId: string;
+  slug: string | null;
+  requireAuth: boolean;
+  statusPage: NonNullable<Awaited<ReturnType<typeof resolveStatusPage>>>;
+}
+
+/**
+ * Resolve status page for any hostname (custom domain, generated/short subdomain, or localhost).
+ * Uses the exact same normalization and subdomain matching across the application.
+ */
+export async function resolveStatusRouteForHostname(
+  hostname: string
+): Promise<ResolvedStatusRoute | null> {
+  const page = await resolveStatusPage({ host: hostname });
+  if (!page) return null;
+  return {
+    pageId: page.id,
+    slug: page.slug,
+    requireAuth: !!page.requireAuth,
+    statusPage: page,
+  };
 }
 
 /** Resolve page identity once at the transport boundary; downstream code receives an explicit page id. */
@@ -23,11 +49,25 @@ export async function resolveStatusPage(identity: StatusPageIdentity = { default
     return prisma.statusPage.findFirst({ where: { slug: identity.slug, enabled: true } });
   }
   if ('host' in identity) {
-    const host = normalizedHost(identity.host);
+    const host = normalizeHostname(identity.host);
     if (!host) return null;
-    return prisma.statusPage.findFirst({
-      where: { enabled: true, OR: [{ customDomain: host }, { subdomain: host }] },
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '';
+    const appHost = appUrl ? normalizeHostname(new URL(appUrl).host) : '';
+
+    const candidates: Prisma.StatusPageWhereInput[] = [{ customDomain: host }, { subdomain: host }];
+
+    const extractedSub = extractSubdomainFromHost(host, appHost);
+    if (extractedSub) {
+      candidates.push({ subdomain: extractedSub });
+    }
+
+    const pages = await prisma.statusPage.findMany({
+      where: { enabled: true, OR: candidates },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
+
+    return pages.find(p => matchesStatusPageDomain(p, host, appHost)) ?? null;
   }
   return prisma.statusPage.findFirst({
     where: { isDefault: true, enabled: true },

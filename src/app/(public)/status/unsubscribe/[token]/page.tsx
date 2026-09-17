@@ -1,50 +1,10 @@
-import prisma from '@/lib/prisma';
 import Link from 'next/link';
 import { logger } from '@/lib/logger';
-import { redirect } from 'next/navigation';
 import { getStatusPagePublicUrl } from '@/lib/status-page-url';
 import { statusPageSlugMatches } from '@/lib/status-page-resolver';
 import { findUnsubscribeSubscription } from '@/lib/status-pages/subscription-tokens';
 
 export const dynamic = 'force-dynamic';
-
-async function confirmUnsubscribe(formData: FormData) {
-  'use server';
-  const token = String(formData.get('token') || '');
-  const expectedSlug = String(formData.get('expectedSlug') || '');
-  if (token) {
-    const subscription = await findUnsubscribeSubscription(token);
-    if (
-      subscription &&
-      statusPageSlugMatches(subscription.statusPage.slug, expectedSlug || undefined)
-    ) {
-      await prisma.$transaction([
-        prisma.statusPageSubscription.updateMany({
-          where: { id: subscription.id, unsubscribedAt: null },
-          data: { unsubscribedAt: new Date(), state: 'UNSUBSCRIBED' },
-        }),
-        prisma.notification.updateMany({
-          where: {
-            recipientType: 'SUBSCRIBER',
-            recipientId: subscription.id,
-            status: { in: ['PENDING', 'FAILED'] },
-          },
-          data: {
-            status: 'SKIPPED',
-            payloadEncrypted: null,
-            errorMsg: 'Subscription was revoked before delivery.',
-          },
-        }),
-      ]);
-      const prefix =
-        subscription.statusPage.slug && !subscription.statusPage.isDefault
-          ? `/status/${subscription.statusPage.slug}`
-          : '/status';
-      redirect(`${prefix}/unsubscribe/${encodeURIComponent(token)}?done=1`);
-    }
-  }
-  redirect('/status');
-}
 
 export default async function UnsubscribePage({
   params,
@@ -140,7 +100,7 @@ export async function renderUnsubscribePage(
           <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
             Confirm that you no longer want updates from {subscription.statusPage.name}.
           </p>
-          <form action={confirmUnsubscribe}>
+          <form method="POST" action="/api/status/subscriptions/unsubscribe">
             <input type="hidden" name="token" value={token} />
             {expectedSlug && <input type="hidden" name="expectedSlug" value={expectedSlug} />}
             <button type="submit">Confirm unsubscribe</button>

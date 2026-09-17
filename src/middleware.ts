@@ -10,6 +10,7 @@ import {
   PRIVATE_STATUS_CACHE_CONTROL,
   PUBLIC_STATUS_CACHE_CONTROL,
 } from '@/lib/status-pages/cache-policy';
+import { matchesStatusPageDomain } from '@/lib/status-pages/status-route-resolver';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
@@ -104,6 +105,13 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
   if (pathname === '/api/status-page/subscribe' && method === 'POST') return true;
   if (pathname.startsWith('/api/status-page/logo/') && method === 'GET') return true;
   if (pathname === '/api/status' && method === 'GET') return true;
+  if (
+    (pathname === '/api/status/subscriptions/verify' ||
+      pathname === '/api/status/subscriptions/unsubscribe') &&
+    method === 'POST'
+  ) {
+    return true;
+  }
   if (pathname.startsWith('/api/status/')) {
     if (method === 'GET') return true;
     if (method === 'POST' && pathname.endsWith('/subscribe')) return true;
@@ -158,15 +166,6 @@ function parseHostname(value?: string | null) {
     }
   }
   return normalizeHostname(trimmed);
-}
-
-function buildSubdomainHost(subdomain: string, appHost: string) {
-  const cleanSubdomain = parseHostname(subdomain);
-  if (!cleanSubdomain) return '';
-  if (cleanSubdomain.includes('.')) return cleanSubdomain;
-  const baseHost = normalizeHostname(appHost);
-  if (!baseHost) return '';
-  return `${cleanSubdomain}.${baseHost}`;
 }
 
 const INTERNAL_API_BASE =
@@ -429,12 +428,9 @@ export function handleStatusDomainRequest({
     return assetResponse;
   }
 
-  // 2. Server Action Firewall: Reject any Next-Action request unless targeting verify or unsubscribe
+  // 2. Server Action Firewall: Reject all Next-Action requests on status domains unconditionally
   if (req.headers.has('next-action')) {
-    const isStatusAction = pathname.startsWith('/verify') || pathname.startsWith('/unsubscribe');
-    if (!isStatusAction) {
-      return new NextResponse('Not Found', { status: 404, headers: securityHeaders });
-    }
+    return new NextResponse('Not Found', { status: 404, headers: securityHeaders });
   }
 
   // 3. Status Auth Callback (runs on status host)
@@ -494,27 +490,32 @@ export default async function middleware(req: NextRequest) {
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
 
-  const forwardedHost = req.headers
+  const rawHost = normalizeHostname(req.headers.get('host'));
+  const rawForwarded = req.headers
     .get('x-forwarded-host')
     ?.split(',')
     .map(value => value.trim())
     .filter(Boolean)
     .at(-1);
-  const hostname = normalizeHostname(forwardedHost || req.headers.get('host'));
-  const publishedPage = hostname ? await fetchPublishedStatusDomain(hostname) : null;
+  const forwardedHost = normalizeHostname(rawForwarded);
+
+  // Check published status routes for both candidate hosts (Host and X-Forwarded-Host)
+  const hostPublished = rawHost ? await fetchPublishedStatusDomain(rawHost) : null;
+  const fwdPublished =
+    forwardedHost && forwardedHost !== rawHost
+      ? await fetchPublishedStatusDomain(forwardedHost)
+      : null;
+  const publishedPage = hostPublished || fwdPublished;
+
   const statusConfig =
     publishedPage || usesExternalStatusServingStore() ? null : await fetchStatusDomainConfig();
 
   let matchedPage: StatusDomainPage | null = null;
-  if (statusConfig?.enabled && hostname) {
+  if (statusConfig?.enabled) {
+    const candidateHosts = [rawHost, forwardedHost].filter(Boolean);
     matchedPage =
       statusConfig.pages?.find(page => {
-        const subdomainHost =
-          page.subdomain && statusConfig.appHost
-            ? buildSubdomainHost(page.subdomain, statusConfig.appHost)
-            : '';
-        const customHost = parseHostname(page.customDomain);
-        return hostname === subdomainHost || hostname === customHost;
+        return candidateHosts.some(h => matchesStatusPageDomain(page, h, statusConfig.appHost));
       }) ?? null;
   }
 
@@ -543,7 +544,11 @@ export default async function middleware(req: NextRequest) {
     });
   }
 
-  if (!isRecognizedAppHost(hostname, statusConfig?.appHost)) {
+  const activeHostname = forwardedHost || rawHost;
+  if (
+    !isRecognizedAppHost(activeHostname, statusConfig?.appHost) ||
+    (rawHost && !isRecognizedAppHost(rawHost, statusConfig?.appHost))
+  ) {
     return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
   }
 
