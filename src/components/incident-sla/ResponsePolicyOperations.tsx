@@ -29,15 +29,11 @@ import {
   FlaskConical,
   Cpu,
   CalendarClock,
-  Clock,
   Activity,
   CheckCircle2,
-  AlertCircle,
   Loader2,
   Plus,
   Trash2,
-  Sliders,
-  ShieldAlert,
 } from 'lucide-react';
 
 type Item = { id: string; name: string; serviceId?: string };

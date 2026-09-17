@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import {
   Card,
   CardContent,
@@ -9,18 +9,47 @@ import {
   CardTitle,
 } from '@/components/ui/shadcn/card';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { ShieldCheck, Clock, Sliders, Calendar, Globe } from 'lucide-react';
+import { ShieldCheck, Clock, Sliders, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
 import ServiceSupportHoursSettings from '@/components/service/ServiceSupportHoursSettings';
 
+interface SupportHoursExceptionInput {
+  localDate: string | Date;
+  available: boolean;
+  startMinute: number | null;
+  endMinute: number | null;
+  label?: string | null;
+}
+
 interface ServiceResponsePolicyHubProps {
   serviceId: string;
-  incidentSlaPolicy: any;
-  workspaceIncidentSlaPolicy: any;
-  incidentClassificationPolicy: any;
-  responseSupportHoursPolicy: any;
+  incidentSlaPolicy: ComponentProps<typeof IncidentSlaPolicySettings>['policy'];
+  workspaceIncidentSlaPolicy: ComponentProps<typeof IncidentSlaPolicySettings>['workspacePolicy'];
+  incidentClassificationPolicy: {
+    version: number;
+    derivePriorityFromUrgency: boolean;
+    priorityFallbackMode?: string | null;
+    rules: Array<{
+      matchValue: string;
+      priorityMode?: string | null;
+      priority?: string | null;
+      urgencyMode?: string | null;
+      urgency?: string | null;
+    }>;
+  } | null;
+  responseSupportHoursPolicy: {
+    version?: number;
+    timezone?: string;
+    mode?: string;
+    windows?: Array<{
+      dayOfWeek: number;
+      startMinute: number;
+      endMinute: number;
+    }>;
+    exceptions?: SupportHoursExceptionInput[];
+  } | null;
   canManage: boolean;
 }
 
@@ -159,8 +188,23 @@ export default function ServiceResponsePolicyHub({
                     version: incidentClassificationPolicy.version,
                     derivePriorityFromUrgency:
                       incidentClassificationPolicy.derivePriorityFromUrgency,
-                    priorityFallbackMode: incidentClassificationPolicy.priorityFallbackMode,
-                    rules: incidentClassificationPolicy.rules,
+                    priorityFallbackMode: incidentClassificationPolicy.priorityFallbackMode as
+                      | 'INHERIT'
+                      | 'ENABLED'
+                      | 'DISABLED'
+                      | undefined,
+                    rules: incidentClassificationPolicy.rules.map(rule => ({
+                      matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
+                      priorityMode: rule.priorityMode as
+                        | 'INHERIT'
+                        | 'FALLBACK'
+                        | 'SET'
+                        | 'CLEAR'
+                        | undefined,
+                      priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
+                      urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT' | undefined,
+                      urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
+                    })),
                   }
                 : null
             }
@@ -176,19 +220,23 @@ export default function ServiceResponsePolicyHub({
                 ? {
                     version: responseSupportHoursPolicy.version ?? 0,
                     timezone: responseSupportHoursPolicy.timezone ?? 'UTC',
-                    mode: responseSupportHoursPolicy.mode ?? 'INHERIT',
+                    mode:
+                      (responseSupportHoursPolicy.mode as 'INHERIT' | 'ALWAYS' | 'SCHEDULED') ??
+                      'INHERIT',
                     windows: responseSupportHoursPolicy.windows ?? [],
                     exceptions: responseSupportHoursPolicy.exceptions
-                      ? responseSupportHoursPolicy.exceptions.map((exc: any) => ({
-                          localDate:
-                            typeof exc.localDate === 'string'
-                              ? exc.localDate
-                              : exc.localDate.toISOString().slice(0, 10),
-                          available: exc.available,
-                          startMinute: exc.startMinute,
-                          endMinute: exc.endMinute,
-                          label: exc.label,
-                        }))
+                      ? responseSupportHoursPolicy.exceptions.map(
+                          (exc: SupportHoursExceptionInput) => ({
+                            localDate:
+                              typeof exc.localDate === 'string'
+                                ? exc.localDate
+                                : exc.localDate.toISOString().slice(0, 10),
+                            available: exc.available,
+                            startMinute: exc.startMinute ?? 0,
+                            endMinute: exc.endMinute ?? 1440,
+                            label: exc.label ?? null,
+                          })
+                        )
                       : [],
                   }
                 : null

@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/shadcn/badge';
 import { notify } from '@/lib/toast';
 import { saveIncidentSlaPolicyAction } from '@/app/(app)/settings/incident-sla/actions';
 import { getIncidentPriorityDefinition } from '@/lib/incidents/priority';
-import { Clock, Shield, Check, Loader2, Sparkles, Building2 } from 'lucide-react';
+import { Clock, Loader2, Sparkles, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Rule = {

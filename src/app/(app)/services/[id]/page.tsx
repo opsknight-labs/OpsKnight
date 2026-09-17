@@ -1,5 +1,9 @@
 import prisma from '@/lib/prisma';
-import type { WebhookIntegration } from '@prisma/client';
+import type { WebhookIntegration, Prisma } from '@prisma/client';
+
+type ClassificationPolicyWithRules = Prisma.IncidentClassificationPolicyGetPayload<{
+  include: { rules: true };
+}>;
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -74,7 +78,6 @@ import {
 } from '@/lib/incident-collaboration/policy';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
-import { Textarea } from '@/components/ui/shadcn/textarea';
 import { INTEGRATION_TYPES, IntegrationType } from '@/components/service/integration-types';
 
 export const revalidate = 0;
@@ -320,7 +323,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
           distinct: ['scopeKey'],
           include: { rules: true },
         })
-      : Promise.resolve([]),
+      : Promise.resolve([] as ClassificationPolicyWithRules[]),
     canManageResponsePolicy
       ? prisma.responseSupportHoursPolicy.findFirst({
           where: { scopeKey: `service:${id}`, sealedAt: { not: null } },
@@ -712,7 +715,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                         {(() => {
                           const policy =
                             integrationClassificationPolicies.find(
-                              (candidate: any) =>
+                              (candidate: ClassificationPolicyWithRules) =>
                                 candidate.scopeKey === `integration:${integration.id}`
                             ) ?? null;
                           return (
@@ -727,30 +730,32 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
                                         | 'INHERIT'
                                         | 'ENABLED'
                                         | 'DISABLED',
-                                      rules: policy.rules.map((rule: any) => ({
-                                        matchValue: rule.matchValue as
-                                          | 'critical'
-                                          | 'error'
-                                          | 'warning'
-                                          | 'info',
-                                        priorityMode: rule.priorityMode as
-                                          | 'INHERIT'
-                                          | 'FALLBACK'
-                                          | 'SET'
-                                          | 'CLEAR',
-                                        priority: rule.priority as
-                                          | 'P1'
-                                          | 'P2'
-                                          | 'P3'
-                                          | 'P4'
-                                          | 'P5'
-                                          | null,
-                                        urgencyMode: rule.urgencyMode as
-                                          | 'INHERIT'
-                                          | 'SET'
-                                          | 'DEFAULT',
-                                        urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
-                                      })),
+                                      rules: policy.rules.map(
+                                        (rule: ClassificationPolicyWithRules['rules'][number]) => ({
+                                          matchValue: rule.matchValue as
+                                            | 'critical'
+                                            | 'error'
+                                            | 'warning'
+                                            | 'info',
+                                          priorityMode: rule.priorityMode as
+                                            | 'INHERIT'
+                                            | 'FALLBACK'
+                                            | 'SET'
+                                            | 'CLEAR',
+                                          priority: rule.priority as
+                                            | 'P1'
+                                            | 'P2'
+                                            | 'P3'
+                                            | 'P4'
+                                            | 'P5'
+                                            | null,
+                                          urgencyMode: rule.urgencyMode as
+                                            | 'INHERIT'
+                                            | 'SET'
+                                            | 'DEFAULT',
+                                          urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
+                                        })
+                                      ),
                                     }
                                   : null
                               }

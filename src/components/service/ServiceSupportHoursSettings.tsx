@@ -6,19 +6,7 @@ import { Input } from '@/components/ui/shadcn/input';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { saveSupportHoursPolicyAction } from '@/app/(app)/settings/incident-sla/actions';
 import { notify } from '@/lib/toast';
-import {
-  Calendar,
-  Clock,
-  Globe,
-  Building2,
-  Plus,
-  Trash2,
-  Check,
-  Loader2,
-  Info,
-  Sun,
-  Moon,
-} from 'lucide-react';
+import { Calendar, Globe, Building2, Plus, Trash2, Check, Loader2, Info, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type SupportMode = 'INHERIT' | 'ALWAYS' | 'SCHEDULED';
