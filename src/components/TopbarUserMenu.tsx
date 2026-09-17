@@ -25,9 +25,18 @@ type Props = {
   avatarUrl: string | null;
   gender: string | null;
   userId: string;
+  legalNotice?: React.ReactNode;
 };
 
-export default function TopbarUserMenu({ name, email, role, avatarUrl, gender, userId }: Props) {
+export default function TopbarUserMenu({
+  name,
+  email,
+  role,
+  avatarUrl,
+  gender,
+  userId,
+  legalNotice,
+}: Props) {
   const router = useRouter();
   const finalAvatarUrl = useUserAvatarSafe(userId, gender, name || email || 'User', avatarUrl);
   const initials = (name || email || 'U').slice(0, 2).toUpperCase();
@@ -185,6 +194,15 @@ export default function TopbarUserMenu({ name, email, role, avatarUrl, gender, u
               ⇧⌘Q
             </DropdownMenuShortcut>
           </DropdownMenuItem>
+
+          {legalNotice && (
+            <>
+              <DropdownMenuSeparator className="my-1 bg-border/60" />
+              <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground/80 flex items-center justify-between">
+                {legalNotice}
+              </div>
+            </>
+          )}
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

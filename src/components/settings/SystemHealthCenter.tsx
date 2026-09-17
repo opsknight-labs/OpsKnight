@@ -320,11 +320,6 @@ export default function SystemHealthCenter({ initialReport }: Props) {
     <div className="space-y-6">
       {/* Centralized DetailHeroBanner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'System Health & Diagnostics',
-        }}
         tag="DIAGNOSTICS & TELEMETRY"
         title="System Health Center"
         icon={

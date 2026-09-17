@@ -79,51 +79,115 @@ export default function BootstrapSetupForm() {
   return (
     <form action={formAction} className="space-y-5">
       <div className="space-y-1.5">
-        <label htmlFor="setup-name" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <label
+          htmlFor="setup-name"
+          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+        >
           Full name
         </label>
         <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
           <User className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
-          <input id="setup-name" name="name" type="text" autoComplete="name" required maxLength={100} value={name} onChange={event => setName(event.target.value)} className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white" />
+          <input
+            id="setup-name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            required
+            maxLength={100}
+            value={name}
+            onChange={event => setName(event.target.value)}
+            className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
+          />
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="setup-email" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <label
+          htmlFor="setup-email"
+          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+        >
           Email address
         </label>
         <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
           <Mail className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
-          <input id="setup-email" name="email" type="email" autoComplete="email" required maxLength={254} value={email} onChange={event => setEmail(event.target.value)} className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white" />
+          <input
+            id="setup-email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            maxLength={254}
+            value={email}
+            onChange={event => setEmail(event.target.value)}
+            className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
+          />
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="setup-bootstrap-code" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <label
+          htmlFor="setup-bootstrap-code"
+          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+        >
           Setup authorization code
         </label>
         <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
           <KeyRound className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
-          <input id="setup-bootstrap-code" name="bootstrapCode" type="password" autoComplete="off" required maxLength={256} spellCheck={false} className="w-full bg-transparent px-3 py-3 font-mono text-sm text-slate-900 outline-none dark:text-white" />
+          <input
+            id="setup-bootstrap-code"
+            name="bootstrapCode"
+            type="password"
+            autoComplete="off"
+            required
+            maxLength={256}
+            spellCheck={false}
+            className="w-full bg-transparent px-3 py-3 font-mono text-sm text-slate-900 outline-none dark:text-white"
+          />
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="setup-password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <label
+          htmlFor="setup-password"
+          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+        >
           Administrator password
         </label>
         <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
           <Lock className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
-          <input id="setup-password" name="password" type="password" autoComplete="new-password" required maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS} value={password} onChange={event => setPassword(event.target.value)} className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white" />
+          <input
+            id="setup-password"
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS}
+            value={password}
+            onChange={event => setPassword(event.target.value)}
+            className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
+          />
         </div>
         <PasswordStrengthMeter password={password} context={passwordContext} />
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="setup-confirm-password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <label
+          htmlFor="setup-confirm-password"
+          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+        >
           Confirm password
         </label>
-        <input id="setup-confirm-password" name="confirmPassword" type="password" autoComplete="new-password" required maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS} value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-slate-500" />
+        <input
+          id="setup-confirm-password"
+          name="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          required
+          maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS}
+          value={confirmPassword}
+          onChange={event => setConfirmPassword(event.target.value)}
+          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-900 outline-none focus:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:border-slate-500"
+        />
         {confirmPassword && !passwordsMatch && (
           <p className="text-xs text-red-600 dark:text-red-400">Passwords do not match.</p>
         )}
@@ -132,7 +196,11 @@ export default function BootstrapSetupForm() {
       <SubmitButton canSubmit={canSubmit} />
 
       {state.error && (
-        <div role="alert" aria-live="assertive" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-500/20 dark:bg-red-500/10">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-500/20 dark:bg-red-500/10"
+        >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
           <p className="text-sm text-red-700 dark:text-red-300">{state.error}</p>
         </div>

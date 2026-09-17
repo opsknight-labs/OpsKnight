@@ -14,13 +14,17 @@ export default function ServiceTabs({ serviceId }: ServiceTabsProps) {
   const basePath = `/services/${serviceId}`;
   const activeHref = pathname.startsWith(`${basePath}/integrations`)
     ? `${basePath}/integrations`
-    : pathname.startsWith(`${basePath}/settings`) || pathname.startsWith(`${basePath}/webhooks`)
-      ? `${basePath}/settings`
-      : basePath;
+    : pathname.startsWith(`${basePath}/notifications`) ||
+        pathname.startsWith(`${basePath}/webhooks`)
+      ? `${basePath}/notifications`
+      : pathname.startsWith(`${basePath}/settings`)
+        ? `${basePath}/settings`
+        : basePath;
 
   const tabs = [
     { href: `/services/${serviceId}`, label: 'Overview' },
     { href: `/services/${serviceId}/integrations`, label: 'Integrations' },
+    { href: `/services/${serviceId}/notifications`, label: 'Notifications' },
     { href: `/services/${serviceId}/settings`, label: 'Settings' },
   ];
 

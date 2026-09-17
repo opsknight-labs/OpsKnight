@@ -88,14 +88,12 @@ describe('bootstrap administrator security', () => {
   });
 
   it('retries a serializable write conflict', async () => {
-    transaction
-      .mockRejectedValueOnce({ code: 'P2034' })
-      .mockImplementationOnce(async callback =>
-        callback({
-          user: { count, create },
-          systemConfig: { findUnique: findUniqueConfig, update: updateConfig },
-        })
-      );
+    transaction.mockRejectedValueOnce({ code: 'P2034' }).mockImplementationOnce(async callback =>
+      callback({
+        user: { count, create },
+        systemConfig: { findUnique: findUniqueConfig, update: updateConfig },
+      })
+    );
     const result = await bootstrapAdmin(bootstrapForm());
     expect(result).toMatchObject({ success: true });
     expect(transaction).toHaveBeenCalledTimes(2);

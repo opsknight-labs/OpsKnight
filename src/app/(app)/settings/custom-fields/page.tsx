@@ -60,11 +60,6 @@ export default async function CustomFieldsPage() {
     <div className="space-y-6">
       {/* Centralized Glassmorphic Hero Banner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Custom Fields',
-        }}
         tag="Incident Metadata & Taxonomy"
         title="Custom Fields"
         subtitle="Define structured metadata attributes, validation rules, and incident table columns."

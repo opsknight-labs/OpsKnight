@@ -41,7 +41,8 @@ export default async function SetupPage() {
               Setup unavailable
             </h1>
             <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              OpsKnight could not initialize the setup service. Check database connectivity and the server logs using the reference below.
+              OpsKnight could not initialize the setup service. Check database connectivity and the
+              server logs using the reference below.
             </p>
             <p className="mt-4 font-mono text-xs text-slate-400">Reference: {requestId}</p>
           </div>
@@ -68,7 +69,9 @@ export default async function SetupPage() {
             <div className="text-xs leading-relaxed text-amber-800 dark:text-amber-200">
               <p className="font-semibold">Operator authorization ready</p>
               <p className="mt-1">
-                A one-time setup capability is active until {bootstrapStatus.expiresAt.toISOString()}. The raw capability is never stored or rendered by the web application.
+                A one-time setup capability is active until{' '}
+                {bootstrapStatus.expiresAt.toISOString()}. The raw capability is never stored or
+                rendered by the web application.
               </p>
             </div>
           </div>
@@ -78,13 +81,15 @@ export default async function SetupPage() {
             <div className="min-w-0 text-xs leading-relaxed text-blue-800 dark:text-blue-200">
               <p className="font-semibold">Issue a one-time setup capability</p>
               <p className="mt-1">
-                Run this production-native command from an interactive terminal inside the OpsKnight container, then refresh this page:
+                Run this production-native command from an interactive terminal inside the OpsKnight
+                container, then refresh this page:
               </p>
               <code className="mt-2 block overflow-x-auto rounded-lg bg-blue-950/5 px-2.5 py-2 font-mono text-[11px] dark:bg-black/20">
                 node scripts/create-bootstrap-code.mjs
               </code>
               <p className="mt-2">
-                It uses only production dependencies already shipped in the image. The plaintext capability is printed only to that terminal and is not written to application logs.
+                It uses only production dependencies already shipped in the image. The plaintext
+                capability is printed only to that terminal and is not written to application logs.
               </p>
             </div>
           </div>

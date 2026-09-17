@@ -162,7 +162,6 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   return (
     <div className="space-y-6">
       <DetailHeroBanner
-        breadcrumb={{ label: 'Settings', href: '/settings', current: 'Microsoft Teams' }}
         tag="COLLABORATION ENGINE"
         title="Microsoft Teams Integration"
         subtitle="Deliver incident cards, lifecycle updates, and controlled collaboration workflows to Microsoft Teams."

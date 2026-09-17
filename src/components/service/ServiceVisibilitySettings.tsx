@@ -55,15 +55,20 @@ export default function ServiceVisibilitySettings({
   };
 
   return (
-    <Card className="border-border shadow-xs">
-      <CardHeader className="pb-4 border-b bg-muted/20">
+    <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
+      <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Shield className="h-4 w-4 text-primary" />
-              Default Incident Visibility
+            <CardTitle className="text-sm font-bold flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
+                <Shield className="h-4 w-4" />
+              </div>
+              <div>
+                <span className="text-muted-foreground font-mono mr-1.5 text-xs">2.</span>
+                <span>Default Incident Visibility</span>
+              </div>
             </CardTitle>
-            <CardDescription className="text-xs mt-0.5">
+            <CardDescription className="text-xs mt-1">
               Choose whether new incidents for this service default to public or private. Responders
               can still override this per incident.
             </CardDescription>

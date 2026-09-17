@@ -104,11 +104,6 @@ export default function ProfileHeroBanner({ user, stats, localTime }: ProfileHer
   return (
     <>
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Profile & Preferences',
-        }}
         tag="Personal Account"
         title={displayName}
         icon={

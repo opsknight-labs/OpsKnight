@@ -59,7 +59,6 @@ export default async function GlobalChatOpsIntegrationPage() {
   return (
     <div className="space-y-6">
       <DetailHeroBanner
-        breadcrumb={{ label: 'Settings', href: '/settings', current: 'War Rooms & ChatOps' }}
         tag="INCIDENT COLLABORATION"
         title="War Rooms & ChatOps"
         subtitle="Centralize how OpsKnight creates and manages incident collaboration rooms across connected providers."

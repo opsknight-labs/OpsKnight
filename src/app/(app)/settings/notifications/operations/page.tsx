@@ -25,7 +25,16 @@ export default async function NotificationOperationsPage() {
     redirect('/settings');
   }
   const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
-  const [leases, campaigns, control, subscriptionStates, feedbackTypes, runtime, storedProviderCapacities, configuredProviders] = await Promise.all([
+  const [
+    leases,
+    campaigns,
+    control,
+    subscriptionStates,
+    feedbackTypes,
+    runtime,
+    storedProviderCapacities,
+    configuredProviders,
+  ] = await Promise.all([
     prisma.providerWorkerLease.count({ where: { expiresAt: { gt: new Date() } } }),
     prisma.notificationFanout.findMany({
       orderBy: { createdAt: 'desc' },
@@ -48,7 +57,9 @@ export default async function NotificationOperationsPage() {
       GROUP BY "eventType"
     `),
     prisma.notificationRuntimeSettings.findUnique({ where: { id: 'default' } }),
-    prisma.notificationProviderCapacity.findMany({ orderBy: [{ channel: 'asc' }, { provider: 'asc' }] }),
+    prisma.notificationProviderCapacity.findMany({
+      orderBy: [{ channel: 'asc' }, { provider: 'asc' }],
+    }),
     prisma.notificationProvider.findMany({ select: { provider: true, enabled: true } }),
   ]);
   // Union inventory: configured providers + stored rows + synthetic channel defaults.
@@ -66,7 +77,10 @@ export default async function NotificationOperationsPage() {
   };
   const seen = new Set(storedProviderCapacities.map(r => `${r.channel}:${r.provider}`));
   const inventory: Array<{ channel: (typeof channels)[number]; provider: string }> = [
-    ...storedProviderCapacities.map(r => ({ channel: r.channel as (typeof channels)[number], provider: r.provider })),
+    ...storedProviderCapacities.map(r => ({
+      channel: r.channel as (typeof channels)[number],
+      provider: r.provider,
+    })),
   ];
   // Expand from actually configured providers
   for (const rec of configuredProviders) {
@@ -105,7 +119,11 @@ export default async function NotificationOperationsPage() {
     }
   }
   const [effectiveCapacities, watermarks, queueHealth] = await Promise.all([
-    Promise.all(inventory.map(({ channel, provider }) => getEffectiveCapacity({ channel: channel as never, provider }))),
+    Promise.all(
+      inventory.map(({ channel, provider }) =>
+        getEffectiveCapacity({ channel: channel as never, provider })
+      )
+    ),
     getEffectiveWatermarks(),
     getBulkQueueHealth(),
   ]);
@@ -118,11 +136,6 @@ export default async function NotificationOperationsPage() {
     <div className="space-y-6">
       {/* 1. Simple Grey Shaded Hero Banner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: user.role === 'ADMIN' ? 'Notification Providers' : 'Settings',
-          href: user.role === 'ADMIN' ? '/settings/notifications' : '/settings',
-          current: 'Operations',
-        }}
         tag="Delivery Control Plane"
         title="Notification Operations"
         subtitle="Real-time delivery telemetry, queue health, error diagnostics, and recovery engine for all alert channels."
@@ -213,8 +226,12 @@ export default async function NotificationOperationsPage() {
       />
       {user.role === 'ADMIN' ? (
         <section aria-labelledby="channel-capacity-heading" className="space-y-3">
-          <h2 id="channel-capacity-heading" className="text-sm font-bold tracking-tight">Channel capacity &mdash; Slack &amp; Webhook</h2>
-          <p className="text-xs text-muted-foreground">Logical profiles governing per-origin buckets. No credential card required.</p>
+          <h2 id="channel-capacity-heading" className="text-sm font-bold tracking-tight">
+            Channel capacity &mdash; Slack &amp; Webhook
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            Logical profiles governing per-origin buckets. No credential card required.
+          </p>
           <div className="grid gap-3 md:grid-cols-2">
             <ProviderCapacitySettings providerKey="slack" />
             <ProviderCapacitySettings providerKey="webhook" />
@@ -222,16 +239,22 @@ export default async function NotificationOperationsPage() {
         </section>
       ) : null}
       <section aria-labelledby="deliverability-heading" className="grid gap-3 md:grid-cols-3">
-        <h2 id="deliverability-heading" className="sr-only">Subscriber deliverability</h2>
+        <h2 id="deliverability-heading" className="sr-only">
+          Subscriber deliverability
+        </h2>
         {subscriptionStates.map(item => (
           <div key={item.state} className="rounded-xl border bg-card p-4">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">{item.state.toLowerCase()}</p>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              {item.state.toLowerCase()}
+            </p>
             <p className="text-2xl font-bold">{item._count._all}</p>
           </div>
         ))}
         {feedbackTypes.map(item => (
           <div key={item.eventType} className="rounded-xl border bg-card p-4">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">24h {item.eventType.toLowerCase()}</p>
+            <p className="text-xs font-semibold uppercase text-muted-foreground">
+              24h {item.eventType.toLowerCase()}
+            </p>
             <p className="text-2xl font-bold">{item.count}</p>
           </div>
         ))}

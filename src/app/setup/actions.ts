@@ -11,10 +11,7 @@ import { logAudit } from '@/lib/audit';
 import { logger } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
 import { consumeAuthRateLimit, authPrivacyDigest } from '@/lib/auth-abuse';
-import {
-  PASSWORD_TRANSPORT_MAX_CODE_UNITS,
-  validatePasswordStrength,
-} from '@/lib/passwords';
+import { PASSWORD_TRANSPORT_MAX_CODE_UNITS, validatePasswordStrength } from '@/lib/passwords';
 import {
   BOOTSTRAP_CONFIG_KEY,
   hashBootstrapCode,

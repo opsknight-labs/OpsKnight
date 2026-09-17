@@ -126,11 +126,6 @@ export default async function SecuritySettingsPage() {
     <div className="space-y-6">
       {/* Centralized Glassmorphic Hero Banner */}
       <DetailHeroBanner
-        breadcrumb={{
-          label: 'Settings',
-          href: '/settings',
-          current: 'Security',
-        }}
         tag="Identity & Protection"
         title="Security & Authentication"
         subtitle="Control how you sign in, manage credentials, and review recent device activity across your account."

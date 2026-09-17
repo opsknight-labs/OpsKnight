@@ -98,4 +98,68 @@ describe('NotificationOperations Component', () => {
       expect(screen.getByText('Requeue')).toBeDefined();
     });
   });
+
+  it('renders official Slack and Microsoft Teams logos for operations channels', async () => {
+    const dataWithSlackAndTeams = {
+      ...mockOperationsData,
+      notifications: [
+        {
+          id: 'op-slack-1',
+          channel: 'SLACK',
+          status: 'SENT',
+          destination: 'C01234567',
+          recipient: null,
+          category: 'INCIDENT',
+          priority: 'P1',
+          urgency: 'HIGH',
+          attempts: 1,
+          maxAttempts: 3,
+          lastAttemptAt: '2026-09-01T23:30:00.000Z',
+          incident: {
+            id: 'inc-slack',
+            title: 'Slack Ops',
+            status: 'INVESTIGATING',
+            urgency: 'HIGH',
+          },
+          auditLog: null,
+          error: null,
+          createdAt: '2026-09-01T23:30:00.000Z',
+        },
+        {
+          id: 'op-teams-1',
+          channel: 'MICROSOFT_TEAMS',
+          status: 'SENT',
+          destination: '19:meeting-channel@thread.v2',
+          recipient: null,
+          category: 'INCIDENT',
+          priority: 'P1',
+          urgency: 'HIGH',
+          attempts: 1,
+          maxAttempts: 3,
+          lastAttemptAt: '2026-09-01T23:31:00.000Z',
+          incident: {
+            id: 'inc-teams',
+            title: 'Teams Ops',
+            status: 'INVESTIGATING',
+            urgency: 'HIGH',
+          },
+          auditLog: null,
+          error: null,
+          createdAt: '2026-09-01T23:31:00.000Z',
+        },
+      ],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(dataWithSlackAndTeams),
+    });
+
+    render(<NotificationOperations canRetry={true} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Slack logo')).toBeInTheDocument();
+      expect(screen.getByLabelText('Microsoft Teams logo')).toBeInTheDocument();
+    });
+  });
 });

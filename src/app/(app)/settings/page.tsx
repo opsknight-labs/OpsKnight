@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { SlackLogo, JiraLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import SettingsSearchTrigger from '@/components/settings/SettingsSearchTrigger';
 
 const sectionIcons: Record<string, LucideIcon | React.ComponentType<{ className?: string }>> = {
   account: User,
@@ -89,9 +90,12 @@ const itemThemes: Record<string, { bg: string; text: string }> = {
     bg: 'bg-purple-500/10 dark:bg-purple-500/20',
     text: 'text-purple-600 dark:text-purple-400',
   },
-  slack: { bg: 'bg-[#4A154B]/10 dark:bg-[#4A154B]/20', text: 'text-[#ECB22E]' },
+  slack: { bg: 'bg-muted/80 dark:bg-muted/50', text: '' },
   'microsoft-teams': { bg: 'bg-[#505AC9]/10 dark:bg-[#505AC9]/20', text: 'text-[#7B83EB]' },
-  chatops: { bg: 'bg-emerald-500/10 dark:bg-emerald-500/20', text: 'text-emerald-500' },
+  chatops: {
+    bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+    text: 'text-emerald-600 dark:text-emerald-400',
+  },
   jira: { bg: 'bg-[#0052CC]/10 dark:bg-[#0052CC]/20', text: 'text-[#2684FF]' },
   system: { bg: 'bg-violet-500/10 dark:bg-violet-500/20', text: 'text-violet-500' },
   'notifications-admin': { bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-500' },
@@ -212,70 +216,118 @@ export default async function SettingsOverviewPage() {
 
   return (
     <div className="space-y-8 pb-12 w-full">
-      {/* Modern Metric Capsules */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-primary/40 hover:shadow-sm transition-all group">
-          <div className="p-2.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform shrink-0">
-            <Puzzle className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Integrations
-            </p>
-            <p className="text-sm font-bold text-foreground truncate mt-0.5">
-              {activeIntegrationsCount} Active
-            </p>
-          </div>
+      {/* Settings Overview Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Manage your personal account, workspace configuration, integrations, and platform
+            operations.
+          </p>
         </div>
 
-        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-emerald-500/40 hover:shadow-sm transition-all group">
-          <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0">
-            <KeyRound className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              API Keys
-            </p>
-            <p className="text-sm font-bold text-foreground truncate mt-0.5">
-              {activeApiKeysCount} Active
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-indigo-500/40 hover:shadow-sm transition-all group">
-          <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0">
-            <SlidersHorizontal className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Custom Fields
-            </p>
-            <p className="text-sm font-bold text-foreground truncate mt-0.5">
-              {customFieldsCount} Defined
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3.5 p-4 rounded-xl border border-border/70 bg-card shadow-xs hover:border-cyan-500/40 hover:shadow-sm transition-all group">
-          <div className="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0">
-            <Globe className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              Status Page
-            </p>
-            <p className="text-sm font-bold text-foreground truncate mt-0.5">
-              {statusPage?.enabled
-                ? statusPage.privacyMode === 'PUBLIC'
-                  ? 'Public'
-                  : 'Active'
-                : 'Disabled'}
-            </p>
-          </div>
+        {/* Quick Search Button (⌘K) */}
+        <div className="flex items-center gap-2">
+          <SettingsSearchTrigger />
         </div>
       </div>
 
-      {/* Settings Sections (Linear / Stripe Grouped List Style) */}
+      {/* Metric Capsules */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <Link
+          href="/settings/integrations/slack"
+          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-purple-500/40 hover:bg-purple-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+        >
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform shrink-0 border border-purple-500/20 shadow-2xs">
+              <Puzzle className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Integrations
+              </p>
+              <p className="text-base font-bold text-foreground truncate mt-0.5">
+                {activeIntegrationsCount} Active
+              </p>
+            </div>
+          </div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-purple-500/10 transition-all shrink-0 ml-2">
+            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </Link>
+
+        <Link
+          href="/settings/api-keys"
+          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-emerald-500/40 hover:bg-emerald-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+        >
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform shrink-0 border border-emerald-500/20 shadow-2xs">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                API Keys
+              </p>
+              <p className="text-base font-bold text-foreground truncate mt-0.5">
+                {activeApiKeysCount} Active
+              </p>
+            </div>
+          </div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-emerald-500/10 transition-all shrink-0 ml-2">
+            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </Link>
+
+        <Link
+          href="/settings/custom-fields"
+          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-indigo-500/40 hover:bg-indigo-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+        >
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform shrink-0 border border-indigo-500/20 shadow-2xs">
+              <SlidersHorizontal className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Custom Fields
+              </p>
+              <p className="text-base font-bold text-foreground truncate mt-0.5">
+                {customFieldsCount} Defined
+              </p>
+            </div>
+          </div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-indigo-500/10 transition-all shrink-0 ml-2">
+            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </Link>
+
+        <Link
+          href="/settings/status-pages"
+          className="group relative flex items-center justify-between p-4 rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs hover:border-cyan-500/40 hover:bg-cyan-500/[0.03] hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+        >
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-105 transition-transform shrink-0 border border-cyan-500/20 shadow-2xs">
+              <Globe className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Status Page
+              </p>
+              <p className="text-base font-bold text-foreground truncate mt-0.5">
+                {statusPage?.enabled
+                  ? statusPage.privacyMode === 'PUBLIC'
+                    ? 'Public'
+                    : 'Active'
+                  : 'Disabled'}
+              </p>
+            </div>
+          </div>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-cyan-500/10 transition-all shrink-0 ml-2">
+            <ChevronRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </Link>
+      </div>
+
+      {/* Settings Sections - Grouped List Rows */}
       <div className="space-y-8">
         {sectionGroups.map(section => {
           const visibleItems = section.items.filter(canAccess);
@@ -288,8 +340,8 @@ export default async function SettingsOverviewPage() {
               {/* Section Header */}
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="p-1.5 rounded-lg bg-muted text-foreground/80 border border-border/40 shrink-0">
-                    <SectionIcon className="h-4 w-4" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-foreground/80 border border-border/60 shrink-0">
+                    <SectionIcon className="h-3.5 w-3.5" />
                   </div>
                   <div className="flex flex-wrap items-baseline gap-x-2 min-w-0">
                     <span className="text-sm font-bold text-foreground tracking-tight">
@@ -302,13 +354,13 @@ export default async function SettingsOverviewPage() {
                     )}
                   </div>
                 </div>
-                <span className="text-[11px] font-medium text-muted-foreground/70 bg-muted/50 px-2 py-0.5 rounded-full border border-border/40 shrink-0 ml-2">
+                <span className="text-[11px] font-medium text-muted-foreground/80 bg-muted/60 px-2.5 py-0.5 rounded-full border border-border/50 shrink-0 ml-2">
                   {visibleItems.length} {visibleItems.length === 1 ? 'item' : 'items'}
                 </span>
               </div>
 
               {/* Grouped Rows Container */}
-              <div className="rounded-xl border border-border/70 bg-card overflow-hidden divide-y divide-border/50 shadow-xs">
+              <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/50 backdrop-blur-xs overflow-hidden divide-y divide-border/60 dark:divide-border/40 shadow-xs hover:border-border transition-colors">
                 {visibleItems.map(item => {
                   const ItemIcon = itemIcons[item.id] || Settings;
                   const status = itemStatuses[item.id];
@@ -321,21 +373,21 @@ export default async function SettingsOverviewPage() {
                     <Link
                       key={item.id}
                       href={item.href}
-                      className="group flex items-center justify-between p-3.5 sm:px-4 hover:bg-muted/40 transition-colors duration-150"
+                      className="group flex items-center justify-between p-4 sm:px-5 sm:py-4 hover:bg-accent/40 dark:hover:bg-accent/25 active:bg-accent/60 transition-colors duration-150"
                     >
                       <div className="flex items-center gap-3.5 min-w-0">
                         <div
                           className={cn(
-                            'p-2.5 rounded-xl shrink-0 transition-transform duration-150 group-hover:scale-105',
+                            'flex h-10 w-10 items-center justify-center rounded-xl shrink-0 transition-transform duration-150 group-hover:scale-105 border border-border/40 shadow-2xs',
                             theme.bg,
                             theme.text
                           )}
                         >
-                          <ItemIcon className="h-4 w-4" />
+                          <ItemIcon className="h-5 w-5 shrink-0" />
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                            <span className="text-[14px] font-semibold text-foreground group-hover:text-primary transition-colors truncate">
                               {item.label}
                             </span>
                             {item.badge && (
@@ -347,7 +399,7 @@ export default async function SettingsOverviewPage() {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          <p className="text-xs text-muted-foreground/85 truncate mt-0.5 max-w-xl">
                             {item.description}
                           </p>
                         </div>
@@ -358,7 +410,7 @@ export default async function SettingsOverviewPage() {
                           <Badge
                             variant="outline"
                             className={cn(
-                              'text-[11px] font-medium px-2.5 py-0.5 h-6 flex items-center gap-1.5 rounded-full border',
+                              'text-[11px] font-medium px-2.5 py-0.5 h-6 flex items-center gap-1.5 rounded-full border shadow-2xs',
                               status.connected
                                 ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                                 : 'border-border/60 bg-muted/40 text-muted-foreground'
@@ -375,7 +427,9 @@ export default async function SettingsOverviewPage() {
                             <span className="truncate max-w-[140px]">{status.label}</span>
                           </Badge>
                         )}
-                        <ChevronRight className="h-4 w-4 text-muted-foreground/60 group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
+                        <div className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 group-hover:text-foreground group-hover:bg-muted/60 transition-all">
+                          <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+                        </div>
                       </div>
                     </Link>
                   );
