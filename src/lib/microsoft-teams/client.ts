@@ -188,19 +188,23 @@ async function resolveServiceUrlForDestination(
   try {
     const prismaForInstall = (await import('@/lib/prisma')).default as unknown as {
       microsoftTeamsInstallation: {
-        findFirst: (
-          a: unknown
-        ) => Promise<{
+        findFirst: (a: unknown) => Promise<{
           serviceUrl: string | null;
           conversationId: string | null;
           botRecipientId: string | null;
         } | null>;
       };
     };
-    const inst = await prismaForInstall.microsoftTeamsInstallation.findFirst({
+    let inst = await prismaForInstall.microsoftTeamsInstallation.findFirst({
       where: { tenantId, teamId, enabled: true },
       select: { serviceUrl: true, conversationId: true, botRecipientId: true },
     } as never);
+    if (!inst?.serviceUrl) {
+      inst = await prismaForInstall.microsoftTeamsInstallation.findFirst({
+        where: { tenantId, enabled: true, serviceUrl: { not: null } },
+        select: { serviceUrl: true, conversationId: true, botRecipientId: true },
+      } as never);
+    }
     return {
       serviceUrl: inst?.serviceUrl ?? null,
       conversationId: inst?.conversationId ?? null,
@@ -333,12 +337,19 @@ async function sendBotActivity(args: {
         errorCode: 'CHANNEL_NOT_FOUND',
         statusCode: 404,
       };
-    if (status === 401 || status === 403)
+    if (status === 401)
       return {
         success: false,
         error: 'Teams authorization failed',
         errorCode: 'AUTH_EXPIRED',
-        statusCode: status,
+        statusCode: 401,
+      };
+    if (status === 403)
+      return {
+        success: false,
+        error: code || 'Bot not in channel roster or access denied',
+        errorCode: 'FORBIDDEN',
+        statusCode: 403,
       };
     return {
       success: false,
@@ -855,7 +866,7 @@ export async function getTeamsGrantedRscPermissions(options?: {
 
     for (const inst of installations) {
       const res = await retryFetch(
-        `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(inst.teamId)}/channels?$top=1&$select=id`,
+        `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(inst.teamId)}/channels?$select=id`,
         { headers: { Authorization: `Bearer ${token}` } },
         { maxAttempts: 2, initialDelayMs: 500 }
       );
@@ -933,9 +944,7 @@ export async function getTeamsGrantedRscPermissions(options?: {
  * conversationUpdate). We enrich with cached teamName and optionally verify
  * via Graph per-team (Team.Read) — no broad GET /teams enumeration.
  */
-export async function listMicrosoftTeamsForDiscovery(options?: {
-  tenantId?: string;
-}): Promise<{
+export async function listMicrosoftTeamsForDiscovery(options?: { tenantId?: string }): Promise<{
   teams: Array<{ id: string; displayName: string; description?: string | null }>;
   error?: string;
 }> {
@@ -958,11 +967,28 @@ export async function listMicrosoftTeamsForDiscovery(options?: {
     if (installations.length === 0) {
       return { teams: [], error: undefined };
     }
-    const teams = installations.map(i => ({
-      id: i.teamId,
-      displayName: i.teamName ?? i.teamId,
-      description: null as string | null,
-    }));
+    const isGuid = (id: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const sorted = [...installations].sort((a, b) => {
+      const aGuid = isGuid(a.teamId) ? 1 : 0;
+      const bGuid = isGuid(b.teamId) ? 1 : 0;
+      return bGuid - aGuid;
+    });
+    const seenNames = new Set<string>();
+    const seenIds = new Set<string>();
+    const teams: Array<{ id: string; displayName: string; description: null }> = [];
+    for (const i of sorted) {
+      if (seenIds.has(i.teamId)) continue;
+      const name = i.teamName?.trim() || i.teamId;
+      if (seenNames.has(name.toLowerCase()) && !isGuid(i.teamId)) continue;
+      seenIds.add(i.teamId);
+      seenNames.add(name.toLowerCase());
+      teams.push({
+        id: i.teamId,
+        displayName: name,
+        description: null,
+      });
+    }
     return { teams };
   } catch (e) {
     return {
@@ -1003,17 +1029,23 @@ export async function listMicrosoftTeamsChannelsForDiscovery(
   const prismaForCheck = (await import('@/lib/prisma')).default as unknown as {
     microsoftTeamsInstallation: { findFirst: (a: unknown) => Promise<{ id: string } | null> };
   };
-  const hasInstallation = await prismaForCheck.microsoftTeamsInstallation.findFirst({
+  let hasInstallation = await prismaForCheck.microsoftTeamsInstallation.findFirst({
     where: { tenantId, teamId: tid, enabled: true },
     select: { id: true },
   } as never);
+  if (!hasInstallation) {
+    hasInstallation = await prismaForCheck.microsoftTeamsInstallation.findFirst({
+      where: { tenantId, enabled: true },
+      select: { id: true },
+    } as never);
+  }
   if (!hasInstallation) return { channels: [], error: 'APP_NOT_INSTALLED' };
   const token = await graphToken(resolved.config.clientId, resolved.clientSecret, tenantId);
   if (!token) return { channels: [], error: 'GRAPH_TOKEN_FAILED' };
   const channels: Array<{ id: string; displayName: string; description?: string | null }> = [];
   const seen = new Set<string>();
   let nextUrl: string | null =
-    `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(tid)}/channels?$top=100&$select=id,displayName,description`;
+    `https://graph.microsoft.com/v1.0/teams/${encodeURIComponent(tid)}/channels?$select=id,displayName,description`;
   // Bound traversal so a malformed or cyclic provider response cannot monopolize a worker.
   for (let page = 0; nextUrl && page < 10 && channels.length < 1_000; page += 1) {
     const parsedUrl = new URL(nextUrl);
