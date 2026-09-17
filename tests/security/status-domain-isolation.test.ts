@@ -385,6 +385,40 @@ describe('Status Domain Host Firewall & Isolation', () => {
 
       expect(res.status).toBe(404);
     });
+
+    it('rejects multipart/form-data POST (MPA Server Action) to /verify on status domain with 405', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.customer.test/verify/sub_abc', {
+        method: 'POST',
+        headers: {
+          host: 'status.customer.test',
+          'content-type': 'multipart/form-data; boundary=----WebKitFormBoundaryXYZ',
+        },
+        body: '------WebKitFormBoundaryXYZ\r\nContent-Disposition: form-data; name="$ACTION_ID_deactivateUser"\r\n\r\n\r\n------WebKitFormBoundaryXYZ--',
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(405);
+      expect(res.headers.get('Allow')).toBe('GET, HEAD');
+    });
+
+    it('rejects any POST to status surface root with 405', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.customer.test/', {
+        method: 'POST',
+        headers: {
+          host: 'status.customer.test',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(405);
+      expect(res.headers.get('Allow')).toBe('GET, HEAD');
+    });
   });
 
   describe('Unknown host rejection (Fail Closed)', () => {
@@ -398,6 +432,26 @@ describe('Status Domain Host Firewall & Isolation', () => {
       const res = await middleware(req);
 
       expect(res.status).toBe(421);
+    });
+  });
+
+  describe('Canonical App Host Recognition under External Serving Store', () => {
+    it('REGRESSION: does not return 421 for canonical app host when external store is enabled', async () => {
+      vi.resetModules();
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsknight.test');
+      vi.stubEnv('STATUS_PAGE_EXTERNAL_SERVING_STORE', 'true');
+      vi.stubEnv('STATUS_PAGE_SERVING_STORE_URL', 'https://serving.opsknight.test/v1');
+      vi.stubEnv('STATUS_PAGE_SERVING_STORE_TOKEN', 'secret');
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://app.opsknight.test/login', {
+        headers: { host: 'app.opsknight.test' },
+      });
+      const res = await middleware(req);
+
+      // Must NOT be 421 Misdirected Request
+      expect(res.status).not.toBe(421);
     });
   });
 });
@@ -486,7 +540,7 @@ describe('Status Auth Ticket & Session Cryptography', () => {
       expect(verification).toBeNull();
     });
 
-    it('enforces single-use ticket guarantee: rejects replay of consumed ticket', async () => {
+    it('mitigates replay of authorization tickets within TTL (process-local cache)', async () => {
       const ticket = await createStatusAuthTicket({
         pageId: 'page_123',
         targetHost: 'status.customer.test',
@@ -498,7 +552,7 @@ describe('Status Auth Ticket & Session Cryptography', () => {
       const first = await verifyStatusAuthTicket(ticket, 'page_123', 'status.customer.test');
       expect(first).not.toBeNull();
 
-      // Second verification of the exact same ticket within TTL MUST FAIL (replay prevention)
+      // Second verification of the exact same ticket within TTL is rejected (process-local replay mitigation)
       const second = await verifyStatusAuthTicket(ticket, 'page_123', 'status.customer.test');
       expect(second).toBeNull();
     });
@@ -613,6 +667,33 @@ describe('Hostname & Subdomain Resolution (Centralized Resolver)', () => {
     );
   });
 
+  it('strictly isolates short subdomain: does NOT match unrelated domain with same first label', async () => {
+    const { matchesStatusPageDomain, extractSubdomainFromHost } =
+      await import('@/lib/status-pages/status-route-resolver');
+
+    // CRITICAL SECURITY REGRESSION:
+    // With subdomain: "status", unrelated domains like status.attacker.com must NEVER match!
+    expect(
+      matchesStatusPageDomain({ subdomain: 'status' }, 'status.attacker.com', 'app.opsknight.com')
+    ).toBe(false);
+
+    expect(
+      matchesStatusPageDomain(
+        { subdomain: 'status' },
+        'status.attacker.com',
+        'https://app.opsknight.com'
+      )
+    ).toBe(false);
+
+    // Without appHost specified, status.attacker.com must also not match a short subdomain "status"
+    expect(matchesStatusPageDomain({ subdomain: 'status' }, 'status.attacker.com')).toBe(false);
+
+    expect(extractSubdomainFromHost('status.attacker.com', 'app.opsknight.com')).toBeNull();
+    expect(extractSubdomainFromHost('status.app.opsknight.com', 'app.opsknight.com')).toBe(
+      'status'
+    );
+  });
+
   it('matchesStatusPageDomain matches custom domain against hostname', async () => {
     const { matchesStatusPageDomain } = await import('@/lib/status-pages/status-route-resolver');
 
@@ -665,7 +746,7 @@ describe('End-to-End Status Authentication Handshake & Isolation Flow', () => {
     });
     expect(hasAccess).toBe(true);
 
-    // 5. Replaying the same ticket to mint another session is blocked (single-use)
+    // 5. Replaying the same ticket to mint another session is rejected (process-local replay mitigation)
     const replayVerified = await verifyStatusAuthTicket(
       ticket,
       'page_private',

@@ -131,10 +131,10 @@ export function isRecognizedAppHost(hostname: string, appHost?: string | null): 
     return true;
   }
   if (appHost) {
-    const cleanAppHost = normalizeHostname(appHost);
+    const cleanAppHost = parseHostname(appHost);
     if (cleanAppHost && clean === cleanAppHost) return true;
   }
-  const defaultEnvAppHost = normalizeHostname(
+  const defaultEnvAppHost = parseHostname(
     process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
   );
   if (defaultEnvAppHost && clean === defaultEnvAppHost) {
@@ -445,6 +445,16 @@ export function handleStatusDomainRequest({
 
   // 4. Allowed Status Surface Pages (Rewrite to public status route)
   if (isStatusDomainPath(pathname)) {
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      return new NextResponse('Method Not Allowed', {
+        status: 405,
+        headers: {
+          ...securityHeaders,
+          Allow: 'GET, HEAD',
+        },
+      });
+    }
+
     const url = req.nextUrl.clone();
     const pageRoot = statusRoute.slug ? `/status/${statusRoute.slug}` : '/status';
     url.pathname = pathname === '/' || pathname === '' ? pageRoot : `${pageRoot}${pathname}`;

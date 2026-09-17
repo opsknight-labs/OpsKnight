@@ -100,7 +100,8 @@ function pruneExpiredTicketNonces() {
 
 /**
  * Verify and unpack an authorization ticket on the status domain callback.
- * Enforces cryptographic signature, host binding, expiration, and single-use nonce consumption.
+ * Enforces cryptographic signature, host binding, expiration, and process-local
+ * replay mitigation within the 60-second TTL window.
  */
 export async function verifyStatusAuthTicket(
   ticket: string,
@@ -140,7 +141,7 @@ export async function verifyStatusAuthTicket(
       return null;
     }
 
-    // Single-use guarantee: reject replayed tickets
+    // Process-local replay mitigation: reject immediate replayed tickets within this instance's TTL window
     pruneExpiredTicketNonces();
     if (consumedTicketNonces.has(payload.nonce)) {
       return null;

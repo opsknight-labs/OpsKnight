@@ -33,29 +33,19 @@ export function buildSubdomainHost(subdomain: string, appHost: string): string {
   const cleanSubdomain = parseHostname(subdomain);
   if (!cleanSubdomain) return '';
   if (cleanSubdomain.includes('.')) return cleanSubdomain;
-  const baseHost = normalizeHostname(appHost);
+  const baseHost = parseHostname(appHost);
   if (!baseHost) return '';
   return `${cleanSubdomain}.${baseHost}`;
 }
 
 export function extractSubdomainFromHost(hostname: string, appHost?: string | null): string | null {
   const cleanHost = normalizeHostname(hostname);
-  if (!cleanHost) return null;
+  if (!cleanHost || !appHost) return null;
 
-  if (appHost) {
-    const cleanAppHost = normalizeHostname(appHost);
-    if (cleanAppHost && cleanHost.endsWith(`.${cleanAppHost}`)) {
-      const sub = cleanHost.slice(0, -(cleanAppHost.length + 1));
-      return sub || null;
-    }
-  }
-
-  // Fallback: if hostname has multiple dot-separated parts, the first part is a potential subdomain
-  if (cleanHost.includes('.')) {
-    const parts = cleanHost.split('.');
-    if (parts.length >= 3) {
-      return parts[0] || null;
-    }
+  const cleanAppHost = parseHostname(appHost);
+  if (cleanAppHost && cleanHost.endsWith(`.${cleanAppHost}`)) {
+    const sub = cleanHost.slice(0, -(cleanAppHost.length + 1));
+    return sub || null;
   }
 
   return null;
@@ -77,13 +67,22 @@ export function matchesStatusPageDomain(
   if (page.subdomain) {
     const cleanSubdomain = parseHostname(page.subdomain);
     if (cleanSubdomain) {
-      if (cleanHost === cleanSubdomain) return true;
+      if (cleanSubdomain.includes('.') && cleanHost === cleanSubdomain) {
+        return true;
+      }
+      if (
+        !cleanSubdomain.includes('.') &&
+        !cleanHost.includes('.') &&
+        cleanHost === cleanSubdomain
+      ) {
+        return true;
+      }
       if (appHost) {
         const fullSubHost = buildSubdomainHost(cleanSubdomain, appHost);
         if (fullSubHost && cleanHost === fullSubHost) return true;
+        const extractedSub = extractSubdomainFromHost(cleanHost, appHost);
+        if (extractedSub && extractedSub === cleanSubdomain) return true;
       }
-      const extractedSub = extractSubdomainFromHost(cleanHost, appHost);
-      if (extractedSub && extractedSub === cleanSubdomain) return true;
     }
   }
 
