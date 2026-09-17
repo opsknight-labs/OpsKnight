@@ -215,8 +215,12 @@ function parseHostname(value?: string | null) {
   return normalizeHostname(trimmed);
 }
 
-const INTERNAL_API_BASE =
+const DEFAULT_APP_HOST =
   process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || 'http://localhost:3000';
+
+const INTERNAL_API_BASE =
+  process.env.INTERNAL_API_URL ||
+  (process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : 'http://127.0.0.1:3000');
 
 function usesExternalStatusServingStore(): boolean {
   return (
@@ -262,7 +266,7 @@ async function fetchStatusDomainConfig(): Promise<StatusDomainConfig | null> {
       const response = await fetch(`${INTERNAL_API_BASE}/api/status-page/domains`, {
         cache: 'no-store',
         headers: await statusDomainRequestHeaders(),
-        signal: AbortSignal.timeout(2000),
+        signal: AbortSignal.timeout(5000),
       });
       if (!response.ok) throw new Error('Status domain configuration unavailable');
       const value = (await response.json()) as StatusDomainConfig;
@@ -339,8 +343,8 @@ export function parsePublishedStatusRoute(value: unknown): PublishedStatusRoute 
   };
 }
 
-export function externalRouteKey(hostname: string): string {
-  const subdomain = extractSubdomainFromHost(hostname, INTERNAL_API_BASE);
+export function externalRouteKey(hostname: string, appHost?: string | null): string {
+  const subdomain = extractSubdomainFromHost(hostname, appHost || DEFAULT_APP_HOST);
   if (subdomain && isSafeStatusSlug(subdomain)) return `subdomain:${subdomain}`;
   return `domain:${hostname}`;
 }
@@ -571,6 +575,11 @@ export default async function middleware(req: NextRequest) {
     .filter(Boolean)
     .at(-1);
   const forwardedHost = normalizeHostname(rawForwarded);
+
+  // Internal status-domain configuration provider: bypass to avoid recursive middleware deadlock
+  if (pathname === '/api/status-page/domains' && isRecognizedAppHost(rawHost || forwardedHost)) {
+    return response;
+  }
 
   // Check published status routes for both candidate hosts (Host and X-Forwarded-Host)
   const hostPublished = rawHost ? await fetchPublishedStatusDomain(rawHost) : null;
