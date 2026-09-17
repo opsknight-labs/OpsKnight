@@ -36,6 +36,7 @@ import {
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import AddWebhookDialog from '@/components/service/AddWebhookDialog';
 import { updateServiceNotificationSettings } from '@/app/(app)/services/actions';
 
 type ServiceNotificationSettingsProps = {
@@ -1147,16 +1148,7 @@ export default function ServiceNotificationSettings({
                 workflows, or internal systems.
               </CardDescription>
             </div>
-            <Link
-              href={`/services/${serviceId}/webhooks/new`}
-              className={cn(
-                'inline-flex items-center justify-center rounded-lg text-xs font-semibold transition-colors',
-                'bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 shadow-2xs shrink-0'
-              )}
-            >
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Add Webhook
-            </Link>
+            <AddWebhookDialog serviceId={serviceId} />
           </div>
         </CardHeader>
         <CardContent className="p-5">
