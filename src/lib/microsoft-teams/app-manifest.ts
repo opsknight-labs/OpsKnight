@@ -19,9 +19,7 @@ export const MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS = [
 ] as const;
 export const MICROSOFT_TEAMS_MANIFEST_VERSION = '1.3.0';
 
-export const MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS = [
-  'TeamSettings.Read.Group',
-] as const;
+export const MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS = ['TeamSettings.Read.Group'] as const;
 export const MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS = [
   'Channel.Create.Group',
   // Reads the exact app-installation consentedPermissionSet used to verify
@@ -95,7 +93,12 @@ export type MicrosoftTeamsAppManifest = {
   description: { short: string; full: string };
   icons: { outline: string; color: string };
   accentColor: string;
-  bots: Array<{ botId: string; scopes: string[]; commandLists: unknown[]; isNotificationOnly: boolean }>;
+  bots: Array<{
+    botId: string;
+    scopes: string[];
+    commandLists: unknown[];
+    isNotificationOnly: boolean;
+  }>;
   validDomains: string[];
   authorization: {
     permissions: {
@@ -122,11 +125,30 @@ export function buildMicrosoftTeamsAppManifest({
     ...MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS,
     ...(includeTeamSettingsPermissions ? MICROSOFT_TEAMS_TEAM_SETTINGS_RSC_PERMISSIONS : []),
     ...(includeWarRoomPermissions ? MICROSOFT_TEAMS_WAR_ROOM_RSC_PERMISSIONS : []),
-    ...(includeWarRoomCollaborationPermissions ? [
-      ...MICROSOFT_TEAMS_WAR_ROOM_LIFECYCLE_RSC_PERMISSIONS,
-      ...MICROSOFT_TEAMS_WAR_ROOM_MEMBERSHIP_RSC_PERMISSIONS,
-    ] : []),
+    ...(includeWarRoomCollaborationPermissions
+      ? [
+          ...MICROSOFT_TEAMS_WAR_ROOM_LIFECYCLE_RSC_PERMISSIONS,
+          ...MICROSOFT_TEAMS_WAR_ROOM_MEMBERSHIP_RSC_PERMISSIONS,
+        ]
+      : []),
   ];
+  let host = 'opsknight.com';
+  let isLocal = false;
+  try {
+    const parsed = new URL(origin);
+    if (
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname.endsWith('.localhost')
+    ) {
+      isLocal = true;
+    } else if (parsed.hostname) {
+      host = parsed.hostname;
+    }
+  } catch {
+    // fallback to opsknight.com
+  }
+
   const manifest: MicrosoftTeamsAppManifest = {
     $schema: 'https://developer.microsoft.com/json-schemas/teams/v1.16/MicrosoftTeams.schema.json',
     manifestVersion: '1.16',
@@ -151,7 +173,7 @@ export function buildMicrosoftTeamsAppManifest({
         isNotificationOnly: true,
       },
     ],
-    validDomains: [new URL(origin).hostname],
+    validDomains: [host],
     authorization: {
       permissions: {
         resourceSpecific: rscPermissions.map(name => ({ name, type: 'Application' as const })),
@@ -161,7 +183,7 @@ export function buildMicrosoftTeamsAppManifest({
     // this when their Entra registration uses a different Application ID URI.
     webApplicationInfo: {
       id: botId,
-      resource: applicationIdUri?.trim() || `api://${new URL(origin).hostname}/${botId}`,
+      resource: applicationIdUri?.trim() || (isLocal ? `api://${botId}` : `api://${host}/${botId}`),
     },
   };
   return manifest;

@@ -27,6 +27,7 @@ This tree is **v1.5**. Switch versions in the sidebar for older releases.
 - [On-call schedules](./core-concepts/schedules)
 - [Teams](./core-concepts/teams)
 - [Slack ChatOps](./integrations/communication/slack-chatops) — war rooms in this version
+- [Microsoft Teams ChatOps](./integrations/communication/microsoft-teams-chatops) — interactive Adaptive Cards and Teams video bridge
 - [PagerDuty Events API v2 ingest](./integrations/custom/pagerduty-emulation)
 - [Status pages](./core-concepts/status-page) — independently scoped public/private pages, APIs, domains, and subscribers
 - [OIDC SSO](./security/oidc-setup)
@@ -36,4 +37,4 @@ This tree is **v1.5**. Switch versions in the sidebar for older releases.
 - [Accessibility](./accessibility/README) — keyboard, focus, screen-reader, motion, and testing boundaries
 - [Enterprise robustness audit](./enterprise-robustness-audit) — validated findings, remediation evidence, and certification gates
 
-SSO is **OIDC**, not SAML. v1.5 has no native MFA, passkey login, or email magic-link flow; enforce MFA at the OIDC provider or access proxy. Microsoft Teams and Google Chat are **webhook formats**, not Slack-style rooms.
+SSO is **OIDC**, not SAML. v1.5 has no native MFA, passkey login, or email magic-link flow; enforce MFA at the OIDC provider or access proxy. Google Chat is a **webhook format**; Slack and Microsoft Teams provide full interactive **ChatOps**.

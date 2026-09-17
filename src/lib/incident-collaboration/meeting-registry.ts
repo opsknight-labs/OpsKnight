@@ -91,7 +91,30 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
   ): Promise<{ userId: string; email?: string } | null> {
     // 1. If global default organizer is configured, use it
     if (defaultOrganizerUpn && defaultOrganizerUpn.trim()) {
-      return { userId: defaultOrganizerUpn.trim(), email: defaultOrganizerUpn.trim() };
+      const trimmed = defaultOrganizerUpn.trim();
+      const isGuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        trimmed
+      );
+      if (trimmed.includes('@') && !isGuid) {
+        try {
+          const token = await getMicrosoftTeamsGraphAccessToken(tenantId);
+          if (token) {
+            const userRes = await fetch(
+              `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(trimmed)}?$select=id`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (userRes.ok) {
+              const userData = (await userRes.json()) as { id?: string };
+              if (userData?.id) {
+                return { userId: userData.id, email: trimmed };
+              }
+            }
+          }
+        } catch {
+          // fall through to return trimmed
+        }
+      }
+      return { userId: trimmed, email: trimmed };
     }
 
     // 2. Try incident assignee's connected Microsoft Teams identity

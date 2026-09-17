@@ -12,21 +12,25 @@ import { describe, expect, it } from 'vitest';
 describe('microsoft teams transport contract', () => {
   it('Bot create uses ConversationParameters.bot + parses id→conversationId, activityId→messageId', () => {
     const client = readFileSync('src/lib/microsoft-teams/client.ts', 'utf8');
-    expect(client).toContain("bot: { id: botAddressId }");
-    expect(client).toContain("botAddressId");
-    expect(client).not.toContain('/v3/conversations/${encodeURIComponent(args.channelId)}/activities');
+    expect(client).toContain('bot: { id: botAddressId }');
+    expect(client).toContain('botAddressId');
+    expect(client).not.toContain(
+      '/v3/conversations/${encodeURIComponent(args.channelId)}/activities'
+    );
     expect(client).not.toContain('directEndpoint');
     expect(client).toMatch(/const conversationId\s*=\s*typeof data\?\.id/);
     expect(client).toMatch(/const providerMessageId\s*=\s*typeof data\?\.activityId/);
-    expect(client).toContain("id: conversationId");
-    expect(client).toContain("activityId: messageId");
-    expect(client).toContain("https://api.botframework.com/.default");
-    expect(client).toContain("https://graph.microsoft.com/.default");
-    expect(client).toContain("botTokenCache");
-    expect(client).toContain("graphTokenCache");
-    expect(client).toContain("botRecipientId");
-    expect(client).toContain("resolveServiceUrlForDestination");
-    expect(client).toContain("/v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(args.messageId)}");
+    expect(client).toContain('id: conversationId');
+    expect(client).toContain('activityId: messageId');
+    expect(client).toContain('https://api.botframework.com/.default');
+    expect(client).toContain('https://graph.microsoft.com/.default');
+    expect(client).toContain('botTokenCache');
+    expect(client).toContain('graphTokenCache');
+    expect(client).toContain('botRecipientId');
+    expect(client).toContain('resolveServiceUrlForDestination');
+    expect(client).toContain(
+      '/v3/conversations/${encodeURIComponent(conversationId)}/activities/${encodeURIComponent(args.messageId)}'
+    );
     const createStart = client.indexOf('const createEndpoint');
     const updateStart = client.indexOf('async function updateBotActivity');
     const createRegion = client.slice(createStart, updateStart);
@@ -34,7 +38,9 @@ describe('microsoft teams transport contract', () => {
     expect(createRegion).not.toContain('retryFetch(');
     expect(createRegion).toContain('if (!conversationId || !providerMessageId)');
     expect(createRegion).toContain("errorCode: 'AMBIGUOUS_SIDE_EFFECT'");
-    expect(client.match(/signal: AbortSignal\.timeout\(30_000\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(client.match(/signal: AbortSignal\.timeout\(30_000\)/g)?.length).toBeGreaterThanOrEqual(
+      2
+    );
   });
 
   it('never automatically recreates an ambiguous card and fences ledger writes by lease', () => {
@@ -44,8 +50,11 @@ describe('microsoft teams transport contract', () => {
     expect(delivery).toContain('requiresManualReconciliation: true');
     expect(delivery).toContain('createAttempted: false');
     expect(delivery).toContain('statusCode >= 500');
-    expect(delivery).toContain("lastKnownRejection: result.errorCode");
-    const transactionStart = delivery.indexOf('await prisma.$transaction(async tx => {', delivery.indexOf('Durable atomic ledger'));
+    expect(delivery).toContain('lastKnownRejection: result.errorCode');
+    const transactionStart = delivery.indexOf(
+      'await prisma.$transaction(async tx => {',
+      delivery.indexOf('Durable atomic ledger')
+    );
     const completionCheck = delivery.indexOf('if (completed.count !== 1)', transactionStart);
     const ledgerUpsert = delivery.indexOf('microsoftTeamsIncidentMessage.upsert', transactionStart);
     expect(completionCheck).toBeGreaterThan(transactionStart);
@@ -60,18 +69,23 @@ describe('microsoft teams transport contract', () => {
 
   it('RSC required set is Bot-primary minimal (ChannelSettings.Read.Group only)', () => {
     const manifest = readFileSync('src/lib/microsoft-teams/app-manifest.ts', 'utf8');
-    expect(manifest).toMatch(/MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS\s*=\s*\[\s*'ChannelSettings\.Read\.Group'/);
-    const requiredDecl = manifest.slice(manifest.indexOf('MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS'), manifest.indexOf('MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS'));
+    expect(manifest).toMatch(
+      /MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS\s*=\s*\[\s*'ChannelSettings\.Read\.Group'/
+    );
+    const requiredDecl = manifest.slice(
+      manifest.indexOf('MICROSOFT_TEAMS_REQUIRED_RSC_PERMISSIONS'),
+      manifest.indexOf('MICROSOFT_TEAMS_OPTIONAL_RSC_PERMISSIONS')
+    );
     expect(requiredDecl).not.toContain('ChannelMessage.Send.Group');
     expect(manifest).not.toContain("'ChannelMessage.Send.Group'");
     expect(manifest).not.toContain("'ChannelMessage.Read.Group'");
     const caps = readFileSync('src/lib/microsoft-teams/capabilities.ts', 'utf8');
-    expect(caps).toContain("canPost = Boolean(botInstalled)");
-    expect(caps).toContain("canUpdateCard = Boolean(botInstalled)");
+    expect(caps).toContain('canPost = Boolean(botInstalled)');
+    expect(caps).toContain('canUpdateCard = Boolean(botInstalled)');
     expect(caps).not.toContain("rsc.missing.includes('ChannelMessage");
     expect(caps).toMatch(/const healthy\s*=\s*canPost/);
     const client = readFileSync('src/lib/microsoft-teams/client.ts', 'utf8');
-    expect(client).toContain('/channels?$top=1&$select=id');
+    expect(client).toContain('/channels?$select=id');
     expect(client).not.toContain('/permissionGrants');
     expect(client).toContain('installations: installationStates');
   });
