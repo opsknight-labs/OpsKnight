@@ -56,6 +56,13 @@ export const LOCK_KEYS = {
    * incident→channel update.
    */
   MICROSOFT_TEAMS_DELIVERY: BigInt(9141006),
+
+  /**
+   * Serializes execution of a subject erasure. Prevents two concurrent
+   * erasure runs for the same (or overlapping) subject from interleaving
+   * their pre-processing and delete steps.
+   */
+  PRIVACY_ERASURE: BigInt(9141007),
 } as const;
 
 /**

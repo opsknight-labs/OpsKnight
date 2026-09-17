@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, FileArchive, Loader2, RefreshCw } from 'lucide-react';
+import { Download, FileArchive, Loader2, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
 import {
   Dialog,
   DialogContent,
@@ -13,6 +14,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/shadcn/dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/shadcn/alert-dialog';
 import {
   Table,
   TableBody,
@@ -45,6 +55,36 @@ type RequestDetail = {
   verifiedAt: string | null;
   notes: string | null;
   exportArtifacts: ExportArtifact[];
+  erasureExecution: {
+    id: string;
+    status: 'PENDING' | 'RUNNING' | 'PARTIAL' | 'COMPLETED' | 'FAILED';
+    planVersion: number;
+    startedAt: string | null;
+    completedAt: string | null;
+    failureCode: string | null;
+  } | null;
+};
+
+type ErasurePlanDomain = {
+  id: string;
+  label: string;
+  strategy: 'DELETE' | 'ANONYMIZE' | 'DETACH' | 'PRESERVE' | 'REVIEW';
+  blocking: boolean;
+  count: number;
+};
+
+type ErasurePlan = {
+  domains: ErasurePlanDomain[];
+  blockingConditions: string[];
+  canExecute: boolean;
+};
+
+const EXECUTION_BADGE_CLASS: Record<string, string> = {
+  PENDING: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  RUNNING: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  PARTIAL: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+  COMPLETED: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  FAILED: 'border-rose-600/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
 };
 
 const ARTIFACT_BADGE_CLASS: Record<ExportArtifactStatus, string> = {
@@ -79,6 +119,7 @@ export default function PrivacyRequestDetailDialog({
   requestId,
   canManage,
   canExport,
+  canErase,
   automated,
   exportEligible,
   trigger,
@@ -86,6 +127,7 @@ export default function PrivacyRequestDetailDialog({
   requestId: string;
   canManage: boolean;
   canExport: boolean;
+  canErase: boolean;
   automated: boolean;
   exportEligible: boolean;
   trigger: React.ReactNode;
@@ -95,6 +137,11 @@ export default function PrivacyRequestDetailDialog({
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [detail, setDetail] = useState<RequestDetail | null>(null);
+  const [plan, setPlan] = useState<ErasurePlan | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmInput, setConfirmInput] = useState('');
 
   async function loadDetail() {
     setLoading(true);
@@ -107,9 +154,61 @@ export default function PrivacyRequestDetailDialog({
         showToast(body?.error ?? 'Failed to load request detail.', 'error');
         return;
       }
-      setDetail(body.data.request);
+      const nextDetail = body.data.request as RequestDetail;
+      setDetail(nextDetail);
+      if (nextDetail.requestType === 'ERASURE') {
+        void loadPlan();
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadPlan() {
+    setPlanLoading(true);
+    try {
+      const response = await fetch(
+        `/api/compliance/privacy-requests/${requestId}/erasure/preview`,
+        {
+          cache: 'no-store',
+        }
+      );
+      const body = await readJson(response);
+      if (!response.ok) {
+        setPlan(null);
+        return;
+      }
+      setPlan(body.data.plan as ErasurePlan);
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
+  async function handleExecuteErasure() {
+    if (confirmInput !== 'ERASE') return;
+    setExecuting(true);
+    try {
+      const response = await fetch(
+        `/api/compliance/privacy-requests/${requestId}/erasure/execute`,
+        {
+          method: 'POST',
+        }
+      );
+      const body = await readJson(response);
+      if (!response.ok) {
+        showToast(body?.error ?? 'Failed to execute erasure.', 'error');
+        return;
+      }
+      setConfirmInput('');
+      setConfirmOpen(false);
+      if (body?.data?.manualReviewRequired) {
+        showToast('Erasure completed — manual review required before closing the request.', 'info');
+      } else {
+        showToast('Erasure executed.', 'success');
+      }
+      await loadDetail();
+    } finally {
+      setExecuting(false);
     }
   }
 
@@ -136,16 +235,23 @@ export default function PrivacyRequestDetailDialog({
       open={open}
       onOpenChange={next => {
         setOpen(next);
-        if (next) void loadDetail();
+        if (next) {
+          void loadDetail();
+        } else {
+          setPlan(null);
+        }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Subject access export</DialogTitle>
+          <DialogTitle>
+            {detail?.requestType === 'ERASURE' ? 'Subject erasure' : 'Subject access export'}
+          </DialogTitle>
           <DialogDescription>
-            Generate and download an encrypted, time-limited export of this subject&apos;s direct
-            data relations. Security credentials are always excluded.
+            {detail?.requestType === 'ERASURE'
+              ? 'Preview and execute verified erasure and anonymization for this subject. This cannot be undone.'
+              : "Generate and download an encrypted, time-limited export of this subject's direct data relations. Security credentials are always excluded."}
           </DialogDescription>
         </DialogHeader>
 
@@ -172,7 +278,7 @@ export default function PrivacyRequestDetailDialog({
               </div>
             </div>
 
-            {canExport && (
+            {canExport && detail.requestType !== 'ERASURE' && (
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <div className="text-sm">
                   {automated ? (
@@ -207,69 +313,235 @@ export default function PrivacyRequestDetailDialog({
               </div>
             )}
 
-            <div className="overflow-x-auto rounded-lg border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Size</TableHead>
-                    <TableHead>Downloads</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {detail.exportArtifacts.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
-                        No exports generated yet.
-                      </TableCell>
-                    </TableRow>
+            {detail.requestType === 'ERASURE' && (
+              <div className="space-y-3 rounded-lg border p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <ShieldAlert className="h-4 w-4" />
+                    Erasure plan
+                  </div>
+                  {detail.erasureExecution && (
+                    <Badge
+                      variant="outline"
+                      className={EXECUTION_BADGE_CLASS[detail.erasureExecution.status]}
+                      title={detail.erasureExecution.failureCode ?? undefined}
+                    >
+                      {detail.erasureExecution.status}
+                    </Badge>
                   )}
-                  {detail.exportArtifacts.map(artifact => {
-                    const expired = new Date(artifact.expiresAt).getTime() <= Date.now();
-                    const downloadable =
-                      !expired && (artifact.status === 'READY' || artifact.status === 'DOWNLOADED');
-                    return (
-                      <TableRow key={artifact.id}>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={ARTIFACT_BADGE_CLASS[expired ? 'EXPIRED' : artifact.status]}
-                            title={artifact.failureReason ?? undefined}
-                          >
-                            {expired ? 'EXPIRED' : artifact.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {new Date(artifact.createdAt).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {new Date(artifact.expiresAt).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-xs">{formatBytes(artifact.sizeBytes)}</TableCell>
-                        <TableCell className="text-xs">{artifact.downloadCount}</TableCell>
-                        <TableCell className="text-right">
-                          {downloadable ? (
-                            <Button size="sm" variant="secondary" asChild>
-                              <a
-                                href={`/api/compliance/privacy-requests/${requestId}/export/${artifact.id}/download`}
+                </div>
+
+                {!canErase ? (
+                  <p className="text-xs text-muted-foreground">
+                    You do not have permission to preview or execute erasure.
+                  </p>
+                ) : planLoading && !plan ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Building plan…
+                  </div>
+                ) : plan ? (
+                  <>
+                    {plan.blockingConditions.length > 0 && (
+                      <ul className="list-inside list-disc space-y-1 text-xs text-amber-600 dark:text-amber-400">
+                        {plan.blockingConditions.map(condition => (
+                          <li key={condition}>{condition}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className="max-h-40 overflow-y-auto rounded border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Domain</TableHead>
+                            <TableHead>Strategy</TableHead>
+                            <TableHead className="text-right">Count</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {plan.domains
+                            .filter(domain => domain.count > 0)
+                            .map(domain => (
+                              <TableRow key={domain.id}>
+                                <TableCell className="text-xs">{domain.label}</TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {domain.strategy}
+                                </TableCell>
+                                <TableCell className="text-right text-xs">{domain.count}</TableCell>
+                              </TableRow>
+                            ))}
+                          {plan.domains.every(domain => domain.count === 0) && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={3}
+                                className="py-4 text-center text-muted-foreground"
                               >
-                                <Download className="mr-1.5 h-4 w-4" />
-                                Download
-                              </a>
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">Unavailable</span>
+                                No data found for this subject.
+                              </TableCell>
+                            </TableRow>
                           )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        {exportEligible
+                          ? plan.canExecute
+                            ? 'Ready to execute — this cannot be undone.'
+                            : 'Blocking conditions must be resolved before erasure can run.'
+                          : 'Complete identity verification and move this request to Processing before erasure can run.'}
+                      </p>
+                      <AlertDialog
+                        open={confirmOpen}
+                        onOpenChange={next => {
+                          setConfirmOpen(next);
+                          if (!next) setConfirmInput('');
+                        }}
+                      >
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setConfirmOpen(true)}
+                          disabled={
+                            !exportEligible ||
+                            !plan.canExecute ||
+                            executing ||
+                            detail.erasureExecution?.status === 'COMPLETED'
+                          }
+                        >
+                          {executing ? (
+                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="mr-1.5 h-4 w-4" />
+                          )}
+                          Execute erasure
+                        </Button>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                              <ShieldAlert className="h-4 w-4" />
+                              Permanently erase subject data?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription asChild>
+                              <div className="space-y-2 text-left">
+                                <p>
+                                  This will permanently remove and anonymize data for{' '}
+                                  <span className="font-mono font-medium text-foreground">
+                                    {detail.subjectType}: {detail.subjectId}
+                                  </span>
+                                  . This action cannot be undone.
+                                </p>
+                                <p className="text-xs">
+                                  Type <span className="font-mono font-semibold">ERASE</span> to
+                                  confirm.
+                                </p>
+                              </div>
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <Input
+                            autoFocus
+                            value={confirmInput}
+                            onChange={event => setConfirmInput(event.target.value)}
+                            placeholder="Type ERASE to confirm"
+                            className="font-mono"
+                            aria-label="Type ERASE to confirm erasure"
+                          />
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={executing}>Cancel</AlertDialogCancel>
+                            <Button
+                              variant="destructive"
+                              disabled={confirmInput !== 'ERASE' || executing}
+                              onClick={() => void handleExecuteErasure()}
+                            >
+                              {executing ? (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-1.5 h-4 w-4" />
+                              )}
+                              Permanently erase
+                            </Button>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => void loadPlan()}>
+                    Load erasure plan
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {detail.requestType !== 'ERASURE' && (
+              <div className="overflow-x-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead>Size</TableHead>
+                      <TableHead>Downloads</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detail.exportArtifacts.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                          No exports generated yet.
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                    )}
+                    {detail.exportArtifacts.map(artifact => {
+                      const expired = new Date(artifact.expiresAt).getTime() <= Date.now();
+                      const downloadable =
+                        !expired &&
+                        (artifact.status === 'READY' || artifact.status === 'DOWNLOADED');
+                      return (
+                        <TableRow key={artifact.id}>
+                          <TableCell>
+                            <Badge
+                              variant="outline"
+                              className={
+                                ARTIFACT_BADGE_CLASS[expired ? 'EXPIRED' : artifact.status]
+                              }
+                              title={artifact.failureReason ?? undefined}
+                            >
+                              {expired ? 'EXPIRED' : artifact.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(artifact.createdAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {new Date(artifact.expiresAt).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {formatBytes(artifact.sizeBytes)}
+                          </TableCell>
+                          <TableCell className="text-xs">{artifact.downloadCount}</TableCell>
+                          <TableCell className="text-right">
+                            {downloadable ? (
+                              <Button size="sm" variant="secondary" asChild>
+                                <a
+                                  href={`/api/compliance/privacy-requests/${requestId}/export/${artifact.id}/download`}
+                                >
+                                  <Download className="mr-1.5 h-4 w-4" />
+                                  Download
+                                </a>
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Unavailable</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
 
             <Button size="sm" variant="ghost" onClick={() => void loadDetail()} disabled={loading}>
               <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
