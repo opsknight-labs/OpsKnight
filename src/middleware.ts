@@ -10,7 +10,10 @@ import {
   PRIVATE_STATUS_CACHE_CONTROL,
   PUBLIC_STATUS_CACHE_CONTROL,
 } from '@/lib/status-pages/cache-policy';
-import { matchesStatusPageDomain } from '@/lib/status-pages/status-route-resolver';
+import {
+  matchesStatusPageDomain,
+  extractSubdomainFromHost,
+} from '@/lib/status-pages/status-route-resolver';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
@@ -337,11 +340,8 @@ export function parsePublishedStatusRoute(value: unknown): PublishedStatusRoute 
 }
 
 export function externalRouteKey(hostname: string): string {
-  const appHostname = parseHostname(INTERNAL_API_BASE);
-  if (appHostname && hostname.endsWith(`.${appHostname}`)) {
-    const subdomain = hostname.slice(0, -(appHostname.length + 1));
-    if (isSafeStatusSlug(subdomain)) return `subdomain:${subdomain}`;
-  }
+  const subdomain = extractSubdomainFromHost(hostname, INTERNAL_API_BASE);
+  if (subdomain && isSafeStatusSlug(subdomain)) return `subdomain:${subdomain}`;
   return `domain:${hostname}`;
 }
 
@@ -374,8 +374,24 @@ export async function fetchPublishedStatusDomain(
         }
       );
       if (!response.ok && response.status !== 404) throw new Error('Status route lookup failed');
-      const value =
-        response.status === 404 ? null : parsePublishedStatusRoute(await response.json());
+      let value = response.status === 404 ? null : parsePublishedStatusRoute(await response.json());
+
+      // Fallback for well-known "status" subdomain to default route if not explicitly published under subdomain:status
+      if (!value && routeKey === 'subdomain:status') {
+        try {
+          const defaultResponse = await fetch(new URL('status-pages/routes/default', storeBase), {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+            signal: AbortSignal.timeout(2000),
+          });
+          if (defaultResponse.ok) {
+            value = parsePublishedStatusRoute(await defaultResponse.json());
+          }
+        } catch {
+          // ignore fallback error
+        }
+      }
+
       if (response.status !== 404 && !value) throw new Error('Invalid status route payload');
       const cachedAt = Date.now();
       cachePublishedRoute(routeKey, {
@@ -570,10 +586,32 @@ export default async function middleware(req: NextRequest) {
   let matchedPage: StatusDomainPage | null = null;
   if (statusConfig?.enabled) {
     const candidateHosts = [rawHost, forwardedHost].filter(Boolean);
+    // 1st priority: explicit customDomain or explicit subdomain match
     matchedPage =
       statusConfig.pages?.find(page => {
-        return candidateHosts.some(h => matchesStatusPageDomain(page, h, statusConfig.appHost));
+        return candidateHosts.some(h => {
+          const cleanHost = normalizeHostname(h);
+          const customHost = parseHostname(page.customDomain);
+          if (customHost && cleanHost === customHost) return true;
+          if (page.subdomain) {
+            const cleanSub = parseHostname(page.subdomain);
+            if (cleanSub && cleanHost === cleanSub) return true;
+            if (statusConfig.appHost) {
+              const extracted = extractSubdomainFromHost(cleanHost, statusConfig.appHost);
+              if (extracted && extracted === cleanSub) return true;
+            }
+          }
+          return false;
+        });
       }) ?? null;
+
+    // 2nd priority: general status route matching (slug, default status page fallback)
+    if (!matchedPage) {
+      matchedPage =
+        statusConfig.pages?.find(page => {
+          return candidateHosts.some(h => matchesStatusPageDomain(page, h, statusConfig.appHost));
+        }) ?? null;
+    }
   }
 
   const statusRoute = publishedPage

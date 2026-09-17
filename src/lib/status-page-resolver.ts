@@ -71,6 +71,13 @@ export async function resolveStatusPage(identity: StatusPageIdentity = { default
     const extractedSub = extractSubdomainFromHost(host, appHost);
     if (extractedSub) {
       candidates.push({ subdomain: extractedSub });
+      if (extractedSub.startsWith('status-')) {
+        candidates.push({ slug: extractedSub.slice('status-'.length) });
+      }
+      candidates.push({ slug: extractedSub });
+      if (extractedSub === 'status') {
+        candidates.push({ isDefault: true });
+      }
     }
 
     const pages = await prisma.statusPage.findMany({
@@ -78,7 +85,21 @@ export async function resolveStatusPage(identity: StatusPageIdentity = { default
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
 
-    return pages.find(p => matchesStatusPageDomain(p, host, appHost)) ?? null;
+    return (
+      pages.find(p => {
+        if (p.customDomain && normalizeHostname(p.customDomain) === host) return true;
+        if (
+          p.subdomain &&
+          extractedSub &&
+          p.subdomain.toLowerCase() === extractedSub.toLowerCase()
+        ) {
+          return true;
+        }
+        return false;
+      }) ??
+      pages.find(p => matchesStatusPageDomain(p, host, appHost)) ??
+      null
+    );
   }
   return prisma.statusPage.findFirst({
     where: { isDefault: true, enabled: true },
