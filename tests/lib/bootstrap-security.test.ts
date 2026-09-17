@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { transaction, count, create } = vi.hoisted(() => ({
+const { transaction, count, create, findUniqueConfig, updateConfig } = vi.hoisted(() => ({
   transaction: vi.fn(),
   count: vi.fn(),
   create: vi.fn(),
+  findUniqueConfig: vi.fn(),
+  updateConfig: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: transaction } }));
@@ -24,13 +26,17 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { bootstrapAdmin } from '@/app/setup/actions';
+import { hashBootstrapCode } from '@/lib/bootstrap-security';
 
-function bootstrapForm(password = 'a secure admin passphrase', confirmPassword = password) {
+const bootstrapCode = 'bootstrap-code-that-is-long-enough';
+
+function bootstrapForm(code = bootstrapCode) {
   const form = new FormData();
   form.set('name', 'First Admin');
   form.set('email', 'admin@example.com');
-  form.set('password', password);
-  form.set('confirmPassword', confirmPassword);
+  form.set('bootstrapCode', code);
+  form.set('password', 'a secure admin passphrase');
+  form.set('confirmPassword', 'a secure admin passphrase');
   return form;
 }
 
@@ -39,35 +45,39 @@ describe('bootstrap administrator security', () => {
     vi.clearAllMocks();
     count.mockResolvedValue(0);
     create.mockResolvedValue({ id: 'admin-1', email: 'admin@example.com' });
+    findUniqueConfig.mockResolvedValue({
+      value: {
+        tokenHash: hashBootstrapCode(bootstrapCode),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        usedAt: null,
+        generation: 1,
+      },
+    });
+    updateConfig.mockResolvedValue({});
     transaction.mockImplementation(async (callback, options) => {
       expect(options).toEqual({ isolationLevel: 'Serializable' });
       return callback({
         user: { count, create },
+        systemConfig: { findUnique: findUniqueConfig, update: updateConfig },
       });
     });
   });
 
-  it('creates the administrator account on initial setup', async () => {
+  it('requires and atomically consumes the one-time capability', async () => {
     const result = await bootstrapAdmin(bootstrapForm());
     expect(result).toEqual({ success: true, email: 'admin@example.com' });
     expect(create).toHaveBeenCalledTimes(1);
-    expect(create).toHaveBeenCalledWith(
+    expect(updateConfig).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          name: 'First Admin',
-          email: 'admin@example.com',
-          role: 'ADMIN',
-          status: 'ACTIVE',
-        }),
+        where: { key: 'auth.bootstrap.authorization' },
+        data: expect.objectContaining({ updatedBy: 'admin-1' }),
       })
     );
   });
 
-  it('rejects setup when passwords do not match', async () => {
-    const result = await bootstrapAdmin(
-      bootstrapForm('passphrase-one-valid', 'passphrase-two-diff')
-    );
-    expect(result).toEqual({ error: 'Passwords do not match.' });
+  it('rejects an invalid capability without creating an admin', async () => {
+    const result = await bootstrapAdmin(bootstrapForm('wrong-code-that-is-long-enough'));
+    expect(result).toEqual({ error: 'Invalid or expired setup authorization code.' });
     expect(create).not.toHaveBeenCalled();
   });
 
@@ -81,6 +91,7 @@ describe('bootstrap administrator security', () => {
     transaction.mockRejectedValueOnce({ code: 'P2034' }).mockImplementationOnce(async callback =>
       callback({
         user: { count, create },
+        systemConfig: { findUnique: findUniqueConfig, update: updateConfig },
       })
     );
     const result = await bootstrapAdmin(bootstrapForm());
