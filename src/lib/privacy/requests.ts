@@ -26,6 +26,20 @@ export function isAutomatedPrivacyRequestType(requestType: PrivacyRequestType): 
 }
 
 /**
+ * ERASURE is automated end to end as of Phase 3, but only for USER subjects
+ * and only via the dedicated erasure engine (src/lib/privacy/erasure/*) — it
+ * is intentionally kept out of AUTOMATED_PRIVACY_REQUEST_TYPES /
+ * isAutomatedPrivacyRequestType, which gate the *export* flow specifically
+ * and must never accept an erasure request.
+ */
+export function isAutomatedErasureRequest(request: {
+  subjectType: PrivacyRequestSubjectType;
+  requestType: PrivacyRequestType;
+}): boolean {
+  return request.subjectType === 'USER' && request.requestType === 'ERASURE';
+}
+
+/**
  * Centralized state machine. COMPLETED and REJECTED are terminal: a finished
  * request cannot be silently reopened by a stray UI/API call.
  */
@@ -289,6 +303,16 @@ export async function getPrivacyRequest(requestId: string) {
           sizeBytes: true,
           checksum: true,
           failureReason: true,
+        },
+      },
+      erasureExecution: {
+        select: {
+          id: true,
+          status: true,
+          planVersion: true,
+          startedAt: true,
+          completedAt: true,
+          failureCode: true,
         },
       },
     },

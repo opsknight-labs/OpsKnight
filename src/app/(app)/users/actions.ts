@@ -105,7 +105,7 @@ async function sendInviteEmailIfConfigured(data: {
   }
 }
 
-async function assertUserIsNotSoleOwner(userId: string) {
+export async function assertUserIsNotSoleOwner(userId: string) {
   const ownedMemberships = await prisma.teamMember.findMany({
     where: { userId, role: 'OWNER' },
     select: { teamId: true },
@@ -132,7 +132,7 @@ async function assertUserIsNotSoleOwner(userId: string) {
   }
 }
 
-async function assertNotLastAdmin(userId: string) {
+export async function assertNotLastAdmin(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { role: true, status: true },

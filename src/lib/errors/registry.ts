@@ -541,6 +541,47 @@ export const ERROR_REGISTRY = {
     retryable: false,
     exposure: 'public',
   },
+  PRIVACY_ERASURE_PREREQUISITES_NOT_MET: {
+    status: 409,
+    category: 'conflict',
+    userMessage:
+      'This request must be an erasure request, complete identity verification, and be in Processing status before erasure can run.',
+    action: 'Verify identity and move the request to Processing, then try again.',
+    retryable: false,
+    exposure: 'public',
+  },
+  PRIVACY_ERASURE_BLOCKED: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'Erasure cannot proceed while blocking conditions remain unresolved.',
+    action: 'Resolve the listed blocking conditions and try again.',
+    retryable: false,
+    exposure: 'public',
+  },
+  PRIVACY_ERASURE_EXECUTION_NOT_FOUND: {
+    status: 404,
+    category: 'not_found',
+    userMessage: 'No erasure execution was found for this request.',
+    retryable: false,
+    exposure: 'public',
+  },
+  PRIVACY_ERASURE_IN_PROGRESS: {
+    status: 409,
+    category: 'conflict',
+    userMessage: 'Erasure is already running for this request.',
+    action: 'Wait for the in-progress execution to finish before retrying.',
+    retryable: true,
+    exposure: 'public',
+  },
+  PRIVACY_ERASURE_FINALIZATION_FAILED: {
+    status: 500,
+    category: 'internal',
+    userMessage:
+      'The subject was erased, but finalizing the request afterward failed. Retry to complete finalization; the erasure itself will not be repeated.',
+    action: 'Retry the erasure action.',
+    retryable: true,
+    exposure: 'public',
+  },
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type AppErrorCode = keyof typeof ERROR_REGISTRY;
