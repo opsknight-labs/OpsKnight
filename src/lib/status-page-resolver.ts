@@ -1,7 +1,9 @@
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { getAppUrl } from '@/lib/app-config';
 import {
   normalizeHostname,
+  parseHostname,
   matchesStatusPageDomain,
   extractSubdomainFromHost,
 } from '@/lib/status-pages/status-route-resolver';
@@ -9,7 +11,7 @@ import {
 export type StatusPageIdentity =
   | { id: string }
   | { slug: string }
-  | { host: string }
+  | { host: string; appHost?: string }
   | { default: true };
 
 export function statusPageSlugMatches(actualSlug: string | null, expectedSlug?: string): boolean {
@@ -28,9 +30,10 @@ export interface ResolvedStatusRoute {
  * Uses the exact same normalization and subdomain matching across the application.
  */
 export async function resolveStatusRouteForHostname(
-  hostname: string
+  hostname: string,
+  appHost?: string
 ): Promise<ResolvedStatusRoute | null> {
-  const page = await resolveStatusPage({ host: hostname });
+  const page = await resolveStatusPage({ host: hostname, appHost });
   if (!page) return null;
   return {
     pageId: page.id,
@@ -52,8 +55,16 @@ export async function resolveStatusPage(identity: StatusPageIdentity = { default
     const host = normalizeHostname(identity.host);
     if (!host) return null;
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '';
-    const appHost = appUrl ? normalizeHostname(new URL(appUrl).host) : '';
+    let appHost = identity.appHost ? parseHostname(identity.appHost) : '';
+    if (!appHost) {
+      try {
+        const canonicalUrl = await getAppUrl();
+        appHost = parseHostname(canonicalUrl);
+      } catch {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || '';
+        appHost = parseHostname(appUrl);
+      }
+    }
 
     const candidates: Prisma.StatusPageWhereInput[] = [{ customDomain: host }, { subdomain: host }];
 

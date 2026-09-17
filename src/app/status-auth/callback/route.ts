@@ -7,7 +7,8 @@ import {
 } from '@/lib/status-pages/status-auth';
 import { useSecureCookies } from '@/lib/auth-cookies';
 
-import { normalizeHostname } from '@/lib/status-pages/status-route-resolver';
+import { normalizeHostname, parseHostname } from '@/lib/status-pages/status-route-resolver';
+import { getAppUrl } from '@/lib/app-config';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,9 @@ export async function GET(req: NextRequest) {
     '';
 
   const cleanHost = normalizeHostname(host);
-  const statusPage = await resolveStatusPage({ host: cleanHost });
+  const canonicalAppUrl = await getAppUrl();
+  const appHost = parseHostname(canonicalAppUrl);
+  const statusPage = await resolveStatusPage({ host: cleanHost, appHost });
 
   if (!statusPage) {
     return new NextResponse('Status page not found for host', { status: 404 });

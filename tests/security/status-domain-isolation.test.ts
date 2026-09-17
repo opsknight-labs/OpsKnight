@@ -246,6 +246,26 @@ describe('Status Domain Host Firewall & Isolation', () => {
 
       expect(res.status).toBe(200);
     });
+
+    it('rejects unallowlisted routes under /api/status/ on status domain with 404 (defense in depth)', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const adminExportReq = new NextRequest(
+        'https://status.customer.test/api/status/admin/export',
+        {
+          headers: { host: 'status.customer.test' },
+        }
+      );
+      const res1 = await middleware(adminExportReq);
+      expect(res1.status).toBe(404);
+
+      const usersReq = new NextRequest('https://status.customer.test/api/status/users', {
+        headers: { host: 'status.customer.test' },
+      });
+      const res2 = await middleware(usersReq);
+      expect(res2.status).toBe(404);
+    });
   });
 
   describe('Host Firewall: Rejection of application plane routes on status domain', () => {
@@ -824,5 +844,60 @@ describe('End-to-End Status Authentication Handshake & Isolation Flow', () => {
       })
     );
     expect(authSessionRes.status).toBe(404);
+  });
+});
+
+describe('Canonical App URL Hierarchy & DB-Backed Host Resolution', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('resolves short-subdomain against SystemSettings.appUrl when it differs from NEXTAUTH_URL', async () => {
+    vi.stubEnv('NEXTAUTH_URL', 'https://old.example.com');
+    delete process.env.NEXT_PUBLIC_APP_URL;
+
+    // Mock prisma so SystemSettings returns internal.example.com
+    const { default: prisma } = await import('@/lib/prisma');
+    vi.spyOn(prisma.systemSettings, 'findUnique').mockResolvedValue({
+      id: 'default',
+      appUrl: 'https://internal.example.com',
+    } as unknown as Awaited<ReturnType<typeof prisma.systemSettings.findUnique>>);
+
+    const targetPage = {
+      id: 'page_db_canonical',
+      slug: 'my-status',
+      subdomain: 'status',
+      customDomain: null,
+      enabled: true,
+      isDefault: true,
+      requireAuth: true,
+      createdAt: new Date(),
+    };
+
+    vi.spyOn(prisma.statusPage, 'findMany').mockResolvedValue([targetPage] as unknown as Awaited<
+      ReturnType<typeof prisma.statusPage.findMany>
+    >);
+
+    const { resolveStatusPage, resolveStatusRouteForHostname } =
+      await import('@/lib/status-page-resolver');
+
+    // Host status.internal.example.com must match short subdomain 'status' using SystemSettings.appUrl
+    const resolved = await resolveStatusPage({ host: 'status.internal.example.com' });
+    expect(resolved).not.toBeNull();
+    expect(resolved?.id).toBe('page_db_canonical');
+
+    // And with resolveStatusRouteForHostname:
+    const route = await resolveStatusRouteForHostname('status.internal.example.com');
+    expect(route).not.toBeNull();
+    expect(route?.pageId).toBe('page_db_canonical');
+
+    // Meanwhile an old hostname does not match
+    const oldHostResolved = await resolveStatusPage({ host: 'status.old.example.com' });
+    expect(oldHostResolved).toBeNull();
   });
 });

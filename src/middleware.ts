@@ -101,21 +101,56 @@ export function isStatusStaticAsset(pathname: string): boolean {
   );
 }
 
+const STATUS_API_EXACT_GET = new Set([
+  '/api/status',
+  '/api/status/history',
+  '/api/status/rss',
+  '/api/status/uptime-export',
+]);
+
+const STATUS_API_EXACT_POST = new Set([
+  '/api/status/subscribe',
+  '/api/status-page/subscribe',
+  '/api/status/subscriptions/verify',
+  '/api/status/subscriptions/unsubscribe',
+]);
+
+const STATUS_SLUG_API_REGEX =
+  /^\/api\/status\/[a-z0-9_-]+(\/(history|rss|uptime-export|subscribe))?$/;
+
+const RESERVED_STATUS_API_SLUGS = new Set([
+  'admin',
+  'api',
+  'auth',
+  'internal',
+  'manage',
+  'settings',
+  'users',
+  'subscriptions',
+]);
+
 export function isAllowedStatusApi(pathname: string, method: string): boolean {
-  if (pathname === '/api/status-page/subscribe' && method === 'POST') return true;
-  if (pathname.startsWith('/api/status-page/logo/') && method === 'GET') return true;
-  if (pathname === '/api/status' && method === 'GET') return true;
-  if (
-    (pathname === '/api/status/subscriptions/verify' ||
-      pathname === '/api/status/subscriptions/unsubscribe') &&
-    method === 'POST'
-  ) {
-    return true;
+  if (method === 'GET') {
+    if (STATUS_API_EXACT_GET.has(pathname)) return true;
+    if (pathname.startsWith('/api/status-page/logo/')) return true;
+    if (pathname.startsWith('/api/status/')) {
+      const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
+      if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
+    }
+    if (STATUS_SLUG_API_REGEX.test(pathname) && !pathname.endsWith('/subscribe')) return true;
+    return false;
   }
-  if (pathname.startsWith('/api/status/')) {
-    if (method === 'GET') return true;
-    if (method === 'POST' && pathname.endsWith('/subscribe')) return true;
+
+  if (method === 'POST') {
+    if (STATUS_API_EXACT_POST.has(pathname)) return true;
+    if (pathname.startsWith('/api/status/')) {
+      const firstSegment = pathname.slice('/api/status/'.length).split('/')[0];
+      if (firstSegment && RESERVED_STATUS_API_SLUGS.has(firstSegment)) return false;
+    }
+    if (STATUS_SLUG_API_REGEX.test(pathname) && pathname.endsWith('/subscribe')) return true;
+    return false;
   }
+
   return false;
 }
 
