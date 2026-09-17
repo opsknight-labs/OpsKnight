@@ -20,6 +20,7 @@ const upsertSchema = z.object({
   channelName: z.string().trim().max(255).nullable().optional(),
   teamName: z.string().trim().max(255).nullable().optional(),
   interactiveEnabled: z.boolean().optional(),
+  warRoomEnabled: z.boolean().optional(),
 });
 
 const deleteSchema = z.object({
@@ -85,9 +86,7 @@ export async function GET(request: NextRequest) {
     const dest = await (
       prisma as unknown as {
         microsoftTeamsDestination: {
-          findFirst: (
-            a: unknown
-          ) => Promise<null | {
+          findFirst: (a: unknown) => Promise<null | {
             id: string;
             tenantId: string;
             teamId: string;
@@ -126,7 +125,15 @@ export async function POST(request: NextRequest) {
         })
       );
 
-    const { serviceId, teamId, channelId, channelName, teamName, interactiveEnabled } = parsed.data;
+    const {
+      serviceId,
+      teamId,
+      channelId,
+      channelName,
+      teamName,
+      interactiveEnabled,
+      warRoomEnabled,
+    } = parsed.data;
     let tenantId = parsed.data.tenantId?.trim() || '';
     await assertCanModifyService(serviceId);
 
@@ -183,9 +190,7 @@ export async function POST(request: NextRequest) {
       };
       microsoftTeamsDestination: {
         create: (a: unknown) => Promise<{ id: string }>;
-        findFirst: (
-          a: unknown
-        ) => Promise<{
+        findFirst: (a: unknown) => Promise<{
           id: string;
           tenantId: string;
           teamId: string;
@@ -340,7 +345,9 @@ export async function POST(request: NextRequest) {
               teamName: teamName ?? null,
               installationId: installation.id,
               enabled: true,
-              ...(interactiveEnabled !== undefined ? { interactiveEnabled } : {}),
+              interactiveEnabled: interactiveEnabled ?? true,
+              warRoomEnabled: warRoomEnabled ?? true,
+              warRoomAutoCreate: true,
               updatedBy: actorId,
             },
           } as never);
@@ -352,6 +359,8 @@ export async function POST(request: NextRequest) {
               channelName: channelName ?? null,
               teamName: teamName ?? null,
               installationId: installation.id,
+              ...(interactiveEnabled !== undefined ? { interactiveEnabled } : {}),
+              ...(warRoomEnabled !== undefined ? { warRoomEnabled } : {}),
               updatedBy: actorId,
             },
           } as never);
@@ -366,7 +375,9 @@ export async function POST(request: NextRequest) {
               teamName: teamName ?? null,
               installationId: installation.id,
               enabled: true,
-              interactiveEnabled: interactiveEnabled ?? false,
+              interactiveEnabled: interactiveEnabled ?? true,
+              warRoomEnabled: warRoomEnabled ?? true,
+              warRoomAutoCreate: true,
               updatedBy: actorId,
             },
           } as never);
