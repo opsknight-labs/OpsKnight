@@ -17,6 +17,7 @@ import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Loader2, Tickets, XCircle } from 'lucide-react';
 import { notify } from '@/lib/toast';
+import { JiraLogo } from '@/components/common/BrandLogos';
 
 type JiraMapping = {
   projectKey: string;
@@ -88,7 +89,7 @@ export default function JiraServiceMappingSettings({
           <div>
             <CardTitle className="text-sm font-bold flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                <Tickets className="h-4 w-4" />
+                <JiraLogo className="h-4 w-4 shrink-0" />
               </div>
               <div>
                 <span className="text-muted-foreground font-mono mr-1.5 text-xs">4.</span>

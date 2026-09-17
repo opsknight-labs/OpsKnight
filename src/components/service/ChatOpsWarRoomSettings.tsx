@@ -17,6 +17,7 @@ import { Loader2, MessageCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { updateServiceChatOpsSettings } from '@/app/(app)/services/actions';
 import { notify } from '@/lib/toast';
+import { SlackLogo } from '@/components/common/BrandLogos';
 
 const VIDEO_BRIDGE_OPTIONS = [
   { value: 'INHERIT', label: 'Inherit Global' },
@@ -85,9 +86,10 @@ export default function ChatOpsWarRoomSettings({
           </div>
           <Badge
             variant={chatOpsEnabled ? 'default' : 'secondary'}
-            className="text-[10px] font-semibold w-fit px-2.5 py-0.5"
+            className="text-[10px] font-semibold w-fit px-2.5 py-0.5 inline-flex items-center gap-1.5"
           >
-            {chatOpsEnabled ? 'ChatOps Enabled' : 'ChatOps not configured'}
+            <SlackLogo className="h-3 w-3 shrink-0" />
+            <span>{chatOpsEnabled ? 'ChatOps Enabled' : 'ChatOps not configured'}</span>
           </Badge>
         </div>
       </CardHeader>

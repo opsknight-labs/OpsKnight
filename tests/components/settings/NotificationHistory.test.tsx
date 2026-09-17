@@ -86,4 +86,64 @@ describe('NotificationHistory Component', () => {
       expect(screen.getByText('Delivery Audit Stream')).toBeDefined();
     });
   });
+
+  it('renders official Slack and Microsoft Teams brand logos for channel entries', async () => {
+    const dataWithSlackAndTeams = {
+      ...mockHistoryData,
+      notifications: [
+        {
+          id: 'notif-slack',
+          channel: 'SLACK',
+          status: 'SENT',
+          message: 'Incident posted to Slack #war-room',
+          incident: {
+            id: 'inc-slack',
+            title: 'Slack Incident',
+            status: 'INVESTIGATING',
+            urgency: 'HIGH',
+          },
+          sentAt: 'Sep 1, 2026, 11:30 PM',
+          deliveredAt: 'Sep 1, 2026, 11:30 PM',
+          failedAt: null,
+          errorMsg: null,
+          attempts: 1,
+          latencyMs: 30,
+          pendingForMs: null,
+          createdAt: 'Sep 1, 2026, 11:30 PM',
+        },
+        {
+          id: 'notif-teams',
+          channel: 'MICROSOFT_TEAMS',
+          status: 'SENT',
+          message: 'Adaptive card sent to Teams #alerts',
+          incident: {
+            id: 'inc-teams',
+            title: 'Teams Incident',
+            status: 'INVESTIGATING',
+            urgency: 'HIGH',
+          },
+          sentAt: 'Sep 1, 2026, 11:31 PM',
+          deliveredAt: 'Sep 1, 2026, 11:31 PM',
+          failedAt: null,
+          errorMsg: null,
+          attempts: 1,
+          latencyMs: 40,
+          pendingForMs: null,
+          createdAt: 'Sep 1, 2026, 11:31 PM',
+        },
+      ],
+    };
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(dataWithSlackAndTeams),
+    });
+
+    render(<NotificationHistory />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Slack logo')).toBeInTheDocument();
+      expect(screen.getByLabelText('Microsoft Teams logo')).toBeInTheDocument();
+    });
+  });
 });

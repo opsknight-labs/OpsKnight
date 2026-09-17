@@ -26,6 +26,7 @@ import DeleteConfirmDialog from '@/components/ui/DeleteConfirmDialog';
 import ServiceDetailTabs from '@/components/service/ServiceDetailTabs';
 import ServiceSettingsFlashToast from '@/components/service/ServiceSettingsFlashToast';
 import { InlineNotice } from '@/components/ui/InlineNotice';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/shadcn/alert';
 
 // Icons
 import {
@@ -48,6 +49,7 @@ import {
   Terminal,
   Webhook,
   Bell,
+  Info,
 } from 'lucide-react';
 
 // Custom Components
@@ -59,6 +61,7 @@ import CopyButton from '@/components/service/CopyButton';
 import IntegrationStatusToggle from '@/components/service/IntegrationStatusToggle';
 import IntegrationSecretControl from '@/components/service/IntegrationSecretControl';
 import DeleteIntegrationButton from '@/components/service/DeleteIntegrationButton';
+import ServiceGeneralSettings from '@/components/service/ServiceGeneralSettings';
 import ServiceNotificationSettings from '@/components/service/ServiceNotificationSettings';
 import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
@@ -829,137 +832,37 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         </InlineNotice>
       )}
 
+      {/* Top Informative Notice Banner */}
+      <Alert className="border-primary/20 bg-primary/5 dark:bg-primary/10 text-primary">
+        <Info className="h-4 w-4 shrink-0 text-primary" />
+        <AlertTitle className="text-xs font-bold text-foreground">
+          Service Settings & Policies
+        </AlertTitle>
+        <AlertDescription className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+          Manage core service configuration, SLA response targets, incident classification
+          overrides, and external issue tracking integrations.
+        </AlertDescription>
+      </Alert>
+
       {canManageService ? (
         <>
           {/* Card 1: Core Service Metadata Form */}
-          <Card className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs shadow-xs">
-            <CardHeader className="pb-4 border-b border-border/60 bg-muted/20 dark:bg-muted/10">
-              <CardTitle className="text-sm font-bold flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                  <Settings className="h-4 w-4" />
-                </div>
-                <div>
-                  <span className="text-muted-foreground font-mono mr-1.5 text-xs">1.</span>
-                  <span>General Configuration</span>
-                </div>
-              </CardTitle>
-              <CardDescription className="text-xs mt-1">
-                Manage service name, SLA tier, regional placement, and team ownership.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-5">
-              <form action={boundUpdateService} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="name" className="text-xs font-semibold">
-                      Service Name *
-                    </Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      defaultValue={service.name}
-                      required
-                      className="text-xs h-9"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="teamId" className="text-xs font-semibold">
-                      Owning Team
-                    </Label>
-                    <select
-                      id="teamId"
-                      name="teamId"
-                      defaultValue={service.teamId || ''}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="">No Owning Team</option>
-                      {teams.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="description" className="text-xs font-semibold">
-                    Description
-                  </Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    defaultValue={service.description || ''}
-                    rows={2}
-                    placeholder="What does this service do?"
-                    className="text-xs"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="escalationPolicyId" className="text-xs font-semibold">
-                      Escalation Policy
-                    </Label>
-                    <select
-                      id="escalationPolicyId"
-                      name="escalationPolicyId"
-                      defaultValue={service.escalationPolicyId || ''}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="">No Policy Attached</option>
-                      {policies.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="slaTier" className="text-xs font-semibold">
-                      Service Tier
-                    </Label>
-                    <select
-                      id="slaTier"
-                      name="slaTier"
-                      defaultValue={service.slaTier || ''}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-                    >
-                      <option value="">None</option>
-                      <option value="Platinum">Platinum</option>
-                      <option value="Gold">Gold</option>
-                      <option value="Silver">Silver</option>
-                      <option value="Bronze">Bronze</option>
-                      <option value="Internal">Internal</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="region" className="text-xs font-semibold">
-                      Primary Region
-                    </Label>
-                    <Input
-                      id="region"
-                      name="region"
-                      defaultValue={service.region || ''}
-                      placeholder="e.g. us-east-1"
-                      className="text-xs h-9"
-                    />
-                  </div>
-                </div>
-
-                {canManageService && (
-                  <div className="pt-2 flex justify-end">
-                    <Button type="submit" size="sm" className="text-xs">
-                      Save Changes
-                    </Button>
-                  </div>
-                )}
-              </form>
-            </CardContent>
-          </Card>
+          <ServiceGeneralSettings
+            key={`general-${id}`}
+            service={{
+              id: service.id,
+              name: service.name,
+              description: service.description,
+              region: service.region,
+              slaTier: service.slaTier,
+              teamId: service.teamId,
+              escalationPolicyId: service.escalationPolicyId,
+            }}
+            teams={teams}
+            policies={policies}
+            canManageService={canManageService}
+            action={boundUpdateService}
+          />
 
           {/* Card 2: Default Incident Visibility Settings */}
           <ServiceVisibilitySettings

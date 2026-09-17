@@ -17,6 +17,7 @@ import {
   EyeOff,
   Check,
 } from 'lucide-react';
+import { SlackLogo } from '@/components/common/BrandLogos';
 
 /**
  * Lets an admin supply or rotate the Slack signing secret on an already-configured workspace.
@@ -85,6 +86,7 @@ export default function SlackSigningSecretCard({ isConfigured }: { isConfigured:
           </div>
           <div>
             <div className="flex items-center gap-2">
+              <SlackLogo className="h-4 w-4 shrink-0" />
               <h3 className="text-base font-semibold text-foreground">Slack Signing Secret</h3>
               <Badge
                 variant={isConfigured ? 'success' : 'destructive'}

@@ -27,7 +27,6 @@ import {
   XCircle,
   RefreshCw,
   Send,
-  Slack,
   Webhook,
   Plus,
   Loader2,
@@ -36,6 +35,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 import { updateServiceNotificationSettings } from '@/app/(app)/services/actions';
 
 type ServiceNotificationSettingsProps = {
@@ -567,13 +567,13 @@ export default function ServiceNotificationSettings({
                   {
                     id: 'SLACK',
                     name: 'Slack',
-                    icon: <Slack className="h-4 w-4 shrink-0" />,
+                    icon: <SlackLogo className="h-4 w-4 shrink-0" />,
                     desc: 'Post incident cards to Slack channels',
                   },
                   {
                     id: 'MICROSOFT_TEAMS',
                     name: 'Microsoft Teams',
-                    icon: <MessageSquare className="h-4 w-4 shrink-0" />,
+                    icon: <MicrosoftTeamsLogo className="h-4 w-4 shrink-0" />,
                     desc: 'Send Adaptive Cards to Teams channels',
                   },
                   {
@@ -627,7 +627,7 @@ export default function ServiceNotificationSettings({
               <div className="rounded-xl border border-border/80 bg-muted/10 p-4 space-y-4">
                 <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
-                    <Slack className="h-4 w-4 text-primary" />
+                    <SlackLogo className="h-4 w-4 shrink-0" />
                     <span className="text-xs font-bold text-foreground">
                       Slack Channel Configuration
                     </span>
@@ -861,7 +861,7 @@ export default function ServiceNotificationSettings({
               <div className="rounded-xl border border-border/80 bg-muted/10 p-4 space-y-4">
                 <div className="flex items-center justify-between gap-2 pb-3 border-b border-border/60">
                   <div className="flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4 text-primary" />
+                    <MicrosoftTeamsLogo className="h-4 w-4 shrink-0" />
                     <span className="text-xs font-bold text-foreground">
                       Microsoft Teams Destination
                     </span>

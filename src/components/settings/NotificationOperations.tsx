@@ -48,8 +48,25 @@ import {
 import { Switch } from '@/components/ui/shadcn/switch';
 import { logger } from '@/lib/logger';
 import Link from 'next/link';
+import {
+  TwilioLogo,
+  WhatsAppLogo,
+  WebPushLogo,
+  SmtpLogo,
+} from '@/components/settings/ProviderBrandLogos';
+import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 
-const CHANNELS = ['EMAIL', 'SMS', 'PUSH', 'SLACK', 'WEBHOOK', 'WHATSAPP'] as const;
+type Props = { canRetry: boolean };
+
+const CHANNELS = [
+  'EMAIL',
+  'SMS',
+  'PUSH',
+  'SLACK',
+  'MICROSOFT_TEAMS',
+  'WEBHOOK',
+  'WHATSAPP',
+] as const;
 const STATUSES = ['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED'] as const;
 const CATEGORIES = [
   'INCIDENT',
@@ -88,15 +105,6 @@ type OperationsResponse = {
   pagination: { nextCursor: string | null; hasMore: boolean };
 };
 
-import {
-  TwilioLogo,
-  WhatsAppLogo,
-  WebPushLogo,
-  SmtpLogo,
-} from '@/components/settings/ProviderBrandLogos';
-
-type Props = { canRetry: boolean };
-
 function getChannelIcon(channel: string) {
   switch (channel.toUpperCase()) {
     case 'EMAIL':
@@ -108,7 +116,10 @@ function getChannelIcon(channel: string) {
     case 'WHATSAPP':
       return <WhatsAppLogo size={14} />;
     case 'SLACK':
-      return <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />;
+      return <SlackLogo className="h-3.5 w-3.5 shrink-0" />;
+    case 'MICROSOFT_TEAMS':
+    case 'TEAMS':
+      return <MicrosoftTeamsLogo className="h-3.5 w-3.5 shrink-0" />;
     case 'WEBHOOK':
     default:
       return <Radio className="h-3.5 w-3.5 text-amber-500" />;

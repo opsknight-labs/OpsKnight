@@ -52,6 +52,7 @@ import {
   WebPushLogo,
   SmtpLogo,
 } from '@/components/settings/ProviderBrandLogos';
+import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 
 type Notification = {
   id: string;
@@ -317,7 +318,10 @@ export default function NotificationHistory() {
       case 'WHATSAPP':
         return <WhatsAppLogo size={14} />;
       case 'SLACK':
-        return <MessageSquare className="h-3.5 w-3.5 text-emerald-500" />;
+        return <SlackLogo className="h-3.5 w-3.5 shrink-0" />;
+      case 'MICROSOFT_TEAMS':
+      case 'TEAMS':
+        return <MicrosoftTeamsLogo className="h-3.5 w-3.5 shrink-0" />;
       case 'WEBHOOK':
       default:
         return <Radio className="h-3.5 w-3.5 text-amber-500" />;
@@ -526,6 +530,7 @@ export default function NotificationHistory() {
                 <SelectItem value="PUSH">Web Push</SelectItem>
                 <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
                 <SelectItem value="SLACK">Slack</SelectItem>
+                <SelectItem value="MICROSOFT_TEAMS">Microsoft Teams</SelectItem>
                 <SelectItem value="WEBHOOK">Webhook</SelectItem>
               </SelectContent>
             </Select>
@@ -665,6 +670,9 @@ export default function NotificationHistory() {
                       return 'bg-emerald-500';
                     case 'SLACK':
                       return 'bg-amber-500';
+                    case 'MICROSOFT_TEAMS':
+                    case 'TEAMS':
+                      return 'bg-indigo-500';
                     case 'WEBHOOK':
                       return 'bg-orange-500';
                     default:
