@@ -1023,7 +1023,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
 
           <ChatOpsWarRoomSettings
             serviceId={id}
-            autoCreateWarRoom={service.autoCreateWarRoom ?? true}
+            autoCreateWarRoom={service.autoCreateWarRoom ?? false}
             warRoomVideoBridge={service.warRoomVideoBridge || null}
             warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
             chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}

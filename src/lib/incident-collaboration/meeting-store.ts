@@ -10,11 +10,40 @@ import prisma from '@/lib/prisma';
 import crypto from 'crypto';
 import type { IncidentMeetingProvider, IncidentMeetingView } from './types';
 import { MeetingProviderRegistry } from './meeting-registry';
+import {
+  recordMeetingProvisionOutcome,
+  observeMeetingProvisionDuration,
+  recordMeetingCloseOutcome,
+  observeMeetingCloseDuration,
+  recordMeetingRetry,
+  type MeetingMetricRetryReason,
+} from './meeting-metrics';
+import { emitMeetingAuditEvent } from './meeting-audit';
+import { WarRoomRetryableError } from '@/lib/war-room/errors';
+export {
+  reconcileIncidentMeeting,
+  reconcileStalledMeetingProvisions,
+  reconcileMeetingCleanupDebt,
+  reconcileMeetingProjectionDrift,
+  retryIncidentMeetingCleanup,
+} from './meeting-reconciliation';
 
 export const INCIDENT_MEETING_PREFIX = 'incident_meeting:';
 
 // In-memory fallback for unit testing environments without full DB
 const memoryMeetingCache = new Map<string, IncidentMeetingView>();
+
+function classifyRetryReason(error: unknown): MeetingMetricRetryReason {
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('ratelimit'))
+    return 'rate_limit';
+  if (msg.includes('401') || msg.includes('403') || msg.includes('permission')) return 'permission';
+  if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('504'))
+    return 'provider_5xx';
+  if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('timedout'))
+    return 'timeout';
+  return 'network';
+}
 
 function mapRecordToView(record: {
   id: string;
@@ -32,7 +61,14 @@ function mapRecordToView(record: {
   organizerEmail?: string | null;
   providerMeetingId?: string | null;
   createdAt: Date | string;
+  readyAt?: Date | string | null;
   closedAt?: Date | string | null;
+  closeStartedAt?: Date | string | null;
+  closeToken?: string | null;
+  cleanupAttemptedAt?: Date | string | null;
+  cleanupRetryCount?: number | null;
+  lastReconciledAt?: Date | string | null;
+  externalCleanupPending?: boolean;
   lastErrorCode?: string | null;
   lastErrorMessage?: string | null;
 }): IncidentMeetingView {
@@ -57,11 +93,34 @@ function mapRecordToView(record: {
     providerMeetingId: record.providerMeetingId ?? null,
     createdAt:
       typeof record.createdAt === 'string' ? record.createdAt : record.createdAt.toISOString(),
+    readyAt: record.readyAt
+      ? typeof record.readyAt === 'string'
+        ? record.readyAt
+        : record.readyAt.toISOString()
+      : null,
     closedAt: record.closedAt
       ? typeof record.closedAt === 'string'
         ? record.closedAt
         : record.closedAt.toISOString()
       : null,
+    closeStartedAt: record.closeStartedAt
+      ? typeof record.closeStartedAt === 'string'
+        ? record.closeStartedAt
+        : record.closeStartedAt.toISOString()
+      : null,
+    closeToken: record.closeToken ?? null,
+    cleanupAttemptedAt: record.cleanupAttemptedAt
+      ? typeof record.cleanupAttemptedAt === 'string'
+        ? record.cleanupAttemptedAt
+        : record.cleanupAttemptedAt.toISOString()
+      : null,
+    cleanupRetryCount: record.cleanupRetryCount ?? 0,
+    lastReconciledAt: record.lastReconciledAt
+      ? typeof record.lastReconciledAt === 'string'
+        ? record.lastReconciledAt
+        : record.lastReconciledAt.toISOString()
+      : null,
+    externalCleanupPending: record.externalCleanupPending ?? false,
     lastErrorCode: record.lastErrorCode ?? null,
     lastErrorMessage: record.lastErrorMessage ?? null,
     actions: {
@@ -92,7 +151,7 @@ export async function getIncidentMeeting(incidentId: string): Promise<IncidentMe
         return view;
       }
     } catch (e) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (process.env.NODE_ENV !== 'test' || process.env.VITEST_USE_REAL_DB === '1') {
         throw e;
       }
     }
@@ -132,6 +191,14 @@ export async function saveIncidentMeeting(meeting: IncidentMeetingView): Promise
           lastErrorCode: meeting.lastErrorCode ?? null,
           lastErrorMessage: meeting.lastErrorMessage ?? null,
           closedAt: meeting.closedAt ? new Date(meeting.closedAt) : null,
+          closeStartedAt: meeting.closeStartedAt ? new Date(meeting.closeStartedAt) : null,
+          closeToken: meeting.closeToken ?? null,
+          cleanupAttemptedAt: meeting.cleanupAttemptedAt
+            ? new Date(meeting.cleanupAttemptedAt)
+            : null,
+          cleanupRetryCount: meeting.cleanupRetryCount ?? 0,
+          lastReconciledAt: meeting.lastReconciledAt ? new Date(meeting.lastReconciledAt) : null,
+          externalCleanupPending: meeting.externalCleanupPending ?? false,
           readyAt: meeting.state === 'READY' ? new Date() : null,
         },
         update: {
@@ -145,6 +212,20 @@ export async function saveIncidentMeeting(meeting: IncidentMeetingView): Promise
           lastErrorCode: meeting.lastErrorCode ?? null,
           lastErrorMessage: meeting.lastErrorMessage ?? null,
           closedAt: meeting.closedAt ? new Date(meeting.closedAt) : null,
+          closeStartedAt: meeting.closeStartedAt ? new Date(meeting.closeStartedAt) : undefined,
+          closeToken: meeting.closeToken !== undefined ? meeting.closeToken : undefined,
+          cleanupAttemptedAt: meeting.cleanupAttemptedAt
+            ? new Date(meeting.cleanupAttemptedAt)
+            : undefined,
+          cleanupRetryCount:
+            meeting.cleanupRetryCount !== undefined ? meeting.cleanupRetryCount : undefined,
+          lastReconciledAt: meeting.lastReconciledAt
+            ? new Date(meeting.lastReconciledAt)
+            : undefined,
+          externalCleanupPending:
+            meeting.externalCleanupPending !== undefined
+              ? meeting.externalCleanupPending
+              : undefined,
           readyAt: meeting.state === 'READY' ? new Date() : undefined,
         },
       });
@@ -441,12 +522,23 @@ export async function requestMeetingProvision(params: {
 
 export function isRetryableMeetingError(error: unknown): boolean {
   if (!error) return false;
+  if (
+    error instanceof WarRoomRetryableError ||
+    (typeof error === 'object' &&
+      error !== null &&
+      (('name' in error && error.name === 'WarRoomRetryableError') ||
+        ('retryable' in error && Boolean((error as { retryable?: boolean }).retryable))))
+  ) {
+    return true;
+  }
   const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
   return (
     msg.includes('429') ||
     msg.includes('rate limit') ||
     msg.includes('ratelimit') ||
     msg.includes('timeout') ||
+    msg.includes('timed out') ||
+    msg.includes('timedout') ||
     msg.includes('fetch') ||
     msg.includes('network') ||
     msg.includes('econnreset') ||
@@ -539,6 +631,7 @@ export async function executeMeetingProvision(params: {
     }
   }
 
+  const startedAt = performance.now();
   try {
     const result = await MeetingProviderRegistry.createOrGetMeeting(provider, {
       incidentId,
@@ -546,6 +639,18 @@ export async function executeMeetingProvision(params: {
       incidentTitle,
       generation: gen,
       customTemplate,
+    });
+
+    const durationSeconds = (performance.now() - startedAt) / 1000;
+    observeMeetingProvisionDuration(provider, durationSeconds);
+    recordMeetingProvisionOutcome(provider, 'success');
+
+    await emitMeetingAuditEvent({
+      action: 'MEETING_PROVISION_SUCCEEDED',
+      incidentId,
+      provider,
+      generation: gen,
+      metadata: { externalId: result.externalId },
     });
 
     // Check if close already won before or during adapter call
@@ -645,12 +750,15 @@ export async function executeMeetingProvision(params: {
 
     return readyMeeting;
   } catch (error) {
+    const durationSeconds = (performance.now() - startedAt) / 1000;
+    observeMeetingProvisionDuration(provider, durationSeconds);
     const errorMessage = (error as Error).message || 'Failed to provision meeting bridge.';
     const isRetryable = isRetryableMeetingError(error);
     const hasMoreAttempts =
       params.attempt != null && params.maxAttempts != null && params.attempt < params.maxAttempts;
 
     if (isRetryable && hasMoreAttempts) {
+      recordMeetingRetry(provider, 'provision', classifyRetryReason(error));
       if (prisma?.incidentMeeting?.updateMany) {
         await prisma.incidentMeeting
           .updateMany({
@@ -670,6 +778,15 @@ export async function executeMeetingProvision(params: {
       }
       throw error;
     }
+
+    recordMeetingProvisionOutcome(provider, 'failed');
+    await emitMeetingAuditEvent({
+      action: 'MEETING_PROVISION_FAILED',
+      incidentId,
+      provider,
+      generation: gen,
+      reason: errorMessage,
+    });
 
     if (prisma?.incidentMeeting?.updateMany) {
       const updateResult = await prisma.incidentMeeting.updateMany({
@@ -742,26 +859,150 @@ export async function executeMeetingProvision(params: {
 
 /**
  * Atomic settlement of a meeting to CLOSED state in DB and cache.
+ * Distinguishes normal close (CLOSING -> CLOSED) from cleanup repair (CLOSED + debt -> CLOSED + clean).
  */
-async function settleMeetingClosed(
-  incidentId: string,
-  errorData?: { lastErrorCode?: string | null; lastErrorMessage?: string | null }
-): Promise<void> {
+export async function settleMeetingClosed(params: {
+  meetingId?: string;
+  incidentId: string;
+  generation?: number;
+  closeToken?: string | null;
+  cleanupRepair?: boolean;
+  provider?: IncidentMeetingProvider;
+  errorData?: { lastErrorCode?: string | null; lastErrorMessage?: string | null };
+}): Promise<void> {
+  const {
+    meetingId,
+    incidentId,
+    generation,
+    closeToken,
+    cleanupRepair = false,
+    errorData,
+  } = params;
+
   const current = await getIncidentMeeting(incidentId);
+  const isDebt = Boolean(errorData?.lastErrorCode);
+  const targetGen = generation ?? current?.generation ?? 1;
+  const targetProvider = params.provider ?? current?.provider ?? 'NONE';
+
+  if (cleanupRepair) {
+    if (!isDebt) {
+      // Successful cleanup repair: clear debt and restore HEALTHY state
+      if (prisma?.incidentMeeting?.updateMany) {
+        try {
+          await prisma.incidentMeeting.updateMany({
+            where: {
+              ...(meetingId ? { id: meetingId } : { incidentId, generation: targetGen }),
+              state: 'CLOSED',
+              externalCleanupPending: true,
+              ...(closeToken ? { closeToken } : {}),
+            },
+            data: {
+              externalCleanupPending: false,
+              health: 'HEALTHY',
+              lastErrorCode: null,
+              lastErrorMessage: null,
+              lastReconciledAt: new Date(),
+              closeToken: null,
+            },
+          });
+        } catch (e) {
+          if (process.env.NODE_ENV !== 'test' || process.env.VITEST_USE_REAL_DB === '1') {
+            throw e;
+          }
+        }
+      }
+
+      if (current && current.generation === targetGen) {
+        memoryMeetingCache.set(incidentId, {
+          ...current,
+          externalCleanupPending: false,
+          health: 'HEALTHY',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          closeToken: null,
+        });
+      }
+
+      if (targetProvider !== 'NONE') {
+        recordMeetingCloseOutcome(targetProvider, 'success');
+        await emitMeetingAuditEvent({
+          action: 'MEETING_CLEANUP_SUCCEEDED',
+          incidentId,
+          provider: targetProvider,
+          generation: targetGen,
+          reason: 'external_cleanup_repair_succeeded',
+        });
+      }
+      return;
+    } else {
+      // Failed cleanup repair: persist failure error on existing debt row, degrade health, release closeToken
+      if (prisma?.incidentMeeting?.updateMany) {
+        try {
+          await prisma.incidentMeeting.updateMany({
+            where: {
+              ...(meetingId ? { id: meetingId } : { incidentId, generation: targetGen }),
+              state: 'CLOSED',
+              externalCleanupPending: true,
+              ...(closeToken ? { closeToken } : {}),
+            },
+            data: {
+              health: 'DEGRADED',
+              lastErrorCode: errorData?.lastErrorCode ?? 'PROVIDER_CLOSE_FAILED',
+              lastErrorMessage: errorData?.lastErrorMessage ?? null,
+              lastReconciledAt: new Date(),
+              closeToken: null,
+            },
+          });
+        } catch (e) {
+          if (process.env.NODE_ENV !== 'test' || process.env.VITEST_USE_REAL_DB === '1') {
+            throw e;
+          }
+        }
+      }
+
+      if (current && current.generation === targetGen) {
+        memoryMeetingCache.set(incidentId, {
+          ...current,
+          health: 'DEGRADED',
+          lastErrorCode: errorData?.lastErrorCode ?? 'PROVIDER_CLOSE_FAILED',
+          lastErrorMessage: errorData?.lastErrorMessage ?? null,
+          closeToken: null,
+          externalCleanupPending: true,
+        });
+      }
+
+      if (targetProvider !== 'NONE') {
+        recordMeetingCloseOutcome(targetProvider, 'failed');
+        await emitMeetingAuditEvent({
+          action: 'MEETING_CLEANUP_FAILED',
+          incidentId,
+          provider: targetProvider,
+          generation: targetGen,
+          reason: errorData?.lastErrorMessage ?? 'PROVIDER_CLEANUP_FAILED',
+        });
+      }
+      return;
+    }
+  }
+
+  // Normal close settlement:
   const closedMeeting: IncidentMeetingView = {
     ...(current || {
-      id: `meet_${incidentId}_1`,
+      id: meetingId || `meet_${incidentId}_${targetGen}`,
       incidentId,
-      generation: 1,
-      provider: 'NONE',
+      generation: targetGen,
+      provider: targetProvider,
       state: 'CLOSED',
       health: 'HEALTHY',
-      externalId: `opsknight:${incidentId}:1`,
+      externalId: `opsknight:${incidentId}:${targetGen}`,
       joinUrl: '',
       createdAt: new Date().toISOString(),
     }),
     state: 'CLOSED',
+    health: isDebt ? 'DEGRADED' : 'HEALTHY',
     closedAt: new Date().toISOString(),
+    externalCleanupPending: isDebt,
+    closeToken: null,
     lastErrorCode: errorData?.lastErrorCode ?? null,
     lastErrorMessage: errorData?.lastErrorMessage ?? null,
     actions: {
@@ -777,23 +1018,53 @@ async function settleMeetingClosed(
   if (prisma?.incidentMeeting?.updateMany) {
     try {
       await prisma.incidentMeeting.updateMany({
-        where: { incidentId, state: { not: 'CLOSED' } },
+        where: {
+          ...(meetingId ? { id: meetingId } : { incidentId, generation: targetGen }),
+          state: closeToken ? 'CLOSING' : { in: ['CLOSING', 'READY', 'PROVISIONING', 'REQUESTED'] },
+          ...(closeToken ? { closeToken } : {}),
+        },
         data: {
           state: 'CLOSED',
+          health: isDebt ? 'DEGRADED' : 'HEALTHY',
           closedAt: new Date(),
+          externalCleanupPending: isDebt,
           provisioningToken: null,
+          closeToken: null,
           lastErrorCode: errorData?.lastErrorCode ?? null,
           lastErrorMessage: errorData?.lastErrorMessage ?? null,
         },
       });
     } catch (e) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (process.env.NODE_ENV !== 'test' || process.env.VITEST_USE_REAL_DB === '1') {
         throw e;
       }
     }
   }
 
-  memoryMeetingCache.set(incidentId, closedMeeting);
+  if (!current || current.generation === targetGen) {
+    memoryMeetingCache.set(incidentId, closedMeeting);
+  }
+
+  if (targetProvider && targetProvider !== 'NONE') {
+    if (isDebt) {
+      recordMeetingCloseOutcome(targetProvider, 'failed');
+      await emitMeetingAuditEvent({
+        action: 'MEETING_CLOSE_FAILED',
+        incidentId,
+        provider: targetProvider,
+        generation: targetGen,
+        reason: errorData?.lastErrorMessage ?? 'PROVIDER_CLOSE_FAILED',
+      });
+    } else {
+      recordMeetingCloseOutcome(targetProvider, 'success');
+      await emitMeetingAuditEvent({
+        action: 'MEETING_CLOSE_SUCCEEDED',
+        incidentId,
+        provider: targetProvider,
+        generation: targetGen,
+      });
+    }
+  }
 }
 
 /**
@@ -805,6 +1076,10 @@ async function settleMeetingClosed(
 export async function closeIncidentMeeting(incidentId: string): Promise<void> {
   const current = await getIncidentMeeting(incidentId);
   if (!current || current.state === 'CLOSED' || current.state === 'CLOSING') return;
+
+  const targetGen = current.generation;
+  const targetMeetingId = current.id;
+  const closeToken = crypto.randomUUID();
 
   // If provider adapter supports external termination, atomically transition to CLOSING and enqueue durable background job
   if (
@@ -821,10 +1096,13 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
           const updateResult = await tx.incidentMeeting.updateMany({
             where: {
               incidentId,
+              generation: targetGen,
               state: { in: ['READY', 'PROVISIONING', 'REQUESTED'] },
             },
             data: {
               state: 'CLOSING',
+              closeStartedAt: new Date(),
+              closeToken,
             },
           });
 
@@ -842,7 +1120,11 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
               scheduledAt: new Date(),
               maxAttempts: 5,
               payload: {
+                meetingId: targetMeetingId,
                 incidentId,
+                generation: targetGen,
+                closeToken,
+                cleanupRepair: false,
                 provider: current.provider,
                 providerMeetingId: current.providerMeetingId,
                 organizerEmail: current.organizerEmail || null,
@@ -851,7 +1133,7 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
           });
         });
       } catch (err) {
-        if (process.env.NODE_ENV !== 'test') {
+        if (process.env.NODE_ENV !== 'test' || process.env.VITEST_USE_REAL_DB === '1') {
           throw err;
         }
       }
@@ -864,9 +1146,18 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
       return;
     }
 
+    await emitMeetingAuditEvent({
+      action: 'MEETING_CLOSE_REQUESTED',
+      incidentId,
+      provider: current.provider,
+      generation: targetGen,
+    });
+
     const closingMeeting: IncidentMeetingView = {
       ...current,
       state: 'CLOSING',
+      closeToken,
+      closeStartedAt: new Date().toISOString(),
       actions: {
         ...current.actions,
         canJoin: false,
@@ -880,7 +1171,11 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
     // In unit test environment without a real DB and without a running worker daemon, execute synchronously
     if (process.env.NODE_ENV === 'test' && process.env.VITEST_USE_REAL_DB !== '1') {
       await executeMeetingCloseJob({
+        meetingId: targetMeetingId,
         incidentId,
+        generation: targetGen,
+        closeToken,
+        cleanupRepair: false,
         provider: current.provider,
         providerMeetingId: current.providerMeetingId,
         organizerEmail: current.organizerEmail || null,
@@ -892,7 +1187,13 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
 
   // Static bridge providers (Zoom, Meet, Jitsi) or meetings without external lifecycle:
   // Immediately settle locally to CLOSED without background job or external provider calls.
-  await settleMeetingClosed(incidentId);
+  await settleMeetingClosed({
+    meetingId: targetMeetingId,
+    incidentId,
+    generation: targetGen,
+    cleanupRepair: false,
+    provider: current.provider,
+  });
 }
 
 /**
@@ -904,30 +1205,154 @@ export async function closeIncidentMeeting(incidentId: string): Promise<void> {
  * - terminal (401/403): settles to CLOSED with PROVIDER_CLOSE_FAILED error metadata
  */
 export async function executeMeetingCloseJob(params: {
+  meetingId?: string;
   incidentId: string;
+  generation?: number;
+  closeToken?: string | null;
+  cleanupRepair?: boolean;
   provider: IncidentMeetingProvider;
   providerMeetingId?: string | null;
   organizerEmail?: string | null;
-}): Promise<void> {
-  if (!params.providerMeetingId || params.provider === 'NONE') {
-    await settleMeetingClosed(params.incidentId);
-    return;
+}): Promise<{ status: 'COMPLETED' | 'STALE' | 'RETRYABLE' | 'FAILED' }> {
+  const {
+    meetingId,
+    incidentId,
+    generation,
+    closeToken,
+    cleanupRepair = false,
+    provider,
+    providerMeetingId,
+    organizerEmail,
+  } = params;
+
+  if (!providerMeetingId || provider === 'NONE') {
+    await settleMeetingClosed({
+      meetingId,
+      incidentId,
+      generation,
+      closeToken,
+      cleanupRepair,
+      provider,
+    });
+    return { status: 'COMPLETED' };
   }
 
+  // Invariant I3: Stale jobs may never mutate a newer generation.
+  // Validate exact meeting generation and closeToken ownership before performing external provider operations.
+  let record: {
+    id: string;
+    generation: number;
+    state: string;
+    closeToken: string | null;
+    externalCleanupPending: boolean;
+  } | null = null;
+
+  if (prisma?.incidentMeeting?.findFirst) {
+    try {
+      if (generation) {
+        record = await prisma.incidentMeeting.findUnique({
+          where: { incidentId_generation: { incidentId, generation } },
+        });
+      } else if (providerMeetingId) {
+        // Safe rolling deployment: resolve by immutable providerMeetingId rather than latest generation
+        record = await prisma.incidentMeeting.findFirst({
+          where: { incidentId, providerMeetingId },
+        });
+      }
+
+      if (!record) {
+        await emitMeetingAuditEvent({
+          action: 'MEETING_CLOSE_STALE_DROPPED',
+          incidentId,
+          provider,
+          generation: generation ?? 0,
+          reason: 'meeting_record_not_found_or_legacy_mismatch',
+        });
+        return { status: 'STALE' };
+      }
+
+      if (cleanupRepair) {
+        if (
+          record.state !== 'CLOSED' ||
+          !record.externalCleanupPending ||
+          (closeToken && record.closeToken && record.closeToken !== closeToken)
+        ) {
+          await emitMeetingAuditEvent({
+            action: 'MEETING_CLOSE_STALE_DROPPED',
+            incidentId,
+            provider,
+            generation: record.generation,
+            reason: 'cleanup_repair_ownership_mismatch',
+          });
+          return { status: 'STALE' };
+        }
+      } else {
+        if (
+          record.state !== 'CLOSING' ||
+          (closeToken && record.closeToken && record.closeToken !== closeToken)
+        ) {
+          await emitMeetingAuditEvent({
+            action: 'MEETING_CLOSE_STALE_DROPPED',
+            incidentId,
+            provider,
+            generation: record.generation,
+            reason: 'close_token_or_state_mismatch',
+          });
+          return { status: 'STALE' };
+        }
+      }
+    } catch (e) {
+      if (process.env.NODE_ENV !== 'test' || process.env.VITEST_USE_REAL_DB === '1') {
+        throw e;
+      }
+    }
+  }
+
+  const targetMeetingId = meetingId ?? record?.id;
+  const targetGeneration = generation ?? record?.generation;
+
+  const started = performance.now();
   try {
-    await MeetingProviderRegistry.closeMeeting(params.provider, {
-      providerMeetingId: params.providerMeetingId,
-      organizerEmail: params.organizerEmail,
+    await MeetingProviderRegistry.closeMeeting(provider, {
+      providerMeetingId,
+      organizerEmail,
     });
-    await settleMeetingClosed(params.incidentId);
+    const durationSeconds = (performance.now() - started) / 1000;
+    observeMeetingCloseDuration(provider, durationSeconds);
+    await settleMeetingClosed({
+      meetingId: targetMeetingId,
+      incidentId,
+      generation: targetGeneration,
+      closeToken,
+      cleanupRepair,
+      provider,
+    });
+    return { status: 'COMPLETED' };
   } catch (err) {
-    if (err instanceof Error && err.name === 'WarRoomRetryableError') {
+    const durationSeconds = (performance.now() - started) / 1000;
+    observeMeetingCloseDuration(provider, durationSeconds);
+
+    if (err instanceof WarRoomRetryableError) {
+      // 429 or 5xx or network: bubble up to queue retry machinery
       throw err;
     }
-    await settleMeetingClosed(params.incidentId, {
-      lastErrorCode: 'PROVIDER_CLOSE_FAILED',
-      lastErrorMessage: err instanceof Error ? err.message : 'Provider close failed',
+
+    // Terminal failure (401/403 or non-retryable): settle to CLOSED with PROVIDER_CLOSE_FAILED error
+    const errorMessage = err instanceof Error ? err.message : 'External meeting close failed';
+    await settleMeetingClosed({
+      meetingId: targetMeetingId,
+      incidentId,
+      generation: targetGeneration,
+      closeToken,
+      cleanupRepair,
+      provider,
+      errorData: {
+        lastErrorCode: 'PROVIDER_CLOSE_FAILED',
+        lastErrorMessage: errorMessage,
+      },
     });
+
+    return { status: 'FAILED' };
   }
 }
 
@@ -935,93 +1360,27 @@ export async function executeMeetingCloseJob(params: {
  * Settles an incident meeting to CLOSED when background close retries are exhausted,
  * capturing explicit provider cleanup debt on the record.
  */
-export async function settleMeetingCloseFailure(incidentId: string, error: string): Promise<void> {
-  await settleMeetingClosed(incidentId, {
-    lastErrorCode: 'PROVIDER_CLOSE_FAILED',
-    lastErrorMessage: `External meeting cleanup failed: ${error.slice(0, 300)}`,
-  });
-}
-
-/**
- * Background orphan recovery:
- * Checks for orphaned PROVISIONING or CLOSING meetings older than 15 minutes where no active
- * BackgroundJob exists with that token or incidentId.
- * Owned by background reconciliation, NOT by read paths.
- */
-export async function reconcileStalledMeetingProvisions(): Promise<number> {
-  if (!prisma?.incidentMeeting?.findMany || !prisma?.backgroundJob?.findMany) return 0;
-
-  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
-  let recoveredCount = 0;
-
-  const stalledMeetings = await prisma.incidentMeeting.findMany({
-    where: {
-      state: 'PROVISIONING',
-      provisioningStartedAt: { lt: fifteenMinutesAgo },
+export async function settleMeetingCloseFailure(
+  incidentId: string,
+  error: string,
+  options?: {
+    meetingId?: string;
+    generation?: number;
+    closeToken?: string;
+    cleanupRepair?: boolean;
+  }
+): Promise<void> {
+  await settleMeetingClosed({
+    incidentId,
+    meetingId: options?.meetingId,
+    generation: options?.generation,
+    closeToken: options?.closeToken,
+    cleanupRepair: options?.cleanupRepair ?? false,
+    errorData: {
+      lastErrorCode: 'PROVIDER_CLOSE_FAILED',
+      lastErrorMessage: `External meeting cleanup failed: ${error.slice(0, 300)}`,
     },
   });
-
-  for (const m of stalledMeetings) {
-    if (!m.provisioningToken) continue;
-
-    const activeJobs = await prisma.backgroundJob.findMany({
-      where: {
-        type: 'MEETING_PROVISION',
-        status: { in: ['PENDING', 'PROCESSING'] },
-      },
-    });
-
-    const hasActiveJob = activeJobs.some(
-      j => (j.payload as { provisioningToken?: string })?.provisioningToken === m.provisioningToken
-    );
-
-    if (!hasActiveJob) {
-      await prisma.incidentMeeting.updateMany({
-        where: {
-          id: m.id,
-          state: 'PROVISIONING',
-          provisioningToken: m.provisioningToken,
-        },
-        data: {
-          state: 'FAILED',
-          health: 'UNAVAILABLE',
-          lastErrorCode: 'ORPHANED_PROVISIONING',
-          lastErrorMessage: 'Provisioning stalled with no active background worker.',
-        },
-      });
-      recoveredCount++;
-    }
-  }
-
-  const stalledClosing = await prisma.incidentMeeting.findMany({
-    where: {
-      state: 'CLOSING',
-      updatedAt: { lt: fifteenMinutesAgo },
-    },
-  });
-
-  for (const m of stalledClosing) {
-    const activeCloseJobs = await prisma.backgroundJob.findMany({
-      where: {
-        type: 'MEETING_CLOSE',
-        status: { in: ['PENDING', 'PROCESSING'] },
-      },
-    });
-
-    const hasActiveCloseJob = activeCloseJobs.some(
-      j => (j.payload as { incidentId?: string })?.incidentId === m.incidentId
-    );
-
-    if (!hasActiveCloseJob) {
-      await settleMeetingClosed(m.incidentId, {
-        lastErrorCode: 'PROVIDER_CLOSE_ORPHANED',
-        lastErrorMessage: 'Meeting close stalled with no active background worker.',
-      });
-      recoveredCount++;
-    }
-  }
-
-  return recoveredCount;
 }
 
 /**

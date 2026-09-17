@@ -167,6 +167,12 @@ async function collectMetricsCached(): Promise<MetricsSnapshot> {
           FROM "IncidentSlaLegacyCapture"
         `
       ),
+      collectWithTimeout('incident-collaboration-metrics', DB_COLLECTOR_TIMEOUT_MS, async () => {
+        const { collectIncidentCollaborationMetricsFromDB } =
+          await import('@/lib/incident-collaboration/meeting-metrics');
+        await collectIncidentCollaborationMetricsFromDB();
+        return true;
+      }),
     ]);
     const value: MetricsSnapshot = {
       jobStats:

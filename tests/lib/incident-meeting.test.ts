@@ -193,7 +193,7 @@ describe('Incident Meeting Store & Provisioning Lifecycle', () => {
         providerMeetingId: 'fake-graph-meeting-id-12345',
         organizerEmail: 'incident-organizer@example.com',
       })
-    ).resolves.toBeUndefined();
+    ).resolves.toBeDefined();
   });
 
   it('handles 50 concurrent provisioning calls safely with single winner claim', async () => {

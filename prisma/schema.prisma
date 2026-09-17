@@ -567,8 +567,8 @@ model Service {
   serviceNotifyOnResolved     Boolean               @default(true)
   serviceNotifyOnSlaBreach    Boolean               @default(false)
   defaultIncidentVisibility   IncidentVisibility    @default(PUBLIC)
-  autoCreateWarRoom           Boolean               @default(true)
-  microsoftTeamsWarRoomAutoCreate Boolean           @default(true)
+  autoCreateWarRoom           Boolean               @default(false)
+  microsoftTeamsWarRoomAutoCreate Boolean           @default(false)
   warRoomVideoBridge          String?
   warRoomCustomBridgeUrl      String?
   slaDefinitions              SLADefinition[]
@@ -912,8 +912,14 @@ model IncidentMeeting {
   providerMeetingId     String?
   provisioningToken     String?
   provisioningStartedAt DateTime?
+  closeStartedAt        DateTime?
+  closeToken            String?
   readyAt               DateTime?
   closedAt              DateTime?
+  cleanupAttemptedAt    DateTime?
+  cleanupRetryCount     Int                     @default(0)
+  lastReconciledAt      DateTime?
+  externalCleanupPending Boolean                @default(false)
   lastErrorCode         String?
   lastErrorMessage      String?
   metadata              Json?
@@ -924,6 +930,8 @@ model IncidentMeeting {
   @@unique([incidentId, generation])
   @@index([incidentId, state])
   @@index([provider, externalId])
+  @@index([state, health, externalCleanupPending, lastReconciledAt])
+  @@index([state, provisioningStartedAt])
 }
 
 model WarRoomParticipant {
