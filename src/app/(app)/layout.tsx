@@ -27,6 +27,7 @@ import AppHeader from '@/components/layout/AppHeader';
 import { RealtimeProvider } from '@/hooks/useRealtime';
 import { IncidentAlertProvider } from '@/contexts/IncidentAlertContext';
 import GlobalIncidentBanner from '@/components/layout/GlobalIncidentBanner';
+import ContentScrollReset from '@/components/layout/ContentScrollReset';
 import { getAppShellContext, type AppShellContext } from '@/lib/app-shell-context';
 import { getRequestActorContext } from '@/lib/request-actor-context';
 import AuthenticatedClientProviders from '@/components/auth/AuthenticatedClientProviders';
@@ -177,6 +178,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                           initialIsStatusPageAdmin={activeShell.isStatusPageAdmin}
                         />
                         <div className="content-shell flex-1">
+                          <ContentScrollReset />
                           <GlobalIncidentBanner />
                           <main id="main-content" className="page-shell">
                             {children}

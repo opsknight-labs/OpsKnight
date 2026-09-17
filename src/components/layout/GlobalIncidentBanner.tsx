@@ -2,13 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import {
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  X,
-  Clock,
-} from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, X, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIncidentAlert } from '@/contexts/IncidentAlertContext';
 
@@ -47,7 +41,8 @@ export default function GlobalIncidentBanner() {
     return null;
   }
 
-  const isCritical = currentIncident.priority === 'P1' || currentIncident.urgency?.toUpperCase() === 'HIGH';
+  const isCritical =
+    currentIncident.priority === 'P1' || currentIncident.urgency?.toUpperCase() === 'HIGH';
   const isAcked = currentIncident.status === 'ACKNOWLEDGED';
   const elapsed = formatElapsed(currentIncident.createdAt);
 
@@ -65,7 +60,7 @@ export default function GlobalIncidentBanner() {
     <aside
       aria-label="Active critical incident notification"
       className={cn(
-        'sticky top-0 z-30 w-full transition-all duration-200 border-b shadow-md text-xs sm:text-sm',
+        'relative z-30 w-full transition-all duration-200 border-b shadow-md text-xs sm:text-sm',
         isCritical
           ? 'bg-rose-700 dark:bg-rose-950/95 text-white dark:text-rose-50 border-rose-800 dark:border-rose-800/90 shadow-rose-900/20 dark:shadow-rose-950/20'
           : 'bg-amber-600 dark:bg-amber-950/95 text-white dark:text-amber-50 border-amber-700 dark:border-amber-800/90 shadow-amber-900/20 dark:shadow-amber-950/20'
