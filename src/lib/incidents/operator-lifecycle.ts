@@ -3,11 +3,7 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import type { IncidentStatus } from '@prisma/client';
 
-import {
-  assertCanAcknowledgeIncident,
-  assertResponderOrAbove,
-  getCurrentUser,
-} from '@/lib/rbac';
+import { assertCanAcknowledgeIncident, assertResponderOrAbove, getCurrentUser } from '@/lib/rbac';
 import { AppError } from '@/lib/errors';
 import type { IdempotencyContext } from '@/lib/idempotency';
 import type { IncidentLifecycleSource } from '@/lib/incidents/lifecycle';
@@ -37,6 +33,21 @@ export async function updateIncidentStatus(
   source: OperatorLifecycleSource,
   idempotency?: IdempotencyContext
 ): Promise<{ replayed: boolean }> {
+  if (status === 'RESOLVED') {
+    throw new AppError({
+      code: 'INCIDENT_INVALID_ARGUMENT',
+      userMessage:
+        'Resolving an incident requires a resolution note. Please use resolveIncidentWithNote.',
+      fields: [
+        {
+          field: 'resolution',
+          code: 'required',
+          message: 'Resolution note is required to resolve an incident.',
+        },
+      ],
+    });
+  }
+
   if (status === 'ACKNOWLEDGED') await assertCanAcknowledgeIncident(id);
   else await assertResponderOrAbove();
 
@@ -81,7 +92,8 @@ export async function resolveIncidentWithNote(
   if (trimmedResolution.length > 1000) {
     throw new AppError({
       code: 'INCIDENT_INVALID_ARGUMENT',
-      userMessage: 'Resolution note must be 1000 characters or fewer. Please shorten your description.',
+      userMessage:
+        'Resolution note must be 1000 characters or fewer. Please shorten your description.',
       fields: [
         {
           field: 'resolution',

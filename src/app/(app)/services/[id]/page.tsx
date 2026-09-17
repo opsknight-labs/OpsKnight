@@ -362,7 +362,7 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
       </div>
 
       {service.incidents.length > 0 ? (
-        <Card className="border-border shadow-xs overflow-hidden">
+        <div className="space-y-4">
           <IncidentList
             incidents={service.incidents.map((i: any) => ({
               id: i.id,
@@ -372,20 +372,27 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
               priority: i.priority,
               createdAt: i.createdAt,
               resolvedAt: i.resolvedAt,
+              acknowledgedAt: i.acknowledgedAt,
+              escalationStatus: i.escalationStatus,
+              currentEscalationStep: i.currentEscalationStep,
+              nextEscalationAt: i.nextEscalationAt,
               assignee: i.assignee,
               team: i.team,
             }))}
             serviceId={id}
+            serviceName={service.name}
           />
           {totalPages > 1 && (
-            <Pagination
-              currentPage={page}
-              totalPages={totalPages}
-              totalItems={totalIncidents}
-              itemsPerPage={INCIDENTS_PER_PAGE}
-            />
+            <div className="rounded-2xl border border-border bg-card p-3 shadow-2xs">
+              <Pagination
+                currentPage={page}
+                totalPages={totalPages}
+                totalItems={totalIncidents}
+                itemsPerPage={INCIDENTS_PER_PAGE}
+              />
+            </div>
           )}
-        </Card>
+        </div>
       ) : (
         <EmptyState
           icon={<ShieldCheck className="h-8 w-8 text-emerald-500" />}
