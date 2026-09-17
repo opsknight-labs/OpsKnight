@@ -515,6 +515,130 @@ describe('Status Domain Host Firewall & Isolation', () => {
       expect(res.status).not.toBe(421);
     });
   });
+
+  describe('Status Sibling Subdomain Recognition (status.opsknight.com when appHost is app.opsknight.com)', () => {
+    it('REGRESSION: correctly routes status.opsknight.com when appHost is app.opsknight.com without 421', async () => {
+      vi.resetModules();
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsknight.com');
+      delete process.env.STATUS_PAGE_EXTERNAL_SERVING_STORE;
+
+      const fetchMock = vi.fn().mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/status-page/domains')) {
+          return Promise.resolve(
+            Response.json({
+              enabled: true,
+              appHost: 'app.opsknight.com',
+              pages: [
+                {
+                  id: 'status_page_main',
+                  slug: 'main',
+                  subdomain: 'status',
+                  customDomain: null,
+                  requireAuth: false,
+                  isDefault: true,
+                },
+              ],
+            })
+          );
+        }
+        return Promise.resolve(new Response(null, { status: 404 }));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.opsknight.com/', {
+        headers: { host: 'status.opsknight.com' },
+      });
+      const res = await middleware(req);
+
+      // Must be rewritten to status route, NOT 421 Misdirected Request
+      expect(res.status).toBe(200);
+      expect(res.headers.get('x-middleware-rewrite')).toContain('/status/main');
+    });
+
+    it('REGRESSION: routes status.opsknight.com to default status page when subdomain is null', async () => {
+      vi.resetModules();
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsknight.com');
+      delete process.env.STATUS_PAGE_EXTERNAL_SERVING_STORE;
+
+      const fetchMock = vi.fn().mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/status-page/domains')) {
+          return Promise.resolve(
+            Response.json({
+              enabled: true,
+              appHost: 'app.opsknight.com',
+              pages: [
+                {
+                  id: 'status_page_default',
+                  slug: 'default-page',
+                  subdomain: null,
+                  customDomain: null,
+                  requireAuth: false,
+                  isDefault: true,
+                },
+              ],
+            })
+          );
+        }
+        return Promise.resolve(new Response(null, { status: 404 }));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.opsknight.com/', {
+        headers: { host: 'status.opsknight.com' },
+      });
+      const res = await middleware(req);
+
+      // Must be rewritten to status route, NOT 421 Misdirected Request
+      expect(res.status).toBe(200);
+      expect(res.headers.get('x-middleware-rewrite')).toContain('/status/default-page');
+    });
+
+    it('REGRESSION: rejects status.attacker.com with 421 Misdirected Request', async () => {
+      vi.resetModules();
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsknight.com');
+      delete process.env.STATUS_PAGE_EXTERNAL_SERVING_STORE;
+
+      const fetchMock = vi.fn().mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/status-page/domains')) {
+          return Promise.resolve(
+            Response.json({
+              enabled: true,
+              appHost: 'app.opsknight.com',
+              pages: [
+                {
+                  id: 'status_page_main',
+                  slug: 'main',
+                  subdomain: 'status',
+                  customDomain: null,
+                  requireAuth: false,
+                  isDefault: true,
+                },
+              ],
+            })
+          );
+        }
+        return Promise.resolve(new Response(null, { status: 404 }));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.attacker.com/', {
+        headers: { host: 'status.attacker.com' },
+      });
+      const res = await middleware(req);
+
+      // Unrecognized host must fail closed with 421
+      expect(res.status).toBe(421);
+    });
+  });
 });
 
 describe('Status Auth Ticket & Session Cryptography', () => {
@@ -761,6 +885,73 @@ describe('Hostname & Subdomain Resolution (Centralized Resolver)', () => {
     const page = { customDomain: 'status.acme.com', subdomain: null };
     expect(matchesStatusPageDomain(page, 'status.acme.com', 'opsknight.com')).toBe(true);
     expect(matchesStatusPageDomain(page, 'evil.acme.com', 'opsknight.com')).toBe(false);
+  });
+
+  it('supports sibling subdomains when appHost is on an app subdomain (e.g. app.opsknight.com)', async () => {
+    const {
+      getCandidateBaseHosts,
+      extractSubdomainFromHost,
+      buildSubdomainHost,
+      matchesStatusPageDomain,
+    } = await import('@/lib/status-pages/status-route-resolver');
+
+    // Candidate base hosts extraction
+    expect(getCandidateBaseHosts('app.opsknight.com')).toEqual([
+      'app.opsknight.com',
+      'opsknight.com',
+    ]);
+    expect(getCandidateBaseHosts('app.staging.opsknight.com')).toEqual([
+      'app.staging.opsknight.com',
+      'staging.opsknight.com',
+      'opsknight.com',
+    ]);
+    expect(getCandidateBaseHosts('opsknight.com')).toEqual(['opsknight.com']);
+    expect(getCandidateBaseHosts('app.opsknight.co.uk')).toEqual([
+      'app.opsknight.co.uk',
+      'opsknight.co.uk',
+    ]);
+
+    // Subdomain extraction for sibling subdomains
+    expect(extractSubdomainFromHost('status.opsknight.com', 'app.opsknight.com')).toBe('status');
+    expect(extractSubdomainFromHost('status.app.opsknight.com', 'app.opsknight.com')).toBe(
+      'status'
+    );
+    expect(extractSubdomainFromHost('status.attacker.com', 'app.opsknight.com')).toBeNull();
+
+    // Building subdomain host defaults to parent apex domain
+    expect(buildSubdomainHost('status', 'app.opsknight.com')).toBe('status.opsknight.com');
+
+    // Page with subdomain 'status' matches sibling subdomain status.opsknight.com
+    expect(
+      matchesStatusPageDomain({ subdomain: 'status' }, 'status.opsknight.com', 'app.opsknight.com')
+    ).toBe(true);
+
+    // Default status page with no subdomain also matches canonical status.opsknight.com
+    expect(
+      matchesStatusPageDomain(
+        { isDefault: true, subdomain: null },
+        'status.opsknight.com',
+        'app.opsknight.com'
+      )
+    ).toBe(true);
+
+    // Status page with slug matches status-<slug>.opsknight.com
+    expect(
+      matchesStatusPageDomain(
+        { slug: 'production' },
+        'status-production.opsknight.com',
+        'app.opsknight.com'
+      )
+    ).toBe(true);
+
+    // Attacker domain NEVER matches default status page
+    expect(
+      matchesStatusPageDomain(
+        { isDefault: true, subdomain: null },
+        'status.attacker.com',
+        'app.opsknight.com'
+      )
+    ).toBe(false);
   });
 });
 

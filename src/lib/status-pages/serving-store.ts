@@ -82,23 +82,44 @@ function isSafeStatusSlug(value: string): boolean {
   );
 }
 
-const routeSchema = z.object({
-  pageId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/),
-  slug: z.string().refine(isSafeStatusSlug).nullable(),
-  requireAuth: z.boolean(),
-  revision: z.string().min(1).max(128).regex(/^[A-Za-z0-9._:-]+$/),
-}).strict();
+const routeSchema = z
+  .object({
+    pageId: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z0-9_-]+$/),
+    slug: z.string().refine(isSafeStatusSlug).nullable(),
+    requireAuth: z.boolean(),
+    revision: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z0-9._:-]+$/),
+  })
+  .strict();
 
 const snapshotKeySchema = z.string().regex(/^\d+\.json$/);
 
 const manifestSchema = z.object({
-  pageId: z.string(), revision: z.string(), enabled: z.boolean(), revoked: z.boolean(),
-  snapshotKey: z.string(), publishedAt: z.string().datetime({ offset: true }),
-  schemaVersion: z.number().int().positive(), integrityHash: z.string().regex(/^[a-f0-9]{64}$/),
+  pageId: z.string(),
+  revision: z.string(),
+  enabled: z.boolean(),
+  revoked: z.boolean(),
+  snapshotKey: z.string(),
+  publishedAt: z.string().datetime({ offset: true }),
+  schemaVersion: z.number().int().positive(),
+  integrityHash: z.string().regex(/^[a-f0-9]{64}$/),
   servingState: z.enum(['LIVE', 'STALE_OK', 'FAIL_CLOSED', 'DISABLED']).optional(),
-  lastGoodRevision: z.string().regex(/^-?\d+$/).nullish(),
+  lastGoodRevision: z
+    .string()
+    .regex(/^-?\d+$/)
+    .nullish(),
   lastGoodSnapshotKey: snapshotKeySchema.nullish(),
-  lastGoodIntegrityHash: z.string().regex(/^[a-f0-9]{64}$/).nullish(),
+  lastGoodIntegrityHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .nullish(),
 });
 
 export function statusSnapshotIntegrity(snapshot: Prisma.JsonValue) {
@@ -161,7 +182,9 @@ class PostgreSqlStatusPageServingStore implements StatusPageServingStore {
       where: domain
         ? { customDomain: domain }
         : subdomain
-          ? { subdomain }
+          ? {
+              OR: [{ subdomain }, ...(subdomain === 'status' ? [{ isDefault: true }] : [])],
+            }
           : routeKey === 'default'
             ? { isDefault: true }
             : { slug: routeKey },
@@ -229,9 +252,7 @@ class PostgreSqlStatusPageServingStore implements StatusPageServingStore {
         where: { statusPageId: pageId },
         select: { payload: true, publishedRevision: true, servingState: true },
       });
-      return row?.servingState === 'STALE_OK' &&
-        row.payload &&
-        row.publishedRevision >= BigInt(0)
+      return row?.servingState === 'STALE_OK' && row.payload && row.publishedRevision >= BigInt(0)
         ? { revision: row.publishedRevision.toString(), payload: row.payload }
         : null;
     });
@@ -248,7 +269,11 @@ class PostgreSqlStatusPageServingStore implements StatusPageServingStore {
           : reason === 'DISABLED'
             ? { servingState: 'DISABLED', publishedRevision: BigInt(-1) }
             : reason === 'DELETED'
-              ? { servingState: 'FAIL_CLOSED', publishedRevision: BigInt(-1), payload: Prisma.DbNull }
+              ? {
+                  servingState: 'FAIL_CLOSED',
+                  publishedRevision: BigInt(-1),
+                  payload: Prisma.DbNull,
+                }
               : { servingState: 'FAIL_CLOSED', publishedRevision: BigInt(-1) };
       await prisma.statusPageSnapshot.updateMany({ where: { statusPageId: pageId }, data });
       addOperationalMetric('opsknight_status_page_revocations_total', 1, { reason });
@@ -272,7 +297,8 @@ class HttpStatusPageServingStore implements StatusPageServingStore {
 
   private async request(path: string, init?: RequestInit) {
     const url = new URL(path, this.origin.pathname.endsWith('/') ? this.origin : `${this.origin}/`);
-    if (url.origin !== this.origin.origin) throw new Error('Serving store request escaped its origin');
+    if (url.origin !== this.origin.origin)
+      throw new Error('Serving store request escaped its origin');
     const { assertSafeOutboundUrl, safeOutboundFetch } = await import('@/lib/network-security');
     await assertSafeOutboundUrl(url.toString());
     const signal = init?.signal ?? AbortSignal.timeout(10_000);
