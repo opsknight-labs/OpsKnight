@@ -66,9 +66,8 @@ import ServiceNotificationSettings from '@/components/service/ServiceNotificatio
 import JiraServiceMappingSettings from '@/components/service/JiraServiceMappingSettings';
 import ChatOpsWarRoomSettings from '@/components/service/ChatOpsWarRoomSettings';
 import ServiceVisibilitySettings from '@/components/service/ServiceVisibilitySettings';
-import IncidentSlaPolicySettings from '@/components/incident-sla/IncidentSlaPolicySettings';
+import ServiceResponsePolicyHub from '@/components/service/ServiceResponsePolicyHub';
 import IncidentClassificationSettings from '@/components/incident-sla/IncidentClassificationSettings';
-import ResponsePolicyOperations from '@/components/incident-sla/ResponsePolicyOperations';
 import { Label } from '@/components/ui/shadcn/label';
 import { Input } from '@/components/ui/shadcn/input';
 import { Textarea } from '@/components/ui/shadcn/textarea';
@@ -872,94 +871,16 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
             canManage={canManageService}
           />
 
-          {/* Section 3: Response Policies & SLAs */}
+          {/* Card 3: Response Policies & SLAs */}
           {canManageResponsePolicy && (
-            <div className="space-y-4 pt-2">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                  <ShieldCheck className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">
-                    <span className="text-muted-foreground font-mono mr-1.5 text-xs">3.</span>
-                    Response Policies & SLAs
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Target SLA response times, priority classifications, and operational coverage
-                    for this service.
-                  </p>
-                </div>
-              </div>
-
-              <IncidentSlaPolicySettings
-                scopeKey={`service:${id}`}
-                policy={incidentSlaPolicy}
-                workspacePolicy={workspaceIncidentSlaPolicy}
-                canManage
-              />
-
-              <IncidentClassificationSettings
-                scopeKey={`service:${id}`}
-                policy={
-                  incidentClassificationPolicy
-                    ? {
-                        version: incidentClassificationPolicy.version,
-                        derivePriorityFromUrgency:
-                          incidentClassificationPolicy.derivePriorityFromUrgency,
-                        priorityFallbackMode: incidentClassificationPolicy.priorityFallbackMode as
-                          | 'INHERIT'
-                          | 'ENABLED'
-                          | 'DISABLED',
-                        rules: incidentClassificationPolicy.rules.map(rule => ({
-                          matchValue: rule.matchValue as 'critical' | 'error' | 'warning' | 'info',
-                          priorityMode: rule.priorityMode as
-                            | 'INHERIT'
-                            | 'FALLBACK'
-                            | 'SET'
-                            | 'CLEAR',
-                          priority: rule.priority as 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null,
-                          urgencyMode: rule.urgencyMode as 'INHERIT' | 'SET' | 'DEFAULT',
-                          urgency: rule.urgency as 'HIGH' | 'MEDIUM' | 'LOW' | null,
-                        })),
-                      }
-                    : null
-                }
-              />
-
-              <ResponsePolicyOperations
-                services={[]}
-                integrations={[]}
-                supportScopeKey={`service:${id}`}
-                showOperations={false}
-                supportVersion={responseSupportHoursPolicy?.version ?? 0}
-                supportTimezone={responseSupportHoursPolicy?.timezone ?? 'UTC'}
-                supportMode={
-                  (responseSupportHoursPolicy?.mode as
-                    | 'INHERIT'
-                    | 'ALWAYS'
-                    | 'SCHEDULED'
-                    | undefined) ?? 'INHERIT'
-                }
-                supportWindows={
-                  responseSupportHoursPolicy?.windows.map(window => ({
-                    dayOfWeek: window.dayOfWeek,
-                    startMinute: window.startMinute,
-                    endMinute: window.endMinute,
-                  })) ?? []
-                }
-                supportExceptions={
-                  responseSupportHoursPolicy?.exceptions.map(exception => ({
-                    localDate: exception.localDate.toISOString().slice(0, 10),
-                    available: exception.available,
-                    startMinute: exception.startMinute,
-                    endMinute: exception.endMinute,
-                    label: exception.label,
-                  })) ?? []
-                }
-                schedulerMode="LEGACY"
-                schedulerIndexReady={false}
-              />
-            </div>
+            <ServiceResponsePolicyHub
+              serviceId={id}
+              incidentSlaPolicy={incidentSlaPolicy}
+              workspaceIncidentSlaPolicy={workspaceIncidentSlaPolicy}
+              incidentClassificationPolicy={incidentClassificationPolicy}
+              responseSupportHoursPolicy={responseSupportHoursPolicy}
+              canManage={canManageService}
+            />
           )}
 
           {/* Card 4: Jira Integration Mapping */}
