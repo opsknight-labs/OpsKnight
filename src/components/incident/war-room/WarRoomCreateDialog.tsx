@@ -40,24 +40,34 @@ export function WarRoomCreateDialog({
   // Only providers that currently allow creation
   const creatableProviders = providers.filter(p => p.canCreate);
   const isPrivateIncident = privacyRequirement === 'PRIVATE';
-  const [selectedTeamsMembership, setSelectedTeamsMembership] = useState<'STANDARD' | 'PRIVATE'>(
-    isPrivateIncident ? 'PRIVATE' : 'STANDARD'
-  );
+  const [selectedMembershipByProvider, setSelectedMembershipByProvider] = useState<
+    Record<string, 'STANDARD' | 'PRIVATE'>
+  >({
+    MICROSOFT_TEAMS: isPrivateIncident ? 'PRIVATE' : 'STANDARD',
+    SLACK: 'STANDARD',
+  });
   const [activeProviderTrigger, setActiveProviderTrigger] = useState<WarRoomProviderName | null>(
     null
   );
 
   React.useEffect(() => {
     if (isPrivateIncident) {
-      setSelectedTeamsMembership('PRIVATE');
+      setSelectedMembershipByProvider(prev => ({
+        ...prev,
+        MICROSOFT_TEAMS: 'PRIVATE',
+      }));
     }
   }, [isPrivateIncident]);
 
   const handleCreate = async (provider: WarRoomProviderName) => {
     setActiveProviderTrigger(provider);
-    const effectiveMembership = isPrivateIncident ? 'PRIVATE' : selectedTeamsMembership;
-    const options =
-      provider === 'MICROSOFT_TEAMS' ? { membershipType: effectiveMembership } : undefined;
+    const effectiveMembership =
+      provider === 'MICROSOFT_TEAMS'
+        ? isPrivateIncident
+          ? 'PRIVATE'
+          : (selectedMembershipByProvider.MICROSOFT_TEAMS ?? 'STANDARD')
+        : 'STANDARD';
+    const options = { membershipType: effectiveMembership };
     try {
       await onCreate(provider, options);
       onOpenChange(false);
@@ -84,6 +94,9 @@ export function WarRoomCreateDialog({
             const isTeams = providerView.provider === 'MICROSOFT_TEAMS';
             const isSlack = providerView.provider === 'SLACK';
             const isThisPending = isPending && activeProviderTrigger === providerView.provider;
+            const currentMembership = isTeams
+              ? selectedMembershipByProvider.MICROSOFT_TEAMS
+              : selectedMembershipByProvider.SLACK;
 
             return (
               <div
@@ -106,7 +119,7 @@ export function WarRoomCreateDialog({
                   </div>
                 </div>
 
-                {isTeams && providerView.supportedOptions.supportsPrivateRooms && (
+                {providerView.supportedOptions.supportsPrivateRooms && (
                   <div className="space-y-1.5 pt-1">
                     <label className="text-xs font-medium text-foreground block">
                       Channel Privacy
@@ -115,11 +128,16 @@ export function WarRoomCreateDialog({
                       <button
                         type="button"
                         disabled={isPrivateIncident}
-                        onClick={() => setSelectedTeamsMembership('STANDARD')}
+                        onClick={() =>
+                          setSelectedMembershipByProvider(prev => ({
+                            ...prev,
+                            MICROSOFT_TEAMS: 'STANDARD',
+                          }))
+                        }
                         className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-medium transition-all ${
                           isPrivateIncident
                             ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
-                            : selectedTeamsMembership === 'STANDARD'
+                            : currentMembership === 'STANDARD'
                               ? 'border-primary bg-primary/5 text-foreground'
                               : 'border-border text-muted-foreground hover:bg-muted/50'
                         }`}
@@ -135,9 +153,14 @@ export function WarRoomCreateDialog({
 
                       <button
                         type="button"
-                        onClick={() => setSelectedTeamsMembership('PRIVATE')}
+                        onClick={() =>
+                          setSelectedMembershipByProvider(prev => ({
+                            ...prev,
+                            MICROSOFT_TEAMS: 'PRIVATE',
+                          }))
+                        }
                         className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-medium transition-all ${
-                          selectedTeamsMembership === 'PRIVATE'
+                          currentMembership === 'PRIVATE'
                             ? 'border-primary bg-primary/5 text-foreground'
                             : 'border-border text-muted-foreground hover:bg-muted/50'
                         }`}

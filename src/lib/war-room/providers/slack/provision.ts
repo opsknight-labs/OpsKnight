@@ -147,7 +147,11 @@ async function ensureTerminalCloseHandoff(warRoomId: string, incidentId: string)
 /** Durable request boundary. No Slack I/O occurs here. */
 export async function requestSlackWarRoom(
   incidentId: string,
-  intent: { manual: boolean; allowNewGeneration: boolean }
+  intent: {
+    manual: boolean;
+    allowNewGeneration: boolean;
+    membershipType?: 'STANDARD' | 'PRIVATE';
+  }
 ): Promise<RequestResult> {
   let claimedResult: {
     claimed: boolean;
@@ -225,11 +229,13 @@ export async function requestSlackWarRoom(
       where: { id: incidentId },
       select: { urgency: true, priority: true, visibility: true },
     });
+    // Slack war rooms are always open to the entire organization regardless of
+    // status-page public/private visibility.
     const decision = evaluateWarRoomPolicy({
       incident: {
         urgency: policyIncident?.urgency ?? incident.urgency,
         priority: policyIncident?.priority ?? incident.priority,
-        visibility: policyIncident?.visibility ?? 'PUBLIC',
+        visibility: 'PUBLIC',
       },
       service: { autoCreate: effectiveAutoCreate },
       destination,
@@ -242,12 +248,6 @@ export async function requestSlackWarRoom(
       },
       manual: intent.manual,
     });
-
-    // Slack adapter declares privateRooms:false; a PRIVATE war room must fail closed
-    // rather than silently creating a STANDARD channel and leaking visibility.
-    if (decision.allowed && decision.membershipType === 'PRIVATE') {
-      return { accepted: false as const, code: 'PRIVATE_DOWNGRADE_DENIED' };
-    }
 
     if (!decision.allowed || !slackWorkspaceId || !destination)
       return {
@@ -272,7 +272,7 @@ export async function requestSlackWarRoom(
         },
         data: {
           providerTenantId: slackWorkspaceId,
-          membershipType: decision.membershipType,
+          membershipType: 'STANDARD',
         },
       });
       await tx.backgroundJob.create({
@@ -360,17 +360,6 @@ export async function provisionSlackWarRoom(
     if (!['AMBIGUOUS', 'CLOSING'].includes(room.state)) return;
   } else {
     if (!['PROVISIONING', 'AMBIGUOUS'].includes(room.state)) return;
-  }
-
-  // Slack declares privateRooms:false — never provision a PRIVATE room even if racing overrides fill it.
-  if (!reconciliationOnly && room.membershipType === 'PRIVATE') {
-    await markFailed(
-      room.id,
-      expectedProvisioningToken,
-      'PRIVATE_WAR_ROOM_UNSUPPORTED',
-      'Slack war rooms do not support private rooms.'
-    );
-    return;
   }
 
   const incident = room.incident;
@@ -874,6 +863,7 @@ export async function provisionSlackWarRoom(
   const effectiveChannelName = plannedForCreate;
   const createResult = await slackApiCall('conversations.create', botToken, {
     name: effectiveChannelName,
+    // Slack war-room channels are open to all responders in the organization
     is_private: false,
   });
 
