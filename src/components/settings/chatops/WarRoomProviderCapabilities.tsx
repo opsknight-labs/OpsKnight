@@ -46,7 +46,7 @@ export function WarRoomProviderCapabilities() {
   // Provider capabilities derived from registered adapter contracts
   const slackCaps: Record<string, boolean> = {
     createRoom: true,
-    privateRooms: false,
+    privateRooms: true,
     manageMembers: true,
     interactiveProjection: true,
     projectionUpdates: true,

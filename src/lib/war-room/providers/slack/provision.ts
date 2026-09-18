@@ -147,7 +147,11 @@ async function ensureTerminalCloseHandoff(warRoomId: string, incidentId: string)
 /** Durable request boundary. No Slack I/O occurs here. */
 export async function requestSlackWarRoom(
   incidentId: string,
-  intent: { manual: boolean; allowNewGeneration: boolean }
+  intent: {
+    manual: boolean;
+    allowNewGeneration: boolean;
+    membershipType?: 'STANDARD' | 'PRIVATE';
+  }
 ): Promise<RequestResult> {
   let claimedResult: {
     claimed: boolean;
@@ -216,7 +220,7 @@ export async function requestSlackWarRoom(
           enabled: true,
           warRoomEnabled: true,
           autoCreate: effectiveAutoCreate,
-          membershipType: 'STANDARD' as const,
+          membershipType: (intent.membershipType ?? 'STANDARD') as 'STANDARD' | 'PRIVATE',
         }
       : null;
 
@@ -242,12 +246,6 @@ export async function requestSlackWarRoom(
       },
       manual: intent.manual,
     });
-
-    // Slack adapter declares privateRooms:false; a PRIVATE war room must fail closed
-    // rather than silently creating a STANDARD channel and leaking visibility.
-    if (decision.allowed && decision.membershipType === 'PRIVATE') {
-      return { accepted: false as const, code: 'PRIVATE_DOWNGRADE_DENIED' };
-    }
 
     if (!decision.allowed || !slackWorkspaceId || !destination)
       return {
@@ -360,17 +358,6 @@ export async function provisionSlackWarRoom(
     if (!['AMBIGUOUS', 'CLOSING'].includes(room.state)) return;
   } else {
     if (!['PROVISIONING', 'AMBIGUOUS'].includes(room.state)) return;
-  }
-
-  // Slack declares privateRooms:false — never provision a PRIVATE room even if racing overrides fill it.
-  if (!reconciliationOnly && room.membershipType === 'PRIVATE') {
-    await markFailed(
-      room.id,
-      expectedProvisioningToken,
-      'PRIVATE_WAR_ROOM_UNSUPPORTED',
-      'Slack war rooms do not support private rooms.'
-    );
-    return;
   }
 
   const incident = room.incident;
@@ -874,7 +861,7 @@ export async function provisionSlackWarRoom(
   const effectiveChannelName = plannedForCreate;
   const createResult = await slackApiCall('conversations.create', botToken, {
     name: effectiveChannelName,
-    is_private: false,
+    is_private: room.membershipType === 'PRIVATE',
   });
 
   if (!createResult.ok) {

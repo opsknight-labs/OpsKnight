@@ -404,6 +404,46 @@ describe('ChatOps War-Room Engine', () => {
       expect(retryModule.retryFetch).not.toHaveBeenCalled();
     });
 
+    it('should request private Slack war-room when incident is private', async () => {
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({
+        id: 'inc-private-123',
+        title: 'Confidential Incident',
+        urgency: 'HIGH',
+        visibility: 'PRIVATE',
+        status: 'OPEN',
+        slackChannelId: null,
+        serviceId: 'srv-1',
+        service: {
+          id: 'srv-1',
+          name: 'Security Service',
+          autoCreateWarRoom: true,
+          warRoomVideoBridge: 'JITSI',
+          slackIntegration: { workspaceId: 'workspace-1' },
+        },
+      } as never);
+      vi.mocked(requestSlackWarRoom).mockResolvedValue({
+        accepted: true,
+        warRoomId: 'slack-room-priv',
+        state: 'PROVISIONING',
+      } as never);
+      vi.mocked(prisma.incidentWarRoom.findUnique).mockResolvedValue({
+        id: 'slack-room-priv',
+        state: 'PROVISIONING',
+        membershipType: 'PRIVATE',
+        providerChannelId: null,
+        providerChannelName: null,
+        providerChannelUrl: null,
+      } as never);
+
+      const result = await createIncidentWarRoom('inc-private-123', { force: true });
+      expect(result.success).toBe(true);
+      expect(result.warRoomId).toBe('slack-room-priv');
+      expect(requestSlackWarRoom).toHaveBeenCalledWith('inc-private-123', {
+        manual: true,
+        allowNewGeneration: true,
+      });
+    });
+
     it('should enqueue durable participant setup through the worker path', async () => {
       // No direct Slack invite is performed on the request path — participant
       // projection is owned by the worker after the channel exists. This

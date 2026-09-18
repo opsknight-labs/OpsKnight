@@ -163,6 +163,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         const result = await requestSlackWarRoom(incidentId, {
           manual: true,
           allowNewGeneration: true,
+          membershipType: options?.membershipType,
         });
 
         if (!result.accepted) {

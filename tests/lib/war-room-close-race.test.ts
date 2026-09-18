@@ -13,19 +13,26 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(engine).toContain('adapter.provision(warRoomId, provisioningToken, opts)');
     expect(queue).toContain('reconciliationOnly');
     expect(queue).toContain('provisionWarRoom(');
-    expect(provider).toContain('provision(warRoomId: string, provisioningToken: string, opts?: { reconciliationOnly');
+    expect(provider).toContain(
+      'provision(warRoomId: string, provisioningToken: string, opts?: { reconciliationOnly'
+    );
   });
 
   it('Slack reconciliationOnly is marker-only (AMBIGUOUS|CLOSING) and never POSTs', () => {
     const slack = readFileSync('src/lib/war-room/providers/slack/provision.ts', 'utf8');
     expect(slack).toContain('reconciliationOnly');
-    expect(slack).toContain("if (reconciliationOnly) {");
+    expect(slack).toContain('if (reconciliationOnly) {');
     expect(slack).toContain("if (!['AMBIGUOUS', 'CLOSING'].includes(room.state)) return");
     expect(slack).toContain("if (!['PROVISIONING', 'AMBIGUOUS'].includes(room.state)) return");
     expect(slack).toContain('reconciliationOnly: marker-only, never POST');
-    expect(slack).toContain('No Slack channel was found by marker/planned name during reconciliation window');
+    expect(slack).toContain(
+      'No Slack channel was found by marker/planned name during reconciliation window'
+    );
     // Must return before reaching conversations.create
-    const reconStart = slack.indexOf('if (reconciliationOnly) {', slack.indexOf('reconciliationOnly: marker-only'));
+    const reconStart = slack.indexOf(
+      'if (reconciliationOnly) {',
+      slack.indexOf('reconciliationOnly: marker-only')
+    );
     const postCreate = slack.indexOf("slackApiCall('conversations.create'", reconStart);
     // There is a reconciliationOnly return before the create
     const reconReturn = slack.indexOf('return;', reconStart);
@@ -36,13 +43,15 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
   it('Teams reconciliationOnly is marker-only (AMBIGUOUS|CLOSING) and never POSTs', () => {
     const teams = readFileSync('src/lib/war-room/providers/microsoft-teams/provision.ts', 'utf8');
     expect(teams).toContain('reconciliationOnly');
-    expect(teams).toContain("if (reconciliationOnly) {");
+    expect(teams).toContain('if (reconciliationOnly) {');
     expect(teams).toContain("if (!['AMBIGUOUS', 'CLOSING'].includes(room.state)) return");
     expect(teams).toContain("if (!['PROVISIONING', 'AMBIGUOUS'].includes(room.state)) return");
-    expect(teams).toContain('No Teams channel was found by marker during the reconciliation window');
+    expect(teams).toContain(
+      'No Teams channel was found by marker during the reconciliation window'
+    );
     expect(teams).toContain('Reconciling CLOSING Teams channel-create by marker only');
     // reconciliationOnly block must precede the durable create gate
-    const reconIdx = teams.indexOf("if (reconciliationOnly) {");
+    const reconIdx = teams.indexOf('if (reconciliationOnly) {');
     const gateIdx = teams.indexOf('// createAttemptedAt is the durable one-way gate');
     expect(reconIdx).toBeGreaterThan(-1);
     expect(gateIdx).toBeGreaterThan(reconIdx);
@@ -72,16 +81,25 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
 
   it('ARCHIVE deliveries are provider-scoped (closeProviderWarRoomsNeutral)', () => {
     const slackAdapter = readFileSync('src/lib/war-room/providers/slack/adapter.ts', 'utf8');
-    const teamsAdapter = readFileSync('src/lib/war-room/providers/microsoft-teams/adapter.ts', 'utf8');
+    const teamsAdapter = readFileSync(
+      'src/lib/war-room/providers/microsoft-teams/adapter.ts',
+      'utf8'
+    );
     const engine = readFileSync('src/lib/war-room/engine.ts', 'utf8');
     expect(engine).toContain('closeProviderWarRoomsNeutral');
     expect(engine).toContain('providerFilter');
     expect(slackAdapter).toContain("closeProviderWarRoomsNeutral(event.incidentId, 'SLACK')");
-    expect(teamsAdapter).toContain("closeProviderWarRoomsNeutral(event.incidentId, 'MICROSOFT_TEAMS')");
+    expect(teamsAdapter).toContain(
+      "closeProviderWarRoomsNeutral(event.incidentId, 'MICROSOFT_TEAMS')"
+    );
     // Adapters must not call cross-provider global close at runtime (comment mentioning the outbox helper is allowed)
     // So check that no adapter directly invokes closeIncidentWarRoomsNeutral at runtime
-    const slackHasRuntimeGlobalClose = /await\s+closeIncidentWarRoomsNeutral\s*\(/.test(slackAdapter);
-    const teamsHasRuntimeGlobalClose = /await\s+closeIncidentWarRoomsNeutral\s*\(/.test(teamsAdapter);
+    const slackHasRuntimeGlobalClose = /await\s+closeIncidentWarRoomsNeutral\s*\(/.test(
+      slackAdapter
+    );
+    const teamsHasRuntimeGlobalClose = /await\s+closeIncidentWarRoomsNeutral\s*\(/.test(
+      teamsAdapter
+    );
     expect(slackHasRuntimeGlobalClose).toBe(false);
     expect(teamsHasRuntimeGlobalClose).toBe(false);
   });
@@ -93,7 +111,9 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     const end = engine.indexOf('/** Repair helper', start);
     const ensureFn = engine.slice(start, end === -1 ? start + 2000 : end);
     expect(ensureFn).not.toContain('.catch(');
-    expect(ensureFn).toMatch(/await prisma\.backgroundJob\.create\(\{[\s\S]*?reconciliationOnly: true/);
+    expect(ensureFn).toMatch(
+      /await prisma\.backgroundJob\.create\(\{[\s\S]*?reconciliationOnly: true/
+    );
   });
 
   it('closeRequestedAt persists on AMBIGUOUS resolve and drives CLOSING adoption', () => {
@@ -130,8 +150,11 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(queue).toContain('rawProvision.reconciliationOnly === true');
     expect(queue).toContain('{ reconciliationOnly: true }');
     // Accepts either the original ternary or the branched 2-arg/3-arg form (fixes queue.test stale 3-arg expectation)
-    const hasTernary = queue.includes('reconciliationOnly ? { reconciliationOnly: true } : undefined');
-    const hasBranched = queue.includes('if (reconciliationOnly)') && queue.includes('provisionWarRoom(');
+    const hasTernary = queue.includes(
+      'reconciliationOnly ? { reconciliationOnly: true } : undefined'
+    );
+    const hasBranched =
+      queue.includes('if (reconciliationOnly)') && queue.includes('provisionWarRoom(');
     expect(hasTernary || hasBranched).toBe(true);
     // Branched form must preserve 2-arg normal case (no third arg) to keep queue.test 2-arg expectation green
     if (hasBranched) {
@@ -146,16 +169,15 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     const engine = readFileSync('src/lib/war-room/engine.ts', 'utf8');
     expect(engine).toContain('providerFilter');
     expect(engine).toContain('...providerFilter');
-    expect(engine).toContain("opts?: { provider?: WarRoomProviderName }");
+    expect(engine).toContain('opts?: { provider?: WarRoomProviderName }');
   });
 
-  it('Slack reconciliationOnly skips PRIVATE check and authority check (CLOSING must reconcile even when RESOLVED)', () => {
+  it('Slack reconciliationOnly skips authority check (CLOSING must reconcile even when RESOLVED)', () => {
     const slack = readFileSync('src/lib/war-room/providers/slack/provision.ts', 'utf8');
-    expect(slack).toContain("if (!reconciliationOnly && room.membershipType === 'PRIVATE')");
     expect(slack).toContain('if (!reconciliationOnly) {');
     // Authority check is inside that guard
     const guardIdx = slack.indexOf('if (!reconciliationOnly) {');
-    const authorityIdx = slack.indexOf("INCIDENT_NOT_ACTIVE", guardIdx);
+    const authorityIdx = slack.indexOf('INCIDENT_NOT_ACTIVE', guardIdx);
     expect(authorityIdx).toBeGreaterThan(guardIdx);
   });
 
@@ -190,7 +212,9 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(engine).toContain('isClosingReconciliationExpired');
     expect(engine).toContain('AMBIGUOUS_RECONCILIATION_WINDOW_MS');
     expect(engine).toContain('RECONCILIATION_EXPIRED_UNVERIFIED');
-    expect(engine).toContain('Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED');
+    expect(engine).toContain(
+      'Reconciliation window expired with unverified external create outcome; closing locally as DEGRADED'
+    );
     expect(engine).toContain('provisioningToken: null');
     const repairStart = engine.indexOf('async function repairWarRoomCloseJobs');
     const finalizeStart = engine.indexOf('export async function finalizeWarRoomCloseNeutral');
@@ -237,7 +261,7 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(cleanup).toContain("status === 'FOUND'");
     expect(cleanup).toContain('DRIFT_SLACK_');
     expect(cleanup).toContain('findWarRoomChannel');
-    expect(cleanup).toContain("conversations.archive");
+    expect(cleanup).toContain('conversations.archive');
     expect(cron).toContain('reconcileTerminalWarRoomDrift');
   });
 
@@ -287,7 +311,7 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
     expect(lifecycle).toContain('let channelId = room.providerChannelId');
     expect(lifecycle).toContain('providerChannelId');
     expect(lifecycle).toContain('channelId');
-    expect(lifecycle).toContain("conversations.archive");
+    expect(lifecycle).toContain('conversations.archive');
     expect(lifecycle).toContain('externalCleanupPending');
   });
 });
@@ -295,8 +319,21 @@ describe('close reconciliation & archive isolation contracts (source)', () => {
 // ── Behavioral: terminal drift Slack tri-state (UNAVAILABLE keeps debt) ──
 describe('terminal drift Slack tri-state (behavioral)', () => {
   async function runDriftWithSlackMocks(opts: {
-    lookup: { status: 'FOUND'; channel: { id: string; name: string } } | { status: 'NOT_FOUND' } | { status: 'UNAVAILABLE'; code: 'RATE_LIMITED' | 'AUTH_FAILED' | 'PERMISSION_DENIED' | 'TRANSIENT'; error?: string };
-    archiveResult?: { ok: boolean; error?: string; transportFailure?: boolean; sideEffectAmbiguous?: boolean; httpStatus?: number };
+    lookup:
+      | { status: 'FOUND'; channel: { id: string; name: string } }
+      | { status: 'NOT_FOUND' }
+      | {
+          status: 'UNAVAILABLE';
+          code: 'RATE_LIMITED' | 'AUTH_FAILED' | 'PERMISSION_DENIED' | 'TRANSIENT';
+          error?: string;
+        };
+    archiveResult?: {
+      ok: boolean;
+      error?: string;
+      transportFailure?: boolean;
+      sideEffectAmbiguous?: boolean;
+      httpStatus?: number;
+    };
   }) {
     vi.resetModules();
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
@@ -322,12 +359,20 @@ describe('terminal drift Slack tri-state (behavioral)', () => {
     }));
     // terminal-cleanup dynamically imports '@/lib/slack' and './providers/slack/client'
     vi.doMock('@/lib/slack', () => ({ getSlackBotToken }));
-    const clientMock = { findSlackWarRoomForTerminalCleanup, slackWarRoomMarker, slackApiCall, findSlackChannelByMarker: vi.fn(), findExistingSlackChannel: vi.fn() };
+    const clientMock = {
+      findSlackWarRoomForTerminalCleanup,
+      slackWarRoomMarker,
+      slackApiCall,
+      findSlackChannelByMarker: vi.fn(),
+      findExistingSlackChannel: vi.fn(),
+    };
     vi.doMock('@/lib/war-room/providers/slack/client', () => clientMock);
     vi.doMock('@/lib/war-room/providers/slack/client.ts', () => clientMock);
     // relative specifier as written in terminal-cleanup
     vi.doMock('./providers/slack/client', () => clientMock);
-    vi.doMock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } }));
+    vi.doMock('@/lib/logger', () => ({
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+    }));
     vi.doMock('@/lib/metrics/operational/registry', () => ({ addOperationalMetric: vi.fn() }));
 
     const mod = await import('@/lib/war-room/terminal-cleanup');
@@ -375,7 +420,9 @@ describe('terminal drift Slack tri-state (behavioral)', () => {
     expect(result.satisfied).toBe(0);
     expect(result.stillPending).toBe(1);
     expect(updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: 'DRIFT_SLACK_TRANSIENT' }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ lastErrorCode: 'DRIFT_SLACK_TRANSIENT' }),
+      })
     );
     const lastData = updateMany.mock.calls[0][0].data as Record<string, unknown>;
     expect(lastData.externalCleanupPending).toBeUndefined();
@@ -391,7 +438,10 @@ describe('terminal drift Slack tri-state (behavioral)', () => {
     expect(result.stillPending).toBe(1);
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ lastErrorCode: 'DRIFT_SLACK_AUTH_FAILED', health: 'PERMISSION_ERROR' }),
+        data: expect.objectContaining({
+          lastErrorCode: 'DRIFT_SLACK_AUTH_FAILED',
+          health: 'PERMISSION_ERROR',
+        }),
       })
     );
   });
@@ -405,7 +455,10 @@ describe('terminal drift Slack tri-state (behavioral)', () => {
     expect(result.stillPending).toBe(0);
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ externalCleanupPending: false, externalCleanupCompletedAt: expect.any(Date) }),
+        data: expect.objectContaining({
+          externalCleanupPending: false,
+          externalCleanupCompletedAt: expect.any(Date),
+        }),
       })
     );
     expect(slackApiCall).not.toHaveBeenCalled();
@@ -419,10 +472,16 @@ describe('terminal drift Slack tri-state (behavioral)', () => {
     expect(result.checked).toBe(1);
     expect(result.cleaned).toBe(1);
     expect(result.satisfied).toBe(0);
-    expect(slackApiCall).toHaveBeenCalledWith('conversations.archive', 'xoxb-mock-token', { channel: 'C999' });
+    expect(slackApiCall).toHaveBeenCalledWith('conversations.archive', 'xoxb-mock-token', {
+      channel: 'C999',
+    });
     expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ externalCleanupPending: false, externalCleanupCompletedAt: expect.any(Date), providerChannelId: 'C999' }),
+        data: expect.objectContaining({
+          externalCleanupPending: false,
+          externalCleanupCompletedAt: expect.any(Date),
+          providerChannelId: 'C999',
+        }),
       })
     );
   });
@@ -437,9 +496,14 @@ describe('terminal drift Slack tri-state (behavioral)', () => {
     expect(result.satisfied).toBe(0);
     expect(result.stillPending).toBe(1);
     expect(updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ lastErrorCode: 'DRIFT_ARCHIVE_RATE_LIMITED' }) })
+      expect.objectContaining({
+        data: expect.objectContaining({ lastErrorCode: 'DRIFT_ARCHIVE_RATE_LIMITED' }),
+      })
     );
-    const lastData = updateMany.mock.calls[updateMany.mock.calls.length - 1][0].data as Record<string, unknown>;
+    const lastData = updateMany.mock.calls[updateMany.mock.calls.length - 1][0].data as Record<
+      string,
+      unknown
+    >;
     expect(lastData.externalCleanupPending).toBeUndefined();
   });
 });
@@ -457,7 +521,7 @@ describe('provisionWarRoom CLOSING fencing (behavioral)', () => {
     }));
     vi.doMock('@/lib/war-room/registry', () => ({
       listWarRoomProviders: () => [],
-      getWarRoomProvider: vi.fn(() => ({ provision: provisionMock, capabilities: {} } as never)),
+      getWarRoomProvider: vi.fn(() => ({ provision: provisionMock, capabilities: {} }) as never),
     }));
     const { provisionWarRoom } = await import('@/lib/war-room/engine');
     await provisionWarRoom('room-1', 'tok-1', { reconciliationOnly: true });
@@ -478,7 +542,7 @@ describe('provisionWarRoom CLOSING fencing (behavioral)', () => {
     }));
     vi.doMock('@/lib/war-room/registry', () => ({
       listWarRoomProviders: () => [],
-      getWarRoomProvider: vi.fn(() => ({ provision: provisionMock, capabilities: {} } as never)),
+      getWarRoomProvider: vi.fn(() => ({ provision: provisionMock, capabilities: {} }) as never),
     }));
     const { provisionWarRoom } = await import('@/lib/war-room/engine');
     await provisionWarRoom('room-1', 'tok-1');

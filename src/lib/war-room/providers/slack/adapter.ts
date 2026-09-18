@@ -403,7 +403,7 @@ export const slackWarRoomAdapter: WarRoomProviderAdapter = {
   provider: 'SLACK',
   capabilities: {
     createRoom: true,
-    privateRooms: false,
+    privateRooms: true,
     manageMembers: true,
     updateRoom: true,
     archiveRoom: true,

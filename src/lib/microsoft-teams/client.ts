@@ -757,7 +757,13 @@ export async function getTeamsWarRoomRscGrantState(input: {
     }
     const body = (await response.json()) as {
       value?: Array<{
-        teamsAppDefinition?: { teamsAppId?: string | null } | null;
+        teamsAppDefinition?: {
+          teamsAppId?: string | null;
+          displayName?: string | null;
+          authorization?: {
+            clientAppId?: string | null;
+          } | null;
+        } | null;
         consentedPermissionSet?: {
           resourceSpecificPermissions?: Array<{
             permissionValue?: string | null;
@@ -766,9 +772,20 @@ export async function getTeamsWarRoomRscGrantState(input: {
         } | null;
       }>;
     };
-    const app = body.value?.find(
-      installation => installation.teamsAppDefinition?.teamsAppId === resolved.config.clientId
-    );
+    const expectedClientId = resolved.config.clientId?.trim().toLowerCase();
+    const app = body.value?.find(installation => {
+      const def = installation.teamsAppDefinition;
+      if (!def) return false;
+      if (
+        expectedClientId &&
+        def.authorization?.clientAppId?.trim().toLowerCase() === expectedClientId
+      )
+        return true;
+      if (expectedClientId && def.teamsAppId?.trim().toLowerCase() === expectedClientId)
+        return true;
+      if (def.displayName?.trim().toLowerCase() === 'opsknight') return true;
+      return false;
+    });
     const granted = (app?.consentedPermissionSet?.resourceSpecificPermissions ?? [])
       .filter(
         permission =>
