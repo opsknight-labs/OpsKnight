@@ -136,10 +136,51 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
         'Microsoft Teams interactive actions are currently disabled.'
       );
     }
+    const candidateTeamIds = [
+      input.activity.channelData?.team?.aadGroupId?.trim(),
+      input.activity.channelData?.team?.id?.trim(),
+      input.activity.conversation?.id?.trim(),
+      teamId,
+    ].filter(Boolean) as string[];
+    const isTeamMatch = (storedId: string | null | undefined) =>
+      Boolean(storedId && candidateTeamIds.includes(storedId.trim()));
+
+    const candidateChannelIds = [
+      channelId,
+      input.activity.channelData?.channel?.id?.trim(),
+      input.activity.conversation?.id?.split(';')[0]?.trim(),
+    ].filter(Boolean) as string[];
+    const isChannelMatch = (storedId: string | null | undefined) =>
+      Boolean(storedId && candidateChannelIds.includes(storedId.trim()));
+
+    const matchesConversation = (
+      storedConvId: string | null | undefined,
+      incomingConvId: string | null | undefined
+    ) => {
+      if (!storedConvId || !incomingConvId) return true;
+      const s = storedConvId.trim();
+      const i = incomingConvId.trim();
+      if (s === i) return true;
+      return s.split(';')[0] === i.split(';')[0];
+    };
+
+    const matchesMessage = (
+      storedMsgId: string | null | undefined,
+      replyToId: string | null | undefined,
+      incomingConvId: string | null | undefined
+    ) => {
+      if (!storedMsgId) return true;
+      const s = storedMsgId.trim();
+      if (replyToId && replyToId.trim() === s) return true;
+      if (incomingConvId && incomingConvId.includes(`;messageid=${s}`)) return true;
+      if (!replyToId) return true;
+      return false;
+    };
+
     const destinationRouteMatches =
       destination.tenantId === tenantId &&
-      destination.teamId === teamId &&
-      destination.channelId === channelId &&
+      isTeamMatch(destination.teamId) &&
+      isChannelMatch(destination.channelId) &&
       incident?.serviceId === destination.serviceId;
     const warRoomDestinationBound = Boolean(
       warRoom &&
@@ -147,29 +188,46 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
       incident.serviceId === destination.serviceId &&
       (!warRoom.installationId || warRoom.installationId === destination.installationId) &&
       (!warRoom.providerTenantId || warRoom.providerTenantId === destination.tenantId) &&
-      (!warRoom.providerContainerId || warRoom.providerContainerId === destination.teamId)
+      (!warRoom.providerContainerId || isTeamMatch(warRoom.providerContainerId))
     );
     const warRoomRouteMatches = Boolean(
       warRoom &&
       warRoom.state === 'READY' &&
       warRoom.providerTenantId === tenantId &&
-      warRoom.providerContainerId === teamId &&
-      warRoom.providerChannelId === channelId &&
+      isTeamMatch(warRoom.providerContainerId) &&
+      isChannelMatch(warRoom.providerChannelId) &&
       warRoomDestinationBound
     );
     // P1 fencing: when warRoomId is present, only READY war-room authority counts; no fallback to generic destination.
     const routeMatches = warRoomId ? warRoomRouteMatches : destinationRouteMatches;
     const messageMatches = warRoom
       ? warRoom.messageGeneration === messageGeneration &&
-        (!input.activity.conversation?.id ||
-          warRoom.commandConversationId === input.activity.conversation.id) &&
-        (!input.activity.replyToId || warRoom.commandMessageId === input.activity.replyToId)
+        matchesConversation(warRoom.commandConversationId, input.activity.conversation?.id) &&
+        matchesMessage(warRoom.commandMessageId, input.activity.replyToId, input.activity.conversation?.id)
       : canonical &&
         canonical.messageGeneration === messageGeneration &&
-        (!input.activity.conversation?.id ||
-          canonical.conversationId === input.activity.conversation.id) &&
-        (!input.activity.replyToId || canonical.messageId === input.activity.replyToId);
+        matchesConversation(canonical.conversationId, input.activity.conversation?.id) &&
+        matchesMessage(canonical.messageId, input.activity.replyToId, input.activity.conversation?.id);
     if (!routeMatches || !messageMatches) {
+      logger.warn('[MicrosoftTeams] StaleCard verification failed', {
+        routeMatches,
+        messageMatches,
+        isWarRoom: Boolean(warRoomId),
+        destinationRouteMatches,
+        warRoomRouteMatches,
+        tenantId,
+        candidateTeamIds,
+        candidateChannelIds,
+        destinationTeamId: destination.teamId,
+        destinationChannelId: destination.channelId,
+        warRoomContainerId: warRoom?.providerContainerId,
+        warRoomChannelId: warRoom?.providerChannelId,
+        activityConversationId: input.activity.conversation?.id,
+        activityReplyToId: input.activity.replyToId,
+        messageGeneration,
+        canonicalGeneration: canonical?.messageGeneration,
+        warRoomGeneration: warRoom?.messageGeneration,
+      });
       return teamsActionError(
         409,
         'StaleCard',
