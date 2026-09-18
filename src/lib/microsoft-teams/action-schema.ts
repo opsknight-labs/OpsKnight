@@ -68,18 +68,41 @@ const envelope = z
     action: z
       .object({
         type: z.literal('Action.Execute'),
-        id: z.string().max(256).optional(),
+        id: z.string().max(256).nullable().optional(),
         verb: z.enum(
           Object.values(TEAMS_CHATOPS_VERBS) as [TeamsChatOpsVerb, ...TeamsChatOpsVerb[]]
         ),
         data: z.unknown(),
+        title: z.string().nullable().optional(),
+        associatedInputs: z.string().nullable().optional(),
       })
-      .strict(),
-    trigger: z.enum(['manual', 'automatic']).optional(),
+      .passthrough(),
+    trigger: z.string().optional(),
+    state: z.string().optional(),
+    inputs: z.record(z.unknown()).optional(),
   })
-  .strict();
+  .passthrough();
 
 export function parseMicrosoftTeamsAction(value: unknown) {
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {}
+  }
   const parsed = envelope.parse(value);
-  return { ...parsed, data: schemas[parsed.action.verb].parse(parsed.action.data) };
+  let rawData = parsed.action.data;
+  if (typeof rawData === 'string') {
+    try {
+      rawData = JSON.parse(rawData);
+    } catch {}
+  }
+  if (
+    parsed.inputs &&
+    typeof parsed.inputs === 'object' &&
+    typeof rawData === 'object' &&
+    rawData !== null
+  ) {
+    rawData = { ...parsed.inputs, ...rawData };
+  }
+  return { ...parsed, data: schemas[parsed.action.verb].parse(rawData) };
 }
