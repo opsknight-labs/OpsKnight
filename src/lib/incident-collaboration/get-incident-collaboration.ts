@@ -415,9 +415,9 @@ export async function getIncidentCollaborationView(
         reason = null;
       }
     } else if (provider === 'ZOOM' || provider === 'GOOGLE_MEET') {
-      const hasTemplate = Boolean(
-        customTemplate || globalPolicy.defaultMeetingProvider === provider
-      );
+      const { resolveGlobalCustomBridgeTemplate } = await import('./meeting-registry');
+      const globalTemplate = await resolveGlobalCustomBridgeTemplate().catch(() => null);
+      const hasTemplate = Boolean(customTemplate?.trim() || globalTemplate?.trim());
       if (!hasTemplate) {
         isAvailable = false;
         readiness = 'UNAVAILABLE';

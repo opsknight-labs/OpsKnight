@@ -59,7 +59,7 @@ export interface MeetingProviderAdapter {
   closeMeeting?(params: CloseMeetingParams): Promise<void>;
 }
 
-async function resolveGlobalCustomBridgeTemplate(): Promise<string | null> {
+export async function resolveGlobalCustomBridgeTemplate(): Promise<string | null> {
   if (prisma?.chatOpsConfig?.findUnique) {
     try {
       const config = await prisma.chatOpsConfig.findUnique({

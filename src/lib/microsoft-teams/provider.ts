@@ -87,7 +87,10 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       getIncidentMeeting(args.incident.id).catch(() => null),
     ]);
     const meeting =
-      meetingRecord && meetingRecord.state === 'READY' && Boolean(meetingRecord.joinUrl)
+      meetingRecord &&
+      meetingRecord.state === 'READY' &&
+      Boolean(meetingRecord.joinUrl) &&
+      meetingRecord.actions?.canJoin !== false
         ? {
             provider: meetingRecord.provider,
             joinUrl: meetingRecord.joinUrl,
@@ -151,7 +154,10 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       getIncidentMeeting(args.incident.id).catch(() => null),
     ]);
     const meeting =
-      meetingRecord && meetingRecord.state === 'READY' && Boolean(meetingRecord.joinUrl)
+      meetingRecord &&
+      meetingRecord.state === 'READY' &&
+      Boolean(meetingRecord.joinUrl) &&
+      meetingRecord.actions?.canJoin !== false
         ? {
             provider: meetingRecord.provider,
             joinUrl: meetingRecord.joinUrl,

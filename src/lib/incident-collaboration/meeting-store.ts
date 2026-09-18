@@ -409,7 +409,7 @@ export async function requestMeetingProvision(params: {
                 state: 'PROVISIONING',
                 health: 'HEALTHY',
                 externalId,
-                joinUrl: current?.joinUrl || '',
+                joinUrl: '',
                 provisioningToken,
                 provisioningStartedAt: new Date(),
               },
@@ -428,7 +428,7 @@ export async function requestMeetingProvision(params: {
                 state: 'PROVISIONING',
                 health: 'HEALTHY',
                 externalId,
-                joinUrl: current?.joinUrl || '',
+                joinUrl: '',
                 provisioningToken,
                 provisioningStartedAt: new Date(),
               },
@@ -1412,8 +1412,12 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
     return; // Already active or provisioning
   }
 
-  const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveEffectiveMeetingProvider } =
-    await import('./policy');
+  const {
+    getGlobalWarRoomPolicy,
+    getServiceWarRoomPolicy,
+    resolveEffectiveMeetingProvider,
+    shouldAutoCreateCollaboration,
+  } = await import('./policy');
 
   const [globalPolicy, servicePolicy, teamsConfig] = await Promise.all([
     getGlobalWarRoomPolicy(),
@@ -1426,7 +1430,15 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
       : Promise.resolve(null),
   ]);
 
-  const autoCreate = servicePolicy?.autoCreate ?? incident.service?.autoCreateWarRoom ?? false;
+  const serviceAutoCreate =
+    servicePolicy?.autoCreate ?? incident.service?.autoCreateWarRoom ?? false;
+  const autoCreate = shouldAutoCreateCollaboration({
+    serviceAutoCreate,
+    incidentUrgency: incident.urgency,
+    incidentPriority: incident.priority,
+    autoCreateOnUrgency: globalPolicy.autoCreateOnUrgency ?? ['HIGH'],
+    autoCreateOnPriority: globalPolicy.autoCreateOnPriority ?? ['P1', 'P2'],
+  });
   if (!autoCreate) return;
 
   const isTeamsMeetingAvailable = Boolean(teamsConfig?.enabled);

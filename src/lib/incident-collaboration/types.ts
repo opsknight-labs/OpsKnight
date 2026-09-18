@@ -190,6 +190,9 @@ export type GlobalWarRoomPolicy = {
   enabled: boolean;
   defaultProviders: WarRoomProviderSet;
   defaultMeetingProvider: IncidentMeetingProvider;
+  autoCreateOnUrgency?: string[];
+  autoCreateOnPriority?: string[];
+  archiveOnResolve?: boolean;
 };
 
 export type IncidentWarRoomProviderView = {

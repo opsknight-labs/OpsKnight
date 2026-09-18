@@ -49,6 +49,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
           teamName?: string | null;
           enabled: boolean;
           interactiveEnabled: boolean;
+          warRoomEnabled: boolean;
           createdAt: Date;
           updatedAt: Date;
           service?: { name: string } | null;
@@ -144,8 +145,9 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   const operationalSummary =
     fleetSummary ?? (warRoomSnapshots ? summarizeOperationalHealth(warRoomSnapshots) : []);
   const teamsSummary = operationalSummary.find(s => s.provider === 'MICROSOFT_TEAMS') ?? null;
-  // Missing evidence must be UNKNOWN, never implicitly healthy. DB/diagnostics failure → UNKNOWN.
-  const integrationHealthForEmpty: import('@/lib/war-room/operations/types').OperationalHealth =
+
+  // 1. Integration Readiness: Is Teams configured, credentials valid, bot healthy, and RSC permissions intact?
+  const integrationReadiness: import('@/lib/war-room/operations/types').OperationalHealth =
     !isConnected
       ? 'UNAVAILABLE'
       : rscUnknown
@@ -155,10 +157,11 @@ export default async function MicrosoftTeamsIntegrationRoute() {
           : health?.botHealthy === false
             ? 'DEGRADED'
             : 'HEALTHY';
-  const operationalHealthLabel: import('@/lib/war-room/operations/types').OperationalHealth =
-    warRoomDiagnosticsError
-      ? ('UNKNOWN' as const)
-      : (teamsSummary?.operationalHealth ?? integrationHealthForEmpty);
+
+  // 2. Operational Fleet Health & Debt: Historical war rooms, degraded channels, cleanup pending
+  const operationalFleetHealth: import('@/lib/war-room/operations/types').OperationalHealth =
+    warRoomDiagnosticsError ? ('UNKNOWN' as const) : (teamsSummary?.operationalHealth ?? 'HEALTHY');
+  const operationalHealthLabel = integrationReadiness;
   // Fleet totals are authoritative; the paginated table is only a view (limit 100).
   const totalWarRooms =
     teamsSummary?.totalRooms ?? (warRoomSnapshots ? warRoomSnapshots.length : 0);
@@ -270,12 +273,22 @@ export default async function MicrosoftTeamsIntegrationRoute() {
           <h2 className="text-sm font-semibold flex items-center gap-2">
             <Shield className="h-4 w-4 text-muted-foreground" /> Integration Health
           </h2>
-          <Badge
-            variant="outline"
-            className={`text-[10px] font-semibold ${operationalHealthLabel === 'HEALTHY' ? 'border-emerald-300 text-emerald-700' : operationalHealthLabel === 'UNKNOWN' ? 'border-blue-300 text-blue-700' : operationalHealthLabel === 'UNAVAILABLE' ? 'border-slate-300 text-slate-600' : operationalHealthLabel === 'DRIFTED' ? 'border-violet-300 text-violet-700' : 'border-amber-300 text-amber-700'}`}
-          >
-            {operationalHealthLabel}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground font-medium">Readiness:</span>
+            <Badge
+              variant="outline"
+              className={`text-[10px] font-semibold ${integrationReadiness === 'HEALTHY' ? 'border-emerald-300 text-emerald-700' : integrationReadiness === 'UNKNOWN' ? 'border-blue-300 text-blue-700' : integrationReadiness === 'UNAVAILABLE' ? 'border-slate-300 text-slate-600' : 'border-amber-300 text-amber-700'}`}
+            >
+              {integrationReadiness}
+            </Badge>
+            <span className="text-[11px] text-muted-foreground font-medium">Fleet:</span>
+            <Badge
+              variant="outline"
+              className={`text-[10px] font-semibold ${operationalFleetHealth === 'HEALTHY' ? 'border-emerald-300 text-emerald-700' : operationalFleetHealth === 'UNKNOWN' ? 'border-blue-300 text-blue-700' : operationalFleetHealth === 'UNAVAILABLE' ? 'border-slate-300 text-slate-600' : operationalFleetHealth === 'DRIFTED' ? 'border-violet-300 text-violet-700' : 'border-amber-300 text-amber-700'}`}
+            >
+              {operationalFleetHealth}
+            </Badge>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 text-[11px]">
           <Badge variant="outline" className="text-[10px]">
@@ -436,6 +449,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
                   <th className="text-left font-semibold py-2 px-2">Service</th>
                   <th className="text-left font-semibold py-2 px-2">Team / Channel</th>
                   <th className="text-left font-semibold py-2 px-2">Interactive</th>
+                  <th className="text-left font-semibold py-2 px-2">War Rooms</th>
                 </tr>
               </thead>
               <tbody>
@@ -446,6 +460,7 @@ export default async function MicrosoftTeamsIntegrationRoute() {
                       {d.teamName ?? d.teamId} → {d.channelName ?? d.channelId}
                     </td>
                     <td className="py-2 px-2">{d.interactiveEnabled ? 'ON' : 'OFF'}</td>
+                    <td className="py-2 px-2">{d.warRoomEnabled ? 'ON' : 'OFF'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -515,6 +530,7 @@ type MicrosoftTeamsDestinationRow = {
   teamName?: string | null;
   enabled: boolean;
   interactiveEnabled: boolean;
+  warRoomEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   service?: { name: string } | null;

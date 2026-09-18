@@ -349,6 +349,20 @@ async function archiveWarRoomIfStillResolved(payload: EventSideEffectPayload): P
     incident.resolvedAt?.toISOString() !== lifecycle.transitionAt
   )
     return;
+
+  // Honor archiveOnResolve setting: if false ("Persistent"), keep collaboration open upon resolution.
+  const chatOpsConfig = prisma.chatOpsConfig?.findUnique
+    ? await prisma.chatOpsConfig
+        .findUnique({
+          where: { id: 'default' },
+          select: { archiveOnResolve: true },
+        })
+        .catch(() => null)
+    : null;
+  if (chatOpsConfig && chatOpsConfig.archiveOnResolve === false) {
+    return;
+  }
+
   // Close active incident meeting bridge on resolution
   const { closeIncidentMeeting } = await import('./incident-collaboration/meeting-store');
   await closeIncidentMeeting(payload.incidentId).catch(() => null);

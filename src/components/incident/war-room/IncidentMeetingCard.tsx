@@ -273,7 +273,7 @@ export function IncidentMeetingCard({ meeting, onAction, className }: IncidentMe
           </Button>
         )}
 
-        {meeting.joinUrl && (
+        {meeting.actions.canJoin && meeting.joinUrl && (
           <Button
             type="button"
             variant="outline"
