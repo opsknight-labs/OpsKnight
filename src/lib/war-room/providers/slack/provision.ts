@@ -220,7 +220,7 @@ export async function requestSlackWarRoom(
           enabled: true,
           warRoomEnabled: true,
           autoCreate: effectiveAutoCreate,
-          membershipType: (intent.membershipType ?? 'STANDARD') as 'STANDARD' | 'PRIVATE',
+          membershipType: 'STANDARD' as const,
         }
       : null;
 
@@ -229,11 +229,13 @@ export async function requestSlackWarRoom(
       where: { id: incidentId },
       select: { urgency: true, priority: true, visibility: true },
     });
+    // Slack war rooms are always open to the entire organization regardless of
+    // status-page public/private visibility.
     const decision = evaluateWarRoomPolicy({
       incident: {
         urgency: policyIncident?.urgency ?? incident.urgency,
         priority: policyIncident?.priority ?? incident.priority,
-        visibility: policyIncident?.visibility ?? 'PUBLIC',
+        visibility: 'PUBLIC',
       },
       service: { autoCreate: effectiveAutoCreate },
       destination,
@@ -270,7 +272,7 @@ export async function requestSlackWarRoom(
         },
         data: {
           providerTenantId: slackWorkspaceId,
-          membershipType: decision.membershipType,
+          membershipType: 'STANDARD',
         },
       });
       await tx.backgroundJob.create({
@@ -861,7 +863,8 @@ export async function provisionSlackWarRoom(
   const effectiveChannelName = plannedForCreate;
   const createResult = await slackApiCall('conversations.create', botToken, {
     name: effectiveChannelName,
-    is_private: room.membershipType === 'PRIVATE',
+    // Slack war-room channels are open to all responders in the organization
+    is_private: false,
   });
 
   if (!createResult.ok) {

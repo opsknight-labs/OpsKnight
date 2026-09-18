@@ -44,7 +44,7 @@ export function WarRoomCreateDialog({
     Record<string, 'STANDARD' | 'PRIVATE'>
   >({
     MICROSOFT_TEAMS: isPrivateIncident ? 'PRIVATE' : 'STANDARD',
-    SLACK: isPrivateIncident ? 'PRIVATE' : 'STANDARD',
+    SLACK: 'STANDARD',
   });
   const [activeProviderTrigger, setActiveProviderTrigger] = useState<WarRoomProviderName | null>(
     null
@@ -52,20 +52,21 @@ export function WarRoomCreateDialog({
 
   React.useEffect(() => {
     if (isPrivateIncident) {
-      setSelectedMembershipByProvider({
+      setSelectedMembershipByProvider(prev => ({
+        ...prev,
         MICROSOFT_TEAMS: 'PRIVATE',
-        SLACK: 'PRIVATE',
-      });
+      }));
     }
   }, [isPrivateIncident]);
 
   const handleCreate = async (provider: WarRoomProviderName) => {
     setActiveProviderTrigger(provider);
-    const chosen =
+    const effectiveMembership =
       provider === 'MICROSOFT_TEAMS'
-        ? (selectedMembershipByProvider.MICROSOFT_TEAMS ?? 'STANDARD')
-        : (selectedMembershipByProvider.SLACK ?? 'STANDARD');
-    const effectiveMembership = isPrivateIncident ? 'PRIVATE' : chosen;
+        ? isPrivateIncident
+          ? 'PRIVATE'
+          : (selectedMembershipByProvider.MICROSOFT_TEAMS ?? 'STANDARD')
+        : 'STANDARD';
     const options = { membershipType: effectiveMembership };
     try {
       await onCreate(provider, options);
@@ -130,7 +131,7 @@ export function WarRoomCreateDialog({
                         onClick={() =>
                           setSelectedMembershipByProvider(prev => ({
                             ...prev,
-                            ...(isTeams ? { MICROSOFT_TEAMS: 'STANDARD' } : { SLACK: 'STANDARD' }),
+                            MICROSOFT_TEAMS: 'STANDARD',
                           }))
                         }
                         className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-medium transition-all ${
@@ -155,7 +156,7 @@ export function WarRoomCreateDialog({
                         onClick={() =>
                           setSelectedMembershipByProvider(prev => ({
                             ...prev,
-                            ...(isTeams ? { MICROSOFT_TEAMS: 'PRIVATE' } : { SLACK: 'PRIVATE' }),
+                            MICROSOFT_TEAMS: 'PRIVATE',
                           }))
                         }
                         className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-medium transition-all ${

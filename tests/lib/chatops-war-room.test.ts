@@ -404,7 +404,7 @@ describe('ChatOps War-Room Engine', () => {
       expect(retryModule.retryFetch).not.toHaveBeenCalled();
     });
 
-    it('should request private Slack war-room when incident is private', async () => {
+    it('should request standard Slack war-room even when incident is private (Slack war rooms are open to org)', async () => {
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
         id: 'inc-private-123',
         title: 'Confidential Incident',
@@ -423,13 +423,13 @@ describe('ChatOps War-Room Engine', () => {
       } as never);
       vi.mocked(requestSlackWarRoom).mockResolvedValue({
         accepted: true,
-        warRoomId: 'slack-room-priv',
+        warRoomId: 'slack-room-standard',
         state: 'PROVISIONING',
       } as never);
       vi.mocked(prisma.incidentWarRoom.findUnique).mockResolvedValue({
-        id: 'slack-room-priv',
+        id: 'slack-room-standard',
         state: 'PROVISIONING',
-        membershipType: 'PRIVATE',
+        membershipType: 'STANDARD',
         providerChannelId: null,
         providerChannelName: null,
         providerChannelUrl: null,
@@ -437,7 +437,7 @@ describe('ChatOps War-Room Engine', () => {
 
       const result = await createIncidentWarRoom('inc-private-123', { force: true });
       expect(result.success).toBe(true);
-      expect(result.warRoomId).toBe('slack-room-priv');
+      expect(result.warRoomId).toBe('slack-room-standard');
       expect(requestSlackWarRoom).toHaveBeenCalledWith('inc-private-123', {
         manual: true,
         allowNewGeneration: true,
