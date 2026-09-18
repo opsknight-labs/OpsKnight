@@ -22,8 +22,9 @@ const context = z
     destinationId: z.string().trim().min(1).max(191),
     messageGeneration: z.coerce.number().int().positive(),
     warRoomId: z.string().trim().min(1).max(191).optional(),
+    userId: z.never({ message: 'User ID spoofing is forbidden' }).optional(),
   })
-  .strict();
+  .passthrough();
 
 const schemas = {
   [TEAMS_CHATOPS_VERBS.REFRESH]: context,
@@ -41,9 +42,11 @@ const schemas = {
           .optional()
       ),
     })
-    .strict(),
+    .passthrough(),
   [TEAMS_CHATOPS_VERBS.ASSIGN_SELF]: context,
-  [TEAMS_CHATOPS_VERBS.NOTE]: context.extend({ note: z.string().trim().min(1).max(2000) }).strict(),
+  [TEAMS_CHATOPS_VERBS.NOTE]: context
+    .extend({ note: z.string().trim().min(1).max(2000) })
+    .passthrough(),
   [TEAMS_CHATOPS_VERBS.PRIORITY]: context
     .extend({
       priority: z
@@ -51,13 +54,13 @@ const schemas = {
         .trim()
         .regex(/^P[1-5]$/),
     })
-    .strict(),
+    .passthrough(),
   [TEAMS_CHATOPS_VERBS.SNOOZE]: context
     .extend({
       minutes: z.coerce.number().int().min(1).max(10080),
       reason: z.string().trim().max(500).optional(),
     })
-    .strict(),
+    .passthrough(),
   [TEAMS_CHATOPS_VERBS.ESCALATE]: context,
   [TEAMS_CHATOPS_VERBS.JOIN_RESPONDER]: context,
   [TEAMS_CHATOPS_VERBS.WHO]: context,

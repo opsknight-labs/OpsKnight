@@ -451,7 +451,12 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     return response as unknown as TeamsInvokeResponse;
   } catch (error) {
     logger.error('[MicrosoftTeams] Adaptive Card invoke error', {
-      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+      error:
+        error instanceof ZodError
+          ? { name: 'ZodError', issues: error.issues }
+          : error instanceof Error
+            ? { message: error.message, stack: error.stack }
+            : error,
       activityValue: input.activity.value,
     });
     addOperationalMetric('opsknight_chatops_invokes_total', 1, {
