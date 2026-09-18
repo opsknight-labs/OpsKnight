@@ -74,6 +74,8 @@ export interface MicrosoftTeamsManifestOptions {
   /** Enables lifecycle and participant-management permissions in addition to channel creation. */
   includeWarRoomCollaborationPermissions?: boolean;
   includeWarRoomPermissions?: boolean;
+  /** Optional extra domains allowed for navigation/popups in Teams (e.g. opssentinal.com) */
+  extraValidDomains?: string[];
 }
 
 // Messaging endpoint is configured on the Azure Bot resource, not in the manifest.
@@ -119,6 +121,7 @@ export function buildMicrosoftTeamsAppManifest({
   includeTeamSettingsPermissions = includeOptionalPermissions,
   includeWarRoomPermissions = false,
   includeWarRoomCollaborationPermissions = false,
+  extraValidDomains,
 }: MicrosoftTeamsManifestOptions): MicrosoftTeamsAppManifest {
   const origin = appUrl.replace(/\/+$/, '');
   const rscPermissions = [
@@ -173,7 +176,7 @@ export function buildMicrosoftTeamsAppManifest({
         isNotificationOnly: true,
       },
     ],
-    validDomains: [host],
+    validDomains: Array.from(new Set([host, ...(extraValidDomains || [])])),
     authorization: {
       permissions: {
         resourceSpecific: rscPermissions.map(name => ({ name, type: 'Application' as const })),

@@ -1,8 +1,13 @@
 import type { IncidentChatProvider, ChatDeliveryResult } from '@/lib/chatops/provider';
 import prisma from '@/lib/prisma';
 import { getBaseUrl } from '@/lib/env-validation';
-import { sendMicrosoftTeamsIncidentCard, updateMicrosoftTeamsIncidentCard, testMicrosoftTeamsConnection } from './client';
+import {
+  sendMicrosoftTeamsIncidentCard,
+  updateMicrosoftTeamsIncidentCard,
+  testMicrosoftTeamsConnection,
+} from './client';
 import { getMicrosoftTeamsInteractiveCardContext } from './card-context';
+import { getIncidentMeeting } from '@/lib/incident-collaboration/meeting-store';
 
 function incidentUrl(incidentId: string): string {
   const base = getBaseUrl().replace(/\/+$/, '');
@@ -62,10 +67,37 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     beforeCreateAttempt?: () => Promise<void>;
     replacementGeneration?: boolean;
   }): Promise<ChatDeliveryResult> {
-    const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: args.destinationId } });
-    if (!dest) return { success: false, error: 'Teams destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
+    const dest = await prisma.microsoftTeamsDestination.findUnique({
+      where: { id: args.destinationId },
+    });
+    if (!dest)
+      return {
+        success: false,
+        error: 'Teams destination not found',
+        errorCode: 'DESTINATION_NOT_FOUND',
+        statusCode: 404,
+      };
     const url = args.incident.incidentUrl || incidentUrl(args.incident.id);
-    const interactive = await getMicrosoftTeamsInteractiveCardContext(args.destinationId, args.incident.id, args.replacementGeneration);
+    const [interactive, meetingRecord] = await Promise.all([
+      getMicrosoftTeamsInteractiveCardContext(
+        args.destinationId,
+        args.incident.id,
+        args.replacementGeneration
+      ),
+      getIncidentMeeting(args.incident.id).catch(() => null),
+    ]);
+    const meeting =
+      meetingRecord &&
+      meetingRecord.joinUrl &&
+      ['READY', 'PROVISIONING', 'REQUESTED'].includes(meetingRecord.state)
+        ? {
+            provider: meetingRecord.provider,
+            joinUrl: meetingRecord.joinUrl,
+            joinWebUrl: meetingRecord.joinWebUrl,
+            conferenceId: meetingRecord.conferenceId,
+            tollNumber: meetingRecord.tollNumber,
+          }
+        : null;
     const res = await sendMicrosoftTeamsIncidentCard({
       tenantId: dest.tenantId,
       teamId: dest.teamId,
@@ -73,6 +105,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
       beforeCreateAttempt: args.beforeCreateAttempt,
+      meeting,
       interactive,
     });
     return res;
@@ -104,10 +137,33 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
     eventType: 'triggered' | 'acknowledged' | 'resolved';
     disableActions?: boolean;
   }): Promise<ChatDeliveryResult> {
-    const dest = await prisma.microsoftTeamsDestination.findUnique({ where: { id: args.destinationId } });
-    if (!dest) return { success: false, error: 'Teams destination not found', errorCode: 'DESTINATION_NOT_FOUND', statusCode: 404 };
+    const dest = await prisma.microsoftTeamsDestination.findUnique({
+      where: { id: args.destinationId },
+    });
+    if (!dest)
+      return {
+        success: false,
+        error: 'Teams destination not found',
+        errorCode: 'DESTINATION_NOT_FOUND',
+        statusCode: 404,
+      };
     const url = args.incident.incidentUrl || incidentUrl(args.incident.id);
-    const interactive = await getMicrosoftTeamsInteractiveCardContext(args.destinationId, args.incident.id);
+    const [interactive, meetingRecord] = await Promise.all([
+      getMicrosoftTeamsInteractiveCardContext(args.destinationId, args.incident.id),
+      getIncidentMeeting(args.incident.id).catch(() => null),
+    ]);
+    const meeting =
+      meetingRecord &&
+      meetingRecord.joinUrl &&
+      ['READY', 'PROVISIONING', 'REQUESTED'].includes(meetingRecord.state)
+        ? {
+            provider: meetingRecord.provider,
+            joinUrl: meetingRecord.joinUrl,
+            joinWebUrl: meetingRecord.joinWebUrl,
+            conferenceId: meetingRecord.conferenceId,
+            tollNumber: meetingRecord.tollNumber,
+          }
+        : null;
     return updateMicrosoftTeamsIncidentCard({
       tenantId: dest.tenantId,
       teamId: dest.teamId,
@@ -117,6 +173,7 @@ export class MicrosoftTeamsChatProvider implements IncidentChatProvider {
       incident: { ...args.incident, incidentUrl: url },
       eventType: args.eventType,
       disableActions: args.disableActions,
+      meeting,
       interactive,
     });
   }

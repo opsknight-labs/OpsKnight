@@ -469,7 +469,8 @@ export async function getIncidentCollaborationView(
           (meeting.state === 'READY' || meeting.state === 'PROVISIONING') &&
           canManageMeeting &&
           incident.status !== 'RESOLVED',
-        canProvision: false,
+        canProvision:
+          canManageMeeting && incident.status !== 'RESOLVED' && meeting.state === 'CLOSED',
         supportsExternalClose: isTeams,
         closeLabel: isTeams ? 'End Meeting' : 'Detach Bridge',
       },

@@ -146,7 +146,40 @@ export async function requestMicrosoftTeamsWarRoom(
           break;
         }
       }
-      if (!privateOwner) return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
+
+      if (!privateOwner && config?.defaultMeetingOrganizerUpn?.trim()) {
+        const upn = config.defaultMeetingOrganizerUpn.trim();
+        try {
+          const { getMicrosoftTeamsGraphAccessToken } =
+            await import('@/lib/microsoft-teams/client');
+          const token = await getMicrosoftTeamsGraphAccessToken(destination.tenantId);
+          if (token) {
+            const userRes = await fetch(
+              `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (userRes.ok) {
+              const userData = (await userRes.json()) as { id?: string };
+              if (userData?.id) {
+                privateOwner = {
+                  userId: incident.assigneeId || 'system-organizer',
+                  objectId: userData.id,
+                };
+              }
+            }
+          }
+        } catch {
+          // Best-effort organizer resolution
+        }
+      }
+
+      if (!privateOwner) {
+        if (intent.manual && intent.membershipType === 'STANDARD') {
+          decision.membershipType = 'STANDARD';
+        } else {
+          return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
+        }
+      }
     }
 
     const claimed = await claimWarRoomProvisioning(tx, {
@@ -894,6 +927,51 @@ export async function provisionMicrosoftTeamsWarRoom(
           privateOwnerObjectId = objectId;
           owner = candidateOwner;
           break;
+        }
+      }
+      if (!owner.value) {
+        const teamsConfig = await prisma.microsoftTeamsConfig.findFirst({
+          where: { enabled: true },
+          select: { defaultMeetingOrganizerUpn: true },
+        });
+        if (teamsConfig?.defaultMeetingOrganizerUpn?.trim()) {
+          const upn = teamsConfig.defaultMeetingOrganizerUpn.trim();
+          try {
+            const { getMicrosoftTeamsGraphAccessToken } =
+              await import('@/lib/microsoft-teams/client');
+            const token = await getMicrosoftTeamsGraphAccessToken(room.providerTenantId);
+            if (token) {
+              const userRes = await fetch(
+                `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              if (userRes.ok) {
+                const userData = (await userRes.json()) as { id?: string };
+                if (userData?.id) {
+                  const candidateOwner = await findTeamMember({
+                    tenantId: room.providerTenantId,
+                    teamId: room.providerContainerId,
+                    userObjectId: userData.id,
+                  });
+                  if (candidateOwner.ok && candidateOwner.value) {
+                    await prisma.incidentWarRoom.updateMany({
+                      where: { id: room.id, provisioningToken: expectedProvisioningToken },
+                      data: {
+                        metadata: {
+                          privateOwnerUserId: 'system-organizer',
+                          privateOwnerObjectId: userData.id,
+                        },
+                      },
+                    });
+                    privateOwnerObjectId = userData.id;
+                    owner = candidateOwner;
+                  }
+                }
+              }
+            }
+          } catch {
+            // best-effort organizer lookup
+          }
         }
       }
       if (!owner.value)
