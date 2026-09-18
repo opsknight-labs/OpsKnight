@@ -229,6 +229,8 @@ export type IncidentCollaborationView = {
   visible: boolean;
   incidentId: string;
   incidentStatus: string;
+  incidentVisibility?: string;
+  privacyRequirement?: 'STANDARD' | 'PRIVATE';
   summary: IncidentCollaborationSummary;
   providers: IncidentWarRoomProviderView[];
   meeting: IncidentMeetingView | null;
