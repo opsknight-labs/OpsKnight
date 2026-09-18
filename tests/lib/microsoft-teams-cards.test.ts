@@ -42,12 +42,23 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
   });
 
   it('encodes Triggered/Acknowledged/Resolved with distinct accent and badge', () => {
-    const triggered = buildMicrosoftTeamsIncidentCard({ incident: incident(), eventType: 'triggered' });
-    const ack = buildMicrosoftTeamsIncidentCard({ incident: incident(), eventType: 'acknowledged' });
-    const resolved = buildMicrosoftTeamsIncidentCard({ incident: incident(), eventType: 'resolved' });
-    const tMeta = (triggered as { _opsknightMeta: { accent: string; eventType: string } })._opsknightMeta;
+    const triggered = buildMicrosoftTeamsIncidentCard({
+      incident: incident(),
+      eventType: 'triggered',
+    });
+    const ack = buildMicrosoftTeamsIncidentCard({
+      incident: incident(),
+      eventType: 'acknowledged',
+    });
+    const resolved = buildMicrosoftTeamsIncidentCard({
+      incident: incident(),
+      eventType: 'resolved',
+    });
+    const tMeta = (triggered as { _opsknightMeta: { accent: string; eventType: string } })
+      ._opsknightMeta;
     const aMeta = (ack as { _opsknightMeta: { accent: string; eventType: string } })._opsknightMeta;
-    const rMeta = (resolved as { _opsknightMeta: { accent: string; eventType: string } })._opsknightMeta;
+    const rMeta = (resolved as { _opsknightMeta: { accent: string; eventType: string } })
+      ._opsknightMeta;
     expect(tMeta.accent).toBe('#e11d48');
     expect(aMeta.accent).toBe('#d97706');
     expect(rMeta.accent).toBe('#059669');
@@ -57,10 +68,16 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
   });
 
   it('suppresses empty description and truncates long description at 280 chars', () => {
-    const noDesc = buildMicrosoftTeamsIncidentCard({ incident: incident({ description: '' }), eventType: 'triggered' });
+    const noDesc = buildMicrosoftTeamsIncidentCard({
+      incident: incident({ description: '' }),
+      eventType: 'triggered',
+    });
     expect(JSON.stringify(noDesc)).not.toContain('p99'); // description TextBlock absent
     const long = 'x'.repeat(500);
-    const truncated = buildMicrosoftTeamsIncidentCard({ incident: incident({ description: long }), eventType: 'triggered' });
+    const truncated = buildMicrosoftTeamsIncidentCard({
+      incident: incident({ description: long }),
+      eventType: 'triggered',
+    });
     const bodyStr = JSON.stringify(truncated.body);
     // Should be sliced to ~280 with ellipsis, not 500 raw.
     expect(bodyStr.length).toBeLessThan(JSON.stringify(long).length + 2000);
@@ -89,8 +106,14 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
   });
 
   it('includes assignee fact when present and omits when absent', () => {
-    const withAssignee = buildMicrosoftTeamsIncidentCard({ incident: incident({ assigneeName: 'Bob' }), eventType: 'triggered' });
-    const withoutAssignee = buildMicrosoftTeamsIncidentCard({ incident: incident({ assigneeName: null as unknown as string }), eventType: 'triggered' });
+    const withAssignee = buildMicrosoftTeamsIncidentCard({
+      incident: incident({ assigneeName: 'Bob' }),
+      eventType: 'triggered',
+    });
+    const withoutAssignee = buildMicrosoftTeamsIncidentCard({
+      incident: incident({ assigneeName: null as unknown as string }),
+      eventType: 'triggered',
+    });
     const withStr = JSON.stringify(withAssignee.body);
     const withoutStr = JSON.stringify(withoutAssignee.body);
     expect(withStr).toContain('Assignee');
@@ -112,7 +135,10 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
     });
     expect(JSON.stringify(resolved.body)).toContain('Resolved by Dave');
 
-    const triggered = buildMicrosoftTeamsIncidentCard({ incident: incident(), eventType: 'triggered' });
+    const triggered = buildMicrosoftTeamsIncidentCard({
+      incident: incident(),
+      eventType: 'triggered',
+    });
     expect(JSON.stringify(triggered.body)).toContain('Created');
     expect(JSON.stringify(triggered.body)).toContain('UTC');
   });
@@ -120,7 +146,13 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
   it('renders strict Phase 2 actions only when explicitly enabled and capability-allowed', () => {
     const card = buildMicrosoftTeamsIncidentCard(
       { incident: incident(), eventType: 'triggered' },
-      { interactive: { destinationId: 'dest-1', messageGeneration: 3, capabilities: { canAcknowledge: true, canRead: true } } },
+      {
+        interactive: {
+          destinationId: 'dest-1',
+          messageGeneration: 3,
+          capabilities: { canAcknowledge: true, canRead: true },
+        },
+      }
     );
     const json = JSON.stringify(card);
     expect(json).toContain('Action.Execute');
@@ -134,14 +166,58 @@ describe('buildMicrosoftTeamsIncidentCard', () => {
   it('keeps at most three primary actions and scopes personalized refresh', () => {
     const card = buildMicrosoftTeamsIncidentCard(
       { incident: incident(), eventType: 'triggered' },
-      { interactive: { destinationId: 'dest-1', messageGeneration: 4, refreshUserIds: ['29:alice'], capabilities: {
-        canAcknowledge: true, canAssignSelf: true, canEscalate: true, canAddNote: true,
-        canSetPriority: true, canSnooze: true, canJoinResponder: true, canRead: true,
-      } } },
+      {
+        interactive: {
+          destinationId: 'dest-1',
+          messageGeneration: 4,
+          refreshUserIds: ['29:alice'],
+          capabilities: {
+            canAcknowledge: true,
+            canAssignSelf: true,
+            canEscalate: true,
+            canAddNote: true,
+            canSetPriority: true,
+            canSnooze: true,
+            canJoinResponder: true,
+            canRead: true,
+          },
+        },
+      }
     );
     const actions = card.actions as Array<{ title: string; mode?: string }>;
     expect(actions.filter(action => action.mode !== 'secondary')).toHaveLength(3);
     expect(actions.find(action => action.title === 'Current responders')?.mode).toBe('secondary');
     expect((card.refresh as { userIds: string[] }).userIds).toEqual(['29:alice']);
+  });
+
+  it('does not render join meeting action when meeting is absent or not READY (e.g. gen1 closed or gen2 provisioning)', () => {
+    const card = buildMicrosoftTeamsIncidentCard(
+      { incident: incident(), eventType: 'triggered' },
+      { meeting: null }
+    );
+    const json = JSON.stringify(card);
+    expect(json).not.toContain('Join Microsoft Teams Meeting');
+    expect(json).not.toContain('Video Bridge');
+  });
+
+  it('renders video bridge and join meeting action when meeting is READY with canonical joinUrl', () => {
+    const card = buildMicrosoftTeamsIncidentCard(
+      { incident: incident(), eventType: 'triggered' },
+      {
+        meeting: {
+          provider: 'MICROSOFT_TEAMS',
+          joinUrl: 'https://teams.microsoft.com/l/meetup-join/gen2-meeting',
+        },
+      }
+    );
+    const json = JSON.stringify(card);
+    expect(json).toContain('Join Teams Meeting');
+    expect(json).toContain('https://teams.microsoft.com/l/meetup-join/gen2-meeting');
+    expect(json).toContain('Video Bridge');
+    const joinAction = (card.actions as Array<{ title: string; url: string }>).find(
+      a => a.title === 'Join Teams Meeting'
+    );
+    expect(joinAction).toBeDefined();
+    expect(joinAction?.url).toBe('https://teams.microsoft.com/l/meetup-join/gen2-meeting');
   });
 });

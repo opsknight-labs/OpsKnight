@@ -11,7 +11,7 @@ import {
 import {
   getGlobalWarRoomPolicy,
   getServiceWarRoomPolicy,
-  resolveEffectiveMeetingProvider,
+  resolveIncidentCollaborationPolicy,
 } from '@/lib/incident-collaboration/policy';
 import type { IncidentMeetingProvider } from '@/lib/incident-collaboration/types';
 
@@ -45,6 +45,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         id: true,
         title: true,
         status: true,
+        urgency: true,
+        priority: true,
+        visibility: true,
         serviceId: true,
         service: {
           select: {
@@ -104,13 +107,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
       const isTeamsAvailable = Boolean(teamsConfig?.enabled);
 
-      const resolution = resolveEffectiveMeetingProvider({
-        globalMeetingProvider: globalPolicy.defaultMeetingProvider,
-        serviceMeetingProvider: servicePolicy ? (servicePolicy.meetingProvider ?? null) : null,
+      const canonicalPolicy = resolveIncidentCollaborationPolicy({
+        incident: {
+          urgency: incident.urgency,
+          priority: incident.priority,
+          visibility: incident.visibility,
+        },
+        globalPolicy,
+        servicePolicy,
+        availableIntegrations: isTeamsAvailable ? ['MICROSOFT_TEAMS'] : [],
         isTeamsMeetingAvailable: isTeamsAvailable,
-        globalWarRoomsEnabled: globalPolicy.enabled,
-        serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : true,
       });
+
+      const resolution = canonicalPolicy.meeting;
 
       if (resolution.isDisabled || resolution.effectiveProvider === 'NONE') {
         return jsonError(

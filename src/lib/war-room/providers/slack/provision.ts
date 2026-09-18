@@ -178,30 +178,37 @@ export async function requestSlackWarRoom(
     const slackWorkspaceId =
       incident.service.slackIntegration?.workspaceId || globalIntegration?.workspaceId || null;
 
-    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveEffectiveWarRoomProviders } =
+    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveIncidentCollaborationPolicy } =
       await import('@/lib/incident-collaboration/policy');
 
     const [globalPolicy, servicePolicy] = await Promise.all([
-      getGlobalWarRoomPolicy(),
-      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
+      getGlobalWarRoomPolicy(tx),
+      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId, tx) : null,
     ]);
 
-    const effectivePolicy = resolveEffectiveWarRoomProviders({
-      globalProviders: globalPolicy.defaultProviders,
-      serviceProviders: servicePolicy ? servicePolicy.serviceProviders : null,
-      availableProviders: ['SLACK'],
-      globalWarRoomsEnabled: globalPolicy.enabled,
-      serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : false,
+    const canonicalPolicy = resolveIncidentCollaborationPolicy({
+      incident: {
+        urgency: incident.urgency,
+        priority: incident.priority,
+        visibility: incident.visibility,
+      },
+      globalPolicy,
+      servicePolicy,
+      availableIntegrations: ['SLACK'],
+      isTeamsMeetingAvailable: false,
     });
 
-    if (!effectivePolicy.effectiveProviders.includes('SLACK') || effectivePolicy.isDisabled) {
+    if (
+      !canonicalPolicy.effectiveProviders.includes('SLACK') ||
+      canonicalPolicy.isCollaborationDisabled
+    ) {
       return { accepted: false as const, code: 'PROVIDER_POLICY_EXCLUDED' };
     }
 
     const effectiveAutoCreate = Boolean(
-      (servicePolicy?.autoCreate ?? incident.service.autoCreateWarRoom) &&
-      effectivePolicy.effectiveProviders.includes('SLACK') &&
-      !effectivePolicy.isDisabled
+      canonicalPolicy.shouldAutoCreate &&
+      canonicalPolicy.effectiveProviders.includes('SLACK') &&
+      !canonicalPolicy.isCollaborationDisabled
     );
 
     const destination = slackWorkspaceId

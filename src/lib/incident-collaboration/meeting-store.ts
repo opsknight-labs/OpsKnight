@@ -409,7 +409,7 @@ export async function requestMeetingProvision(params: {
                 state: 'PROVISIONING',
                 health: 'HEALTHY',
                 externalId,
-                joinUrl: current?.joinUrl || '',
+                joinUrl: '',
                 provisioningToken,
                 provisioningStartedAt: new Date(),
               },
@@ -428,7 +428,7 @@ export async function requestMeetingProvision(params: {
                 state: 'PROVISIONING',
                 health: 'HEALTHY',
                 externalId,
-                joinUrl: current?.joinUrl || '',
+                joinUrl: '',
                 provisioningToken,
                 provisioningStartedAt: new Date(),
               },
@@ -1412,7 +1412,7 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
     return; // Already active or provisioning
   }
 
-  const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveEffectiveMeetingProvider } =
+  const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveIncidentCollaborationPolicy } =
     await import('./policy');
 
   const [globalPolicy, servicePolicy, teamsConfig] = await Promise.all([
@@ -1426,28 +1426,29 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
       : Promise.resolve(null),
   ]);
 
-  const autoCreate = servicePolicy?.autoCreate ?? incident.service?.autoCreateWarRoom ?? false;
-  if (!autoCreate) return;
-
-  const isTeamsMeetingAvailable = Boolean(teamsConfig?.enabled);
-
-  const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
-
-  const resolution = resolveEffectiveMeetingProvider({
-    globalMeetingProvider: globalPolicy.defaultMeetingProvider,
-    serviceMeetingProvider: servicePolicy?.meetingProvider ?? null,
-    isTeamsMeetingAvailable,
-    globalWarRoomsEnabled: globalPolicy.enabled,
-    serviceWarRoomsEnabled: servicePolicy?.warRoomsEnabled ?? true,
+  const canonicalPolicy = resolveIncidentCollaborationPolicy({
+    incident: {
+      urgency: incident.urgency,
+      priority: incident.priority,
+      visibility: incident.visibility,
+    },
+    globalPolicy,
+    servicePolicy,
+    availableIntegrations: [],
+    isTeamsMeetingAvailable: Boolean(teamsConfig?.enabled),
   });
 
-  if (resolution.isDisabled || resolution.effectiveProvider === 'NONE') {
+  if (!canonicalPolicy.shouldAutoCreate) return;
+
+  if (canonicalPolicy.meeting.isDisabled || canonicalPolicy.meeting.effectiveProvider === 'NONE') {
     return;
   }
 
+  const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
+
   await requestMeetingProvision({
     incidentId,
-    provider: resolution.effectiveProvider,
+    provider: canonicalPolicy.meeting.effectiveProvider,
     incidentTitle: incident.title,
     customTemplate,
   });

@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
@@ -10,6 +11,11 @@ import { assertAdmin, assertCanModifyService } from '@/lib/rbac';
 import { assertServiceNameAvailable, UniqueNameConflictError } from '@/lib/unique-names';
 import { assertJiraIssueType, assertJiraProjectKey, parseLabels } from '@/lib/jira-validation';
 import { parseServiceNotificationChannels } from '@/lib/service-notification-settings';
+import { setServiceWarRoomPolicy } from '@/lib/incident-collaboration/policy';
+import type {
+  WarRoomProviderSet,
+  IncidentMeetingProvider,
+} from '@/lib/incident-collaboration/types';
 
 const JIRA_AUTO_CREATE_URGENCIES = new Set(['HIGH', 'MEDIUM', 'LOW']);
 function serviceSettingsRedirect(serviceId: string, tab = 'settings') {
@@ -208,7 +214,16 @@ export async function updateServiceNotificationSettings(serviceId: string, formD
   redirect(serviceSettingsRedirect(serviceId, 'notifications'));
 }
 
-const ALLOWED_VIDEO_BRIDGES = new Set(['INHERIT', 'JITSI', 'ZOOM', 'GOOGLE_MEET', 'NONE']);
+const ALLOWED_VIDEO_BRIDGES = new Set([
+  'INHERIT',
+  'MICROSOFT_TEAMS',
+  'JITSI',
+  'ZOOM',
+  'GOOGLE_MEET',
+  'NONE',
+]);
+
+const VALID_PROVIDER_MODES = new Set(['INHERIT', 'BOTH', 'SLACK', 'MICROSOFT_TEAMS', 'DISABLED']);
 
 export async function updateServiceChatOpsSettings(
   prevStateOrServiceId: { success?: boolean; error?: string | null } | string | undefined,
@@ -249,25 +264,80 @@ export async function updateServiceChatOpsSettings(
         }
       } else {
         urlToTest = `https://${urlToTest}`;
-        try {
-          new URL(urlToTest.replace(/\{incidentId\}/g, 'test-incident-placeholder'));
-        } catch {
-          return { error: 'Please enter a valid URL for the custom bridge.' };
-        }
       }
       warRoomCustomBridgeUrl = urlToTest;
     }
 
     const autoCreateWarRoom = formData.get('autoCreateWarRoom') === 'on';
+    const providerModeRaw = formData.get('providerMode');
+    let providerMode: string | null = null;
+    let warRoomsEnabled = formData.get('warRoomsEnabled') !== 'false';
 
-    await prisma.service.update({
-      where: { id: serviceId },
-      data: {
-        autoCreateWarRoom,
-        warRoomVideoBridge,
-        warRoomCustomBridgeUrl,
-      },
-    });
+    if (providerModeRaw !== null) {
+      providerMode = String(providerModeRaw).trim();
+      if (!VALID_PROVIDER_MODES.has(providerMode)) {
+        return { error: 'Invalid war room provider mode.' };
+      }
+
+      let serviceProviders: WarRoomProviderSet | null = null;
+      if (providerMode === 'INHERIT') {
+        serviceProviders = null;
+        warRoomsEnabled = true;
+      } else if (providerMode === 'BOTH') {
+        serviceProviders = ['SLACK', 'MICROSOFT_TEAMS'];
+        warRoomsEnabled = true;
+      } else if (providerMode === 'SLACK') {
+        serviceProviders = ['SLACK'];
+        warRoomsEnabled = true;
+      } else if (providerMode === 'MICROSOFT_TEAMS') {
+        serviceProviders = ['MICROSOFT_TEAMS'];
+        warRoomsEnabled = true;
+      } else if (providerMode === 'DISABLED') {
+        serviceProviders = [];
+        warRoomsEnabled = false;
+      }
+
+      const applyPolicyAndBridge = async (tx?: Prisma.TransactionClient) => {
+        await setServiceWarRoomPolicy(
+          serviceId,
+          {
+            serviceProviders,
+            meetingProvider: warRoomVideoBridge as IncidentMeetingProvider | null,
+            warRoomsEnabled,
+            autoCreate: autoCreateWarRoom,
+          },
+          currentUser!.id,
+          tx
+        );
+
+        if (warRoomCustomBridgeUrl !== undefined) {
+          const client = tx || prisma;
+          await client.service.update({
+            where: { id: serviceId },
+            data: {
+              warRoomCustomBridgeUrl,
+            },
+          });
+        }
+      };
+
+      if (typeof prisma.$transaction === 'function') {
+        await prisma.$transaction(async tx => {
+          await applyPolicyAndBridge(tx);
+        });
+      } else {
+        await applyPolicyAndBridge();
+      }
+    } else {
+      await prisma.service.update({
+        where: { id: serviceId },
+        data: {
+          autoCreateWarRoom,
+          warRoomVideoBridge,
+          warRoomCustomBridgeUrl,
+        },
+      });
+    }
 
     await logAudit({
       action: 'service.chatops.updated',
@@ -277,6 +347,7 @@ export async function updateServiceChatOpsSettings(
       details: {
         autoCreateWarRoom,
         warRoomVideoBridge,
+        ...(providerMode !== null ? { providerMode, warRoomsEnabled } : {}),
         hasCustomBridgeUrl: Boolean(warRoomCustomBridgeUrl),
       },
     });

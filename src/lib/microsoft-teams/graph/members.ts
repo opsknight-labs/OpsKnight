@@ -18,18 +18,34 @@ async function findMember(input: {
     : `/teams/${encodeURIComponent(input.teamId)}/members`;
   let next: string | null = `${root}?$top=100&$select=id,userId,roles`;
   for (let page = 0; next && page < 100; page += 1) {
-    const result = await microsoftTeamsGraphRequest(input.tenantId, next, { method: 'GET' }, 'READ');
+    const result = await microsoftTeamsGraphRequest(
+      input.tenantId,
+      next,
+      { method: 'GET' },
+      'READ'
+    );
     if (!result.ok) return result;
-    const body = await result.value.json().catch(() => null) as { value?: ConversationMember[]; '@odata.nextLink'?: string } | null;
+    const body = (await result.value.json().catch(() => null)) as {
+      value?: ConversationMember[];
+      '@odata.nextLink'?: string;
+    } | null;
     if (!Array.isArray(body?.value)) {
-      return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph returned an invalid Teams member listing.' };
+      return {
+        ok: false,
+        code: 'TRANSIENT_READ',
+        message: 'Microsoft Graph returned an invalid Teams member listing.',
+      };
     }
     const member = body.value.find(candidate => candidate.userId === input.userObjectId);
     if (member) return { ok: true, value: member };
     next = typeof body['@odata.nextLink'] === 'string' ? body['@odata.nextLink'] : null;
   }
   return next
-    ? { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph member pagination exceeded its safety limit.' }
+    ? {
+        ok: false,
+        code: 'TRANSIENT_READ',
+        message: 'Microsoft Graph member pagination exceeded its safety limit.',
+      }
     : { ok: true, value: null };
 }
 
@@ -52,6 +68,35 @@ export function findChannelMember(input: {
 }
 
 /**
+ * Resolves an Entra user's Object ID by UPN using Microsoft Graph.
+ * Returns a WarRoomGraphResult with user object { id: string } or null if not found (404).
+ * Transient errors (429, 5xx, token failure, network error) return ok: false with retryable codes.
+ */
+export async function findUserByUpn(input: {
+  tenantId: string;
+  upn: string;
+}): Promise<WarRoomGraphResult<{ id: string } | null>> {
+  const path = `/users/${encodeURIComponent(input.upn)}?$select=id`;
+  const result = await microsoftTeamsGraphRequest(input.tenantId, path, { method: 'GET' }, 'READ');
+  if (!result.ok) {
+    if (
+      result.code === 'TEAM_NOT_FOUND' ||
+      result.message.includes('404') ||
+      result.message.includes('Request_ResourceNotFound') ||
+      result.message.includes('ResourceNotFound')
+    ) {
+      return { ok: true, value: null };
+    }
+    return result;
+  }
+  const body = (await result.value.json().catch(() => null)) as { id?: string } | null;
+  if (!body?.id) {
+    return { ok: true, value: null };
+  }
+  return { ok: true, value: { id: body.id } };
+}
+
+/**
  * Batched membership resolver — lists the entire Team/channel once so
  * N participants do not each paginate independently. Callers should
  * still treat individual add/remove as per-member mutations fenced
@@ -68,13 +113,23 @@ async function listAllMembers(input: {
   let next: string | null = `${root}?$top=100&$select=id,userId,roles`;
   const map = new Map<string, ConversationMember>();
   for (let page = 0; next && page < 100; page += 1) {
-    const result = await microsoftTeamsGraphRequest(input.tenantId, next, { method: 'GET' }, 'READ');
+    const result = await microsoftTeamsGraphRequest(
+      input.tenantId,
+      next,
+      { method: 'GET' },
+      'READ'
+    );
     if (!result.ok) return result as WarRoomGraphResult<Map<string, ConversationMember>>;
-    const body = (await result.value.json().catch(() => null)) as
-      | { value?: ConversationMember[]; '@odata.nextLink'?: string }
-      | null;
+    const body = (await result.value.json().catch(() => null)) as {
+      value?: ConversationMember[];
+      '@odata.nextLink'?: string;
+    } | null;
     if (!Array.isArray(body?.value)) {
-      return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph returned an invalid Teams member listing.' };
+      return {
+        ok: false,
+        code: 'TRANSIENT_READ',
+        message: 'Microsoft Graph returned an invalid Teams member listing.',
+      };
     }
     for (const member of body.value) {
       if (member.userId) map.set(member.userId, member);
@@ -82,12 +137,19 @@ async function listAllMembers(input: {
     next = typeof body['@odata.nextLink'] === 'string' ? body['@odata.nextLink'] : null;
   }
   if (next) {
-    return { ok: false, code: 'TRANSIENT_READ', message: 'Microsoft Graph member pagination exceeded its safety limit.' };
+    return {
+      ok: false,
+      code: 'TRANSIENT_READ',
+      message: 'Microsoft Graph member pagination exceeded its safety limit.',
+    };
   }
   return { ok: true, value: map };
 }
 
-export function listTeamMembers(input: { tenantId: string; teamId: string }): Promise<WarRoomGraphResult<Map<string, ConversationMember>>> {
+export function listTeamMembers(input: {
+  tenantId: string;
+  teamId: string;
+}): Promise<WarRoomGraphResult<Map<string, ConversationMember>>> {
   return listAllMembers(input);
 }
 
@@ -122,7 +184,7 @@ export async function addChannelMember(input: {
         'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${escapedObjectId}')`,
       }),
     },
-    'MEMBER_ADD',
+    'MEMBER_ADD'
   );
   return result.ok ? { ok: true, value: null } : result;
 }
@@ -142,7 +204,7 @@ export async function updateChannelMemberRoles(input: {
     input.tenantId,
     `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/members/${encodeURIComponent(input.membershipId)}`,
     { method: 'PATCH', body: JSON.stringify({ roles: input.roles }) },
-    'MEMBER_UPDATE',
+    'MEMBER_UPDATE'
   );
   return result.ok ? { ok: true, value: null } : result;
 }
@@ -163,7 +225,7 @@ export async function removeChannelMember(input: {
     input.tenantId,
     `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/members/${encodeURIComponent(input.membershipId)}`,
     { method: 'DELETE' },
-    'MEMBER_REMOVE',
+    'MEMBER_REMOVE'
   );
   if (result.ok) return { ok: true, value: null };
   // Graph returns 404 when the membership was already removed — treat as success

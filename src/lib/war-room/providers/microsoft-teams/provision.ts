@@ -61,33 +61,37 @@ export async function requestMicrosoftTeamsWarRoom(
       }),
     ]);
 
-    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveEffectiveWarRoomProviders } =
+    const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveIncidentCollaborationPolicy } =
       await import('@/lib/incident-collaboration/policy');
 
     const [globalPolicy, servicePolicy] = await Promise.all([
-      getGlobalWarRoomPolicy(),
-      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId) : null,
+      getGlobalWarRoomPolicy(tx),
+      incident.serviceId ? getServiceWarRoomPolicy(incident.serviceId, tx) : null,
     ]);
 
-    const effectivePolicy = resolveEffectiveWarRoomProviders({
-      globalProviders: globalPolicy.defaultProviders,
-      serviceProviders: servicePolicy ? servicePolicy.serviceProviders : null,
-      availableProviders: ['MICROSOFT_TEAMS'],
-      globalWarRoomsEnabled: globalPolicy.enabled,
-      serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : false,
+    const canonicalPolicy = resolveIncidentCollaborationPolicy({
+      incident: {
+        urgency: incident.urgency,
+        priority: incident.priority,
+        visibility: incident.visibility,
+      },
+      globalPolicy,
+      servicePolicy,
+      availableIntegrations: ['MICROSOFT_TEAMS'],
+      isTeamsMeetingAvailable: Boolean(config?.enabled),
     });
 
     if (
-      !effectivePolicy.effectiveProviders.includes('MICROSOFT_TEAMS') ||
-      effectivePolicy.isDisabled
+      !canonicalPolicy.effectiveProviders.includes('MICROSOFT_TEAMS') ||
+      canonicalPolicy.isCollaborationDisabled
     ) {
       return { accepted: false, code: 'PROVIDER_POLICY_EXCLUDED' };
     }
 
     const effectiveAutoCreate = Boolean(
-      (servicePolicy?.autoCreate ?? incident.service.microsoftTeamsWarRoomAutoCreate) &&
-      effectivePolicy.effectiveProviders.includes('MICROSOFT_TEAMS') &&
-      !effectivePolicy.isDisabled
+      canonicalPolicy.shouldAutoCreate &&
+      canonicalPolicy.effectiveProviders.includes('MICROSOFT_TEAMS') &&
+      !canonicalPolicy.isCollaborationDisabled
     );
 
     const decision = evaluateWarRoomPolicy({
@@ -146,7 +150,13 @@ export async function requestMicrosoftTeamsWarRoom(
           break;
         }
       }
-      if (!privateOwner) return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
+
+      // If no operator chat link is found, we allow the background worker to attempt
+      // resolution via the configured defaultMeetingOrganizerUpn. If neither is available,
+      // fail closed immediately without performing any external I/O here.
+      if (!privateOwner && !config?.defaultMeetingOrganizerUpn?.trim()) {
+        return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
+      }
     }
 
     const claimed = await claimWarRoomProvisioning(tx, {
@@ -815,31 +825,30 @@ export async function provisionMicrosoftTeamsWarRoom(
   let privateOwnerObjectId =
     typeof metadata?.privateOwnerObjectId === 'string' ? metadata.privateOwnerObjectId : null;
   if (room.membershipType === 'PRIVATE') {
-    if (!privateOwnerObjectId)
-      return markFailed(
-        room.id,
-        expectedProvisioningToken,
-        'PRIVATE_OWNER_UNAVAILABLE',
-        'Private Teams war rooms require a verified owner.'
-      );
-    let owner = await findTeamMember({
-      tenantId: room.providerTenantId,
-      teamId: room.providerContainerId,
-      userObjectId: privateOwnerObjectId,
-    });
-    if (!owner.ok) {
-      if (
-        owner.code === 'RATE_LIMITED' ||
-        owner.code === 'TRANSIENT_READ' ||
-        owner.code === 'GRAPH_TOKEN_FAILED'
-      )
-        throw new WarRoomRetryableError(owner.message, owner.retryAfterMs);
-      return markFailed(room.id, expectedProvisioningToken, owner.code, owner.message);
+    let owner: Awaited<ReturnType<typeof findTeamMember>> | null = null;
+
+    if (privateOwnerObjectId) {
+      const ownerCheck = await findTeamMember({
+        tenantId: room.providerTenantId,
+        teamId: room.providerContainerId,
+        userObjectId: privateOwnerObjectId,
+      });
+      if (!ownerCheck.ok) {
+        if (
+          ownerCheck.code === 'RATE_LIMITED' ||
+          ownerCheck.code === 'TRANSIENT_READ' ||
+          ownerCheck.code === 'GRAPH_TOKEN_FAILED'
+        )
+          throw new WarRoomRetryableError(ownerCheck.message, ownerCheck.retryAfterMs);
+        return markFailed(room.id, expectedProvisioningToken, ownerCheck.code, ownerCheck.message);
+      }
+      if (ownerCheck.value) {
+        owner = ownerCheck;
+      }
     }
-    if (!owner.value) {
-      // Fallback: the durable snapshot owner may have left the Team since the
-      // request boundary. Re-resolve from incident assignee / team-lead links
-      // and try the next verified candidate that is actually in the Team.
+
+    if (!owner?.value) {
+      // Fallback 1: Re-resolve from incident assignee / team-lead links
       const incidentForFallback = await prisma.incident.findUnique({
         where: { id: room.incident.id },
         select: {
@@ -851,6 +860,7 @@ export async function provisionMicrosoftTeamsWarRoom(
         incidentForFallback?.assigneeId,
         incidentForFallback?.service.team?.teamLeadId,
       ].filter((id): id is string => Boolean(id));
+
       if (fallbackCandidates.length > 0) {
         const destinationTenant = room.providerTenantId;
         const fallbackLinks = await prisma.chatIdentityLink.findMany({
@@ -896,13 +906,84 @@ export async function provisionMicrosoftTeamsWarRoom(
           break;
         }
       }
-      if (!owner.value)
+
+      // Fallback 2: Resolve configured defaultMeetingOrganizerUpn via Graph
+      if (!owner?.value) {
+        const teamsConfig = await prisma.microsoftTeamsConfig.findFirst({
+          where: { enabled: true },
+          select: { defaultMeetingOrganizerUpn: true },
+        });
+        if (teamsConfig?.defaultMeetingOrganizerUpn?.trim()) {
+          const upn = teamsConfig.defaultMeetingOrganizerUpn.trim();
+          const { findUserByUpn } = await import('@/lib/microsoft-teams/graph/members');
+          const userLookup = await findUserByUpn({
+            tenantId: room.providerTenantId,
+            upn,
+          });
+          if (!userLookup.ok) {
+            if (
+              userLookup.code === 'RATE_LIMITED' ||
+              userLookup.code === 'TRANSIENT_READ' ||
+              userLookup.code === 'GRAPH_TOKEN_FAILED'
+            ) {
+              throw new WarRoomRetryableError(userLookup.message, userLookup.retryAfterMs);
+            }
+            return markFailed(
+              room.id,
+              expectedProvisioningToken,
+              userLookup.code,
+              userLookup.message
+            );
+          }
+          if (userLookup.value?.id) {
+            const candidateOwner = await findTeamMember({
+              tenantId: room.providerTenantId,
+              teamId: room.providerContainerId,
+              userObjectId: userLookup.value.id,
+            });
+            if (!candidateOwner.ok) {
+              if (
+                candidateOwner.code === 'RATE_LIMITED' ||
+                candidateOwner.code === 'TRANSIENT_READ' ||
+                candidateOwner.code === 'GRAPH_TOKEN_FAILED'
+              ) {
+                throw new WarRoomRetryableError(
+                  candidateOwner.message,
+                  candidateOwner.retryAfterMs
+                );
+              }
+              return markFailed(
+                room.id,
+                expectedProvisioningToken,
+                candidateOwner.code,
+                candidateOwner.message
+              );
+            }
+            if (candidateOwner.value) {
+              await prisma.incidentWarRoom.updateMany({
+                where: { id: room.id, provisioningToken: expectedProvisioningToken },
+                data: {
+                  metadata: {
+                    privateOwnerUserId: 'system-organizer',
+                    privateOwnerObjectId: userLookup.value.id,
+                  },
+                },
+              });
+              privateOwnerObjectId = userLookup.value.id;
+              owner = candidateOwner;
+            }
+          }
+        }
+      }
+
+      if (!owner?.value || !privateOwnerObjectId) {
         return markFailed(
           room.id,
           expectedProvisioningToken,
-          'PRIVATE_OWNER_NOT_IN_TEAM',
-          'The selected private-room owner is not a member of the parent Team.'
+          'PRIVATE_OWNER_UNAVAILABLE',
+          'Private Teams war rooms require a verified owner in the parent Team.'
         );
+      }
     }
   }
 

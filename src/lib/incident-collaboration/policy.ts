@@ -57,14 +57,20 @@ export function resolveEffectiveMeetingProvider(params: {
   isDisabled: boolean;
   isInherited: boolean;
 } {
-  const { globalMeetingProvider, serviceMeetingProvider, isTeamsMeetingAvailable } = params;
+  const {
+    globalMeetingProvider,
+    serviceMeetingProvider,
+    isTeamsMeetingAvailable,
+    globalWarRoomsEnabled,
+    serviceWarRoomsEnabled,
+  } = params;
 
   const isInherited = serviceMeetingProvider === null || serviceMeetingProvider === undefined;
   const desiredProvider: IncidentMeetingProvider = isInherited
     ? globalMeetingProvider
     : serviceMeetingProvider;
 
-  if (desiredProvider === 'NONE') {
+  if (desiredProvider === 'NONE' || !globalWarRoomsEnabled || !serviceWarRoomsEnabled) {
     return {
       effectiveProvider: 'NONE',
       desiredProvider,
@@ -162,26 +168,131 @@ export function resolveEffectiveWarRoomProviders(params: {
 /**
  * Fetch global default war room provider policy.
  */
-export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
+/**
+ * Unified collaboration auto-create evaluator.
+ * Pure policy function: checks service opt-in and urgency/priority threshold match.
+ */
+export function shouldAutoCreateCollaboration(input: {
+  serviceAutoCreate: boolean;
+  incidentUrgency: string;
+  incidentPriority: string | null;
+  autoCreateOnUrgency: string[];
+  autoCreateOnPriority: string[];
+}): boolean {
+  if (!input.serviceAutoCreate) return false;
+  const matchesUrgency = input.autoCreateOnUrgency.includes(input.incidentUrgency);
+  const matchesPriority = Boolean(
+    input.incidentPriority && input.autoCreateOnPriority.includes(input.incidentPriority)
+  );
+  return matchesUrgency || matchesPriority;
+}
+
+export interface IncidentCollaborationPolicyResolution {
+  effectiveProviders: WarRoomProviderSet;
+  desiredProviders: WarRoomProviderSet;
+  effectiveAutoCreate: boolean;
+  shouldAutoCreate: boolean;
+  isCollaborationDisabled: boolean;
+  meeting: {
+    effectiveProvider: IncidentMeetingProvider;
+    desiredProvider: IncidentMeetingProvider;
+    isUnavailable: boolean;
+    unavailableReason?: string;
+    isDisabled: boolean;
+    isInherited: boolean;
+  };
+  privacyRequirement: 'STANDARD' | 'PRIVATE';
+  archiveOnResolve: boolean;
+}
+
+/**
+ * Authoritative Canonical Collaboration Policy Resolver.
+ * Pure function combining Global, Integration, Service, and Incident-level policies.
+ */
+export function resolveIncidentCollaborationPolicy(input: {
+  incident: {
+    urgency: string;
+    priority: string | null;
+    visibility: string;
+  };
+  globalPolicy: GlobalWarRoomPolicy;
+  servicePolicy?: ServiceWarRoomPolicy | null;
+  availableIntegrations: WarRoomProviderSet;
+  isTeamsMeetingAvailable: boolean;
+}): IncidentCollaborationPolicyResolution {
+  const serviceWarRoomsEnabled = input.servicePolicy
+    ? (input.servicePolicy.warRoomsEnabled ?? true)
+    : true;
+
+  const providerResolution = resolveEffectiveWarRoomProviders({
+    globalProviders: input.globalPolicy.defaultProviders,
+    serviceProviders: input.servicePolicy ? (input.servicePolicy.serviceProviders ?? null) : null,
+    availableProviders: input.availableIntegrations,
+    globalWarRoomsEnabled: input.globalPolicy.enabled,
+    serviceWarRoomsEnabled,
+  });
+
+  const meetingResolution = resolveEffectiveMeetingProvider({
+    globalMeetingProvider: input.globalPolicy.defaultMeetingProvider,
+    serviceMeetingProvider: input.servicePolicy?.meetingProvider ?? null,
+    isTeamsMeetingAvailable: input.isTeamsMeetingAvailable,
+    globalWarRoomsEnabled: input.globalPolicy.enabled,
+    serviceWarRoomsEnabled,
+  });
+
+  const serviceAutoCreate = Boolean(input.servicePolicy?.autoCreate ?? false);
+  const shouldAutoCreate = shouldAutoCreateCollaboration({
+    serviceAutoCreate,
+    incidentUrgency: input.incident.urgency,
+    incidentPriority: input.incident.priority,
+    autoCreateOnUrgency: input.globalPolicy.autoCreateOnUrgency ?? ['HIGH'],
+    autoCreateOnPriority: input.globalPolicy.autoCreateOnPriority ?? ['P1', 'P2'],
+  });
+
+  const privacyRequirement: 'STANDARD' | 'PRIVATE' =
+    input.incident.visibility === 'PRIVATE' ? 'PRIVATE' : 'STANDARD';
+
+  return {
+    effectiveProviders: providerResolution.effectiveProviders,
+    desiredProviders: providerResolution.desiredProviders,
+    effectiveAutoCreate: serviceAutoCreate,
+    shouldAutoCreate,
+    isCollaborationDisabled: providerResolution.isDisabled,
+    meeting: meetingResolution,
+    privacyRequirement,
+    archiveOnResolve: input.globalPolicy.archiveOnResolve ?? true,
+  };
+}
+
+export async function getGlobalWarRoomPolicy(
+  tx?: Prisma.TransactionClient
+): Promise<GlobalWarRoomPolicy> {
+  const client = tx || prisma;
   const [chatOpsConfig, defaultProvidersRow, defaultMeetingRow] = await Promise.all([
-    prisma?.chatOpsConfig?.findUnique
-      ? prisma.chatOpsConfig
+    client?.chatOpsConfig?.findUnique
+      ? client.chatOpsConfig
           .findUnique({
             where: { id: 'default' },
-            select: { enabled: true, defaultVideoBridge: true },
+            select: {
+              enabled: true,
+              defaultVideoBridge: true,
+              autoCreateOnUrgency: true,
+              autoCreateOnPriority: true,
+              archiveOnResolve: true,
+            },
           })
           .catch(() => null)
       : Promise.resolve(null),
-    prisma?.systemConfig?.findUnique
-      ? prisma.systemConfig
+    client?.systemConfig?.findUnique
+      ? client.systemConfig
           .findUnique({
             where: { key: GLOBAL_WAR_ROOM_POLICY_KEY },
             select: { value: true },
           })
           .catch(() => null)
       : Promise.resolve(null),
-    prisma?.systemConfig?.findUnique
-      ? prisma.systemConfig
+    client?.systemConfig?.findUnique
+      ? client.systemConfig
           .findUnique({
             where: { key: GLOBAL_MEETING_POLICY_KEY },
             select: { value: true },
@@ -219,6 +330,9 @@ export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
     enabled: Boolean(chatOpsConfig?.enabled),
     defaultProviders,
     defaultMeetingProvider,
+    autoCreateOnUrgency: chatOpsConfig?.autoCreateOnUrgency ?? ['HIGH'],
+    autoCreateOnPriority: chatOpsConfig?.autoCreateOnPriority ?? ['P1', 'P2'],
+    archiveOnResolve: chatOpsConfig?.archiveOnResolve ?? true,
   };
 }
 
@@ -282,10 +396,14 @@ export async function setGlobalMeetingProvider(
 /**
  * Fetch service-level war room provider policy.
  */
-export async function getServiceWarRoomPolicy(serviceId: string): Promise<ServiceWarRoomPolicy> {
+export async function getServiceWarRoomPolicy(
+  serviceId: string,
+  tx?: Prisma.TransactionClient
+): Promise<ServiceWarRoomPolicy> {
+  const client = tx || prisma;
   const [service, configRow] = await Promise.all([
-    prisma?.service?.findUnique
-      ? prisma.service
+    client?.service?.findUnique
+      ? client.service
           .findUnique({
             where: { id: serviceId },
             select: {
@@ -296,8 +414,8 @@ export async function getServiceWarRoomPolicy(serviceId: string): Promise<Servic
           })
           .catch(() => null)
       : Promise.resolve(null),
-    prisma?.systemConfig?.findUnique
-      ? prisma.systemConfig
+    client?.systemConfig?.findUnique
+      ? client.systemConfig
           .findUnique({
             where: { key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}` },
             select: { value: true },
@@ -388,7 +506,7 @@ export async function setServiceWarRoomPolicy(
   tx?: Prisma.TransactionClient
 ): Promise<void> {
   const client = tx || prisma;
-  const current = await getServiceWarRoomPolicy(serviceId);
+  const current = await getServiceWarRoomPolicy(serviceId, tx);
   const updated: ServiceWarRoomPolicy = {
     serviceProviders: policy.serviceProviders,
     meetingProvider:

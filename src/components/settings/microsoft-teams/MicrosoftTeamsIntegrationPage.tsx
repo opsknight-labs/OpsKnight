@@ -47,6 +47,7 @@ type DestinationRow = {
   teamName?: string | null;
   enabled: boolean;
   interactiveEnabled: boolean;
+  warRoomEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
   service?: { name: string } | null;
@@ -172,6 +173,22 @@ export default function MicrosoftTeamsIntegrationPage({
       );
       router.refresh();
     } else toast.error('Failed to update interactive actions.');
+  };
+
+  const onToggleWarRooms = async (destination: DestinationRow) => {
+    const res = await fetch('/api/microsoft-teams/destinations', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        serviceId: destination.serviceId,
+        destinationId: destination.id,
+        warRoomEnabled: !destination.warRoomEnabled,
+      }),
+    });
+    if (res.ok) {
+      toast.success(`War room routing ${destination.warRoomEnabled ? 'disabled' : 'enabled'}.`);
+      router.refresh();
+    } else toast.error('Failed to update war room routing.');
   };
 
   const onDisconnect = async () => {
@@ -382,17 +399,28 @@ export default function MicrosoftTeamsIntegrationPage({
                           {d.teamName ?? 'Team'}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                         <Hash className="h-3 w-3 text-muted-foreground/70" />
                         <span className="font-medium text-foreground">
                           {d.channelName ?? d.channelId}
                         </span>
                         <span className="text-muted-foreground/50">·</span>
                         <span>ChatOps: {d.interactiveEnabled ? 'Active' : 'Disabled'}</span>
+                        <span className="text-muted-foreground/50">·</span>
+                        <span>War Rooms: {d.warRoomEnabled ? 'Enabled' : 'Disabled'}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() => onToggleWarRooms(d)}
+                        disabled={!isAdmin || !config?.warRoomsEnabled}
+                      >
+                        {d.warRoomEnabled ? 'Disable War Rooms' : 'Enable War Rooms'}
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
@@ -498,12 +526,11 @@ export default function MicrosoftTeamsIntegrationPage({
                 <select
                   id="mt-tenantMode"
                   name="tenantMode"
-                  defaultValue={config?.tenantMode ?? 'SINGLE'}
+                  defaultValue="SINGLE"
                   disabled={!isAdmin}
                   className="h-9 w-full rounded-md border bg-background px-3 text-xs"
                 >
                   <option value="SINGLE">SINGLE (Your Organization Only)</option>
-                  <option value="MULTI">MULTI (Multi-Tenant Allowed)</option>
                 </select>
               </div>
               <div className="space-y-1.5 sm:col-span-2">
@@ -555,11 +582,11 @@ export default function MicrosoftTeamsIntegrationPage({
                 />
                 <div>
                   <span className="font-semibold text-foreground block">
-                    Enable Automated Incident War Rooms
+                    Enable Incident War Rooms
                   </span>
                   <span className="text-muted-foreground block mt-0.5">
-                    Automatically provisions dedicated collaboration channels and Teams Video
-                    Bridges for critical incidents.
+                    Enables provisioning dedicated collaboration channels and Teams Video Bridges
+                    for incidents.
                   </span>
                 </div>
               </label>

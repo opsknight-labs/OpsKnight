@@ -94,7 +94,7 @@ describe('Incident Collaboration Policy Hierarchy & Matrix Certification', () =>
   });
 
   describe('Meeting Provider Policy & Meeting-Only Certification', () => {
-    it('Meeting-only service certified: war rooms disabled + meeting Jitsi enabled', () => {
+    it('Meeting disabled when war rooms disabled', () => {
       const warRoomRes = resolveEffectiveWarRoomProviders({
         globalProviders: ['SLACK'],
         serviceProviders: null,
@@ -111,12 +111,12 @@ describe('Incident Collaboration Policy Hierarchy & Matrix Certification', () =>
         serviceWarRoomsEnabled: false,
       });
 
-      // War rooms are disabled, but meeting remains completely functional
+      // War rooms are disabled, and meeting also disabled by policy
       expect(warRoomRes.isDisabled).toBe(true);
       expect(warRoomRes.effectiveProviders).toEqual([]);
 
-      expect(meetingRes.isDisabled).toBe(false);
-      expect(meetingRes.effectiveProvider).toBe('JITSI');
+      expect(meetingRes.isDisabled).toBe(true);
+      expect(meetingRes.effectiveProvider).toBe('NONE');
       expect(meetingRes.isUnavailable).toBe(false);
     });
 

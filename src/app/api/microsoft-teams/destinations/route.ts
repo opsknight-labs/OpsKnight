@@ -20,31 +20,47 @@ const upsertSchema = z.object({
   channelName: z.string().trim().max(255).nullable().optional(),
   teamName: z.string().trim().max(255).nullable().optional(),
   interactiveEnabled: z.boolean().optional(),
+  warRoomEnabled: z.boolean().optional(),
 });
 
 const deleteSchema = z.object({
   serviceId: z.string().trim().min(1).max(191),
   destinationId: z.string().trim().min(1).max(191).optional(),
 });
-const interactiveSchema = z
+
+const patchSchema = z
   .object({
     serviceId: z.string().trim().min(1).max(191),
     destinationId: z.string().trim().min(1).max(191),
-    interactiveEnabled: z.boolean(),
+    interactiveEnabled: z.boolean().optional(),
+    warRoomEnabled: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine(data => data.interactiveEnabled !== undefined || data.warRoomEnabled !== undefined, {
+    message:
+      'At least one capability setting (interactiveEnabled or warRoomEnabled) must be provided.',
+  });
 
 export async function PATCH(request: NextRequest) {
   try {
-    const parsed = interactiveSchema.safeParse(await request.json().catch(() => null));
+    const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success)
       return jsonError(
         new AppError({
           code: 'VALIDATION_FAILED',
-          userMessage: 'Invalid interactive destination settings.',
+          userMessage: parsed.error.issues[0]?.message ?? 'Invalid destination settings.',
         })
       );
     await assertCanModifyService(parsed.data.serviceId);
+
+    const updateData: { interactiveEnabled?: boolean; warRoomEnabled?: boolean } = {};
+    if (parsed.data.interactiveEnabled !== undefined) {
+      updateData.interactiveEnabled = parsed.data.interactiveEnabled;
+    }
+    if (parsed.data.warRoomEnabled !== undefined) {
+      updateData.warRoomEnabled = parsed.data.warRoomEnabled;
+    }
+
     const updated = await prisma.microsoftTeamsDestination.updateMany({
       where: {
         id: parsed.data.destinationId,
@@ -52,7 +68,7 @@ export async function PATCH(request: NextRequest) {
         enabled: true,
         installation: { enabled: true },
       },
-      data: { interactiveEnabled: parsed.data.interactiveEnabled },
+      data: updateData,
     });
     if (updated.count !== 1)
       return jsonError(
@@ -64,7 +80,7 @@ export async function PATCH(request: NextRequest) {
     return jsonOk({ ok: true });
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
-    return jsonError('Failed to update Teams interactive settings', 500);
+    return jsonError('Failed to update Teams destination settings', 500);
   }
 }
 
@@ -85,9 +101,7 @@ export async function GET(request: NextRequest) {
     const dest = await (
       prisma as unknown as {
         microsoftTeamsDestination: {
-          findFirst: (
-            a: unknown
-          ) => Promise<null | {
+          findFirst: (a: unknown) => Promise<null | {
             id: string;
             tenantId: string;
             teamId: string;
@@ -126,7 +140,15 @@ export async function POST(request: NextRequest) {
         })
       );
 
-    const { serviceId, teamId, channelId, channelName, teamName, interactiveEnabled } = parsed.data;
+    const {
+      serviceId,
+      teamId,
+      channelId,
+      channelName,
+      teamName,
+      interactiveEnabled,
+      warRoomEnabled,
+    } = parsed.data;
     let tenantId = parsed.data.tenantId?.trim() || '';
     await assertCanModifyService(serviceId);
 
@@ -183,9 +205,7 @@ export async function POST(request: NextRequest) {
       };
       microsoftTeamsDestination: {
         create: (a: unknown) => Promise<{ id: string }>;
-        findFirst: (
-          a: unknown
-        ) => Promise<{
+        findFirst: (a: unknown) => Promise<{
           id: string;
           tenantId: string;
           teamId: string;
@@ -199,15 +219,10 @@ export async function POST(request: NextRequest) {
       };
     };
 
-    // Phase 2: verified installation chain — destination requires an enabled installation
-    let installation = await prismaAny.microsoftTeamsInstallation.findFirst({
+    // Phase 2: verified installation chain — target Team requires an enabled bot installation
+    const installation = await prismaAny.microsoftTeamsInstallation.findFirst({
       where: { tenantId, teamId, enabled: true },
     });
-    if (!installation?.id) {
-      installation = await prismaAny.microsoftTeamsInstallation.findFirst({
-        where: { tenantId, enabled: true },
-      });
-    }
     if (!installation?.id) {
       return jsonError(
         new AppError({
@@ -341,6 +356,7 @@ export async function POST(request: NextRequest) {
               installationId: installation.id,
               enabled: true,
               ...(interactiveEnabled !== undefined ? { interactiveEnabled } : {}),
+              ...(warRoomEnabled !== undefined ? { warRoomEnabled } : { warRoomEnabled: true }),
               updatedBy: actorId,
             },
           } as never);
@@ -352,6 +368,8 @@ export async function POST(request: NextRequest) {
               channelName: channelName ?? null,
               teamName: teamName ?? null,
               installationId: installation.id,
+              ...(interactiveEnabled !== undefined ? { interactiveEnabled } : {}),
+              ...(warRoomEnabled !== undefined ? { warRoomEnabled } : {}),
               updatedBy: actorId,
             },
           } as never);
@@ -367,6 +385,7 @@ export async function POST(request: NextRequest) {
               installationId: installation.id,
               enabled: true,
               interactiveEnabled: interactiveEnabled ?? false,
+              warRoomEnabled: warRoomEnabled ?? true,
               updatedBy: actorId,
             },
           } as never);

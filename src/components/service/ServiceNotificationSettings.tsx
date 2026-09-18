@@ -28,7 +28,6 @@ import {
   RefreshCw,
   Send,
   Webhook,
-  Plus,
   Loader2,
   MessageSquare,
   BellRing,
@@ -1023,6 +1022,7 @@ export default function ServiceNotificationSettings({
                             channelId: resolvedChannelId,
                             channelName,
                             teamName,
+                            warRoomEnabled: true,
                           };
                           if (inferredTenantId) payload.tenantId = inferredTenantId;
                           const res = await fetch('/api/microsoft-teams/destinations', {

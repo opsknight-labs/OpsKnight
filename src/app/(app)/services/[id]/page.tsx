@@ -830,7 +830,11 @@ export default async function ServiceDetailPage({ params, searchParams }: Servic
         >
           <ChatOpsWarRoomSettings
             serviceId={id}
-            autoCreateWarRoom={service.autoCreateWarRoom ?? false}
+            autoCreateWarRoom={
+              serviceWarRoomPolicy?.autoCreate ??
+              (service.autoCreateWarRoom || service.microsoftTeamsWarRoomAutoCreate) ??
+              false
+            }
             warRoomVideoBridge={service.warRoomVideoBridge || null}
             warRoomCustomBridgeUrl={service.warRoomCustomBridgeUrl || null}
             chatOpsEnabled={Boolean(chatOpsConfig?.enabled)}

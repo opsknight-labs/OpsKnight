@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
@@ -78,17 +79,46 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       );
     }
 
-    const action = typeof body?.action === 'string' ? body.action : undefined;
-    const provider = typeof body?.provider === 'string' ? body.provider : undefined;
-    const roomId = typeof body?.roomId === 'string' ? body.roomId : undefined;
+    const postBodySchema = z.discriminatedUnion('action', [
+      z.object({
+        action: z.literal('CREATE'),
+        provider: z.enum(['SLACK', 'MICROSOFT_TEAMS']),
+        options: z
+          .object({
+            membershipType: z.enum(['STANDARD', 'PRIVATE']).optional(),
+          })
+          .optional(),
+      }),
+      z.object({
+        action: z.enum(['CLOSE', 'REFRESH_PROJECTION', 'SYNC_PARTICIPANTS', 'RECONCILE']),
+        roomId: z.string().trim().min(1),
+      }),
+    ]);
+
+    const parsed = postBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError(
+        new AppError({
+          code: 'VALIDATION_FAILED',
+          userMessage: parsed.error.issues[0]?.message ?? 'Invalid request body.',
+        })
+      );
+    }
 
     // 1. CREATE ACTION
-    if (action === 'CREATE') {
-      if (!provider || !['SLACK', 'MICROSOFT_TEAMS'].includes(provider)) {
+    if (parsed.data.action === 'CREATE') {
+      const { provider, options } = parsed.data;
+
+      // Inviolable Security Invariant: Private incidents must NEVER create STANDARD war rooms.
+      const incident = await prisma.incident.findUnique({
+        where: { id: incidentId },
+        select: { visibility: true },
+      });
+      if (incident?.visibility === 'PRIVATE' && options?.membershipType === 'STANDARD') {
         return jsonError(
           new AppError({
-            code: 'VALIDATION_FAILED',
-            userMessage: 'A valid provider (SLACK or MICROSOFT_TEAMS) is required.',
+            code: 'INCIDENT_MODIFY_DENIED',
+            userMessage: 'Private incidents cannot create standard war rooms.',
           })
         );
       }
@@ -114,7 +144,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const existingActive = await prisma.incidentWarRoom.findFirst({
         where: {
           incidentId,
-          provider: provider as 'SLACK' | 'MICROSOFT_TEAMS',
+          provider,
           state: { in: ['PROVISIONING', 'AMBIGUOUS', 'READY', 'CLOSING'] },
         },
         select: { id: true, state: true },
@@ -128,8 +158,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           })
         );
       }
-
-      const options = (body?.options as { membershipType?: 'STANDARD' | 'PRIVATE' }) || undefined;
 
       if (provider === 'SLACK') {
         const result = await requestSlackWarRoom(incidentId, {
@@ -149,35 +177,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         return jsonOk({ success: true, warRoomId: result.warRoomId, state: result.state }, 202);
       }
 
-      if (provider === 'MICROSOFT_TEAMS') {
-        const result = await requestMicrosoftTeamsWarRoom(incidentId, {
-          manual: true,
-          allowNewGeneration: true,
-          membershipType: options?.membershipType,
-        });
+      const result = await requestMicrosoftTeamsWarRoom(incidentId, {
+        manual: true,
+        allowNewGeneration: true,
+        membershipType: options?.membershipType,
+      });
 
-        if (!result.accepted) {
-          return jsonError(
-            new AppError({
-              code: 'VALIDATION_FAILED',
-              userMessage: `Failed to create Microsoft Teams war room: ${result.code}`,
-            })
-          );
-        }
-
-        return jsonOk({ success: true, warRoomId: result.warRoomId, state: result.state }, 202);
+      if (!result.accepted) {
+        return jsonError(
+          new AppError({
+            code: 'VALIDATION_FAILED',
+            userMessage: `Failed to create Microsoft Teams war room: ${result.code}`,
+          })
+        );
       }
+
+      return jsonOk({ success: true, warRoomId: result.warRoomId, state: result.state }, 202);
     }
 
     // 2. ROOM-SPECIFIC ACTIONS (CLOSE, REFRESH_PROJECTION, SYNC_PARTICIPANTS, RECONCILE)
-    if (!roomId || typeof roomId !== 'string') {
-      return jsonError(
-        new AppError({
-          code: 'VALIDATION_FAILED',
-          userMessage: 'roomId is required for this action.',
-        })
-      );
-    }
+    const { action, roomId } = parsed.data;
 
     // Ensure room belongs to incident
     const room = await prisma.incidentWarRoom.findFirst({
