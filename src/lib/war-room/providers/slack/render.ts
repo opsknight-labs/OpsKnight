@@ -43,7 +43,7 @@ export function renderSlackWarRoomProjection(model: WarRoomProjectionModel) {
         elements: [
           {
             type: 'mrkdwn',
-            text: `<${model.incident.url}|Open incident> · ${model.incident.status}${model.incident.assigneeName ? ` · ${model.incident.assigneeName}` : ''} · <https://opsknight.com|OpsKnight>`,
+            text: `<${model.incident.url}|Open incident> · ${model.incident.status}${model.incident.assigneeName ? ` · ${model.incident.assigneeName}` : ''}`,
           },
         ],
       },
