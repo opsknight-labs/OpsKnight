@@ -263,6 +263,8 @@ export default function StatusPageFooter({
                 const target = e.target as HTMLImageElement;
                 if (!target.src.endsWith('/logo.png')) {
                   target.src = '/logo.png';
+                } else {
+                  target.style.display = 'none';
                 }
               }}
             />
