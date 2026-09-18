@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
-import { Loader2, Plus, Lock, Globe, MessageSquare } from 'lucide-react';
+import { Loader2, Plus, MessageSquare } from 'lucide-react';
 import type {
   IncidentWarRoomProviderView,
   WarRoomProviderName,
@@ -31,7 +31,7 @@ type WarRoomCreateDialogProps = {
 
 export function WarRoomCreateDialog({
   providers,
-  privacyRequirement,
+  privacyRequirement: _privacyRequirement,
   open,
   onOpenChange,
   onCreate,
@@ -39,35 +39,13 @@ export function WarRoomCreateDialog({
 }: WarRoomCreateDialogProps) {
   // Only providers that currently allow creation
   const creatableProviders = providers.filter(p => p.canCreate);
-  const isPrivateIncident = privacyRequirement === 'PRIVATE';
-  const [selectedMembershipByProvider, setSelectedMembershipByProvider] = useState<
-    Record<string, 'STANDARD' | 'PRIVATE'>
-  >({
-    MICROSOFT_TEAMS: isPrivateIncident ? 'PRIVATE' : 'STANDARD',
-    SLACK: 'STANDARD',
-  });
   const [activeProviderTrigger, setActiveProviderTrigger] = useState<WarRoomProviderName | null>(
     null
   );
 
-  React.useEffect(() => {
-    if (isPrivateIncident) {
-      setSelectedMembershipByProvider(prev => ({
-        ...prev,
-        MICROSOFT_TEAMS: 'PRIVATE',
-      }));
-    }
-  }, [isPrivateIncident]);
-
   const handleCreate = async (provider: WarRoomProviderName) => {
     setActiveProviderTrigger(provider);
-    const effectiveMembership =
-      provider === 'MICROSOFT_TEAMS'
-        ? isPrivateIncident
-          ? 'PRIVATE'
-          : (selectedMembershipByProvider.MICROSOFT_TEAMS ?? 'STANDARD')
-        : 'STANDARD';
-    const options = { membershipType: effectiveMembership };
+    const options = { membershipType: 'STANDARD' as const };
     try {
       await onCreate(provider, options);
       onOpenChange(false);
@@ -94,9 +72,6 @@ export function WarRoomCreateDialog({
             const isTeams = providerView.provider === 'MICROSOFT_TEAMS';
             const isSlack = providerView.provider === 'SLACK';
             const isThisPending = isPending && activeProviderTrigger === providerView.provider;
-            const currentMembership = isTeams
-              ? selectedMembershipByProvider.MICROSOFT_TEAMS
-              : selectedMembershipByProvider.SLACK;
 
             return (
               <div
@@ -118,62 +93,6 @@ export function WarRoomCreateDialog({
                     </div>
                   </div>
                 </div>
-
-                {providerView.supportedOptions.supportsPrivateRooms && (
-                  <div className="space-y-1.5 pt-1">
-                    <label className="text-xs font-medium text-foreground block">
-                      Channel Privacy
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        disabled={isPrivateIncident}
-                        onClick={() =>
-                          setSelectedMembershipByProvider(prev => ({
-                            ...prev,
-                            MICROSOFT_TEAMS: 'STANDARD',
-                          }))
-                        }
-                        className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-medium transition-all ${
-                          isPrivateIncident
-                            ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
-                            : currentMembership === 'STANDARD'
-                              ? 'border-primary bg-primary/5 text-foreground'
-                              : 'border-border text-muted-foreground hover:bg-muted/50'
-                        }`}
-                      >
-                        <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <div className="text-left min-w-0">
-                          <span className="block font-semibold">Standard</span>
-                          <span className="text-[10px] text-muted-foreground">
-                            {isPrivateIncident ? 'Private only' : 'Org members'}
-                          </span>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedMembershipByProvider(prev => ({
-                            ...prev,
-                            MICROSOFT_TEAMS: 'PRIVATE',
-                          }))
-                        }
-                        className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-medium transition-all ${
-                          currentMembership === 'PRIVATE'
-                            ? 'border-primary bg-primary/5 text-foreground'
-                            : 'border-border text-muted-foreground hover:bg-muted/50'
-                        }`}
-                      >
-                        <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        <div className="text-left min-w-0">
-                          <span className="block font-semibold">Private</span>
-                          <span className="text-[10px] text-muted-foreground">Responders only</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 <div className="pt-1 flex justify-end">
                   <Button

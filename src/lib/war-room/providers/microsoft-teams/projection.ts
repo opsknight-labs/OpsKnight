@@ -22,6 +22,14 @@ function isRetryableTeamsProjectionError(result: {
   if (code === 'RATE_LIMITED' || code === 'GRAPH_TOKEN_FAILED' || code === 'TRANSIENT_READ')
     return true;
   if (code === 'AMBIGUOUS_SIDE_EFFECT' || code === 'AMBIGUOUS_CARD_CREATE') return false;
+  // BotNotInConversationRoster indicates the bot cannot participate in the channel roster; retries cannot succeed.
+  if (
+    result.error &&
+    (result.error.includes('BotNotInConversationRoster') ||
+      result.error.includes('The bot is not part of the conversation roster'))
+  ) {
+    return false;
+  }
   if (result.statusCode != null && result.statusCode >= 500 && result.statusCode <= 599)
     return true;
   if (result.statusCode === 429) return true;
@@ -35,7 +43,15 @@ function isRetryableTeamsProjectionError(result: {
 function isDefiniteCreateRetryableError(result: {
   errorCode?: string;
   statusCode?: number;
+  error?: string;
 }): boolean {
+  if (
+    result.error &&
+    (result.error.includes('BotNotInConversationRoster') ||
+      result.error.includes('The bot is not part of the conversation roster'))
+  ) {
+    return false;
+  }
   const code = (result.errorCode ?? '').toUpperCase();
   if (code === 'RATE_LIMITED') return true;
   if (result.statusCode === 429) return true;

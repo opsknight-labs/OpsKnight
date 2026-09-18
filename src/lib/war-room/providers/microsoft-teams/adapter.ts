@@ -47,7 +47,7 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
   provider: 'MICROSOFT_TEAMS',
   capabilities: {
     createRoom: true,
-    privateRooms: true,
+    privateRooms: false,
     manageMembers: true,
     updateRoom: true,
     archiveRoom: false,
@@ -72,24 +72,57 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
       include: { incident: { select: { id: true } } },
     });
     if (!full || !full.providerTenantId || !full.providerContainerId) {
-      await prisma.incidentWarRoom.updateMany({ where: { id: warRoomId }, data: { lastReconciledAt: new Date() } });
+      await prisma.incidentWarRoom.updateMany({
+        where: { id: warRoomId },
+        data: { lastReconciledAt: new Date() },
+      });
       return;
     }
-    const { getChannelById, findWarRoomChannel, warRoomMarker } = await import('@/lib/microsoft-teams/graph/channels');
-    let result: Awaited<ReturnType<typeof getChannelById>> | Awaited<ReturnType<typeof findWarRoomChannel>>;
+    const { getChannelById, findWarRoomChannel, warRoomMarker } =
+      await import('@/lib/microsoft-teams/graph/channels');
+    let result:
+      | Awaited<ReturnType<typeof getChannelById>>
+      | Awaited<ReturnType<typeof findWarRoomChannel>>;
     if (full.providerChannelId) {
-      const direct = await getChannelById({ tenantId: full.providerTenantId, teamId: full.providerContainerId, channelId: full.providerChannelId });
+      const direct = await getChannelById({
+        tenantId: full.providerTenantId,
+        teamId: full.providerContainerId,
+        channelId: full.providerChannelId,
+      });
       if (!direct.ok) result = direct;
       else if (direct.value) {
-        const hasMarker = direct.value.description?.includes(warRoomMarker(full.incident.id, full.generation));
-        result = hasMarker ? direct : await findWarRoomChannel({ tenantId: full.providerTenantId, teamId: full.providerContainerId, marker: warRoomMarker(full.incident.id, full.generation) });
+        const hasMarker = direct.value.description?.includes(
+          warRoomMarker(full.incident.id, full.generation)
+        );
+        result = hasMarker
+          ? direct
+          : await findWarRoomChannel({
+              tenantId: full.providerTenantId,
+              teamId: full.providerContainerId,
+              marker: warRoomMarker(full.incident.id, full.generation),
+            });
       } else {
-        result = await findWarRoomChannel({ tenantId: full.providerTenantId, teamId: full.providerContainerId, marker: warRoomMarker(full.incident.id, full.generation) });
+        result = await findWarRoomChannel({
+          tenantId: full.providerTenantId,
+          teamId: full.providerContainerId,
+          marker: warRoomMarker(full.incident.id, full.generation),
+        });
       }
     } else {
-      result = await findWarRoomChannel({ tenantId: full.providerTenantId, teamId: full.providerContainerId, marker: warRoomMarker(full.incident.id, full.generation) });
+      result = await findWarRoomChannel({
+        tenantId: full.providerTenantId,
+        teamId: full.providerContainerId,
+        marker: warRoomMarker(full.incident.id, full.generation),
+      });
     }
-    const health = result.ok && result.value ? 'HEALTHY' : !result.ok && result.code === 'MISSING_PERMISSION' ? 'PERMISSION_ERROR' : result.ok ? 'MISSING' : 'DEGRADED';
+    const health =
+      result.ok && result.value
+        ? 'HEALTHY'
+        : !result.ok && result.code === 'MISSING_PERMISSION'
+          ? 'PERMISSION_ERROR'
+          : result.ok
+            ? 'MISSING'
+            : 'DEGRADED';
     await prisma.incidentWarRoom.update({
       where: { id: warRoomId },
       data: {
@@ -97,7 +130,12 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
         lastReconciledAt: new Date(),
         ...(health === 'HEALTHY'
           ? { lastErrorCode: null, lastError: null }
-          : { lastErrorCode: result.ok ? 'CHANNEL_MISSING' : result.code, lastError: result.ok ? 'The Teams war-room marker was not found during health reconciliation.' : result.message }),
+          : {
+              lastErrorCode: result.ok ? 'CHANNEL_MISSING' : result.code,
+              lastError: result.ok
+                ? 'The Teams war-room marker was not found during health reconciliation.'
+                : result.message,
+            }),
       },
     });
   },

@@ -466,6 +466,11 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
       subject,
       startDateTime: now.toISOString(),
       endDateTime: end.toISOString(),
+      lobbyBypassSettings: {
+        scope: 'organization',
+        isDialInBypassEnabled: true,
+      },
+      allowedPresenters: 'everyone',
     };
 
     let res: Response;
