@@ -30,8 +30,6 @@ export async function GET() {
         '*.opssentinal.com',
         'opsknight.com',
         '*.opsknight.com',
-        'teams.microsoft.com',
-        '*.teams.microsoft.com',
         ...(process.env.MICROSOFT_TEAMS_VALID_DOMAINS
           ? process.env.MICROSOFT_TEAMS_VALID_DOMAINS.split(',').map(s => s.trim())
           : []),

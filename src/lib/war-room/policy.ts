@@ -11,15 +11,14 @@ export function evaluateWarRoomPolicy(input: WarRoomPolicyInput): WarRoomPolicyD
   if (!input.destination.autoCreate && !input.manual)
     return { allowed: false, code: 'AUTO_CREATE_DISABLED' };
 
+  // Strict confidentiality boundary:
+  // If an incident is PRIVATE, the war room must ALWAYS be PRIVATE.
+  // Manual requests bypass threshold and auto-create gates, NEVER confidentiality.
   const requested =
-    input.manual && input.destination?.membershipType
-      ? input.destination.membershipType
-      : input.incident.visibility === 'PRIVATE'
-        ? 'PRIVATE'
-        : (input.destination?.membershipType ?? input.config.defaultMembershipType);
-  // Visibility is a security boundary: an automatic private incident may never silently become a standard room.
-  if (!input.manual && input.incident.visibility === 'PRIVATE' && requested !== 'PRIVATE')
-    return { allowed: false, code: 'PRIVATE_DOWNGRADE_DENIED' };
+    input.incident.visibility === 'PRIVATE'
+      ? 'PRIVATE'
+      : (input.destination?.membershipType ?? input.config.defaultMembershipType);
+
   if (input.manual) return { allowed: true, membershipType: requested, reason: 'MANUAL' };
   const matched =
     input.config.autoCreateOnUrgency.includes(input.incident.urgency) ||

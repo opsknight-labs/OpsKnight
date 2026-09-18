@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   assertCanModifyService: vi.fn(),
   serviceUpdate: vi.fn(),
+  setServiceWarRoomPolicy: vi.fn(),
   logAudit: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn(),
@@ -10,6 +11,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/rbac', () => ({
   assertCanModifyService: mocks.assertCanModifyService,
+}));
+
+vi.mock('@/lib/incident-collaboration/policy', () => ({
+  setServiceWarRoomPolicy: mocks.setServiceWarRoomPolicy,
 }));
 
 vi.mock('@/lib/prisma', () => ({
@@ -166,5 +171,41 @@ describe('updateServiceChatOpsSettings', () => {
       error: 'Permission denied',
     });
     expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid providerMode with a validation error', async () => {
+    const formData = new FormData();
+    formData.set('providerMode', 'INVALID_MODE');
+
+    const result = await updateServiceChatOpsSettings('svc-1', formData);
+
+    expect(result).toEqual({
+      error: 'Invalid war room provider mode.',
+    });
+    expect(mocks.serviceUpdate).not.toHaveBeenCalled();
+    expect(mocks.setServiceWarRoomPolicy).not.toHaveBeenCalled();
+  });
+
+  it('persists Teams-only providerMode with autoCreate: true to canonical policy', async () => {
+    const formData = new FormData();
+    formData.set('providerMode', 'MICROSOFT_TEAMS');
+    formData.set('autoCreateWarRoom', 'on');
+    formData.set('warRoomsEnabled', 'true');
+    formData.set('warRoomVideoBridge', 'MICROSOFT_TEAMS');
+
+    const result = await updateServiceChatOpsSettings('svc-1', formData);
+
+    expect(result).toEqual({ success: true, error: null });
+    expect(mocks.setServiceWarRoomPolicy).toHaveBeenCalledWith(
+      'svc-1',
+      {
+        serviceProviders: ['MICROSOFT_TEAMS'],
+        meetingProvider: 'MICROSOFT_TEAMS',
+        warRoomsEnabled: true,
+        autoCreate: true,
+      },
+      'user-1',
+      undefined
+    );
   });
 });

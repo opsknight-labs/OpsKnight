@@ -147,38 +147,11 @@ export async function requestMicrosoftTeamsWarRoom(
         }
       }
 
-      if (!privateOwner && config?.defaultMeetingOrganizerUpn?.trim()) {
-        const upn = config.defaultMeetingOrganizerUpn.trim();
-        try {
-          const { getMicrosoftTeamsGraphAccessToken } =
-            await import('@/lib/microsoft-teams/client');
-          const token = await getMicrosoftTeamsGraphAccessToken(destination.tenantId);
-          if (token) {
-            const userRes = await fetch(
-              `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            if (userRes.ok) {
-              const userData = (await userRes.json()) as { id?: string };
-              if (userData?.id) {
-                privateOwner = {
-                  userId: incident.assigneeId || 'system-organizer',
-                  objectId: userData.id,
-                };
-              }
-            }
-          }
-        } catch {
-          // Best-effort organizer resolution
-        }
-      }
-
-      if (!privateOwner) {
-        if (intent.manual && intent.membershipType === 'STANDARD') {
-          decision.membershipType = 'STANDARD';
-        } else {
-          return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
-        }
+      // If no operator chat link is found, we allow the background worker to attempt
+      // resolution via the configured defaultMeetingOrganizerUpn. If neither is available,
+      // fail closed immediately without performing any external I/O here.
+      if (!privateOwner && !config?.defaultMeetingOrganizerUpn?.trim()) {
+        return { accepted: false, code: 'PRIVATE_OWNER_UNAVAILABLE' };
       }
     }
 

@@ -261,6 +261,75 @@ describe('Incident Meeting Store & Provisioning Lifecycle', () => {
     vi.restoreAllMocks();
   });
 
+  it('Teams meeting close retries with resolved user Object ID when Graph returns 400 InvalidArgument not a valid GUID', async () => {
+    const adapter = new TeamsMeetingAdapter();
+    vi.spyOn(teamsAuth, 'getMicrosoftTeamsConfig').mockResolvedValue({
+      config: {
+        id: 'default',
+        enabled: true,
+        tenantId: 'mock-tenant-id',
+        defaultMeetingOrganizerUpn: 'organizer@example.com',
+      } as never,
+      clientSecret: 'secret',
+    });
+    vi.spyOn(teamsClient, 'getMicrosoftTeamsGraphAccessToken').mockResolvedValue('mock-token');
+
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      // 1. First DELETE with UPN fails with 400 InvalidArgument
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'InvalidArgument',
+              message: 'The userId in request URL is not a valid GUID',
+            },
+          }),
+          { status: 400 }
+        )
+      )
+      // 2. GET /users/{UPN}?$select=id succeeds with user GUID
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          }),
+          { status: 200 }
+        )
+      )
+      // 3. Retry DELETE with resolved Object ID succeeds with 204
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      adapter.closeMeeting({
+        providerMeetingId: 'meet-invalid-guid-id',
+        organizerEmail: 'organizer@example.com',
+      })
+    ).resolves.toBeUndefined();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('/users/organizer%40example.com/onlineMeetings/meet-invalid-guid-id'),
+      expect.objectContaining({ method: 'DELETE' })
+    );
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/users/organizer%40example.com?$select=id'),
+      expect.anything()
+    );
+    expect(fetchSpy).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining(
+        '/users/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/onlineMeetings/meet-invalid-guid-id'
+      ),
+      expect.objectContaining({ method: 'DELETE' })
+    );
+
+    fetchSpy.mockRestore();
+    vi.restoreAllMocks();
+  });
+
   it('Teams meeting close classifies 429 and 5xx as retryable errors with Retry-After support', async () => {
     const adapter = new TeamsMeetingAdapter();
     vi.spyOn(teamsAuth, 'getMicrosoftTeamsConfig').mockResolvedValue({

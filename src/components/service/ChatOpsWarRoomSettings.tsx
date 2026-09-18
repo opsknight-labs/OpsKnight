@@ -289,7 +289,7 @@ export default function ChatOpsWarRoomSettings({
               <input
                 type="checkbox"
                 name="autoCreateWarRoom"
-                defaultChecked={autoCreateWarRoom}
+                defaultChecked={servicePolicy?.autoCreate ?? autoCreateWarRoom}
                 disabled={!canManage || providerMode === 'DISABLED'}
                 className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-50"
               />

@@ -1,6 +1,7 @@
 'use server';
 
 import prisma from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { randomBytes } from 'crypto';
@@ -222,6 +223,8 @@ const ALLOWED_VIDEO_BRIDGES = new Set([
   'NONE',
 ]);
 
+const VALID_PROVIDER_MODES = new Set(['INHERIT', 'BOTH', 'SLACK', 'MICROSOFT_TEAMS', 'DISABLED']);
+
 export async function updateServiceChatOpsSettings(
   prevStateOrServiceId: { success?: boolean; error?: string | null } | string | undefined,
   formData: FormData
@@ -261,21 +264,21 @@ export async function updateServiceChatOpsSettings(
         }
       } else {
         urlToTest = `https://${urlToTest}`;
-        try {
-          new URL(urlToTest.replace(/\{incidentId\}/g, 'test-incident-placeholder'));
-        } catch {
-          return { error: 'Please enter a valid URL for the custom bridge.' };
-        }
       }
       warRoomCustomBridgeUrl = urlToTest;
     }
 
     const autoCreateWarRoom = formData.get('autoCreateWarRoom') === 'on';
     const providerModeRaw = formData.get('providerMode');
-    const providerMode = providerModeRaw !== null ? String(providerModeRaw).trim() : null;
+    let providerMode: string | null = null;
     let warRoomsEnabled = formData.get('warRoomsEnabled') !== 'false';
 
-    if (providerMode !== null) {
+    if (providerModeRaw !== null) {
+      providerMode = String(providerModeRaw).trim();
+      if (!VALID_PROVIDER_MODES.has(providerMode)) {
+        return { error: 'Invalid war room provider mode.' };
+      }
+
       let serviceProviders: WarRoomProviderSet | null = null;
       if (providerMode === 'INHERIT') {
         serviceProviders = null;
@@ -294,24 +297,36 @@ export async function updateServiceChatOpsSettings(
         warRoomsEnabled = false;
       }
 
-      await setServiceWarRoomPolicy(
-        serviceId,
-        {
-          serviceProviders,
-          meetingProvider: warRoomVideoBridge as IncidentMeetingProvider | null,
-          warRoomsEnabled,
-          autoCreate: autoCreateWarRoom,
-        },
-        currentUser.id
-      );
-
-      if (warRoomCustomBridgeUrl !== undefined) {
-        await prisma.service.update({
-          where: { id: serviceId },
-          data: {
-            warRoomCustomBridgeUrl,
+      const applyPolicyAndBridge = async (tx?: Prisma.TransactionClient) => {
+        await setServiceWarRoomPolicy(
+          serviceId,
+          {
+            serviceProviders,
+            meetingProvider: warRoomVideoBridge as IncidentMeetingProvider | null,
+            warRoomsEnabled,
+            autoCreate: autoCreateWarRoom,
           },
+          currentUser!.id,
+          tx
+        );
+
+        if (warRoomCustomBridgeUrl !== undefined) {
+          const client = tx || prisma;
+          await client.service.update({
+            where: { id: serviceId },
+            data: {
+              warRoomCustomBridgeUrl,
+            },
+          });
+        }
+      };
+
+      if (typeof prisma.$transaction === 'function') {
+        await prisma.$transaction(async tx => {
+          await applyPolicyAndBridge(tx);
         });
+      } else {
+        await applyPolicyAndBridge();
       }
     } else {
       await prisma.service.update({

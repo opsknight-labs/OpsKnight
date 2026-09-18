@@ -84,6 +84,70 @@ export function getMicrosoftTeamsBotMessagingEndpoint(appUrl: string): string {
   return `${appUrl.replace(/\/+$/, '')}/api/microsoft-teams/messages`;
 }
 
+/** Prohibited external/shared domains per Microsoft Teams Store validation guidelines */
+const PROHIBITED_TEAMS_DOMAINS = new Set([
+  'microsoft.com',
+  'teams.microsoft.com',
+  'office.com',
+  'office365.com',
+  'azure.com',
+  'azureedge.net',
+  'windows.net',
+  'sharepoint.com',
+  'sharepointonline.com',
+  'live.com',
+  'onedrive.com',
+]);
+
+export function isProhibitedTeamsDomain(domain: string): boolean {
+  const normalized = domain.toLowerCase().replace(/^\*\./, '').trim();
+  if (PROHIBITED_TEAMS_DOMAINS.has(normalized)) return true;
+  for (const prohibited of PROHIBITED_TEAMS_DOMAINS) {
+    if (normalized.endsWith(`.${prohibited}`)) return true;
+  }
+  return false;
+}
+
+export function sanitizeValidDomain(raw: string): string | null {
+  if (!raw) return null;
+  let cleaned = raw.trim().toLowerCase();
+  if (!cleaned) return null;
+
+  const isWildcard = cleaned.startsWith('*.');
+  if (isWildcard) {
+    cleaned = cleaned.slice(2);
+  }
+
+  // Strip protocol if present
+  if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) {
+    try {
+      cleaned = new URL(cleaned).hostname;
+    } catch {
+      cleaned = cleaned.replace(/^https?:\/\//, '');
+    }
+  }
+
+  // Strip path or port
+  cleaned = cleaned.split('/')[0].split(':')[0].trim();
+  if (!cleaned || cleaned.includes('*') || cleaned.includes('?')) return null;
+
+  const fullDomain = isWildcard ? `*.${cleaned}` : cleaned;
+  if (isProhibitedTeamsDomain(fullDomain)) return null;
+
+  return fullDomain;
+}
+
+export function sanitizeValidDomains(domains: string[]): string[] {
+  const result = new Set<string>();
+  for (const d of domains) {
+    const sanitized = sanitizeValidDomain(d);
+    if (sanitized) {
+      result.add(sanitized);
+    }
+  }
+  return Array.from(result);
+}
+
 export type MicrosoftTeamsAppManifest = {
   $schema: string;
   manifestVersion: string;
@@ -176,7 +240,7 @@ export function buildMicrosoftTeamsAppManifest({
         isNotificationOnly: true,
       },
     ],
-    validDomains: Array.from(new Set([host, ...(extraValidDomains || [])])),
+    validDomains: sanitizeValidDomains([host, ...(extraValidDomains || [])]),
     authorization: {
       permissions: {
         resourceSpecific: rscPermissions.map(name => ({ name, type: 'Application' as const })),
