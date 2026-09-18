@@ -16,7 +16,7 @@ async function findMember(input: {
   const root = input.channelId
     ? `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/members`
     : `/teams/${encodeURIComponent(input.teamId)}/members`;
-  let next: string | null = `${root}?$top=100&$select=id,userId,roles`;
+  let next: string | null = `${root}?$top=100`;
   for (let page = 0; next && page < 100; page += 1) {
     const result = await microsoftTeamsGraphRequest(
       input.tenantId,
@@ -110,7 +110,7 @@ async function listAllMembers(input: {
   const root = input.channelId
     ? `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/members`
     : `/teams/${encodeURIComponent(input.teamId)}/members`;
-  let next: string | null = `${root}?$top=100&$select=id,userId,roles`;
+  let next: string | null = `${root}?$top=100`;
   const map = new Map<string, ConversationMember>();
   for (let page = 0; next && page < 100; page += 1) {
     const result = await microsoftTeamsGraphRequest(

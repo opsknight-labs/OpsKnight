@@ -195,6 +195,7 @@ export function IncidentWarRoomManager({
 
       <WarRoomCreateDialog
         providers={collaboration.providers}
+        privacyRequirement={collaboration.privacyRequirement}
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onCreate={onCreate}
