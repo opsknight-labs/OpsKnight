@@ -6,6 +6,7 @@ import {
   resolveEffectiveMeetingProvider,
 } from '@/lib/incident-collaboration/policy';
 import type { GlobalWarRoomPolicy } from '@/lib/incident-collaboration/types';
+import type { Prisma } from '@prisma/client';
 import { evaluateWarRoomPolicy } from '@/lib/war-room/policy';
 
 describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
@@ -346,6 +347,75 @@ describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
       expect(res.isDisabled).toBe(true);
       expect(res.isUnavailable).toBe(false);
     });
+
+    it('Global disabled + Teams meeting configured -> NONE / disabled', () => {
+      const res = resolveEffectiveMeetingProvider({
+        globalMeetingProvider: 'MICROSOFT_TEAMS',
+        serviceMeetingProvider: null,
+        isTeamsMeetingAvailable: true,
+        globalWarRoomsEnabled: false,
+        serviceWarRoomsEnabled: true,
+      });
+      expect(res.effectiveProvider).toBe('NONE');
+      expect(res.isDisabled).toBe(true);
+      expect(res.isUnavailable).toBe(false);
+    });
+
+    it('Service disabled + Teams meeting configured -> NONE / disabled', () => {
+      const res = resolveEffectiveMeetingProvider({
+        globalMeetingProvider: 'MICROSOFT_TEAMS',
+        serviceMeetingProvider: null,
+        isTeamsMeetingAvailable: true,
+        globalWarRoomsEnabled: true,
+        serviceWarRoomsEnabled: false,
+      });
+      expect(res.effectiveProvider).toBe('NONE');
+      expect(res.isDisabled).toBe(true);
+      expect(res.isUnavailable).toBe(false);
+    });
+
+    it('Service disabled + Jitsi -> NONE / disabled', () => {
+      const res = resolveEffectiveMeetingProvider({
+        globalMeetingProvider: 'JITSI',
+        serviceMeetingProvider: null,
+        isTeamsMeetingAvailable: false,
+        globalWarRoomsEnabled: true,
+        serviceWarRoomsEnabled: false,
+      });
+      expect(res.effectiveProvider).toBe('NONE');
+      expect(res.isDisabled).toBe(true);
+      expect(res.isUnavailable).toBe(false);
+    });
+
+    it('Meeting canonical policy resolution when service disabled -> rejected', () => {
+      const canonical = resolveIncidentCollaborationPolicy({
+        incident: {
+          urgency: 'HIGH',
+          priority: 'P1',
+          visibility: 'PUBLIC',
+        },
+        globalPolicy: {
+          enabled: true,
+          defaultProviders: ['SLACK', 'MICROSOFT_TEAMS'],
+          defaultMeetingProvider: 'MICROSOFT_TEAMS',
+          autoCreateOnUrgency: ['HIGH'],
+          autoCreateOnPriority: ['P1'],
+          archiveOnResolve: true,
+        },
+        servicePolicy: {
+          serviceProviders: [],
+          meetingProvider: 'MICROSOFT_TEAMS',
+          warRoomsEnabled: false, // Service has disabled ChatOps
+          autoCreate: false,
+        },
+        availableIntegrations: ['MICROSOFT_TEAMS'],
+        isTeamsMeetingAvailable: true,
+      });
+
+      expect(canonical.meeting.isDisabled).toBe(true);
+      expect(canonical.meeting.effectiveProvider).toBe('NONE');
+      expect(canonical.isCollaborationDisabled).toBe(true);
+    });
   });
 
   describe('7. Runtime Action Derivation & Transaction-Aware Policy Integration', () => {
@@ -384,7 +454,7 @@ describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
     it('Transaction-aware getGlobalWarRoomPolicy queries the transaction client', async () => {
       const { getGlobalWarRoomPolicy } = await import('@/lib/incident-collaboration/policy');
 
-      const mockTx = {
+      const mockTx: Pick<Prisma.TransactionClient, 'chatOpsConfig' | 'systemConfig'> = {
         chatOpsConfig: {
           findUnique: vi.fn().mockResolvedValue({
             enabled: true,
@@ -393,15 +463,15 @@ describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
             autoCreateOnPriority: ['P1'],
             archiveOnResolve: false,
           }),
-        },
+        } as unknown as Prisma.TransactionClient['chatOpsConfig'],
         systemConfig: {
           findUnique: vi.fn().mockResolvedValue({
             value: ['MICROSOFT_TEAMS'],
           }),
-        },
-      } as any;
+        } as unknown as Prisma.TransactionClient['systemConfig'],
+      };
 
-      const policy = await getGlobalWarRoomPolicy(mockTx);
+      const policy = await getGlobalWarRoomPolicy(mockTx as unknown as Prisma.TransactionClient);
       expect(mockTx.chatOpsConfig.findUnique).toHaveBeenCalledWith({
         where: { id: 'default' },
         select: expect.anything(),
@@ -415,14 +485,14 @@ describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
     it('Transaction-aware getServiceWarRoomPolicy queries the transaction client', async () => {
       const { getServiceWarRoomPolicy } = await import('@/lib/incident-collaboration/policy');
 
-      const mockTx = {
+      const mockTx: Pick<Prisma.TransactionClient, 'service' | 'systemConfig'> = {
         service: {
           findUnique: vi.fn().mockResolvedValue({
             autoCreateWarRoom: true,
             microsoftTeamsWarRoomAutoCreate: true,
             warRoomVideoBridge: 'MICROSOFT_TEAMS',
           }),
-        },
+        } as unknown as Prisma.TransactionClient['service'],
         systemConfig: {
           findUnique: vi.fn().mockResolvedValue({
             value: {
@@ -432,10 +502,13 @@ describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
               autoCreate: true,
             },
           }),
-        },
-      } as any;
+        } as unknown as Prisma.TransactionClient['systemConfig'],
+      };
 
-      const policy = await getServiceWarRoomPolicy('svc-tx-1', mockTx);
+      const policy = await getServiceWarRoomPolicy(
+        'svc-tx-1',
+        mockTx as unknown as Prisma.TransactionClient
+      );
       expect(mockTx.service.findUnique).toHaveBeenCalledWith({
         where: { id: 'svc-tx-1' },
         select: expect.anything(),

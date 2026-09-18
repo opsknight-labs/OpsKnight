@@ -170,7 +170,7 @@ describe('Incident Meeting Policy Resolver', () => {
     expect(result.effectiveProvider).toBe('NONE');
   });
 
-  it('allows meeting bridge even when chat war rooms are disabled (decoupled meeting enablement)', () => {
+  it('disables meeting bridge when chat war rooms are disabled (coupled meeting enablement)', () => {
     const result = resolveEffectiveMeetingProvider({
       globalMeetingProvider: 'MICROSOFT_TEAMS',
       serviceMeetingProvider: null,
@@ -179,8 +179,8 @@ describe('Incident Meeting Policy Resolver', () => {
       serviceWarRoomsEnabled: false,
     });
 
-    expect(result.isDisabled).toBe(false);
-    expect(result.effectiveProvider).toBe('MICROSOFT_TEAMS');
+    expect(result.isDisabled).toBe(true);
+    expect(result.effectiveProvider).toBe('NONE');
   });
 
   it('disables meeting when global meeting provider is NONE', () => {

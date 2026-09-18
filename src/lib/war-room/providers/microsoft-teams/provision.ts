@@ -915,41 +915,63 @@ export async function provisionMicrosoftTeamsWarRoom(
         });
         if (teamsConfig?.defaultMeetingOrganizerUpn?.trim()) {
           const upn = teamsConfig.defaultMeetingOrganizerUpn.trim();
-          try {
-            const { getMicrosoftTeamsGraphAccessToken } =
-              await import('@/lib/microsoft-teams/client');
-            const token = await getMicrosoftTeamsGraphAccessToken(room.providerTenantId);
-            if (token) {
-              const userRes = await fetch(
-                `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(upn)}?$select=id`,
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              if (userRes.ok) {
-                const userData = (await userRes.json()) as { id?: string };
-                if (userData?.id) {
-                  const candidateOwner = await findTeamMember({
-                    tenantId: room.providerTenantId,
-                    teamId: room.providerContainerId,
-                    userObjectId: userData.id,
-                  });
-                  if (candidateOwner.ok && candidateOwner.value) {
-                    await prisma.incidentWarRoom.updateMany({
-                      where: { id: room.id, provisioningToken: expectedProvisioningToken },
-                      data: {
-                        metadata: {
-                          privateOwnerUserId: 'system-organizer',
-                          privateOwnerObjectId: userData.id,
-                        },
-                      },
-                    });
-                    privateOwnerObjectId = userData.id;
-                    owner = candidateOwner;
-                  }
-                }
-              }
+          const { findUserByUpn } = await import('@/lib/microsoft-teams/graph/members');
+          const userLookup = await findUserByUpn({
+            tenantId: room.providerTenantId,
+            upn,
+          });
+          if (!userLookup.ok) {
+            if (
+              userLookup.code === 'RATE_LIMITED' ||
+              userLookup.code === 'TRANSIENT_READ' ||
+              userLookup.code === 'GRAPH_TOKEN_FAILED'
+            ) {
+              throw new WarRoomRetryableError(userLookup.message, userLookup.retryAfterMs);
             }
-          } catch {
-            // best-effort organizer lookup
+            return markFailed(
+              room.id,
+              expectedProvisioningToken,
+              userLookup.code,
+              userLookup.message
+            );
+          }
+          if (userLookup.value?.id) {
+            const candidateOwner = await findTeamMember({
+              tenantId: room.providerTenantId,
+              teamId: room.providerContainerId,
+              userObjectId: userLookup.value.id,
+            });
+            if (!candidateOwner.ok) {
+              if (
+                candidateOwner.code === 'RATE_LIMITED' ||
+                candidateOwner.code === 'TRANSIENT_READ' ||
+                candidateOwner.code === 'GRAPH_TOKEN_FAILED'
+              ) {
+                throw new WarRoomRetryableError(
+                  candidateOwner.message,
+                  candidateOwner.retryAfterMs
+                );
+              }
+              return markFailed(
+                room.id,
+                expectedProvisioningToken,
+                candidateOwner.code,
+                candidateOwner.message
+              );
+            }
+            if (candidateOwner.value) {
+              await prisma.incidentWarRoom.updateMany({
+                where: { id: room.id, provisioningToken: expectedProvisioningToken },
+                data: {
+                  metadata: {
+                    privateOwnerUserId: 'system-organizer',
+                    privateOwnerObjectId: userLookup.value.id,
+                  },
+                },
+              });
+              privateOwnerObjectId = userLookup.value.id;
+              owner = candidateOwner;
+            }
           }
         }
       }
