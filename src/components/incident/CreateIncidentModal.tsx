@@ -24,7 +24,6 @@ import {
   LayoutTemplate,
   Loader2,
   Lock,
-  MessageSquare,
   PenLine,
   Radio,
   Search,
@@ -92,7 +91,6 @@ type Service = {
   defaultIncidentVisibility?: 'PUBLIC' | 'PRIVATE';
   team?: { id: string; name: string } | null;
   policy?: EscalationPolicy | null;
-  autoCreateWarRoom?: boolean;
   slackChannel?: string | null;
 };
 
@@ -246,16 +244,6 @@ const QUICK_SNIPPETS = [
   { label: '+ Impact', snippet: '\n\n**Customer Impact:**\n- ' },
   { label: '+ Mitigation', snippet: '\n\n**Mitigation Steps:**\n- ' },
 ];
-
-function slugifyChannel(title: string): string {
-  if (!title.trim()) return 'incident-title';
-  const clean = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 24);
-  return clean || 'incident-title';
-}
 
 function parseInlineMarkdown(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
@@ -413,7 +401,6 @@ function CreateIncidentModalContent({
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(true);
   const [descTab, setDescTab] = useState<'write' | 'preview'>('write');
-  const [createWarRoom, setCreateWarRoom] = useState(true);
   const userOverrodeVisibility = useRef(false);
 
   const form = useForm<FormValues>({
@@ -527,7 +514,6 @@ function CreateIncidentModalContent({
       formData.append('urgency', data.urgency);
       formData.append('visibility', data.visibility);
       if (data.priority) formData.append('priority', data.priority);
-      if (createWarRoom) formData.append('createWarRoom', 'true');
 
       if (data.assigneeId && data.assigneeId !== 'unassigned') {
         if (data.assigneeId.startsWith('team:')) {
@@ -549,7 +535,7 @@ function CreateIncidentModalContent({
         formAction(formData);
       });
     },
-    [customFieldValues, formAction, createWarRoom]
+    [customFieldValues, formAction]
   );
 
   const handleKeyDown = useCallback(
@@ -1459,52 +1445,6 @@ function CreateIncidentModalContent({
                           escalation policies.
                         </p>
                       )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Feature 5: ChatOps & War Room Provisioning Card */}
-                <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-semibold text-foreground">
-                            Incident War Room
-                          </span>
-                          <span className="inline-flex items-center gap-1 font-mono text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                            #inc-
-                            <span className="opacity-50" title="Auto-assigned incident ID">
-                              {'{id}'}
-                            </span>
-                            -{slugifyChannel(watchedTitle)}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          Auto-provisions a dedicated Slack triage channel with responder invites.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <label
-                        htmlFor="warroom-toggle"
-                        className="text-xs font-medium text-muted-foreground cursor-pointer select-none"
-                      >
-                        {createWarRoom ? 'Enabled' : 'Disabled'}
-                      </label>
-                      <Switch
-                        id="warroom-toggle"
-                        checked={createWarRoom}
-                        onCheckedChange={setCreateWarRoom}
-                        aria-label="Auto-provision Slack war room channel"
-                      />
                     </div>
                   </div>
                 </div>
