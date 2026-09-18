@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   resolveIncidentCollaborationPolicy,
   shouldAutoCreateCollaboration,
   resolveEffectiveWarRoomProviders,
   resolveEffectiveMeetingProvider,
 } from '@/lib/incident-collaboration/policy';
-import type { GlobalWarRoomPolicy, ServiceWarRoomPolicy } from '@/lib/incident-collaboration/types';
+import type { GlobalWarRoomPolicy } from '@/lib/incident-collaboration/types';
 import { evaluateWarRoomPolicy } from '@/lib/war-room/policy';
 
 describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
@@ -345,6 +345,108 @@ describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
       expect(res.effectiveProvider).toBe('NONE');
       expect(res.isDisabled).toBe(true);
       expect(res.isUnavailable).toBe(false);
+    });
+  });
+
+  describe('7. Runtime Action Derivation & Transaction-Aware Policy Integration', () => {
+    it('Persistent collaboration allows canClose on RESOLVED incidents for active war rooms', async () => {
+      const { deriveWarRoomActions } = await import('@/lib/incident-collaboration/capabilities');
+
+      // Incident is RESOLVED, but war room is still READY because archiveOnResolve was false
+      const actions = deriveWarRoomActions({
+        state: 'READY',
+        channelUrl: 'https://teams.microsoft.com/l/channel/19%3Aabc',
+        incidentStatus: 'RESOLVED',
+        canManage: true,
+        archiveOnResolve: false,
+      });
+
+      expect(actions.canClose).toBe(true);
+      expect(actions.canOpen).toBe(true);
+      expect(actions.canSyncParticipants).toBe(false); // sync participants requires active incident
+    });
+
+    it('Disallows canClose for already CLOSED or ARCHIVED rooms on RESOLVED incidents', async () => {
+      const { deriveWarRoomActions } = await import('@/lib/incident-collaboration/capabilities');
+
+      const closedActions = deriveWarRoomActions({
+        state: 'CLOSED',
+        channelUrl: 'https://teams.microsoft.com/l/channel/19%3Aabc',
+        incidentStatus: 'RESOLVED',
+        canManage: true,
+        archiveOnResolve: false,
+      });
+
+      expect(closedActions.canClose).toBe(false);
+      expect(closedActions.canOpen).toBe(true);
+    });
+
+    it('Transaction-aware getGlobalWarRoomPolicy queries the transaction client', async () => {
+      const { getGlobalWarRoomPolicy } = await import('@/lib/incident-collaboration/policy');
+
+      const mockTx = {
+        chatOpsConfig: {
+          findUnique: vi.fn().mockResolvedValue({
+            enabled: true,
+            defaultVideoBridge: 'MICROSOFT_TEAMS',
+            autoCreateOnUrgency: ['HIGH', 'CRITICAL'],
+            autoCreateOnPriority: ['P1'],
+            archiveOnResolve: false,
+          }),
+        },
+        systemConfig: {
+          findUnique: vi.fn().mockResolvedValue({
+            value: ['MICROSOFT_TEAMS'],
+          }),
+        },
+      } as any;
+
+      const policy = await getGlobalWarRoomPolicy(mockTx);
+      expect(mockTx.chatOpsConfig.findUnique).toHaveBeenCalledWith({
+        where: { id: 'default' },
+        select: expect.anything(),
+      });
+      expect(policy.enabled).toBe(true);
+      expect(policy.defaultProviders).toEqual(['MICROSOFT_TEAMS']);
+      expect(policy.archiveOnResolve).toBe(false);
+      expect(policy.autoCreateOnUrgency).toEqual(['HIGH', 'CRITICAL']);
+    });
+
+    it('Transaction-aware getServiceWarRoomPolicy queries the transaction client', async () => {
+      const { getServiceWarRoomPolicy } = await import('@/lib/incident-collaboration/policy');
+
+      const mockTx = {
+        service: {
+          findUnique: vi.fn().mockResolvedValue({
+            autoCreateWarRoom: true,
+            microsoftTeamsWarRoomAutoCreate: true,
+            warRoomVideoBridge: 'MICROSOFT_TEAMS',
+          }),
+        },
+        systemConfig: {
+          findUnique: vi.fn().mockResolvedValue({
+            value: {
+              serviceProviders: ['SLACK', 'MICROSOFT_TEAMS'],
+              meetingProvider: 'MICROSOFT_TEAMS',
+              warRoomsEnabled: true,
+              autoCreate: true,
+            },
+          }),
+        },
+      } as any;
+
+      const policy = await getServiceWarRoomPolicy('svc-tx-1', mockTx);
+      expect(mockTx.service.findUnique).toHaveBeenCalledWith({
+        where: { id: 'svc-tx-1' },
+        select: expect.anything(),
+      });
+      expect(mockTx.systemConfig.findUnique).toHaveBeenCalledWith({
+        where: { key: 'service_war_room_policy:svc-tx-1' },
+        select: expect.anything(),
+      });
+      expect(policy.serviceProviders).toEqual(['SLACK', 'MICROSOFT_TEAMS']);
+      expect(policy.warRoomsEnabled).toBe(true);
+      expect(policy.autoCreate).toBe(true);
     });
   });
 });

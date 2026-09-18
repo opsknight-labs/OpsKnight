@@ -161,7 +161,6 @@ export default async function MicrosoftTeamsIntegrationRoute() {
   // 2. Operational Fleet Health & Debt: Historical war rooms, degraded channels, cleanup pending
   const operationalFleetHealth: import('@/lib/war-room/operations/types').OperationalHealth =
     warRoomDiagnosticsError ? ('UNKNOWN' as const) : (teamsSummary?.operationalHealth ?? 'HEALTHY');
-  const operationalHealthLabel = integrationReadiness;
   // Fleet totals are authoritative; the paginated table is only a view (limit 100).
   const totalWarRooms =
     teamsSummary?.totalRooms ?? (warRoomSnapshots ? warRoomSnapshots.length : 0);

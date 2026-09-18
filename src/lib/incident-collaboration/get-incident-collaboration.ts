@@ -27,8 +27,7 @@ import type {
 import {
   getGlobalWarRoomPolicy,
   getServiceWarRoomPolicy,
-  resolveEffectiveWarRoomProviders,
-  resolveEffectiveMeetingProvider,
+  resolveIncidentCollaborationPolicy,
 } from './policy';
 import { deriveProviderCanCreate, deriveWarRoomActions } from './capabilities';
 import { getProviderDeepLinkUrl } from './urls';
@@ -153,17 +152,21 @@ export async function getIncidentCollaborationView(
   if (isSlackConnected) availableIntegrations.push('SLACK');
   if (isTeamsChatConnected) availableIntegrations.push('MICROSOFT_TEAMS');
 
-  // Resolve 4-layer provider policy: Global Default + Service Override + Availability
-  const policyResolution = resolveEffectiveWarRoomProviders({
-    globalProviders: globalPolicy.defaultProviders,
-    serviceProviders: servicePolicy ? servicePolicy.serviceProviders : null,
-    availableProviders: availableIntegrations,
-    globalWarRoomsEnabled: globalPolicy.enabled,
-    serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : true,
+  // Resolve canonical 4-layer collaboration policy
+  const canonicalPolicy = resolveIncidentCollaborationPolicy({
+    incident: {
+      urgency: incident.urgency,
+      priority: incident.priority,
+      visibility: incident.visibility,
+    },
+    globalPolicy,
+    servicePolicy,
+    availableIntegrations,
+    isTeamsMeetingAvailable: isTeamsIntegrationEnabled,
   });
 
-  const isSlackDesired = policyResolution.desiredProviders.includes('SLACK');
-  const isTeamsDesired = policyResolution.desiredProviders.includes('MICROSOFT_TEAMS');
+  const isSlackDesired = canonicalPolicy.desiredProviders.includes('SLACK');
+  const isTeamsDesired = canonicalPolicy.desiredProviders.includes('MICROSOFT_TEAMS');
 
   // Destination validation
   const slackDestinationAvailable = hasSlackIntegration;
@@ -243,6 +246,7 @@ export async function getIncidentCollaborationView(
       incidentStatus: incident?.status || 'OPEN',
       canManage: canManageWarRooms && providerAvailability === 'AVAILABLE',
       externalCleanupPending: room.externalCleanupPending,
+      archiveOnResolve: canonicalPolicy.archiveOnResolve,
     });
 
     // Even if provider is disabled, Open link remains valid if channel exists
@@ -380,15 +384,9 @@ export async function getIncidentCollaborationView(
   const historicalSlackRooms = slackProviderView.history;
   const historicalTeamsRooms = teamsProviderView.history;
 
-  // Meeting resolution
+  // Meeting resolution from canonical policy
   const canManageMeeting = canManageWarRooms;
-  const meetingResolution = resolveEffectiveMeetingProvider({
-    globalMeetingProvider: globalPolicy.defaultMeetingProvider,
-    serviceMeetingProvider: servicePolicy ? (servicePolicy.meetingProvider ?? null) : null,
-    isTeamsMeetingAvailable: isTeamsIntegrationEnabled,
-    globalWarRoomsEnabled: globalPolicy.enabled,
-    serviceWarRoomsEnabled: servicePolicy ? servicePolicy.warRoomsEnabled : true,
-  });
+  const meetingResolution = canonicalPolicy.meeting;
 
   let meeting: IncidentMeetingView | null = persistedMeeting;
 
@@ -468,7 +466,7 @@ export async function getIncidentCollaborationView(
         canClose:
           (meeting.state === 'READY' || meeting.state === 'PROVISIONING') &&
           canManageMeeting &&
-          incident.status !== 'RESOLVED',
+          (incident.status !== 'RESOLVED' || !canonicalPolicy.archiveOnResolve),
         canProvision:
           canManageMeeting && incident.status !== 'RESOLVED' && meeting.state === 'CLOSED',
         supportsExternalClose: isTeams,

@@ -258,10 +258,13 @@ export function resolveIncidentCollaborationPolicy(input: {
   };
 }
 
-export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
+export async function getGlobalWarRoomPolicy(
+  tx?: Prisma.TransactionClient
+): Promise<GlobalWarRoomPolicy> {
+  const client = tx || prisma;
   const [chatOpsConfig, defaultProvidersRow, defaultMeetingRow] = await Promise.all([
-    prisma?.chatOpsConfig?.findUnique
-      ? prisma.chatOpsConfig
+    client?.chatOpsConfig?.findUnique
+      ? client.chatOpsConfig
           .findUnique({
             where: { id: 'default' },
             select: {
@@ -274,16 +277,16 @@ export async function getGlobalWarRoomPolicy(): Promise<GlobalWarRoomPolicy> {
           })
           .catch(() => null)
       : Promise.resolve(null),
-    prisma?.systemConfig?.findUnique
-      ? prisma.systemConfig
+    client?.systemConfig?.findUnique
+      ? client.systemConfig
           .findUnique({
             where: { key: GLOBAL_WAR_ROOM_POLICY_KEY },
             select: { value: true },
           })
           .catch(() => null)
       : Promise.resolve(null),
-    prisma?.systemConfig?.findUnique
-      ? prisma.systemConfig
+    client?.systemConfig?.findUnique
+      ? client.systemConfig
           .findUnique({
             where: { key: GLOBAL_MEETING_POLICY_KEY },
             select: { value: true },
@@ -387,10 +390,14 @@ export async function setGlobalMeetingProvider(
 /**
  * Fetch service-level war room provider policy.
  */
-export async function getServiceWarRoomPolicy(serviceId: string): Promise<ServiceWarRoomPolicy> {
+export async function getServiceWarRoomPolicy(
+  serviceId: string,
+  tx?: Prisma.TransactionClient
+): Promise<ServiceWarRoomPolicy> {
+  const client = tx || prisma;
   const [service, configRow] = await Promise.all([
-    prisma?.service?.findUnique
-      ? prisma.service
+    client?.service?.findUnique
+      ? client.service
           .findUnique({
             where: { id: serviceId },
             select: {
@@ -401,8 +408,8 @@ export async function getServiceWarRoomPolicy(serviceId: string): Promise<Servic
           })
           .catch(() => null)
       : Promise.resolve(null),
-    prisma?.systemConfig?.findUnique
-      ? prisma.systemConfig
+    client?.systemConfig?.findUnique
+      ? client.systemConfig
           .findUnique({
             where: { key: `${SERVICE_WAR_ROOM_POLICY_PREFIX}${serviceId}` },
             select: { value: true },
@@ -493,7 +500,7 @@ export async function setServiceWarRoomPolicy(
   tx?: Prisma.TransactionClient
 ): Promise<void> {
   const client = tx || prisma;
-  const current = await getServiceWarRoomPolicy(serviceId);
+  const current = await getServiceWarRoomPolicy(serviceId, tx);
   const updated: ServiceWarRoomPolicy = {
     serviceProviders: policy.serviceProviders,
     meetingProvider:

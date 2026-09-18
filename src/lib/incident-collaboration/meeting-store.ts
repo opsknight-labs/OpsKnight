@@ -1412,12 +1412,8 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
     return; // Already active or provisioning
   }
 
-  const {
-    getGlobalWarRoomPolicy,
-    getServiceWarRoomPolicy,
-    resolveEffectiveMeetingProvider,
-    shouldAutoCreateCollaboration,
-  } = await import('./policy');
+  const { getGlobalWarRoomPolicy, getServiceWarRoomPolicy, resolveIncidentCollaborationPolicy } =
+    await import('./policy');
 
   const [globalPolicy, servicePolicy, teamsConfig] = await Promise.all([
     getGlobalWarRoomPolicy(),
@@ -1430,36 +1426,29 @@ export async function maybeAutoProvisionIncidentMeeting(incidentId: string): Pro
       : Promise.resolve(null),
   ]);
 
-  const serviceAutoCreate =
-    servicePolicy?.autoCreate ?? incident.service?.autoCreateWarRoom ?? false;
-  const autoCreate = shouldAutoCreateCollaboration({
-    serviceAutoCreate,
-    incidentUrgency: incident.urgency,
-    incidentPriority: incident.priority,
-    autoCreateOnUrgency: globalPolicy.autoCreateOnUrgency ?? ['HIGH'],
-    autoCreateOnPriority: globalPolicy.autoCreateOnPriority ?? ['P1', 'P2'],
-  });
-  if (!autoCreate) return;
-
-  const isTeamsMeetingAvailable = Boolean(teamsConfig?.enabled);
-
-  const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
-
-  const resolution = resolveEffectiveMeetingProvider({
-    globalMeetingProvider: globalPolicy.defaultMeetingProvider,
-    serviceMeetingProvider: servicePolicy?.meetingProvider ?? null,
-    isTeamsMeetingAvailable,
-    globalWarRoomsEnabled: globalPolicy.enabled,
-    serviceWarRoomsEnabled: servicePolicy?.warRoomsEnabled ?? true,
+  const canonicalPolicy = resolveIncidentCollaborationPolicy({
+    incident: {
+      urgency: incident.urgency,
+      priority: incident.priority,
+      visibility: incident.visibility,
+    },
+    globalPolicy,
+    servicePolicy,
+    availableIntegrations: [],
+    isTeamsMeetingAvailable: Boolean(teamsConfig?.enabled),
   });
 
-  if (resolution.isDisabled || resolution.effectiveProvider === 'NONE') {
+  if (!canonicalPolicy.shouldAutoCreate) return;
+
+  if (canonicalPolicy.meeting.isDisabled || canonicalPolicy.meeting.effectiveProvider === 'NONE') {
     return;
   }
 
+  const customTemplate = incident.service?.warRoomCustomBridgeUrl || null;
+
   await requestMeetingProvision({
     incidentId,
-    provider: resolution.effectiveProvider,
+    provider: canonicalPolicy.meeting.effectiveProvider,
     incidentTitle: incident.title,
     customTemplate,
   });

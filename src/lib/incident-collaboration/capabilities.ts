@@ -18,12 +18,22 @@ export function deriveWarRoomActions(options: {
   incidentStatus: string;
   canManage: boolean;
   externalCleanupPending?: boolean;
+  archiveOnResolve?: boolean;
 }): IncidentWarRoomActions {
-  const { state, channelUrl, incidentStatus, canManage, externalCleanupPending } = options;
+  const {
+    state,
+    channelUrl,
+    incidentStatus,
+    canManage,
+    externalCleanupPending,
+    archiveOnResolve = true,
+  } = options;
   const isIncidentActive = ['OPEN', 'ACKNOWLEDGED'].includes(incidentStatus);
 
   const canOpen = Boolean(channelUrl && ['READY', 'CLOSED', 'ARCHIVED'].includes(state));
-  const canClose = Boolean(canManage && isIncidentActive && ['READY', 'AMBIGUOUS'].includes(state));
+  const canClose = Boolean(
+    canManage && (isIncidentActive || !archiveOnResolve) && ['READY', 'AMBIGUOUS'].includes(state)
+  );
   const canReconcile = Boolean(canManage && ['READY', 'AMBIGUOUS'].includes(state));
   const canSyncParticipants = Boolean(canManage && isIncidentActive && state === 'READY');
   const canRefreshProjection = Boolean(canManage && state === 'READY');

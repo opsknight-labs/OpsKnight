@@ -21,20 +21,21 @@ vi.mock('@/lib/db-utils', () => ({
   ),
 }));
 
-vi.mock('@/lib/incident-collaboration/policy', () => ({
-  getGlobalWarRoomPolicy: vi.fn().mockResolvedValue({
-    enabled: true,
-    defaultProviders: ['MICROSOFT_TEAMS'],
-  }),
-  getServiceWarRoomPolicy: vi.fn().mockResolvedValue(null),
-  resolveEffectiveWarRoomProviders: vi.fn().mockReturnValue({
-    effectiveProviders: ['MICROSOFT_TEAMS'],
-    desiredProviders: ['MICROSOFT_TEAMS'],
-    unavailableDesiredProviders: [],
-    isDisabled: false,
-    isInherited: true,
-  }),
-}));
+vi.mock('@/lib/incident-collaboration/policy', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/incident-collaboration/policy')>();
+  return {
+    ...actual,
+    getGlobalWarRoomPolicy: vi.fn().mockResolvedValue({
+      enabled: true,
+      defaultProviders: ['MICROSOFT_TEAMS'],
+      defaultMeetingProvider: 'MICROSOFT_TEAMS',
+      autoCreateOnUrgency: ['HIGH'],
+      autoCreateOnPriority: ['P1', 'P2'],
+      archiveOnResolve: true,
+    }),
+    getServiceWarRoomPolicy: vi.fn().mockResolvedValue(null),
+  };
+});
 
 import { requestMicrosoftTeamsWarRoom } from '@/lib/war-room/providers/microsoft-teams/provision';
 

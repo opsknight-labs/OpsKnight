@@ -28,7 +28,6 @@ import {
   RefreshCw,
   Send,
   Webhook,
-  Plus,
   Loader2,
   MessageSquare,
   BellRing,
