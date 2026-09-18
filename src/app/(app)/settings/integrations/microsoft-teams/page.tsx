@@ -82,6 +82,17 @@ export default async function MicrosoftTeamsIntegrationRoute() {
     includeTeamSettingsPermissions: process.env.MICROSOFT_TEAMS_INCLUDE_OPTIONAL_RSC === '1',
     includeWarRoomPermissions: config?.warRoomsEnabled ?? false,
     includeWarRoomCollaborationPermissions: config?.warRoomsEnabled ?? false,
+    extraValidDomains: [
+      'opssentinal.com',
+      '*.opssentinal.com',
+      'opsknight.com',
+      '*.opsknight.com',
+      'teams.microsoft.com',
+      '*.teams.microsoft.com',
+      ...(process.env.MICROSOFT_TEAMS_VALID_DOMAINS
+        ? process.env.MICROSOFT_TEAMS_VALID_DOMAINS.split(',').map(s => s.trim())
+        : []),
+    ],
   });
   const rscState = isConnected ? await getTeamsGrantedRscPermissions().catch(() => null) : null;
   const rscUnknown = !rscState || rscState.unknown;

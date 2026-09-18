@@ -25,6 +25,17 @@ export async function GET() {
       applicationIdUri: process.env.MICROSOFT_TEAMS_APPLICATION_ID_URI?.trim() || undefined,
       includeWarRoomPermissions: resolved.config.warRoomsEnabled,
       includeWarRoomCollaborationPermissions: resolved.config.warRoomsEnabled,
+      extraValidDomains: [
+        'opssentinal.com',
+        '*.opssentinal.com',
+        'opsknight.com',
+        '*.opsknight.com',
+        'teams.microsoft.com',
+        '*.teams.microsoft.com',
+        ...(process.env.MICROSOFT_TEAMS_VALID_DOMAINS
+          ? process.env.MICROSOFT_TEAMS_VALID_DOMAINS.split(',').map(s => s.trim())
+          : []),
+      ],
     });
     const assetRoot = path.join(process.cwd(), 'public', 'microsoft-teams');
     const [color, outline] = await Promise.all([

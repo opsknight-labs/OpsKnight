@@ -314,6 +314,39 @@ export class TeamsMeetingAdapter implements MeetingProviderAdapter {
       );
     }
 
+    if (
+      res.status === 400 &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(organizerUpn)
+    ) {
+      const errBody = await res
+        .clone()
+        .text()
+        .catch(() => '');
+      if (errBody.includes('not a valid GUID') || errBody.includes('InvalidArgument')) {
+        try {
+          const userRes = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(organizerUpn)}?$select=id`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (userRes.ok) {
+            const userData = (await userRes.json()) as { id?: string };
+            if (userData?.id) {
+              const retryRes = await fetch(
+                `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userData.id)}/onlineMeetings/${encodeURIComponent(providerMeetingId)}`,
+                {
+                  method: 'DELETE',
+                  headers: { Authorization: `Bearer ${token}` },
+                }
+              );
+              res = retryRes;
+            }
+          }
+        } catch {
+          // fallback to standard error handling
+        }
+      }
+    }
+
     // 204 No Content: Successful deletion per Graph API specification
     if (res.status === 204) {
       return;

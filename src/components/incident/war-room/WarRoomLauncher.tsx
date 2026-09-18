@@ -133,6 +133,27 @@ export function WarRoomLauncher({
       );
     }
 
+    // 3b. Meeting provisioning or requested
+    if (
+      collaboration.meeting &&
+      ['PROVISIONING', 'REQUESTED'].includes(collaboration.meeting.state)
+    ) {
+      return (
+        <div className="flex items-center gap-1.5">
+          {collaboration.meeting.provider === 'MICROSOFT_TEAMS' ? (
+            <MicrosoftTeamsLogo className="h-4.5 w-4.5 shrink-0" />
+          ) : (
+            <Video className="h-4 w-4 shrink-0 text-amber-500" />
+          )}
+          <span className="font-semibold">
+            {collaboration.meeting.state === 'PROVISIONING'
+              ? 'Connecting meeting…'
+              : 'Start Meeting'}
+          </span>
+        </div>
+      );
+    }
+
     // 4. No active rooms, but create capability exists
     if (canCreateAny) {
       return (
@@ -143,8 +164,8 @@ export function WarRoomLauncher({
       );
     }
 
-    // 5. Historical rooms exist, but no active room and cannot create
-    if (collaboration.history.length > 0) {
+    // 5. Historical rooms exist, or collaboration is enabled
+    if (collaboration.history.length > 0 || collaboration.meeting) {
       return (
         <div className="flex items-center gap-1.5">
           <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -153,7 +174,12 @@ export function WarRoomLauncher({
       );
     }
 
-    return null;
+    return (
+      <div className="flex items-center gap-1.5">
+        <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span>War room</span>
+      </div>
+    );
   };
 
   const content = renderContent();
