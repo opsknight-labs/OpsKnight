@@ -111,8 +111,8 @@ describe('CreateIncidentModal', () => {
     expect(screen.getByText('Customer-Facing Outage')).toBeInTheDocument();
     expect(screen.getByText('Internal System Only')).toBeInTheDocument();
 
-    // ChatOps War Room
-    expect(screen.getByText('Incident War Room')).toBeInTheDocument();
+    // War room creation is managed via policies and dedicated launcher, not ad-hoc modal toggle
+    expect(screen.queryByText('Incident War Room')).not.toBeInTheDocument();
 
     // Who Gets Paged
     expect(screen.getByText('Who Gets Paged?')).toBeInTheDocument();

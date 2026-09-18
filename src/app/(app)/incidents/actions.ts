@@ -486,7 +486,6 @@ export async function getIncidentCreationContext() {
         id: true,
         name: true,
         defaultIncidentVisibility: true,
-        autoCreateWarRoom: true,
         slackChannel: true,
         team: { select: { id: true, name: true } },
         policy: {
