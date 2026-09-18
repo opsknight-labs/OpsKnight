@@ -136,14 +136,49 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
         'Microsoft Teams interactive actions are currently disabled.'
       );
     }
-    const candidateTeamIds = [
+    const rawCandidateTeamIds = [
       input.activity.channelData?.team?.aadGroupId?.trim(),
       input.activity.channelData?.team?.id?.trim(),
       input.activity.conversation?.id?.trim(),
+      input.activity.conversation?.id?.split(';')[0]?.trim(),
       teamId,
     ].filter(Boolean) as string[];
-    const isTeamMatch = (storedId: string | null | undefined) =>
-      Boolean(storedId && candidateTeamIds.includes(storedId.trim()));
+
+    const candidateTeamIds = [...new Set(rawCandidateTeamIds)];
+
+    // In Microsoft Teams, a Team has two identifiers:
+    // 1) The Azure AD Group Object ID (GUID) used by Microsoft Graph API (stored in destination.teamId, warRoom.providerContainerId, installation.teamId)
+    // 2) The Teams internal thread ID (format: 19:...@thread.tacv2) used by Bot Framework in channelData.team.id
+    // Teams Bot Framework invokes frequently omit aadGroupId, so we bridge them via the installation ledger.
+    if (destination?.installation) {
+      const inst = destination.installation;
+      const instIdentifiers = [inst.teamId, inst.channelId, inst.conversationId].filter(Boolean) as string[];
+      if (instIdentifiers.some(id => candidateTeamIds.includes(id.trim()))) {
+        for (const id of instIdentifiers) {
+          candidateTeamIds.push(id.trim());
+        }
+      }
+    }
+
+    if (prisma?.microsoftTeamsInstallation?.findMany) {
+      const matchingInstallations = await prisma.microsoftTeamsInstallation.findMany({
+        where: {
+          tenantId,
+          enabled: true,
+          OR: [
+            { teamId: { in: candidateTeamIds } },
+            { channelId: { in: candidateTeamIds } },
+            { conversationId: { in: candidateTeamIds } },
+          ],
+        },
+        select: { teamId: true, channelId: true, conversationId: true },
+      });
+      for (const inst of matchingInstallations) {
+        if (inst.teamId) candidateTeamIds.push(inst.teamId.trim());
+        if (inst.channelId) candidateTeamIds.push(inst.channelId.trim());
+        if (inst.conversationId) candidateTeamIds.push(inst.conversationId.trim());
+      }
+    }
 
     const candidateChannelIds = [
       channelId,
@@ -152,6 +187,18 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     ].filter(Boolean) as string[];
     const isChannelMatch = (storedId: string | null | undefined) =>
       Boolean(storedId && candidateChannelIds.includes(storedId.trim()));
+
+    if (warRoom?.providerChannelId && isChannelMatch(warRoom.providerChannelId)) {
+      if (warRoom.providerContainerId) candidateTeamIds.push(warRoom.providerContainerId.trim());
+      if (destination?.teamId) candidateTeamIds.push(destination.teamId.trim());
+      if (destination?.installation?.teamId) candidateTeamIds.push(destination.installation.teamId.trim());
+    }
+
+    const isTeamMatch = (storedId: string | null | undefined) => {
+      if (!storedId) return true;
+      const target = storedId.trim();
+      return candidateTeamIds.includes(target);
+    };
 
     const matchesConversation = (
       storedConvId: string | null | undefined,

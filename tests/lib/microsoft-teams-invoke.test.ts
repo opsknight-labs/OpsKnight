@@ -20,6 +20,8 @@ const prismaMock = {
   microsoftTeamsDestination: { findUnique: vi.fn(async () => destination) },
   incident: { findUnique: vi.fn(async (args: { select?: unknown }) => args.select ? ({ assignee: null, watchers: [] }) : incident) },
   microsoftTeamsIncidentMessage: { findUnique: vi.fn(async () => canonical) },
+  microsoftTeamsInstallation: { findMany: vi.fn(async () => []) },
+  incidentWarRoom: { findFirst: vi.fn(async () => null) },
 };
 
 vi.mock('@/lib/prisma', () => ({ default: prismaMock }));
@@ -129,5 +131,109 @@ describe('Microsoft Teams invoke adapter', () => {
     expect(capturedPayloadDigest).toBe(firstDigest);
 
     vi.useRealTimers();
+  });
+
+  it('bridges Azure AD Group GUID destination with Teams internal thread ID via installation ledger', async () => {
+    const guidTeamId = 'e83b3788-96b6-49fc-a485-582b719e49d3';
+    const threadTeamId = '19:PcM4kw6ULagEt9_wcgiuSYEwaCgAu1_22W8K-D41spM1@thread.tacv2';
+    const notificationChannelId = '19:ea6c2a8074a348ceb302a2fac8df17b5@thread.tacv2';
+
+    prismaMock.microsoftTeamsDestination.findUnique.mockResolvedValueOnce({
+      ...destination,
+      teamId: guidTeamId,
+      channelId: notificationChannelId,
+      installation: {
+        enabled: true,
+        teamId: guidTeamId,
+        channelId: threadTeamId,
+        conversationId: threadTeamId,
+      },
+    } as never);
+    prismaMock.microsoftTeamsIncidentMessage.findUnique.mockResolvedValueOnce({
+      ...canonical,
+      conversationId: notificationChannelId,
+    } as never);
+
+    const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
+
+    // Teams Bot Framework sends channelData.team.id = threadTeamId and omits aadGroupId
+    const teamsActivity = activity({
+      channelData: {
+        tenant: { id: 'tenant-1' },
+        team: { id: threadTeamId },
+        channel: { id: notificationChannelId },
+      },
+      conversation: { id: `${notificationChannelId};messageid=message-1` },
+      replyToId: 'message-1',
+    });
+
+    const response = await handleMicrosoftTeamsAdaptiveCardAction({
+      activity: teamsActivity,
+      verifiedTenantId: 'tenant-1',
+    });
+    expect(response).toMatchObject({ statusCode: 200, value: 'Incident acknowledged.' });
+  });
+
+  it('allows War Room card interaction when triggered from war room channel', async () => {
+    const guidTeamId = 'e83b3788-96b6-49fc-a485-582b719e49d3';
+    const warRoomChannelId = '19:87262c3ec7c54a65b3e03769669af9a3@thread.tacv2';
+    const warRoomMessageId = '1789744465529';
+    const warRoomConvId = `${warRoomChannelId};messageid=${warRoomMessageId}`;
+
+    prismaMock.microsoftTeamsDestination.findUnique.mockResolvedValueOnce({
+      ...destination,
+      teamId: guidTeamId,
+      installationId: 'install-1',
+      installation: {
+        id: 'install-1',
+        enabled: true,
+        teamId: guidTeamId,
+      },
+    } as never);
+
+    prismaMock.incidentWarRoom.findFirst.mockResolvedValueOnce({
+      id: 'war-room-1',
+      incidentId: 'inc-1',
+      destinationId: 'dest-1',
+      installationId: 'install-1',
+      state: 'READY',
+      providerTenantId: 'tenant-1',
+      providerContainerId: guidTeamId,
+      providerChannelId: warRoomChannelId,
+      commandMessageId: warRoomMessageId,
+      commandConversationId: warRoomConvId,
+      messageGeneration: 1,
+    } as never);
+
+    const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
+
+    const warRoomActivity = activity({
+      replyToId: warRoomMessageId,
+      conversation: { id: warRoomConvId },
+      channelData: {
+        tenant: { id: 'tenant-1' },
+        team: { id: '19:general@thread.tacv2' },
+        channel: { id: warRoomChannelId },
+      },
+      value: {
+        action: {
+          type: 'Action.Execute',
+          verb: 'opsknight.incident.ack',
+          data: {
+            v: 2,
+            incidentId: 'inc-1',
+            destinationId: 'dest-1',
+            warRoomId: 'war-room-1',
+            messageGeneration: 1,
+          },
+        },
+      },
+    });
+
+    const response = await handleMicrosoftTeamsAdaptiveCardAction({
+      activity: warRoomActivity,
+      verifiedTenantId: 'tenant-1',
+    });
+    expect(response).toMatchObject({ statusCode: 200, value: 'Incident acknowledged.' });
   });
 });
