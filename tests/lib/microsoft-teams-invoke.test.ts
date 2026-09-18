@@ -83,8 +83,31 @@ describe('Microsoft Teams invoke adapter', () => {
     resolveMicrosoftTeamsUser.mockResolvedValueOnce(null);
     const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
     const response = await handleMicrosoftTeamsAdaptiveCardAction({ activity: activity(), verifiedTenantId: 'tenant-1' });
-    expect(response).toMatchObject({ statusCode: 401, type: 'application/vnd.microsoft.error' });
+    expect(response).toMatchObject({
+      statusCode: 401,
+      type: 'application/vnd.microsoft.activity.loginRequest',
+    });
     expect(JSON.stringify(response)).toContain('/settings/chatops/link?token=challenge-token');
+    expect(executeChatOpsCommand).not.toHaveBeenCalled();
+  });
+
+  it('allows unlinked identity to refresh card without 401 prompt', async () => {
+    resolveMicrosoftTeamsUser.mockResolvedValueOnce(null);
+    const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
+    const refreshActivity = activity({
+      value: {
+        action: {
+          type: 'Action.Execute',
+          verb: 'opsknight.incident.refresh',
+          data: { v: 2, incidentId: 'inc-1', destinationId: 'dest-1', messageGeneration: 1 },
+        },
+      },
+    });
+    const response = await handleMicrosoftTeamsAdaptiveCardAction({
+      activity: refreshActivity,
+      verifiedTenantId: 'tenant-1',
+    });
+    expect(response).toMatchObject({ statusCode: 200, type: 'application/vnd.microsoft.card.adaptive' });
     expect(executeChatOpsCommand).not.toHaveBeenCalled();
   });
 
