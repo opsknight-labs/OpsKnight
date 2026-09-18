@@ -107,26 +107,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     // 1. CREATE ACTION
     if (parsed.data.action === 'CREATE') {
-      const { provider, options } = parsed.data;
-
-      // Inviolable Security Invariant: Private incidents must NEVER create STANDARD war rooms for Teams.
-      // Slack war rooms are always open to all responders in the organization.
-      const incident = await prisma.incident.findUnique({
-        where: { id: incidentId },
-        select: { visibility: true },
-      });
-      if (
-        provider === 'MICROSOFT_TEAMS' &&
-        incident?.visibility === 'PRIVATE' &&
-        options?.membershipType === 'STANDARD'
-      ) {
-        return jsonError(
-          new AppError({
-            code: 'INCIDENT_MODIFY_DENIED',
-            userMessage: 'Private incidents cannot create standard Microsoft Teams war rooms.',
-          })
-        );
-      }
+      const { provider } = parsed.data;
 
       // Check authoritative server-side capability resolver
       const { getIncidentCollaborationCapabilities } =
@@ -186,7 +167,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       const result = await requestMicrosoftTeamsWarRoom(incidentId, {
         manual: true,
         allowNewGeneration: true,
-        membershipType: options?.membershipType,
+        membershipType: 'STANDARD',
       });
 
       if (!result.accepted) {

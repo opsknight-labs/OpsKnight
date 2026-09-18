@@ -368,7 +368,7 @@ export async function getIncidentCollaborationView(
       historyCount: history.length,
       history,
       supportedOptions: {
-        supportsPrivateRooms: isTeams,
+        supportsPrivateRooms: false,
       },
     };
   }

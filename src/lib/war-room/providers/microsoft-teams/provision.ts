@@ -94,11 +94,14 @@ export async function requestMicrosoftTeamsWarRoom(
       !canonicalPolicy.isCollaborationDisabled
     );
 
+    // Teams war rooms are open to the Team (standard channel) so that
+    // the Bot can post Adaptive Cards, sync responders, and display the meeting bridge
+    // without hitting Microsoft Teams' BotNotInConversationRoster private-channel lockout.
     const decision = evaluateWarRoomPolicy({
       incident: {
         urgency: incident.urgency,
         priority: incident.priority,
-        visibility: incident.visibility,
+        visibility: 'PUBLIC',
       },
       service: { autoCreate: effectiveAutoCreate },
       destination: destination
@@ -106,7 +109,7 @@ export async function requestMicrosoftTeamsWarRoom(
             enabled: destination.enabled,
             warRoomEnabled: destination.warRoomEnabled,
             autoCreate: effectiveAutoCreate,
-            membershipType: intent.membershipType ?? destination.warRoomMembershipType,
+            membershipType: 'STANDARD',
           }
         : null,
       config: {
@@ -114,8 +117,7 @@ export async function requestMicrosoftTeamsWarRoom(
         warRoomsEnabled: Boolean(config?.warRoomsEnabled),
         autoCreateOnUrgency: chatOpsConfig?.autoCreateOnUrgency ?? [],
         autoCreateOnPriority: chatOpsConfig?.autoCreateOnPriority ?? [],
-        defaultMembershipType:
-          intent.membershipType ?? config?.defaultWarRoomMembershipType ?? 'STANDARD',
+        defaultMembershipType: 'STANDARD',
       },
       manual: intent.manual,
     });
@@ -173,7 +175,7 @@ export async function requestMicrosoftTeamsWarRoom(
           installationId: destination.installationId,
           providerTenantId: destination.tenantId,
           providerContainerId: destination.teamId,
-          membershipType: decision.membershipType,
+          membershipType: 'STANDARD',
           ...(privateOwner
             ? {
                 metadata: {
