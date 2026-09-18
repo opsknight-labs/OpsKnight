@@ -4,7 +4,13 @@ import { logger } from '@/lib/logger';
 import { createHash } from 'node:crypto';
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
-const ALLOWED_LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const ALLOWED_LOGO_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+]);
 
 function parseDataImage(dataUrl: string): { mime: string; buffer: Buffer } | null {
   if (!dataUrl.startsWith('data:')) return null;

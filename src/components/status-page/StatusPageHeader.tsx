@@ -186,18 +186,19 @@ export default function StatusPageHeader({
   return (
     <header className="status-topbar status-page-header" data-sp-slot="header">
       <div className="status-topbar__inner">
-        <a
-          className="status-topbar__brand"
-          data-sp-slot="brand"
-          href="https://opsknight.com/"
-        >
+        <a className="status-topbar__brand" data-sp-slot="brand" href="https://opsknight.com/">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={logoUrl}
-            alt=""
+            alt={statusPage.name || 'OpsKnight'}
             data-sp-slot="brand-logo"
             onError={event => {
-              (event.target as HTMLImageElement).style.display = 'none';
+              const target = event.target as HTMLImageElement;
+              if (!target.src.endsWith('/logo.png')) {
+                target.src = '/logo.png';
+              } else {
+                target.style.display = 'none';
+              }
             }}
           />
           <span data-sp-slot="brand-name">{statusPage.name}</span>

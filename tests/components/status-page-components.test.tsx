@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import StatusPageSubscribe from '@/components/status-page/StatusPageSubscribe';
 import StatusPageSubscribeModal from '@/components/status-page/StatusPageSubscribeModal';
 import StatusPageFooter from '@/components/status-page/StatusPageFooter';
+import StatusPageHeader from '@/components/status-page/StatusPageHeader';
 
 // Mock fetch for subscribe tests
 const mockFetch = vi.fn();
@@ -222,5 +223,34 @@ describe('StatusPageFooter', () => {
     expect(screen.getByRole('link', { name: /json api/i })).toBeDefined();
     expect(screen.getByRole('link', { name: /rss feed/i })).toBeDefined();
     expect(screen.getByRole('link', { name: /help desk/i })).toBeDefined();
+  });
+});
+
+describe('StatusPageHeader', () => {
+  it('renders default /logo.svg when no custom brand logo provided', () => {
+    render(<StatusPageHeader statusPage={{ name: 'Acme Status' }} timeZone="UTC" />);
+    const logo = screen.getByRole('img');
+    expect(logo.getAttribute('src')).toBe('/logo.svg');
+    expect(logo.getAttribute('alt')).toBe('Acme Status');
+  });
+
+  it('falls back to /logo.png if logo fails to load and hides if /logo.png also fails', () => {
+    render(
+      <StatusPageHeader
+        statusPage={{ name: 'Acme Status' }}
+        branding={{ logoUrl: 'https://example.com/broken-logo.png' }}
+        timeZone="UTC"
+      />
+    );
+    const logo = screen.getByRole('img') as HTMLImageElement;
+    expect(logo.getAttribute('src')).toBe('https://example.com/broken-logo.png');
+
+    // First error: fall back to /logo.png
+    fireEvent.error(logo);
+    expect(logo.getAttribute('src')).toBe('/logo.png');
+
+    // Second error: /logo.png also fails, element is hidden
+    fireEvent.error(logo);
+    expect(logo.style.display).toBe('none');
   });
 });

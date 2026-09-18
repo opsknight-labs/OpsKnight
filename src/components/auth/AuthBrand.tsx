@@ -21,7 +21,15 @@ export default function AuthBrand({ className, compact = false }: AuthBrandProps
       aria-label="OpsKnight official website"
     >
       <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-red-200 bg-red-50 p-1 dark:border-red-500/30 dark:bg-red-950/50">
-        <Image src="/logo.png" alt="" width={28} height={28} className="h-6 w-6 object-contain" />
+        <Image
+          src="/logo.png"
+          alt="OpsKnight"
+          width={28}
+          height={28}
+          className="h-6 w-6 object-contain"
+          priority
+          unoptimized
+        />
       </span>
       <span
         className={cn(
