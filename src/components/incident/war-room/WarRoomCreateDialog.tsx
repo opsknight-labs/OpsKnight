@@ -19,6 +19,7 @@ import { getProviderPresentation } from '@/lib/incident-collaboration/presentati
 
 type WarRoomCreateDialogProps = {
   providers: IncidentWarRoomProviderView[];
+  privacyRequirement?: 'STANDARD' | 'PRIVATE';
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreate: (
@@ -30,6 +31,7 @@ type WarRoomCreateDialogProps = {
 
 export function WarRoomCreateDialog({
   providers,
+  privacyRequirement,
   open,
   onOpenChange,
   onCreate,
@@ -37,17 +39,25 @@ export function WarRoomCreateDialog({
 }: WarRoomCreateDialogProps) {
   // Only providers that currently allow creation
   const creatableProviders = providers.filter(p => p.canCreate);
+  const isPrivateIncident = privacyRequirement === 'PRIVATE';
   const [selectedTeamsMembership, setSelectedTeamsMembership] = useState<'STANDARD' | 'PRIVATE'>(
-    'STANDARD'
+    isPrivateIncident ? 'PRIVATE' : 'STANDARD'
   );
   const [activeProviderTrigger, setActiveProviderTrigger] = useState<WarRoomProviderName | null>(
     null
   );
 
+  React.useEffect(() => {
+    if (isPrivateIncident) {
+      setSelectedTeamsMembership('PRIVATE');
+    }
+  }, [isPrivateIncident]);
+
   const handleCreate = async (provider: WarRoomProviderName) => {
     setActiveProviderTrigger(provider);
+    const effectiveMembership = isPrivateIncident ? 'PRIVATE' : selectedTeamsMembership;
     const options =
-      provider === 'MICROSOFT_TEAMS' ? { membershipType: selectedTeamsMembership } : undefined;
+      provider === 'MICROSOFT_TEAMS' ? { membershipType: effectiveMembership } : undefined;
     try {
       await onCreate(provider, options);
       onOpenChange(false);
@@ -104,17 +114,22 @@ export function WarRoomCreateDialog({
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
+                        disabled={isPrivateIncident}
                         onClick={() => setSelectedTeamsMembership('STANDARD')}
                         className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-medium transition-all ${
-                          selectedTeamsMembership === 'STANDARD'
-                            ? 'border-primary bg-primary/5 text-foreground'
-                            : 'border-border text-muted-foreground hover:bg-muted/50'
+                          isPrivateIncident
+                            ? 'opacity-40 cursor-not-allowed border-border text-muted-foreground'
+                            : selectedTeamsMembership === 'STANDARD'
+                              ? 'border-primary bg-primary/5 text-foreground'
+                              : 'border-border text-muted-foreground hover:bg-muted/50'
                         }`}
                       >
                         <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <div className="text-left min-w-0">
                           <span className="block font-semibold">Standard</span>
-                          <span className="text-[10px] text-muted-foreground">Org members</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {isPrivateIncident ? 'Private only' : 'Org members'}
+                          </span>
                         </div>
                       </button>
 

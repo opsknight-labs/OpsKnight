@@ -218,6 +218,22 @@ describe('Collaboration Flow Matrix (Global → Service → Incident)', () => {
         expect(decision.membershipType).toBe('STANDARD');
       }
     });
+
+    it('resolveIncidentCollaborationPolicy marks privacyRequirement as PRIVATE for private incidents', () => {
+      const policy = resolveIncidentCollaborationPolicy({
+        incident: { urgency: 'HIGH', priority: 'P1', visibility: 'PRIVATE' },
+        globalPolicy: {
+          enabled: true,
+          defaultProviders: ['SLACK', 'MICROSOFT_TEAMS'],
+          defaultMeetingProvider: 'MICROSOFT_TEAMS',
+        },
+        servicePolicy: null,
+        availableIntegrations: ['SLACK', 'MICROSOFT_TEAMS'],
+        isTeamsMeetingAvailable: true,
+      });
+
+      expect(policy.privacyRequirement).toBe('PRIVATE');
+    });
   });
 
   describe('4. Destination Capabilities & Readiness Matrix', () => {

@@ -190,6 +190,10 @@ export async function getIncidentCollaborationView(
   } else if (!slackDestinationAvailable) {
     slackAvailability = 'NOT_CONFIGURED';
     slackUnavailableReason = 'No Slack channel or destination mapped for this service.';
+  } else if (incident.visibility === 'PRIVATE') {
+    slackAvailability = 'DISABLED';
+    slackUnavailableReason =
+      'Slack does not support private war rooms. Use Microsoft Teams or update incident visibility to Public.';
   } else {
     slackAvailability = 'AVAILABLE';
   }
@@ -499,6 +503,8 @@ export async function getIncidentCollaborationView(
     visible: isAnyProviderVisible,
     incidentId: incident.id,
     incidentStatus: incident.status,
+    incidentVisibility: incident.visibility,
+    privacyRequirement: canonicalPolicy.privacyRequirement,
     summary: {
       activeRooms,
       transitioningRooms,

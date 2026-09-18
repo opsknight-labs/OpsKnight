@@ -76,13 +76,11 @@ describe('Teams war-room channel identity', () => {
   });
 
   it('creates a private channel with the verified owner in the initial request', async () => {
-    global.fetch = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ id: 'channel-1', displayName: 'incident-room' }), {
-          status: 201,
-        })
-      ) as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: 'channel-1', displayName: 'incident-room' }), {
+        status: 201,
+      })
+    ) as typeof fetch;
     await expect(
       createChannel({
         tenantId: 'tenant-1',
@@ -186,5 +184,86 @@ describe('findUserByUpn Entra directory resolution', () => {
 
     const result = await findUserByUpn({ tenantId: 'tenant-1', upn: 'nonexistent@contoso.com' });
     expect(result).toEqual({ ok: true, value: null });
+  });
+});
+
+describe('findTeamMember & listTeamMembers Graph queries', () => {
+  it('queries /teams/{teamId}/members without $select to avoid conversationMember OData failure', async () => {
+    const { findTeamMember } = await import('@/lib/microsoft-teams/graph/members');
+    let requestedUrl = '';
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      requestedUrl = url;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                id: 'member-1',
+                userId: 'user-guid-456',
+                roles: ['owner'],
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+      );
+    }) as typeof fetch;
+
+    const result = await findTeamMember({
+      tenantId: 'tenant-1',
+      teamId: 'team-abc',
+      userObjectId: 'user-guid-456',
+    });
+
+    expect(requestedUrl).toBe('https://graph.microsoft.com/v1.0/teams/team-abc/members?$top=100');
+    expect(requestedUrl).not.toContain('$select');
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        '@odata.type': '#microsoft.graph.aadUserConversationMember',
+        id: 'member-1',
+        userId: 'user-guid-456',
+        roles: ['owner'],
+      },
+    });
+  });
+
+  it('listTeamMembers queries without $select and indexes by userId', async () => {
+    const { listTeamMembers } = await import('@/lib/microsoft-teams/graph/members');
+    let requestedUrl = '';
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      requestedUrl = url;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            value: [
+              {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                id: 'member-1',
+                userId: 'user-guid-456',
+                roles: ['owner'],
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+      );
+    }) as typeof fetch;
+
+    const result = await listTeamMembers({
+      tenantId: 'tenant-1',
+      teamId: 'team-abc',
+    });
+
+    expect(requestedUrl).toBe('https://graph.microsoft.com/v1.0/teams/team-abc/members?$top=100');
+    expect(requestedUrl).not.toContain('$select');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.get('user-guid-456')).toMatchObject({
+        id: 'member-1',
+        userId: 'user-guid-456',
+      });
+    }
   });
 });
