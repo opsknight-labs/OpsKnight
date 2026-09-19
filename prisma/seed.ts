@@ -1297,8 +1297,11 @@ async function main() {
         },
       });
 
+      const objectiveId = `so_${crypto.randomUUID()}`;
       await prisma.serviceObjective.create({
         data: {
+          id: objectiveId,
+          lineageId: objectiveId,
           name: `${service.name} MTTA`,
           description: `MTTA objective for ${service.name}`,
           serviceId: service.id,

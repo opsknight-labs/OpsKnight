@@ -83,7 +83,7 @@ export async function evaluateServiceObjective({
 
   const compliant = objectiveIsCompliant(value, objective.target, objective.comparator);
   return {
-    objectiveId: objective.id,
+    objectiveId: objective.lineageId,
     metric: objective.metricType,
     value,
     target: objective.target,

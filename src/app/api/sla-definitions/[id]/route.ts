@@ -4,6 +4,7 @@ import { getCurrentAuthorizationActor } from '@/lib/rbac';
 import { serviceReadWhere } from '@/lib/authorization-filters';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
 import { LEGACY_SLA_DEPRECATION_HEADERS, legacySlaGone, legacyWindow } from '@/lib/slo/http';
+import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   addOperationalMetric('opsknight_legacy_sla_api_requests_total', 1, {
@@ -12,14 +13,28 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   });
   const actor = await getCurrentAuthorizationActor();
   const id = (await params).id;
+  const legacyDefinition = await prisma.sLADefinition.findFirst({
+    where: { id, service: serviceReadWhere(actor) },
+    include: {
+      service: { select: { id: true, name: true } },
+      snapshots: { orderBy: { date: 'desc' }, take: 30 },
+    },
+  });
+  if (legacyDefinition) {
+    return NextResponse.json(
+      {
+        ...legacyDefinition,
+        legacy: true,
+        snapshots: legacyDefinition.snapshots.map(snapshot => ({ ...snapshot, legacy: true })),
+      },
+      { headers: LEGACY_SLA_DEPRECATION_HEADERS }
+    );
+  }
   const objective = await prisma.serviceObjective.findFirst({
     where: {
-      OR: [
-        { id, serviceId: null },
-        { legacySlaDefinitionId: id, serviceId: null },
-        { id, service: serviceReadWhere(actor) },
-        { legacySlaDefinitionId: id, service: serviceReadWhere(actor) },
-      ],
+      lineageId: id,
+      activeTo: null,
+      ...serviceObjectiveReadWhere(actor),
     },
     include: { service: { select: { id: true, name: true } } },
   });
@@ -39,6 +54,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   return NextResponse.json(
     {
       ...objective,
+      id: objective.lineageId,
       window: legacyWindow(objective.windowType, objective.windowValue),
       snapshots: legacySnapshots.map(snapshot => ({ ...snapshot, legacy: true })),
     },

@@ -1,35 +1,44 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const actor = await getCurrentAuthorizationActor();
-  const objective = await prisma.serviceObjective.findFirst({
+  const lineageId = (await params).id;
+  const versions = await prisma.serviceObjective.findMany({
     where: {
-      id: (await params).id,
-      OR: [{ serviceId: null }, { service: serviceReadWhere(actor) }],
+      lineageId,
+      ...serviceObjectiveReadWhere(actor),
     },
-    select: { id: true, legacySlaDefinitionId: true },
+    orderBy: { version: 'asc' },
   });
-  if (!objective) return jsonError('Service objective not found', 404);
+  if (versions.length === 0) return jsonError('Service objective not found', 404);
+  const versionIds = versions.map(version => version.id);
+  const legacySlaDefinitionId = versions.find(version => version.legacySlaDefinitionId)
+    ?.legacySlaDefinitionId;
 
   const [snapshots, legacySnapshots] = await Promise.all([
     prisma.serviceObjectiveSnapshot.findMany({
-      where: { objectiveId: objective.id },
+      where: { objectiveId: { in: versionIds } },
       orderBy: { periodEnd: 'desc' },
       take: 366,
     }),
-    objective.legacySlaDefinitionId
+    legacySlaDefinitionId
       ? prisma.sLASnapshot.findMany({
-          where: { slaDefinitionId: objective.legacySlaDefinitionId },
+          where: { slaDefinitionId: legacySlaDefinitionId },
           orderBy: { date: 'desc' },
           take: 366,
         })
       : Promise.resolve([]),
   ]);
   return jsonOk({
+    versions: versions.map(version => ({
+      ...version,
+      id: version.lineageId,
+      versionId: version.id,
+    })),
     snapshots: snapshots.map(snapshot => ({
       ...snapshot,
       numerator: snapshot.numerator?.toString() ?? null,

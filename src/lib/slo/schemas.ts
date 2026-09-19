@@ -1,11 +1,18 @@
 import { z } from 'zod';
-import { OBJECTIVE_COMPARATORS, OBJECTIVE_WINDOWS, SERVICE_OBJECTIVE_METRICS } from './types';
+import { OBJECTIVE_COMPARATORS, OBJECTIVE_WINDOWS } from './types';
+
+export const CREATABLE_SERVICE_OBJECTIVE_METRICS = [
+  'UPTIME',
+  'AVAILABILITY',
+  'MTTA',
+  'MTTR',
+] as const;
 
 const serviceObjectiveBaseSchema = z.object({
   serviceId: z.string().min(1).nullable().optional(),
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).nullable().optional(),
-  metricType: z.enum(SERVICE_OBJECTIVE_METRICS),
+  metricType: z.enum(CREATABLE_SERVICE_OBJECTIVE_METRICS),
   target: z.number().finite().nonnegative(),
   comparator: z.enum(OBJECTIVE_COMPARATORS),
   windowType: z.enum(OBJECTIVE_WINDOWS),

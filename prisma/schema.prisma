@@ -2460,6 +2460,7 @@ model SLADefinition {
 /// owned exclusively by IncidentSlaPolicy and the frozen Incident contract.
 model ServiceObjective {
   id                    String                     @id @default(cuid())
+  lineageId             String
   serviceId             String?
   service               Service?                   @relation(fields: [serviceId], references: [id])
   name                  String
@@ -2472,19 +2473,21 @@ model ServiceObjective {
   version               Int                        @default(1)
   activeFrom            DateTime                   @default(now())
   activeTo              DateTime?
-  legacySlaDefinitionId String?                    @unique
+  legacySlaDefinitionId String?
   snapshots             ServiceObjectiveSnapshot[]
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
 
   @@index([serviceId, metricType, activeTo])
+  @@index([lineageId, version])
+  @@index([legacySlaDefinitionId])
   @@index([activeFrom, activeTo])
 }
 
 model ServiceObjectiveSnapshot {
   id                String             @id @default(cuid())
   objectiveId       String
-  objective         ServiceObjective   @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  objective         ServiceObjective   @relation(fields: [objectiveId], references: [id], onDelete: Restrict)
   periodStart       DateTime
   periodEnd         DateTime
   value             Float?
@@ -2580,6 +2583,10 @@ model CronSchedulerState {
   nextRunAt           DateTime?
   lastRollupDate      String?
   lastRollupRefreshAt DateTime?
+  lastObjectiveSnapshotAt         DateTime?
+  lastObjectiveSnapshotSuccessAt  DateTime?
+  lastObjectiveSnapshotDurationMs Int?
+  lastObjectiveSnapshotFailed     Int      @default(0)
   lockedBy            String?
   lockedAt            DateTime?
   updatedAt           DateTime  @updatedAt

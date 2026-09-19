@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { assertAdmin, getCurrentAuthorizationActor } from '@/lib/rbac';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { serviceObjectiveCreateSchema } from '@/lib/slo/schemas';
 import { logger } from '@/lib/logger';
 import { jsonError, jsonOk } from '@/lib/api-response';
@@ -14,12 +14,14 @@ export async function GET(request: NextRequest) {
     where: {
       activeTo: null,
       ...(serviceId ? { serviceId } : {}),
-      OR: [{ serviceId: null }, { service: serviceReadWhere(actor) }],
+      ...serviceObjectiveReadWhere(actor),
     },
     include: { service: { select: { id: true, name: true } } },
     orderBy: { activeFrom: 'desc' },
   });
-  return jsonOk(objectives);
+  return jsonOk(
+    objectives.map(objective => ({ ...objective, id: objective.lineageId, versionId: objective.id }))
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -36,6 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const objective = await prisma.$transaction(async tx => {
+      const lineageId = `so_${crypto.randomUUID()}`;
       await tx.serviceObjective.updateMany({
         where: {
           serviceId: data.serviceId ?? null,
@@ -46,6 +49,8 @@ export async function POST(request: NextRequest) {
       });
       return tx.serviceObjective.create({
         data: {
+          id: lineageId,
+          lineageId,
           serviceId: data.serviceId ?? null,
           name: data.name,
           description: data.description ?? null,
@@ -58,7 +63,7 @@ export async function POST(request: NextRequest) {
         include: { service: { select: { id: true, name: true } } },
       });
     });
-    return jsonOk(objective, 201);
+    return jsonOk({ ...objective, id: objective.lineageId, versionId: objective.id }, 201);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return jsonError('Validation failed', 400, { details: error.errors });

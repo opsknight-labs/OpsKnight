@@ -178,6 +178,10 @@ export async function updateState(data: {
   nextRunAt?: Date | null;
   lastRollupDate?: string | null;
   lastRollupRefreshAt?: Date | null;
+  lastObjectiveSnapshotAt?: Date | null;
+  lastObjectiveSnapshotSuccessAt?: Date | null;
+  lastObjectiveSnapshotDurationMs?: number | null;
+  lastObjectiveSnapshotFailed?: number;
 }): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
@@ -501,6 +505,17 @@ async function runOnce() {
           logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
         });
         const overdueNotifications = await notifyOverdueActionItems(now);
+        const { processServiceObjectiveSnapshots } = await import(
+          '@/jobs/service-objective-scheduler'
+        );
+        const serviceObjectiveSnapshots = await processServiceObjectiveSnapshots(now);
+        await updateState({
+          lastObjectiveSnapshotAt: now,
+          lastObjectiveSnapshotSuccessAt:
+            serviceObjectiveSnapshots.failed === 0 ? now : undefined,
+          lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
+          lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
+        });
 
         // Run automated SLA drift detection and self-healing
         try {
@@ -605,6 +620,7 @@ async function runOnce() {
           stillMissing: Math.max(0, missingDays.length - toGenerate.length),
           reconciled: dirtyDays.length,
           overdueNotifications,
+          serviceObjectiveSnapshots,
           rollupsDeleted: 'handled-by-data-cleanup',
         });
       } catch (error) {

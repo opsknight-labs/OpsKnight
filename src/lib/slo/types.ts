@@ -24,6 +24,7 @@ export type ObjectiveWindow = (typeof OBJECTIVE_WINDOWS)[number];
 
 export interface ServiceObjectiveEvaluationInput {
   id: string;
+  lineageId: string;
   serviceId: string | null;
   metricType: ServiceObjectiveMetric;
   target: number;

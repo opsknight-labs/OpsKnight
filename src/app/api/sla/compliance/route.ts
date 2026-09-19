@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getCurrentAuthorizationActor } from '@/lib/rbac';
-import { serviceReadWhere } from '@/lib/authorization-filters';
+import { serviceObjectiveReadWhere } from '@/lib/slo/authorization';
 import { evaluateServiceObjective } from '@/lib/slo/evaluator';
 import { legacyWindow, LEGACY_SLA_DEPRECATION_HEADERS } from '@/lib/slo/http';
 import { addOperationalMetric } from '@/lib/metrics/operational/registry';
@@ -19,7 +19,7 @@ export async function GET(_request: NextRequest) {
   const objectives = await prisma.serviceObjective.findMany({
     where: {
       activeTo: null,
-      OR: [{ serviceId: null }, { service: serviceReadWhere(actor) }],
+      ...serviceObjectiveReadWhere(actor),
     },
     include: { service: { select: { id: true, name: true } } },
     orderBy: { activeFrom: 'desc' },
@@ -28,7 +28,7 @@ export async function GET(_request: NextRequest) {
     objectives.map(async objective => {
       const evaluation = await evaluateServiceObjective({ actor, objective });
       return {
-        definitionId: objective.id,
+        definitionId: objective.lineageId,
         name: objective.name,
         serviceId: objective.serviceId,
         serviceName: objective.service?.name ?? 'Global',
