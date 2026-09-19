@@ -2,6 +2,15 @@ import type { ComplianceEvidenceType as PrismaComplianceEvidenceType } from '@pr
 
 export type ComplianceEvidenceType = PrismaComplianceEvidenceType;
 
+export const COMPLIANCE_EVIDENCE_TYPES = [
+  'VERIFICATION_RESULT',
+  'CONFIGURATION_SNAPSHOT',
+  'SYSTEM_STATE',
+  'CAPABILITY_CHECK',
+  'EXECUTION_SUMMARY',
+  'EVALUATION_FAILURE',
+] as const;
+
 export interface ComplianceEvidenceDraft {
   readonly type: ComplianceEvidenceType;
   readonly collectorId: string;
@@ -44,4 +53,5 @@ export interface EvidenceQueryOptions {
 export interface EvidenceQueryResult {
   readonly evidence: readonly ComplianceEvidenceRecord[];
   readonly nextCursor: string | null;
+  readonly hasMore: boolean;
 }
