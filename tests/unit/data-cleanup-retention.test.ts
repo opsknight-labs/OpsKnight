@@ -70,6 +70,10 @@ const { mockPrisma } = vi.hoisted(() => {
       findMany: vi.fn().mockResolvedValue([]),
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
+    rateLimit: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    $executeRaw: vi.fn().mockResolvedValue(1),
     $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(mockPrisma)),
   };

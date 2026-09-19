@@ -65,6 +65,11 @@ export async function cleanupExpiredRateLimits(): Promise<number> {
     const result = await prisma.rateLimit.deleteMany({
       where: {
         expiresAt: { lt: new Date() },
+        key: {
+          not: {
+            startsWith: 'mutex:',
+          },
+        },
       },
     });
     return result.count;

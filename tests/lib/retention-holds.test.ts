@@ -207,7 +207,7 @@ describe('Retention Holds Service', () => {
       expect(result.hold.id).toBe('hold-123');
       expect(result.hold.status).toBe('ACTIVE');
 
-      // Verify audit event does NOT include raw sensitive reason text
+      // Verify audit event does NOT include raw sensitive reason text, and txClient is passed
       expect(mockEmitAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'retention.hold.created',
@@ -219,7 +219,8 @@ describe('Retention Holds Service', () => {
             reasonProvided: true,
             externalReferenceProvided: true,
           },
-        })
+        }),
+        expect.anything()
       );
       const auditCall = mockEmitAuditEvent.mock.calls[0][0];
       expect(JSON.stringify(auditCall.metadata)).not.toContain(
@@ -274,7 +275,8 @@ describe('Retention Holds Service', () => {
           metadata: expect.objectContaining({
             wasAlreadyReleased: false,
           }),
-        })
+        }),
+        expect.anything()
       );
     });
 
