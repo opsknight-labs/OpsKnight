@@ -16,6 +16,7 @@ import {
   Activity,
   SlidersHorizontal,
   Database,
+  Key,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import type { ComplianceControl, ControlStatus, ComplianceFramework } from '@/lib/compliance/types';
 import type { PersonalDataDomain } from '@/lib/privacy/types';
+import { EncryptionMigrationPanel } from './EncryptionMigrationPanel';
 
 const statusPresentation: Record<
   ControlStatus,
@@ -93,7 +95,7 @@ export default function ComplianceClientTabs({
   privacyData,
 }: Props) {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'security' | 'privacy' | 'cra' | 'evidence'
+    'overview' | 'security' | 'privacy' | 'encryption' | 'cra' | 'evidence'
   >(privacyData.userId || privacyData.query ? 'privacy' : 'overview');
   const [statusFilter, setStatusFilter] = useState<ControlStatus | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -226,6 +228,7 @@ export default function ComplianceClientTabs({
             icon: ShieldCheck,
           },
           { id: 'privacy', label: 'Privacy & DSR', icon: Lock },
+          { id: 'encryption', label: 'Encryption & Keys', icon: Key },
           { id: 'cra', label: `CRA Readiness (${craControls.length})`, icon: Shield },
           { id: 'evidence', label: 'Evidence Catalog', icon: FileCode },
         ].map(tab => {
@@ -598,6 +601,13 @@ export default function ComplianceClientTabs({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* TAB: ENCRYPTION & KEY RETIREMENT */}
+      {activeTab === 'encryption' && (
+        <div className="space-y-4 animate-in fade-in-50 duration-150">
+          <EncryptionMigrationPanel />
         </div>
       )}
 

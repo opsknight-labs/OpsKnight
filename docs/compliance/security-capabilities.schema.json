@@ -24,13 +24,17 @@
         "newSecretWrites",
         "legacyReads",
         "keyringOverlapRotation",
-        "generalDatabaseFieldEncryption"
+        "generalDatabaseFieldEncryption",
+        "controlledMigration",
+        "keyRetirementReadiness"
       ],
       "properties": {
         "newSecretWrites": { "const": "AES-256-GCM-v3-envelope" },
         "legacyReads": { "type": "array", "minItems": 1, "items": { "type": "string" } },
         "keyringOverlapRotation": { "type": "boolean" },
-        "generalDatabaseFieldEncryption": { "type": "boolean" }
+        "generalDatabaseFieldEncryption": { "type": "boolean" },
+        "controlledMigration": { "type": "boolean" },
+        "keyRetirementReadiness": { "type": "boolean" }
       }
     },
     "identity": { "$ref": "#/$defs/booleanCapabilities" },

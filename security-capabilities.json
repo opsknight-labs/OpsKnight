@@ -6,7 +6,9 @@
     "newSecretWrites": "AES-256-GCM-v3-envelope",
     "legacyReads": ["AES-256-CBC-v1", "AES-256-CBC-v2"],
     "keyringOverlapRotation": true,
-    "generalDatabaseFieldEncryption": false
+    "generalDatabaseFieldEncryption": false,
+    "controlledMigration": true,
+    "keyRetirementReadiness": true
   },
   "identity": {
     "oidc": true,

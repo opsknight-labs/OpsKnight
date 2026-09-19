@@ -81,6 +81,104 @@ function getEncryptionKeyring(): EncryptionKeyEntry[] {
   return entries;
 }
 
+export function getEncryptionKeyringEntries(): Array<{ id: string; key: string }> {
+  return getEncryptionKeyring();
+}
+
+/**
+ * Returns full keyring for migration and inspection purposes:
+ * includes all environment keys, plus the database legacy fallback key
+ * (id: 'database_legacy') if SystemSettings.encryptionKey is set.
+ * The DB key is strictly an inspect/read key and will never be active.
+ */
+export async function getMigrationKeyring(
+  dbClient?: unknown
+): Promise<Array<{ id: string; key: string; source: 'env' | 'database_legacy' }>> {
+  const envEntries: Array<{ id: string; key: string; source: 'env' | 'database_legacy' }> =
+    getEncryptionKeyring().map(e => ({
+      id: e.id,
+      key: e.key,
+      source: 'env' as const,
+    }));
+
+  try {
+    let client = dbClient;
+    if (!client) {
+      const prismaModule = await import('./prisma');
+      client = prismaModule.default;
+    }
+    const prisma = client as {
+      systemSettings: {
+        findUnique: (args: unknown) => Promise<{ encryptionKey: string | null } | null>;
+      };
+    };
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { encryptionKey: true },
+    });
+    if (settings?.encryptionKey && isValidHexKey(settings.encryptionKey)) {
+      envEntries.push({
+        id: 'database_legacy',
+        key: settings.encryptionKey,
+        source: 'database_legacy' as const,
+      });
+    }
+  } catch {
+    // Ignore DB errors
+  }
+
+  return envEntries;
+}
+
+/**
+ * Returns sanitized metadata about configured encryption keys without exposing key material.
+ */
+export async function getEncryptionKeyringMetadata(): Promise<{
+  activeKeyId: string | null;
+  keys: Array<{ id: string; source: 'env' | 'database_legacy'; isActive: boolean }>;
+  totalKeys: number;
+  hasLegacyDbKey: boolean;
+}> {
+  const entries = getEncryptionKeyring();
+  const activeId = entries[0]?.id || null;
+
+  let hasLegacyDbKey = false;
+  try {
+    const prismaModule = await import('./prisma');
+    const settings = await prismaModule.default.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { encryptionKey: true },
+    });
+    if (settings?.encryptionKey && isValidHexKey(settings.encryptionKey)) {
+      hasLegacyDbKey = true;
+    }
+  } catch {
+    // Ignore DB errors when querying metadata
+  }
+
+  const keys: Array<{ id: string; source: 'env' | 'database_legacy'; isActive: boolean }> =
+    entries.map(entry => ({
+      id: entry.id,
+      source: 'env' as const,
+      isActive: entry.id === activeId,
+    }));
+
+  if (hasLegacyDbKey && !keys.some(k => k.id === 'database_legacy')) {
+    keys.push({
+      id: 'database_legacy',
+      source: 'database_legacy' as const,
+      isActive: false,
+    });
+  }
+
+  return {
+    activeKeyId: activeId,
+    keys,
+    totalKeys: keys.length,
+    hasLegacyDbKey,
+  };
+}
+
 /**
  * Resolve the active encryption key.
  * Returns null only in production when ENCRYPTION_KEY is not set.
@@ -268,73 +366,7 @@ export async function decrypt(encryptedText: string): Promise<string> {
           '[Encryption] Primary decryption failed. Attempting legacy database key fallback...'
         );
         const decryptedLegacy = await decryptWithKey(encryptedText, settings.encryptionKey);
-        logger.info(
-          '[Encryption] Legacy decryption succeeded. Initiating background transparent migration to new key...'
-        );
-
-        // Asynchronously migrate this specific ciphertext to the new key in the database
-        // without blocking the returned result:
-        const active = getEncryptionKeyring()[0];
-        if (active) {
-          Promise.resolve().then(async () => {
-            try {
-              const newEncrypted = await encryptWithKey(decryptedLegacy, active.key, active.id);
-
-              // 1. Check OidcConfig
-              await prisma.oidcConfig.updateMany({
-                where: { clientSecret: encryptedText },
-                data: { clientSecret: newEncrypted },
-              });
-
-              // 2. Check SlackIntegration
-              await prisma.slackIntegration.updateMany({
-                where: { botToken: encryptedText },
-                data: { botToken: newEncrypted },
-              });
-              await prisma.slackIntegration.updateMany({
-                where: { signingSecret: encryptedText },
-                data: { signingSecret: newEncrypted },
-              });
-
-              // 3. Check SlackOAuthConfig
-              await prisma.slackOAuthConfig.updateMany({
-                where: { clientSecret: encryptedText },
-                data: { clientSecret: newEncrypted },
-              });
-
-              // For provider JSON configs, it's prefixed by "enc:". So we search for "enc:" + encryptedText.
-              const oldEncPrefixed = 'enc:' + encryptedText;
-              const newEncPrefixed = 'enc:' + newEncrypted;
-
-              // 4. Check NotificationProvider config values
-              const notifProviders = await prisma.notificationProvider.findMany();
-              for (const np of notifProviders) {
-                if (np.config && typeof np.config === 'object') {
-                  let updated = false;
-                  const cfg = { ...(np.config as Record<string, any>) };
-                  for (const [k, v] of Object.entries(cfg)) {
-                    if (v === oldEncPrefixed) {
-                      cfg[k] = newEncPrefixed;
-                      updated = true;
-                    }
-                  }
-                  if (updated) {
-                    await prisma.notificationProvider.update({
-                      where: { id: np.id },
-                      data: { config: cfg },
-                    });
-                    logger.info(
-                      `[Encryption] Dynamic migration: updated NotificationProvider ${np.id} configuration.`
-                    );
-                  }
-                }
-              }
-            } catch (migrationError) {
-              logger.error('[Encryption] Dynamic on-the-fly migration error', { migrationError });
-            }
-          });
-        }
-
+        logger.info('[Encryption] Legacy decryption succeeded using database key fallback.');
         return decryptedLegacy;
       }
     } catch (fallbackError) {
