@@ -945,169 +945,158 @@ export default function ComplianceClientTabs({
 
       {/* TAB 5: EVIDENCE CATALOG */}
       {activeTab === 'evidence' && (
-        <div className="space-y-4 animate-in fade-in-50 duration-150">
-          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-5 shadow-xs space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 pb-3.5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
-                  <FileCode className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-foreground">Verified Evidence Catalog</h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    Cryptographically hashed runtime evidence and repository compliance contracts
-                  </p>
-                </div>
+        <div className="space-y-6 animate-in fade-in-50 duration-150">
+          {/* Main Card */}
+          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs p-5 shadow-xs space-y-6">
+            <div className="flex items-center gap-3 border-b border-border/60 pb-3.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0 border border-primary/20 shadow-2xs">
+                <FileCode className="h-4 w-4" />
               </div>
-
-              {/* Sub-section toggle */}
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border/60">
-                <button
-                  type="button"
-                  onClick={() => setEvidenceSection('runtime')}
-                  className={cn(
-                    'px-3 py-1 rounded-lg text-xs font-semibold transition-all select-none flex items-center gap-1.5',
-                    evidenceSection === 'runtime'
-                      ? 'bg-primary text-primary-foreground shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Runtime Evidence
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                    {runtimeEvidenceList.length}
-                  </Badge>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEvidenceSection('repository')}
-                  className={cn(
-                    'px-3 py-1 rounded-lg text-xs font-semibold transition-all select-none flex items-center gap-1.5',
-                    evidenceSection === 'repository'
-                      ? 'bg-primary text-primary-foreground shadow-xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  <Database className="h-3.5 w-3.5" />
-                  Repository Baseline
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                    {controls.length}
-                  </Badge>
-                </button>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Verified Evidence Catalog</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Cryptographically hashed operational evidence and repository compliance contracts
+                </p>
               </div>
             </div>
 
-            {/* SECTION: RUNTIME EVIDENCE */}
-            {evidenceSection === 'runtime' && (
-              <div className="space-y-4">
-                {/* Search and Filters */}
-                <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-                  <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                    <input
-                      type="text"
-                      value={evidenceSearchQuery}
-                      onChange={e => setEvidenceSearchQuery(e.target.value)}
-                      placeholder="Search evidence by control, title, hash..."
-                      className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
-                    />
-                  </div>
+            {/* SECTION 1: RUNTIME AUTOMATED EVIDENCE */}
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" />
+                  <h4 className="text-xs font-bold text-foreground">Automated Runtime Evidence</h4>
+                  <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+                    {runtimeEvidenceList.length} snapshots
+                  </Badge>
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  SHA-256 canonical digests generated during control evaluations
+                </span>
+              </div>
 
-                  <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
-                    {[
-                      'ALL',
-                      'VERIFICATION_RESULT',
-                      'CONFIGURATION_SNAPSHOT',
-                      'SYSTEM_STATE',
-                      'CAPABILITY_CHECK',
-                      'EVALUATION_FAILURE',
-                    ].map(type => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => setEvidenceTypeFilter(type)}
-                        className={cn(
-                          'px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap select-none',
-                          evidenceTypeFilter === type
-                            ? 'bg-primary text-primary-foreground shadow-xs'
-                            : 'border border-border/70 bg-card/80 text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                        )}
-                      >
-                        {type.replace(/_/g, ' ')}
-                      </button>
-                    ))}
-                  </div>
+              {/* Search and Filters */}
+              <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    value={evidenceSearchQuery}
+                    onChange={e => setEvidenceSearchQuery(e.target.value)}
+                    placeholder="Search evidence by control, title, hash..."
+                    className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                  />
                 </div>
 
-                {isLoadingEvidence ? (
-                  <div className="p-12 text-center text-xs text-muted-foreground">
-                    Loading runtime evidence snapshots...
-                  </div>
-                ) : filteredRuntimeEvidence.length > 0 ? (
-                  <div className="rounded-xl border border-border/60 divide-y divide-border/40 overflow-hidden">
-                    {filteredRuntimeEvidence.map(item => (
-                      <div
-                        key={item.id}
-                        className="p-3.5 hover:bg-muted/20 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                      >
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono font-bold text-primary text-[11px] px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
-                              {item.controlId}
-                            </span>
-                            <Badge variant="outline" className="text-[10px] font-semibold">
-                              {item.type.replace(/_/g, ' ')}
-                            </Badge>
-                            <span className="font-semibold text-foreground truncate">
-                              {item.title}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <span>
-                              Collector: {item.collectorId} (v{item.collectorVersion})
-                            </span>
-                            <span>·</span>
-                            <span>Observed: {new Date(item.observedAt).toLocaleString()}</span>
-                            <span>·</span>
-                            <span className="font-mono text-[10px] bg-muted/50 px-1.5 py-0.5 rounded border border-border/40">
-                              {item.contentHash.slice(0, 18)}…
-                            </span>
-                          </div>
-                        </div>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedEvidence(item);
-                            setIsEvidenceViewerOpen(true);
-                          }}
-                          className="h-7 text-xs font-semibold px-3 shrink-0 gap-1.5"
-                        >
-                          <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                          Inspect Evidence
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-border/80 p-8 text-center space-y-2">
-                    <ShieldCheck className="h-8 w-8 text-muted-foreground mx-auto" />
-                    <p className="text-xs font-medium text-foreground">
-                      No runtime evidence records found
-                    </p>
-                    <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                      Runtime evaluators automatically collect verifiable, sha256-hashed evidence
-                      snapshots during control evaluations. Click <strong>Evaluate Controls</strong>{' '}
-                      in the Security tab.
-                    </p>
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto">
+                  {[
+                    'ALL',
+                    'VERIFICATION_RESULT',
+                    'CONFIGURATION_SNAPSHOT',
+                    'SYSTEM_STATE',
+                    'CAPABILITY_CHECK',
+                    'EVALUATION_FAILURE',
+                  ].map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setEvidenceTypeFilter(type)}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all whitespace-nowrap select-none',
+                        evidenceTypeFilter === type
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : 'border border-border/70 bg-card/80 text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                      )}
+                    >
+                      {type.replace(/_/g, ' ')}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
 
-            {/* SECTION: REPOSITORY BASELINE */}
-            {evidenceSection === 'repository' && (
+              {isLoadingEvidence ? (
+                <div className="p-10 text-center text-xs text-muted-foreground">
+                  Loading runtime evidence snapshots...
+                </div>
+              ) : filteredRuntimeEvidence.length > 0 ? (
+                <div className="rounded-xl border border-border/60 divide-y divide-border/40 overflow-hidden">
+                  {filteredRuntimeEvidence.map(item => (
+                    <div
+                      key={item.id}
+                      className="p-3.5 hover:bg-muted/20 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono font-bold text-primary text-[11px] px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
+                            {item.controlId}
+                          </span>
+                          <Badge variant="outline" className="text-[10px] font-semibold">
+                            {item.type.replace(/_/g, ' ')}
+                          </Badge>
+                          <span className="font-semibold text-foreground truncate">
+                            {item.title}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>
+                            Collector: {item.collectorId} (v{item.collectorVersion})
+                          </span>
+                          <span>·</span>
+                          <span>Observed: {new Date(item.observedAt).toLocaleString()}</span>
+                          <span>·</span>
+                          <span className="font-mono text-[10px] bg-muted/50 px-1.5 py-0.5 rounded border border-border/40">
+                            {item.contentHash.slice(0, 18)}…
+                          </span>
+                        </div>
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedEvidence(item);
+                          setIsEvidenceViewerOpen(true);
+                        }}
+                        className="h-7 text-xs font-semibold px-3 shrink-0 gap-1.5"
+                      >
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                        Inspect Evidence
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border/80 p-6 text-center space-y-2 bg-muted/10">
+                  <ShieldCheck className="h-7 w-7 text-muted-foreground mx-auto" />
+                  <p className="text-xs font-medium text-foreground">
+                    No runtime evidence records found
+                  </p>
+                  <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
+                    Runtime evaluators collect verifiable, SHA-256 hashed snapshots during
+                    evaluation runs. Click <strong>Evaluate Controls</strong> in the Security tab to
+                    trigger inspection.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* SECTION 2: REPOSITORY BASELINE CONTRACTS */}
+            <div className="space-y-4 pt-5 border-t border-border/60">
+              <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-primary" />
+                  <h4 className="text-xs font-bold text-foreground">
+                    Repository Baseline Artifacts
+                  </h4>
+                  <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0">
+                    {controls.length} controls
+                  </Badge>
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  Static repository implementation artifacts and source contracts
+                </span>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2">
                 {controls.map(control => (
                   <div
@@ -1135,7 +1124,7 @@ export default function ComplianceClientTabs({
                   </div>
                 ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}
