@@ -34,6 +34,7 @@ describe('ComplianceClientTabs', () => {
       title: 'Multi-Factor Authentication',
       description: 'Enforces multi-factor authentication on administrative sessions.',
       status: 'IMPLEMENTED',
+      assessmentMode: 'CATALOG',
       owner: 'OPERATOR',
       frameworks: ['SOC2', 'ISO27001'],
       implementation: 'Enforced for all admin sessions via TOTP/WebAuthn.',
@@ -45,6 +46,7 @@ describe('ComplianceClientTabs', () => {
       title: 'Secrets Management & Rotation',
       description: 'Encryption and lifecycle for secrets.',
       status: 'PARTIAL',
+      assessmentMode: 'CATALOG',
       owner: 'OPERATOR',
       frameworks: ['SOC2'],
       implementation: 'AES-256 encrypted in transit and rest.',
@@ -56,6 +58,7 @@ describe('ComplianceClientTabs', () => {
       title: 'Software Bill of Materials (SBOM)',
       description: 'SBOM export pipeline.',
       status: 'IMPLEMENTED',
+      assessmentMode: 'CATALOG',
       owner: 'MAINTAINER',
       frameworks: ['CRA'],
       implementation: 'Automated SPDX export on release tag.',
@@ -104,17 +107,17 @@ describe('ComplianceClientTabs', () => {
     ).toBeInTheDocument();
 
     // Badges (adhering to readiness percentage without "compliant" or "score")
-    expect(screen.getByText(/75% Implemented/i)).toBeInTheDocument();
+    expect(screen.getByText(/Repository Baseline:\s*15\s*\/\s*20/i)).toBeInTheDocument();
     expect(screen.getByText('Enterprise Governance')).toBeInTheDocument();
 
     // 4 Stats capsules
-    expect(screen.getByText('Implemented')).toBeInTheDocument();
-    expect(screen.getByText('15 (75%)')).toBeInTheDocument();
+    expect(screen.getByText('Baseline Implemented')).toBeInTheDocument();
+    expect(screen.getByText('15 of 20')).toBeInTheDocument();
 
-    expect(screen.getByText('Partial Controls')).toBeInTheDocument();
+    expect(screen.getByText('Baseline Partial')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
 
-    expect(screen.getByText('Missing / Gaps')).toBeInTheDocument();
+    expect(screen.getByText('Baseline Missing')).toBeInTheDocument();
     expect(screen.getAllByText('2').length).toBeGreaterThan(0);
 
     expect(screen.getByText('Frameworks')).toBeInTheDocument();
@@ -163,5 +166,84 @@ describe('ComplianceClientTabs', () => {
     fireEvent.click(screen.getByRole('button', { name: /Evidence Catalog/i }));
     expect(screen.getByText('Verified Evidence Catalog')).toBeInTheDocument();
     expect(screen.getByText('src/lib/auth/mfa.ts')).toBeInTheDocument();
+  });
+
+  it('renders runtime control state and respects canEvaluate permission', () => {
+    const controlsWithRuntime: ComplianceControl[] = [
+      {
+        id: 'SEC-ENC-001',
+        title: 'Stored secret encryption',
+        description: 'AES-256-GCM envelope encryption.',
+        status: 'PARTIAL',
+        catalogStatus: 'PARTIAL',
+        assessmentMode: 'RUNTIME',
+        evaluatorId: 'encryption.at-rest',
+        owner: 'MAINTAINER',
+        frameworks: ['SOC2'],
+        implementation: 'AES-256-GCM v3 envelope encryption with key-retirement readiness.',
+        gaps: [],
+        evidence: ['src/lib/encryption.ts'],
+      },
+      {
+        id: 'SEC-BACKUP-001',
+        title: 'Backup procedures',
+        description: 'Documented backup.',
+        status: 'IMPLEMENTED',
+        catalogStatus: 'IMPLEMENTED',
+        assessmentMode: 'CATALOG',
+        owner: 'OPERATOR',
+        frameworks: ['SOC2'],
+        implementation: 'Documented database backup and recovery set.',
+        gaps: [],
+        evidence: ['docs/backup.md'],
+      },
+    ];
+
+    const controlStates = [
+      {
+        controlId: 'SEC-ENC-001',
+        status: 'IMPLEMENTED' as const,
+        latestEvaluationId: 'eval-123',
+        evaluatorId: 'encryption.at-rest',
+        evaluatorVersion: '1',
+        evaluatedAt: '2026-09-19T14:00:00.000Z',
+        validUntil: null,
+        summary: 'Stored-secret encryption verification completed successfully.',
+      },
+    ];
+
+    // Case 1: Read-only user (canEvaluate = false)
+    const { unmount } = render(
+      <ComplianceClientTabs
+        {...defaultProps}
+        controls={controlsWithRuntime}
+        controlStates={controlStates}
+        canEvaluate={false}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Security Controls/i }));
+
+    expect(screen.getByText('Runtime Control State')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Evaluate Controls/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Stored-secret encryption verification completed successfully.')
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Repository baseline: IMPLEMENTED/i)).toBeInTheDocument();
+
+    unmount();
+
+    // Case 2: Admin user (canEvaluate = true)
+    render(
+      <ComplianceClientTabs
+        {...defaultProps}
+        controls={controlsWithRuntime}
+        controlStates={controlStates}
+        canEvaluate={true}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Security Controls/i }));
+    expect(screen.getByRole('button', { name: /Evaluate Controls/i })).toBeInTheDocument();
   });
 });

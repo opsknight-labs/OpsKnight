@@ -1,12 +1,14 @@
-import type { ComplianceControl } from './types';
+import type { ComplianceControlDefinition } from './types';
 
-export const complianceControls = [
+export const complianceControls: readonly ComplianceControlDefinition[] = [
   {
     id: 'SEC-AUTH-001',
     title: 'OIDC authentication',
     description:
       'Issuer and subject identity binding, provider configuration and OIDC login are implemented.',
     status: 'IMPLEMENTED',
+    catalogStatus: 'IMPLEMENTED',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation:
@@ -19,11 +21,16 @@ export const complianceControls = [
     title: 'Centralized authorization',
     description: 'Roles grant capabilities; resource policies restrict scoped access.',
     status: 'IMPLEMENTED',
+    catalogStatus: 'IMPLEMENTED',
+    assessmentMode: 'RUNTIME',
+    evaluatorId: 'authorization.rbac',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'GDPR', 'SOC2', 'ISO27001'],
     implementation: 'Roles grant capabilities; resource policies restrict scoped access.',
     evidence: ['src/lib/authorization.ts', 'src/lib/authorization-policy.ts', 'src/lib/rbac.ts'],
-    gaps: ['Operator owns access reviews; registry is not proof that every route is secure.'],
+    gaps: [
+      'Verifies OpsKnight authorization architecture; organizations must review and govern individual user role assignments.',
+    ],
   },
   {
     id: 'SEC-SESSION-001',
@@ -31,6 +38,8 @@ export const complianceControls = [
     description:
       'JWT sessions use token-version revocation and session-age enforcement. Cookies use SameSite=Lax.',
     status: 'IMPLEMENTED',
+    catalogStatus: 'IMPLEMENTED',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation:
@@ -41,16 +50,23 @@ export const complianceControls = [
   {
     id: 'SEC-ENC-001',
     title: 'Stored secret encryption',
-    description: 'New protected secrets use AES-256-GCM v3 envelopes. Legacy CBC remains readable.',
+    description:
+      'Stored secrets use AES-256-GCM v3 envelope encryption with key-rotation, retirement verification, and tamper-evident authentication.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'RUNTIME',
+    evaluatorId: 'encryption.at-rest',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'GDPR', 'SOC2', 'ISO27001'],
     implementation:
-      'New protected secrets use AES-256-GCM v3 envelopes. Legacy CBC remains readable.',
-    evidence: ['src/lib/encryption.ts', 'docs/v1.5/security/encryption.md'],
+      'Protected secrets use AES-256-GCM envelope encryption with non-destructive preview, CAS migration, and verified key-retirement readiness.',
+    evidence: [
+      'src/lib/encryption.ts',
+      'src/lib/encryption/migration.ts',
+      'docs/v1.5/security/encryption-migration.md',
+    ],
     gaps: [
-      'Legacy ciphertext and plaintext compatibility paths remain; no complete migration claim.',
-      'Operators retain all keys needed to recover stored data.',
+      'Operators must maintain active encryption keys in the deployment environment and execute verified retirement of old keys.',
     ],
   },
   {
@@ -59,6 +75,8 @@ export const complianceControls = [
     description:
       'Security workflow generates CycloneDX; release container builds request SBOM and provenance.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation:
@@ -73,6 +91,8 @@ export const complianceControls = [
     title: 'Static security analysis',
     description: 'CodeQL and security ESLint run in CI.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation: 'CodeQL and security ESLint run in CI.',
@@ -86,6 +106,8 @@ export const complianceControls = [
     title: 'Dependency vulnerability scanning',
     description: 'npm audit and Trivy produce findings in the security workflow.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation: 'npm audit and Trivy produce findings in the security workflow.',
@@ -97,6 +119,8 @@ export const complianceControls = [
     title: 'Secret scanning',
     description: 'TruffleHog scans repository changes.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation: 'TruffleHog scans repository changes.',
@@ -111,6 +135,8 @@ export const complianceControls = [
     description:
       'Documented database and key recovery set, storage protection and RPO/RTO planning.',
     status: 'IMPLEMENTED',
+    catalogStatus: 'IMPLEMENTED',
+    assessmentMode: 'CATALOG',
     owner: 'OPERATOR',
     frameworks: ['SOC2', 'ISO27001', 'GDPR'],
     implementation:
@@ -125,6 +151,8 @@ export const complianceControls = [
     title: 'Restore validation',
     description: 'A CI restore drill and verification script exist.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'OPERATOR',
     frameworks: ['SOC2', 'ISO27001'],
     implementation: 'A CI restore drill and verification script exist.',
@@ -139,6 +167,8 @@ export const complianceControls = [
     description:
       'AuditLog stores actor snapshots and event details; audit access is capability protected.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'GDPR', 'SOC2', 'ISO27001'],
     implementation:
@@ -151,18 +181,24 @@ export const complianceControls = [
   {
     id: 'SEC-RETENTION-001',
     title: 'Configurable retention',
-    description: 'Policy provides configurable incident, alert, log and metrics retention.',
+    description:
+      'Policy provides configurable incident, alert, log, metrics, and privacy request retention with hold-aware cleanup.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'RUNTIME',
+    evaluatorId: 'data.retention',
     owner: 'OPERATOR',
     frameworks: ['GDPR', 'ISO27701', 'DPDP', 'CCPA', 'SOC2'],
-    implementation: 'Policy provides configurable incident, alert, log and metrics retention.',
+    implementation:
+      'Policy provides configurable retention limits enforced by an advisory-locked, hold-aware background cleanup engine.',
     evidence: [
       'src/lib/retention-policy.ts',
-      'src/lib/cron-scheduler.ts',
+      'src/lib/retention/holds.ts',
+      'src/lib/data-cleanup.ts',
       'docs/v1.5/administration/data-retention.md',
     ],
     gaps: [
-      'Coverage is not a subject-erasure engine or a legal-hold system. Domain-specific choices remain operator responsibilities.',
+      'Organizations determine their legal retention requirements and domain-specific preservation choices.',
     ],
   },
   {
@@ -170,6 +206,8 @@ export const complianceControls = [
     title: 'Deployment privacy notice',
     description: 'Self-hosted operators must publish a notice describing their actual processing.',
     status: 'MISSING',
+    catalogStatus: 'MISSING',
+    assessmentMode: 'CATALOG',
     owner: 'ORGANIZATION',
     frameworks: ['GDPR', 'ISO27701', 'DPDP', 'CCPA'],
     implementation:
@@ -185,6 +223,8 @@ export const complianceControls = [
     description:
       'Structured identities coexist with free-text incident content, logs and integration payloads.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'ORGANIZATION',
     frameworks: ['GDPR', 'ISO27701', 'DPDP', 'CCPA'],
     implementation:
@@ -197,43 +237,72 @@ export const complianceControls = [
   {
     id: 'PRIV-ERASURE-001',
     title: 'Subject erasure',
-    description: 'No end-to-end subject erasure service is established.',
-    status: 'MISSING',
+    description:
+      'End-to-end subject erasure workflow with discovery, manual verification, cascading cleanup, and auditable execution.',
+    status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'RUNTIME',
+    evaluatorId: 'privacy.erasure',
     owner: 'MAINTAINER',
     frameworks: ['GDPR', 'ISO27701', 'DPDP', 'CCPA'],
-    implementation: 'No end-to-end subject erasure service is established.',
-    evidence: ['prisma/schema.prisma'],
+    implementation:
+      'Subject erasure execution model evaluates subject discovery, blocks on conflicting retention holds, anonymizes personal data, and logs execution audit records.',
+    evidence: [
+      'src/lib/privacy/registry.ts',
+      'src/lib/privacy/discovery.ts',
+      'src/lib/privacy/erasure/execute.ts',
+    ],
     gaps: [
-      'Deactivation and relation cascades do not erase every occurrence of personal data. Planned for phases 2/3.',
+      'Operators must verify requester identity and assess conflicting legal-hold obligations before executing destructive erasure.',
     ],
   },
   {
     id: 'PRIV-EXPORT-001',
     title: 'Subject access export',
-    description: 'Operational exports do not constitute a complete subject access export.',
-    status: 'MISSING',
+    description:
+      'Subject access export pipeline generates encrypted artifacts with deterministic discovery and time-limited download expiry.',
+    status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'RUNTIME',
+    evaluatorId: 'privacy.export',
     owner: 'MAINTAINER',
     frameworks: ['GDPR', 'ISO27701', 'DPDP', 'CCPA'],
-    implementation: 'Operational exports do not constitute a complete subject access export.',
-    evidence: ['prisma/schema.prisma'],
-    gaps: ['Request verification, scope review and safe delivery belong to a later phase.'],
+    implementation:
+      'Privacy request workflow generates password-protected, encrypted subject data exports with automatic artifact retention expiry.',
+    evidence: [
+      'src/lib/privacy/registry.ts',
+      'src/lib/privacy/discovery.ts',
+      'src/lib/privacy/export/exporter.ts',
+    ],
+    gaps: [
+      'Operators must verify requester identity and deliver artifacts through secure external channels.',
+    ],
   },
   {
     id: 'PRIV-HOLD-001',
     title: 'Legal holds',
-    description: 'No coordinated legal-hold service is established.',
-    status: 'MISSING',
+    description:
+      'OpsKnight provides hold-aware lifecycle protection across user, incident, and privacy-request scopes with conflict fencing.',
+    status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'RUNTIME',
+    evaluatorId: 'privacy.holds',
     owner: 'MAINTAINER',
     frameworks: ['GDPR', 'ISO27701', 'SOC2'],
-    implementation: 'No coordinated legal-hold service is established.',
-    evidence: ['src/lib/retention-policy.ts'],
-    gaps: ['Policy exceptions and hold-aware retention require a later phase.'],
+    implementation:
+      'DataRetentionHold service coordinates active holds across users, incidents, and privacy requests to block destructive erasure and automated retention cleanup.',
+    evidence: ['src/lib/retention/holds.ts', 'src/lib/data-cleanup.ts'],
+    gaps: [
+      'Organizations determine their legal preservation obligations and establish external hold management procedures.',
+    ],
   },
   {
     id: 'CRA-VULN-001',
     title: 'Vulnerability disclosure',
     description: 'A security policy describes reporting and response.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation: 'A security policy describes reporting and response.',
@@ -247,6 +316,8 @@ export const complianceControls = [
     title: 'Supported versions',
     description: 'Security policy supports the latest major version.',
     status: 'PARTIAL',
+    catalogStatus: 'PARTIAL',
+    assessmentMode: 'CATALOG',
     owner: 'MAINTAINER',
     frameworks: ['CRA', 'SOC2', 'ISO27001'],
     implementation: 'Security policy supports the latest major version.',
@@ -255,4 +326,4 @@ export const complianceControls = [
       'A support period, release-specific EOL decisions and legal applicability assessment require maintainer approval.',
     ],
   },
-] as const satisfies readonly ComplianceControl[];
+];
