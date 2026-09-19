@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
-import { prisma as defaultPrisma } from '@/lib/prisma';
+import defaultPrisma from '@/lib/prisma';
 import type { ComplianceFramework } from '../types';
 import { complianceControls } from '../controls';
 import type {
@@ -124,8 +124,7 @@ export async function getFrameworkRequirementDetailView(
           runtimeState = {
             status: stateRecord.status,
             summary: stateRecord.summary,
-            lastEvaluatedAt: stateRecord.lastEvaluatedAt.toISOString(),
-            activeKeyId: stateRecord.activeKeyId,
+            evaluatedAt: stateRecord.evaluatedAt.toISOString(),
             validUntil: stateRecord.validUntil ? stateRecord.validUntil.toISOString() : null,
           };
 
@@ -139,7 +138,6 @@ export async function getFrameworkRequirementDetailView(
               const latestEvidence = evidenceRecords[0];
               const integrityValid = evidenceRecords.every(ev =>
                 verifyComplianceEvidenceHash({
-                  id: ev.id,
                   evaluationId: ev.evaluationId,
                   controlId: ev.controlId,
                   type: ev.type,
@@ -149,7 +147,7 @@ export async function getFrameworkRequirementDetailView(
                   description: ev.description,
                   resourceType: ev.resourceType,
                   resourceId: ev.resourceId,
-                  metadata: ev.metadata,
+                  metadata: (ev.metadata ?? {}) as Record<string, unknown>,
                   collectedAt: ev.collectedAt,
                   observedAt: ev.observedAt,
                   validUntil: ev.validUntil,

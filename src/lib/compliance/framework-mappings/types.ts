@@ -76,8 +76,7 @@ export interface FrameworkRequirementView {
     readonly runtimeState?: {
       readonly status: string;
       readonly summary: string;
-      readonly lastEvaluatedAt: string;
-      readonly activeKeyId?: string | null;
+      readonly evaluatedAt: string;
       readonly validUntil?: string | null;
     };
     readonly evidenceSummary?: {
