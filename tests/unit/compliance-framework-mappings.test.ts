@@ -107,6 +107,28 @@ describe('framework mapping engine (unit)', () => {
     }
   });
 
+  it('resolves ISO 27701:2019 legacy requirements as SUPERSEDED following withdrawal', () => {
+    const iso27701ReqIds = [
+      'ISO27701-PII-SECURITY',
+      'ISO27701-RETENTION-DISPOSAL',
+      'ISO27701-PII-SUBJECT-RIGHTS',
+      'ISO27701-PRIVACY-BY-DESIGN',
+    ] as const;
+
+    const today = new Date('2026-09-19T00:00:00Z');
+
+    for (const id of iso27701ReqIds) {
+      const req = getFrameworkRequirement(id);
+      expect(req).toBeDefined();
+      expect(req?.effectiveUntil).toBe('2025-10-14');
+      expect(resolveRequirementLifecycle(req!, today)).toBe('SUPERSEDED');
+    }
+
+    const isoFramework = getFramework('ISO27701');
+    expect(isoFramework?.version).toContain('withdrawn');
+    expect(isoFramework?.version).toContain('superseded by ISO/IEC 27701:2025');
+  });
+
   it('computes factual framework inventory counts without scores or percentages', () => {
     const summary = getFrameworkSummaryView('GDPR');
     expect(summary).toBeDefined();

@@ -49,15 +49,15 @@ The framework mapping engine is implemented in TypeScript within `src/lib/compli
 
 Each supported framework is registered with its official legal or standard citation, version, jurisdiction, and official authoritative source URL:
 
-| Framework ID | Title                                                         | Version           | Jurisdiction    | Authoritative Source                                                            |
-| ------------ | ------------------------------------------------------------- | ----------------- | --------------- | ------------------------------------------------------------------------------- |
-| `GDPR`       | General Data Protection Regulation (Regulation (EU) 2016/679) | 2016/679          | European Union  | EUR-Lex (`eur-lex.europa.eu`)                                                   |
-| `CRA`        | EU Cyber Resilience Act (Regulation (EU) 2024/2847)           | 2024/2847         | European Union  | EUR-Lex (`eur-lex.europa.eu`)                                                   |
-| `SOC2`       | SOC 2 Trust Services Criteria                                 | 2017              | Global / AICPA  | AICPA (`www.aicpa-cima.com`)                                                    |
-| `ISO27001`   | ISO/IEC 27001:2022 Information Security Management            | 2022              | International   | ISO (`www.iso.org`)                                                             |
-| `ISO27701`   | ISO/IEC 27701:2019 Privacy Information Management             | 2019              | International   | ISO (`www.iso.org`)                                                             |
-| `DPDP`       | Digital Personal Data Protection Act, 2023 & Draft Rules 2025 | 2023 / Rules 2025 | India           | Ministry of Electronics and Information Technology (MeitY) (`www.meity.gov.in`) |
-| `CCPA`       | California Consumer Privacy Act (as amended by CPRA)          | 2018 / 2020       | California, USA | California Department of Justice (`www.oag.ca.gov`)                             |
+| Framework ID | Title                                                                             | Version           | Jurisdiction    | Authoritative Source                                                            |
+| ------------ | --------------------------------------------------------------------------------- | ----------------- | --------------- | ------------------------------------------------------------------------------- |
+| `GDPR`       | General Data Protection Regulation (Regulation (EU) 2016/679)                     | 2016/679          | European Union  | EUR-Lex (`eur-lex.europa.eu`)                                                   |
+| `CRA`        | EU Cyber Resilience Act (Regulation (EU) 2024/2847)                               | 2024/2847         | European Union  | EUR-Lex (`eur-lex.europa.eu`)                                                   |
+| `SOC2`       | SOC 2 Trust Services Criteria                                                     | 2017              | Global / AICPA  | AICPA (`www.aicpa-cima.com`)                                                    |
+| `ISO27001`   | ISO/IEC 27001:2022 Information Security Management                                | 2022              | International   | ISO (`www.iso.org`)                                                             |
+| `ISO27701`   | ISO/IEC 27701:2019 (Legacy mapping — withdrawn; superseded by ISO/IEC 27701:2025) | 2019 (Withdrawn)  | International   | ISO (`www.iso.org`)                                                             |
+| `DPDP`       | Digital Personal Data Protection Act, 2023 + DPDP Rules 2025                      | 2023 + Rules 2025 | India           | Ministry of Electronics and Information Technology (MeitY) (`www.meity.gov.in`) |
+| `CCPA`       | California Consumer Privacy Act (as amended by CPRA)                              | 2018 / 2020       | California, USA | California Department of Justice (`www.oag.ca.gov`)                             |
 
 ### 2. Requirements (`FrameworkRequirement`)
 
@@ -85,13 +85,13 @@ Mappings define how a technical control relates to a framework requirement:
 
 The `resolveRequirementLifecycle(requirement, now)` function dynamically evaluates whether a requirement is active, future-effective, or superseded:
 
-- **DPDP Act 2023 & Draft Rules 2025**:
+- **DPDP Act 2023 + DPDP Rules 2025**:
   - Under the 18-month staged commencement timeline (effective `2027-05-13`), all substantive requirements—reasonable security safeguards (`DPDP-SECURITY-SAFEGUARDS`, Section 8(5) & Rule 6), erasure upon purpose completion or consent withdrawal (`DPDP-RETENTION-SPECIFIED`, Section 8 & Rule 8), correction and erasure rights (`DPDP-ERASURE`, Section 12(3)), and grievance redressal mechanisms (`DPDP-GRIEVANCE-REDRESSAL`, Section 13 & Rule 14)—dynamically resolve to `FUTURE` prior to `2027-05-13` and `ACTIVE` on or after that date.
 - **CRA (Regulation (EU) 2024/2847)**:
   - Incident & Vulnerability Reporting (`CRA-ART-14-REPORTING`, Article 14): In effect from `2026-09-11` (`ACTIVE`).
   - Substantive Product Obligations (`CRA-ANNEX-I-SECURITY`, `CRA-VULN-HANDLING`, `CRA-SBOM-DOCUMENTATION`, `CRA-SUPPORT-LIFECYCLE`): Apply 36 months after entry into force on `2027-12-11` (Article 71). Dynamically resolve to `FUTURE` prior to `2027-12-11` and `ACTIVE` thereafter.
-- **ISO/IEC 27701:2019 Alignment**:
-  - Requirements reference official clauses of `ISO/IEC 27701:2019` (clauses 6.5, 7.2.8, 7.3.2, 7.4.2) with direct links to `iso.org`. Edition 2 (2025) Annex A mapping transition is documented as pending licensed text verification of Annex A control cross-reference tables.
+- **ISO/IEC 27701:2019 (Legacy mapping — withdrawn; superseded by ISO/IEC 27701:2025)**:
+  - ISO/IEC 27701:2019 (Edition 1) has been withdrawn by ISO and superseded by ISO/IEC 27701:2025 (Edition 2). Requirements reference official 2019 clauses (6.5, 7.2.8, 7.3.2, 7.4.2) and are preserved as historical mappings with lifecycle `SUPERSEDED` (`effectiveUntil: '2025-10-14'`). Transition to Edition 2 will occur once licensed Annex A control tables are formally verified.
 
 ### 5. Canonical Fingerprint
 
@@ -103,11 +103,11 @@ To enable auditability and change tracking across versions, `computeFrameworkMap
 
 Compliance cannot be achieved solely through software. OpsKnight establishes clear shared responsibility boundaries:
 
-| Layer                      | Responsible Entity         | Scope & Examples                                                                                                                                      |
-| -------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Software Platform**      | OpsKnight                  | Cryptographic algorithms (AES-256-GCM), immutable audit logging, automated runtime evaluators, cryptographic evidence hashing, access control engine. |
-| **Operational Deployment** | Operator / Hosting Team    | Key rotation frequency, root KMS envelope key security, backup retention enforcement, network perimeter firewalls, TLS termination.                   |
-| **Governance & Legal**     | Organization / Legal / DPO | Data Protection Officer appointment, Privacy Impact Assessments (DPIA), breach notification to supervisory authorities, vendor DPAs.                  |
+| Layer                      | Responsible Entity         | Scope & Examples                                                                                                                                                            |
+| -------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Software Platform**      | OpsKnight                  | Cryptographic algorithms (AES-256-GCM), capability-protected structured audit logging, automated runtime evaluators, cryptographic evidence hashing, access control engine. |
+| **Operational Deployment** | Operator / Hosting Team    | Key rotation frequency, root KMS envelope key security, backup retention enforcement, network perimeter firewalls, TLS termination.                                         |
+| **Governance & Legal**     | Organization / Legal / DPO | Data Protection Officer appointment, Privacy Impact Assessments (DPIA), breach notification to supervisory authorities, vendor DPAs.                                        |
 
 ---
 

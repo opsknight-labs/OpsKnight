@@ -12,6 +12,10 @@ export function resolveRequirementLifecycle(
     return 'REFERENCE_ONLY';
   }
 
+  if (requirement.lifecycle === 'SUPERSEDED') {
+    return 'SUPERSEDED';
+  }
+
   const currentTime = now.getTime();
 
   if (requirement.effectiveFrom) {

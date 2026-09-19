@@ -9,7 +9,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     summary:
       'Organizations acting as PII controllers must implement technical safeguards, access boundaries, and transmission protections to safeguard personally identifiable information under ISO/IEC 27701:2019.',
     sourceUrl: 'https://www.iso.org/standard/71670.html',
-    lifecycle: 'ACTIVE',
+    effectiveUntil: '2025-10-14',
+    lifecycle: 'SUPERSEDED',
     applicability: 'SHARED',
   },
   {
@@ -20,7 +21,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     summary:
       'Organizations must define retention schedules and ensure personal data is securely destroyed or de-identified when retention periods expire, unless legal holds require preservation under ISO/IEC 27701:2019.',
     sourceUrl: 'https://www.iso.org/standard/71670.html',
-    lifecycle: 'ACTIVE',
+    effectiveUntil: '2025-10-14',
+    lifecycle: 'SUPERSEDED',
     applicability: 'SHARED',
   },
   {
@@ -31,7 +33,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     summary:
       'Organizations must provide mechanisms to enable PII principals to access, correct, and request erasure of their personal data in a timely manner under ISO/IEC 27701:2019.',
     sourceUrl: 'https://www.iso.org/standard/71670.html',
-    lifecycle: 'ACTIVE',
+    effectiveUntil: '2025-10-14',
+    lifecycle: 'SUPERSEDED',
     applicability: 'SHARED',
   },
   {
@@ -42,7 +45,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     summary:
       'Systems and processing mechanisms are designed to collect and retain only the minimum necessary personal data and protect confidentiality by default under ISO/IEC 27701:2019.',
     sourceUrl: 'https://www.iso.org/standard/71670.html',
-    lifecycle: 'ACTIVE',
+    effectiveUntil: '2025-10-14',
+    lifecycle: 'SUPERSEDED',
     applicability: 'PRODUCT',
   },
 ] as const;

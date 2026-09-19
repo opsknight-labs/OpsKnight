@@ -29,7 +29,7 @@ export const gdprMappings: readonly FrameworkControlMapping[] = [
     relationship: 'OPERATOR_DEPENDENCY',
     evidenceExpectation: 'OPERATOR',
     rationale:
-      'Automated backup procedures support the ability to restore personal data availability and access in a timely manner; operator must verify deployment backups.',
+      'Documented backup procedures support restoration planning; operators must implement and verify deployment backups.',
   },
   {
     id: 'GDPR-ART32-SECAUDIT001',
