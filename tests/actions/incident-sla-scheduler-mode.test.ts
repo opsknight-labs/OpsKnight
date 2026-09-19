@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   invalidate: vi.fn(),
   revalidatePath: vi.fn(),
   loggerError: vi.fn(),
+  acquireAdvisoryLock: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: mocks.transaction } }));
@@ -18,6 +19,10 @@ vi.mock('@/lib/incident-sla/scheduler-control', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 vi.mock('@/lib/logger', () => ({ logger: { error: mocks.loggerError, warn: vi.fn() } }));
+vi.mock('@/lib/db-locks', () => ({
+  acquireAdvisoryLock: mocks.acquireAdvisoryLock,
+  LOCK_KEYS: { SLA_SCHEDULER: BigInt(1762184301) },
+}));
 
 import { saveSlaSchedulerModeAction } from '@/app/(app)/settings/incident-sla/actions';
 
@@ -59,6 +64,7 @@ describe('SLA scheduler mode action', () => {
       capabilities: ['admin.manage'],
     });
     mocks.emitAuditEvent.mockResolvedValue(undefined);
+    mocks.acquireAdvisoryLock.mockResolvedValue(undefined);
   });
 
   it.each([
@@ -71,6 +77,7 @@ describe('SLA scheduler mode action', () => {
       mode: 'SHADOW',
     });
     expect(upsert).toHaveBeenCalled();
+    expect(mocks.acquireAdvisoryLock).toHaveBeenCalled();
     expect(mocks.invalidate).toHaveBeenCalled();
   });
 

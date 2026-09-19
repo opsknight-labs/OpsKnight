@@ -21,6 +21,7 @@ import {
   invalidateSlaSchedulerMode,
   MIN_CLEAN_SHADOW_CHECKS,
 } from '@/lib/incident-sla/scheduler-control';
+import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 
 export type IncidentResponsePolicySaveResult =
   | { ok: true; version: number }
@@ -137,7 +138,7 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
   const mode = parsed.data;
   try {
     const rejection = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(1762184301)`;
+    await acquireAdvisoryLock(tx, LOCK_KEYS.SLA_SCHEDULER);
     const current = await tx.systemConfig.findUnique({
       where: { key: 'incident_sla_scheduler' },
       select: { value: true },
