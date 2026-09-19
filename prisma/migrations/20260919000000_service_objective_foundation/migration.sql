@@ -83,6 +83,12 @@ CREATE INDEX "ServiceObjective_legacySlaDefinitionId_idx"
   ON "ServiceObjective"("legacySlaDefinitionId");
 CREATE UNIQUE INDEX "ServiceObjective_one_active_lineage_idx"
   ON "ServiceObjective"("lineageId") WHERE "activeTo" IS NULL;
+CREATE UNIQUE INDEX "ServiceObjective_one_active_service_metric_idx"
+  ON "ServiceObjective"("serviceId", "metricType")
+  WHERE "activeTo" IS NULL AND "serviceId" IS NOT NULL;
+CREATE UNIQUE INDEX "ServiceObjective_one_active_workspace_metric_idx"
+  ON "ServiceObjective"("metricType")
+  WHERE "activeTo" IS NULL AND "serviceId" IS NULL;
 CREATE INDEX "ServiceObjective_serviceId_metricType_activeTo_idx"
   ON "ServiceObjective"("serviceId", "metricType", "activeTo");
 CREATE INDEX "ServiceObjective_activeFrom_activeTo_idx"
@@ -114,7 +120,7 @@ INSERT INTO "ServiceObjective" (
 )
 SELECT
   'so_' || md5("id"),
-  "id",
+  'so_legacy_' || md5(COALESCE("serviceId", '__workspace__') || ':' || "metricType"),
   "serviceId",
   "name",
   "description",

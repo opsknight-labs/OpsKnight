@@ -24,10 +24,11 @@ export function getObjectiveSnapshotPeriod(
   },
   dayEnd: Date
 ): { periodStart: Date; periodEnd: Date } | null {
-  const configuredStart = new Date(
-    dayEnd.getTime() - objectiveWindowDays(objective.windowType, objective.windowValue) * 86_400_000
-  );
   const periodEnd = objective.activeTo && objective.activeTo < dayEnd ? objective.activeTo : dayEnd;
+  const configuredStart = new Date(
+    periodEnd.getTime() -
+      objectiveWindowDays(objective.windowType, objective.windowValue) * 86_400_000
+  );
   const periodStart = objective.activeFrom > configuredStart ? objective.activeFrom : configuredStart;
   return periodStart < periodEnd ? { periodStart, periodEnd } : null;
 }

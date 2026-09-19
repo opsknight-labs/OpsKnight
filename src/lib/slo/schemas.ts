@@ -40,6 +40,13 @@ function validateWindowAndTarget(
       message: 'Percentage targets cannot exceed 100',
     });
   }
+  if (['UPTIME', 'AVAILABILITY'].includes(value.metricType) && !value.serviceId) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['serviceId'],
+      message: 'serviceId is required for uptime and availability objectives',
+    });
+  }
 }
 
 export const serviceObjectiveCreateSchema =

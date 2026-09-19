@@ -26,7 +26,6 @@ export async function GET(request: NextRequest) {
     prisma.serviceObjective.findMany({
       where: {
         activeTo: null,
-        legacySlaDefinitionId: null,
         ...(serviceId ? { serviceId } : {}),
         ...serviceObjectiveReadWhere(actor),
       },
@@ -34,12 +33,21 @@ export async function GET(request: NextRequest) {
       orderBy: { activeFrom: 'desc' },
     }),
   ]);
+  const migratedLegacyIds = new Set(
+    objectives.flatMap(objective =>
+      objective.legacySlaDefinitionId ? [objective.legacySlaDefinitionId] : []
+    )
+  );
   return NextResponse.json(
     [
-      ...legacyDefinitions.map(definition => ({ ...definition, legacy: true })),
+      ...legacyDefinitions
+        .filter(definition => !migratedLegacyIds.has(definition.id))
+        .map(definition => ({ ...definition, legacy: true })),
       ...objectives.map(objective => ({
         ...objective,
-        id: objective.lineageId,
+        id: objective.legacySlaDefinitionId ?? objective.lineageId,
+        objectiveId: objective.lineageId,
+        versionId: objective.id,
         window: legacyWindow(objective.windowType, objective.windowValue),
         legacy: false,
       })),

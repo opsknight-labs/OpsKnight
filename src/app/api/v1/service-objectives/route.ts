@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { assertAdmin, getCurrentAuthorizationActor } from '@/lib/rbac';
@@ -67,6 +68,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return jsonError('Validation failed', 400, { details: error.errors });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return jsonError('An active objective already exists for this service and metric', 409);
     }
     logger.error('Service objective creation failed', { error });
     return jsonError('Failed to create service objective', 500);

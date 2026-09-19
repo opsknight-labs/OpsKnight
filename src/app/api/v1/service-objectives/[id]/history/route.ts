@@ -16,8 +16,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   });
   if (versions.length === 0) return jsonError('Service objective not found', 404);
   const versionIds = versions.map(version => version.id);
-  const legacySlaDefinitionId = versions.find(version => version.legacySlaDefinitionId)
-    ?.legacySlaDefinitionId;
+  const legacySlaDefinitionIds = versions.flatMap(version =>
+    version.legacySlaDefinitionId ? [version.legacySlaDefinitionId] : []
+  );
 
   const [snapshots, legacySnapshots] = await Promise.all([
     prisma.serviceObjectiveSnapshot.findMany({
@@ -25,9 +26,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       orderBy: { periodEnd: 'desc' },
       take: 366,
     }),
-    legacySlaDefinitionId
+    legacySlaDefinitionIds.length > 0
       ? prisma.sLASnapshot.findMany({
-          where: { slaDefinitionId: legacySlaDefinitionId },
+          where: { slaDefinitionId: { in: legacySlaDefinitionIds } },
           orderBy: { date: 'desc' },
           take: 366,
         })

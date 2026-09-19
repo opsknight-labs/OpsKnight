@@ -19,6 +19,7 @@ describe('service objective evaluator semantics', () => {
 
   it('rejects unsupported telemetry metrics and invalid cross-field combinations', () => {
     const base = {
+      serviceId: 'service-1',
       name: 'Availability',
       metricType: 'AVAILABILITY' as const,
       target: 99.9,
@@ -36,5 +37,18 @@ describe('service objective evaluator semantics', () => {
     expect(
       serviceObjectiveCreateSchema.safeParse({ ...base, metricType: 'LATENCY_P99' }).success
     ).toBe(false);
+    expect(
+      serviceObjectiveCreateSchema.safeParse({ ...base, serviceId: null, metricType: 'UPTIME' })
+        .success
+    ).toBe(false);
+    expect(
+      serviceObjectiveCreateSchema.safeParse({
+        ...base,
+        serviceId: null,
+        metricType: 'MTTR',
+        target: 30,
+        comparator: 'LESS_THAN_OR_EQUAL',
+      }).success
+    ).toBe(true);
   });
 });

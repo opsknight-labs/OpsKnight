@@ -19,4 +19,12 @@ describe('service objective migration contract', () => {
     expect(migration).toContain("WHEN \"metricType\" IN ('UPTIME', 'AVAILABILITY')");
     expect(migration).toContain("ELSE 'LESS_THAN_OR_EQUAL'");
   });
+
+  it('reconstructs legacy lineages and enforces one active objective per scope and metric', () => {
+    expect(migration).toContain(
+      `md5(COALESCE("serviceId", '__workspace__') || ':' || "metricType")`
+    );
+    expect(migration).toContain('"ServiceObjective_one_active_service_metric_idx"');
+    expect(migration).toContain('"ServiceObjective_one_active_workspace_metric_idx"');
+  });
 });
