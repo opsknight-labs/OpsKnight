@@ -131,6 +131,14 @@ export async function getMigrationKeyring(
 }
 
 /**
+ * Returns the identifier of the current active primary encryption key.
+ */
+export function getActiveKeyId(): string | null {
+  const entries = getEncryptionKeyring();
+  return entries[0]?.id ?? null;
+}
+
+/**
  * Returns sanitized metadata about configured encryption keys without exposing key material.
  */
 export async function getEncryptionKeyringMetadata(): Promise<{

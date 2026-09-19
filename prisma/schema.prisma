@@ -50,6 +50,7 @@ enum AuditEntityType {
   PRIVACY_ERASURE_EXECUTION
   DATA_RETENTION_HOLD
   ENCRYPTION_MIGRATION
+  COMPLIANCE_EVALUATION
 }
 
 // Data subject a privacy request concerns. Only USER is operable in Phase 2;
@@ -2876,4 +2877,54 @@ model EncryptionMigrationIssue {
 
   @@index([runId, targetId])
   @@index([runId, classification])
+}
+enum ComplianceEvaluationStatus {
+  IMPLEMENTED
+  PARTIAL
+  ACTION_REQUIRED
+  UNVERIFIED
+  NOT_APPLICABLE
+}
+
+enum ComplianceEvaluationTrigger {
+  MANUAL
+  API
+  SCHEDULED
+  DEPLOYMENT
+}
+
+// Immutable historical record of a runtime control evaluation.
+model ComplianceEvaluation {
+  id               String                      @id @default(cuid())
+  controlId        String
+  status           ComplianceEvaluationStatus
+  evaluatorId      String
+  evaluatorVersion String
+  summary          String
+  findings         Json                        @default("[]")
+  evidenceRefs     Json                        @default("[]")
+  trigger          ComplianceEvaluationTrigger
+  batchId          String?
+  evaluatedAt      DateTime                    @default(now())
+  validUntil       DateTime?
+  createdAt        DateTime                    @default(now())
+
+  @@index([controlId, evaluatedAt])
+  @@index([status])
+  @@index([batchId])
+}
+
+// Cached projection of the latest evaluated state for a compliance control.
+model ComplianceControlState {
+  controlId          String                     @id
+  status             ComplianceEvaluationStatus
+  latestEvaluationId String
+  evaluatorId        String
+  evaluatorVersion   String
+  evaluatedAt        DateTime
+  validUntil         DateTime?
+  summary            String
+  updatedAt          DateTime                   @updatedAt
+
+  @@index([status])
 }

@@ -10,8 +10,6 @@ import {
   RotateCcw,
   Loader2,
   AlertTriangle,
-  ShieldCheck,
-  CheckCircle2,
   Database,
   FileText,
   UserX,

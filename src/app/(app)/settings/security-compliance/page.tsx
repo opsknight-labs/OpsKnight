@@ -7,6 +7,7 @@ import { getReadiness } from '@/lib/compliance/readiness';
 import { discoverSubjectData, subjectDiscoveryInputSchema } from '@/lib/privacy/discovery';
 import { personalDataRegistry } from '@/lib/privacy/registry';
 import { getUserPermissions } from '@/lib/rbac';
+import { resolveComplianceRuntimeState } from '@/lib/compliance/state';
 import ComplianceClientTabs from '@/components/settings/compliance/ComplianceClientTabs';
 import type { Prisma } from '@prisma/client';
 
@@ -19,7 +20,7 @@ export default async function SecurityCompliancePage({
 }) {
   // Read-only readiness diagnostics — not certification or legal conclusions
   const permissions = await getUserPermissions();
-  if (!permissions.capabilities.includes(CAPABILITIES.ADMIN_MANAGE)) redirect('/settings');
+  if (!permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_READ)) redirect('/settings');
 
   const params = await searchParams;
   const query = params.q?.trim().slice(0, 100) ?? '';
@@ -76,6 +77,24 @@ export default async function SecurityCompliancePage({
     counts: getReadiness(fw.id),
   }));
 
+  const rawControlStates = await prisma.complianceControlState.findMany();
+  const stateMap = new Map(rawControlStates.map(s => [s.controlId, s]));
+  const now = new Date();
+  const controlStates = complianceControls
+    .map(c => resolveComplianceRuntimeState(c, stateMap.get(c.id), now))
+    .filter((s): s is NonNullable<typeof s> => s !== null)
+    .map(s => ({
+      controlId: s.controlId,
+      status: s.status,
+      latestEvaluationId: s.latestEvaluationId,
+      evaluatorId: s.evaluatorId,
+      evaluatorVersion: s.evaluatorVersion,
+      evaluatedAt: s.evaluatedAt.toISOString(),
+      validUntil: s.validUntil ? s.validUntil.toISOString() : null,
+      summary: s.summary,
+    }));
+  const canEvaluate = permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVALUATE);
+
   return (
     <div className="space-y-6 pb-12 w-full">
       <ComplianceClientTabs
@@ -83,6 +102,8 @@ export default async function SecurityCompliancePage({
         frameworks={frameworkList}
         controls={complianceControls}
         personalDataRegistry={personalDataRegistry}
+        controlStates={controlStates}
+        canEvaluate={canEvaluate}
         privacyData={{
           users,
           userCount,
