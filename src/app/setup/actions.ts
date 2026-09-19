@@ -17,9 +17,18 @@ import {
   hashBootstrapCode,
   parseBootstrapState,
 } from '@/lib/bootstrap-security';
+import { getAuthoritativeRequestOrigin } from '@/lib/request-host';
 
 const BOOTSTRAP_TRANSACTION_ATTEMPTS = 3;
 const BOOTSTRAP_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Resolve the canonical application URL for seeding SystemSettings.appUrl
+ * during bootstrap. Uses the shared origin resolution logic from request-host.
+ */
+function resolveBootstrapAppUrl(headerStore: Headers): string | null {
+  return getAuthoritativeRequestOrigin(headerStore);
+}
 
 const schema = z
   .object({
@@ -119,6 +128,44 @@ export async function bootstrapAdmin(formData: FormData) {
               updatedBy: created.id,
             },
           });
+
+          // Seed SystemSettings.appUrl from the request origin ONLY when no canonical
+          // URL is already configured (in DB, NEXT_PUBLIC_APP_URL, or NEXTAUTH_URL).
+          // This eliminates the chicken-and-egg problem on fresh installations without
+          // overwriting deliberate pre-configuration.
+          const existingSettings = await tx.systemSettings.findUnique({
+            where: { id: 'default' },
+            select: { appUrl: true },
+          });
+          const hasPreconfiguredAppUrl = Boolean(
+            existingSettings?.appUrl ||
+            process.env.NEXT_PUBLIC_APP_URL ||
+            process.env.NEXTAUTH_URL
+          );
+
+          if (!hasPreconfiguredAppUrl) {
+            const bootstrapAppUrl = resolveBootstrapAppUrl(headerStore);
+            if (bootstrapAppUrl) {
+              await tx.systemSettings.upsert({
+                where: { id: 'default' },
+                create: { id: 'default', appUrl: bootstrapAppUrl },
+                update: { appUrl: bootstrapAppUrl },
+              });
+              await logAudit(
+                {
+                  action: 'settings.app_url.bootstrap_seeded',
+                  entityType: 'USER',
+                  entityId: created.id,
+                  actorId: null,
+                  source: 'AUTH',
+                  newValue: { appUrl: bootstrapAppUrl },
+                  details: { method: 'operator_bootstrap_capability' },
+                },
+                tx
+              );
+            }
+          }
+
           await logAudit(
             {
               action: 'user.bootstrap',
