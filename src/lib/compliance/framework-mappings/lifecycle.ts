@@ -16,8 +16,10 @@ export function resolveRequirementLifecycle(
 
   if (requirement.effectiveFrom) {
     const effectiveTime = new Date(requirement.effectiveFrom).getTime();
-    if (!isNaN(effectiveTime) && currentTime < effectiveTime) {
-      return 'FUTURE';
+    if (!isNaN(effectiveTime)) {
+      if (currentTime < effectiveTime) {
+        return 'FUTURE';
+      }
     }
   }
 
@@ -26,6 +28,10 @@ export function resolveRequirementLifecycle(
     if (!isNaN(untilTime) && currentTime > untilTime) {
       return 'SUPERSEDED';
     }
+  }
+
+  if (requirement.effectiveFrom) {
+    return 'ACTIVE';
   }
 
   return requirement.lifecycle;
