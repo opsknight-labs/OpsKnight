@@ -8,8 +8,8 @@ import {
   renewCleanupMutexLease,
   releaseCleanupMutexLease,
   CLEANUP_MUTEX_KEY,
-  CleanupConflictError,
 } from '@/lib/data-cleanup';
+import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
 import {
   createTestIncident,
   createTestService,
@@ -809,6 +809,54 @@ describeIfRealDB('retention holds integration (real PostgreSQL)', () => {
     // First worker tries to renew with stale token -> rejected
     const renewed = await renewCleanupMutexLease(token1!);
     expect(renewed).toBe(false);
+
+    // Clean up
+    await releaseCleanupMutexLease(token2!);
+  });
+
+  it('cleanupExpiredRateLimits preserves mutex lease rows to prevent ABA fencing token reset', async () => {
+    // 1. Worker A acquires token 1
+    const token1 = await acquireCleanupMutexLease();
+    expect(token1).not.toBeNull();
+
+    // 2. Worker A releases -> row marked expired (expiresAt in past)
+    const released = await releaseCleanupMutexLease(token1!);
+    expect(released).toBe(true);
+
+    // 3. Seed an ordinary expired rate limit record
+    const standardKey = 'ratelimit:api:user-123';
+    await testPrisma.rateLimit.upsert({
+      where: { key: standardKey },
+      create: {
+        key: standardKey,
+        count: 5,
+        expiresAt: new Date(Date.now() - 60000),
+      },
+      update: {
+        expiresAt: new Date(Date.now() - 60000),
+      },
+    });
+
+    // 4. Run cron rate limit cleanup
+    await cleanupExpiredRateLimits();
+
+    // 5. Standard expired rate limit record MUST be deleted
+    const standardRecord = await testPrisma.rateLimit.findUnique({
+      where: { key: standardKey },
+    });
+    expect(standardRecord).toBeNull();
+
+    // 6. Mutex row MUST still exist!
+    const mutexRow = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(mutexRow).not.toBeNull();
+    expect(mutexRow!.count).toBe(token1);
+
+    // 7. Worker B acquires again -> must receive token 2, NOT reset to 1
+    const token2 = await acquireCleanupMutexLease();
+    expect(token2).not.toBeNull();
+    expect(token2!).toBe(token1! + 1);
 
     // Clean up
     await releaseCleanupMutexLease(token2!);
