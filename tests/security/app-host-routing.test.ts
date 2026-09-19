@@ -570,7 +570,9 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
     it('auth.ts enables host trust by default because middleware validates hosts', async () => {
       delete process.env.AUTH_TRUST_HOST;
       const { getAuthOptions } = await import('@/lib/auth');
-      const options = await getAuthOptions();
+      const options = (await getAuthOptions()) as import('next-auth').NextAuthOptions & {
+        trustHost?: boolean;
+      };
 
       expect(options.trustHost).toBe(true);
     });
