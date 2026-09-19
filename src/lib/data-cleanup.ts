@@ -11,8 +11,68 @@ import {
 } from './retention/lifecycle';
 import { acquireRetentionResourceLock } from './retention/resource-lock';
 
-const CLEANUP_MUTEX_KEY = 'mutex:data-cleanup';
-const CLEANUP_MUTEX_LEASE_MS = 15 * 60 * 1000; // 15 minutes
+export const CLEANUP_MUTEX_KEY = 'mutex:data-cleanup';
+export const CLEANUP_MUTEX_LEASE_MS = 15 * 60 * 1000; // 15 minutes
+
+/**
+ * Acquires the distributed cleanup mutex lease on RateLimit.
+ * Returns the version/fencing token (positive integer) if acquired, or null if another runner holds it.
+ */
+export async function acquireCleanupMutexLease(): Promise<number | null> {
+  const { default: prisma } = await import('./prisma');
+  if (!prisma) return null;
+  const leaseExpiresAt = new Date(Date.now() + CLEANUP_MUTEX_LEASE_MS);
+  const rows = await prisma.$queryRaw<Array<{ count?: number; acquired?: boolean }>>`
+    INSERT INTO "RateLimit" ("key", "count", "expiresAt")
+    VALUES (${CLEANUP_MUTEX_KEY}, 1, ${leaseExpiresAt})
+    ON CONFLICT ("key") DO UPDATE
+    SET "count" = "RateLimit"."count" + 1, "expiresAt" = ${leaseExpiresAt}
+    WHERE "RateLimit"."expiresAt" < NOW()
+    RETURNING "count"
+  `;
+  if (!rows || rows.length === 0) {
+    return null;
+  }
+  return typeof rows[0]?.count === 'number' ? rows[0].count : 1;
+}
+
+/**
+ * Renews an active cleanup mutex lease for another lease duration,
+ * only if the fencing token matches the current version in DB.
+ */
+export async function renewCleanupMutexLease(token: number): Promise<boolean> {
+  const { default: prisma } = await import('./prisma');
+  if (!prisma.$executeRaw) return false;
+  const newExpiresAt = new Date(Date.now() + CLEANUP_MUTEX_LEASE_MS);
+  const res = await prisma.$executeRaw`
+    UPDATE "RateLimit"
+    SET "expiresAt" = ${newExpiresAt}
+    WHERE "key" = ${CLEANUP_MUTEX_KEY} AND "count" = ${token}
+  `;
+  return res > 0;
+}
+
+/**
+ * Releases the cleanup mutex lease only if the fencing token matches.
+ * If the lease expired and was claimed by another worker, this release safely does nothing.
+ */
+export async function releaseCleanupMutexLease(token: number): Promise<boolean> {
+  const { default: prisma } = await import('./prisma');
+  if (prisma.$executeRaw) {
+    const res = await prisma.$executeRaw`
+      DELETE FROM "RateLimit"
+      WHERE "key" = ${CLEANUP_MUTEX_KEY} AND "count" = ${token}
+    `;
+    return res > 0;
+  }
+  if (prisma.rateLimit?.deleteMany) {
+    const res = await prisma.rateLimit.deleteMany({
+      where: { key: CLEANUP_MUTEX_KEY, count: token },
+    });
+    return res.count > 0;
+  }
+  return false;
+}
 
 /**
  * Data Cleanup Service
@@ -82,7 +142,7 @@ export async function performDataCleanup(
     policy,
   });
 
-  let hasDbRowMutex = false;
+  let leaseToken: number | null = null;
   if (!dryRun) {
     if (isCleanupInProgress) {
       throw new CleanupConflictError(
@@ -91,25 +151,11 @@ export async function performDataCleanup(
     }
     isCleanupInProgress = true;
     try {
-      if (prisma.$executeRaw) {
-        const leaseExpiresAt = new Date(Date.now() + CLEANUP_MUTEX_LEASE_MS);
-        // Atomically claim the distributed cleanup mutex via RateLimit lease row:
-        // - Inserts if row doesn't exist
-        // - Updates if existing lease expired (expiresAt < NOW())
-        // - Returns 0 affected rows if valid lease is already active -> conflict
-        const rowsAffected = await prisma.$executeRaw`
-          INSERT INTO "RateLimit" ("key", "count", "expiresAt")
-          VALUES (${CLEANUP_MUTEX_KEY}, 1, ${leaseExpiresAt})
-          ON CONFLICT ("key") DO UPDATE
-          SET "count" = "RateLimit"."count" + 1, "expiresAt" = ${leaseExpiresAt}
-          WHERE "RateLimit"."expiresAt" < NOW()
-        `;
-        if (rowsAffected === 0) {
-          throw new CleanupConflictError(
-            'Data cleanup is currently being executed by another process or instance.'
-          );
-        }
-        hasDbRowMutex = true;
+      leaseToken = await acquireCleanupMutexLease();
+      if (leaseToken === null) {
+        throw new CleanupConflictError(
+          'Data cleanup is currently being executed by another process or instance.'
+        );
       }
     } catch (lockErr) {
       if (lockErr instanceof CleanupConflictError) {
@@ -337,6 +383,7 @@ export async function performDataCleanup(
       const sortedBatch = [...batch].sort();
 
       let deletedBatchCount = 0;
+      let batchFullyHeld = false;
       await prisma.$transaction(
         async tx => {
           // Acquire resource locks for all incidents in this batch (deterministic sorted order)
@@ -354,6 +401,7 @@ export async function performDataCleanup(
 
           if (stillDeletableIncidents.length === 0) {
             // All incidents in this batch became held
+            batchFullyHeld = true;
             return;
           }
 
@@ -473,6 +521,11 @@ export async function performDataCleanup(
         }
       );
 
+      if (batchFullyHeld) {
+        if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
+        continue;
+      }
+
       // Loop termination safety guard against infinite loops
       if (deletedBatchCount === 0) {
         logger.warn('[DataCleanup] Batch incident delete returned 0 rows, stopping batch loop', {
@@ -480,6 +533,8 @@ export async function performDataCleanup(
         });
         break;
       }
+
+      if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
     }
 
     // 3. Lifecycle cleanup: Privacy Requests (COMPLETED/REJECTED)
@@ -487,6 +542,9 @@ export async function performDataCleanup(
       for (let i = 0; i < deletablePrivacyRequests.length; i += BATCH_SIZE) {
         const batch = deletablePrivacyRequests.slice(i, i + BATCH_SIZE);
         const sortedBatch = [...batch].sort();
+
+        let prBatchFullyHeld = false;
+        let prDeletedCount = 0;
 
         await prisma.$transaction(
           async tx => {
@@ -504,6 +562,7 @@ export async function performDataCleanup(
             }
 
             if (stillDeletableRequests.length === 0) {
+              prBatchFullyHeld = true;
               return;
             }
 
@@ -511,12 +570,30 @@ export async function performDataCleanup(
               where: { id: { in: stillDeletableRequests } },
             });
             privacyRequestCount += deleted.count;
+            prDeletedCount = deleted.count;
           },
           {
             maxWait: 10000,
             timeout: 60000,
           }
         );
+
+        if (prBatchFullyHeld) {
+          if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
+          continue;
+        }
+
+        if (prDeletedCount === 0) {
+          logger.warn(
+            '[DataCleanup] Batch privacy request delete returned 0 rows, stopping batch loop',
+            {
+              batchCount: batch.length,
+            }
+          );
+          break;
+        }
+
+        if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
       }
     }
 
@@ -616,6 +693,10 @@ export async function performDataCleanup(
             resourceType,
           });
           break;
+        }
+
+        if (leaseToken !== null) {
+          await renewCleanupMutexLease(leaseToken);
         }
       }
 
@@ -917,15 +998,9 @@ export async function performDataCleanup(
   } finally {
     if (!dryRun) {
       isCleanupInProgress = false;
-      if (hasDbRowMutex) {
+      if (leaseToken !== null) {
         try {
-          if (prisma.rateLimit?.deleteMany) {
-            await prisma.rateLimit.deleteMany({
-              where: { key: CLEANUP_MUTEX_KEY },
-            });
-          } else if (prisma.$executeRaw) {
-            await prisma.$executeRaw`DELETE FROM "RateLimit" WHERE "key" = ${CLEANUP_MUTEX_KEY}`;
-          }
+          await releaseCleanupMutexLease(leaseToken);
         } catch (_unlockErr) {
           // Ignore error on cleanup finish
         }

@@ -2,7 +2,13 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { isAppError } from '@/lib/errors';
 import { executeErasure } from '@/lib/privacy/erasure/execute';
 import { createRetentionHold, releaseRetentionHold } from '@/lib/retention/holds';
-import { performDataCleanup } from '@/lib/data-cleanup';
+import {
+  performDataCleanup,
+  acquireCleanupMutexLease,
+  renewCleanupMutexLease,
+  releaseCleanupMutexLease,
+  CLEANUP_MUTEX_KEY,
+} from '@/lib/data-cleanup';
 import {
   createTestIncident,
   createTestService,
@@ -649,5 +655,112 @@ describeIfRealDB('retention holds integration (real PostgreSQL)', () => {
       expect(artifactInDb).toBeNull();
       expect(cleanupResult.status).toBe('fulfilled');
     }
+  });
+
+  it('fully-held first batch of >500 incidents continues and processes subsequent batches', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const service = await createTestService('Multi-Batch Service');
+
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+
+    // Create 502 resolved old incidents:
+    // Batch 1 (500 incidents) will be placed under retention hold
+    // Batch 2 (2 incidents) will have no holds and should be deleted
+    const totalIncidents = 502;
+    const incidentData = Array.from({ length: totalIncidents }, (_, i) => ({
+      title: `Batch Test Incident ${i}`,
+      status: 'RESOLVED' as const,
+      urgency: 'LOW' as const,
+      serviceId: service.id,
+      createdAt: fortyDaysAgo,
+      resolvedAt: fortyDaysAgo,
+    }));
+
+    await testPrisma.incident.createMany({ data: incidentData });
+
+    // Fetch created incidents ordered deterministically by id
+    const createdIncidents = await testPrisma.incident.findMany({
+      where: { serviceId: service.id },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    expect(createdIncidents.length).toBe(totalIncidents);
+
+    // Hold the first 500 incidents (entire first batch)
+    const firstBatchIds = createdIncidents.slice(0, 500).map(inc => inc.id);
+    const holdData = firstBatchIds.map(id => ({
+      scopeType: 'INCIDENT' as const,
+      scopeId: id,
+      reason: 'Batch 1 retention hold',
+      createdById: admin.id,
+    }));
+
+    await testPrisma.dataRetentionHold.createMany({ data: holdData });
+
+    const policyOverride = { incidentRetentionDays: 30 };
+    const cleanupResult = await performDataCleanup(false, policyOverride);
+
+    // Batch 2 (remaining 2 incidents) must be successfully deleted
+    expect(cleanupResult.incidents).toBe(2);
+    expect(cleanupResult.held.incidents).toBeGreaterThanOrEqual(500);
+
+    // Verify first batch survived in DB
+    const remainingIncidents = await testPrisma.incident.findMany({
+      where: { serviceId: service.id },
+      select: { id: true },
+    });
+    expect(remainingIncidents.length).toBe(500);
+    const remainingIds = new Set(remainingIncidents.map(inc => inc.id));
+    for (const heldId of firstBatchIds) {
+      expect(remainingIds.has(heldId)).toBe(true);
+    }
+  });
+
+  it('cleanup mutex lease enforces fencing tokens and supports renewal', async () => {
+    // 1. Acquire initial lease
+    const token1 = await acquireCleanupMutexLease();
+    expect(token1).not.toBeNull();
+    expect(typeof token1).toBe('number');
+
+    // 2. Another concurrent acquisition while lease is active should fail (return null)
+    const token2 = await acquireCleanupMutexLease();
+    expect(token2).toBeNull();
+
+    // 3. Renew the active lease with the matching fencing token
+    const renewed = await renewCleanupMutexLease(token1!);
+    expect(renewed).toBe(true);
+
+    // 4. Simulating lease expiry and takeover by another worker:
+    // Update expiresAt to past and let worker 2 acquire it (incrementing count)
+    await testPrisma.$executeRaw`
+      UPDATE "RateLimit"
+      SET "expiresAt" = NOW() - INTERVAL '1 second'
+      WHERE "key" = ${CLEANUP_MUTEX_KEY}
+    `;
+
+    const token3 = await acquireCleanupMutexLease();
+    expect(token3).not.toBeNull();
+    expect(token3).toBeGreaterThan(token1!);
+
+    // 5. Worker 1 tries to release using its stale token1:
+    // It must NOT delete worker 2's lease!
+    const staleRelease = await releaseCleanupMutexLease(token1!);
+    expect(staleRelease).toBe(false);
+
+    // Verify worker 2's lease row is still present in DB
+    const activeLease = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(activeLease).not.toBeNull();
+    expect(activeLease!.count).toBe(token3);
+
+    // 6. Worker 2 releases with its valid token3:
+    const validRelease = await releaseCleanupMutexLease(token3!);
+    expect(validRelease).toBe(true);
+
+    const deletedLease = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(deletedLease).toBeNull();
   });
 });
