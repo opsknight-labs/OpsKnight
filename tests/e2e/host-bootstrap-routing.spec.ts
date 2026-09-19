@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import http from 'node:http';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -110,6 +110,14 @@ function issueBootstrapCode(): string {
     .find(line => /^[A-Za-z0-9_-]{32}$/.test(line));
   expect(code).toBeTruthy();
   return code!;
+}
+
+async function loginAsAdmin(page: Page) {
+  await page.goto(`${APP_BASE}/login`);
+  await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
+  await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
+  await page.locator('form button[type="submit"]').click();
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
 }
 
 // ---------------------------------------------------------------------------
@@ -246,11 +254,7 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     expect(loginRes?.status()).toBe(200);
 
     // Perform login with the newly created administrator credentials
-    await page.locator('input[type="email"]').fill(ADMIN_EMAIL);
-    await page.locator('input[type="password"]').fill(ADMIN_PASSWORD);
-    await page.locator('form button[type="submit"]').click();
-
-    await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
+    await loginAsAdmin(page);
 
     // Verify core app routes now return 200
     const settingsRes = await page.goto(`${APP_BASE}/settings`);
@@ -301,6 +305,9 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     page,
     context,
   }) => {
+    // Authenticate page so admin session cookies are created in this browser context
+    await loginAsAdmin(page);
+
     // Copy authenticated session cookies to the status domain so cookies are present
     const appCookies = await context.cookies(`${APP_BASE}`);
     if (appCookies.length > 0) {
@@ -347,6 +354,9 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
   test('11. settings domain change via /api/settings/app-url dynamically updates recognized host immediately', async ({
     page,
   }) => {
+    // Authenticate page so browser context has active admin session cookies
+    await loginAsAdmin(page);
+
     // Navigate page to authenticated app origin so browser executes same-origin API calls with session cookies
     await page.goto(`${APP_BASE}/settings`);
 
