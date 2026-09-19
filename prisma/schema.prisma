@@ -49,6 +49,7 @@ enum AuditEntityType {
   PRIVACY_EXPORT_ARTIFACT
   PRIVACY_ERASURE_EXECUTION
   DATA_RETENTION_HOLD
+  ENCRYPTION_MIGRATION
 }
 
 // Data subject a privacy request concerns. Only USER is operable in Phase 2;
@@ -490,6 +491,7 @@ model User {
   privacyRequestsRequested    PrivacyRequest[]             @relation("PrivacyRequestRequestedBy")
   createdRetentionHolds       DataRetentionHold[]          @relation("RetentionHoldCreatedBy")
   releasedRetentionHolds      DataRetentionHold[]          @relation("RetentionHoldReleasedBy")
+  initiatedEncryptionRuns     EncryptionMigrationRun[]     @relation("EncryptionRunInitiator")
 
   @@index([email])
   @@index([role, status])
@@ -1883,6 +1885,7 @@ enum JobType {
   WAR_ROOM_PROVIDER_EVENT
   MEETING_PROVISION
   MEETING_CLOSE
+  ENCRYPTION_LIFECYCLE
 }
 
 enum JobStatus {
@@ -2790,3 +2793,88 @@ model DataRetentionHold {
   @@index([expiresAt, releasedAt])
   @@index([createdAt])
 }
+
+enum EncryptionMigrationMode {
+  PREVIEW
+  MIGRATE
+  VERIFY
+}
+
+enum EncryptionMigrationStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Represents an execution of the encryption migration and verification lifecycle.
+model EncryptionMigrationRun {
+  id                           String                          @id @default(cuid())
+  mode                         EncryptionMigrationMode         @default(PREVIEW)
+  status                       EncryptionMigrationStatus       @default(PENDING)
+  registryFingerprint          String
+  activeKeyId                  String?
+  totalRecords                 Int                             @default(0)
+  processedRecords             Int                             @default(0)
+  migratedRecords              Int                             @default(0)
+  errorRecords                 Int                             @default(0)
+  skippedRecords               Int                             @default(0)
+  conflictRecords              Int                             @default(0)
+  safeForDatabaseKeyRetirement Json?                           @default("[]")
+  errorMessage                 String?
+  startedAt                    DateTime?
+  completedAt                  DateTime?
+  initiatedById                String?
+  createdAt                    DateTime                        @default(now())
+  updatedAt                    DateTime                        @updatedAt
+
+  initiatedBy                  User?                           @relation("EncryptionRunInitiator", fields: [initiatedById], references: [id], onDelete: SetNull)
+  targetStates                 EncryptionMigrationTargetState[]
+  issues                       EncryptionMigrationIssue[]
+
+  @@index([status, mode])
+  @@index([createdAt])
+  @@index([registryFingerprint])
+}
+
+// Checkpoint state per encryption target in a run.
+model EncryptionMigrationTargetState {
+  id             String                    @id @default(cuid())
+  runId          String
+  targetId       String
+  status         EncryptionMigrationStatus @default(PENDING)
+  cursor         String?
+  totalCount     Int                       @default(0)
+  processedCount Int                       @default(0)
+  migratedCount  Int                       @default(0)
+  errorCount     Int                       @default(0)
+  conflictCount  Int                       @default(0)
+  keysDetected   Json?                     @default("{}")
+  inspectionStats Json?                    @default("{}")
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  run            EncryptionMigrationRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, targetId])
+  @@index([runId, status])
+}
+
+// Audit record for issues encountered during encryption migration (strictly no plaintext or ciphertext).
+model EncryptionMigrationIssue {
+  id             String                 @id @default(cuid())
+  runId          String
+  targetId       String
+  recordId       String
+  fieldPath      String
+  classification String
+  errorMessage   String?
+  createdAt      DateTime               @default(now())
+
+  run            EncryptionMigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, targetId])
+  @@index([runId, classification])
+}
+

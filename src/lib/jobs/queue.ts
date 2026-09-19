@@ -53,7 +53,8 @@ export type JobType =
   | 'WAR_ROOM_CLOSE'
   | 'WAR_ROOM_PROVIDER_EVENT'
   | 'MEETING_PROVISION'
-  | 'MEETING_CLOSE';
+  | 'MEETING_CLOSE'
+  | 'ENCRYPTION_LIFECYCLE';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -1100,6 +1101,13 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
           data: { status: 'CANCELLED', completedAt: new Date() },
         });
         return false;
+      }
+      case 'ENCRYPTION_LIFECYCLE': {
+        const runId = requiredPayloadString(job.payload, 'runId');
+        const { executeMigrationRun } = await import('../encryption/migration');
+        await executeMigrationRun({ runId, prisma });
+        await markJobCompleted(job.id);
+        return true;
       }
       default:
         await markJobFailed(job.id, `Unknown job type: ${job.type}`);
