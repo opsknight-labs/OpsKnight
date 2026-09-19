@@ -11,6 +11,7 @@ import { transitionPrivacyRequest } from '@/lib/privacy/requests';
 import { buildSubjectErasurePlan } from './plan';
 import { verifySubjectErasure } from './verify';
 import { discoverErasureBlockersTx, type ErasureDomainCounts } from './discover';
+import { acquireRetentionResourceLock } from '@/lib/retention/resource-lock';
 
 export interface ErasureActor {
   id: string;
@@ -255,6 +256,7 @@ export async function executeErasure(
         // admins through PRIVACY_ERASURE alone.
         await acquireAdvisoryLock(tx, LOCK_KEYS.USER_ADMIN_INVARIANT);
         await acquireAdvisoryLock(tx, LOCK_KEYS.PRIVACY_ERASURE);
+        await acquireRetentionResourceLock(tx, 'USER', subjectId);
 
         // Re-validate the request is still PROCESSING inside the same
         // SERIALIZABLE transaction that will mutate the subject. An admin
@@ -412,7 +414,11 @@ export async function executeErasure(
         // null) — the exact window the recovery path is meant to close.
         await tx.privacyErasureExecution.update({
           where: { id: executionId },
-          data: { mutationCommittedAt: new Date(), resultSummary: domainCounts, manualReviewRequired },
+          data: {
+            mutationCommittedAt: new Date(),
+            resultSummary: domainCounts,
+            manualReviewRequired,
+          },
         });
       });
 

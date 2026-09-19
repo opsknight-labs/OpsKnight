@@ -39,6 +39,9 @@ export const CAPABILITIES = {
   PRIVACY_REQUESTS_MANAGE: 'privacy.requests.manage',
   PRIVACY_EXPORT: 'privacy.export',
   PRIVACY_ERASURE: 'privacy.erasure',
+  RETENTION_READ: 'retention.read',
+  RETENTION_MANAGE: 'retention.manage',
+  RETENTION_HOLDS_MANAGE: 'retention.holds.manage',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
@@ -91,6 +94,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.POLICY_READ_ALL,
   // Auditors may view privacy request state but never export or modify it.
   CAPABILITIES.PRIVACY_READ,
+  // Auditors may view retention settings and cleanup previews.
+  CAPABILITIES.RETENTION_READ,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_CREATE_SCOPED,

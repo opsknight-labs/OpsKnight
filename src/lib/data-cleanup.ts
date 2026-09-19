@@ -2,6 +2,12 @@ import 'server-only';
 import { logger } from './logger';
 import { getRetentionPolicy, type RetentionPolicy } from './retention-policy';
 import { cleanupOldRollups } from './metric-rollup';
+import {
+  filterHeldIncidents,
+  filterHeldPrivacyRequests,
+  getHeldIncidentIds,
+} from './retention/lifecycle';
+import { acquireRetentionResourceLock } from './retention/resource-lock';
 
 /**
  * Data Cleanup Service
@@ -14,6 +20,7 @@ import { cleanupOldRollups } from './metric-rollup';
  */
 
 export interface CleanupResult {
+  // Existing fields (unchanged for backwards compatibility)
   incidents: number;
   alerts: number;
   logs: number;
@@ -22,6 +29,16 @@ export interface CleanupResult {
   auditLogs: number;
   inAppNotifications: number;
   slaPerformanceLogs: number;
+  // New lifecycle fields (additive)
+  held: {
+    incidents: number;
+    privacyRequests: number;
+  };
+  lifecycle: {
+    privacyRequests: number;
+    expiredExportArtifacts: number;
+    unsubscribedSubscribers: number;
+  };
   executionTimeMs: number;
   dryRun: boolean;
 }
@@ -103,6 +120,20 @@ export async function performDataCleanup(
   const metricsCutoff = new Date(now);
   metricsCutoff.setDate(metricsCutoff.getDate() - policy.metricsRetentionDays);
 
+  // Lifecycle cutoffs (Phase 3 PR2)
+  const privacyRequestCutoff = new Date(now);
+  privacyRequestCutoff.setDate(
+    privacyRequestCutoff.getDate() - policy.completedPrivacyRequestRetentionDays
+  );
+
+  const expiredArtifactCutoff = new Date(now);
+  expiredArtifactCutoff.setDate(
+    expiredArtifactCutoff.getDate() - policy.expiredPrivacyArtifactRetentionDays
+  );
+
+  const subscriberCutoff = new Date(now);
+  subscriberCutoff.setDate(subscriberCutoff.getDate() - policy.unsubscribedSubscriberRetentionDays);
+
   // Resolved incidents older than incidentCutoff that have had no event or note activity
   // since the incident retention cutoff. Also guard resolvedAt if set.
   const resolvedIncidentCleanupWhere = {
@@ -121,9 +152,62 @@ export async function performDataCleanup(
   let auditLogCount = 0;
   let inAppNotificationCount = 0;
   let slaPerformanceLogCount = 0;
+  let privacyRequestCount = 0;
+  let expiredExportArtifactCount = 0;
+  let unsubscribedSubscriberCount = 0;
+  let heldIncidentCount = 0;
+  let heldPrivacyRequestCount = 0;
 
   try {
-    // 1. Count what would be deleted
+    // 1. Find all eligible IDs first, then filter out held resources
+    const [
+      eligibleIncidents,
+      eligiblePrivacyRequests,
+      eligibleExportArtifacts,
+      eligibleSubscribers,
+    ] = await Promise.all([
+      prisma.incident.findMany({
+        where: resolvedIncidentCleanupWhere,
+        select: { id: true },
+      }),
+      prisma.privacyRequest.findMany({
+        where: {
+          status: { in: ['COMPLETED', 'REJECTED'] },
+          updatedAt: { lt: privacyRequestCutoff },
+        },
+        select: { id: true },
+      }),
+      prisma.privacyExportArtifact.findMany({
+        where: {
+          status: 'EXPIRED',
+          expiresAt: { lt: expiredArtifactCutoff },
+        },
+        select: { id: true },
+      }),
+      prisma.statusPageSubscription.findMany({
+        where: {
+          state: 'UNSUBSCRIBED',
+          unsubscribedAt: { lt: subscriberCutoff },
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    const eligibleIncidentIds = eligibleIncidents.map(i => i.id);
+    const eligiblePrivacyRequestIds = eligiblePrivacyRequests.map(r => r.id);
+
+    // Filter out held resources
+    const { deletableIds: deletableIncidents, heldCount: heldIncidents } =
+      await filterHeldIncidents(prisma, eligibleIncidentIds);
+    heldIncidentCount = heldIncidents;
+
+    const { deletableIds: deletablePrivacyRequests, heldCount: heldPrivacyRequests } =
+      await filterHeldPrivacyRequests(prisma, eligiblePrivacyRequestIds);
+    heldPrivacyRequestCount = heldPrivacyRequests;
+
+    const allHeldIncidentIds = await getHeldIncidentIds(prisma);
+
+    // Count what would be deleted
     const [
       incidentsToDelete,
       alertsToDelete,
@@ -135,16 +219,19 @@ export async function performDataCleanup(
       slaPerformanceLogsToDelete,
       incidentEventsFromIncidents,
     ] = await Promise.all([
-      prisma.incident.count({
-        where: resolvedIncidentCleanupWhere,
-      }),
+      Promise.resolve(deletableIncidents.length),
       prisma.alert.count({
         where: { createdAt: { lt: alertCutoff } },
       }),
       prisma.logEntry.count({
         where: { timestamp: { lt: logCutoff } },
       }),
-      prisma.incidentEvent.count({ where: { createdAt: { lt: logCutoff } } }),
+      prisma.incidentEvent.count({
+        where: {
+          createdAt: { lt: logCutoff },
+          ...(allHeldIncidentIds.length > 0 ? { incidentId: { notIn: allHeldIncidentIds } } : {}),
+        },
+      }),
       prisma.auditLog.count({ where: { createdAt: { lt: logCutoff } } }),
       prisma.incidentMetricRollup?.count
         ? prisma.incidentMetricRollup.count({ where: { date: { lt: metricsCutoff } } })
@@ -157,7 +244,7 @@ export async function performDataCleanup(
         : Promise.resolve(0),
       prisma.incidentEvent.count({
         where: {
-          incident: resolvedIncidentCleanupWhere,
+          incidentId: { in: deletableIncidents },
           createdAt: { gte: logCutoff },
         },
       }),
@@ -190,26 +277,35 @@ export async function performDataCleanup(
         auditLogs: auditLogsToDelete,
         inAppNotifications: inAppNotificationsToDelete,
         slaPerformanceLogs: slaPerformanceLogsToDelete,
+        held: {
+          incidents: heldIncidentCount,
+          privacyRequests: heldPrivacyRequestCount,
+        },
+        lifecycle: {
+          privacyRequests: deletablePrivacyRequests.length,
+          expiredExportArtifacts: eligibleExportArtifacts.length,
+          unsubscribedSubscribers: eligibleSubscribers.length,
+        },
         executionTimeMs: Date.now() - startTime,
         dryRun: true,
       };
     }
 
     // 2. Delete in order with strict FK dependency ordering
+    // Use pre-filtered deletable incidents to respect retention holds
     const BATCH_SIZE = 500;
-    while (true) {
-      const incidentIds = await prisma.incident.findMany({
-        where: resolvedIncidentCleanupWhere,
-        select: { id: true },
-        orderBy: { id: 'asc' },
-        take: BATCH_SIZE,
-      });
-      const batch = incidentIds.map(i => i.id);
+    for (let i = 0; i < deletableIncidents.length; i += BATCH_SIZE) {
+      const batch = deletableIncidents.slice(i, i + BATCH_SIZE);
       if (batch.length === 0) break;
 
       let deletedBatchCount = 0;
       await prisma.$transaction(
         async tx => {
+          // Acquire resource locks for all incidents in this batch (deterministic order to prevent deadlocks)
+          for (const incidentId of batch) {
+            await acquireRetentionResourceLock(tx, 'INCIDENT', incidentId);
+          }
+
           // 2.1 Delete external issue links
           if (tx.externalIssueLink?.deleteMany) {
             await tx.externalIssueLink.deleteMany({
@@ -330,6 +426,42 @@ export async function performDataCleanup(
       }
     }
 
+    // 3. Lifecycle cleanup: Privacy Requests (COMPLETED/REJECTED)
+    if (deletablePrivacyRequests.length > 0) {
+      for (let i = 0; i < deletablePrivacyRequests.length; i += BATCH_SIZE) {
+        const batch = deletablePrivacyRequests.slice(i, i + BATCH_SIZE);
+        for (const requestId of batch) {
+          await acquireRetentionResourceLock(prisma, 'PRIVACY_REQUEST', requestId);
+        }
+        const deleted = await prisma.privacyRequest.deleteMany({
+          where: { id: { in: batch } },
+        });
+        privacyRequestCount += deleted.count;
+      }
+    }
+
+    // 4. Lifecycle cleanup: Expired Export Artifacts
+    if (eligibleExportArtifacts.length > 0) {
+      for (let i = 0; i < eligibleExportArtifacts.length; i += BATCH_SIZE) {
+        const batch = eligibleExportArtifacts.slice(i, i + BATCH_SIZE).map(a => a.id);
+        const deleted = await prisma.privacyExportArtifact.deleteMany({
+          where: { id: { in: batch } },
+        });
+        expiredExportArtifactCount += deleted.count;
+      }
+    }
+
+    // 5. Lifecycle cleanup: Unsubscribed Subscribers
+    if (eligibleSubscribers.length > 0) {
+      for (let i = 0; i < eligibleSubscribers.length; i += BATCH_SIZE) {
+        const batch = eligibleSubscribers.slice(i, i + BATCH_SIZE).map(s => s.id);
+        const deleted = await prisma.statusPageSubscription.deleteMany({
+          where: { id: { in: batch } },
+        });
+        unsubscribedSubscriberCount += deleted.count;
+      }
+    }
+
     const deleteInBatches = async (
       findIds: () => Promise<Array<{ id: string }>>,
       deleteIds: (ids: string[]) => Promise<{ count: number }>
@@ -365,7 +497,12 @@ export async function performDataCleanup(
       await deleteInBatches(
         () =>
           prisma.notification.findMany({
-            where: { createdAt: { lt: alertCutoff } },
+            where: {
+              createdAt: { lt: alertCutoff },
+              ...(allHeldIncidentIds.length > 0
+                ? { incidentId: { notIn: allHeldIncidentIds } }
+                : {}),
+            },
             select: { id: true },
             orderBy: { id: 'asc' },
             take: BATCH_SIZE,
@@ -387,6 +524,9 @@ export async function performDataCleanup(
             where: {
               createdAt: { lt: logCutoff },
               status: { in: ['COMPLETED', 'FAILED'] },
+              ...(allHeldIncidentIds.length > 0
+                ? { incidentId: { notIn: allHeldIncidentIds } }
+                : {}),
             },
             select: { id: true },
             orderBy: { id: 'asc' },
@@ -399,7 +539,10 @@ export async function performDataCleanup(
     eventCount += await deleteInBatches(
       () =>
         prisma.incidentEvent.findMany({
-          where: { createdAt: { lt: logCutoff } },
+          where: {
+            createdAt: { lt: logCutoff },
+            ...(allHeldIncidentIds.length > 0 ? { incidentId: { notIn: allHeldIncidentIds } } : {}),
+          },
           select: { id: true },
           orderBy: { id: 'asc' },
           take: BATCH_SIZE,
@@ -465,6 +608,11 @@ export async function performDataCleanup(
       metrics: metricsCount,
       inAppNotifications: inAppNotificationCount,
       slaPerformanceLogs: slaPerformanceLogCount,
+      privacyRequests: privacyRequestCount,
+      expiredExportArtifacts: expiredExportArtifactCount,
+      unsubscribedSubscribers: unsubscribedSubscriberCount,
+      heldIncidents: heldIncidentCount,
+      heldPrivacyRequests: heldPrivacyRequestCount,
       executionTimeMs,
     });
 
@@ -477,6 +625,15 @@ export async function performDataCleanup(
       auditLogs: auditLogCount,
       inAppNotifications: inAppNotificationCount,
       slaPerformanceLogs: slaPerformanceLogCount,
+      held: {
+        incidents: heldIncidentCount,
+        privacyRequests: heldPrivacyRequestCount,
+      },
+      lifecycle: {
+        privacyRequests: privacyRequestCount,
+        expiredExportArtifacts: expiredExportArtifactCount,
+        unsubscribedSubscribers: unsubscribedSubscriberCount,
+      },
       executionTimeMs,
       dryRun: false,
     };
@@ -488,7 +645,14 @@ export async function performDataCleanup(
       isCleanupInProgress = false;
       if (hasPgAdvisoryLock && prisma.$queryRaw) {
         try {
-          await prisma.$queryRaw`SELECT pg_advisory_unlock(9141004::bigint)`;
+          // Unlock session-scoped advisory lock. Since Prisma maintains a connection pool,
+          // concurrently dispatching unlocks ensures the connection holding the lock is reached.
+          await Promise.all(
+            Array.from(
+              { length: 15 },
+              () => prisma.$queryRaw`SELECT pg_advisory_unlock(9141004::bigint)`
+            )
+          );
         } catch (_unlockErr) {
           // Ignore unlock error on cleanup finish
         }
