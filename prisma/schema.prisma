@@ -2465,7 +2465,7 @@ model ServiceObjective {
   id                    String                     @id @default(cuid())
   lineageId             String
   serviceId             String?
-  service               Service?                   @relation(fields: [serviceId], references: [id])
+  service               Service?                   @relation(fields: [serviceId], references: [id], onDelete: Restrict)
   name                  String
   description           String?
   metricType            ServiceObjectiveMetric
@@ -2877,4 +2877,3 @@ model EncryptionMigrationIssue {
   @@index([runId, targetId])
   @@index([runId, classification])
 }
-

@@ -178,9 +178,12 @@ export default function SLAHelpPanel() {
                 <div className="flex items-start gap-3">
                   <Zap className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-800">Latency P99</p>
+                    <p className="text-sm font-semibold text-blue-800">
+                      Latency P99 (reserved)
+                    </p>
                     <p className="text-xs text-blue-700 mt-1">
-                      99th percentile response time. 99% of requests complete within this time.
+                      Reserved for future request-telemetry support; it cannot currently be
+                      configured as a Service Objective.
                       <br />
                       <span className="font-mono text-[10px] bg-blue-100 px-1 rounded mt-1 inline-block">
                         Target: Maximum milliseconds allowed

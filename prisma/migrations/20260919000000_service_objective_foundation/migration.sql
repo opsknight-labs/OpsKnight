@@ -83,6 +83,8 @@ CREATE INDEX "ServiceObjective_legacySlaDefinitionId_idx"
   ON "ServiceObjective"("legacySlaDefinitionId");
 CREATE UNIQUE INDEX "ServiceObjective_one_active_lineage_idx"
   ON "ServiceObjective"("lineageId") WHERE "activeTo" IS NULL;
+CREATE UNIQUE INDEX "ServiceObjective_lineageId_version_key"
+  ON "ServiceObjective"("lineageId", "version");
 CREATE UNIQUE INDEX "ServiceObjective_one_active_service_metric_idx"
   ON "ServiceObjective"("serviceId", "metricType")
   WHERE "activeTo" IS NULL AND "serviceId" IS NOT NULL;
@@ -100,7 +102,7 @@ CREATE INDEX "ServiceObjectiveSnapshot_objectiveId_periodEnd_idx"
 
 ALTER TABLE "ServiceObjective"
   ADD CONSTRAINT "ServiceObjective_serviceId_fkey"
-  FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  FOREIGN KEY ("serviceId") REFERENCES "Service"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "ServiceObjectiveSnapshot"
   ADD CONSTRAINT "ServiceObjectiveSnapshot_objectiveId_fkey"
   FOREIGN KEY ("objectiveId") REFERENCES "ServiceObjective"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -118,9 +120,30 @@ INSERT INTO "ServiceObjective" (
   "comparator", "windowType", "windowValue", "version", "activeFrom",
   "activeTo", "legacySlaDefinitionId", "createdAt", "updatedAt"
 )
+WITH supported AS (
+  SELECT *,
+    SUM(CASE WHEN "version" = 1 THEN 1 ELSE 0 END) OVER (
+      PARTITION BY "serviceId", "metricType"
+      ORDER BY "activeFrom", "id"
+      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS chain_number,
+    LEAD("activeFrom") OVER (
+      PARTITION BY "serviceId", "metricType"
+      ORDER BY "activeFrom", "id"
+    ) AS next_active_from
+  FROM "SLADefinition"
+  WHERE "metricType" IN ('UPTIME', 'AVAILABILITY', 'MTTA', 'MTTR')
+    AND "targetAckTime" IS NULL
+    AND "targetResolveTime" IS NULL
+), classified AS (
+  SELECT *, GREATEST(chain_number, 1) AS effective_chain_number
+  FROM supported
+)
 SELECT
   'so_' || md5("id"),
-  'so_legacy_' || md5(COALESCE("serviceId", '__workspace__') || ':' || "metricType"),
+  'so_legacy_' || md5(
+    COALESCE("serviceId", '__workspace__') || ':' || "metricType" || ':' || effective_chain_number
+  ),
   "serviceId",
   "name",
   "description",
@@ -145,12 +168,40 @@ SELECT
   END,
   "version",
   "activeFrom",
-  "activeTo",
+  COALESCE("activeTo", next_active_from),
   "id",
   "createdAt",
   "updatedAt"
-FROM "SLADefinition"
-WHERE "metricType" IN ('UPTIME', 'AVAILABILITY', 'MTTA', 'MTTR')
-  AND "targetAckTime" IS NULL
-  AND "targetResolveTime" IS NULL
+FROM classified
 ON CONFLICT ("id") DO NOTHING;
+
+CREATE OR REPLACE FUNCTION prevent_service_objective_revision_mutation()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'ServiceObjective revisions are immutable and cannot be deleted';
+  END IF;
+  IF NEW."lineageId" IS DISTINCT FROM OLD."lineageId"
+    OR NEW."serviceId" IS DISTINCT FROM OLD."serviceId"
+    OR NEW."name" IS DISTINCT FROM OLD."name"
+    OR NEW."description" IS DISTINCT FROM OLD."description"
+    OR NEW."metricType" IS DISTINCT FROM OLD."metricType"
+    OR NEW."target" IS DISTINCT FROM OLD."target"
+    OR NEW."comparator" IS DISTINCT FROM OLD."comparator"
+    OR NEW."windowType" IS DISTINCT FROM OLD."windowType"
+    OR NEW."windowValue" IS DISTINCT FROM OLD."windowValue"
+    OR NEW."version" IS DISTINCT FROM OLD."version"
+    OR NEW."activeFrom" IS DISTINCT FROM OLD."activeFrom"
+    OR NEW."legacySlaDefinitionId" IS DISTINCT FROM OLD."legacySlaDefinitionId"
+    OR OLD."activeTo" IS NOT NULL
+    OR NEW."activeTo" IS NULL
+  THEN
+    RAISE EXCEPTION 'ServiceObjective revisions are immutable; only retirement is allowed';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER "ServiceObjective_immutable_revision"
+BEFORE UPDATE OR DELETE ON "ServiceObjective"
+FOR EACH ROW EXECUTE FUNCTION prevent_service_objective_revision_mutation();

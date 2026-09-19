@@ -21,7 +21,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     orderBy: { version: 'desc' },
   });
   if (matchedObjective) {
-    const [objective, versions] = await Promise.all([
+    const [activeObjective, versions] = await Promise.all([
       prisma.serviceObjective.findFirst({
         where: { lineageId: matchedObjective.lineageId, activeTo: null },
         include: { service: { select: { id: true, name: true } } },
@@ -31,32 +31,30 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         select: { legacySlaDefinitionId: true },
       }),
     ]);
-    if (!objective) {
+    const objective = activeObjective ?? matchedObjective;
+    if (objective) {
+      const legacyIds = versions.flatMap(version =>
+        version.legacySlaDefinitionId ? [version.legacySlaDefinitionId] : []
+      );
+      const legacySnapshots = await prisma.sLASnapshot.findMany({
+        where: { slaDefinitionId: { in: legacyIds } },
+        orderBy: { date: 'desc' },
+        take: 30,
+      });
       return NextResponse.json(
-        { error: 'Service objective not found' },
-        { status: 404, headers: LEGACY_SLA_DEPRECATION_HEADERS }
+        {
+          ...objective,
+          id,
+          objectiveId: objective.lineageId,
+          versionId: objective.id,
+          window: legacyWindow(objective.windowType, objective.windowValue),
+          legacy: false,
+          retired: objective.activeTo !== null,
+          snapshots: legacySnapshots.map(snapshot => ({ ...snapshot, legacy: true })),
+        },
+        { headers: LEGACY_SLA_DEPRECATION_HEADERS }
       );
     }
-    const legacyIds = versions.flatMap(version =>
-      version.legacySlaDefinitionId ? [version.legacySlaDefinitionId] : []
-    );
-    const legacySnapshots = await prisma.sLASnapshot.findMany({
-      where: { slaDefinitionId: { in: legacyIds } },
-      orderBy: { date: 'desc' },
-      take: 30,
-    });
-    return NextResponse.json(
-      {
-        ...objective,
-        id,
-        objectiveId: objective.lineageId,
-        versionId: objective.id,
-        window: legacyWindow(objective.windowType, objective.windowValue),
-        legacy: false,
-        snapshots: legacySnapshots.map(snapshot => ({ ...snapshot, legacy: true })),
-      },
-      { headers: LEGACY_SLA_DEPRECATION_HEADERS }
-    );
   }
   const legacyDefinition = await prisma.sLADefinition.findFirst({
     where: { id, service: serviceReadWhere(actor) },

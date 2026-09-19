@@ -505,18 +505,6 @@ async function runOnce() {
           logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
         });
         const overdueNotifications = await notifyOverdueActionItems(now);
-        const { processServiceObjectiveSnapshots } = await import(
-          '@/jobs/service-objective-scheduler'
-        );
-        const serviceObjectiveSnapshots = await processServiceObjectiveSnapshots(now);
-        await updateState({
-          lastObjectiveSnapshotAt: now,
-          lastObjectiveSnapshotSuccessAt:
-            serviceObjectiveSnapshots.failed === 0 ? now : undefined,
-          lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
-          lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
-        });
-
         // Run automated SLA drift detection and self-healing
         try {
           const { runSLADriftDetection } = await import('./sla-drift-detection');
@@ -605,6 +593,28 @@ async function runOnce() {
           });
           for (const day of toGenerate) {
             await generateAllDailyRollups(day);
+          }
+        }
+
+        // Objective snapshots may consume historical incident rollups. Materialize them only
+        // after dirty-day reconciliation and once the missing-rollup backlog is fully drained.
+        let serviceObjectiveSnapshots = null;
+        if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
+          const { processServiceObjectiveSnapshots } = await import(
+            '@/jobs/service-objective-scheduler'
+          );
+          serviceObjectiveSnapshots = await processServiceObjectiveSnapshots(now);
+          await updateState({
+            lastObjectiveSnapshotAt: now,
+            lastObjectiveSnapshotSuccessAt:
+              serviceObjectiveSnapshots.failed === 0 ? now : undefined,
+            lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
+            lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
+          });
+          if (serviceObjectiveSnapshots.failed > 0) {
+            throw new Error(
+              `${serviceObjectiveSnapshots.failed} service objective snapshot(s) failed; retrying the daily run`
+            );
           }
         }
 
