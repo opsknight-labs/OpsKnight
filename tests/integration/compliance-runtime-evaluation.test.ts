@@ -5,6 +5,7 @@ import { computeRegistryFingerprint, ENCRYPTION_TARGETS } from '@/lib/encryption
 import { getActiveKeyId } from '@/lib/encryption';
 import { computeComplianceControlRegistryFingerprint } from '@/lib/compliance/registry';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
+import { verifyComplianceEvidenceHash } from '@/lib/compliance/evidence/hash';
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -330,6 +331,7 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
             status: 'ACTION_REQUIRED',
             summary: 'Stale Evaluation A Result',
             findings: [],
+            evidence: [],
             evidenceRefs: [],
           };
         }
@@ -337,6 +339,7 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
           status: 'IMPLEMENTED',
           summary: 'Newer Evaluation B Result',
           findings: [],
+          evidence: [],
           evidenceRefs: [],
         };
       },
@@ -437,5 +440,125 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
     expect(auditLogs[0].actorId).toBe(admin.id);
     expect(auditLogs[1].action).toBe('COMPLIANCE_EVALUATION_COMPLETED');
     expect(auditLogs[1].actorId).toBe(admin.id);
+    const details = auditLogs[1].details as Record<string, unknown>;
+    const metadata = (details?.metadata as Record<string, unknown>) ?? {};
+    expect(metadata.summary).toEqual(
+      expect.objectContaining({
+        total: 6,
+        evidenceRecordsCreated: expect.any(Number),
+      })
+    );
+
+    // Verify evidence records were persisted for every evaluation
+    const totalEvidence = await testPrisma.complianceEvidence.count();
+    expect(totalEvidence).toBeGreaterThanOrEqual(6);
+  });
+
+  it('atomically persists evaluation, evidence records, and state projection with verified SHA-256 hashes', async () => {
+    const context = {
+      prisma: testPrisma,
+      now: new Date(),
+      controlRegistryFingerprint: computeComplianceControlRegistryFingerprint(),
+    };
+
+    const outcome = await evaluateControl({
+      controlId: 'SEC-RETENTION-001',
+      context,
+      trigger: 'MANUAL',
+    });
+
+    expect(outcome.evaluation.status).toBe('IMPLEMENTED');
+    expect(outcome.evidenceCount).toBeGreaterThanOrEqual(2);
+
+    // Fetch persisted evidence records directly from PostgreSQL
+    const evidenceRecords = await testPrisma.complianceEvidence.findMany({
+      where: { evaluationId: outcome.evaluation.id },
+      orderBy: { observedAt: 'asc' },
+    });
+
+    expect(evidenceRecords).toHaveLength(outcome.evidenceCount);
+
+    for (const record of evidenceRecords) {
+      expect(record.controlId).toBe('SEC-RETENTION-001');
+      expect(record.evaluationId).toBe(outcome.evaluation.id);
+      expect(record.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+
+      // Verify SHA-256 canonical digest integrity against the database record
+      const isValid = verifyComplianceEvidenceHash({
+        controlId: record.controlId,
+        evaluationId: record.evaluationId,
+        type: record.type,
+        collectorId: record.collectorId,
+        collectorVersion: record.collectorVersion,
+        resourceType: record.resourceType,
+        resourceId: record.resourceId,
+        observedAt: record.observedAt,
+        validUntil: record.validUntil,
+        metadata: record.metadata as Record<string, unknown>,
+        contentHash: record.contentHash,
+      });
+
+      expect(isValid).toBe(true);
+    }
+  });
+
+  it('fails safely to UNVERIFIED with EVALUATION_FAILURE evidence when evidence contains forbidden sensitive keys', async () => {
+    const originalEvaluator = complianceEvaluatorRegistry['data.retention'];
+
+    try {
+      complianceEvaluatorRegistry['data.retention'] = {
+        id: 'data.retention',
+        version: '1',
+        evaluate: async () => ({
+          status: 'IMPLEMENTED' as const,
+          summary: 'Leaky evaluator implementation',
+          findings: [],
+          evidence: [
+            {
+              type: 'CONFIGURATION_SNAPSHOT' as const,
+              collectorId: 'data.retention',
+              collectorVersion: '1',
+              title: 'Leaky Retention Config',
+              observedAt: new Date(),
+              metadata: {
+                adminSecretToken: 'super-secret-token-12345',
+              },
+            },
+          ],
+          evidenceRefs: [],
+        }),
+      };
+
+      const context = {
+        prisma: testPrisma,
+        now: new Date(),
+        controlRegistryFingerprint: computeComplianceControlRegistryFingerprint(),
+      };
+
+      const outcome = await evaluateControl({
+        controlId: 'SEC-RETENTION-001',
+        context,
+        trigger: 'MANUAL',
+      });
+
+      expect(outcome.evaluation.status).toBe('UNVERIFIED');
+      expect(outcome.evaluation.findings).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'EVIDENCE_VALIDATION_FAILED' })])
+      );
+      expect(outcome.controlState.status).toBe('UNVERIFIED');
+
+      // Database should contain the safe EVALUATION_FAILURE record, NOT the leaky token
+      const dbEvidence = await testPrisma.complianceEvidence.findMany({
+        where: { evaluationId: outcome.evaluation.id },
+      });
+
+      expect(dbEvidence).toHaveLength(1);
+      expect(dbEvidence[0].type).toBe('EVALUATION_FAILURE');
+      expect(dbEvidence[0].title).toBe('Evidence Validation Failure');
+      expect(JSON.stringify(dbEvidence[0].metadata)).not.toContain('adminSecretToken');
+      expect(JSON.stringify(dbEvidence[0].metadata)).not.toContain('super-secret-token');
+    } finally {
+      complianceEvaluatorRegistry['data.retention'] = originalEvaluator;
+    }
   });
 });
