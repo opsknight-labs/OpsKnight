@@ -40,8 +40,10 @@ export function canonicalizeEvidenceValue(val: unknown, seen = new WeakSet<objec
     const sortedKeys = Object.keys(val as Record<string, unknown>).sort();
     const result: Record<string, unknown> = {};
     for (const key of sortedKeys) {
+      // eslint-disable-next-line security/detect-object-injection
       const item = (val as Record<string, unknown>)[key];
       if (item !== undefined) {
+        // eslint-disable-next-line security/detect-object-injection
         result[key] = canonicalizeEvidenceValue(item, seen);
       }
     }
