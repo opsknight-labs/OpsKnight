@@ -1,7 +1,56 @@
 import { execFileSync } from 'node:child_process';
+import http from 'node:http';
 import { expect, test } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+
+const PORT = '3100';
+
+interface RawHttpResponse {
+  status: number;
+  headers: http.IncomingHttpHeaders;
+  getHeader(name: string): string | undefined;
+  body: string;
+}
+
+function rawHttpRequest(
+  path: string,
+  options: {
+    method?: string;
+    headers?: Record<string, string>;
+  } = {}
+): Promise<RawHttpResponse> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: '127.0.0.1',
+        port: Number(PORT),
+        path,
+        method: options.method || 'GET',
+        headers: options.headers,
+      },
+      res => {
+        let body = '';
+        res.on('data', chunk => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode || 0,
+            headers: res.headers,
+            getHeader(name: string) {
+              const val = res.headers[name.toLowerCase()];
+              return Array.isArray(val) ? val[0] : val;
+            },
+            body,
+          });
+        });
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
 
 const prisma = new PrismaClient();
 const databaseUrl =
@@ -9,7 +58,6 @@ const databaseUrl =
   'postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public';
 
 const BOOTSTRAP_CONFIG_KEY = 'auth.bootstrap.authorization';
-const PORT = '3100';
 
 const APP_HOST = 'fresh.opsknight.test';
 const STATUS_HOST = 'status.customer.test';
@@ -22,7 +70,6 @@ const APP_BASE = `http://${APP_HOST}:${PORT}`;
 const STATUS_BASE = `http://${STATUS_HOST}:${PORT}`;
 const ATTACKER_BASE = `http://${ATTACKER_HOST}:${PORT}`;
 const REPLACEMENT_BASE = `http://${REPLACEMENT_HOST}:${PORT}`;
-const DIRECT_SERVER = `http://127.0.0.1:${PORT}`;
 
 const ADMIN_EMAIL = 'fresh-admin@opsknight.test';
 const ADMIN_PASSWORD = 'Secure-Bootstrap-Comet-492!';
@@ -81,6 +128,9 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
   });
 
   test('1. fresh installation asserts 0 users and null appUrl', async () => {
+    await resetDatabase();
+    await seedStatusPage();
+
     const userCount = await prisma.user.count();
     const systemSettings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
 
@@ -275,7 +325,7 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
 
   test('10. spoofed X-Forwarded-Host cannot bypass status firewall by default (untrusted proxy)', async () => {
     // Attack: connect to status domain but send X-Forwarded-Host claiming to be app domain
-    const attack1 = await fetch(`${DIRECT_SERVER}/users`, {
+    const attack1 = await rawHttpRequest('/users', {
       headers: {
         host: `${STATUS_HOST}:${PORT}`,
         'x-forwarded-host': APP_HOST,
@@ -285,7 +335,7 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     expect(attack1.status).toBe(404);
 
     // Attack: connect to unknown attacker host but spoof X-Forwarded-Host claiming app domain
-    const attack2 = await fetch(`${DIRECT_SERVER}/login`, {
+    const attack2 = await rawHttpRequest('/login', {
       headers: {
         host: `${ATTACKER_HOST}:${PORT}`,
         'x-forwarded-host': APP_HOST,
@@ -332,30 +382,27 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     });
 
     // Secondary www host should receive 308 Permanent Redirect to apex, preserving port 3100
-    const wwwRes = await fetch(`${DIRECT_SERVER}/login?source=nav`, {
+    const wwwRes = await rawHttpRequest('/login?source=nav', {
       headers: { host: `${WWW_HOST}:${PORT}` },
-      redirect: 'manual',
     });
     expect(wwwRes.status).toBe(308);
-    const location = wwwRes.headers.get('location');
+    const location = wwwRes.getHeader('location');
     expect(location).toBe(`http://${APEX_HOST}:${PORT}/login?source=nav`);
 
     // Verify untrusted X-Forwarded-Proto does not alter the protocol
-    const spoofProtoRes = await fetch(`${DIRECT_SERVER}/login`, {
+    const spoofProtoRes = await rawHttpRequest('/login', {
       headers: {
         host: `${WWW_HOST}:${PORT}`,
         'x-forwarded-proto': 'https',
       },
-      redirect: 'manual',
     });
     expect(spoofProtoRes.status).toBe(308);
     // Because TRUST_PROXY_HEADERS is false, untrusted proto is ignored and matches request scheme (http)
-    expect(spoofProtoRes.headers.get('location')).toBe(`http://${APEX_HOST}:${PORT}/login`);
+    expect(spoofProtoRes.getHeader('location')).toBe(`http://${APEX_HOST}:${PORT}/login`);
 
     // Canonical apex host serves directly => 200
-    const apexRes = await fetch(`${DIRECT_SERVER}/login`, {
+    const apexRes = await rawHttpRequest('/login', {
       headers: { host: `${APEX_HOST}:${PORT}` },
-      redirect: 'manual',
     });
     expect(apexRes.status).toBe(200);
   });
@@ -397,37 +444,34 @@ test.describe.serial('trusted proxy topology lifecycle', () => {
 
   test('trusted reverse proxy routes internal Host to app based on X-Forwarded-Host', async () => {
     // Behind reverse proxy: Host is internal container hostname, X-Forwarded-Host is public app host
-    const res = await fetch(`${DIRECT_SERVER}/login`, {
+    const res = await rawHttpRequest('/login', {
       headers: {
         host: `internal-app:${PORT}`,
         'x-forwarded-host': APP_HOST,
         'x-forwarded-proto': 'https',
       },
-      redirect: 'manual',
     });
     expect(res.status).toBe(200);
   });
 
   test('trusted reverse proxy enforces login redirect on protected route with X-Forwarded-Host', async () => {
-    const res = await fetch(`${DIRECT_SERVER}/settings`, {
+    const res = await rawHttpRequest('/settings', {
       headers: {
         host: `internal-app:${PORT}`,
         'x-forwarded-host': APP_HOST,
         'x-forwarded-proto': 'https',
       },
-      redirect: 'manual',
     });
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toContain('/login?callbackUrl=%2Fsettings');
+    expect(res.getHeader('location')).toContain('/login?callbackUrl=%2Fsettings');
   });
 
   test('trusted reverse proxy routes internal Host to status firewall when X-Forwarded-Host is status domain', async () => {
-    const res = await fetch(`${DIRECT_SERVER}/users`, {
+    const res = await rawHttpRequest('/users', {
       headers: {
         host: `internal-app:${PORT}`,
         'x-forwarded-host': STATUS_HOST,
       },
-      redirect: 'manual',
     });
     // Enforces status firewall (404 for application route /users)
     expect(res.status).toBe(404);
