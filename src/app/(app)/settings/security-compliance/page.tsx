@@ -8,6 +8,7 @@ import { discoverSubjectData, subjectDiscoveryInputSchema } from '@/lib/privacy/
 import { personalDataRegistry } from '@/lib/privacy/registry';
 import { getUserPermissions } from '@/lib/rbac';
 import { resolveComplianceRuntimeState } from '@/lib/compliance/state';
+import { getFrameworkSummaryView } from '@/lib/compliance/framework-mappings';
 import ComplianceClientTabs from '@/components/settings/compliance/ComplianceClientTabs';
 import type { Prisma } from '@prisma/client';
 
@@ -68,18 +69,33 @@ export default async function SecurityCompliancePage({
 
   const pageCount = Math.max(1, Math.ceil(userCount / USER_SEARCH_PAGE_SIZE));
   const overall = getReadiness();
+  const now = new Date();
 
-  const frameworkList = frameworks.map(fw => ({
-    id: fw.id,
-    title: fw.title,
-    scope: fw.scope,
-    source: fw.source,
-    counts: getReadiness(fw.id),
-  }));
+  const frameworkList = frameworks.map(fw => {
+    const summary = getFrameworkSummaryView(fw.id, now);
+    return {
+      id: fw.id,
+      title: fw.title,
+      scope: fw.scope,
+      source: fw.source,
+      version: summary?.framework.version,
+      summaryView: summary
+        ? {
+            mappedRequirementsCount: summary.mappedRequirementsCount,
+            mappedControlsCount: summary.mappedControlsCount,
+            runtimeBackedCount: summary.runtimeBackedCount,
+            repositoryBackedCount: summary.repositoryBackedCount,
+            operatorDependencyCount: summary.operatorDependencyCount,
+            organizationalDependencyCount: summary.organizationalDependencyCount,
+            futureRequirementsCount: summary.futureRequirementsCount,
+          }
+        : undefined,
+      counts: getReadiness(fw.id),
+    };
+  });
 
   const rawControlStates = await prisma.complianceControlState.findMany();
   const stateMap = new Map(rawControlStates.map(s => [s.controlId, s]));
-  const now = new Date();
   const controlStates = complianceControls
     .map(c => resolveComplianceRuntimeState(c, stateMap.get(c.id), now))
     .filter((s): s is NonNullable<typeof s> => s !== null)

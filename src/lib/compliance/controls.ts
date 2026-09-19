@@ -188,7 +188,7 @@ export const complianceControls: readonly ComplianceControlDefinition[] = [
     assessmentMode: 'RUNTIME',
     evaluatorId: 'data.retention',
     owner: 'OPERATOR',
-    frameworks: ['GDPR', 'ISO27701', 'DPDP', 'CCPA', 'SOC2'],
+    frameworks: ['GDPR', 'ISO27701', 'DPDP', 'CCPA'],
     implementation:
       'Policy provides configurable retention limits enforced by an advisory-locked, hold-aware background cleanup engine.',
     evidence: [
@@ -288,7 +288,7 @@ export const complianceControls: readonly ComplianceControlDefinition[] = [
     assessmentMode: 'RUNTIME',
     evaluatorId: 'privacy.holds',
     owner: 'MAINTAINER',
-    frameworks: ['GDPR', 'ISO27701', 'SOC2'],
+    frameworks: ['GDPR', 'ISO27701'],
     implementation:
       'DataRetentionHold service coordinates active holds across users, incidents, and privacy requests to block destructive erasure and automated retention cleanup.',
     evidence: ['src/lib/retention/holds.ts', 'src/lib/data-cleanup.ts'],

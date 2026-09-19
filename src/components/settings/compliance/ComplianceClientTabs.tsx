@@ -33,6 +33,7 @@ import type { PersonalDataDomain } from '@/lib/privacy/types';
 import type { ComplianceEvidenceRecord } from '@/lib/compliance/evidence/types';
 import { EncryptionMigrationPanel } from './EncryptionMigrationPanel';
 import { ComplianceEvidenceViewer } from './ComplianceEvidenceViewer';
+import { FrameworkRequirementsModal } from './FrameworkRequirementsModal';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/lib/toast';
 
@@ -93,6 +94,16 @@ type FrameworkItem = {
   title: string;
   scope: string;
   source: string;
+  version?: string;
+  summaryView?: {
+    mappedRequirementsCount: number;
+    mappedControlsCount: number;
+    runtimeBackedCount: number;
+    repositoryBackedCount: number;
+    operatorDependencyCount: number;
+    organizationalDependencyCount: number;
+    futureRequirementsCount: number;
+  };
   counts: Record<ControlStatus, number>;
 };
 
@@ -158,6 +169,8 @@ export default function ComplianceClientTabs({
   const totalControls = overall.IMPLEMENTED + overall.PARTIAL + overall.MISSING;
 
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [selectedFrameworkForModal, setSelectedFrameworkForModal] =
+    useState<ComplianceFramework | null>(null);
   const router = useRouter();
 
   const stateMap = useMemo(
@@ -472,9 +485,24 @@ export default function ComplianceClientTabs({
       {/* TAB 1: FRAMEWORKS OVERVIEW */}
       {activeTab === 'overview' && (
         <div className="space-y-4 animate-in fade-in-50 duration-150">
+          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-4 shadow-xs space-y-1">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-primary shrink-0" />
+              <h3 className="font-bold text-sm text-foreground">
+                Regulatory &amp; Security Framework Mappings
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Granular requirement mappings linking technical controls and automated runtime
+              evidence to formal framework specifications. Mappings demonstrate technical evidence
+              collection only; they do not represent certification or complete regulatory
+              compliance.
+            </p>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {frameworks.map(fw => {
-              const total = fw.counts.IMPLEMENTED + fw.counts.PARTIAL + fw.counts.MISSING;
+              const view = fw.summaryView;
 
               return (
                 <div
@@ -494,43 +522,85 @@ export default function ComplianceClientTabs({
                           </span>
                         </div>
                       </div>
-                      <Badge
-                        variant="outline"
-                        className="text-[11px] font-mono font-bold bg-muted/40"
-                      >
-                        Repository Baseline: {fw.counts.IMPLEMENTED}/{total}
-                      </Badge>
+                      {fw.version && (
+                        <Badge
+                          variant="outline"
+                          className="text-[11px] font-mono font-semibold bg-muted/40"
+                        >
+                          {fw.version}
+                        </Badge>
+                      )}
                     </div>
+
                     <p className="text-xs text-muted-foreground mt-3 line-clamp-2 leading-relaxed">
                       {fw.scope}
                     </p>
 
-                    <div className="grid grid-cols-3 gap-1.5 mt-3.5 pt-3 border-t border-border/50 text-center">
-                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                        <p className="text-[10px] font-semibold uppercase">Done</p>
-                        <p className="text-xs font-bold mt-0.5">{fw.counts.IMPLEMENTED}</p>
+                    {view ? (
+                      <div className="grid grid-cols-2 gap-1.5 mt-3.5 pt-3 border-t border-border/50 text-center text-xs">
+                        <div className="p-2 rounded-lg bg-muted/30 border border-border/50">
+                          <p className="text-[10px] text-muted-foreground uppercase font-semibold">
+                            Requirements
+                          </p>
+                          <p className="text-sm font-bold font-mono text-foreground mt-0.5">
+                            {view.mappedRequirementsCount}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-muted/30 border border-border/50">
+                          <p className="text-[10px] text-muted-foreground uppercase font-semibold">
+                            Controls
+                          </p>
+                          <p className="text-sm font-bold font-mono text-foreground mt-0.5">
+                            {view.mappedControlsCount}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <p className="text-[10px] uppercase font-semibold">Runtime Evidence</p>
+                          <p className="text-sm font-bold font-mono mt-0.5">
+                            {view.runtimeBackedCount}
+                          </p>
+                        </div>
+                        <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                          <p className="text-[10px] uppercase font-semibold">Operator Deps</p>
+                          <p className="text-sm font-bold font-mono mt-0.5">
+                            {view.operatorDependencyCount}
+                          </p>
+                        </div>
+                        {view.futureRequirementsCount > 0 && (
+                          <div className="col-span-2 p-1.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 flex items-center justify-center gap-1.5 text-[11px] font-semibold">
+                            <span>Future Staged:</span>
+                            <span className="font-mono">
+                              {view.futureRequirementsCount} requirements
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        <p className="text-[10px] font-semibold uppercase">Partial</p>
-                        <p className="text-xs font-bold mt-0.5">{fw.counts.PARTIAL}</p>
+                    ) : (
+                      <div className="mt-3.5 pt-3 border-t border-border/50 text-xs text-muted-foreground">
+                        Metadata mapping loaded.
                       </div>
-                      <div className="p-1.5 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
-                        <p className="text-[10px] font-semibold uppercase">Missing</p>
-                        <p className="text-xs font-bold mt-0.5">{fw.counts.MISSING}</p>
-                      </div>
-                    </div>
+                    )}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-border/50">
+                  <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between gap-2">
                     <a
                       href={fw.source}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold"
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground font-medium"
                     >
-                      <span>Official Specification</span>
+                      <span>Spec</span>
                       <ExternalLink className="h-3 w-3" />
                     </a>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedFrameworkForModal(fw.id)}
+                      className="text-xs h-7 px-2.5 font-semibold"
+                    >
+                      <span>View Requirements</span>
+                    </Button>
                   </div>
                 </div>
               );
@@ -1173,6 +1243,13 @@ export default function ComplianceClientTabs({
         evidence={selectedEvidence}
         isOpen={isEvidenceViewerOpen}
         onClose={() => setIsEvidenceViewerOpen(false)}
+      />
+
+      {/* Framework Requirements & Shared Responsibility Modal */}
+      <FrameworkRequirementsModal
+        frameworkId={selectedFrameworkForModal}
+        isOpen={selectedFrameworkForModal !== null}
+        onClose={() => setSelectedFrameworkForModal(null)}
       />
     </div>
   );
