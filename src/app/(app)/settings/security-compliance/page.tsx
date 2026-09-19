@@ -1,75 +1,34 @@
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { complianceControls } from '@/lib/compliance/controls';
 import { frameworks } from '@/lib/compliance/frameworks';
-import { getReadiness } from '@/lib/compliance/readiness';
-import { discoverSubjectData, subjectDiscoveryInputSchema } from '@/lib/privacy/discovery';
-import { personalDataRegistry } from '@/lib/privacy/registry';
 import { getUserPermissions } from '@/lib/rbac';
-import { resolveComplianceRuntimeState } from '@/lib/compliance/state';
 import { getFrameworkSummaryView } from '@/lib/compliance/framework-mappings';
-import ComplianceClientTabs from '@/components/settings/compliance/ComplianceClientTabs';
-import type { Prisma } from '@prisma/client';
+import { getComplianceControlCenterData } from '@/lib/compliance/control-center';
+import { ComplianceControlCenter } from '@/components/settings/compliance/control-center';
 
-const USER_SEARCH_PAGE_SIZE = 30;
+const VALID_TABS = ['overview', 'controls', 'frameworks', 'evidence', 'operations'] as const;
+type ValidTab = (typeof VALID_TABS)[number];
 
 export default async function SecurityCompliancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ userId?: string; q?: string; page?: string; tab?: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   // Read-only readiness diagnostics — not certification or legal conclusions
   const permissions = await getUserPermissions();
-  if (!permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_READ)) redirect('/settings');
+  if (!permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_READ)) {
+    redirect('/settings');
+  }
 
   const params = await searchParams;
-  const query = params.q?.trim().slice(0, 100) ?? '';
-  const requestedPage = Number(params.page);
-  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const initialTab: ValidTab = VALID_TABS.includes(params.tab as ValidTab)
+    ? (params.tab as ValidTab)
+    : 'overview';
 
-  // DB Performance Optimization: Only query user database if the user is interacting with Privacy & DSR discovery
-  const shouldQueryPrivacyUsers = Boolean(query || params.userId || params.tab === 'privacy');
-
-  const userWhere = (
-    query
-      ? {
-          OR: [
-            { name: { contains: query, mode: 'insensitive' } },
-            { email: { contains: query, mode: 'insensitive' } },
-          ],
-        }
-      : {}
-  ) satisfies Prisma.UserWhereInput;
-
-  const parsedSubject = subjectDiscoveryInputSchema.safeParse({
-    userId: params.userId,
-    actorUserId: permissions.id,
-  });
-
-  const [users, userCount, selectedUser, discovery] = shouldQueryPrivacyUsers
-    ? await Promise.all([
-        prisma.user.findMany({
-          where: userWhere,
-          select: { id: true, name: true, email: true, status: true },
-          orderBy: [{ name: 'asc' }, { email: 'asc' }],
-          skip: (page - 1) * USER_SEARCH_PAGE_SIZE,
-          take: USER_SEARCH_PAGE_SIZE,
-        }),
-        prisma.user.count({ where: userWhere }),
-        parsedSubject.success
-          ? prisma.user.findUnique({
-              where: { id: parsedSubject.data.userId },
-              select: { id: true, name: true, email: true },
-            })
-          : Promise.resolve(null),
-        parsedSubject.success ? discoverSubjectData(parsedSubject.data) : Promise.resolve(null),
-      ])
-    : [[], 0, null, null];
-
-  const pageCount = Math.max(1, Math.ceil(userCount / USER_SEARCH_PAGE_SIZE));
-  const overall = getReadiness();
   const now = new Date();
+
+  const [controlCenterData] = await Promise.all([getComplianceControlCenterData({ prisma, now })]);
 
   const frameworkList = frameworks.map(fw => {
     const summary = getFrameworkSummaryView(fw.id, now);
@@ -90,47 +49,26 @@ export default async function SecurityCompliancePage({
             futureRequirementsCount: summary.futureRequirementsCount,
           }
         : undefined,
-      counts: getReadiness(fw.id),
     };
   });
 
-  const rawControlStates = await prisma.complianceControlState.findMany();
-  const stateMap = new Map(rawControlStates.map(s => [s.controlId, s]));
-  const controlStates = complianceControls
-    .map(c => resolveComplianceRuntimeState(c, stateMap.get(c.id), now))
-    .filter((s): s is NonNullable<typeof s> => s !== null)
-    .map(s => ({
-      controlId: s.controlId,
-      status: s.status,
-      latestEvaluationId: s.latestEvaluationId,
-      evaluatorId: s.evaluatorId,
-      evaluatorVersion: s.evaluatorVersion,
-      evaluatedAt: s.evaluatedAt.toISOString(),
-      validUntil: s.validUntil ? s.validUntil.toISOString() : null,
-      summary: s.summary,
-    }));
-  const canEvaluate = permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVALUATE);
+  const capabilities = {
+    canEvaluate: permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVALUATE),
+    canReadEvidence:
+      permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVIDENCE_READ) ||
+      permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_READ),
+    canReadEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_READ),
+    canManageEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_MANAGE),
+    canReadPrivacy: permissions.capabilities.includes(CAPABILITIES.PRIVACY_READ),
+    canReadRetention: permissions.capabilities.includes(CAPABILITIES.RETENTION_READ),
+  };
 
   return (
-    <div className="space-y-6 pb-12 w-full">
-      <ComplianceClientTabs
-        overall={overall}
-        frameworks={frameworkList}
-        controls={complianceControls}
-        personalDataRegistry={personalDataRegistry}
-        controlStates={controlStates}
-        canEvaluate={canEvaluate}
-        privacyData={{
-          users,
-          userCount,
-          selectedUser,
-          discovery,
-          query,
-          page,
-          pageCount,
-          userId: params.userId,
-        }}
-      />
-    </div>
+    <ComplianceControlCenter
+      initialData={controlCenterData}
+      frameworks={frameworkList}
+      capabilities={capabilities}
+      initialTab={initialTab}
+    />
   );
 }

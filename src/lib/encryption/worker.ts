@@ -116,3 +116,34 @@ export async function cancelEncryptionRun(
     },
   });
 }
+
+/**
+ * Settles an EncryptionMigrationRun into FAILED state upon terminal failure of its background job.
+ * Only transitions runs that are currently PENDING or RUNNING; never overwrites COMPLETED, CANCELLED, or FAILED.
+ */
+export async function settleEncryptionLifecycleFailure(
+  prisma: PrismaClient,
+  runId: string,
+  error: string
+): Promise<EncryptionMigrationRun | null> {
+  const run = await prisma.encryptionMigrationRun.findUnique({
+    where: { id: runId },
+  });
+
+  if (!run) return null;
+
+  if (run.status !== 'PENDING' && run.status !== 'RUNNING') {
+    return run;
+  }
+
+  const safeErrorMessage = error ? error.slice(0, 1000) : 'Background job execution failed';
+
+  return await prisma.encryptionMigrationRun.update({
+    where: { id: runId },
+    data: {
+      status: 'FAILED',
+      errorMessage: safeErrorMessage,
+      completedAt: new Date(),
+    },
+  });
+}
