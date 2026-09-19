@@ -18,6 +18,7 @@ import {
   normalizeHostname,
   parseHostname,
   getAuthoritativeRequestHost,
+  getAuthoritativeRequestOrigin,
 } from '@/lib/request-host';
 import { parse as parseDomain } from 'tldts';
 
@@ -761,27 +762,14 @@ export default async function middleware(req: NextRequest) {
   // 4. Canonical host 308 redirection for domain aliases (e.g. opsnite.com -> www.opsnite.com)
   const canonicalHost = getCanonicalApplicationHost(statusConfig?.appHost);
   if (shouldRedirectToCanonicalAppHost(requestHost, canonicalHost, pathname, req.method)) {
-    const canonicalUrl = req.nextUrl.clone();
-    // Preserve request port if non-standard (e.g. port 3100), unless canonical host explicitly defines a port
-    if (canonicalHost.includes(':')) {
-      canonicalUrl.host = canonicalHost;
-    } else {
-      canonicalUrl.hostname = canonicalHost;
-    }
-
-    // Gate forwarded protocol strictly behind TRUST_PROXY_HEADERS
-    let validatedProto = req.nextUrl.protocol.replace(':', '');
-    if (process.env.TRUST_PROXY_HEADERS === 'true') {
-      const forwardedProto = req.headers
-        .get('x-forwarded-proto')
-        ?.split(',')[0]
-        ?.trim()
-        .toLowerCase();
-      if (forwardedProto === 'http' || forwardedProto === 'https') {
-        validatedProto = forwardedProto;
-      }
-    }
-    canonicalUrl.protocol = `${validatedProto}:`;
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const originUrl = new URL(authoritativeOrigin);
+    const targetHost = canonicalHost.includes(':')
+      ? canonicalHost
+      : originUrl.port
+        ? `${canonicalHost}:${originUrl.port}`
+        : canonicalHost;
+    const canonicalUrl = new URL(pathname + req.nextUrl.search, `${originUrl.protocol}//${targetHost}`);
 
     const redirectResponse = NextResponse.redirect(canonicalUrl, { status: 308 });
     Object.entries(securityHeaders).forEach(([key, value]) =>
@@ -792,8 +780,9 @@ export default async function middleware(req: NextRequest) {
 
   // Old mobile reset links remain valid but converge on the single responsive page.
   if (pathname === '/m/reset-password') {
-    const resetUrl = req.nextUrl.clone();
-    resetUrl.pathname = '/reset-password';
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const resetUrl = new URL('/reset-password', authoritativeOrigin);
+    resetUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(resetUrl);
     Object.entries(securityHeaders).forEach(([key, value]) =>
       redirectResponse.headers.set(key, value)
@@ -825,8 +814,9 @@ export default async function middleware(req: NextRequest) {
     );
 
   if (shouldRedirectToMobile && mobileDestination) {
-    const mobileUrl = req.nextUrl.clone();
-    mobileUrl.pathname = mobileDestination;
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const mobileUrl = new URL(mobileDestination, authoritativeOrigin);
+    mobileUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(mobileUrl);
     Object.entries(securityHeaders).forEach(([key, value]) =>
       redirectResponse.headers.set(key, value)
@@ -902,7 +892,8 @@ export default async function middleware(req: NextRequest) {
         req.nextUrl.searchParams.get('callbackUrl'),
         defaultDest
       );
-      const redirectResponse = NextResponse.redirect(new URL(redirectUrl, req.url));
+      const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+      const redirectResponse = NextResponse.redirect(new URL(redirectUrl, authoritativeOrigin));
       Object.entries(securityHeaders).forEach(([key, value]) =>
         redirectResponse.headers.set(key, value)
       );
@@ -913,8 +904,9 @@ export default async function middleware(req: NextRequest) {
 
   if (isPublicPath(pathname)) return response;
 
-  const url = req.nextUrl.clone();
-  url.pathname = pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
+  const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+  const loginPath = pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
+  const url = new URL(loginPath, authoritativeOrigin);
   url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
   const redirectResponse = NextResponse.redirect(url);
   redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');

@@ -347,21 +347,36 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
   test('11. settings domain change via /api/settings/app-url dynamically updates recognized host immediately', async ({
     page,
   }) => {
-    // First, verify current settings via API
-    const currentRes = await page.request.get(`${APP_BASE}/api/settings/app-url`);
-    expect(currentRes.ok()).toBe(true);
-    const currentData = await currentRes.json();
+    // Navigate page to authenticated app origin so browser executes same-origin API calls with session cookies
+    await page.goto(`${APP_BASE}/settings`);
+
+    // First, verify current settings via browser fetch
+    const currentData = await page.evaluate(async () => {
+      const res = await fetch('/api/settings/app-url');
+      if (!res.ok) throw new Error(`GET /api/settings/app-url failed with ${res.status}`);
+      return res.json();
+    });
     expect(currentData.appUrl).toBe(APP_BASE);
 
     // Update Application URL via real API with authenticated session
-    const updateRes = await page.request.post(`${APP_BASE}/api/settings/app-url`, {
-      data: {
-        appUrl: REPLACEMENT_BASE,
-        expectedUpdatedAt: currentData.updatedAt,
+    const updatedData = await page.evaluate(
+      async ({ replacementBase, expectedUpdatedAt }) => {
+        const res = await fetch('/api/settings/app-url', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            appUrl: replacementBase,
+            expectedUpdatedAt,
+          }),
+        });
+        if (!res.ok) throw new Error(`POST /api/settings/app-url failed with ${res.status}`);
+        return res.json();
       },
-    });
-    expect(updateRes.ok()).toBe(true);
-    const updatedData = await updateRes.json();
+      {
+        replacementBase: REPLACEMENT_BASE,
+        expectedUpdatedAt: currentData.updatedAt,
+      }
+    );
     expect(updatedData.success).toBe(true);
     expect(updatedData.appUrl).toBe(REPLACEMENT_BASE);
 
@@ -463,7 +478,23 @@ test.describe.serial('trusted proxy topology lifecycle', () => {
       },
     });
     expect(res.status).toBe(307);
-    expect(res.getHeader('location')).toContain('/login?callbackUrl=%2Fsettings');
+    expect(res.getHeader('location')).toBe(
+      `https://${APP_HOST}/login?callbackUrl=%2Fsettings`
+    );
+  });
+
+  test('SECURITY REGRESSION: trusted proxy redirect strictly uses X-Forwarded-Host origin, NEVER client-controlled Host', async () => {
+    const res = await rawHttpRequest('/settings', {
+      headers: {
+        host: `evil.attacker.test:${PORT}`,
+        'x-forwarded-host': APP_HOST,
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(res.status).toBe(307);
+    const location = res.getHeader('location');
+    expect(location).toBe(`https://${APP_HOST}/login?callbackUrl=%2Fsettings`);
+    expect(location).not.toContain('evil.attacker.test');
   });
 
   test('trusted reverse proxy routes internal Host to status firewall when X-Forwarded-Host is status domain', async () => {

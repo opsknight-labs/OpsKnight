@@ -76,7 +76,9 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       const res = await middleware(req);
 
       expect(res.status).toBe(307);
-      expect(res.headers.get('location')).toContain('/login?callbackUrl=%2Fsettings');
+      expect(res.headers.get('location')).toBe(
+        'https://www.opsnite.com/login?callbackUrl=%2Fsettings'
+      );
     });
 
     it('authenticated GET https://www.opsnite.com/settings => app response', async () => {
@@ -163,6 +165,71 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       const res = await middleware(req);
 
       expect(res.status).toBe(404);
+    });
+
+    it('trusted proxy: unauthenticated protected-route redirect uses authoritative public origin', async () => {
+      vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://internal-app:3000/settings', {
+        headers: {
+          host: 'internal-app:3000',
+          'x-forwarded-host': 'www.opsnite.com',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe(
+        'https://www.opsnite.com/login?callbackUrl=%2Fsettings'
+      );
+    });
+
+    it('SECURITY REGRESSION: redirect strictly uses X-Forwarded-Host origin, NEVER client-controlled Host header', async () => {
+      vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://evil.attacker.test:3000/settings', {
+        headers: {
+          host: 'evil.attacker.test:3000',
+          'x-forwarded-host': 'www.opsnite.com',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(307);
+      const location = res.headers.get('location');
+      expect(location).toBe('https://www.opsnite.com/login?callbackUrl=%2Fsettings');
+      expect(location).not.toContain('evil.attacker.test');
+    });
+
+    it('trusted proxy: authenticated login redirect uses authoritative public origin', async () => {
+      vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
+      setupStatusServingMocks();
+      const { getToken } = await import('next-auth/jwt');
+      vi.mocked(getToken).mockResolvedValueOnce({
+        sub: 'admin-1',
+        email: 'admin@opsnite.com',
+        role: 'ADMIN',
+      });
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://internal-app:3000/login?callbackUrl=%2Fsettings', {
+        headers: {
+          host: 'internal-app:3000',
+          'x-forwarded-host': 'www.opsnite.com',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe('https://www.opsnite.com/settings');
     });
   });
 
