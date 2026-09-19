@@ -7,10 +7,21 @@ export const gdprRequirements: readonly FrameworkRequirement[] = [
     reference: 'Article 32',
     title: 'Security of Processing',
     summary:
-      'Requires implementation of appropriate technical and organizational measures to ensure a level of security appropriate to risk, including encryption of personal data, continuous confidentiality, integrity, availability, and resilience of processing systems, restoration capabilities, and regular testing.',
+      'Requires implementation of appropriate technical and organizational measures to protect personal data against security risks, including encryption of personal data, ongoing confidentiality, integrity, availability, and resilience of processing systems, restoration capabilities, and regular evaluation.',
     sourceUrl: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
     lifecycle: 'ACTIVE',
     applicability: 'SHARED',
+  },
+  {
+    id: 'GDPR-ART-13',
+    framework: 'GDPR',
+    reference: 'Article 13 & 14',
+    title: 'Transparency and Privacy Notice',
+    summary:
+      'Controllers must provide transparent information regarding the identity of the controller, processing purposes, legal bases, recipients, and data subject rights at the time personal data are obtained.',
+    sourceUrl: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
+    lifecycle: 'ACTIVE',
+    applicability: 'ORGANIZATION',
   },
   {
     id: 'GDPR-ART-15',
@@ -41,6 +52,17 @@ export const gdprRequirements: readonly FrameworkRequirement[] = [
     title: 'Storage Limitation Principle',
     summary:
       'Mandates that personal data must be kept in a form which permits identification of data subjects for no longer than is necessary for the purposes for which the personal data are processed.',
+    sourceUrl: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
+    lifecycle: 'ACTIVE',
+    applicability: 'SHARED',
+  },
+  {
+    id: 'GDPR-ART-5-1-C',
+    framework: 'GDPR',
+    reference: 'Article 5(1)(c)',
+    title: 'Data Minimization Principle',
+    summary:
+      'Personal data must be adequate, relevant, and limited to what is necessary in relation to the purposes for which they are processed.',
     sourceUrl: 'https://eur-lex.europa.eu/eli/reg/2016/679/oj',
     lifecycle: 'ACTIVE',
     applicability: 'SHARED',

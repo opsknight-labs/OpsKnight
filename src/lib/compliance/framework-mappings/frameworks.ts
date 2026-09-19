@@ -44,13 +44,14 @@ export const COMPLIANCE_FRAMEWORK_DEFINITIONS: readonly ComplianceFrameworkDefin
   },
   {
     id: 'ISO27701',
-    title: 'ISO/IEC 27701:2025',
-    version: 'ISO/IEC 27701:2025',
+    title: 'ISO/IEC 27701:2019',
+    version: 'ISO/IEC 27701:2019',
     jurisdiction: 'International',
     frameworkType: 'STANDARD',
     authoritativeSource: 'ISO',
-    sourceUrl: 'https://www.iso.org/standard/27701',
-    notes: 'International standard for Privacy Information Management Systems (PIMS).',
+    sourceUrl: 'https://www.iso.org/standard/71670.html',
+    notes:
+      'ISO/IEC 27701:2019 (Edition 1) PIMS standard. Clause mappings reference the 2019 structure (clauses 6-7). Transition to Edition 2 (ISO/IEC 27701:2025) will take place once licensed Annex A control tables are formally mapped.',
   },
   {
     id: 'DPDP',

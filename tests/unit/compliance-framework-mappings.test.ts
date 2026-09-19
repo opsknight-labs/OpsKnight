@@ -61,25 +61,50 @@ describe('framework mapping engine (unit)', () => {
   });
 
   it('resolves DPDP lifecycle dynamically based on reference dates', () => {
-    const dpdpRetentionReq = getFrameworkRequirement('DPDP-RETENTION-SPECIFIED');
-    expect(dpdpRetentionReq).toBeDefined();
-    expect(dpdpRetentionReq?.effectiveFrom).toBe('2026-11-13');
+    const dpdpReqIds = [
+      'DPDP-SECURITY-SAFEGUARDS',
+      'DPDP-RETENTION-SPECIFIED',
+      'DPDP-ERASURE',
+      'DPDP-GRIEVANCE-REDRESSAL',
+    ] as const;
 
-    // Prior to commencement date
     const beforeDate = new Date('2026-09-19T00:00:00Z');
-    expect(resolveRequirementLifecycle(dpdpRetentionReq!, beforeDate)).toBe('FUTURE');
+    const afterDate = new Date('2027-06-01T00:00:00Z');
 
-    // After commencement date
-    const afterDate = new Date('2026-11-20T00:00:00Z');
-    expect(resolveRequirementLifecycle(dpdpRetentionReq!, afterDate)).toBe('ACTIVE');
+    for (const id of dpdpReqIds) {
+      const req = getFrameworkRequirement(id);
+      expect(req).toBeDefined();
+      expect(req?.effectiveFrom).toBe('2027-05-13');
+      expect(resolveRequirementLifecycle(req!, beforeDate)).toBe('FUTURE');
+      expect(resolveRequirementLifecycle(req!, afterDate)).toBe('ACTIVE');
+    }
+  });
 
-    // Grievance redressal (18-month staged commencement: 2027-05-13)
-    const grievanceReq = getFrameworkRequirement('DPDP-GRIEVANCE-REDRESSAL');
-    expect(grievanceReq?.effectiveFrom).toBe('2027-05-13');
-    expect(resolveRequirementLifecycle(grievanceReq!, beforeDate)).toBe('FUTURE');
-    expect(resolveRequirementLifecycle(grievanceReq!, new Date('2027-06-01T00:00:00Z'))).toBe(
-      'ACTIVE'
-    );
+  it('resolves CRA lifecycle dynamically distinguishing Article 14 from substantive obligations', () => {
+    const art14 = getFrameworkRequirement('CRA-ART-14-REPORTING');
+    expect(art14).toBeDefined();
+    expect(art14?.effectiveFrom).toBe('2026-09-11');
+
+    // Article 14 active today (post 11 Sep 2026)
+    const today = new Date('2026-09-19T00:00:00Z');
+    expect(resolveRequirementLifecycle(art14!, today)).toBe('ACTIVE');
+    expect(resolveRequirementLifecycle(art14!, new Date('2026-08-01T00:00:00Z'))).toBe('FUTURE');
+
+    // Substantive obligations (Annex I, SBOM, Vuln Handling, Support) apply from 2027-12-11
+    const substantiveIds = [
+      'CRA-ANNEX-I-SECURITY',
+      'CRA-VULN-HANDLING',
+      'CRA-SBOM-DOCUMENTATION',
+      'CRA-SUPPORT-LIFECYCLE',
+    ] as const;
+
+    for (const id of substantiveIds) {
+      const req = getFrameworkRequirement(id);
+      expect(req).toBeDefined();
+      expect(req?.effectiveFrom).toBe('2027-12-11');
+      expect(resolveRequirementLifecycle(req!, today)).toBe('FUTURE');
+      expect(resolveRequirementLifecycle(req!, new Date('2028-01-01T00:00:00Z'))).toBe('ACTIVE');
+    }
   });
 
   it('computes factual framework inventory counts without scores or percentages', () => {
@@ -106,6 +131,8 @@ describe('framework mapping engine (unit)', () => {
             return Promise.resolve({
               controlId: 'SEC-ENC-001',
               status: 'IMPLEMENTED',
+              evaluatorId: 'encryption.at-rest',
+              evaluatorVersion: '1',
               summary: 'Stored-secret verification passed.',
               evaluatedAt: new Date('2026-09-19T12:00:00Z'),
               latestEvaluationId: 'eval-enc-1',
@@ -116,6 +143,8 @@ describe('framework mapping engine (unit)', () => {
             return Promise.resolve({
               controlId: 'SEC-AUTHZ-001',
               status: 'ACTION_REQUIRED',
+              evaluatorId: 'authorization.rbac',
+              evaluatorVersion: '1',
               summary: 'Authorization policy review required.',
               evaluatedAt: new Date('2026-09-19T13:00:00Z'),
               latestEvaluationId: 'eval-authz-1',
@@ -148,6 +177,67 @@ describe('framework mapping engine (unit)', () => {
     const detailViewObj = detailView as unknown as Record<string, unknown>;
     expect(detailViewObj.status).toBeUndefined();
     expect(detailViewObj.compliance).toBeUndefined();
+  });
+
+  it('resolves runtime status to UNVERIFIED if evaluation validUntil is expired', async () => {
+    const mockPrisma = {
+      complianceControlState: {
+        findUnique: () =>
+          Promise.resolve({
+            controlId: 'SEC-ENC-001',
+            status: 'IMPLEMENTED',
+            evaluatorId: 'encryption.at-rest',
+            evaluatorVersion: '1',
+            summary: 'Stored-secret verification passed.',
+            evaluatedAt: new Date('2026-09-18T12:00:00Z'),
+            latestEvaluationId: 'eval-enc-old',
+            validUntil: new Date('2026-09-19T10:00:00Z'), // Expired relative to query time below
+          }),
+      },
+      complianceEvidence: {
+        findMany: () => Promise.resolve([]),
+      },
+    };
+
+    const detailView = await getFrameworkRequirementDetailView('GDPR-ART-32', {
+      prisma: mockPrisma as never,
+      now: new Date('2026-09-19T12:00:00Z'),
+    });
+
+    const encMapping = detailView?.mappings.find(m => m.controlId === 'SEC-ENC-001');
+    expect(encMapping?.runtimeState?.status).toBe('UNVERIFIED');
+    expect(encMapping?.runtimeState?.summary).toContain('Evaluation validity expired');
+    expect(encMapping?.runtimeState?.isVersionCurrent).toBe(false);
+  });
+
+  it('resolves runtime status to UNVERIFIED if evaluatorVersion does not match current evaluator', async () => {
+    const mockPrisma = {
+      complianceControlState: {
+        findUnique: () =>
+          Promise.resolve({
+            controlId: 'SEC-ENC-001',
+            status: 'IMPLEMENTED',
+            evaluatorId: 'encryption.at-rest',
+            evaluatorVersion: '0', // Current active version is '1'
+            summary: 'Stored-secret verification passed under older evaluator.',
+            evaluatedAt: new Date('2026-09-19T12:00:00Z'),
+            latestEvaluationId: 'eval-enc-v0',
+            validUntil: null,
+          }),
+      },
+      complianceEvidence: {
+        findMany: () => Promise.resolve([]),
+      },
+    };
+
+    const detailView = await getFrameworkRequirementDetailView('GDPR-ART-32', {
+      prisma: mockPrisma as never,
+    });
+
+    const encMapping = detailView?.mappings.find(m => m.controlId === 'SEC-ENC-001');
+    expect(encMapping?.runtimeState?.status).toBe('UNVERIFIED');
+    expect(encMapping?.runtimeState?.summary).toContain('Evaluator version changed');
+    expect(encMapping?.runtimeState?.isVersionCurrent).toBe(false);
   });
 
   it('returns control framework mappings view for control detail pages', () => {

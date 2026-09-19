@@ -9,7 +9,7 @@ export const iso27001Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Federated OIDC identity authentication provides technical access control evidence satisfying A.5.15 and A.8.2 requirements.',
+      'Federated OIDC identity authentication provides technical access control evidence relevant to A.5.15 and A.8.2 requirements.',
   },
   {
     id: 'ISO27001-A-SECAUTHZ001',
@@ -19,7 +19,7 @@ export const iso27001Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Centralized capability mapping restricts operational privilege and satisfies least-privilege access rules.',
+      'Centralized capability mapping restricts operational privilege in support of least-privilege access rules.',
   },
   {
     id: 'ISO27001-A-SECSESSION001',
@@ -38,7 +38,7 @@ export const iso27001Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'AES-256-GCM envelope encryption and key verification demonstrate compliance with Control A.8.24 cryptographic rules.',
+      'AES-256-GCM envelope encryption and key verification contribute technical evidence for Control A.8.24 cryptography.',
   },
   {
     id: 'ISO27001-A-SECSBOM001',
@@ -48,7 +48,7 @@ export const iso27001Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Software bill of materials provides component transparency satisfying secure development controls in A.8.25.',
+      'Software bill of materials provides component transparency supporting secure development controls in A.8.25.',
   },
   {
     id: 'ISO27001-A-SECSAST001',
@@ -58,7 +58,7 @@ export const iso27001Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Static code analysis integrated into CI enforces security coding standards prior to production release.',
+      'Static code analysis integrated into CI scans for security patterns during development cycles.',
   },
   {
     id: 'ISO27001-A-SECSCA001',
@@ -78,7 +78,7 @@ export const iso27001Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Secret detection pre-commit and CI gates safeguard against hardcoded credentials in application sources.',
+      'Secret detection hooks inspect commits to identify unencrypted credentials in application source trees.',
   },
   {
     id: 'ISO27001-A-CRAVULN001',
@@ -128,6 +128,6 @@ export const iso27001Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Audit log generation provides activity records fulfilling Control A.8.15 logging requirements.',
+      'Audit log generation records administrative activity, supporting Control A.8.15 logging objectives.',
   },
 ] as const;

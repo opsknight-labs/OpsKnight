@@ -109,19 +109,59 @@ describe('compliance framework mappings architecture contract', () => {
   });
 
   it('strictly forbids compliance pass/fail, percentage or certification wording in models', () => {
-    const forbiddenKeywords = ['COMPLIANT', 'CERTIFIED', 'PASSED', 'FAILED'];
+    const forbiddenEnums = ['COMPLIANT', 'CERTIFIED', 'PASSED', 'FAILED'];
 
     for (const mapping of ALL_FRAMEWORK_CONTROL_MAPPINGS) {
-      for (const kw of forbiddenKeywords) {
+      for (const kw of forbiddenEnums) {
         expect(mapping.relationship).not.toContain(kw);
         expect(mapping.evidenceExpectation).not.toContain(kw);
       }
     }
 
     for (const req of ALL_FRAMEWORK_REQUIREMENTS) {
-      for (const kw of forbiddenKeywords) {
+      for (const kw of forbiddenEnums) {
         expect(req.lifecycle).not.toContain(kw);
         expect(req.applicability).not.toContain(kw);
+      }
+    }
+
+    const forbiddenPatterns = [
+      /\bsatisf(y|ies|ied|ying)\b/i,
+      /\bcertif(y|ies|ied|ying|icate|ication|ications)\b/i,
+      /\bprevent(s|ed|ing)?\b/i,
+      /\btamper-resistant\b/i,
+      /\bimmutable\b/i,
+      /\bguarantee(s|d)?\b/i,
+      /\bcompliant\b/i,
+    ];
+
+    for (const mapping of ALL_FRAMEWORK_CONTROL_MAPPINGS) {
+      for (const pattern of forbiddenPatterns) {
+        expect(
+          pattern.test(mapping.rationale),
+          `Mapping "${mapping.id}" rationale contains forbidden pattern ${pattern}: "${mapping.rationale}"`
+        ).toBe(false);
+
+        if (mapping.notes) {
+          expect(
+            pattern.test(mapping.notes),
+            `Mapping "${mapping.id}" notes contain forbidden pattern ${pattern}: "${mapping.notes}"`
+          ).toBe(false);
+        }
+      }
+    }
+
+    for (const req of ALL_FRAMEWORK_REQUIREMENTS) {
+      for (const pattern of forbiddenPatterns) {
+        expect(
+          pattern.test(req.title),
+          `Requirement "${req.id}" title contains forbidden pattern ${pattern}: "${req.title}"`
+        ).toBe(false);
+
+        expect(
+          pattern.test(req.summary),
+          `Requirement "${req.id}" summary contains forbidden pattern ${pattern}: "${req.summary}"`
+        ).toBe(false);
       }
     }
   });

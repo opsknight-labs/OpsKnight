@@ -81,14 +81,17 @@ Mappings define how a technical control relates to a framework requirement:
 - **Evidence Expectation**: `RUNTIME`, `REPOSITORY`, `OPERATOR`, or `ORGANIZATIONAL`.
 - **Rationale**: Human-readable technical explanation of what the control demonstrates and its explicit limitations.
 
-### 4. Dynamic Lifecycle & DPDP Staged Commencement
+### 4. Dynamic Lifecycle & Staged Commencement
 
 The `resolveRequirementLifecycle(requirement, now)` function dynamically evaluates whether a requirement is active, future-effective, or superseded:
 
 - **DPDP Act 2023 & Draft Rules 2025**:
-  - Security safeguards (`DPDP-SECURITY-SAFEGUARDS`) and erasure upon withdrawal (`DPDP-ERASURE`): `ACTIVE` immediately upon rule notification.
-  - Specified retention period (`DPDP-RETENTION-SPECIFIED`, Rule 4): Staged commencement 1 year post-notification (`2026-11-13`). Dynamically resolves to `FUTURE` prior to commencement and `ACTIVE` afterward.
-  - Grievance redressal timelines (`DPDP-GRIEVANCE-REDRESSAL`, Rule 14): Staged commencement 18 months post-notification (`2027-05-13`). Dynamically resolves to `FUTURE` prior to commencement and `ACTIVE` afterward.
+  - Under the 18-month staged commencement timeline (effective `2027-05-13`), all substantive requirements—reasonable security safeguards (`DPDP-SECURITY-SAFEGUARDS`, Section 8(5) & Rule 6), erasure upon purpose completion or consent withdrawal (`DPDP-RETENTION-SPECIFIED`, Section 8 & Rule 8), correction and erasure rights (`DPDP-ERASURE`, Section 12(3)), and grievance redressal mechanisms (`DPDP-GRIEVANCE-REDRESSAL`, Section 13 & Rule 14)—dynamically resolve to `FUTURE` prior to `2027-05-13` and `ACTIVE` on or after that date.
+- **CRA (Regulation (EU) 2024/2847)**:
+  - Incident & Vulnerability Reporting (`CRA-ART-14-REPORTING`, Article 14): In effect from `2026-09-11` (`ACTIVE`).
+  - Substantive Product Obligations (`CRA-ANNEX-I-SECURITY`, `CRA-VULN-HANDLING`, `CRA-SBOM-DOCUMENTATION`, `CRA-SUPPORT-LIFECYCLE`): Apply 36 months after entry into force on `2027-12-11` (Article 71). Dynamically resolve to `FUTURE` prior to `2027-12-11` and `ACTIVE` thereafter.
+- **ISO/IEC 27701:2019 Alignment**:
+  - Requirements reference official clauses of `ISO/IEC 27701:2019` (clauses 6.5, 7.2.8, 7.3.2, 7.4.2) with direct links to `iso.org`. Edition 2 (2025) Annex A mapping transition is documented as pending licensed text verification of Annex A control cross-reference tables.
 
 ### 5. Canonical Fingerprint
 

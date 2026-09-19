@@ -16,10 +16,10 @@ export const ccpaMappings: readonly FrameworkControlMapping[] = [
     framework: 'CCPA',
     requirementId: 'CCPA-RIGHT-TO-KNOW',
     controlId: 'PRIV-001',
-    relationship: 'PROCESS_SUPPORT',
-    evidenceExpectation: 'REPOSITORY',
+    relationship: 'ORGANIZATIONAL_DEPENDENCY',
+    evidenceExpectation: 'OPERATOR',
     rationale:
-      'Privacy request management workflow provides verification and processing tracking for consumer Right to Know submissions.',
+      'Deployment privacy notice documentation provides Notice at Collection disclosures detailing personal information categories and consumer rights mechanisms.',
   },
   {
     id: 'CCPA-DELETE-PRIVERASURE001',
@@ -29,17 +29,17 @@ export const ccpaMappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Automated personal data erasure engine provides technical evidence executing permanent consumer data deletion across registered domains.',
+      'Automated personal data erasure engine provides technical evidence executing permanent consumer data deletion across registered domains upon verified request.',
   },
   {
-    id: 'CCPA-DELETE-PRIV002',
+    id: 'CCPA-RET-PRIV002',
     framework: 'CCPA',
-    requirementId: 'CCPA-RIGHT-TO-DELETE',
+    requirementId: 'CCPA-RETENTION-LIMITATION',
     controlId: 'PRIV-002',
-    relationship: 'PROCESS_SUPPORT',
-    evidenceExpectation: 'REPOSITORY',
+    relationship: 'ORGANIZATIONAL_DEPENDENCY',
+    evidenceExpectation: 'ORGANIZATIONAL',
     rationale:
-      'Legal hold management ensures statutory deletion exceptions (e.g. security incident detection or legal compliance) prevent unintended deletion.',
+      'Data minimization reviews support proportionality principles by evaluating whether collected incident attributes remain reasonably necessary for operational purposes.',
   },
   {
     id: 'CCPA-RET-SECRETENTION001',
@@ -49,6 +49,6 @@ export const ccpaMappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Automated retention policy enforcement provides technical evidence demonstrating data is not retained longer than reasonably necessary for disclosed purposes.',
+      'Automated retention policy enforcement provides technical evidence supporting data retention limitation and proportionality rules.',
   },
 ] as const;

@@ -102,45 +102,61 @@ export function FrameworkRequirementsModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isOpen || !frameworkId) {
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
       setData(null);
       setError(null);
+      setIsLoading(false);
+      onClose();
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen || !frameworkId) {
       return;
     }
 
+    const abortController = new AbortController();
     let isMounted = true;
-    setIsLoading(true);
-    setError(null);
 
-    fetch(`/api/compliance/frameworks/${frameworkId}/requirements`)
-      .then(async res => {
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.error || `Failed to fetch requirements (${res.status})`);
-        }
-        return res.json();
+    const timer = setTimeout(() => {
+      if (!isMounted) return;
+      setIsLoading(true);
+      setError(null);
+
+      fetch(`/api/compliance/frameworks/${frameworkId}/requirements`, {
+        signal: abortController.signal,
       })
-      .then(resData => {
-        if (isMounted) {
-          setData(resData);
-          setIsLoading(false);
-        }
-      })
-      .catch(err => {
-        if (isMounted) {
-          setError(err.message || 'Failed to load framework requirements');
-          setIsLoading(false);
-        }
-      });
+        .then(async res => {
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.error || `Failed to fetch requirements (${res.status})`);
+          }
+          return res.json();
+        })
+        .then(resData => {
+          if (isMounted) {
+            setData(resData);
+            setIsLoading(false);
+          }
+        })
+        .catch(err => {
+          if (isMounted && !abortController.signal.aborted) {
+            setError(err.message || 'Failed to load framework requirements');
+            setIsLoading(false);
+          }
+        });
+    }, 0);
 
     return () => {
       isMounted = false;
+      clearTimeout(timer);
+      abortController.abort();
     };
   }, [isOpen, frameworkId]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-2">
           {data?.framework ? (

@@ -15,6 +15,7 @@ import {
   getMappingsForControl,
 } from './registry';
 import { resolveRequirementLifecycle } from './lifecycle';
+import { resolveComplianceRuntimeState } from '../state';
 import { verifyComplianceEvidenceHash } from '../evidence/hash';
 
 export interface QueryOptions {
@@ -121,12 +122,16 @@ export async function getFrameworkRequirementDetailView(
         });
 
         if (stateRecord) {
-          runtimeState = {
-            status: stateRecord.status,
-            summary: stateRecord.summary,
-            evaluatedAt: stateRecord.evaluatedAt.toISOString(),
-            validUntil: stateRecord.validUntil ? stateRecord.validUntil.toISOString() : null,
-          };
+          const resolved = resolveComplianceRuntimeState(control, stateRecord, now);
+          if (resolved) {
+            runtimeState = {
+              status: resolved.status,
+              summary: resolved.summary,
+              evaluatedAt: resolved.evaluatedAt.toISOString(),
+              validUntil: resolved.validUntil ? resolved.validUntil.toISOString() : null,
+              isVersionCurrent: resolved.isVersionCurrent,
+            };
+          }
 
           if (stateRecord.latestEvaluationId) {
             const evidenceRecords = await prisma.complianceEvidence.findMany({

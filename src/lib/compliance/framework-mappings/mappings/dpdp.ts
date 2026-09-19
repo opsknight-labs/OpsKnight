@@ -9,7 +9,7 @@ export const dpdpMappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Encrypted personal data export generation provides technical evidence of reasonable security safeguards during data extraction and handling.',
+      'Encrypted personal data export generation provides technical evidence supporting security safeguards during data extraction and handling.',
   },
   {
     id: 'DPDP-ERASURE-PRIVERASURE001',
@@ -19,17 +19,17 @@ export const dpdpMappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Automated personal data erasure engine provides technical evidence supporting fulfillment of Section 12(3) Data Principal erasure requests.',
+      'Automated personal data erasure workflow provides technical evidence supporting fulfillment of Section 12(3) Data Principal erasure requests.',
   },
   {
     id: 'DPDP-ERASURE-PRIV001',
     framework: 'DPDP',
     requirementId: 'DPDP-ERASURE',
     controlId: 'PRIV-001',
-    relationship: 'PROCESS_SUPPORT',
-    evidenceExpectation: 'REPOSITORY',
+    relationship: 'ORGANIZATIONAL_DEPENDENCY',
+    evidenceExpectation: 'OPERATOR',
     rationale:
-      'Privacy request management provides administrative tracking for processing and resolving erasure requests from Data Principals.',
+      'Deployment privacy notice provides disclosures to Data Principals describing available erasure request mechanisms and organizational contacts.',
   },
   {
     id: 'DPDP-RET-SECRETENTION001',
@@ -39,16 +39,16 @@ export const dpdpMappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Configurable retention policies and automated cleanup provide technical controls ready to enforce Rule 4 erasure upon purpose completion once operative.',
+      'Configurable retention policies and automated cleanup provide technical controls supporting Rule 8 erasure obligations upon purpose completion.',
   },
   {
     id: 'DPDP-RET-PRIV002',
     framework: 'DPDP',
     requirementId: 'DPDP-RETENTION-SPECIFIED',
     controlId: 'PRIV-002',
-    relationship: 'PROCESS_SUPPORT',
-    evidenceExpectation: 'REPOSITORY',
+    relationship: 'ORGANIZATIONAL_DEPENDENCY',
+    evidenceExpectation: 'ORGANIZATIONAL',
     rationale:
-      'Legal hold management ensures preservation overrides prevent premature data destruction where ongoing legal proceedings require retention.',
+      'Data minimization reviews support purpose limitation by evaluating stored incident and profile attributes against operational necessity.',
   },
 ] as const;

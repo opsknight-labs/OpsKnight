@@ -9,7 +9,7 @@ export const soc2Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'OIDC federated authentication enforces identity binding before granting access to system assets.',
+      'OIDC federated authentication supports identity binding before granting access to system assets.',
   },
   {
     id: 'SOC2-CC6-SECAUTHZ001',
@@ -29,17 +29,7 @@ export const soc2Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Session lifetime bounds and token-version invalidation ensure prompt revocation of terminated sessions.',
-  },
-  {
-    id: 'SOC2-CC6-SECRETENTION001',
-    framework: 'SOC2',
-    requirementId: 'SOC2-CC6-LOGICAL-ACCESS',
-    controlId: 'SEC-RETENTION-001',
-    relationship: 'TECHNICAL_EVIDENCE',
-    evidenceExpectation: 'RUNTIME',
-    rationale:
-      'Configurable data retention policies ensure logical records are pruned when no longer required.',
+      'Session lifetime bounds and token-version invalidation support timely revocation of terminated sessions.',
   },
   {
     id: 'SOC2-CC6-SECENC001',
@@ -79,7 +69,7 @@ export const soc2Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'SBOM validation certifies all software components incorporated during change cycles are catalogued.',
+      'SBOM generation and schema validation document software components incorporated during change cycles.',
   },
   {
     id: 'SOC2-CC8-SECSAST001',
@@ -89,7 +79,7 @@ export const soc2Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Automated code scanning prevents unverified vulnerabilities from advancing through deployment pipelines.',
+      'Automated code scanning inspects changes for known vulnerability patterns during deployment pipelines.',
   },
   {
     id: 'SOC2-CC8-SECSCA001',
@@ -99,7 +89,7 @@ export const soc2Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
     rationale:
-      'Continuous SCA scanning gates dependency changes against known security vulnerabilities.',
+      'Software composition analysis scans dependencies against known security vulnerabilities.',
   },
   {
     id: 'SOC2-CC8-SECSECRETS001',
@@ -108,8 +98,7 @@ export const soc2Mappings: readonly FrameworkControlMapping[] = [
     controlId: 'SEC-SECRETS-001',
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'REPOSITORY',
-    rationale:
-      'Secret detection hooks prevent unencrypted secrets from being committed into release artifacts.',
+    rationale: 'Secret detection hooks inspect commits to detect unencrypted credentials.',
   },
   {
     id: 'SOC2-CC8-CRASUPPORT001',
@@ -140,15 +129,5 @@ export const soc2Mappings: readonly FrameworkControlMapping[] = [
     evidenceExpectation: 'OPERATOR',
     rationale:
       'Database restoration documentation enables recovery; operator must execute periodic restoration drills.',
-  },
-  {
-    id: 'SOC2-A1-PRIVHOLD001',
-    framework: 'SOC2',
-    requirementId: 'SOC2-A1-AVAILABILITY',
-    controlId: 'PRIV-HOLD-001',
-    relationship: 'TECHNICAL_EVIDENCE',
-    evidenceExpectation: 'RUNTIME',
-    rationale:
-      'Legal hold protection prevents accidental or malicious loss of records required for ongoing availability obligations.',
   },
 ] as const;

@@ -78,6 +78,7 @@ export interface FrameworkRequirementView {
       readonly summary: string;
       readonly evaluatedAt: string;
       readonly validUntil?: string | null;
+      readonly isVersionCurrent?: boolean;
     };
     readonly evidenceSummary?: {
       readonly latestObservedAt: string;

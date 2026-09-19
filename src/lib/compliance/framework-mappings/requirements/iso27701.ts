@@ -7,8 +7,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     reference: 'Clause 6.5',
     title: 'Information Security Safeguards for PII',
     summary:
-      'Organizations acting as PII controllers must implement technical safeguards, access boundaries, and transmission protections to safeguard personally identifiable information.',
-    sourceUrl: 'https://www.iso.org/standard/27701',
+      'Organizations acting as PII controllers must implement technical safeguards, access boundaries, and transmission protections to safeguard personally identifiable information under ISO/IEC 27701:2019.',
+    sourceUrl: 'https://www.iso.org/standard/71670.html',
     lifecycle: 'ACTIVE',
     applicability: 'SHARED',
   },
@@ -18,8 +18,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     reference: 'Clause 7.2.8',
     title: 'PII Retention and Disposal',
     summary:
-      'Organizations must define retention schedules and ensure personal data is securely destroyed or de-identified when retention periods expire, unless legal holds require preservation.',
-    sourceUrl: 'https://www.iso.org/standard/27701',
+      'Organizations must define retention schedules and ensure personal data is securely destroyed or de-identified when retention periods expire, unless legal holds require preservation under ISO/IEC 27701:2019.',
+    sourceUrl: 'https://www.iso.org/standard/71670.html',
     lifecycle: 'ACTIVE',
     applicability: 'SHARED',
   },
@@ -29,8 +29,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     reference: 'Clause 7.3.2, 7.3.3',
     title: 'Obligations to PII Principals (Access and Erasure)',
     summary:
-      'Organizations must provide mechanisms to enable PII principals to access, correct, and request erasure of their personal data in a timely manner.',
-    sourceUrl: 'https://www.iso.org/standard/27701',
+      'Organizations must provide mechanisms to enable PII principals to access, correct, and request erasure of their personal data in a timely manner under ISO/IEC 27701:2019.',
+    sourceUrl: 'https://www.iso.org/standard/71670.html',
     lifecycle: 'ACTIVE',
     applicability: 'SHARED',
   },
@@ -40,8 +40,8 @@ export const iso27701Requirements: readonly FrameworkRequirement[] = [
     reference: 'Clause 7.4.2',
     title: 'Privacy by Design and Default',
     summary:
-      'Systems and processing mechanisms are designed to collect and retain only the minimum necessary personal data and protect confidentiality by default.',
-    sourceUrl: 'https://www.iso.org/standard/27701',
+      'Systems and processing mechanisms are designed to collect and retain only the minimum necessary personal data and protect confidentiality by default under ISO/IEC 27701:2019.',
+    sourceUrl: 'https://www.iso.org/standard/71670.html',
     lifecycle: 'ACTIVE',
     applicability: 'PRODUCT',
   },

@@ -9,17 +9,7 @@ export const iso27701Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Scheduled data retention enforcement satisfies PII retention disposal controls in Clause 7.2.8.',
-  },
-  {
-    id: 'ISO27701-RET-PRIV002',
-    framework: 'ISO27701',
-    requirementId: 'ISO27701-RETENTION-DISPOSAL',
-    controlId: 'PRIV-002',
-    relationship: 'PROCESS_SUPPORT',
-    evidenceExpectation: 'REPOSITORY',
-    rationale:
-      'Legal hold exception handling ensures PII preservation obligations override scheduled disposal.',
+      'Scheduled data retention cleanup provides technical evidence relevant to PII retention and disposal practices under Clause 7.2.8.',
   },
   {
     id: 'ISO27701-RET-PRIVHOLD001',
@@ -29,17 +19,17 @@ export const iso27701Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Runtime hold checks protect against accidental deletion of PII subject to statutory hold rules.',
+      'Runtime legal hold checks provide evidence that active preservation orders suspend automated disposal.',
   },
   {
     id: 'ISO27701-SUBJ-PRIV001',
     framework: 'ISO27701',
     requirementId: 'ISO27701-PII-SUBJECT-RIGHTS',
     controlId: 'PRIV-001',
-    relationship: 'PROCESS_SUPPORT',
-    evidenceExpectation: 'REPOSITORY',
+    relationship: 'ORGANIZATIONAL_DEPENDENCY',
+    evidenceExpectation: 'OPERATOR',
     rationale:
-      'Privacy request tracking workflow facilitates fulfillment of PII principal access and correction requests.',
+      'Deployment privacy notice provides disclosures regarding personal data collection, processing purposes, and principal rights mechanisms.',
   },
   {
     id: 'ISO27701-SUBJ-PRIVERASURE001',
@@ -49,7 +39,7 @@ export const iso27701Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Automated personal data erasure engine executes permanent disposal across registered data domains.',
+      'Automated personal data erasure workflow supports fulfillment of PII principal erasure requests under Clause 7.3.3.',
   },
   {
     id: 'ISO27701-SUBJ-PRIVEXPORT001',
@@ -59,6 +49,16 @@ export const iso27701Mappings: readonly FrameworkControlMapping[] = [
     relationship: 'TECHNICAL_EVIDENCE',
     evidenceExpectation: 'RUNTIME',
     rationale:
-      'Encrypted personal data export enables fulfillment of PII principal access and data portability requests.',
+      'Encrypted personal data export supports fulfillment of PII principal access and data portability requests under Clause 7.3.2.',
+  },
+  {
+    id: 'ISO27701-PBD-PRIV002',
+    framework: 'ISO27701',
+    requirementId: 'ISO27701-PRIVACY-BY-DESIGN',
+    controlId: 'PRIV-002',
+    relationship: 'ORGANIZATIONAL_DEPENDENCY',
+    evidenceExpectation: 'ORGANIZATIONAL',
+    rationale:
+      'Data minimization reviews support Clause 7.4.2 by evaluating whether collected incident payloads and user attributes remain strictly necessary.',
   },
 ] as const;
