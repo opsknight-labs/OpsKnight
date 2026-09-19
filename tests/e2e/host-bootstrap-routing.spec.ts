@@ -91,20 +91,20 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
   test('2. bootstrap exception allows /setup on unknown host but rejects all other app routes with 421', async ({
     page,
   }) => {
-    // /setup is permitted on an unknown host during initial bootstrap
+    // GET /setup is permitted on an unknown host during initial bootstrap
     const setupRes = await page.goto(`${APP_BASE}/setup`);
     expect(setupRes?.status()).toBe(200);
     await expect(page.getByText('System initialization')).toBeVisible();
 
-    // /login is rejected with 421 Misdirected Request
+    // GET /login is rejected with 421 Misdirected Request
     const loginRes = await page.goto(`${APP_BASE}/login`);
     expect(loginRes?.status()).toBe(421);
 
-    // /users is rejected with 421
+    // GET /users is rejected with 421
     const usersRes = await page.goto(`${APP_BASE}/users`);
     expect(usersRes?.status()).toBe(421);
 
-    // /settings is rejected with 421
+    // GET /settings is rejected with 421
     const settingsRes = await page.goto(`${APP_BASE}/settings`);
     expect(settingsRes?.status()).toBe(421);
 
@@ -164,8 +164,8 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     await expect(page.getByText('Administrator created')).toBeVisible({ timeout: 20_000 });
   });
 
-  test('5. bootstrap automatically seeds SystemSettings.appUrl and marks capability used', async () => {
-    // SystemSettings.appUrl is seeded with the request URL used during setup
+  test('5. bootstrap automatically seeds SystemSettings.appUrl preserving protocol and port', async () => {
+    // SystemSettings.appUrl is seeded with the exact origin: scheme + hostname + port
     const settings = await prisma.systemSettings.findUnique({ where: { id: 'default' } });
     expect(settings?.appUrl).toBe(APP_BASE);
 
@@ -188,10 +188,10 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     expect(auditEntries.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('6. post-bootstrap, the established host becomes a recognized application host and allows login', async ({
+  test('6. post-bootstrap, the established host becomes recognized immediately without stale cache delay', async ({
     page,
   }) => {
-    // /login is now accessible (200, no longer 421)
+    // /login is accessible immediately — force-refresh on mismatch ensures no 60s cache delay
     const loginRes = await page.goto(`${APP_BASE}/login`);
     expect(loginRes?.status()).toBe(200);
 
@@ -294,19 +294,28 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     expect(attack2.status).toBe(421);
   });
 
-  test('11. settings domain change dynamically updates recognized application host', async ({
+  test('11. settings domain change via /api/settings/app-url dynamically updates recognized host immediately', async ({
     page,
   }) => {
-    // Update SystemSettings.appUrl to replacement domain
-    await prisma.systemSettings.update({
-      where: { id: 'default' },
-      data: { appUrl: REPLACEMENT_BASE },
+    // First, verify current settings via API
+    const currentRes = await page.request.get(`${APP_BASE}/api/settings/app-url`);
+    expect(currentRes.ok()).toBe(true);
+    const currentData = await currentRes.json();
+    expect(currentData.appUrl).toBe(APP_BASE);
+
+    // Update Application URL via real API with authenticated session
+    const updateRes = await page.request.post(`${APP_BASE}/api/settings/app-url`, {
+      data: {
+        appUrl: REPLACEMENT_BASE,
+        expectedUpdatedAt: currentData.updatedAt,
+      },
     });
+    expect(updateRes.ok()).toBe(true);
+    const updatedData = await updateRes.json();
+    expect(updatedData.success).toBe(true);
+    expect(updatedData.appUrl).toBe(REPLACEMENT_BASE);
 
-    // Wait for the 1-second domain config cache to expire
-    await page.waitForTimeout(1500);
-
-    // Replacement domain is now the recognized app host => 200
+    // Replacement domain is immediately recognized via force-refresh => 200
     const replacementLogin = await page.goto(`${REPLACEMENT_BASE}/login`);
     expect(replacementLogin?.status()).toBe(200);
 
@@ -315,23 +324,33 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     expect(oldLogin?.status()).toBe(421);
   });
 
-  test('12. canonical www <-> apex 308 redirect behavior', async ({ page }) => {
+  test('12. canonical www <-> apex 308 redirect behavior preserves non-standard port and validated proto', async () => {
     // Configure apex domain as canonical in SystemSettings
     await prisma.systemSettings.update({
       where: { id: 'default' },
       data: { appUrl: `http://${APEX_HOST}:${PORT}` },
     });
 
-    await page.waitForTimeout(1500);
-
-    // Secondary www host should receive 308 Permanent Redirect to apex
+    // Secondary www host should receive 308 Permanent Redirect to apex, preserving port 3100
     const wwwRes = await fetch(`${DIRECT_SERVER}/login?source=nav`, {
       headers: { host: `${WWW_HOST}:${PORT}` },
       redirect: 'manual',
     });
     expect(wwwRes.status).toBe(308);
     const location = wwwRes.headers.get('location');
-    expect(location).toContain(`${APEX_HOST}:${PORT}/login?source=nav`);
+    expect(location).toBe(`http://${APEX_HOST}:${PORT}/login?source=nav`);
+
+    // Verify untrusted X-Forwarded-Proto does not alter the protocol
+    const spoofProtoRes = await fetch(`${DIRECT_SERVER}/login`, {
+      headers: {
+        host: `${WWW_HOST}:${PORT}`,
+        'x-forwarded-proto': 'https',
+      },
+      redirect: 'manual',
+    });
+    expect(spoofProtoRes.status).toBe(308);
+    // Because TRUST_PROXY_HEADERS is false, untrusted proto is ignored and matches request scheme (http)
+    expect(spoofProtoRes.headers.get('location')).toBe(`http://${APEX_HOST}:${PORT}/login`);
 
     // Canonical apex host serves directly => 200
     const apexRes = await fetch(`${DIRECT_SERVER}/login`, {

@@ -184,9 +184,10 @@ export { normalizeHostname, parseHostname, getAuthoritativeRequestHost } from '@
  * rate-limited, consumed once, refused when a user already exists) protects
  * this endpoint.
  */
-export function isBootstrapSetupRequest(pathname: string, _method: string): boolean {
-  // Allow both GET (page render) and POST (Server Action form submission).
-  return pathname === '/setup';
+export function isBootstrapSetupRequest(pathname: string, method: string): boolean {
+  if (pathname !== '/setup') return false;
+  const upper = (method || '').toUpperCase();
+  return upper === 'GET' || upper === 'HEAD' || upper === 'POST';
 }
 
 export function getHostWithAliases(hostname: string): string[] {
@@ -353,10 +354,10 @@ type CachedDomainConfig = {
 let cachedStatusDomain: CachedDomainConfig | null = null;
 let inflightStatusDomainFetch: Promise<StatusDomainConfig | null> | null = null;
 
-async function fetchStatusDomainConfig(): Promise<StatusDomainConfig | null> {
+async function fetchStatusDomainConfig(forceRefresh = false): Promise<StatusDomainConfig | null> {
   const now = Date.now();
-  if (cachedStatusDomain && cachedStatusDomain.expiresAt > now) return cachedStatusDomain.value;
-  if (inflightStatusDomainFetch) return inflightStatusDomainFetch;
+  if (!forceRefresh && cachedStatusDomain && cachedStatusDomain.expiresAt > now) return cachedStatusDomain.value;
+  if (!forceRefresh && inflightStatusDomainFetch) return inflightStatusDomainFetch;
 
   inflightStatusDomainFetch = (async () => {
     try {
@@ -743,23 +744,41 @@ export default async function middleware(req: NextRequest) {
 
   // 3. Validate authoritative request host as an allowed application host
   if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
-    // If not recognized against static env hosts, try fetching statusConfig for DB-configured SystemSettings.appUrl
-    if (!statusConfig) {
-      statusConfig = await fetchStatusDomainConfig();
-    }
+    // If not recognized against static env hosts or cached config, force-refresh
+    // DB-backed host config once before returning 421. This handles:
+    // 1) First login immediately after /setup (cache previously had appHost = null)
+    // 2) Domain changes from Settings -> Application URL
+    statusConfig = await fetchStatusDomainConfig(true);
     if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
       return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
     }
   }
 
-  // 3. Canonical host 308 redirection for domain aliases (e.g. opsnite.com -> www.opsnite.com)
+  // 4. Canonical host 308 redirection for domain aliases (e.g. opsnite.com -> www.opsnite.com)
   const canonicalHost = getCanonicalApplicationHost(statusConfig?.appHost);
   if (shouldRedirectToCanonicalAppHost(requestHost, canonicalHost, pathname, req.method)) {
     const canonicalUrl = req.nextUrl.clone();
-    canonicalUrl.host = canonicalHost;
-    const proto =
-      req.headers.get('x-forwarded-proto') || req.nextUrl.protocol.replace(':', '') || 'https';
-    canonicalUrl.protocol = `${proto}:`;
+    // Preserve request port if non-standard (e.g. port 3100), unless canonical host explicitly defines a port
+    if (canonicalHost.includes(':')) {
+      canonicalUrl.host = canonicalHost;
+    } else {
+      canonicalUrl.hostname = canonicalHost;
+    }
+
+    // Gate forwarded protocol strictly behind TRUST_PROXY_HEADERS
+    let validatedProto = req.nextUrl.protocol.replace(':', '');
+    if (process.env.TRUST_PROXY_HEADERS === 'true') {
+      const forwardedProto = req.headers
+        .get('x-forwarded-proto')
+        ?.split(',')[0]
+        ?.trim()
+        .toLowerCase();
+      if (forwardedProto === 'http' || forwardedProto === 'https') {
+        validatedProto = forwardedProto;
+      }
+    }
+    canonicalUrl.protocol = `${validatedProto}:`;
+
     const redirectResponse = NextResponse.redirect(canonicalUrl, { status: 308 });
     Object.entries(securityHeaders).forEach(([key, value]) =>
       redirectResponse.headers.set(key, value)

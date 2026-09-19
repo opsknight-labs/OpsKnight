@@ -55,13 +55,14 @@ export function validateProductionEnv(): void {
       name: 'NEXTAUTH_SECRET',
       description: 'Independent signing secret for authentication sessions',
     },
-    {
-      name: 'NEXTAUTH_URL',
-      description: 'Full URL of your application (e.g., https://OpsKnight.yourdomain.com)',
-    },
   ];
 
   const _optional: Array<{ name: string; description: string }> = [
+    {
+      name: 'NEXTAUTH_URL',
+      description:
+        'Full URL of your application (optional — can be established via bootstrap setup or SystemSettings.appUrl)',
+    },
     {
       name: 'PROMETHEUS_SCRAPE_TOKEN',
       description: 'Bearer token for scraping Prometheus metrics endpoint (/api/metrics)',

@@ -198,22 +198,25 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       expect(res.status).toBe(404);
     });
 
-    it('CRITICAL: spoofed X-Forwarded-Host cannot turn status request into app request even with TRUST_PROXY_HEADERS=true', async () => {
+    it('documentation/misconfiguration: when TRUST_PROXY_HEADERS=true and ingress forwards untrusted XFH, XFH routes to app plane', async () => {
       vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
+      // Demonstrates the security boundary requirement: when proxy headers are trusted,
+      // the ingress MUST overwrite client-supplied XFH. If the ingress forwards an untrusted
+      // XFH pointing to the app, the request is routed as an app request (redirects to login).
       const req = new NextRequest('https://status.customer.com/users', {
         headers: {
           host: 'status.customer.com',
           'x-forwarded-host': 'www.opsnite.com',
-          cookie: 'next-auth.session-token=valid-admin-session',
         },
       });
       const res = await middleware(req);
 
-      // XFH wins when trusted, but ingress MUST sanitize. Documented requirement.
-      expect([200, 307, 404, 421]).toContain(res.status);
+      // Successfully routed to app plane (unauthenticated -> 307 redirect to login)
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toContain('/login?callbackUrl=%2Fusers');
     });
   });
 
@@ -409,6 +412,110 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
 
       expect(res.status).toBe(308);
       expect(res.headers.get('location')).toBe('https://www.db-configured.opsnite.com/login');
+    });
+  });
+
+  describe('Shared Request Origin and Bootstrap Method Restrictions', () => {
+    it('getAuthoritativeRequestOrigin resolves scheme, host, and non-standard port', async () => {
+      const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
+
+      const headers = new Headers({
+        host: 'fresh.opsknight.test:3100',
+        origin: 'http://fresh.opsknight.test:3100',
+      });
+      expect(getAuthoritativeRequestOrigin(headers)).toBe('http://fresh.opsknight.test:3100');
+    });
+
+    it('getAuthoritativeRequestOrigin omits standard ports 80 and 443', async () => {
+      const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
+
+      const headers443 = new Headers({
+        host: 'opsknight-devtest.corporateroot.net:443',
+        origin: 'https://opsknight-devtest.corporateroot.net:443',
+      });
+      expect(getAuthoritativeRequestOrigin(headers443)).toBe(
+        'https://opsknight-devtest.corporateroot.net'
+      );
+
+      const headers80 = new Headers({
+        host: 'opsknight.test:80',
+        origin: 'http://opsknight.test:80',
+      });
+      expect(getAuthoritativeRequestOrigin(headers80)).toBe('http://opsknight.test');
+    });
+
+    it('getAuthoritativeRequestOrigin ignores untrusted XFH/XFP when TRUST_PROXY_HEADERS is false', async () => {
+      const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
+
+      const headers = new Headers({
+        host: 'status.customer.test',
+        'x-forwarded-host': 'fresh.opsknight.test',
+        'x-forwarded-proto': 'http',
+      });
+      expect(getAuthoritativeRequestOrigin(headers)).toBe('https://status.customer.test');
+    });
+
+    it('getAuthoritativeRequestOrigin respects XFH/XFP when TRUST_PROXY_HEADERS is true', async () => {
+      vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
+      const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
+
+      const headers = new Headers({
+        host: 'internal-app:3000',
+        'x-forwarded-host': 'fresh.opsknight.test:3100',
+        'x-forwarded-proto': 'https',
+      });
+      expect(getAuthoritativeRequestOrigin(headers)).toBe('https://fresh.opsknight.test:3100');
+    });
+
+    it('isBootstrapSetupRequest strictly allows only GET, HEAD, and POST on /setup', async () => {
+      const { isBootstrapSetupRequest } = await import('@/middleware');
+
+      expect(isBootstrapSetupRequest('/setup', 'GET')).toBe(true);
+      expect(isBootstrapSetupRequest('/setup', 'HEAD')).toBe(true);
+      expect(isBootstrapSetupRequest('/setup', 'POST')).toBe(true);
+
+      // Other methods rejected
+      expect(isBootstrapSetupRequest('/setup', 'PUT')).toBe(false);
+      expect(isBootstrapSetupRequest('/setup', 'DELETE')).toBe(false);
+      expect(isBootstrapSetupRequest('/setup', 'PATCH')).toBe(false);
+
+      // Other paths rejected
+      expect(isBootstrapSetupRequest('/login', 'GET')).toBe(false);
+      expect(isBootstrapSetupRequest('/setup/extra', 'GET')).toBe(false);
+    });
+
+    it('canonical redirect preserves non-standard ports', async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://opsnite.com:3100');
+      vi.stubEnv('NEXTAUTH_URL', 'http://opsnite.com:3100');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://www.opsnite.com:3100/login?source=nav', {
+        headers: { host: 'www.opsnite.com:3100' },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(308);
+      expect(res.headers.get('location')).toBe('http://opsnite.com:3100/login?source=nav');
+    });
+
+    it('canonical redirect ignores untrusted X-Forwarded-Proto when TRUST_PROXY_HEADERS is unset', async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://opsnite.com:3100');
+      vi.stubEnv('NEXTAUTH_URL', 'http://opsnite.com:3100');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://www.opsnite.com:3100/login', {
+        headers: {
+          host: 'www.opsnite.com:3100',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(308);
+      // Untrusted XFP is ignored — preserves http
+      expect(res.headers.get('location')).toBe('http://opsnite.com:3100/login');
     });
   });
 });
