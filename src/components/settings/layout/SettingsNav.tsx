@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Tickets,
+  Target,
   User,
   Users,
 } from 'lucide-react';
@@ -54,6 +55,7 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
   jira: JiraLogo,
   'message-circle': MessageCircle,
   tickets: Tickets,
+  target: Target,
 };
 
 export default function SettingsNav({
