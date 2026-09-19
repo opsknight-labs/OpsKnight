@@ -192,15 +192,20 @@ export function parseHostname(value?: string | null): string {
 }
 
 export function getAuthoritativeRequestHost(req: NextRequest | Request): string {
-  const forwarded = req.headers.get('x-forwarded-host');
-  if (forwarded) {
-    const rawForwarded = forwarded
-      .split(',')
-      .map(value => value.trim())
-      .filter(Boolean)
-      .at(-1);
-    const cleanForwarded = normalizeHostname(rawForwarded);
-    if (cleanForwarded) return cleanForwarded;
+  // Only trust X-Forwarded-Host when the deployment has explicitly opted in.
+  // The ingress/reverse-proxy MUST overwrite (not append) client-supplied
+  // X-Forwarded-Host for this to be safe.
+  if (process.env.TRUST_PROXY_HEADERS === 'true') {
+    const forwarded = req.headers.get('x-forwarded-host');
+    if (forwarded) {
+      const rawForwarded = forwarded
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean)
+        .at(-1);
+      const cleanForwarded = normalizeHostname(rawForwarded);
+      if (cleanForwarded) return cleanForwarded;
+    }
   }
   const rawHost = normalizeHostname(req.headers.get('host'));
   if (rawHost) return rawHost;
@@ -245,22 +250,29 @@ export function getAllowedAppHosts(canonicalAppHost?: string | null): Set<string
     '[::1]',
   ]);
 
-  const candidates: (string | null | undefined)[] = [
+  // Canonical sources get automatic www ↔ apex alias generation
+  const canonicalSources: (string | null | undefined)[] = [
     canonicalAppHost,
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.NEXTAUTH_URL,
   ];
 
-  if (process.env.APP_HOST_ALIASES) {
-    process.env.APP_HOST_ALIASES.split(',').forEach(alias => candidates.push(alias.trim()));
-  }
-
-  for (const candidate of candidates) {
+  for (const candidate of canonicalSources) {
     if (!candidate) continue;
     const parsed = parseHostname(candidate);
     if (parsed) {
       for (const host of getHostWithAliases(parsed)) {
         allowed.add(host);
+      }
+    }
+  }
+
+  // Explicit aliases are exact — no automatic www pairing
+  if (process.env.APP_HOST_ALIASES) {
+    for (const alias of process.env.APP_HOST_ALIASES.split(',')) {
+      const parsed = parseHostname(alias.trim());
+      if (parsed) {
+        allowed.add(parsed);
       }
     }
   }

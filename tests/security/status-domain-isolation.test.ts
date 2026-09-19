@@ -378,8 +378,27 @@ describe('Status Domain Host Firewall & Isolation', () => {
       });
       const res = await middleware(req);
 
-      // Untrusted/unknown forwarded host cannot bypass firewall to reach application routes
-      expect([404, 421]).toContain(res.status);
+      // Status host firewall must reject — spoofed XFH cannot escape status boundary
+      expect(res.status).toBe(404);
+    });
+
+    it('CRITICAL SECURITY INVARIANT: spoofed X-Forwarded-Host using actual app hostname cannot bypass status firewall', async () => {
+      setupRouteMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      // Attacker spoofs X-Forwarded-Host with the actual configured application hostname
+      // to try to escape the status domain firewall and reach /users on the app plane
+      const req = new NextRequest('https://status.customer.test/users', {
+        headers: {
+          host: 'status.customer.test',
+          'x-forwarded-host': 'app.opsknight.test',
+          cookie: 'next-auth.session-token=valid-admin-session',
+        },
+      });
+      const res = await middleware(req);
+
+      // Must be rejected by the status domain firewall with 404 — never routed to app
+      expect(res.status).toBe(404);
     });
   });
 
