@@ -121,9 +121,9 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     const rootRes = await page.goto(`${STATUS_BASE}/`);
     expect(rootRes?.status()).toBe(200);
 
-    // Status history renders
+    // Non-existent status sub-path returns 404
     const historyRes = await page.goto(`${STATUS_BASE}/history`);
-    expect(historyRes?.status()).toBe(200);
+    expect(historyRes?.status()).toBe(404);
 
     // /setup on status domain is rejected by status firewall with 404 (statusRoute takes precedence)
     const setupRes = await page.goto(`${STATUS_BASE}/setup`);

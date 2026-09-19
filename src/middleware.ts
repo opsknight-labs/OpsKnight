@@ -89,7 +89,6 @@ function isPublicPath(pathname: string) {
 export function isStatusDomainPath(pathname: string) {
   return (
     pathname === '/' ||
-    pathname === '/history' ||
     pathname === '/subscribe' ||
     pathname.startsWith('/postmortems/') ||
     pathname.startsWith('/verify') ||

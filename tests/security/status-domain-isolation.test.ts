@@ -79,7 +79,7 @@ describe('Status Domain Host Firewall & Isolation', () => {
       expect(res.headers.get('cache-control')).toBe(PUBLIC_STATUS_CACHE_CONTROL);
     });
 
-    it('rewrites /history to the status history route', async () => {
+    it('rejects /history on status domain as not found (rendered inline on status page)', async () => {
       setupRouteMocks();
       const { default: middleware } = await import('@/middleware');
 
@@ -88,10 +88,8 @@ describe('Status Domain Host Firewall & Isolation', () => {
       });
       const res = await middleware(req);
 
-      expect(res.headers.get('x-middleware-rewrite')).toBe(
-        'https://status.customer.test/status/public-status/history'
-      );
-      expect(res.status).toBe(200);
+      expect(res.status).toBe(404);
+      expect(res.headers.get('x-middleware-rewrite')).toBeNull();
     });
 
     it('rewrites /postmortems/:incidentId to the status postmortem route', async () => {
@@ -318,6 +316,7 @@ describe('Status Domain Host Firewall & Isolation', () => {
       '/incidents/123',
       '/admin',
       '/admin/system',
+      '/history',
       '/setup',
       '/login',
       '/forgot-password',
