@@ -394,6 +394,9 @@ export async function performDataCleanup(
       const batch = deletableIncidents.slice(i, i + BATCH_SIZE);
       if (batch.length === 0) break;
 
+      // Fence every destructive batch before it runs (including the very first batch)
+      await assertLeaseOwnership();
+
       // Deterministically sort resource IDs before acquiring locks to prevent deadlocks
       const sortedBatch = [...batch].sort();
 
@@ -412,6 +415,13 @@ export async function performDataCleanup(
 
           if (newlyHeld > 0) {
             heldIncidentCount += newlyHeld;
+            // Retain newly held IDs so subsequent child evidence phases exclude them and do not double-count
+            const stillDeletableSet = new Set(stillDeletableIncidents);
+            for (const id of sortedBatch) {
+              if (!stillDeletableSet.has(id) && !allHeldIncidentIds.includes(id)) {
+                allHeldIncidentIds.push(id);
+              }
+            }
           }
 
           if (stillDeletableIncidents.length === 0) {
@@ -556,6 +566,11 @@ export async function performDataCleanup(
     if (deletablePrivacyRequests.length > 0) {
       for (let i = 0; i < deletablePrivacyRequests.length; i += BATCH_SIZE) {
         const batch = deletablePrivacyRequests.slice(i, i + BATCH_SIZE);
+        if (batch.length === 0) break;
+
+        // Fence every privacy request batch before it runs
+        await assertLeaseOwnership();
+
         const sortedBatch = [...batch].sort();
 
         let prBatchFullyHeld = false;
@@ -574,6 +589,13 @@ export async function performDataCleanup(
 
             if (newlyHeld > 0) {
               heldPrivacyRequestCount += newlyHeld;
+              // Retain newly held IDs so subsequent child phases exclude them and do not double-count
+              const stillDeletableSet = new Set(stillDeletableRequests);
+              for (const id of sortedBatch) {
+                if (!stillDeletableSet.has(id) && !allHeldPrivacyRequestIds.includes(id)) {
+                  allHeldPrivacyRequestIds.push(id);
+                }
+              }
             }
 
             if (stillDeletableRequests.length === 0) {
@@ -641,6 +663,7 @@ export async function performDataCleanup(
       let totalDeleted = 0;
 
       while (true) {
+        await assertLeaseOwnership();
         const candidates = await fetchCandidates(Array.from(knownHeldParentIds));
         if (!candidates || candidates.length === 0) {
           break;
@@ -748,6 +771,7 @@ export async function performDataCleanup(
     // 5. Lifecycle cleanup: Unsubscribed Subscribers
     if (eligibleSubscribers.length > 0) {
       for (let i = 0; i < eligibleSubscribers.length; i += BATCH_SIZE) {
+        await assertLeaseOwnership();
         const batch = eligibleSubscribers.slice(i, i + BATCH_SIZE).map(s => s.id);
         const deleted = await prisma.statusPageSubscription.deleteMany({
           where: { id: { in: batch } },
@@ -763,6 +787,7 @@ export async function performDataCleanup(
     ) => {
       let deleted = 0;
       while (true) {
+        await assertLeaseOwnership();
         const rows = await findIds();
         if (rows.length === 0) return deleted;
         const res = await deleteIds(rows.map(row => row.id));

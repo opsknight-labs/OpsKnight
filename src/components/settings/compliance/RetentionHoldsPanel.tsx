@@ -51,8 +51,18 @@ export default function RetentionHoldsPanel() {
   const [selectedHold, setSelectedHold] = useState<HoldItem | null>(null);
   const [releasing, setReleasing] = useState(false);
 
+  const requestGenRef = React.useRef(0);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
   const fetchHolds = useCallback(
     async (reset = true, cursorToUse?: string | null) => {
+      if (reset && abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const currentGen = ++requestGenRef.current;
+
       if (reset) {
         setLoading(true);
       } else {
@@ -64,20 +74,30 @@ export default function RetentionHoldsPanel() {
         if (scopeFilter !== 'ALL') params.set('scopeType', scopeFilter);
         if (!reset && cursorToUse) params.set('cursor', cursorToUse);
 
-        const res = await fetch(`/api/compliance/retention-holds?${params.toString()}`);
+        const res = await fetch(`/api/compliance/retention-holds?${params.toString()}`, {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error('Failed to load retention holds');
         const data = await res.json();
+
+        // Discard stale response if filter changed while request was in flight
+        if (currentGen !== requestGenRef.current) return;
+
         if (reset) {
           setHolds(data.holds || []);
         } else {
           setHolds(prev => [...prev, ...(data.holds || [])]);
         }
         setNextCursor(data.nextCursor || null);
-      } catch (err) {
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === 'AbortError') return;
+        if (currentGen !== requestGenRef.current) return;
         notify.error(err instanceof Error ? err.message : 'Error loading retention holds');
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (currentGen === requestGenRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [statusFilter, scopeFilter]
