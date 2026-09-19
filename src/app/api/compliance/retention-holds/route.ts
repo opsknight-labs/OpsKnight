@@ -8,6 +8,7 @@ import { AppError, isAppError } from '@/lib/errors';
 import {
   createRetentionHold,
   listRetentionHolds,
+  RetentionResourceNotFoundError,
   type ListRetentionHoldsOptions,
 } from '@/lib/retention/holds';
 
@@ -114,7 +115,7 @@ export async function POST(request: NextRequest) {
     return jsonOk({ hold: result.hold }, 201);
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
-    if (error instanceof Error && error.message.includes('not found')) {
+    if (error instanceof RetentionResourceNotFoundError) {
       return jsonError(
         new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: error.message }),
         404

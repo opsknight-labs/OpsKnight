@@ -12,6 +12,22 @@ import { acquireRetentionResourceLock } from './resource-lock';
  * locking, validation, and audit behavior.
  */
 
+export class RetentionHoldNotFoundError extends Error {
+  readonly code = 'RESOURCE_NOT_FOUND';
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetentionHoldNotFoundError';
+  }
+}
+
+export class RetentionResourceNotFoundError extends Error {
+  readonly code = 'RESOURCE_NOT_FOUND';
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetentionResourceNotFoundError';
+  }
+}
+
 export interface RetentionHoldInput {
   scopeType: 'USER' | 'INCIDENT' | 'PRIVACY_REQUEST';
   scopeId: string;
@@ -261,7 +277,9 @@ export async function createRetentionHold(
     // Re-validate resource still exists after acquiring lock
     const exists = await validateResourceExists(txClient, input.scopeType, input.scopeId);
     if (!exists) {
-      throw new Error(`Resource ${input.scopeType}:${input.scopeId} not found`);
+      throw new RetentionResourceNotFoundError(
+        `Resource ${input.scopeType}:${input.scopeId} not found`
+      );
     }
 
     // Validate expiresAt is in the future if provided
@@ -334,7 +352,7 @@ export async function releaseRetentionHold(
     });
 
     if (!existingHold) {
-      throw new Error(`Retention hold ${holdId} not found`);
+      throw new RetentionHoldNotFoundError(`Retention hold ${holdId} not found`);
     }
 
     // Acquire resource lock to prevent race with cleanup
