@@ -19,6 +19,7 @@ import {
   parseHostname,
   getAuthoritativeRequestHost,
 } from '@/lib/request-host';
+import { parse as parseDomain } from 'tldts';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
@@ -202,19 +203,21 @@ export function getHostWithAliases(hostname: string): string[] {
   ) {
     return Array.from(hosts);
   }
-  if (clean.startsWith('www.')) {
-    const withoutWww = clean.slice(4);
-    if (withoutWww && withoutWww.includes('.')) {
-      hosts.add(withoutWww);
-    }
-  } else {
-    const parts = clean.split('.');
-    // Only automatically add www. to genuine apex domains (e.g. opsnite.com -> www.opsnite.com),
-    // not arbitrary subdomains (e.g. app.opsnite.com or dev.corporate.net)
-    if (parts.length === 2) {
+
+  // Use tldts to symmetrically pair genuine apex domains (e.g. opsnite.com ↔ www.opsnite.com,
+  // example.co.uk ↔ www.example.co.uk) without pairing arbitrary subdomains in either direction
+  // (e.g. app.opsnite.com or www.app.opsnite.com).
+  const parsed = parseDomain(clean);
+  if (parsed.domain) {
+    if (parsed.subdomain === '') {
+      // Genuine apex domain -> pair with www.<apex>
       hosts.add(`www.${clean}`);
+    } else if (parsed.subdomain === 'www') {
+      // Genuine www.<apex> domain -> pair with apex
+      hosts.add(parsed.domain);
     }
   }
+
   return Array.from(hosts);
 }
 
@@ -259,7 +262,7 @@ export function isAllowedApplicationHost(
   hostname: string,
   canonicalAppHost?: string | null
 ): boolean {
-  if (!hostname) return true;
+  if (!hostname) return false;
   const clean = normalizeHostname(hostname);
   if (!clean) return false;
   if (

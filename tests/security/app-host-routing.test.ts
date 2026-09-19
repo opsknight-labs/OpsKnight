@@ -415,7 +415,7 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
           return Promise.resolve(
             Response.json({
               enabled: true,
-              appHost: 'www.db-configured.opsnite.com',
+              appHost: 'www.db-configured.com',
               pages: [],
             })
           );
@@ -426,13 +426,13 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
 
       const { default: middleware } = await import('@/middleware');
 
-      const req = new NextRequest('https://db-configured.opsnite.com/login', {
-        headers: { host: 'db-configured.opsnite.com' },
+      const req = new NextRequest('https://db-configured.com/login', {
+        headers: { host: 'db-configured.com' },
       });
       const res = await middleware(req);
 
       expect(res.status).toBe(308);
-      expect(res.headers.get('location')).toBe('https://www.db-configured.opsnite.com/login');
+      expect(res.headers.get('location')).toBe('https://www.db-configured.com/login');
     });
   });
 
@@ -539,18 +539,32 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       expect(res.headers.get('location')).toBe('http://opsnite.com:3100/login');
     });
 
-    it('getHostWithAliases strictly pairs real apex domains and excludes subdomains', async () => {
+    it('getHostWithAliases symmetrically pairs real apex domains and excludes subdomains in both directions', async () => {
       const { getHostWithAliases } = await import('@/middleware');
 
-      // Genuine apex domain gets www pair
+      // Genuine apex domains get www pair in both directions
       expect(getHostWithAliases('opssentinal.com')).toEqual(['opssentinal.com', 'www.opssentinal.com']);
       expect(getHostWithAliases('www.opssentinal.com')).toEqual(['www.opssentinal.com', 'opssentinal.com']);
 
-      // Subdomains do NOT get www pair
+      // Complex ccTLDs (like .co.uk) are handled correctly via tldts
+      expect(getHostWithAliases('example.co.uk')).toEqual(['example.co.uk', 'www.example.co.uk']);
+      expect(getHostWithAliases('www.example.co.uk')).toEqual(['www.example.co.uk', 'example.co.uk']);
+
+      // Subdomains do NOT get paired in EITHER direction
       expect(getHostWithAliases('app.opsnite.com')).toEqual(['app.opsnite.com']);
+      expect(getHostWithAliases('www.app.opsnite.com')).toEqual(['www.app.opsnite.com']);
       expect(getHostWithAliases('opsknight-devtest.corporateroot.net')).toEqual([
         'opsknight-devtest.corporateroot.net',
       ]);
+    });
+
+    it('isAllowedApplicationHost fails closed on empty, null, or invalid hostnames', async () => {
+      const { isAllowedApplicationHost } = await import('@/middleware');
+
+      expect(isAllowedApplicationHost('')).toBe(false);
+      expect(isAllowedApplicationHost(null as unknown as string)).toBe(false);
+      expect(isAllowedApplicationHost(undefined as unknown as string)).toBe(false);
+      expect(isAllowedApplicationHost('   ')).toBe(false);
     });
 
     it('auth.ts enables host trust by default because middleware validates hosts', async () => {
