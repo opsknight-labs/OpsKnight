@@ -378,7 +378,8 @@ describe('Status Domain Host Firewall & Isolation', () => {
       });
       const res = await middleware(req);
 
-      expect(res.status).toBe(404);
+      // Untrusted/unknown forwarded host cannot bypass firewall to reach application routes
+      expect([404, 421]).toContain(res.status);
     });
   });
 

@@ -166,31 +166,7 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
   return false;
 }
 
-export function isRecognizedAppHost(hostname: string, appHost?: string | null): boolean {
-  if (!hostname) return true;
-  const clean = normalizeHostname(hostname);
-  if (
-    clean === 'localhost' ||
-    clean === '127.0.0.1' ||
-    clean === '[::1]' ||
-    clean.endsWith('.localhost')
-  ) {
-    return true;
-  }
-  if (appHost) {
-    const cleanAppHost = parseHostname(appHost);
-    if (cleanAppHost && clean === cleanAppHost) return true;
-  }
-  const defaultEnvAppHost = parseHostname(
-    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
-  );
-  if (defaultEnvAppHost && clean === defaultEnvAppHost) {
-    return true;
-  }
-  return false;
-}
-
-export function normalizeHostname(value?: string | null) {
+export function normalizeHostname(value?: string | null): string {
   if (!value) return '';
   const candidate = value.trim().toLowerCase().replace(/\.$/, '');
   if (!candidate || candidate.length > 253 || /[^a-z0-9.:[\]-]/.test(candidate)) return '';
@@ -201,7 +177,7 @@ export function normalizeHostname(value?: string | null) {
   }
 }
 
-function parseHostname(value?: string | null) {
+export function parseHostname(value?: string | null): string {
   if (!value) return '';
   const trimmed = value.trim();
   if (!trimmed) return '';
@@ -213,6 +189,143 @@ function parseHostname(value?: string | null) {
     }
   }
   return normalizeHostname(trimmed);
+}
+
+export function getAuthoritativeRequestHost(req: NextRequest | Request): string {
+  const forwarded = req.headers.get('x-forwarded-host');
+  if (forwarded) {
+    const rawForwarded = forwarded
+      .split(',')
+      .map(value => value.trim())
+      .filter(Boolean)
+      .at(-1);
+    const cleanForwarded = normalizeHostname(rawForwarded);
+    if (cleanForwarded) return cleanForwarded;
+  }
+  const rawHost = normalizeHostname(req.headers.get('host'));
+  if (rawHost) return rawHost;
+  try {
+    const url = new URL(req.url);
+    return normalizeHostname(url.host);
+  } catch {
+    return '';
+  }
+}
+
+export function getHostWithAliases(hostname: string): string[] {
+  const clean = normalizeHostname(hostname);
+  if (!clean) return [];
+  const hosts = new Set<string>([clean]);
+  if (
+    clean === 'localhost' ||
+    clean === '127.0.0.1' ||
+    clean === '[::1]' ||
+    clean.endsWith('.localhost')
+  ) {
+    return Array.from(hosts);
+  }
+  if (clean.startsWith('www.')) {
+    const apex = clean.slice(4);
+    if (apex && apex.includes('.')) {
+      hosts.add(apex);
+    }
+  } else {
+    const parts = clean.split('.');
+    if (parts.length >= 2) {
+      hosts.add(`www.${clean}`);
+    }
+  }
+  return Array.from(hosts);
+}
+
+export function getAllowedAppHosts(canonicalAppHost?: string | null): Set<string> {
+  const allowed = new Set<string>([
+    'localhost',
+    '127.0.0.1',
+    '[::1]',
+  ]);
+
+  const candidates: (string | null | undefined)[] = [
+    canonicalAppHost,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXTAUTH_URL,
+  ];
+
+  if (process.env.APP_HOST_ALIASES) {
+    process.env.APP_HOST_ALIASES.split(',').forEach(alias => candidates.push(alias.trim()));
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const parsed = parseHostname(candidate);
+    if (parsed) {
+      for (const host of getHostWithAliases(parsed)) {
+        allowed.add(host);
+      }
+    }
+  }
+
+  return allowed;
+}
+
+export function isAllowedApplicationHost(
+  hostname: string,
+  canonicalAppHost?: string | null
+): boolean {
+  if (!hostname) return true;
+  const clean = normalizeHostname(hostname);
+  if (!clean) return false;
+  if (
+    clean === 'localhost' ||
+    clean === '127.0.0.1' ||
+    clean === '[::1]' ||
+    clean.endsWith('.localhost')
+  ) {
+    return true;
+  }
+  const allowed = getAllowedAppHosts(canonicalAppHost);
+  return allowed.has(clean);
+}
+
+export const isRecognizedAppHost = isAllowedApplicationHost;
+
+export function getCanonicalApplicationHost(statusConfigAppHost?: string | null): string {
+  const candidate =
+    statusConfigAppHost ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXTAUTH_URL ||
+    'localhost';
+  return parseHostname(candidate) || 'localhost';
+}
+
+export function shouldRedirectToCanonicalAppHost(
+  requestHost: string,
+  canonicalHost: string,
+  pathname: string,
+  method: string
+): boolean {
+  if (process.env.REDIRECT_TO_CANONICAL_HOST === 'false') return false;
+  if (!requestHost || !canonicalHost) return false;
+  if (requestHost === canonicalHost) return false;
+  if (
+    requestHost === 'localhost' ||
+    requestHost === '127.0.0.1' ||
+    requestHost.endsWith('.localhost') ||
+    canonicalHost === 'localhost' ||
+    canonicalHost === '127.0.0.1' ||
+    canonicalHost.endsWith('.localhost')
+  ) {
+    return false;
+  }
+  if (pathname === '/api/status-page/domains' || pathname === '/api/health') {
+    return false;
+  }
+  if (method !== 'GET' && method !== 'HEAD') {
+    return false;
+  }
+  const isWwwPair =
+    requestHost === `www.${canonicalHost}` || canonicalHost === `www.${requestHost}`;
+  return isWwwPair;
 }
 
 const DEFAULT_APP_HOST =
@@ -567,59 +680,45 @@ export default async function middleware(req: NextRequest) {
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
 
-  const rawHost = normalizeHostname(req.headers.get('host'));
-  const rawForwarded = req.headers
-    .get('x-forwarded-host')
-    ?.split(',')
-    .map(value => value.trim())
-    .filter(Boolean)
-    .at(-1);
-  const forwardedHost = normalizeHostname(rawForwarded);
+  const requestHost = getAuthoritativeRequestHost(req);
 
   // Internal status-domain configuration provider: bypass to avoid recursive middleware deadlock
-  if (pathname === '/api/status-page/domains' && isRecognizedAppHost(rawHost || forwardedHost)) {
+  if (pathname === '/api/status-page/domains' && isAllowedApplicationHost(requestHost)) {
     return response;
   }
 
-  // Check published status routes for both candidate hosts (Host and X-Forwarded-Host)
-  const hostPublished = rawHost ? await fetchPublishedStatusDomain(rawHost) : null;
-  const fwdPublished =
-    forwardedHost && forwardedHost !== rawHost
-      ? await fetchPublishedStatusDomain(forwardedHost)
-      : null;
-  const publishedPage = hostPublished || fwdPublished;
+  // 1. Resolve status route strictly using the authoritative request host
+  const publishedPage = requestHost ? await fetchPublishedStatusDomain(requestHost) : null;
 
-  const statusConfig =
-    publishedPage || usesExternalStatusServingStore() ? null : await fetchStatusDomainConfig();
+  let statusConfig: StatusDomainConfig | null = null;
+  if (!publishedPage && !usesExternalStatusServingStore()) {
+    statusConfig = await fetchStatusDomainConfig();
+  }
 
   let matchedPage: StatusDomainPage | null = null;
-  if (statusConfig?.enabled) {
-    const candidateHosts = [rawHost, forwardedHost].filter(Boolean);
+  if (!publishedPage && statusConfig?.enabled && requestHost) {
     // 1st priority: explicit customDomain or explicit subdomain match
     matchedPage =
       statusConfig.pages?.find(page => {
-        return candidateHosts.some(h => {
-          const cleanHost = normalizeHostname(h);
-          const customHost = parseHostname(page.customDomain);
-          if (customHost && cleanHost === customHost) return true;
-          if (page.subdomain) {
-            const cleanSub = parseHostname(page.subdomain);
-            if (cleanSub && cleanHost === cleanSub) return true;
-            if (statusConfig.appHost) {
-              const extracted = extractSubdomainFromHost(cleanHost, statusConfig.appHost);
-              if (extracted && extracted === cleanSub) return true;
-            }
+        const customHost = parseHostname(page.customDomain);
+        if (customHost && requestHost === customHost) return true;
+        if (page.subdomain) {
+          const cleanSub = parseHostname(page.subdomain);
+          if (cleanSub && requestHost === cleanSub) return true;
+          if (statusConfig?.appHost) {
+            const extracted = extractSubdomainFromHost(requestHost, statusConfig.appHost);
+            if (extracted && extracted === cleanSub) return true;
           }
-          return false;
-        });
+        }
+        return false;
       }) ?? null;
 
     // 2nd priority: general status route matching (slug, default status page fallback)
     if (!matchedPage) {
       matchedPage =
-        statusConfig.pages?.find(page => {
-          return candidateHosts.some(h => matchesStatusPageDomain(page, h, statusConfig.appHost));
-        }) ?? null;
+        statusConfig.pages?.find(page =>
+          matchesStatusPageDomain(page, requestHost, statusConfig?.appHost)
+        ) ?? null;
     }
   }
 
@@ -648,12 +747,30 @@ export default async function middleware(req: NextRequest) {
     });
   }
 
-  const activeHostname = forwardedHost || rawHost;
-  if (
-    !isRecognizedAppHost(activeHostname, statusConfig?.appHost) ||
-    (rawHost && !isRecognizedAppHost(rawHost, statusConfig?.appHost))
-  ) {
-    return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
+  // 2. Validate authoritative request host as an allowed application host
+  if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
+    // If not recognized against static env hosts, try fetching statusConfig for DB-configured SystemSettings.appUrl
+    if (!statusConfig) {
+      statusConfig = await fetchStatusDomainConfig();
+    }
+    if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
+      return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
+    }
+  }
+
+  // 3. Canonical host 308 redirection for domain aliases (e.g. opsnite.com -> www.opsnite.com)
+  const canonicalHost = getCanonicalApplicationHost(statusConfig?.appHost);
+  if (shouldRedirectToCanonicalAppHost(requestHost, canonicalHost, pathname, req.method)) {
+    const canonicalUrl = req.nextUrl.clone();
+    canonicalUrl.host = canonicalHost;
+    const proto =
+      req.headers.get('x-forwarded-proto') || req.nextUrl.protocol.replace(':', '') || 'https';
+    canonicalUrl.protocol = `${proto}:`;
+    const redirectResponse = NextResponse.redirect(canonicalUrl, { status: 308 });
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      redirectResponse.headers.set(key, value)
+    );
+    return redirectResponse;
   }
 
   // Old mobile reset links remain valid but converge on the single responsive page.
