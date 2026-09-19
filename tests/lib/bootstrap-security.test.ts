@@ -1,11 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { transaction, count, create, findUniqueConfig, updateConfig } = vi.hoisted(() => ({
+const {
+  transaction,
+  count,
+  create,
+  findUniqueConfig,
+  updateConfig,
+  findUniqueSettings,
+  upsertSettings,
+} = vi.hoisted(() => ({
   transaction: vi.fn(),
   count: vi.fn(),
   create: vi.fn(),
   findUniqueConfig: vi.fn(),
   updateConfig: vi.fn(),
+  findUniqueSettings: vi.fn(),
+  upsertSettings: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({ default: { $transaction: transaction } }));
@@ -41,8 +51,12 @@ function bootstrapForm(code = bootstrapCode) {
 }
 
 describe('bootstrap administrator security', () => {
+  const originalEnv = { ...process.env };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    delete process.env.NEXTAUTH_URL;
     count.mockResolvedValue(0);
     create.mockResolvedValue({ id: 'admin-1', email: 'admin@example.com' });
     findUniqueConfig.mockResolvedValue({
@@ -54,13 +68,20 @@ describe('bootstrap administrator security', () => {
       },
     });
     updateConfig.mockResolvedValue({});
+    findUniqueSettings.mockResolvedValue(null);
+    upsertSettings.mockResolvedValue({});
     transaction.mockImplementation(async (callback, options) => {
       expect(options).toEqual({ isolationLevel: 'Serializable' });
       return callback({
         user: { count, create },
         systemConfig: { findUnique: findUniqueConfig, update: updateConfig },
+        systemSettings: { findUnique: findUniqueSettings, upsert: upsertSettings },
       });
     });
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
   });
 
   it('requires and atomically consumes the one-time capability', async () => {
@@ -92,10 +113,63 @@ describe('bootstrap administrator security', () => {
       callback({
         user: { count, create },
         systemConfig: { findUnique: findUniqueConfig, update: updateConfig },
+        systemSettings: { findUnique: findUniqueSettings, upsert: upsertSettings },
       })
     );
     const result = await bootstrapAdmin(bootstrapForm());
     expect(result).toMatchObject({ success: true });
     expect(transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('seeds SystemSettings.appUrl when no canonical appUrl is preconfigured', async () => {
+    findUniqueSettings.mockResolvedValue(null);
+    const { headers } = await import('next/headers');
+    vi.mocked(headers).mockResolvedValueOnce(
+      new Headers({
+        host: 'fresh.opsknight.test:3100',
+        origin: 'http://fresh.opsknight.test:3100',
+      })
+    );
+
+    const result = await bootstrapAdmin(bootstrapForm());
+    expect(result).toEqual({ success: true, email: 'admin@example.com' });
+    expect(upsertSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'default' },
+        create: expect.objectContaining({ appUrl: 'http://fresh.opsknight.test:3100' }),
+        update: expect.objectContaining({ appUrl: 'http://fresh.opsknight.test:3100' }),
+      })
+    );
+  });
+
+  it('does NOT overwrite existing configured SystemSettings.appUrl', async () => {
+    findUniqueSettings.mockResolvedValue({ appUrl: 'https://canonical.company.com' });
+    const { headers } = await import('next/headers');
+    vi.mocked(headers).mockResolvedValueOnce(
+      new Headers({
+        host: 'temporary.company.com',
+        origin: 'https://temporary.company.com',
+      })
+    );
+
+    const result = await bootstrapAdmin(bootstrapForm());
+    expect(result).toEqual({ success: true, email: 'admin@example.com' });
+    expect(upsertSettings).not.toHaveBeenCalled();
+  });
+
+  it('does NOT overwrite when NEXT_PUBLIC_APP_URL is preconfigured in environment', async () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://env.company.com';
+    findUniqueSettings.mockResolvedValue(null);
+    const { headers } = await import('next/headers');
+    vi.mocked(headers).mockResolvedValueOnce(
+      new Headers({
+        host: 'temporary.company.com',
+        origin: 'https://temporary.company.com',
+      })
+    );
+
+    const result = await bootstrapAdmin(bootstrapForm());
+    expect(result).toEqual({ success: true, email: 'admin@example.com' });
+    expect(upsertSettings).not.toHaveBeenCalled();
   });
 });

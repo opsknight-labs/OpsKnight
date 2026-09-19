@@ -14,6 +14,13 @@ import {
   matchesStatusPageDomain,
   extractSubdomainFromHost,
 } from '@/lib/status-pages/status-route-resolver';
+import {
+  normalizeHostname,
+  parseHostname,
+  getAuthoritativeRequestHost,
+  getAuthoritativeRequestOrigin,
+} from '@/lib/request-host';
+import { parse as parseDomain } from 'tldts';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
@@ -83,7 +90,6 @@ function isPublicPath(pathname: string) {
 export function isStatusDomainPath(pathname: string) {
   return (
     pathname === '/' ||
-    pathname === '/history' ||
     pathname === '/subscribe' ||
     pathname.startsWith('/postmortems/') ||
     pathname.startsWith('/verify') ||
@@ -166,9 +172,99 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
   return false;
 }
 
-export function isRecognizedAppHost(hostname: string, appHost?: string | null): boolean {
-  if (!hostname) return true;
+// Re-export shared host utilities for external consumers
+export { normalizeHostname, parseHostname, getAuthoritativeRequestHost } from '@/lib/request-host';
+
+/**
+ * Returns true when the request targets the one-time bootstrap setup page
+ * (/setup) or its Server Action POST. This is the minimal surface that
+ * must be allowed on an unknown host during initial installation, before
+ * SystemSettings.appUrl has been seeded.
+ *
+ * The existing bootstrap code mechanism (expiring one-time operator capability,
+ * rate-limited, consumed once, refused when a user already exists) protects
+ * this endpoint.
+ */
+export function isBootstrapSetupRequest(pathname: string, method: string): boolean {
+  if (pathname !== '/setup') return false;
+  const upper = (method || '').toUpperCase();
+  return upper === 'GET' || upper === 'HEAD' || upper === 'POST';
+}
+
+export function getHostWithAliases(hostname: string): string[] {
   const clean = normalizeHostname(hostname);
+  if (!clean) return [];
+  const hosts = new Set<string>([clean]);
+  if (
+    clean === 'localhost' ||
+    clean === '127.0.0.1' ||
+    clean === '[::1]' ||
+    clean.endsWith('.localhost')
+  ) {
+    return Array.from(hosts);
+  }
+
+  // Use tldts to symmetrically pair genuine apex domains (e.g. opsnite.com ↔ www.opsnite.com,
+  // example.co.uk ↔ www.example.co.uk) without pairing arbitrary subdomains in either direction
+  // (e.g. app.opsnite.com or www.app.opsnite.com).
+  const parsed = parseDomain(clean);
+  if (parsed.domain) {
+    if (parsed.subdomain === '') {
+      // Genuine apex domain -> pair with www.<apex>
+      hosts.add(`www.${clean}`);
+    } else if (parsed.subdomain === 'www') {
+      // Genuine www.<apex> domain -> pair with apex
+      hosts.add(parsed.domain);
+    }
+  }
+
+  return Array.from(hosts);
+}
+
+export function getAllowedAppHosts(canonicalAppHost?: string | null): Set<string> {
+  const allowed = new Set<string>([
+    'localhost',
+    '127.0.0.1',
+    '[::1]',
+  ]);
+
+  // Canonical sources get automatic www ↔ apex alias generation
+  const canonicalSources: (string | null | undefined)[] = [
+    canonicalAppHost,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXTAUTH_URL,
+  ];
+
+  for (const candidate of canonicalSources) {
+    if (!candidate) continue;
+    const parsed = parseHostname(candidate);
+    if (parsed) {
+      for (const host of getHostWithAliases(parsed)) {
+        allowed.add(host);
+      }
+    }
+  }
+
+  // Explicit aliases are exact — no automatic www pairing
+  if (process.env.APP_HOST_ALIASES) {
+    for (const alias of process.env.APP_HOST_ALIASES.split(',')) {
+      const parsed = parseHostname(alias.trim());
+      if (parsed) {
+        allowed.add(parsed);
+      }
+    }
+  }
+
+  return allowed;
+}
+
+export function isAllowedApplicationHost(
+  hostname: string,
+  canonicalAppHost?: string | null
+): boolean {
+  if (!hostname) return false;
+  const clean = normalizeHostname(hostname);
+  if (!clean) return false;
   if (
     clean === 'localhost' ||
     clean === '127.0.0.1' ||
@@ -177,42 +273,49 @@ export function isRecognizedAppHost(hostname: string, appHost?: string | null): 
   ) {
     return true;
   }
-  if (appHost) {
-    const cleanAppHost = parseHostname(appHost);
-    if (cleanAppHost && clean === cleanAppHost) return true;
-  }
-  const defaultEnvAppHost = parseHostname(
-    process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
-  );
-  if (defaultEnvAppHost && clean === defaultEnvAppHost) {
-    return true;
-  }
-  return false;
+  const allowed = getAllowedAppHosts(canonicalAppHost);
+  return allowed.has(clean);
 }
 
-export function normalizeHostname(value?: string | null) {
-  if (!value) return '';
-  const candidate = value.trim().toLowerCase().replace(/\.$/, '');
-  if (!candidate || candidate.length > 253 || /[^a-z0-9.:[\]-]/.test(candidate)) return '';
-  try {
-    return new URL(`http://${candidate}`).hostname.replace(/^\[|\]$/g, '');
-  } catch {
-    return '';
-  }
+export const isRecognizedAppHost = isAllowedApplicationHost;
+
+export function getCanonicalApplicationHost(statusConfigAppHost?: string | null): string {
+  const candidate =
+    statusConfigAppHost ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXTAUTH_URL ||
+    'localhost';
+  return parseHostname(candidate) || 'localhost';
 }
 
-function parseHostname(value?: string | null) {
-  if (!value) return '';
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    try {
-      return normalizeHostname(new URL(trimmed).host);
-    } catch {
-      return '';
-    }
+export function shouldRedirectToCanonicalAppHost(
+  requestHost: string,
+  canonicalHost: string,
+  pathname: string,
+  method: string
+): boolean {
+  if (process.env.REDIRECT_TO_CANONICAL_HOST === 'false') return false;
+  if (!requestHost || !canonicalHost) return false;
+  if (requestHost === canonicalHost) return false;
+  if (
+    requestHost === 'localhost' ||
+    requestHost === '127.0.0.1' ||
+    requestHost.endsWith('.localhost') ||
+    canonicalHost === 'localhost' ||
+    canonicalHost === '127.0.0.1' ||
+    canonicalHost.endsWith('.localhost')
+  ) {
+    return false;
   }
-  return normalizeHostname(trimmed);
+  if (pathname === '/api/status-page/domains' || pathname === '/api/health') {
+    return false;
+  }
+  if (method !== 'GET' && method !== 'HEAD') {
+    return false;
+  }
+  const isWwwPair =
+    requestHost === `www.${canonicalHost}` || canonicalHost === `www.${requestHost}`;
+  return isWwwPair;
 }
 
 const DEFAULT_APP_HOST =
@@ -256,10 +359,10 @@ type CachedDomainConfig = {
 let cachedStatusDomain: CachedDomainConfig | null = null;
 let inflightStatusDomainFetch: Promise<StatusDomainConfig | null> | null = null;
 
-async function fetchStatusDomainConfig(): Promise<StatusDomainConfig | null> {
+async function fetchStatusDomainConfig(forceRefresh = false): Promise<StatusDomainConfig | null> {
   const now = Date.now();
-  if (cachedStatusDomain && cachedStatusDomain.expiresAt > now) return cachedStatusDomain.value;
-  if (inflightStatusDomainFetch) return inflightStatusDomainFetch;
+  if (!forceRefresh && cachedStatusDomain && cachedStatusDomain.expiresAt > now) return cachedStatusDomain.value;
+  if (!forceRefresh && inflightStatusDomainFetch) return inflightStatusDomainFetch;
 
   inflightStatusDomainFetch = (async () => {
     try {
@@ -567,59 +670,45 @@ export default async function middleware(req: NextRequest) {
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
 
-  const rawHost = normalizeHostname(req.headers.get('host'));
-  const rawForwarded = req.headers
-    .get('x-forwarded-host')
-    ?.split(',')
-    .map(value => value.trim())
-    .filter(Boolean)
-    .at(-1);
-  const forwardedHost = normalizeHostname(rawForwarded);
+  const requestHost = getAuthoritativeRequestHost(req);
 
   // Internal status-domain configuration provider: bypass to avoid recursive middleware deadlock
-  if (pathname === '/api/status-page/domains' && isRecognizedAppHost(rawHost || forwardedHost)) {
+  if (pathname === '/api/status-page/domains' && isAllowedApplicationHost(requestHost)) {
     return response;
   }
 
-  // Check published status routes for both candidate hosts (Host and X-Forwarded-Host)
-  const hostPublished = rawHost ? await fetchPublishedStatusDomain(rawHost) : null;
-  const fwdPublished =
-    forwardedHost && forwardedHost !== rawHost
-      ? await fetchPublishedStatusDomain(forwardedHost)
-      : null;
-  const publishedPage = hostPublished || fwdPublished;
+  // 1. Resolve status route strictly using the authoritative request host
+  const publishedPage = requestHost ? await fetchPublishedStatusDomain(requestHost) : null;
 
-  const statusConfig =
-    publishedPage || usesExternalStatusServingStore() ? null : await fetchStatusDomainConfig();
+  let statusConfig: StatusDomainConfig | null = null;
+  if (!publishedPage && !usesExternalStatusServingStore()) {
+    statusConfig = await fetchStatusDomainConfig();
+  }
 
   let matchedPage: StatusDomainPage | null = null;
-  if (statusConfig?.enabled) {
-    const candidateHosts = [rawHost, forwardedHost].filter(Boolean);
+  if (!publishedPage && statusConfig?.enabled && requestHost) {
     // 1st priority: explicit customDomain or explicit subdomain match
     matchedPage =
       statusConfig.pages?.find(page => {
-        return candidateHosts.some(h => {
-          const cleanHost = normalizeHostname(h);
-          const customHost = parseHostname(page.customDomain);
-          if (customHost && cleanHost === customHost) return true;
-          if (page.subdomain) {
-            const cleanSub = parseHostname(page.subdomain);
-            if (cleanSub && cleanHost === cleanSub) return true;
-            if (statusConfig.appHost) {
-              const extracted = extractSubdomainFromHost(cleanHost, statusConfig.appHost);
-              if (extracted && extracted === cleanSub) return true;
-            }
+        const customHost = parseHostname(page.customDomain);
+        if (customHost && requestHost === customHost) return true;
+        if (page.subdomain) {
+          const cleanSub = parseHostname(page.subdomain);
+          if (cleanSub && requestHost === cleanSub) return true;
+          if (statusConfig?.appHost) {
+            const extracted = extractSubdomainFromHost(requestHost, statusConfig.appHost);
+            if (extracted && extracted === cleanSub) return true;
           }
-          return false;
-        });
+        }
+        return false;
       }) ?? null;
 
     // 2nd priority: general status route matching (slug, default status page fallback)
     if (!matchedPage) {
       matchedPage =
-        statusConfig.pages?.find(page => {
-          return candidateHosts.some(h => matchesStatusPageDomain(page, h, statusConfig.appHost));
-        }) ?? null;
+        statusConfig.pages?.find(page =>
+          matchesStatusPageDomain(page, requestHost, statusConfig?.appHost)
+        ) ?? null;
     }
   }
 
@@ -648,18 +737,52 @@ export default async function middleware(req: NextRequest) {
     });
   }
 
-  const activeHostname = forwardedHost || rawHost;
-  if (
-    !isRecognizedAppHost(activeHostname, statusConfig?.appHost) ||
-    (rawHost && !isRecognizedAppHost(rawHost, statusConfig?.appHost))
-  ) {
-    return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
+  // 2. Bootstrap setup exception: allow /setup on unknown hosts for initial installation.
+  //    Status domain already handled above (returns 404 for /setup via firewall).
+  //    The existing secure bootstrap code mechanism (one-time operator capability,
+  //    rate-limited, consumed once, refuses when a user already exists) protects
+  //    this endpoint. Once bootstrap completes, SystemSettings.appUrl is seeded
+  //    and the host becomes recognized — closing this exception permanently.
+  if (isBootstrapSetupRequest(pathname, req.method)) {
+    return response;
+  }
+
+  // 3. Validate authoritative request host as an allowed application host
+  if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
+    // If not recognized against static env hosts or cached config, force-refresh
+    // DB-backed host config once before returning 421. This handles:
+    // 1) First login immediately after /setup (cache previously had appHost = null)
+    // 2) Domain changes from Settings -> Application URL
+    statusConfig = await fetchStatusDomainConfig(true);
+    if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
+      return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
+    }
+  }
+
+  // 4. Canonical host 308 redirection for domain aliases (e.g. opsnite.com -> www.opsnite.com)
+  const canonicalHost = getCanonicalApplicationHost(statusConfig?.appHost);
+  if (shouldRedirectToCanonicalAppHost(requestHost, canonicalHost, pathname, req.method)) {
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const originUrl = new URL(authoritativeOrigin);
+    const targetHost = canonicalHost.includes(':')
+      ? canonicalHost
+      : originUrl.port
+        ? `${canonicalHost}:${originUrl.port}`
+        : canonicalHost;
+    const canonicalUrl = new URL(pathname + req.nextUrl.search, `${originUrl.protocol}//${targetHost}`);
+
+    const redirectResponse = NextResponse.redirect(canonicalUrl, { status: 308 });
+    Object.entries(securityHeaders).forEach(([key, value]) =>
+      redirectResponse.headers.set(key, value)
+    );
+    return redirectResponse;
   }
 
   // Old mobile reset links remain valid but converge on the single responsive page.
   if (pathname === '/m/reset-password') {
-    const resetUrl = req.nextUrl.clone();
-    resetUrl.pathname = '/reset-password';
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const resetUrl = new URL('/reset-password', authoritativeOrigin);
+    resetUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(resetUrl);
     Object.entries(securityHeaders).forEach(([key, value]) =>
       redirectResponse.headers.set(key, value)
@@ -691,8 +814,9 @@ export default async function middleware(req: NextRequest) {
     );
 
   if (shouldRedirectToMobile && mobileDestination) {
-    const mobileUrl = req.nextUrl.clone();
-    mobileUrl.pathname = mobileDestination;
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const mobileUrl = new URL(mobileDestination, authoritativeOrigin);
+    mobileUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(mobileUrl);
     Object.entries(securityHeaders).forEach(([key, value]) =>
       redirectResponse.headers.set(key, value)
@@ -768,7 +892,8 @@ export default async function middleware(req: NextRequest) {
         req.nextUrl.searchParams.get('callbackUrl'),
         defaultDest
       );
-      const redirectResponse = NextResponse.redirect(new URL(redirectUrl, req.url));
+      const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+      const redirectResponse = NextResponse.redirect(new URL(redirectUrl, authoritativeOrigin));
       Object.entries(securityHeaders).forEach(([key, value]) =>
         redirectResponse.headers.set(key, value)
       );
@@ -779,8 +904,9 @@ export default async function middleware(req: NextRequest) {
 
   if (isPublicPath(pathname)) return response;
 
-  const url = req.nextUrl.clone();
-  url.pathname = pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
+  const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+  const loginPath = pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
+  const url = new URL(loginPath, authoritativeOrigin);
   url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
   const redirectResponse = NextResponse.redirect(url);
   redirectResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
