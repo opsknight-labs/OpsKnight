@@ -154,8 +154,6 @@ export default function ComplianceClientTabs({
   const [searchQuery, setSearchQuery] = useState('');
 
   const totalControls = overall.IMPLEMENTED + overall.PARTIAL + overall.MISSING;
-  const percentImplemented =
-    totalControls > 0 ? Math.round((overall.IMPLEMENTED / totalControls) * 100) : 0;
 
   const [isEvaluating, setIsEvaluating] = useState(false);
   const router = useRouter();
@@ -264,7 +262,7 @@ export default function ComplianceClientTabs({
               variant="outline"
               className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
             >
-              {percentImplemented}% Implemented
+              Repository Baseline: {overall.IMPLEMENTED}/{totalControls}
             </Badge>
             <Badge
               variant="outline"
@@ -302,22 +300,22 @@ export default function ComplianceClientTabs({
         }
         stats={[
           {
-            label: 'Implemented',
-            value: `${overall.IMPLEMENTED} (${percentImplemented}%)`,
+            label: 'Baseline Implemented',
+            value: `${overall.IMPLEMENTED} of ${totalControls}`,
             icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-            subtext: 'Controls verified',
+            subtext: 'Repository baseline claims',
           },
           {
-            label: 'Partial Controls',
+            label: 'Baseline Partial',
             value: `${overall.PARTIAL}`,
             icon: <TriangleAlert className="h-3.5 w-3.5" />,
-            subtext: 'In-progress remediations',
+            subtext: 'Identified catalog gaps',
           },
           {
-            label: 'Missing / Gaps',
+            label: 'Baseline Missing',
             value: `${overall.MISSING}`,
             icon: <CircleDashed className="h-3.5 w-3.5" />,
-            subtext: 'Unaddressed requirements',
+            subtext: 'Unaddressed features',
           },
           {
             label: 'Frameworks',
@@ -413,7 +411,7 @@ export default function ComplianceClientTabs({
                         variant="outline"
                         className="text-[11px] font-mono font-bold bg-muted/40"
                       >
-                        {pct}%
+                        {fw.counts.IMPLEMENTED}/{total} Baseline
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 line-clamp-2 leading-relaxed">

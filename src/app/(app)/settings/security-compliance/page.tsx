@@ -7,6 +7,7 @@ import { getReadiness } from '@/lib/compliance/readiness';
 import { discoverSubjectData, subjectDiscoveryInputSchema } from '@/lib/privacy/discovery';
 import { personalDataRegistry } from '@/lib/privacy/registry';
 import { getUserPermissions } from '@/lib/rbac';
+import { resolveComplianceRuntimeState } from '@/lib/compliance/state';
 import ComplianceClientTabs from '@/components/settings/compliance/ComplianceClientTabs';
 import type { Prisma } from '@prisma/client';
 
@@ -77,16 +78,21 @@ export default async function SecurityCompliancePage({
   }));
 
   const rawControlStates = await prisma.complianceControlState.findMany();
-  const controlStates = rawControlStates.map(s => ({
-    controlId: s.controlId,
-    status: s.status,
-    latestEvaluationId: s.latestEvaluationId,
-    evaluatorId: s.evaluatorId,
-    evaluatorVersion: s.evaluatorVersion,
-    evaluatedAt: s.evaluatedAt.toISOString(),
-    validUntil: s.validUntil ? s.validUntil.toISOString() : null,
-    summary: s.summary,
-  }));
+  const stateMap = new Map(rawControlStates.map(s => [s.controlId, s]));
+  const now = new Date();
+  const controlStates = complianceControls
+    .map(c => resolveComplianceRuntimeState(c, stateMap.get(c.id), now))
+    .filter((s): s is NonNullable<typeof s> => s !== null)
+    .map(s => ({
+      controlId: s.controlId,
+      status: s.status,
+      latestEvaluationId: s.latestEvaluationId,
+      evaluatorId: s.evaluatorId,
+      evaluatorVersion: s.evaluatorVersion,
+      evaluatedAt: s.evaluatedAt.toISOString(),
+      validUntil: s.validUntil ? s.validUntil.toISOString() : null,
+      summary: s.summary,
+    }));
   const canEvaluate = permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVALUATE);
 
   return (

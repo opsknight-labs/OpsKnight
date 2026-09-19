@@ -107,17 +107,17 @@ describe('ComplianceClientTabs', () => {
     ).toBeInTheDocument();
 
     // Badges (adhering to readiness percentage without "compliant" or "score")
-    expect(screen.getByText(/75% Implemented/i)).toBeInTheDocument();
+    expect(screen.getByText(/Repository Baseline:\s*15\s*\/\s*20/i)).toBeInTheDocument();
     expect(screen.getByText('Enterprise Governance')).toBeInTheDocument();
 
     // 4 Stats capsules
-    expect(screen.getByText('Implemented')).toBeInTheDocument();
-    expect(screen.getByText('15 (75%)')).toBeInTheDocument();
+    expect(screen.getByText('Baseline Implemented')).toBeInTheDocument();
+    expect(screen.getByText('15 of 20')).toBeInTheDocument();
 
-    expect(screen.getByText('Partial Controls')).toBeInTheDocument();
+    expect(screen.getByText('Baseline Partial')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
 
-    expect(screen.getByText('Missing / Gaps')).toBeInTheDocument();
+    expect(screen.getByText('Baseline Missing')).toBeInTheDocument();
     expect(screen.getAllByText('2').length).toBeGreaterThan(0);
 
     expect(screen.getByText('Frameworks')).toBeInTheDocument();

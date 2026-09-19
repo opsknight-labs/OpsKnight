@@ -91,42 +91,48 @@ export async function evaluateControl(
     },
   });
 
-  // Update current state projection cache with monotonic race protection
-  const existingState = await context.prisma.complianceControlState.findUnique({
-    where: { controlId: control.id },
-  });
+  // Update current state projection cache with transaction advisory lock and monotonic protection
+  const controlState = await context.prisma.$transaction(async tx => {
+    // Acquire transaction-scoped advisory lock for this controlId
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`compliance-control:${control.id}`}, 0))`;
 
-  let controlState: ComplianceControlState;
-  if (!existingState) {
-    controlState = await context.prisma.complianceControlState.create({
-      data: {
-        controlId: control.id,
-        status: result.status,
-        latestEvaluationId: evaluation.id,
-        evaluatorId: evaluator.id,
-        evaluatorVersion: evaluator.version,
-        evaluatedAt: context.now,
-        validUntil: result.validUntil ?? null,
-        summary: result.summary,
-      },
-    });
-  } else if (context.now >= existingState.evaluatedAt) {
-    controlState = await context.prisma.complianceControlState.update({
+    const existingState = await tx.complianceControlState.findUnique({
       where: { controlId: control.id },
-      data: {
-        status: result.status,
-        latestEvaluationId: evaluation.id,
-        evaluatorId: evaluator.id,
-        evaluatorVersion: evaluator.version,
-        evaluatedAt: context.now,
-        validUntil: result.validUntil ?? null,
-        summary: result.summary,
-      },
     });
-  } else {
-    // Stale evaluation resolved after a newer evaluation; retain newer state
-    controlState = existingState;
-  }
+
+    if (!existingState) {
+      return tx.complianceControlState.create({
+        data: {
+          controlId: control.id,
+          status: result.status,
+          latestEvaluationId: evaluation.id,
+          evaluatorId: evaluator.id,
+          evaluatorVersion: evaluator.version,
+          evaluatedAt: context.now,
+          validUntil: result.validUntil ?? null,
+          summary: result.summary,
+        },
+      });
+    }
+
+    if (context.now >= existingState.evaluatedAt) {
+      return tx.complianceControlState.update({
+        where: { controlId: control.id },
+        data: {
+          status: result.status,
+          latestEvaluationId: evaluation.id,
+          evaluatorId: evaluator.id,
+          evaluatorVersion: evaluator.version,
+          evaluatedAt: context.now,
+          validUntil: result.validUntil ?? null,
+          summary: result.summary,
+        },
+      });
+    }
+
+    // A newer evaluation was committed before lock acquisition; retain newer state
+    return existingState;
+  });
 
   return { evaluation, controlState };
 }

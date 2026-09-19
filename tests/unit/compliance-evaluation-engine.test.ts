@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
+import type { ComplianceEvaluationContext } from '@/lib/compliance/evaluators/types';
 import { evaluateControl } from '@/lib/compliance/evaluation/engine';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
 
@@ -7,15 +9,32 @@ vi.mock('@/lib/audit', () => ({
   emitAuditEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
+interface MockPrisma {
+  $transaction: ReturnType<typeof vi.fn>;
+  $executeRaw: ReturnType<typeof vi.fn>;
+  complianceEvaluation: {
+    create: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  };
+  complianceControlState: {
+    findUnique: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  };
+}
+
 describe('compliance evaluation engine (unit)', () => {
-  let mockPrisma: any;
+  let mockPrisma: MockPrisma;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockPrisma = {
+      $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockPrisma)),
+      $executeRaw: vi.fn().mockResolvedValue(1),
       complianceEvaluation: {
-        create: vi.fn().mockImplementation(({ data }: any) => ({
+        create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
           id: `eval_${Math.random().toString(36).slice(2, 8)}`,
           ...data,
           createdAt: new Date(),
@@ -24,11 +43,11 @@ describe('compliance evaluation engine (unit)', () => {
       },
       complianceControlState: {
         findUnique: vi.fn().mockResolvedValue(null),
-        create: vi.fn().mockImplementation(({ data }: any) => ({
+        create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
           ...data,
           updatedAt: new Date(),
         })),
-        update: vi.fn().mockImplementation(({ data }: any) => ({
+        update: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
           ...data,
           updatedAt: new Date(),
         })),
@@ -36,6 +55,17 @@ describe('compliance evaluation engine (unit)', () => {
       },
     };
   });
+
+  function makeContext(
+    overrides: Partial<ComplianceEvaluationContext> = {}
+  ): ComplianceEvaluationContext {
+    return {
+      prisma: mockPrisma as unknown as PrismaClient,
+      now: new Date('2026-09-19T14:00:00.000Z'),
+      controlRegistryFingerprint: 'mock-fingerprint',
+      ...overrides,
+    };
+  }
 
   it('evaluates a runtime control and persists evaluation and state projection', async () => {
     const fakeEvaluator = {
@@ -52,12 +82,9 @@ describe('compliance evaluation engine (unit)', () => {
 
     complianceEvaluatorRegistry['encryption.at-rest'] = fakeEvaluator;
 
-    const context = {
-      prisma: mockPrisma,
-      now: new Date('2026-09-19T14:00:00.000Z'),
-      controlRegistryFingerprint: 'mock-fingerprint',
+    const context = makeContext({
       actor: { id: 'admin-1', email: 'admin@example.com', name: 'Admin' },
-    };
+    });
 
     const { evaluation, controlState } = await evaluateControl({
       controlId: 'SEC-ENC-001',
@@ -78,32 +105,20 @@ describe('compliance evaluation engine (unit)', () => {
   });
 
   it('rejects an unknown control ID', async () => {
-    const context = {
-      prisma: mockPrisma,
-      now: new Date(),
-      controlRegistryFingerprint: 'mock-fp',
-    };
-
     await expect(
       evaluateControl({
         controlId: 'NON-EXISTENT-999',
-        context,
+        context: makeContext(),
         trigger: 'MANUAL',
       })
     ).rejects.toThrow(/not found in registry/i);
   });
 
   it('rejects a catalog-only control for runtime evaluation', async () => {
-    const context = {
-      prisma: mockPrisma,
-      now: new Date(),
-      controlRegistryFingerprint: 'mock-fp',
-    };
-
     await expect(
       evaluateControl({
         controlId: 'SEC-AUTH-001',
-        context,
+        context: makeContext(),
         trigger: 'MANUAL',
       })
     ).rejects.toThrow(/does not support runtime evaluation/i);
@@ -116,15 +131,9 @@ describe('compliance evaluation engine (unit)', () => {
       evaluate: vi.fn().mockRejectedValue(new Error('PostgreSQL connection timeout')),
     };
 
-    const context = {
-      prisma: mockPrisma,
-      now: new Date('2026-09-19T14:00:00.000Z'),
-      controlRegistryFingerprint: 'mock-fp',
-    };
-
     const { evaluation, controlState } = await evaluateControl({
       controlId: 'SEC-ENC-001',
-      context,
+      context: makeContext(),
       trigger: 'API',
     });
 
@@ -161,15 +170,9 @@ describe('compliance evaluation engine (unit)', () => {
     });
 
     // Older evaluation at 14:00 finishes late
-    const context = {
-      prisma: mockPrisma,
-      now: new Date('2026-09-19T14:00:00.000Z'),
-      controlRegistryFingerprint: 'mock-fp',
-    };
-
     const { controlState } = await evaluateControl({
       controlId: 'SEC-ENC-001',
-      context,
+      context: makeContext({ now: new Date('2026-09-19T14:00:00.000Z') }),
       trigger: 'API',
     });
 

@@ -3,7 +3,7 @@ import type {
   ComplianceEvaluationContext,
   ComplianceEvaluatorResult,
 } from './types';
-import { computeRegistryFingerprint } from '@/lib/encryption/registry';
+import { computeRegistryFingerprint, ENCRYPTION_TARGETS } from '@/lib/encryption/registry';
 import { getActiveKeyId } from '@/lib/encryption';
 
 export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
@@ -67,6 +67,47 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
       };
     }
 
+    const targetMap = new Map(latestVerifyRun.targetStates.map(t => [t.targetId, t]));
+    const missingTargetIds: string[] = [];
+    const incompleteTargetIds: string[] = [];
+
+    for (const expectedTarget of ENCRYPTION_TARGETS) {
+      const state = targetMap.get(expectedTarget.id);
+      if (!state) {
+        missingTargetIds.push(expectedTarget.id);
+      } else if (state.status !== 'COMPLETED' || state.processedCount !== state.totalCount) {
+        incompleteTargetIds.push(expectedTarget.id);
+      }
+    }
+
+    if (missingTargetIds.length > 0 || incompleteTargetIds.length > 0) {
+      return {
+        status: 'UNVERIFIED',
+        summary:
+          'Latest encryption verification does not cover all registered encryption targets completely.',
+        findings: [
+          {
+            code: 'INCOMPLETE_VERIFICATION_COVERAGE',
+            message: `Verification missing or incomplete for targets: ${[...missingTargetIds, ...incompleteTargetIds].join(', ')}`,
+            severity: 'WARNING',
+          },
+          ...(missingTargetIds.length > 0
+            ? [{ code: 'MISSING_TARGET_COUNT', value: missingTargetIds.length }]
+            : []),
+          ...(incompleteTargetIds.length > 0
+            ? [{ code: 'INCOMPLETE_TARGET_COUNT', value: incompleteTargetIds.length }]
+            : []),
+        ],
+        evidenceRefs: [
+          {
+            source: 'EncryptionMigrationRun',
+            referenceId: latestVerifyRun.id,
+            description: `Only ${latestVerifyRun.targetStates.length}/${ENCRYPTION_TARGETS.length} targets verified.`,
+          },
+        ],
+      };
+    }
+
     let unavailableKeyCount = 0;
     let ambiguousCount = 0;
     let unreadableCount = 0;
@@ -88,12 +129,9 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
       currentV3Count += stats.currentV3 ?? 0;
     }
 
+    const inspectionErrors = unavailableKeyCount + ambiguousCount + unreadableCount;
     const blockingIssues =
-      unavailableKeyCount +
-      ambiguousCount +
-      unreadableCount +
-      latestVerifyRun.errorRecords +
-      latestVerifyRun.conflictRecords;
+      Math.max(inspectionErrors, latestVerifyRun.errorRecords) + latestVerifyRun.conflictRecords;
 
     const legacyRecords = oldKeyCount + legacyV2Count + legacyV1Count + plaintextCount;
 
