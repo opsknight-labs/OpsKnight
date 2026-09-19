@@ -88,7 +88,8 @@ export function getAuthoritativeRequestHost(req: Request): string {
  *   - origin: used for public application URLs (scheme://hostname[:port])
  */
 export function getAuthoritativeRequestOrigin(
-  source: Request | Headers
+  source: Request | Headers,
+  fallbackAppUrl?: string | null
 ): string | null {
   const getHeader = (name: string): string | null => {
     if ('headers' in source && typeof source.headers?.get === 'function') {
@@ -182,10 +183,47 @@ export function getAuthoritativeRequestOrigin(
       } else if ('url' in source && typeof source.url === 'string') {
         try {
           const parsedUrl = new URL(source.url);
+          const transportProto = parsedUrl.protocol.replace(':', '');
+
           if (untrustedForwardedProto) {
-            // If untrusted X-Forwarded-Proto was present, Next.js server derived parsedUrl.protocol from it.
-            // Discard the spoofed proto if it conflicts with the non-standard port or hostname.
-            if (port && port !== '443') {
+            // Next.js server derives request.url's scheme from req.headers['x-forwarded-proto'].
+            // When proxy headers are untrusted, discard client-spoofed proto and preserve
+            // the transport-derived scheme or connection metadata:
+            // 1) If transport is already http, untrusted x-forwarded-proto: https must not upgrade it
+            // 2) If explicit appUrl is configured (statusConfig/env), use its authoritative scheme
+            // 3) If NEXTAUTH_COOKIE_SECURE=false, environment explicitly runs over HTTP
+            // 4) If loopback/localhost, transport is HTTP
+            // 5) Otherwise, retain transportProto (preserving https on standard and non-standard TLS ports like 8443)
+            const configuredUrl =
+              fallbackAppUrl ||
+              process.env.NEXT_PUBLIC_APP_URL ||
+              process.env.NEXTAUTH_URL;
+            let matchedConfigScheme: string | null = null;
+            if (configuredUrl) {
+              try {
+                const parsedConfig = new URL(configuredUrl);
+                const configPort = parsedConfig.port || (parsedConfig.protocol === 'https:' ? '443' : '80');
+                const requestPort = port || (transportProto === 'http' ? '80' : '443');
+                if (
+                  normalizeHostname(parsedConfig.host) === hostname &&
+                  configPort === requestPort
+                ) {
+                  matchedConfigScheme = parsedConfig.protocol.replace(':', '');
+                }
+              } catch {
+                // Ignore malformed URL
+              }
+            }
+
+            const socketEncrypted =
+              (source as { socket?: { encrypted?: boolean } }).socket?.encrypted ??
+              (source as { connection?: { encrypted?: boolean } }).connection?.encrypted;
+
+            if (matchedConfigScheme) {
+              proto = matchedConfigScheme;
+            } else if (typeof socketEncrypted === 'boolean') {
+              proto = socketEncrypted ? 'https' : 'http';
+            } else if (process.env.NEXTAUTH_COOKIE_SECURE === 'false') {
               proto = 'http';
             } else if (
               hostname === 'localhost' ||
@@ -194,10 +232,10 @@ export function getAuthoritativeRequestOrigin(
             ) {
               proto = 'http';
             } else {
-              proto = 'https';
+              proto = transportProto || 'https';
             }
           } else {
-            proto = parsedUrl.protocol.replace(':', '');
+            proto = transportProto;
           }
           if (!port && parsedUrl.port) {
             port = parsedUrl.port;

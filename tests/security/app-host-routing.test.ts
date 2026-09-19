@@ -541,8 +541,36 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
         'x-forwarded-proto': 'http',
       });
       expect(getAuthoritativeRequestOrigin(headers)).toBe('https://status.customer.test');
+    });
 
-      // NextRequest with non-standard port and spoofed x-forwarded-proto
+    it('getAuthoritativeRequestOrigin preserves HTTPS on non-standard ports when proxy headers are untrusted', async () => {
+      const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
+
+      // When app URL is configured as https on a non-standard port (e.g. 8443), spoofed XFP: http does not downgrade
+      const reqTls = new NextRequest('http://secure.example.com:8443/login', {
+        headers: {
+          host: 'secure.example.com:8443',
+          'x-forwarded-proto': 'http',
+        },
+      });
+      expect(
+        getAuthoritativeRequestOrigin(reqTls, 'https://secure.example.com:8443')
+      ).toBe('https://secure.example.com:8443');
+
+      // Default production behavior without insecure cookies flag preserves https on port 8443
+      const reqTlsDefault = new NextRequest('https://secure.example.com:8443/login', {
+        headers: {
+          host: 'secure.example.com:8443',
+          'x-forwarded-proto': 'http',
+        },
+      });
+      expect(getAuthoritativeRequestOrigin(reqTlsDefault)).toBe('https://secure.example.com:8443');
+    });
+
+    it('getAuthoritativeRequestOrigin retains http scheme when NEXTAUTH_COOKIE_SECURE is false or loopback', async () => {
+      vi.stubEnv('NEXTAUTH_COOKIE_SECURE', 'false');
+      const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
+
       const req = new NextRequest('https://www.opsknight.test:3100/login', {
         headers: {
           host: 'www.opsknight.test:3100',
