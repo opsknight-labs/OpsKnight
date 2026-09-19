@@ -148,6 +148,8 @@ export function getAuthoritativeRequestOrigin(
       proto = forwardedProto;
     }
   } else {
+    const untrustedForwardedProto = getHeader('x-forwarded-proto');
+
     // Check browser origin header (standard for POST / Server Actions)
     const originHeader = getHeader('origin');
     if (originHeader) {
@@ -180,7 +182,23 @@ export function getAuthoritativeRequestOrigin(
       } else if ('url' in source && typeof source.url === 'string') {
         try {
           const parsedUrl = new URL(source.url);
-          proto = parsedUrl.protocol.replace(':', '');
+          if (untrustedForwardedProto) {
+            // If untrusted X-Forwarded-Proto was present, Next.js server derived parsedUrl.protocol from it.
+            // Discard the spoofed proto if it conflicts with the non-standard port or hostname.
+            if (port && port !== '443') {
+              proto = 'http';
+            } else if (
+              hostname === 'localhost' ||
+              hostname === '127.0.0.1' ||
+              hostname.endsWith('.localhost')
+            ) {
+              proto = 'http';
+            } else {
+              proto = 'https';
+            }
+          } else {
+            proto = parsedUrl.protocol.replace(':', '');
+          }
           if (!port && parsedUrl.port) {
             port = parsedUrl.port;
           }
