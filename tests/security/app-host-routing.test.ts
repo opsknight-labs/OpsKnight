@@ -352,6 +352,27 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
 
       expect(res.status).toBe(421);
     });
+
+    it('canonical subdomains (e.g. app.opsnite.com) do NOT get automatic www pairing', async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.opsnite.com');
+      vi.stubEnv('NEXTAUTH_URL', 'https://app.opsnite.com');
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      // Base subdomain works
+      const baseReq = new NextRequest('https://app.opsnite.com/login', {
+        headers: { host: 'app.opsnite.com' },
+      });
+      const baseRes = await middleware(baseReq);
+      expect(baseRes.status).toBe(200);
+
+      // www.app.opsnite.com is NOT paired and is rejected with 421
+      const wwwReq = new NextRequest('https://www.app.opsnite.com/login', {
+        headers: { host: 'www.app.opsnite.com' },
+      });
+      const wwwRes = await middleware(wwwReq);
+      expect(wwwRes.status).toBe(421);
+    });
   });
 
   describe('External Serving Store & Database Canonical App Host Precedence', () => {
@@ -516,6 +537,28 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       expect(res.status).toBe(308);
       // Untrusted XFP is ignored — preserves http
       expect(res.headers.get('location')).toBe('http://opsnite.com:3100/login');
+    });
+
+    it('getHostWithAliases strictly pairs real apex domains and excludes subdomains', async () => {
+      const { getHostWithAliases } = await import('@/middleware');
+
+      // Genuine apex domain gets www pair
+      expect(getHostWithAliases('opssentinal.com')).toEqual(['opssentinal.com', 'www.opssentinal.com']);
+      expect(getHostWithAliases('www.opssentinal.com')).toEqual(['www.opssentinal.com', 'opssentinal.com']);
+
+      // Subdomains do NOT get www pair
+      expect(getHostWithAliases('app.opsnite.com')).toEqual(['app.opsnite.com']);
+      expect(getHostWithAliases('opsknight-devtest.corporateroot.net')).toEqual([
+        'opsknight-devtest.corporateroot.net',
+      ]);
+    });
+
+    it('auth.ts enables host trust by default because middleware validates hosts', async () => {
+      delete process.env.AUTH_TRUST_HOST;
+      const { getAuthOptions } = await import('@/lib/auth');
+      const options = await getAuthOptions();
+
+      expect(options.trustHost).toBe(true);
     });
   });
 });

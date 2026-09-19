@@ -203,13 +203,15 @@ export function getHostWithAliases(hostname: string): string[] {
     return Array.from(hosts);
   }
   if (clean.startsWith('www.')) {
-    const apex = clean.slice(4);
-    if (apex && apex.includes('.')) {
-      hosts.add(apex);
+    const withoutWww = clean.slice(4);
+    if (withoutWww && withoutWww.includes('.')) {
+      hosts.add(withoutWww);
     }
   } else {
     const parts = clean.split('.');
-    if (parts.length >= 2) {
+    // Only automatically add www. to genuine apex domains (e.g. opsnite.com -> www.opsnite.com),
+    // not arbitrary subdomains (e.g. app.opsnite.com or dev.corporate.net)
+    if (parts.length === 2) {
       hosts.add(`www.${clean}`);
     }
   }

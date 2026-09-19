@@ -256,9 +256,11 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
           },
         },
       },
-      // Host headers affect OAuth callback construction. Trust them only when an
-      // operator explicitly opts in for a correctly configured reverse proxy.
-      trustHost: process.env.AUTH_TRUST_HOST?.toLowerCase() === 'true',
+      // Host headers affect OAuth callback construction. The edge middleware
+      // host firewall strictly validates all incoming hosts before they can reach
+      // NextAuth (unknown hosts -> 421, status hosts -> 404). Therefore, host trust
+      // is enabled by default, while still allowing an explicit AUTH_TRUST_HOST=false override.
+      trustHost: process.env.AUTH_TRUST_HOST?.toLowerCase() !== 'false',
       providers: [
         ...(activeOidcConfig && oidcValidation?.metadata
           ? [

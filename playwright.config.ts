@@ -60,7 +60,6 @@ export default defineConfig({
       DATABASE_URL: databaseUrl,
       NEXTAUTH_SECRET: 'opsknight-e2e-nextauth-secret-change-me',
       ENCRYPTION_KEY: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      AUTH_TRUST_HOST: 'true',
       NEXTAUTH_COOKIE_SECURE: 'false',
       TRUST_PROXY_HEADERS: process.env.TRUST_PROXY_HEADERS || 'false',
       PORT: '3100',
