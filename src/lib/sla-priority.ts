@@ -1,5 +1,5 @@
 import { Incident, Service } from '@prisma/client';
-import { resolveSlaTarget } from './metrics/domain/sla-target';
+import { resolveLegacySlaTarget } from './metrics/domain/sla-target';
 import { effectiveMaterializedElapsedMs } from './metrics/domain/sla-clock';
 
 // Priority-based SLA targets (in minutes)
@@ -12,7 +12,7 @@ export function getPrioritySLATarget(
   priority: string | null | undefined,
   service: SlaTargetService
 ): { ack: number; resolve: number } {
-  const target = resolveSlaTarget({
+  const target = resolveLegacySlaTarget({
     priority,
     serviceTargets: {
       ackMinutes: service.targetAckMinutes,

@@ -237,7 +237,7 @@ export async function getWidgetData(
     slaMetricsRaw.activeIncidentSummaries || []
   ).map(inc => {
     const slaAckDeadline = inc.slaAckDeadline ? new Date(inc.slaAckDeadline) : null;
-    const slaResolveDeadline = new Date(inc.slaResolveDeadline);
+    const slaResolveDeadline = inc.slaResolveDeadline ? new Date(inc.slaResolveDeadline) : null;
 
     return {
       id: inc.id,
