@@ -64,11 +64,19 @@ interface EncryptionRun {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  isOrphaned?: boolean;
+  orphanReason?: string | null;
   targetStates?: RunTargetState[];
   initiatedBy?: { id: string; name: string | null; email: string } | null;
 }
 
-export function EncryptionMigrationPanel() {
+export interface EncryptionMigrationPanelProps {
+  readonly canManageEncryption?: boolean;
+}
+
+export function EncryptionMigrationPanel({
+  canManageEncryption = true,
+}: EncryptionMigrationPanelProps) {
   const [loading, setLoading] = useState(true);
   const [keyring, setKeyring] = useState<KeyringMetadata | null>(null);
   const [activeRun, setActiveRun] = useState<EncryptionRun | null>(null);
@@ -360,14 +368,37 @@ export function EncryptionMigrationPanel() {
         </div>
       </div>
 
-      {/* Active Run Banner (if running) */}
+      {/* Active Run Banner (if running or queued) */}
       {activeRun && (activeRun.status === 'RUNNING' || activeRun.status === 'PENDING') && (
-        <div className="rounded-xl border border-primary/40 bg-primary/5 p-4 shadow-xs space-y-3">
+        <div
+          className={cn(
+            'rounded-xl border p-4 shadow-xs space-y-3',
+            activeRun.isOrphaned
+              ? 'border-amber-500/50 bg-amber-500/5 dark:bg-amber-500/10'
+              : 'border-primary/40 bg-primary/5'
+          )}
+        >
+          {activeRun.isOrphaned && (
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-semibold pb-1 border-b border-amber-500/20">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>
+                {activeRun.orphanReason ||
+                  'Run appears orphaned: no active background job found after lease threshold.'}
+              </span>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+              {activeRun.status === 'PENDING' ? (
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 animate-pulse" />
+              ) : (
+                <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+              )}
               <span className="text-sm font-semibold text-foreground">
-                {activeRun.mode} Run in Progress ({activeRun.id})
+                {activeRun.mode} Run:{' '}
+                {activeRun.status === 'PENDING' ? 'Queued (Waiting for worker...)' : 'In Progress'}{' '}
+                ({activeRun.id})
               </span>
             </div>
             <Button
@@ -377,7 +408,7 @@ export function EncryptionMigrationPanel() {
               className="gap-1.5 h-7 text-xs"
             >
               <StopCircle className="h-3.5 w-3.5" />
-              Cancel Run
+              {activeRun.isOrphaned ? 'Recover / Cancel Run' : 'Cancel Run'}
             </Button>
           </div>
 
@@ -398,7 +429,9 @@ export function EncryptionMigrationPanel() {
                           100,
                           Math.round((activeRun.processedRecords / activeRun.totalRecords) * 100)
                         )
-                      : 50
+                      : activeRun.status === 'PENDING'
+                        ? 10
+                        : 50
                   }%`,
                 }}
               />
@@ -434,29 +467,37 @@ export function EncryptionMigrationPanel() {
             variant="outline"
             size="sm"
             onClick={() => handleStartRun('PREVIEW')}
-            disabled={isSubmitting || activeRun?.status === 'RUNNING'}
+            disabled={
+              isSubmitting || activeRun?.status === 'RUNNING' || activeRun?.status === 'PENDING'
+            }
             className="gap-1.5 h-8 text-xs font-medium"
           >
             <Eye className="h-3.5 w-3.5 text-muted-foreground" />
             Preview Impact
+            <span className="text-[10px] text-muted-foreground font-mono ml-0.5">(Read-Only)</span>
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => handleStartRun('VERIFY')}
-            disabled={isSubmitting || activeRun?.status === 'RUNNING'}
+            disabled={
+              isSubmitting || activeRun?.status === 'RUNNING' || activeRun?.status === 'PENDING'
+            }
             className="gap-1.5 h-8 text-xs font-medium"
           >
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
             Verify Integrity
+            <span className="text-[10px] text-muted-foreground font-mono ml-0.5">(Read-Only)</span>
           </Button>
 
           <Button
             variant="default"
             size="sm"
             onClick={() => setConfirmMigrateModal(true)}
-            disabled={isSubmitting || activeRun?.status === 'RUNNING'}
+            disabled={
+              isSubmitting || activeRun?.status === 'RUNNING' || activeRun?.status === 'PENDING'
+            }
             className="gap-1.5 h-8 text-xs font-medium bg-primary hover:bg-primary/90"
           >
             <Play className="h-3.5 w-3.5" />

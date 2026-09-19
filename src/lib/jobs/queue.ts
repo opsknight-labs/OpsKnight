@@ -148,6 +148,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.provisioningToken;
     case 'projectionVersion':
       return values.projectionVersion;
+    case 'runId':
+      return values.runId;
     default:
       return undefined;
   }
@@ -556,6 +558,22 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
         : job.scheduledAt,
     },
   });
+
+  if (!shouldRetry && job.type === 'ENCRYPTION_LIFECYCLE') {
+    const runId = payloadValue(job.payload, 'runId');
+    if (typeof runId === 'string' && runId.trim()) {
+      try {
+        const { settleEncryptionLifecycleFailure } = await import('../encryption/worker');
+        await settleEncryptionLifecycleFailure(prisma, runId, error);
+      } catch (settleErr) {
+        logger.warn('jobs.encryption_lifecycle_failure_settlement_failed', {
+          jobId: job.id,
+          runId,
+          error: settleErr instanceof Error ? settleErr.message : String(settleErr),
+        });
+      }
+    }
+  }
 }
 
 export async function processJob(jobInput: QueuedJob | string | null): Promise<boolean> {
