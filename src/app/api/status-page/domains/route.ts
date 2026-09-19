@@ -35,6 +35,7 @@ export async function GET(request: Request) {
       enabled: statusPages.length > 0,
       pages: statusPages,
       appHost,
+      appUrl,
     });
     response.headers.set('Cache-Control', 'no-store');
     return response;
