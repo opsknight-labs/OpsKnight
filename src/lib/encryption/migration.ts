@@ -201,6 +201,7 @@ interface TargetLifecycleContext {
     errorCount: number;
     conflictCount: number;
     keysDetected: unknown;
+    inspectionStats?: unknown;
   };
   keyring: Array<{ id: string; key: string }>;
   activeKey: { id: string; key: string } | null;
@@ -221,6 +222,34 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
     for (const [k, v] of Object.entries(ctx.targetState.keysDetected as Record<string, number>)) {
       keysDetectedMap.set(k, Number(v) || 0);
     }
+  }
+
+  const inspectionStats = {
+    currentV3: 0,
+    oldKeyV3: 0,
+    legacyV2: 0,
+    legacyV1: 0,
+    plaintext: 0,
+    unavailableKey: 0,
+    ambiguous: 0,
+    unreadable: 0,
+    empty: 0,
+  };
+
+  if (
+    typeof ctx.targetState.inspectionStats === 'object' &&
+    ctx.targetState.inspectionStats !== null
+  ) {
+    const prev = ctx.targetState.inspectionStats as Record<string, number>;
+    inspectionStats.currentV3 = Number(prev.currentV3) || 0;
+    inspectionStats.oldKeyV3 = Number(prev.oldKeyV3) || 0;
+    inspectionStats.legacyV2 = Number(prev.legacyV2) || 0;
+    inspectionStats.legacyV1 = Number(prev.legacyV1) || 0;
+    inspectionStats.plaintext = Number(prev.plaintext) || 0;
+    inspectionStats.unavailableKey = Number(prev.unavailableKey) || 0;
+    inspectionStats.ambiguous = Number(prev.ambiguous) || 0;
+    inspectionStats.unreadable = Number(prev.unreadable) || 0;
+    inspectionStats.empty = Number(prev.empty) || 0;
   }
 
   await prisma.encryptionMigrationTargetState.update({
@@ -254,6 +283,17 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
       const current = keysDetectedMap.get(k) || 0;
       keysDetectedMap.set(k, current + count);
     }
+
+    // Merge inspection statistics
+    inspectionStats.currentV3 += batch.stats.currentV3;
+    inspectionStats.oldKeyV3 += batch.stats.oldKeyV3;
+    inspectionStats.legacyV2 += batch.stats.legacyV2;
+    inspectionStats.legacyV1 += batch.stats.legacyV1;
+    inspectionStats.plaintext += batch.stats.plaintext;
+    inspectionStats.unavailableKey += batch.stats.unavailableKey;
+    inspectionStats.ambiguous += batch.stats.ambiguous;
+    inspectionStats.unreadable += batch.stats.unreadable;
+    inspectionStats.empty += batch.stats.empty;
 
     if (mode === 'PREVIEW' || mode === 'VERIFY') {
       // Non-destructive read-only classification
@@ -681,6 +721,7 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
         errorCount,
         conflictCount,
         keysDetected: keysDetectedObj,
+        inspectionStats,
       },
     });
 

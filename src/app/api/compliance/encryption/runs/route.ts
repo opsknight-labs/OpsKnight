@@ -58,6 +58,9 @@ export async function GET(request: NextRequest) {
         initiatedBy: {
           select: { id: true, name: true, email: true },
         },
+        targetStates: {
+          orderBy: { targetId: 'asc' },
+        },
       },
     });
 

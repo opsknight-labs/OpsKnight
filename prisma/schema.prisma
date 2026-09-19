@@ -2683,6 +2683,7 @@ model EncryptionMigrationTargetState {
   errorCount     Int                       @default(0)
   conflictCount  Int                       @default(0)
   keysDetected   Json?                     @default("{}")
+  inspectionStats Json?                    @default("{}")
   createdAt      DateTime                  @default(now())
   updatedAt      DateTime                  @updatedAt
 

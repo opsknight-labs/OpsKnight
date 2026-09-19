@@ -34,6 +34,17 @@ interface RunTargetState {
   errorCount: number;
   conflictCount: number;
   keysDetected: Record<string, number> | null;
+  inspectionStats?: {
+    currentV3?: number;
+    oldKeyV3?: number;
+    legacyV2?: number;
+    legacyV1?: number;
+    plaintext?: number;
+    unavailableKey?: number;
+    ambiguous?: number;
+    unreadable?: number;
+    empty?: number;
+  } | null;
 }
 
 interface EncryptionRun {
@@ -327,6 +338,11 @@ export function EncryptionMigrationPanel() {
                     {a.status === 'UNVERIFIED' && (
                       <Badge variant="secondary" className="text-muted-foreground">
                         Unverified
+                      </Badge>
+                    )}
+                    {a.status === 'UNRESOLVED_RECORDS_EXIST' && (
+                      <Badge className="border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400">
+                        <AlertTriangle className="h-3 w-3 mr-1" /> Blocked — unresolved records
                       </Badge>
                     )}
                   </div>
@@ -636,35 +652,149 @@ export function EncryptionMigrationPanel() {
                 </div>
               </div>
 
+              {/* Preview Impact Summary Counters */}
+              {(() => {
+                let currentV3 = 0;
+                let oldKeyV3 = 0;
+                let legacyV2 = 0;
+                let legacyV1 = 0;
+                let plaintext = 0;
+                let errorTotal = 0;
+
+                for (const t of selectedRun.targetStates || []) {
+                  const s = t.inspectionStats;
+                  if (s) {
+                    currentV3 += s.currentV3 || 0;
+                    oldKeyV3 += s.oldKeyV3 || 0;
+                    legacyV2 += s.legacyV2 || 0;
+                    legacyV1 += s.legacyV1 || 0;
+                    plaintext += s.plaintext || 0;
+                    errorTotal +=
+                      (s.unavailableKey || 0) + (s.ambiguous || 0) + (s.unreadable || 0);
+                  } else {
+                    errorTotal += t.errorCount || 0;
+                  }
+                }
+                const migrationCandidates = oldKeyV3 + legacyV2 + legacyV1 + plaintext;
+                const blockingIssues = errorTotal + selectedRun.errorRecords;
+
+                return (
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-center">
+                      <span className="text-[10px] uppercase font-semibold text-amber-600 dark:text-amber-400 block">
+                        Migration Candidates
+                      </span>
+                      <span className="text-base font-bold text-amber-700 dark:text-amber-300 font-mono">
+                        {migrationCandidates}
+                      </span>
+                    </div>
+                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-center">
+                      <span className="text-[10px] uppercase font-semibold text-emerald-600 dark:text-emerald-400 block">
+                        Already Current
+                      </span>
+                      <span className="text-base font-bold text-emerald-700 dark:text-emerald-300 font-mono">
+                        {currentV3}
+                      </span>
+                    </div>
+                    <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-2.5 text-center">
+                      <span className="text-[10px] uppercase font-semibold text-blue-600 dark:text-blue-400 block">
+                        Legacy Plaintext
+                      </span>
+                      <span className="text-base font-bold text-blue-700 dark:text-blue-300 font-mono">
+                        {plaintext}
+                      </span>
+                    </div>
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-center">
+                      <span className="text-[10px] uppercase font-semibold text-rose-600 dark:text-rose-400 block">
+                        Blocking Issues
+                      </span>
+                      <span className="text-base font-bold text-rose-700 dark:text-rose-300 font-mono">
+                        {blockingIssues}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div>
-                <h5 className="font-semibold text-xs text-foreground mb-2">Target Breakdown</h5>
+                <h5 className="font-semibold text-xs text-foreground mb-2">
+                  {selectedRun.mode === 'MIGRATE'
+                    ? 'Migration Target Progress'
+                    : 'Target Format Breakdown'}
+                </h5>
                 <div className="border border-border/60 rounded-lg overflow-hidden">
                   <table className="w-full text-left text-[11px]">
                     <thead className="bg-muted/40 text-muted-foreground border-b border-border/40">
                       <tr>
                         <th className="py-2 px-3 font-semibold">Target ID</th>
-                        <th className="py-2 px-3 font-semibold">Processed</th>
-                        <th className="py-2 px-3 font-semibold">Migrated</th>
-                        <th className="py-2 px-3 font-semibold">Conflicts</th>
-                        <th className="py-2 px-3 font-semibold">Errors</th>
+                        {selectedRun.mode === 'MIGRATE' ? (
+                          <>
+                            <th className="py-2 px-3 font-semibold text-right">Processed</th>
+                            <th className="py-2 px-3 font-semibold text-right">Migrated</th>
+                            <th className="py-2 px-3 font-semibold text-right">Conflicts</th>
+                            <th className="py-2 px-3 font-semibold text-right">Errors</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="py-2 px-3 font-semibold text-right">Current</th>
+                            <th className="py-2 px-3 font-semibold text-right">Old Key</th>
+                            <th className="py-2 px-3 font-semibold text-right">v2</th>
+                            <th className="py-2 px-3 font-semibold text-right">v1</th>
+                            <th className="py-2 px-3 font-semibold text-right">Plaintext</th>
+                            <th className="py-2 px-3 font-semibold text-right">Errors</th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/30">
-                      {selectedRun.targetStates?.map(t => (
-                        <tr key={t.id}>
-                          <td className="py-2 px-3 font-mono">{t.targetId}</td>
-                          <td className="py-2 px-3 font-mono">{t.processedCount}</td>
-                          <td className="py-2 px-3 font-mono text-emerald-600 dark:text-emerald-400">
-                            {t.migratedCount}
-                          </td>
-                          <td className="py-2 px-3 font-mono text-amber-600 dark:text-amber-400">
-                            {t.conflictCount}
-                          </td>
-                          <td className="py-2 px-3 font-mono text-rose-600 dark:text-rose-400">
-                            {t.errorCount}
-                          </td>
-                        </tr>
-                      ))}
+                      {selectedRun.targetStates?.map(t => {
+                        const s = t.inspectionStats;
+                        return (
+                          <tr key={t.id}>
+                            <td className="py-2 px-3 font-mono font-medium">{t.targetId}</td>
+                            {selectedRun.mode === 'MIGRATE' ? (
+                              <>
+                                <td className="py-2 px-3 font-mono text-right">
+                                  {t.processedCount}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-emerald-600 dark:text-emerald-400">
+                                  {t.migratedCount}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-amber-600 dark:text-amber-400">
+                                  {t.conflictCount}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-rose-600 dark:text-rose-400">
+                                  {t.errorCount}
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="py-2 px-3 font-mono text-right text-emerald-600 dark:text-emerald-400">
+                                  {s?.currentV3 ?? 0}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-amber-600 dark:text-amber-400">
+                                  {s?.oldKeyV3 ?? 0}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-purple-600 dark:text-purple-400">
+                                  {s?.legacyV2 ?? 0}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-indigo-600 dark:text-indigo-400">
+                                  {s?.legacyV1 ?? 0}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-blue-600 dark:text-blue-400">
+                                  {s?.plaintext ?? 0}
+                                </td>
+                                <td className="py-2 px-3 font-mono text-right text-rose-600 dark:text-rose-400">
+                                  {(s?.unavailableKey ?? 0) +
+                                    (s?.ambiguous ?? 0) +
+                                    (s?.unreadable ?? 0) +
+                                    t.errorCount}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

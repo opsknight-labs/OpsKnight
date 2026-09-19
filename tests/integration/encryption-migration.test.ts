@@ -69,6 +69,17 @@ describeIfRealDB('encryption migration integration (real PostgreSQL)', () => {
       where: { id: 'oidc-preview-test' },
     });
     expect(oidcRow?.clientSecret).toBe(k1Secret);
+
+    // Verify preview persisted format breakdown in inspectionStats
+    const oidcState = await testPrisma.encryptionMigrationTargetState.findFirstOrThrow({
+      where: { runId: run.id, targetId: 'oidc.client-secret' },
+    });
+    const stats = oidcState.inspectionStats as Record<string, number>;
+    expect(stats).toBeDefined();
+    expect(stats.oldKeyV3).toBe(1);
+    expect(stats.currentV3).toBe(0);
+    expect(stats.plaintext).toBe(0);
+    expect(stats.unreadable).toBe(0);
   });
 
   it('MIGRATE mode re-encrypts old-key and legacy values to active key using CAS', async () => {
@@ -382,11 +393,15 @@ describeIfRealDB('encryption migration integration (real PostgreSQL)', () => {
       where: { runId: previewRun.id, targetId: 'oidc.client-secret' },
     });
     expect(oidcState?.errorCount).toBe(0);
+    const oidcStats = oidcState?.inspectionStats as Record<string, number>;
+    expect(oidcStats?.legacyV1).toBe(1);
 
     const slackState = await testPrisma.encryptionMigrationTargetState.findFirst({
       where: { runId: previewRun.id, targetId: 'slack.bot-token' },
     });
     expect(slackState?.errorCount).toBe(0);
+    const slackStats = slackState?.inspectionStats as Record<string, number>;
+    expect(slackStats?.legacyV2).toBe(1);
 
     // 5. MIGRATE: Successfully migrates records to v3:k2
     const migrateRun = await startEncryptionRun(testPrisma, {

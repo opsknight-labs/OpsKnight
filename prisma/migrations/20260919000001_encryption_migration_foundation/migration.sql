@@ -38,6 +38,7 @@ CREATE TABLE "EncryptionMigrationTargetState" (
   "errorCount"     INTEGER NOT NULL DEFAULT 0,
   "conflictCount"  INTEGER NOT NULL DEFAULT 0,
   "keysDetected"   JSONB DEFAULT '{}',
+  "inspectionStats" JSONB DEFAULT '{}',
   "createdAt"      TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updatedAt"      TIMESTAMP(3) NOT NULL,
 
