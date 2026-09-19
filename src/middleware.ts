@@ -113,25 +113,18 @@ export function isStatusStaticAsset(pathname: string): boolean {
   ) {
     return true;
   }
-  // Explicit allowlist instead of regex to avoid nested quantifiers (ESLint unsafe-regex).
-  const LOGO_ASSETS = new Set([
-    '/logo.svg',
-    '/logo.png',
-    '/logo.webp',
-    '/logo.gif',
-    '/logo.jpg',
-    '/logo.jpeg',
-    '/logo.ico',
-    '/logo-mark.svg',
-    '/logo-mark.png',
-    '/logo-mark.webp',
-    '/logo-mark.gif',
-    '/logo-mark.jpg',
-    '/logo-mark.jpeg',
-    '/logo-mark.ico',
-  ]);
-  if (LOGO_ASSETS.has(pathname.toLowerCase())) {
-    return true;
+  // String-based logo check: avoids nested quantifiers that ESLint flags as unsafe regex.
+  // Matches /logo.ext and /logo-<suffix>.ext for any known image extension.
+  const LOGO_EXTENSIONS = new Set(['svg', 'png', 'webp', 'gif', 'jpg', 'jpeg', 'ico']);
+  const lowerPath = pathname.toLowerCase();
+  if (lowerPath.startsWith('/logo')) {
+    const dotIdx = lowerPath.lastIndexOf('.');
+    if (dotIdx > 0 && LOGO_EXTENSIONS.has(lowerPath.slice(dotIdx + 1))) {
+      const middle = lowerPath.slice(5, dotIdx); // chars between '/logo' and '.ext'
+      if (middle === '' || middle.startsWith('-')) {
+        return true;
+      }
+    }
   }
   if (
     pathname.startsWith('/icons/') ||
