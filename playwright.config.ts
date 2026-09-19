@@ -28,8 +28,15 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testMatch: /(auth-recovery|navigation-fast-path)\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'] },
+      testMatch: /(auth-recovery|navigation-fast-path|host-bootstrap-routing)\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: [
+            '--host-resolver-rules=MAP *.opsknight.test 127.0.0.1,MAP opsknight.test 127.0.0.1,MAP *.customer.test 127.0.0.1,MAP customer.test 127.0.0.1,MAP *.attacker.test 127.0.0.1,MAP attacker.test 127.0.0.1',
+          ],
+        },
+      },
     },
     {
       name: 'mobile-chromium',
@@ -44,20 +51,20 @@ export default defineConfig({
   ],
   webServer: {
     command: useProductionServer
-      ? 'npm run start:dev'
-      : 'npm run dev -- --hostname 127.0.0.1 --port 3100',
+      ? 'npm run start:dev -- --hostname 0.0.0.0 --port 3100'
+      : 'npm run dev -- --hostname 0.0.0.0 --port 3100',
     url: 'http://127.0.0.1:3100/setup',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
       DATABASE_URL: databaseUrl,
-      NEXTAUTH_URL: 'http://127.0.0.1:3100',
-      NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:3100',
       NEXTAUTH_SECRET: 'opsknight-e2e-nextauth-secret-change-me',
       ENCRYPTION_KEY: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       AUTH_TRUST_HOST: 'true',
+      STATUS_PAGE_DOMAIN_CACHE_TTL: '1',
+      TRUST_PROXY_HEADERS: process.env.TRUST_PROXY_HEADERS || 'false',
       PORT: '3100',
-      HOSTNAME: '127.0.0.1',
+      HOSTNAME: '0.0.0.0',
     },
   },
 });
