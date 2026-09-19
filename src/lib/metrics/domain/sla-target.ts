@@ -26,15 +26,10 @@ function isPositiveFinite(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
-export function resolveSlaTarget(input: {
-  incidentTargets?: IncidentSlaTargetSnapshot | null;
-  priority?: string | null;
-  serviceTargets?: { ackMinutes?: number | null; resolveMinutes?: number | null };
-  definitionOverride?: { ackMinutes?: number | null; resolveMinutes?: number | null } | null;
-  globalDefaults?: { ackMinutes: number; resolveMinutes: number };
-}): SlaTarget {
-  const defaults = input.globalDefaults ?? { ackMinutes: 15, resolveMinutes: 120 };
-  const incidentTargets = input.incidentTargets;
+/** Canonical analytics use only the complete immutable contract captured on the incident. */
+export function resolveFrozenSlaTarget(
+  incidentTargets?: IncidentSlaTargetSnapshot | null
+): SlaTarget | null {
   if (
     isPositiveFinite(incidentTargets?.ackTargetMs) &&
     isPositiveFinite(incidentTargets?.resolveTargetMs)
@@ -45,6 +40,21 @@ export function resolveSlaTarget(input: {
       source: 'incident',
     };
   }
+  return null;
+}
+
+/** @deprecated Compatibility-only target reconstruction. Never use for canonical SLA analytics. */
+export function resolveLegacySlaTarget(input: {
+  incidentTargets?: IncidentSlaTargetSnapshot | null;
+  priority?: string | null;
+  serviceTargets?: { ackMinutes?: number | null; resolveMinutes?: number | null };
+  definitionOverride?: { ackMinutes?: number | null; resolveMinutes?: number | null } | null;
+  globalDefaults?: { ackMinutes: number; resolveMinutes: number };
+}): SlaTarget {
+  const defaults = input.globalDefaults ?? { ackMinutes: 15, resolveMinutes: 120 };
+  const incidentTargets = input.incidentTargets;
+  const frozenTarget = resolveFrozenSlaTarget(incidentTargets);
+  if (frozenTarget) return frozenTarget;
 
   const override = input.definitionOverride;
   if (override?.ackMinutes != null || override?.resolveMinutes != null) {

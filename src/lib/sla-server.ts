@@ -12,11 +12,7 @@ import {
 import { getServiceDynamicStatus } from './service-status';
 import { logger } from './logger';
 import { activeIncidentStatuses, activeIncidentStatusesForFilter } from './incident-status';
-import {
-  getRetentionPolicy,
-  getQueryDateBounds,
-  shouldUseRollups,
-} from './retention-policy';
+import { getRetentionPolicy, getQueryDateBounds, shouldUseRollups } from './retention-policy';
 import { incidentEventSqlPredicate, incidentEventWhereFor } from './incident-event-classifier';
 import { mergeHybridMetrics } from './sla-hybrid-merge';
 import { getActiveOnCallShifts, getWindowOnCallShifts } from './oncall-shifts';
@@ -25,7 +21,7 @@ import { intervalDurationMs, intervalGaps, type TimeInterval } from './metrics/d
 import { compileIncidentMetricFilter, type IncidentMetricFilter } from './metrics/domain/filter';
 import { isRollupCompatibleIncidentFilter } from './metrics/domain/rollup-eligibility';
 import { METRIC_ACCUMULATOR } from './metrics/domain/accumulator';
-import { resolveSlaTarget } from './metrics/domain/sla-target';
+import { resolveFrozenSlaTarget } from './metrics/domain/sla-target';
 import { projectIncidentSlaState } from './incident-sla/state';
 import { slaTargetSql } from './metrics/domain/sla-target-sql';
 import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/domain/sla-clock';
@@ -1664,17 +1660,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   } else {
     // In-memory calculation for small datasets
     for (const incident of recentIncidents) {
-      const target = resolveSlaTarget({
-        incidentTargets: {
-          ackTargetMs: incident.slaAckTargetMs,
-          resolveTargetMs: incident.slaResolveTargetMs,
-        },
-        priority: incident.priority,
-        serviceTargets: {
-          ackMinutes: incident.service.targetAckMinutes,
-          resolveMinutes: incident.service.targetResolveMinutes,
-        },
+      const target = resolveFrozenSlaTarget({
+        ackTargetMs: incident.slaAckTargetMs,
+        resolveTargetMs: incident.slaResolveTargetMs,
       });
+      if (!target) continue;
       const elapsedAt = (evaluationAt: Date) =>
         effectiveElapsedMs({
           startedAt: incident.createdAt,
@@ -1788,20 +1778,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         });
         trendEntry.ackSum += ackElapsed;
         trendEntry.ackCount += 1;
-        const serviceTargets = serviceTargetMap.get(incident.serviceId);
-        const target = resolveSlaTarget({
-          incidentTargets: {
-            ackTargetMs: incident.slaAckTargetMs,
-            resolveTargetMs: incident.slaResolveTargetMs,
-          },
-          priority: incident.priority,
-          serviceTargets,
-          globalDefaults: {
-            ackMinutes: DEFAULT_ACK_TARGET_MINUTES,
-            resolveMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
-          },
+        const target = resolveFrozenSlaTarget({
+          ackTargetMs: incident.slaAckTargetMs,
+          resolveTargetMs: incident.slaResolveTargetMs,
         });
-        if (ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
+        if (target && ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
       }
       if (incident.status === 'RESOLVED' && incident.resolvedAt) {
         trendEntry.resolveSum += capturedOrEffectiveElapsedMs({
@@ -1897,16 +1878,9 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     }
 
     s.count++;
-    const target = resolveSlaTarget({
-      incidentTargets: {
-        ackTargetMs: incident.slaAckTargetMs,
-        resolveTargetMs: incident.slaResolveTargetMs,
-      },
-      priority: incident.priority,
-      serviceTargets: {
-        ackMinutes: incident.service.targetAckMinutes,
-        resolveMinutes: incident.service.targetResolveMinutes,
-      },
+    const target = resolveFrozenSlaTarget({
+      ackTargetMs: incident.slaAckTargetMs,
+      resolveTargetMs: incident.slaResolveTargetMs,
     });
     const elapsedAt = (evaluationAt: Date) =>
       effectiveElapsedMs({
@@ -1919,12 +1893,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     if (ackAt) {
       s.ackSum += elapsedAt(ackAt);
       s.ackCount++;
-      if (elapsedAt(ackAt) > target.ackTargetMs) {
+      if (target && elapsedAt(ackAt) > target.ackTargetMs) {
         s.ackBreaches++;
       }
     } else if (incident.status !== 'RESOLVED') {
       // Check for overdue unacked
-      if (elapsedAt(now) > target.ackTargetMs) {
+      if (target && elapsedAt(now) > target.ackTargetMs) {
         s.ackBreaches++;
       }
     }
@@ -1932,12 +1906,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     if (incident.status === 'RESOLVED' && incident.resolvedAt) {
       s.resolveSum += elapsedAt(incident.resolvedAt);
       s.resolveCount++;
-      if (elapsedAt(incident.resolvedAt) > target.resolveTargetMs) {
+      if (target && elapsedAt(incident.resolvedAt) > target.resolveTargetMs) {
         s.resolveBreaches++;
       }
     } else if (incident.status !== 'RESOLVED') {
       // Check for overdue unresolved
-      if (elapsedAt(now) > target.resolveTargetMs) {
+      if (target && elapsedAt(now) > target.resolveTargetMs) {
         s.resolveBreaches++;
       }
     }
@@ -2150,16 +2124,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     : recentIncidents.slice(0, filters.incidentLimit || DEFAULT_INCIDENT_DISPLAY_LIMIT);
 
   const activeIncidentSummaries = filters.includeActiveIncidents
-    ? activeIncidentsData.map(incident => {
-        const serviceTargets = serviceTargetMap.get(incident.serviceId);
-        const target = resolveSlaTarget({
-          incidentTargets: {
-            ackTargetMs: incident.slaAckTargetMs,
-            resolveTargetMs: incident.slaResolveTargetMs,
-          },
-          priority: incident.priority,
-          serviceTargets,
+    ? activeIncidentsData.flatMap(incident => {
+        const target = resolveFrozenSlaTarget({
+          ackTargetMs: incident.slaAckTargetMs,
+          resolveTargetMs: incident.slaResolveTargetMs,
         });
+        if (!target) return [];
         const elapsedMs = effectiveElapsedMs({
           startedAt: incident.createdAt,
           evaluationAt: now,
@@ -2167,22 +2137,24 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         });
         const ackRemainingMs = Math.max(0, target.ackTargetMs - elapsedMs);
         const resolveRemainingMs = Math.max(0, target.resolveTargetMs - elapsedMs);
-        return {
-          id: incident.id,
-          title: incident.title,
-          status: incident.status,
-          urgency: incident.urgency,
-          createdAt: incident.createdAt,
-          acknowledgedAt: incident.acknowledgedAt ?? null,
-          serviceId: incident.serviceId,
-          serviceName: serviceNameMap.get(incident.serviceId) || 'Unknown service',
-          assigneeId: incident.assigneeId ?? null,
-          targetAckMinutes: target.ackTargetMs / 60_000,
-          targetResolveMinutes: target.resolveTargetMs / 60_000,
-          slaAckDeadline:
-            incident.status === 'ACKNOWLEDGED' ? null : new Date(now.getTime() + ackRemainingMs),
-          slaResolveDeadline: new Date(now.getTime() + resolveRemainingMs),
-        };
+        return [
+          {
+            id: incident.id,
+            title: incident.title,
+            status: incident.status,
+            urgency: incident.urgency,
+            createdAt: incident.createdAt,
+            acknowledgedAt: incident.acknowledgedAt ?? null,
+            serviceId: incident.serviceId,
+            serviceName: serviceNameMap.get(incident.serviceId) || 'Unknown service',
+            assigneeId: incident.assigneeId ?? null,
+            targetAckMinutes: target.ackTargetMs / 60_000,
+            targetResolveMinutes: target.resolveTargetMs / 60_000,
+            slaAckDeadline:
+              incident.status === 'ACKNOWLEDGED' ? null : new Date(now.getTime() + ackRemainingMs),
+            slaResolveDeadline: new Date(now.getTime() + resolveRemainingMs),
+          },
+        ];
       })
     : undefined;
 

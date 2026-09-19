@@ -304,6 +304,8 @@ describe('calculateSLAMetrics trend series', () => {
         serviceId: 'service-1',
         acknowledgedAt: new Date('2026-01-01T01:10:00Z'),
         resolvedAt: new Date('2026-01-01T02:00:00Z'),
+        slaAckTargetMs: 15 * 60_000,
+        slaResolveTargetMs: 120 * 60_000,
         service: { targetAckMinutes: 15, targetResolveMinutes: 120 },
       },
       {
@@ -316,6 +318,8 @@ describe('calculateSLAMetrics trend series', () => {
         serviceId: 'service-1',
         acknowledgedAt: new Date('2026-01-01T05:30:00Z'),
         resolvedAt: null,
+        slaAckTargetMs: 15 * 60_000,
+        slaResolveTargetMs: 120 * 60_000,
         service: { targetAckMinutes: 15, targetResolveMinutes: 120 },
       },
     ];
