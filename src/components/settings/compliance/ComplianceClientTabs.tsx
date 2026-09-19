@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   Activity,
   SlidersHorizontal,
+  Database,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
@@ -248,6 +249,15 @@ export default function ComplianceClientTabs({
             </button>
           );
         })}
+
+        <a
+          href="/settings/system"
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium border border-border/50 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-all ml-auto shrink-0"
+        >
+          <Database className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span>Data Lifecycle &amp; Retention</span>
+          <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+        </a>
       </div>
 
       {/* TAB 1: FRAMEWORKS OVERVIEW */}

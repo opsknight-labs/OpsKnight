@@ -2,52 +2,74 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { performDataCleanup } from '@/lib/data-cleanup';
 
 // Mock dependencies
-const mockPrisma = {
-  incident: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  alert: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-    updateMany: vi.fn(),
-  },
-  logEntry: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  incidentEvent: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  auditLog: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  incidentNote: {
-    deleteMany: vi.fn(),
-  },
-  customFieldValue: {
-    deleteMany: vi.fn(),
-  },
-  inAppNotification: {
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  sLAPerformanceLog: {
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  incidentMetricRollup: {
-    deleteMany: vi.fn().mockResolvedValue({ count: 5 }),
-  },
-  $transaction: vi.fn(async (callback: (tx: any) => unknown) => callback(mockPrisma)),
-};
+const { mockPrisma } = vi.hoisted(() => {
+  const mockPrisma = {
+    incident: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    alert: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    logEntry: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    incidentEvent: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    auditLog: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    incidentNote: {
+      deleteMany: vi.fn(),
+    },
+    customFieldValue: {
+      deleteMany: vi.fn(),
+    },
+    inAppNotification: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    sLAPerformanceLog: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    incidentMetricRollup: {
+      count: vi.fn(),
+      deleteMany: vi.fn().mockResolvedValue({ count: 5 }),
+    },
+    dataRetentionHold: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    privacyRequest: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    privacyExportArtifact: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    statusPageSubscription: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
+    $transaction: vi.fn(async (callback: (tx: any) => unknown) => callback(mockPrisma)),
+  };
+  return { mockPrisma };
+});
 
 vi.mock('@/lib/prisma', () => ({
   default: mockPrisma,
@@ -60,6 +82,9 @@ vi.mock('@/lib/retention-policy', () => ({
     logRetentionDays: 90,
     metricsRetentionDays: 365,
     realTimeWindowDays: 90,
+    completedPrivacyRequestRetentionDays: 730,
+    expiredPrivacyArtifactRetentionDays: 30,
+    unsubscribedSubscriberRetentionDays: 30,
   }),
 }));
 
@@ -71,11 +96,21 @@ describe('Data Cleanup Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default counts
-    mockPrisma.incident.count.mockResolvedValue(5);
+    mockPrisma.incident.findMany.mockResolvedValue([
+      { id: 'inc-1' },
+      { id: 'inc-2' },
+      { id: 'inc-3' },
+      { id: 'inc-4' },
+      { id: 'inc-5' },
+    ]);
     mockPrisma.alert.count.mockResolvedValue(10);
     mockPrisma.logEntry.count.mockResolvedValue(20);
     mockPrisma.incidentEvent.count.mockResolvedValue(0);
     mockPrisma.auditLog.count.mockResolvedValue(0);
+    mockPrisma.dataRetentionHold.findMany.mockResolvedValue([]);
+    mockPrisma.privacyRequest.findMany.mockResolvedValue([]);
+    mockPrisma.privacyExportArtifact.findMany.mockResolvedValue([]);
+    mockPrisma.statusPageSubscription.findMany.mockResolvedValue([]);
   });
 
   it('should respect dryRun flag and NOT delete data', async () => {
@@ -87,12 +122,19 @@ describe('Data Cleanup Service', () => {
     expect(result.logs).toBe(20);
     expect(result.events).toBe(0);
     expect(result.auditLogs).toBe(0);
+    expect(result.held).toEqual({ incidents: 0, privacyRequests: 0 });
+    expect(result.lifecycle).toEqual({
+      privacyRequests: 0,
+      expiredExportArtifacts: 0,
+      unsubscribedSubscribers: 0,
+    });
 
-    expect(mockPrisma.incident.count).toHaveBeenCalledWith({
+    expect(mockPrisma.incident.findMany).toHaveBeenCalledWith({
       where: expect.objectContaining({
         status: 'RESOLVED',
         events: expect.objectContaining({ none: expect.any(Object) }),
       }),
+      select: { id: true },
     });
 
     // Verify delete was NOT called
@@ -105,7 +147,8 @@ describe('Data Cleanup Service', () => {
   it('should delete data when dryRun is false', async () => {
     // Setup for execution flow
     mockPrisma.incident.findMany
-      .mockResolvedValueOnce([{ id: 'inc-1' }, { id: 'inc-2' }])
+      .mockResolvedValueOnce([{ id: 'inc-1' }, { id: 'inc-2' }]) // initial eligible query
+      .mockResolvedValueOnce([{ id: 'inc-1' }, { id: 'inc-2' }]) // batch query inside execution
       .mockResolvedValueOnce([]);
     mockPrisma.incidentEvent.deleteMany.mockResolvedValue({ count: 10 });
     mockPrisma.incidentNote.deleteMany.mockResolvedValue({ count: 2 });
@@ -117,7 +160,9 @@ describe('Data Cleanup Service', () => {
     mockPrisma.logEntry.findMany.mockResolvedValueOnce([{ id: 'log-1' }]).mockResolvedValueOnce([]);
     mockPrisma.logEntry.deleteMany.mockResolvedValue({ count: 1 });
     mockPrisma.incidentEvent.findMany.mockResolvedValue([]);
-    mockPrisma.auditLog.findMany.mockResolvedValueOnce([{ id: 'audit-1' }]).mockResolvedValueOnce([]);
+    mockPrisma.auditLog.findMany
+      .mockResolvedValueOnce([{ id: 'audit-1' }])
+      .mockResolvedValueOnce([]);
     mockPrisma.auditLog.deleteMany.mockResolvedValue({ count: 1 });
     mockPrisma.inAppNotification.findMany.mockResolvedValue([]);
     mockPrisma.sLAPerformanceLog.findMany.mockResolvedValue([]);

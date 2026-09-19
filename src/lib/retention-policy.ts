@@ -33,6 +33,10 @@ export interface RetentionPolicy {
    * so an unconfigured tenant matches the pre-tenant behaviour.
    */
   businessHoursTimeZone: string;
+  // Lifecycle retention settings (Phase 3 PR2)
+  completedPrivacyRequestRetentionDays: number;
+  expiredPrivacyArtifactRetentionDays: number;
+  unsubscribedSubscriberRetentionDays: number;
 }
 
 // Default retention policy (used if settings not found)
@@ -43,6 +47,9 @@ const DEFAULT_POLICY: RetentionPolicy = {
   metricsRetentionDays: 365, // 1 year
   realTimeWindowDays: 90, // 90 days for real-time, older uses rollups
   businessHoursTimeZone: 'UTC',
+  completedPrivacyRequestRetentionDays: 730, // 2 years
+  expiredPrivacyArtifactRetentionDays: 30, // 30 days
+  unsubscribedSubscriberRetentionDays: 30, // 30 days
 };
 
 // Cache for retention policy
@@ -74,12 +81,11 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
 
     if (!prisma) return DEFAULT_POLICY;
 
-    // `businessHoursTimeZone` was added by the SLA tier-2 migration. To
-    // stay rolling-deploy safe (e.g., the case where new code starts
-    // serving before the migration has applied to all replicas), we
-    // attempt to read it, and fall back to UTC on any column-missing
-    // error. Wrapped separately so an unrelated DB error still fails
-    // the outer try/catch as before.
+    // `businessHoursTimeZone` was added by the SLA tier-2 migration.
+    // `completedPrivacyRequestRetentionDays`, `expiredPrivacyArtifactRetentionDays`,
+    // and `unsubscribedSubscriberRetentionDays` were added by the Retention Holds migration.
+    // To stay rolling-deploy safe, we attempt to read all new columns, and fall back
+    // to defaults on any column-missing error.
     let settings: {
       incidentRetentionDays: number | null;
       alertRetentionDays: number | null;
@@ -87,6 +93,9 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
       metricsRetentionDays: number | null;
       realTimeWindowDays: number | null;
       businessHoursTimeZone?: string | null;
+      completedPrivacyRequestRetentionDays?: number | null;
+      expiredPrivacyArtifactRetentionDays?: number | null;
+      unsubscribedSubscriberRetentionDays?: number | null;
     } | null = null;
     try {
       settings = await prisma.systemSettings.findUnique({
@@ -98,14 +107,17 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
           metricsRetentionDays: true,
           realTimeWindowDays: true,
           businessHoursTimeZone: true,
+          completedPrivacyRequestRetentionDays: true,
+          expiredPrivacyArtifactRetentionDays: true,
+          unsubscribedSubscriberRetentionDays: true,
         },
       });
     } catch (err) {
       // Treat as "column not present yet" — re-read without the new
-      // column so existing behaviour is preserved during a rolling
+      // columns so existing behaviour is preserved during a rolling
       // deploy.
       logger.warn(
-        '[RetentionPolicy] businessHoursTimeZone read failed (likely pre-migration); falling back',
+        '[RetentionPolicy] New lifecycle columns read failed (likely pre-migration); falling back',
         { error: err instanceof Error ? err.message : String(err) }
       );
       settings = await prisma.systemSettings.findUnique({
@@ -116,6 +128,7 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
           logRetentionDays: true,
           metricsRetentionDays: true,
           realTimeWindowDays: true,
+          businessHoursTimeZone: true,
         },
       });
     }
@@ -129,6 +142,15 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
         metricsRetentionDays: settings.metricsRetentionDays ?? DEFAULT_POLICY.metricsRetentionDays,
         realTimeWindowDays: settings.realTimeWindowDays ?? DEFAULT_POLICY.realTimeWindowDays,
         businessHoursTimeZone: normalizeContractTimeZone(settings.businessHoursTimeZone),
+        completedPrivacyRequestRetentionDays:
+          settings.completedPrivacyRequestRetentionDays ??
+          DEFAULT_POLICY.completedPrivacyRequestRetentionDays,
+        expiredPrivacyArtifactRetentionDays:
+          settings.expiredPrivacyArtifactRetentionDays ??
+          DEFAULT_POLICY.expiredPrivacyArtifactRetentionDays,
+        unsubscribedSubscriberRetentionDays:
+          settings.unsubscribedSubscriberRetentionDays ??
+          DEFAULT_POLICY.unsubscribedSubscriberRetentionDays,
       };
     } else {
       // Create default settings if not exists
@@ -142,6 +164,10 @@ export async function getRetentionPolicy(): Promise<RetentionPolicy> {
             logRetentionDays: DEFAULT_POLICY.logRetentionDays,
             metricsRetentionDays: DEFAULT_POLICY.metricsRetentionDays,
             realTimeWindowDays: DEFAULT_POLICY.realTimeWindowDays,
+            completedPrivacyRequestRetentionDays:
+              DEFAULT_POLICY.completedPrivacyRequestRetentionDays,
+            expiredPrivacyArtifactRetentionDays: DEFAULT_POLICY.expiredPrivacyArtifactRetentionDays,
+            unsubscribedSubscriberRetentionDays: DEFAULT_POLICY.unsubscribedSubscriberRetentionDays,
           },
           update: {},
         });
@@ -213,6 +239,24 @@ export async function updateRetentionPolicy(
       });
     }
   }
+  if (policy.completedPrivacyRequestRetentionDays !== undefined) {
+    validated.completedPrivacyRequestRetentionDays = Math.max(
+      30,
+      Math.min(3650, policy.completedPrivacyRequestRetentionDays)
+    ); // 30 days to 10 years
+  }
+  if (policy.expiredPrivacyArtifactRetentionDays !== undefined) {
+    validated.expiredPrivacyArtifactRetentionDays = Math.max(
+      1,
+      Math.min(365, policy.expiredPrivacyArtifactRetentionDays)
+    ); // 1 day to 1 year
+  }
+  if (policy.unsubscribedSubscriberRetentionDays !== undefined) {
+    validated.unsubscribedSubscriberRetentionDays = Math.max(
+      1,
+      Math.min(3650, policy.unsubscribedSubscriberRetentionDays)
+    ); // 1 day to 10 years
+  }
 
   const updated = await prisma.systemSettings.upsert({
     where: { id: 'default' },
@@ -229,6 +273,9 @@ export async function updateRetentionPolicy(
       metricsRetentionDays: true,
       realTimeWindowDays: true,
       businessHoursTimeZone: true,
+      completedPrivacyRequestRetentionDays: true,
+      expiredPrivacyArtifactRetentionDays: true,
+      unsubscribedSubscriberRetentionDays: true,
     },
   });
 
@@ -244,6 +291,15 @@ export async function updateRetentionPolicy(
     metricsRetentionDays: updated.metricsRetentionDays ?? DEFAULT_POLICY.metricsRetentionDays,
     realTimeWindowDays: updated.realTimeWindowDays ?? DEFAULT_POLICY.realTimeWindowDays,
     businessHoursTimeZone: updated.businessHoursTimeZone ?? DEFAULT_POLICY.businessHoursTimeZone,
+    completedPrivacyRequestRetentionDays:
+      updated.completedPrivacyRequestRetentionDays ??
+      DEFAULT_POLICY.completedPrivacyRequestRetentionDays,
+    expiredPrivacyArtifactRetentionDays:
+      updated.expiredPrivacyArtifactRetentionDays ??
+      DEFAULT_POLICY.expiredPrivacyArtifactRetentionDays,
+    unsubscribedSubscriberRetentionDays:
+      updated.unsubscribedSubscriberRetentionDays ??
+      DEFAULT_POLICY.unsubscribedSubscriberRetentionDays,
   };
 }
 
