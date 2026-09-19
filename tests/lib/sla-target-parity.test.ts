@@ -41,6 +41,8 @@ describe('canonical SLA target and pause clock', () => {
     });
     expect(sql.strings.join(' ')).toContain('"slaAckTargetMs" > 0');
     expect(sql.strings.join(' ')).toContain('"slaResolveTargetMs" > 0');
+    expect(sql.strings.join(' ')).toContain('"slaTargetSource"');
+    expect(sql.strings.join(' ')).toContain('"slaTargetCapturedAt" IS NOT NULL');
     expect(sql.strings.join(' ')).not.toContain('FROM "Service"');
     expect(sql.strings.join(' ')).not.toContain('priority');
   });

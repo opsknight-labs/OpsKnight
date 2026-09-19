@@ -90,6 +90,8 @@ describe('analytics-metrics utilities', () => {
         updatedAt: null,
         slaAckTargetMs: 15 * 60_000,
         slaResolveTargetMs: 90 * 60_000,
+        slaTargetSource: 'SERVICE_DEFAULT',
+        slaTargetCapturedAt: new Date('2025-01-01T00:00:00Z'),
       },
       {
         id: 'i2',
@@ -100,6 +102,8 @@ describe('analytics-metrics utilities', () => {
         updatedAt: null,
         slaAckTargetMs: 15 * 60_000,
         slaResolveTargetMs: 90 * 60_000,
+        slaTargetSource: 'SERVICE_DEFAULT',
+        slaTargetCapturedAt: new Date('2025-01-01T02:00:00Z'),
       },
     ];
     const ackMap = new Map<string, Date>([['i1', new Date('2025-01-01T00:10:00Z')]]);

@@ -166,6 +166,8 @@ export async function generateDailyRollup(
             slaResolveElapsedMs: true,
             slaAckTargetMs: true,
             slaResolveTargetMs: true,
+            slaTargetSource: true,
+            slaTargetCapturedAt: true,
             slaPauses: { select: { startedAt: true, endedAt: true } },
             serviceId: true,
             service: {
@@ -316,6 +318,8 @@ export async function generateDailyRollup(
           const target = resolveFrozenSlaTarget({
             ackTargetMs: incident.slaAckTargetMs,
             resolveTargetMs: incident.slaResolveTargetMs,
+            source: incident.slaTargetSource,
+            capturedAt: incident.slaTargetCapturedAt,
           });
           const elapsedAt = (evaluationAt: Date) =>
             effectiveElapsedMs({

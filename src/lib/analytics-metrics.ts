@@ -179,6 +179,8 @@ export function buildServiceSlaTable(
     priority?: string | null;
     slaAckTargetMs?: number | null;
     slaResolveTargetMs?: number | null;
+    slaTargetSource?: string | null;
+    slaTargetCapturedAt?: Date | null;
     slaPauses?: Array<{ startedAt: Date; endedAt: Date | null }>;
   }>,
   ackMap: Map<string, Date>,
@@ -198,6 +200,8 @@ export function buildServiceSlaTable(
     const target = resolveFrozenSlaTarget({
       ackTargetMs: incident.slaAckTargetMs,
       resolveTargetMs: incident.slaResolveTargetMs,
+      source: incident.slaTargetSource,
+      capturedAt: incident.slaTargetCapturedAt,
     });
     if (!target) continue;
     const current = serviceSlaStats.get(incident.serviceId) || {

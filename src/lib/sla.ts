@@ -120,7 +120,7 @@ export type SLAMetrics = {
     mttr: number;
     ackRate: number;
     resolveRate: number;
-    ackCompliance: number;
+    ackCompliance: number | null;
     resolveCount: number;
     escalationRate: number;
   }>;
@@ -155,10 +155,11 @@ export type SLAMetrics = {
     serviceId: string;
     serviceName: string;
     assigneeId: string | null;
-    targetAckMinutes: number;
-    targetResolveMinutes: number;
+    targetAckMinutes: number | null;
+    targetResolveMinutes: number | null;
     slaAckDeadline: Date | null;
-    slaResolveDeadline: Date;
+    slaResolveDeadline: Date | null;
+    slaState: 'VALID' | 'INVALID';
   }>;
 
   // New Enhanced Features

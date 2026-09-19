@@ -987,6 +987,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     slaResolveElapsedMs: true,
     slaAckTargetMs: true,
     slaResolveTargetMs: true,
+    slaTargetSource: true,
+    slaTargetCapturedAt: true,
     slaPauses: { select: { startedAt: true, endedAt: true } },
     service: {
       select: {
@@ -1039,6 +1041,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         acknowledgedAt: true,
         slaAckTargetMs: true,
         slaResolveTargetMs: true,
+        slaTargetSource: true,
+        slaTargetCapturedAt: true,
         slaPauses: { select: { startedAt: true, endedAt: true } },
       },
       orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
@@ -1663,6 +1667,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       const target = resolveFrozenSlaTarget({
         ackTargetMs: incident.slaAckTargetMs,
         resolveTargetMs: incident.slaResolveTargetMs,
+        source: incident.slaTargetSource,
+        capturedAt: incident.slaTargetCapturedAt,
       });
       if (!target) continue;
       const elapsedAt = (evaluationAt: Date) =>
@@ -1750,6 +1756,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ackSum: 0,
       ackCount: 0,
       ackSlaMet: 0,
+      ackSlaEvaluated: 0,
       resolveSum: 0,
       resolveCount: 0,
       escalationCount: 0,
@@ -1781,8 +1788,13 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         const target = resolveFrozenSlaTarget({
           ackTargetMs: incident.slaAckTargetMs,
           resolveTargetMs: incident.slaResolveTargetMs,
+          source: incident.slaTargetSource,
+          capturedAt: incident.slaTargetCapturedAt,
         });
-        if (target && ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
+        if (target) {
+          trendEntry.ackSlaEvaluated += 1;
+          if (ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
+        }
       }
       if (incident.status === 'RESOLVED' && incident.resolvedAt) {
         trendEntry.resolveSum += capturedOrEffectiveElapsedMs({
@@ -1820,6 +1832,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       resolveBreaches: number;
       activeCount: number;
       criticalCount: number;
+      slaEvaluatedCount: number;
+      slaUnknownCount: number;
     }
   >();
 
@@ -1838,6 +1852,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       resolveBreaches: 0,
       activeCount: 0,
       criticalCount: 0,
+      slaEvaluatedCount: 0,
+      slaUnknownCount: 0,
     });
   }
 
@@ -1872,6 +1888,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         resolveBreaches: 0,
         activeCount: 0,
         criticalCount: 0,
+        slaEvaluatedCount: 0,
+        slaUnknownCount: 0,
       };
       serviceMap.set(incident.serviceId, s);
       serviceNameMap.set(incident.serviceId, incident.service.name);
@@ -1881,7 +1899,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     const target = resolveFrozenSlaTarget({
       ackTargetMs: incident.slaAckTargetMs,
       resolveTargetMs: incident.slaResolveTargetMs,
+      source: incident.slaTargetSource,
+      capturedAt: incident.slaTargetCapturedAt,
     });
+    if (target) s.slaEvaluatedCount++;
+    else s.slaUnknownCount++;
     const elapsedAt = (evaluationAt: Date) =>
       effectiveElapsedMs({
         startedAt: incident.createdAt,
@@ -1927,11 +1949,13 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
       slaBreaches: s.ackBreaches + s.resolveBreaches, // FIX: Include both types
       status:
-        s.ackBreaches + s.resolveBreaches === 0
-          ? 'Healthy'
-          : s.ackBreaches + s.resolveBreaches < 3
-            ? 'Degraded'
-            : 'Critical',
+        s.slaEvaluatedCount === 0 && s.slaUnknownCount > 0
+          ? 'Unknown'
+          : s.ackBreaches + s.resolveBreaches === 0
+            ? 'Healthy'
+            : s.ackBreaches + s.resolveBreaches < 3
+              ? 'Degraded'
+              : 'Critical',
       dynamicStatus: getServiceDynamicStatus({
         activeIncidentCount: s.activeCount,
         hasCritical: s.criticalCount > 0,
@@ -2128,15 +2152,16 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         const target = resolveFrozenSlaTarget({
           ackTargetMs: incident.slaAckTargetMs,
           resolveTargetMs: incident.slaResolveTargetMs,
+          source: incident.slaTargetSource,
+          capturedAt: incident.slaTargetCapturedAt,
         });
-        if (!target) return [];
         const elapsedMs = effectiveElapsedMs({
           startedAt: incident.createdAt,
           evaluationAt: now,
           pauses: incident.slaPauses,
         });
-        const ackRemainingMs = Math.max(0, target.ackTargetMs - elapsedMs);
-        const resolveRemainingMs = Math.max(0, target.resolveTargetMs - elapsedMs);
+        const ackRemainingMs = target ? Math.max(0, target.ackTargetMs - elapsedMs) : null;
+        const resolveRemainingMs = target ? Math.max(0, target.resolveTargetMs - elapsedMs) : null;
         return [
           {
             id: incident.id,
@@ -2148,11 +2173,14 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
             serviceId: incident.serviceId,
             serviceName: serviceNameMap.get(incident.serviceId) || 'Unknown service',
             assigneeId: incident.assigneeId ?? null,
-            targetAckMinutes: target.ackTargetMs / 60_000,
-            targetResolveMinutes: target.resolveTargetMs / 60_000,
+            targetAckMinutes: target ? target.ackTargetMs / 60_000 : null,
+            targetResolveMinutes: target ? target.resolveTargetMs / 60_000 : null,
             slaAckDeadline:
-              incident.status === 'ACKNOWLEDGED' ? null : new Date(now.getTime() + ackRemainingMs),
-            slaResolveDeadline: new Date(now.getTime() + resolveRemainingMs),
+              !target || incident.status === 'ACKNOWLEDGED'
+                ? null
+                : new Date(now.getTime() + ackRemainingMs!),
+            slaResolveDeadline: target ? new Date(now.getTime() + resolveRemainingMs!) : null,
+            slaState: target ? ('VALID' as const) : ('INVALID' as const),
           },
         ];
       })
@@ -2381,7 +2409,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ackRate: s.count ? (s.ackCount / s.count) * 100 : 0,
       resolveRate: s.count ? (s.resolveCount / s.count) * 100 : 0,
       resolveCount: s.resolveCount,
-      ackCompliance: s.ackCount ? (s.ackSlaMet / s.ackCount) * 100 : 0,
+      ackCompliance: s.ackSlaEvaluated ? (s.ackSlaMet / s.ackSlaEvaluated) * 100 : null,
       escalationRate: s.count ? (s.escalationCount / s.count) * 100 : 0,
     })),
     statusMix,

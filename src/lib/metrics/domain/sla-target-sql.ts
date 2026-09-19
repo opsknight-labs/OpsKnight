@@ -1,5 +1,9 @@
 import { Prisma } from '@prisma/client';
-type IncidentSlaColumn = 'slaAckTargetMs' | 'slaResolveTargetMs';
+type IncidentSlaColumn =
+  | 'slaAckTargetMs'
+  | 'slaResolveTargetMs'
+  | 'slaTargetSource'
+  | 'slaTargetCapturedAt';
 
 function column(alias: string | undefined, name: IncidentSlaColumn) {
   if (alias !== undefined && !/^[a-z][a-z0-9_]*$/i.test(alias)) {
@@ -21,8 +25,14 @@ export function slaTargetSql(input: {
   );
   const ackColumn = column(input.alias, 'slaAckTargetMs');
   const resolveColumn = column(input.alias, 'slaResolveTargetMs');
+  const sourceColumn = column(input.alias, 'slaTargetSource');
+  const capturedAtColumn = column(input.alias, 'slaTargetCapturedAt');
   return Prisma.sql`CASE
-    WHEN ${ackColumn} > 0 AND ${resolveColumn} > 0 THEN ${frozenColumn}
+    WHEN ${ackColumn} > 0
+      AND ${resolveColumn} > 0
+      AND NULLIF(BTRIM(${sourceColumn}), '') IS NOT NULL
+      AND ${capturedAtColumn} IS NOT NULL
+    THEN ${frozenColumn}
     ELSE NULL
   END`;
 }

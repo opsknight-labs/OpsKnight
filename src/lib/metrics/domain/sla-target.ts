@@ -3,6 +3,8 @@ export type SlaTarget = { ackTargetMs: number; resolveTargetMs: number; source: 
 export type IncidentSlaTargetSnapshot = {
   ackTargetMs?: number | null;
   resolveTargetMs?: number | null;
+  source?: string | null;
+  capturedAt?: Date | null;
 };
 
 export const MINUTE_MS = 60_000;
@@ -26,14 +28,29 @@ function isPositiveFinite(value: number | null | undefined): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
+export function isFrozenIncidentSlaContractValid(
+  snapshot?: IncidentSlaTargetSnapshot | null
+): snapshot is {
+  ackTargetMs: number;
+  resolveTargetMs: number;
+  source: string;
+  capturedAt: Date;
+} {
+  return (
+    validateCapturedIncidentSlaContract({
+      slaAckTargetMs: snapshot?.ackTargetMs,
+      slaResolveTargetMs: snapshot?.resolveTargetMs,
+      slaTargetSource: snapshot?.source,
+      slaTargetCapturedAt: snapshot?.capturedAt,
+    }) === null
+  );
+}
+
 /** Canonical analytics use only the complete immutable contract captured on the incident. */
 export function resolveFrozenSlaTarget(
   incidentTargets?: IncidentSlaTargetSnapshot | null
 ): SlaTarget | null {
-  if (
-    isPositiveFinite(incidentTargets?.ackTargetMs) &&
-    isPositiveFinite(incidentTargets?.resolveTargetMs)
-  ) {
+  if (isFrozenIncidentSlaContractValid(incidentTargets)) {
     return {
       ackTargetMs: incidentTargets.ackTargetMs,
       resolveTargetMs: incidentTargets.resolveTargetMs,
@@ -53,8 +70,16 @@ export function resolveLegacySlaTarget(input: {
 }): SlaTarget {
   const defaults = input.globalDefaults ?? { ackMinutes: 15, resolveMinutes: 120 };
   const incidentTargets = input.incidentTargets;
-  const frozenTarget = resolveFrozenSlaTarget(incidentTargets);
-  if (frozenTarget) return frozenTarget;
+  if (
+    isPositiveFinite(incidentTargets?.ackTargetMs) &&
+    isPositiveFinite(incidentTargets?.resolveTargetMs)
+  ) {
+    return {
+      ackTargetMs: incidentTargets.ackTargetMs,
+      resolveTargetMs: incidentTargets.resolveTargetMs,
+      source: 'incident',
+    };
+  }
 
   const override = input.definitionOverride;
   if (override?.ackMinutes != null || override?.resolveMinutes != null) {
@@ -88,3 +113,4 @@ export function resolveLegacySlaTarget(input: {
     source: 'global',
   };
 }
+import { validateCapturedIncidentSlaContract } from '@/lib/incident-sla/contract';
