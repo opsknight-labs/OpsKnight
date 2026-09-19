@@ -16,7 +16,6 @@ import {
   getRetentionPolicy,
   getQueryDateBounds,
   shouldUseRollups,
-  type RetentionPolicy,
 } from './retention-policy';
 import { incidentEventSqlPredicate, incidentEventWhereFor } from './incident-event-classifier';
 import { mergeHybridMetrics } from './sla-hybrid-merge';
@@ -611,27 +610,6 @@ function formatHourLabel(date: Date, timeZone: string = 'UTC') {
 }
 
 /**
- * Checks if a date falls outside business hours in a specific timezone
- * Business hours: Monday-Friday, 8am-6pm
- */
-function isAfterHoursInTimeZone(date: Date, timeZone: string): boolean {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    hour: 'numeric',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const weekday = parts.find(p => p.type === 'weekday')?.value || '';
-  const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '12', 10);
-
-  const isWeekend = weekday === 'Sat' || weekday === 'Sun';
-  const isBusinessHours = hour >= 8 && hour < 18;
-
-  return isWeekend || !isBusinessHours;
-}
-
-/**
  * Calculate SLA metrics with all filters & legacy parity
  *
  * FEATURES:
@@ -913,10 +891,6 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   const coverageWindowEnd = new Date(now);
   coverageWindowEnd.setDate(now.getDate() + coverageWindowDays);
-
-  // Pagination settings
-  const pageSize = filters.pageSize || DEFAULT_PAGE_SIZE;
-  const page = Math.max(1, filters.page || 1);
 
   // 2. Build Where Clauses. Selection and authorization are compiled once,
   // then ANDed with snapshot-specific status predicates.
@@ -1362,17 +1336,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // are both matched during the rolling-deploy window. After the
   // backfill release the fallback can be deleted.
   const recentIncidentIds = recentIncidents.map(i => i.id);
-  const [ackEvents, escalationEvents, reopenEvents, autoResolveEvents] = recentIncidentIds.length
+  const [escalationEvents, reopenEvents, autoResolveEvents] = recentIncidentIds.length
     ? await Promise.all([
-        // CRITICAL: Get earliest ack event first so MTTA is deterministic.
-        prisma.incidentEvent.findMany({
-          where: {
-            incidentId: { in: recentIncidentIds },
-            ...incidentEventWhereFor('ACKNOWLEDGED'),
-          },
-          select: { incidentId: true, createdAt: true },
-          orderBy: { createdAt: 'asc' },
-        }),
         // Escalation / reopen / auto-resolve are used for in-memory
         // rate calculation on the displayed (potentially-truncated)
         // window; DB-aggregation counts come from the raw-SQL query.
@@ -1399,7 +1364,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           select: { incidentId: true },
         }),
       ])
-    : [[], [], [], []];
+    : [[], [], []];
 
   const [firstNotes, firstAlerts] = recentIncidentIds.length
     ? await Promise.all([
@@ -1416,18 +1381,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ])
     : [[], []];
 
-  // Build Global Ack Map - FIX: Use earliest ack event due to ordering above
+  // Current incident state is authoritative. Timeline ACK events are historical
+  // facts and must not resurrect ACK after UNACKNOWLEDGE or REOPEN.
   const ackMap = new Map<string, Date>();
-  // First, use acknowledgedAt from incident (most reliable)
   for (const i of recentIncidents) {
     if (i.acknowledgedAt) {
       ackMap.set(i.id, i.acknowledgedAt);
-    }
-  }
-  // Then, fall back to earliest ack event (events are now ordered by createdAt asc)
-  for (const e of ackEvents) {
-    if (!ackMap.has(e.incidentId)) {
-      ackMap.set(e.incidentId, e.createdAt);
     }
   }
 
@@ -2501,10 +2460,17 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 }
 
 /**
- * Generate a daily SLA compliance snapshot for a specific definition and date
- * Consolidated from SLAService
+ * @deprecated Legacy SLASnapshot writes are retired. This compatibility symbol
+ * remains for one release so out-of-tree callers fail closed without writing.
  */
 export async function generateDailySnapshot(definitionId: string, date: Date): Promise<void> {
+  logger.info('[Legacy SLA] Ignored retired snapshot request', {
+    definitionId,
+    date: date.toISOString(),
+  });
+  return;
+
+  /* Retained temporarily as rollback archaeology; this block is not executable.
   const { default: prisma } = await import('./prisma');
 
   const definition = await prisma.sLADefinition.findUnique({
@@ -2667,6 +2633,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
   });
 
   logger.info(`[SLA] Snapshot updated`, { definitionId, date: start.toISOString(), score });
+  */
 }
 
 export async function checkIncidentSLA(incidentId: string): Promise<IncidentSLAResult> {
@@ -2711,6 +2678,8 @@ function calculateMergedDuration(intervals: Array<{ start: Date; end: Date }>): 
   let current = { start: sorted[0].start, end: sorted[0].end };
 
   for (let i = 1; i < sorted.length; i += 1) {
+    // Index is bounded by the array length in this loop.
+    // eslint-disable-next-line security/detect-object-injection
     const next = sorted[i];
 
     if (next.start <= current.end) {
@@ -2746,7 +2715,7 @@ export async function calculateMultiServiceUptime(
     | {
         visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
         incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
-  } = {},
+      } = {},
   db?: Pick<import('@prisma/client').PrismaClient, 'incident'>
 ): Promise<Record<string, number>> {
   const { default: prisma } = await import('./prisma');
@@ -2796,6 +2765,8 @@ export async function calculateMultiServiceUptime(
 
   for (const serviceId of serviceIds) {
     if (totalMs <= 0) {
+      // Service IDs are authorized database values, not object-property paths.
+      // eslint-disable-next-line security/detect-object-injection
       uptimeByService[serviceId] = 100;
       continue;
     }
@@ -2817,6 +2788,8 @@ export async function calculateMultiServiceUptime(
 
     const downtimeMs = calculateMergedDuration(intervals);
     const uptime = ((totalMs - downtimeMs) / totalMs) * 100;
+    // Service IDs are authorized database values, not object-property paths.
+    // eslint-disable-next-line security/detect-object-injection
     uptimeByService[serviceId] = Math.max(0, Math.min(100, uptime));
   }
 

@@ -21,6 +21,7 @@ import {
   invalidateSlaSchedulerMode,
   MIN_CLEAN_SHADOW_CHECKS,
 } from '@/lib/incident-sla/scheduler-control';
+import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 
 export type IncidentResponsePolicySaveResult =
   | { ok: true; version: number }
@@ -135,8 +136,9 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
   const parsed = schedulerModeSchema.safeParse(rawMode);
   if (!parsed.success) return { ok: false as const, message: 'Invalid scheduler mode.' };
   const mode = parsed.data;
-  const rejection = await prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(1762184301)`;
+  try {
+    const rejection = await prisma.$transaction(async tx => {
+    await acquireAdvisoryLock(tx, LOCK_KEYS.SLA_SCHEDULER);
     const current = await tx.systemConfig.findUnique({
       where: { key: 'incident_sla_scheduler' },
       select: { value: true },
@@ -187,9 +189,17 @@ export async function saveSlaSchedulerModeAction(rawMode: unknown) {
       tx
     );
     return null;
-  });
-  if (rejection) return { ok: false as const, message: rejection };
-  invalidateSlaSchedulerMode();
-  revalidatePath('/settings/incident-sla');
-  return { ok: true as const, mode };
+    });
+    if (rejection) return { ok: false as const, message: rejection };
+    invalidateSlaSchedulerMode();
+    revalidatePath('/settings/incident-sla');
+    return { ok: true as const, mode };
+  } catch (error) {
+    logger.error('[IncidentSlaScheduler] Mode change failed', {
+      mode,
+      actorId: permissions.id,
+      error,
+    });
+    return { ok: false as const, message: 'Unable to change SLA scheduler mode.' };
+  }
 }

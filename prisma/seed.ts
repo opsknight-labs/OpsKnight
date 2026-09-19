@@ -890,6 +890,8 @@ async function clearDatabase() {
     prisma.statusPageSnapshot.deleteMany(),
     prisma.statusPageService.deleteMany(),
     prisma.statusPage.deleteMany(),
+    prisma.serviceObjectiveSnapshot.deleteMany(),
+    prisma.serviceObjective.deleteMany(),
     prisma.sLASnapshot.deleteMany(),
     prisma.sLADefinition.deleteMany(),
     prisma.sLAPerformanceLog.deleteMany(),
@@ -1295,17 +1297,18 @@ async function main() {
         },
       });
 
-      await prisma.sLADefinition.create({
+      const objectiveId = `so_${crypto.randomUUID()}`;
+      await prisma.serviceObjective.create({
         data: {
+          id: objectiveId,
+          lineageId: objectiveId,
           name: `${service.name} MTTA`,
-          description: `MTTA SLA for ${service.name}`,
-          targetAckTime: template.tier === 'Gold' ? 15 : 30,
-          targetResolveTime: template.tier === 'Gold' ? 120 : 360,
+          description: `MTTA objective for ${service.name}`,
           serviceId: service.id,
-          priority: template.tier === 'Gold' ? 'P1' : 'P2',
-          target: 99.5,
-          window: '30d',
+          target: template.tier === 'Gold' ? 15 : 30,
           metricType: 'MTTA',
+          comparator: 'LESS_THAN_OR_EQUAL',
+          windowType: 'THIRTY_DAYS',
         },
       });
     }
@@ -1656,17 +1659,21 @@ async function main() {
   }
 
   for (let day = 0; day < seedConfig.slaSnapshotDays; day++) {
-    const snapshotDate = daysAgo(day);
-    const definition = await prisma.sLADefinition.findFirst();
-    if (definition) {
-      await prisma.sLASnapshot.create({
+    const periodStart = daysAgo(day + 1);
+    const periodEnd = daysAgo(day);
+    const objective = await prisma.serviceObjective.findFirst();
+    if (objective) {
+      await prisma.serviceObjectiveSnapshot.create({
         data: {
-          slaDefinitionId: definition.id,
-          date: snapshotDate,
-          totalIncidents: 12,
-          metAckTime: 10,
-          metResolveTime: 9,
-          complianceScore: 92.5,
+          objectiveId: objective.id,
+          periodStart,
+          periodEnd,
+          value: 12,
+          sampleCount: BigInt(12),
+          target: objective.target,
+          breached: false,
+          dataState: 'AVAILABLE',
+          definitionVersion: objective.version,
         },
       });
     }
