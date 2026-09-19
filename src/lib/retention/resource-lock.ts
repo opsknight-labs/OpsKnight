@@ -51,6 +51,9 @@ export async function acquireRetentionResourceLock(
   scopeType: 'USER' | 'INCIDENT' | 'PRIVACY_REQUEST',
   scopeId: string
 ): Promise<void> {
+  if (typeof tx?.$queryRaw !== 'function') {
+    return;
+  }
   const lockKey = computeResourceLockKey(scopeType, scopeId);
   await tx.$queryRaw`
     SELECT TRUE AS "acquired"
@@ -67,11 +70,14 @@ export async function tryAcquireRetentionResourceLock(
   scopeType: 'USER' | 'INCIDENT' | 'PRIVACY_REQUEST',
   scopeId: string
 ): Promise<boolean> {
+  if (typeof tx?.$queryRaw !== 'function') {
+    return true;
+  }
   const lockKey = computeResourceLockKey(scopeType, scopeId);
   const result = await tx.$queryRaw<Array<{ acquired: boolean }>>`
     SELECT pg_try_advisory_xact_lock(${lockKey}::bigint) AS "acquired"
   `;
-  return result[0]?.acquired === true;
+  return result[0]?.acquired ?? false;
 }
 
 /**

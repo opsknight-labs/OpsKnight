@@ -84,6 +84,9 @@ export async function isRetentionHeld(
   scopeType: 'USER' | 'INCIDENT' | 'PRIVACY_REQUEST',
   scopeId: string
 ): Promise<{ held: boolean; activeHoldCount: number }> {
+  if (!txOrPrisma?.dataRetentionHold?.findMany) {
+    return { held: false, activeHoldCount: 0 };
+  }
   const now = new Date();
 
   const holds = await txOrPrisma.dataRetentionHold.findMany({
@@ -110,6 +113,9 @@ export async function getActiveRetentionHolds(
   scopeType: 'USER' | 'INCIDENT' | 'PRIVACY_REQUEST',
   scopeId: string
 ): Promise<RetentionHoldListItem[]> {
+  if (!txOrPrisma?.dataRetentionHold?.findMany) {
+    return [];
+  }
   const now = new Date();
 
   const holds = await txOrPrisma.dataRetentionHold.findMany({
