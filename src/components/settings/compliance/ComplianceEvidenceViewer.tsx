@@ -10,7 +10,16 @@ import {
 } from '@/components/ui/shadcn/dialog';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
-import { Check, Copy, ShieldCheck, Database, Calendar, Tag, Layers } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  ShieldCheck,
+  AlertTriangle,
+  Database,
+  Calendar,
+  Tag,
+  Layers,
+} from 'lucide-react';
 import type {
   ComplianceEvidenceRecord,
   ComplianceEvidenceType,
@@ -100,33 +109,66 @@ export function ComplianceEvidenceViewer({
         </DialogHeader>
 
         {/* Cryptographic Integrity Card */}
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-              <ShieldCheck className="h-4 w-4" />
-              SHA-256 Canonical Digest (Application Immutable)
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCopyHash}
-              className="h-7 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 px-2"
-            >
-              {copiedHash ? (
-                <>
-                  <Check className="h-3.5 w-3.5 mr-1" /> Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy Hash
-                </>
-              )}
-            </Button>
+        {evidence.integrityValid === false ? (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                <AlertTriangle className="h-4 w-4 text-rose-600" />
+                Cryptographic Integrity Mismatch (Tampered Record)
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyHash}
+                className="h-7 text-[11px] text-rose-700 dark:text-rose-300 hover:bg-rose-500/20 px-2"
+              >
+                {copiedHash ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 mr-1" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5 mr-1" /> Copy Hash
+                  </>
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] text-rose-600 dark:text-rose-400">
+              Warning: Recomputed canonical SHA-256 digest does not match stored content hash.
+            </p>
+            <div className="font-mono text-[11px] bg-background/80 dark:bg-background/40 border border-rose-500/30 rounded-lg p-2 break-all text-rose-700 dark:text-rose-300 select-all">
+              {evidence.contentHash}
+            </div>
           </div>
-          <div className="font-mono text-[11px] bg-background/80 dark:bg-background/40 border border-border/60 rounded-lg p-2 break-all text-foreground select-all">
-            {evidence.contentHash}
+        ) : (
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4" />
+                Integrity Verified (SHA-256 matches canonical payload)
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyHash}
+                className="h-7 text-[11px] text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10 px-2"
+              >
+                {copiedHash ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 mr-1" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5 mr-1" /> Copy Hash
+                  </>
+                )}
+              </Button>
+            </div>
+            <div className="font-mono text-[11px] bg-background/80 dark:bg-background/40 border border-border/60 rounded-lg p-2 break-all text-foreground select-all">
+              {evidence.contentHash}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Fact Grid */}
         <div className="grid grid-cols-2 gap-3 text-xs">

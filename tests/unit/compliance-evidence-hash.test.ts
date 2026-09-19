@@ -125,11 +125,13 @@ describe('compliance evidence hashing and canonicalization', () => {
     expect(hashA).not.toBe(hashC);
   });
 
-  it('verifies valid evidence hash and detects tampering', () => {
+  it('verifies valid evidence hash and detects tampering across all individual fields', () => {
+    const collectedAt = new Date('2026-09-19T20:01:00.000Z');
     const hash = computeEvidenceContentHash({
       controlId: 'SEC-ENC-001',
       evaluationId: 'eval-1',
       draft: baseDraft,
+      collectedAt,
     });
 
     const validRecord = {
@@ -138,9 +140,12 @@ describe('compliance evidence hashing and canonicalization', () => {
       type: baseDraft.type,
       collectorId: baseDraft.collectorId,
       collectorVersion: baseDraft.collectorVersion,
+      title: baseDraft.title,
+      description: baseDraft.description ?? null,
       resourceType: baseDraft.resourceType ?? null,
       resourceId: baseDraft.resourceId ?? null,
       observedAt: baseDraft.observedAt,
+      collectedAt,
       validUntil: baseDraft.validUntil ?? null,
       metadata: baseDraft.metadata,
       contentHash: hash,
@@ -148,12 +153,69 @@ describe('compliance evidence hashing and canonicalization', () => {
 
     expect(verifyComplianceEvidenceHash(validRecord)).toBe(true);
 
-    // Tampered metadata
-    const tamperedRecord = {
-      ...validRecord,
-      metadata: { ...validRecord.metadata, currentV3: 99999 },
-    };
+    // Tampered title
+    expect(verifyComplianceEvidenceHash({ ...validRecord, title: 'Tampered Title' })).toBe(false);
 
-    expect(verifyComplianceEvidenceHash(tamperedRecord)).toBe(false);
+    // Tampered description
+    expect(
+      verifyComplianceEvidenceHash({ ...validRecord, description: 'Tampered Description' })
+    ).toBe(false);
+
+    // Tampered collectedAt
+    expect(
+      verifyComplianceEvidenceHash({
+        ...validRecord,
+        collectedAt: new Date('2026-09-19T20:02:00.000Z'),
+      })
+    ).toBe(false);
+
+    // Tampered controlId
+    expect(verifyComplianceEvidenceHash({ ...validRecord, controlId: 'SEC-ENC-002' })).toBe(false);
+
+    // Tampered evaluationId
+    expect(verifyComplianceEvidenceHash({ ...validRecord, evaluationId: 'eval-999' })).toBe(false);
+
+    // Tampered type
+    expect(verifyComplianceEvidenceHash({ ...validRecord, type: 'CAPABILITY_CHECK' })).toBe(false);
+
+    // Tampered collectorId
+    expect(verifyComplianceEvidenceHash({ ...validRecord, collectorId: 'other.collector' })).toBe(
+      false
+    );
+
+    // Tampered collectorVersion
+    expect(verifyComplianceEvidenceHash({ ...validRecord, collectorVersion: '2' })).toBe(false);
+
+    // Tampered resourceType
+    expect(verifyComplianceEvidenceHash({ ...validRecord, resourceType: 'OtherResource' })).toBe(
+      false
+    );
+
+    // Tampered resourceId
+    expect(verifyComplianceEvidenceHash({ ...validRecord, resourceId: 'run-999' })).toBe(false);
+
+    // Tampered observedAt
+    expect(
+      verifyComplianceEvidenceHash({
+        ...validRecord,
+        observedAt: new Date('2026-09-19T20:00:01.000Z'),
+      })
+    ).toBe(false);
+
+    // Tampered validUntil
+    expect(
+      verifyComplianceEvidenceHash({
+        ...validRecord,
+        validUntil: new Date('2026-09-20T20:00:00.000Z'),
+      })
+    ).toBe(false);
+
+    // Tampered metadata
+    expect(
+      verifyComplianceEvidenceHash({
+        ...validRecord,
+        metadata: { ...validRecord.metadata, currentV3: 99999 },
+      })
+    ).toBe(false);
   });
 });

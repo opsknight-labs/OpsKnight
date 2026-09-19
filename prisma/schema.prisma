@@ -2776,12 +2776,13 @@ model ComplianceEvidence {
   contentHash      String
   metadata         Json
 
-  evaluation       ComplianceEvaluation   @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  evaluation       ComplianceEvaluation   @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
 
   @@index([controlId, observedAt])
   @@index([evaluationId])
   @@index([type])
   @@index([resourceType, resourceId])
+  @@index([contentHash])
 }
 
 // Cached projection of the latest evaluated state for a compliance control.

@@ -6,6 +6,8 @@ import type {
   EvidenceQueryResult,
 } from './types';
 
+import { verifyComplianceEvidenceHash } from './hash';
+
 export interface GetControlEvidenceOptions {
   controlId: string;
   type?: ComplianceEvidenceType;
@@ -43,7 +45,7 @@ function mapToRecord(row: {
   contentHash: string;
   metadata: Prisma.JsonValue;
 }): ComplianceEvidenceRecord {
-  return {
+  const record: ComplianceEvidenceRecord = {
     id: row.id,
     evaluationId: row.evaluationId,
     controlId: row.controlId,
@@ -59,6 +61,11 @@ function mapToRecord(row: {
     validUntil: row.validUntil,
     contentHash: row.contentHash,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
+  };
+
+  return {
+    ...record,
+    integrityValid: verifyComplianceEvidenceHash(record),
   };
 }
 

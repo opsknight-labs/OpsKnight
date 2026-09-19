@@ -225,22 +225,46 @@ export default function ComplianceClientTabs({
   const [isEvidenceViewerOpen, setIsEvidenceViewerOpen] = useState(false);
   const [runtimeEvidenceList, setRuntimeEvidenceList] = useState<ComplianceEvidenceRecord[]>([]);
   const [isLoadingEvidence, setIsLoadingEvidence] = useState(false);
-  const [evidenceSection, setEvidenceSection] = useState<'runtime' | 'repository'>('runtime');
+  const [evidenceCursor, setEvidenceCursor] = useState<string | null>(null);
+  const [hasMoreEvidence, setHasMoreEvidence] = useState(false);
+  const [isLoadingMoreEvidence, setIsLoadingMoreEvidence] = useState(false);
   const [evidenceTypeFilter, setEvidenceTypeFilter] = useState<string>('ALL');
   const [evidenceSearchQuery, setEvidenceSearchQuery] = useState('');
 
   const fetchEvidence = async () => {
     setIsLoadingEvidence(true);
     try {
-      const res = await fetch('/api/compliance/evidence?limit=100');
+      const res = await fetch('/api/compliance/evidence?limit=50');
       const json = await res.json();
       if (res.ok && json.data?.evidence) {
         setRuntimeEvidenceList(json.data.evidence);
+        setEvidenceCursor(json.data.nextCursor ?? null);
+        setHasMoreEvidence(Boolean(json.data.hasMore));
       }
     } catch {
       // Ignore network errors
     } finally {
       setIsLoadingEvidence(false);
+    }
+  };
+
+  const loadMoreEvidence = async () => {
+    if (!evidenceCursor || isLoadingMoreEvidence) return;
+    setIsLoadingMoreEvidence(true);
+    try {
+      const res = await fetch(
+        `/api/compliance/evidence?limit=50&cursor=${encodeURIComponent(evidenceCursor)}`
+      );
+      const json = await res.json();
+      if (res.ok && json.data?.evidence) {
+        setRuntimeEvidenceList(prev => [...prev, ...json.data.evidence]);
+        setEvidenceCursor(json.data.nextCursor ?? null);
+        setHasMoreEvidence(Boolean(json.data.hasMore));
+      }
+    } catch {
+      // Ignore network errors
+    } finally {
+      setIsLoadingMoreEvidence(false);
     }
   };
 
@@ -995,6 +1019,7 @@ export default function ComplianceClientTabs({
                     'CONFIGURATION_SNAPSHOT',
                     'SYSTEM_STATE',
                     'CAPABILITY_CHECK',
+                    'EXECUTION_SUMMARY',
                     'EVALUATION_FAILURE',
                   ].map(type => (
                     <button
@@ -1064,6 +1089,20 @@ export default function ComplianceClientTabs({
                       </Button>
                     </div>
                   ))}
+
+                  {hasMoreEvidence && (
+                    <div className="p-3 bg-muted/10 text-center border-t border-border/40">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={loadMoreEvidence}
+                        disabled={isLoadingMoreEvidence}
+                        className="text-xs font-semibold h-8 px-4"
+                      >
+                        {isLoadingMoreEvidence ? 'Loading more evidence...' : 'Load More Evidence'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-border/80 p-6 text-center space-y-2 bg-muted/10">

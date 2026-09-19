@@ -6,6 +6,7 @@ import { getActiveKeyId } from '@/lib/encryption';
 import { computeComplianceControlRegistryFingerprint } from '@/lib/compliance/registry';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
 import { verifyComplianceEvidenceHash } from '@/lib/compliance/evidence/hash';
+import { createEvidenceDraft } from '@/lib/compliance/evidence/build';
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -319,6 +320,9 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
 
     const originalEvaluator = complianceEvaluatorRegistry['authorization.rbac'];
 
+    const nowA = new Date('2026-09-19T10:00:00Z');
+    const nowB = new Date('2026-09-19T11:00:00Z');
+
     let aCalled = false;
     complianceEvaluatorRegistry['authorization.rbac'] = {
       id: 'authorization.rbac',
@@ -331,7 +335,20 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
             status: 'ACTION_REQUIRED',
             summary: 'Stale Evaluation A Result',
             findings: [],
-            evidence: [],
+            evidence: [
+              createEvidenceDraft({
+                type: 'CAPABILITY_CHECK',
+                collectorId: 'authorization.rbac',
+                collectorVersion: '1',
+                title: 'RBAC Policy Check A',
+                observedAt: nowA,
+                metadata: {
+                  rbacValid: false,
+                  role: 'VIEWER',
+                  issue: 'TEST_ISSUE',
+                },
+              }),
+            ],
             evidenceRefs: [],
           };
         }
@@ -339,16 +356,27 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
           status: 'IMPLEMENTED',
           summary: 'Newer Evaluation B Result',
           findings: [],
-          evidence: [],
+          evidence: [
+            createEvidenceDraft({
+              type: 'CAPABILITY_CHECK',
+              collectorId: 'authorization.rbac',
+              collectorVersion: '1',
+              title: 'RBAC Policy Check B',
+              observedAt: nowB,
+              metadata: {
+                registeredRolesCount: 4,
+                registeredCapabilityCount: 20,
+                resourcePolicyActionsCount: 5,
+                adminGovernanceVerified: true,
+              },
+            }),
+          ],
           evidenceRefs: [],
         };
       },
     };
 
     try {
-      const nowA = new Date('2026-09-19T10:00:00Z');
-      const nowB = new Date('2026-09-19T11:00:00Z');
-
       // Start Evaluation A (will pause inside evaluate())
       const promiseA = evaluateControl({
         controlId: 'SEC-AUTHZ-001',
@@ -490,9 +518,12 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
         type: record.type,
         collectorId: record.collectorId,
         collectorVersion: record.collectorVersion,
+        title: record.title,
+        description: record.description,
         resourceType: record.resourceType,
         resourceId: record.resourceId,
         observedAt: record.observedAt,
+        collectedAt: record.collectedAt,
         validUntil: record.validUntil,
         metadata: record.metadata as Record<string, unknown>,
         contentHash: record.contentHash,
@@ -560,5 +591,122 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
     } finally {
       complianceEvaluatorRegistry['data.retention'] = originalEvaluator;
     }
+  });
+
+  it('fails closed to UNVERIFIED with EVALUATION_FAILURE when an evaluator returns zero evidence drafts', async () => {
+    const originalEvaluator = complianceEvaluatorRegistry['data.retention'];
+
+    try {
+      complianceEvaluatorRegistry['data.retention'] = {
+        id: 'data.retention',
+        version: '1',
+        evaluate: async () => ({
+          status: 'IMPLEMENTED' as const,
+          summary: 'Evaluator with no evidence',
+          findings: [],
+          evidence: [],
+          evidenceRefs: [],
+        }),
+      };
+
+      const context = {
+        prisma: testPrisma,
+        now: new Date(),
+        controlRegistryFingerprint: computeComplianceControlRegistryFingerprint(),
+      };
+
+      const outcome = await evaluateControl({
+        controlId: 'SEC-RETENTION-001',
+        context,
+        trigger: 'MANUAL',
+      });
+
+      expect(outcome.evaluation.status).toBe('UNVERIFIED');
+      expect(outcome.controlState.status).toBe('UNVERIFIED');
+      expect(outcome.evaluation.findings).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'EVIDENCE_VALIDATION_FAILED' })])
+      );
+
+      const dbEvidence = await testPrisma.complianceEvidence.findMany({
+        where: { evaluationId: outcome.evaluation.id },
+      });
+      expect(dbEvidence).toHaveLength(1);
+      expect(dbEvidence[0].type).toBe('EVALUATION_FAILURE');
+    } finally {
+      complianceEvaluatorRegistry['data.retention'] = originalEvaluator;
+    }
+  });
+
+  it('fails closed to UNVERIFIED with EVALUATION_FAILURE when an evaluator claims mismatched collector identity', async () => {
+    const originalEvaluator = complianceEvaluatorRegistry['data.retention'];
+
+    try {
+      complianceEvaluatorRegistry['data.retention'] = {
+        id: 'data.retention',
+        version: '1',
+        evaluate: async () => ({
+          status: 'IMPLEMENTED' as const,
+          summary: 'Spoofed provenance evaluator',
+          findings: [],
+          evidence: [
+            createEvidenceDraft({
+              type: 'CONFIGURATION_SNAPSHOT',
+              collectorId: 'forged.collector',
+              collectorVersion: '99',
+              title: 'Spoofed Evidence',
+              observedAt: new Date(),
+              metadata: { incidentRetentionDays: 365 },
+            }),
+          ],
+          evidenceRefs: [],
+        }),
+      };
+
+      const context = {
+        prisma: testPrisma,
+        now: new Date(),
+        controlRegistryFingerprint: computeComplianceControlRegistryFingerprint(),
+      };
+
+      const outcome = await evaluateControl({
+        controlId: 'SEC-RETENTION-001',
+        context,
+        trigger: 'MANUAL',
+      });
+
+      expect(outcome.evaluation.status).toBe('UNVERIFIED');
+      expect(outcome.controlState.status).toBe('UNVERIFIED');
+      expect(outcome.evaluation.findings).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'EVIDENCE_VALIDATION_FAILED' })])
+      );
+    } finally {
+      complianceEvaluatorRegistry['data.retention'] = originalEvaluator;
+    }
+  });
+
+  it('strictly restricts deletion of ComplianceEvaluation when durable evidence exists (foreign key RESTRICT)', async () => {
+    const context = {
+      prisma: testPrisma,
+      now: new Date(),
+      controlRegistryFingerprint: computeComplianceControlRegistryFingerprint(),
+    };
+
+    const outcome = await evaluateControl({
+      controlId: 'SEC-RETENTION-001',
+      context,
+      trigger: 'MANUAL',
+    });
+
+    const evidenceRows = await testPrisma.complianceEvidence.findMany({
+      where: { evaluationId: outcome.evaluation.id },
+    });
+    expect(evidenceRows.length).toBeGreaterThan(0);
+
+    // Attempting to delete the parent evaluation must be rejected by PostgreSQL foreign key RESTRICT
+    await expect(
+      testPrisma.complianceEvaluation.delete({
+        where: { id: outcome.evaluation.id },
+      })
+    ).rejects.toThrow();
   });
 });

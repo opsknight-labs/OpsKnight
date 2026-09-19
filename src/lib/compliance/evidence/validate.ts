@@ -1,4 +1,5 @@
 import type { ComplianceEvidenceDraft } from './types';
+import { COLLECTOR_EVIDENCE_SCHEMAS, evaluationFailureEvidenceSchema } from './schemas';
 
 export class EvidenceValidationError extends Error {
   constructor(
@@ -31,11 +32,37 @@ const FORBIDDEN_KEY_PATTERNS = [
   /^body$/i,
 ];
 
+const FORBIDDEN_TEXT_PATTERNS = [
+  /-----BEGIN [A-Z ]+ PRIVATE KEY-----/i,
+  /\b(?:bearer\s+[a-zA-Z0-9_\-\.]{20,})/i,
+  /\b(?:password|passwd)\s*[:=]\s*\S+/i,
+  /\b(?:ghp_|gho_|xoxb-|xoxp-)[a-zA-Z0-9_]{16,}/i,
+  /\b(?:eyJh|eyKb)[a-zA-Z0-9_\-\.]{30,}/i,
+];
+
 function checkMetadataKey(key: string): void {
   for (const pattern of FORBIDDEN_KEY_PATTERNS) {
     if (pattern.test(key)) {
       throw new EvidenceValidationError(
         `Evidence metadata contains forbidden sensitive key: "${key}"`,
+        'FORBIDDEN_KEY_DETECTED'
+      );
+    }
+  }
+}
+
+function checkTextForSecrets(field: string, text: string | null | undefined): void {
+  if (!text) return;
+  if (text.length > MAX_STRING_LENGTH) {
+    throw new EvidenceValidationError(
+      `Evidence ${field} exceeds maximum allowed length of ${MAX_STRING_LENGTH} characters`,
+      'STRING_TOO_LONG'
+    );
+  }
+  for (const pattern of FORBIDDEN_TEXT_PATTERNS) {
+    if (pattern.test(text)) {
+      throw new EvidenceValidationError(
+        `Evidence ${field} contains forbidden sensitive credential pattern: "${text}"`,
         'FORBIDDEN_KEY_DETECTED'
       );
     }
@@ -99,11 +126,19 @@ function scanValue(val: unknown, currentDepth: number): void {
   );
 }
 
+export interface ValidateEvidenceOptions {
+  expectedCollectorId?: string;
+  expectedCollectorVersion?: string;
+}
+
 /**
- * Validates an evidence draft against strict safety and size criteria.
+ * Validates an evidence draft against strict safety, provenance, schema and size criteria.
  * Throws EvidenceValidationError if validation fails.
  */
-export function validateEvidenceDraft(draft: ComplianceEvidenceDraft): void {
+export function validateEvidenceDraft(
+  draft: ComplianceEvidenceDraft,
+  options?: ValidateEvidenceOptions
+): void {
   if (!draft.type) {
     throw new EvidenceValidationError('Evidence draft must have a valid type', 'INVALID_TYPE');
   }
@@ -122,12 +157,36 @@ export function validateEvidenceDraft(draft: ComplianceEvidenceDraft): void {
     );
   }
 
+  // Provenance check if caller specifies expected collector identity
+  if (options?.expectedCollectorId && draft.collectorId !== options.expectedCollectorId) {
+    throw new EvidenceValidationError(
+      `Evidence collectorId mismatch: expected "${options.expectedCollectorId}", received "${draft.collectorId}"`,
+      'COLLECTOR_PROVENANCE_MISMATCH'
+    );
+  }
+
+  if (
+    options?.expectedCollectorVersion &&
+    draft.collectorVersion !== options.expectedCollectorVersion
+  ) {
+    throw new EvidenceValidationError(
+      `Evidence collectorVersion mismatch: expected "${options.expectedCollectorVersion}", received "${draft.collectorVersion}"`,
+      'COLLECTOR_PROVENANCE_MISMATCH'
+    );
+  }
+
   if (!draft.title || typeof draft.title !== 'string' || draft.title.trim().length === 0) {
     throw new EvidenceValidationError(
       'Evidence draft must have a non-empty title',
       'INVALID_TITLE'
     );
   }
+
+  // Sanitize top-level textual fields for sensitive patterns
+  checkTextForSecrets('title', draft.title);
+  checkTextForSecrets('description', draft.description);
+  checkTextForSecrets('resourceType', draft.resourceType);
+  checkTextForSecrets('resourceId', draft.resourceId);
 
   if (!(draft.observedAt instanceof Date) || isNaN(draft.observedAt.getTime())) {
     throw new EvidenceValidationError(
@@ -143,7 +202,7 @@ export function validateEvidenceDraft(draft: ComplianceEvidenceDraft): void {
     );
   }
 
-  // Scan metadata structure for forbidden keys and size
+  // Scan metadata structure for forbidden keys, recursion depth, and size (defense-in-depth)
   scanValue(draft.metadata, 1);
 
   // Serialized byte size constraint
@@ -155,12 +214,56 @@ export function validateEvidenceDraft(draft: ComplianceEvidenceDraft): void {
       'METADATA_TOO_LARGE'
     );
   }
+
+  // Validate exact per-collector Zod schema if available
+  if (draft.type === 'EVALUATION_FAILURE') {
+    const failureResult = evaluationFailureEvidenceSchema.safeParse(draft.metadata);
+    if (!failureResult.success) {
+      const collectorSchema = COLLECTOR_EVIDENCE_SCHEMAS[draft.collectorId];
+      if (collectorSchema) {
+        const altResult = collectorSchema.safeParse(draft.metadata);
+        if (!altResult.success) {
+          throw new EvidenceValidationError(
+            `Evidence metadata violates evaluation failure schema: ${failureResult.error.message}`,
+            'SCHEMA_VALIDATION_FAILED'
+          );
+        }
+      } else {
+        throw new EvidenceValidationError(
+          `Evidence metadata violates evaluation failure schema: ${failureResult.error.message}`,
+          'SCHEMA_VALIDATION_FAILED'
+        );
+      }
+    }
+  } else {
+    const collectorSchema = COLLECTOR_EVIDENCE_SCHEMAS[draft.collectorId];
+    if (collectorSchema) {
+      const parseResult = collectorSchema.safeParse(draft.metadata);
+      if (!parseResult.success) {
+        throw new EvidenceValidationError(
+          `Evidence metadata violates collector "${draft.collectorId}" schema: ${parseResult.error.message}`,
+          'SCHEMA_VALIDATION_FAILED'
+        );
+      }
+    }
+  }
 }
 
 /**
  * Validates a collection of evidence drafts for an evaluation.
+ * Rejects empty evidence drafts to guarantee that authoritative runtime states always possess durable evidence.
  */
-export function validateEvidenceDrafts(drafts: readonly ComplianceEvidenceDraft[]): void {
+export function validateEvidenceDrafts(
+  drafts: readonly ComplianceEvidenceDraft[],
+  options?: ValidateEvidenceOptions
+): void {
+  if (drafts.length === 0) {
+    throw new EvidenceValidationError(
+      'Runtime evaluation must provide evidence',
+      'EVIDENCE_REQUIRED'
+    );
+  }
+
   if (drafts.length > MAX_EVIDENCE_DRAFTS_PER_EVALUATION) {
     throw new EvidenceValidationError(
       `Evidence drafts count (${drafts.length}) exceeds maximum limit of ${MAX_EVIDENCE_DRAFTS_PER_EVALUATION} per evaluation`,
@@ -169,6 +272,6 @@ export function validateEvidenceDrafts(drafts: readonly ComplianceEvidenceDraft[
   }
 
   for (const draft of drafts) {
-    validateEvidenceDraft(draft);
+    validateEvidenceDraft(draft, options);
   }
 }

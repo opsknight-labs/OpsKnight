@@ -233,6 +233,36 @@ describe('compliance evaluation engine (unit)', () => {
     });
   });
 
+  it('fails safely to UNVERIFIED with EVIDENCE_VALIDATION_FAILED when evaluator returns zero evidence drafts', async () => {
+    complianceEvaluatorRegistry['encryption.at-rest'] = {
+      id: 'encryption.at-rest',
+      version: '1',
+      evaluate: vi.fn().mockResolvedValue({
+        status: 'IMPLEMENTED' as const,
+        summary: 'No evidence evaluator',
+        findings: [],
+        evidence: [],
+        evidenceRefs: [],
+      }),
+    };
+
+    const { evaluation, controlState } = await evaluateControl({
+      controlId: 'SEC-ENC-001',
+      context: makeContext(),
+      trigger: 'API',
+    });
+
+    expect(evaluation.status).toBe('UNVERIFIED');
+    expect(evaluation.summary).toContain('evidence validation failed');
+    expect(controlState.status).toBe('UNVERIFIED');
+    expect(mockPrisma.complianceEvidence.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'EVALUATION_FAILURE',
+        title: 'Evidence Validation Failure',
+      }),
+    });
+  });
+
   it('protects against race conditions by not overwriting newer state with an older evaluation', async () => {
     complianceEvaluatorRegistry['encryption.at-rest'] = {
       id: 'encryption.at-rest',
@@ -241,7 +271,19 @@ describe('compliance evaluation engine (unit)', () => {
         status: 'IMPLEMENTED' as const,
         summary: 'Older evaluation finished late.',
         findings: [],
-        evidence: [],
+        evidence: [
+          {
+            type: 'VERIFICATION_RESULT' as const,
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Encryption Verification',
+            observedAt: new Date('2026-09-19T14:00:00.000Z'),
+            metadata: {
+              completedVerifyRunFound: false,
+              activeKeyId: 'k3',
+            },
+          },
+        ],
         evidenceRefs: [],
       }),
     };

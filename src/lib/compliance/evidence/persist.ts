@@ -32,6 +32,7 @@ export async function persistEvidenceDrafts(
       controlId,
       evaluationId,
       draft,
+      collectedAt,
     });
 
     return {

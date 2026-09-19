@@ -25,9 +25,7 @@ import type {
   EvaluationBatchResult,
 } from './types';
 
-export async function evaluateControl(
-  options: EvaluateControlOptions
-): Promise<{
+export async function evaluateControl(options: EvaluateControlOptions): Promise<{
   evaluation: ComplianceEvaluation;
   controlState: ComplianceControlState;
   evidenceCount: number;
@@ -102,7 +100,10 @@ export async function evaluateControl(
     if (!Array.isArray(result.evidence)) {
       throw new Error('Evaluator result must include an array of evidence drafts');
     }
-    validateEvidenceDrafts(result.evidence);
+    validateEvidenceDrafts(result.evidence, {
+      expectedCollectorId: evaluator.id,
+      expectedCollectorVersion: evaluator.version,
+    });
   } catch (err: unknown) {
     logger.error('[Compliance Engine] Evidence validation failed', {
       controlId,

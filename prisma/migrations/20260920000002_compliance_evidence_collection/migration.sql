@@ -34,5 +34,8 @@ CREATE INDEX "ComplianceEvidence_type_idx" ON "ComplianceEvidence"("type");
 -- CreateIndex
 CREATE INDEX "ComplianceEvidence_resourceType_resourceId_idx" ON "ComplianceEvidence"("resourceType", "resourceId");
 
+-- CreateIndex
+CREATE INDEX "ComplianceEvidence_contentHash_idx" ON "ComplianceEvidence"("contentHash");
+
 -- AddForeignKey
-ALTER TABLE "ComplianceEvidence" ADD CONSTRAINT "ComplianceEvidence_evaluationId_fkey" FOREIGN KEY ("evaluationId") REFERENCES "ComplianceEvaluation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ComplianceEvidence" ADD CONSTRAINT "ComplianceEvidence_evaluationId_fkey" FOREIGN KEY ("evaluationId") REFERENCES "ComplianceEvaluation"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

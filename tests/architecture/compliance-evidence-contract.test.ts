@@ -1,4 +1,3 @@
-/* eslint-disable security/detect-non-literal-fs-filename */
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -6,7 +5,7 @@ import { COMPLIANCE_EVIDENCE_TYPES } from '@/lib/compliance/evidence/types';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
 
 describe('compliance evidence architecture contract', () => {
-  it('guarantees compliance evidence records are strictly append-only (no update or delete)', () => {
+  it('guarantees compliance evidence records are strictly append-only (no update or delete in application code)', () => {
     const srcDir = path.resolve(process.cwd(), 'src');
 
     function scanFiles(dir: string): string[] {
@@ -40,6 +39,21 @@ describe('compliance evidence architecture contract', () => {
         ).toBe(false);
       }
     }
+  });
+
+  it('guarantees schema enforces foreign key onDelete: Restrict and contentHash index', () => {
+    const schemaPath = path.resolve(process.cwd(), 'prisma/schema.prisma');
+    const schemaContent = fs.readFileSync(schemaPath, 'utf8');
+
+    // Evidence must restrict deletion when parent evaluation is deleted
+    expect(schemaContent).toMatch(
+      /model ComplianceEvidence\s*\{[\s\S]*?evaluation\s+ComplianceEvaluation\s+@relation\([^)]*?onDelete:\s*Restrict[^)]*?\)/
+    );
+
+    // Schema must index contentHash
+    expect(schemaContent).toMatch(
+      /model ComplianceEvidence\s*\{[\s\S]*?@@index\(\[contentHash\]\)/
+    );
   });
 
   it('verifies all registered evaluators are present and versioned', () => {

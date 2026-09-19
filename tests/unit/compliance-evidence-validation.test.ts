@@ -18,10 +18,8 @@ describe('compliance evidence safety validation', () => {
     title: 'Encryption Verification',
     observedAt: new Date(),
     metadata: {
+      completedVerifyRunFound: false,
       activeKeyId: 'k3',
-      verifiedTargets: 17,
-      currentV3: 1500,
-      conflicts: 0,
     },
   };
 
@@ -73,6 +71,60 @@ describe('compliance evidence safety validation', () => {
     expect(() => validateEvidenceDraft(draft)).toThrowError(/forbidden sensitive key/i);
   });
 
+  it('rejects raw credentials in title, description, or resource fields', () => {
+    const draftWithSecretTitle: ComplianceEvidenceDraft = {
+      ...validDraft,
+      title: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sensitive',
+    };
+    expect(() => validateEvidenceDraft(draftWithSecretTitle)).toThrowError(
+      /forbidden sensitive credential pattern/i
+    );
+
+    const draftWithPrivateKey: ComplianceEvidenceDraft = {
+      ...validDraft,
+      description: '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA0',
+    };
+    expect(() => validateEvidenceDraft(draftWithPrivateKey)).toThrowError(
+      /forbidden sensitive credential pattern/i
+    );
+  });
+
+  it('rejects collector provenance mismatch', () => {
+    expect(() =>
+      validateEvidenceDraft(validDraft, {
+        expectedCollectorId: 'data.retention',
+        expectedCollectorVersion: '1',
+      })
+    ).toThrowError(/collectorId mismatch/i);
+
+    expect(() =>
+      validateEvidenceDraft(validDraft, {
+        expectedCollectorId: 'encryption.at-rest',
+        expectedCollectorVersion: '2',
+      })
+    ).toThrowError(/collectorVersion mismatch/i);
+  });
+
+  it('rejects metadata violating exact collector Zod schema', () => {
+    const draftWithInvalidField: ComplianceEvidenceDraft = {
+      ...validDraft,
+      metadata: {
+        completedVerifyRunFound: false,
+        activeKeyId: 'k3',
+        unexpectedField: 'invalid_extra_data',
+      },
+    };
+
+    try {
+      validateEvidenceDraft(draftWithInvalidField);
+      expect.unreachable('Should have thrown');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(EvidenceValidationError);
+      expect((err as EvidenceValidationError).code).toBe('SCHEMA_VALIDATION_FAILED');
+      expect((err as EvidenceValidationError).message).toContain('violates collector');
+    }
+  });
+
   it('rejects metadata exceeding maximum byte size', () => {
     const hugeString = 'x'.repeat(MAX_METADATA_BYTES + 100);
     const draft: ComplianceEvidenceDraft = {
@@ -100,6 +152,17 @@ describe('compliance evidence safety validation', () => {
     };
 
     expect(() => validateEvidenceDraft(draft)).toThrowError(/nesting depth/i);
+  });
+
+  it('rejects empty evidence drafts collection (EVIDENCE_REQUIRED)', () => {
+    try {
+      validateEvidenceDrafts([]);
+      expect.unreachable('Should have thrown');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(EvidenceValidationError);
+      expect((err as EvidenceValidationError).code).toBe('EVIDENCE_REQUIRED');
+      expect((err as EvidenceValidationError).message).toContain('must provide evidence');
+    }
   });
 
   it('rejects evidence drafts collection exceeding maximum count', () => {

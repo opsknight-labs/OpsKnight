@@ -11,9 +11,12 @@ export interface EvidenceHashPayload {
   readonly type: string;
   readonly collectorId: string;
   readonly collectorVersion: string;
+  readonly title: string;
+  readonly description: string | null;
   readonly resourceType: string | null;
   readonly resourceId: string | null;
   readonly observedAt: string;
+  readonly collectedAt: string;
   readonly validUntil: string | null;
   readonly metadata: Record<string, unknown>;
 }
@@ -24,14 +27,19 @@ export function buildEvidenceHashPayload(params: {
   type: string;
   collectorId: string;
   collectorVersion: string;
+  title: string;
+  description?: string | null;
   resourceType?: string | null;
   resourceId?: string | null;
   observedAt: Date | string;
+  collectedAt: Date | string;
   validUntil?: Date | string | null;
   metadata: Record<string, unknown>;
 }): EvidenceHashPayload {
   const observedAtStr =
     params.observedAt instanceof Date ? params.observedAt.toISOString() : params.observedAt;
+  const collectedAtStr =
+    params.collectedAt instanceof Date ? params.collectedAt.toISOString() : params.collectedAt;
   const validUntilStr = params.validUntil
     ? params.validUntil instanceof Date
       ? params.validUntil.toISOString()
@@ -45,9 +53,12 @@ export function buildEvidenceHashPayload(params: {
     type: params.type,
     collectorId: params.collectorId,
     collectorVersion: params.collectorVersion,
+    title: params.title,
+    description: params.description ?? null,
     resourceType: params.resourceType ?? null,
     resourceId: params.resourceId ?? null,
     observedAt: observedAtStr,
+    collectedAt: collectedAtStr,
     validUntil: validUntilStr,
     metadata: params.metadata,
   };
@@ -60,16 +71,21 @@ export function computeEvidenceContentHash(params: {
   controlId: string;
   evaluationId: string;
   draft: ComplianceEvidenceDraft;
+  collectedAt?: Date | string;
 }): string {
+  const collectedAt = params.collectedAt ?? params.draft.observedAt;
   const payload = buildEvidenceHashPayload({
     controlId: params.controlId,
     evaluationId: params.evaluationId,
     type: params.draft.type,
     collectorId: params.draft.collectorId,
     collectorVersion: params.draft.collectorVersion,
+    title: params.draft.title,
+    description: params.draft.description,
     resourceType: params.draft.resourceType,
     resourceId: params.draft.resourceId,
     observedAt: params.draft.observedAt,
+    collectedAt,
     validUntil: params.draft.validUntil,
     metadata: params.draft.metadata,
   });
@@ -90,23 +106,33 @@ export function verifyComplianceEvidenceHash(
     | 'type'
     | 'collectorId'
     | 'collectorVersion'
+    | 'title'
+    | 'description'
     | 'resourceType'
     | 'resourceId'
     | 'observedAt'
+    | 'collectedAt'
     | 'validUntil'
     | 'metadata'
     | 'contentHash'
   >
 ): boolean {
+  if (!evidence || !evidence.contentHash) {
+    return false;
+  }
+
   const payload = buildEvidenceHashPayload({
     controlId: evidence.controlId,
     evaluationId: evidence.evaluationId,
     type: evidence.type,
     collectorId: evidence.collectorId,
     collectorVersion: evidence.collectorVersion,
+    title: evidence.title,
+    description: evidence.description,
     resourceType: evidence.resourceType,
     resourceId: evidence.resourceId,
     observedAt: evidence.observedAt,
+    collectedAt: evidence.collectedAt,
     validUntil: evidence.validUntil,
     metadata: evidence.metadata as Record<string, unknown>,
   });

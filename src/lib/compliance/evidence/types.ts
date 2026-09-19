@@ -40,6 +40,7 @@ export interface ComplianceEvidenceRecord {
   readonly validUntil?: Date | null;
   readonly contentHash: string;
   readonly metadata: Record<string, unknown>;
+  readonly integrityValid?: boolean;
 }
 
 export interface EvidenceQueryOptions {

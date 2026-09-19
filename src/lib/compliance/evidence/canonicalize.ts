@@ -37,17 +37,12 @@ export function canonicalizeEvidenceValue(val: unknown, seen = new WeakSet<objec
       return val.map(item => canonicalizeEvidenceValue(item, seen));
     }
 
-    const sortedKeys = Object.keys(val as Record<string, unknown>).sort();
-    const result: Record<string, unknown> = {};
-    for (const key of sortedKeys) {
-      // eslint-disable-next-line security/detect-object-injection
-      const item = (val as Record<string, unknown>)[key];
-      if (item !== undefined) {
-        // eslint-disable-next-line security/detect-object-injection
-        result[key] = canonicalizeEvidenceValue(item, seen);
-      }
-    }
-    return result;
+    const sortedEntries = Object.entries(val as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => [k, canonicalizeEvidenceValue(v, seen)]);
+
+    return Object.fromEntries(sortedEntries);
   } finally {
     seen.delete(val);
   }
