@@ -455,20 +455,20 @@ model User {
   createdAt                    DateTime   @default(now())
   updatedAt                    DateTime   @updatedAt
 
-  assignedIncidents    Incident[]
-  teamMemberships      TeamMember[]
-  onCallShifts         OnCallShift[]
-  escalationRules      EscalationRule[]
-  incidentNotes        IncidentNote[]
-  postmortems          Postmortem[]
-  notifications        Notification[]
-  inAppNotifications   InAppNotification[]
-  devices              UserDevice[]
-  incidentWatchers     IncidentWatcher[]
-  auditLogs            AuditLog[]
-  overrides            OnCallOverride[]    @relation("OverrideUser")
-  overrideReplacements OnCallOverride[]    @relation("OverrideReplacesUser")
-  layerAssignments     OnCallLayerUser[]
+  assignedIncidents           Incident[]
+  teamMemberships             TeamMember[]
+  onCallShifts                OnCallShift[]
+  escalationRules             EscalationRule[]
+  incidentNotes               IncidentNote[]
+  postmortems                 Postmortem[]
+  notifications               Notification[]
+  inAppNotifications          InAppNotification[]
+  devices                     UserDevice[]
+  incidentWatchers            IncidentWatcher[]
+  auditLogs                   AuditLog[]
+  overrides                   OnCallOverride[]             @relation("OverrideUser")
+  overrideReplacements        OnCallOverride[]             @relation("OverrideReplacesUser")
+  layerAssignments            OnCallLayerUser[]
   apiKeys                     ApiKey[]
   incidentTemplates           IncidentTemplate[]
   updatedProviders            NotificationProvider[]
@@ -504,24 +504,25 @@ model UserAvatar {
   data      Bytes
   mimeType  String
   updatedAt DateTime @updatedAt
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model OidcIdentity {
-  id               String    @id @default(cuid())
-  issuer           String
-  subject          String
-  email            String?
-  providerConfigId String?   @default("default")
-  providerObjectId String?
-  tenantId         String?
+  id                String    @id @default(cuid())
+  issuer            String
+  subject           String
+  email             String?
+  providerConfigId  String?   @default("default")
+  providerObjectId  String?
+  tenantId          String?
   issuerFingerprint String?
-  emailAtLink      String?
-  lastLoginAt      DateTime?
-  userId           String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailAtLink       String?
+  lastLoginAt       DateTime?
+  userId            String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([issuer, subject])
   @@index([userId])
   @@index([issuer])
@@ -530,11 +531,11 @@ model OidcIdentity {
 }
 
 model Team {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String             @id @default(cuid())
+  name              String             @unique
+  description       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   members           TeamMember[]
   services          Service[]
   escalationRules   EscalationRule[]
@@ -542,7 +543,7 @@ model Team {
   incidents         Incident[]
   dashboards        Dashboard[]
   teamLeadId        String?
-  teamLead          User? @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
+  teamLead          User?              @relation("TeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
 }
 
 model TeamMember {
@@ -551,84 +552,88 @@ model TeamMember {
   teamId                   String
   role                     TeamRole @default(MEMBER)
   receiveTeamNotifications Boolean  @default(true)
-  user User @relation(fields: [userId], references: [id])
-  team Team @relation(fields: [teamId], references: [id])
+  user                     User     @relation(fields: [userId], references: [id])
+  team                     Team     @relation(fields: [teamId], references: [id])
+
   @@unique([userId, teamId])
   @@index([teamId])
 }
 
 model Service {
-  id                          String                @id @default(cuid())
-  name                        String                @unique
-  description                 String?
-  region                      String?
-  slaTier                     String?
-  status                      ServiceStatus         @default(OPERATIONAL)
-  targetAckMinutes            Int                   @default(15)
-  targetResolveMinutes        Int                   @default(120)
-  teamId                      String?
-  escalationPolicyId          String?
-  slackWebhookUrl             String?
-  slackChannel                String?
-  slackWorkspaceId            String?
-  slackIntegrationId          String?
-  webhookUrl                  String?
-  serviceNotificationChannels NotificationChannel[] @default([])
-  serviceNotifyOnTriggered    Boolean               @default(true)
-  serviceNotifyOnAck          Boolean               @default(true)
-  serviceNotifyOnResolved     Boolean               @default(true)
-  serviceNotifyOnSlaBreach    Boolean               @default(false)
-  defaultIncidentVisibility   IncidentVisibility    @default(PUBLIC)
-  autoCreateWarRoom           Boolean               @default(false)
-  microsoftTeamsWarRoomAutoCreate Boolean           @default(false)
-  warRoomVideoBridge          String?
-  warRoomCustomBridgeUrl      String?
-  slaDefinitions              SLADefinition[]
-  createdAt                   DateTime              @default(now())
-  updatedAt                   DateTime              @updatedAt
-  team      Team?             @relation(fields: [teamId], references: [id])
-  incidents Incident[]
-  policy    EscalationPolicy? @relation(fields: [escalationPolicyId], references: [id])
-  integrations              Integration[]
-  alerts                    Alert[]
-  incidentTemplates         IncidentTemplate[]
-  statusPageServices        StatusPageService[]
-  webhookIntegrations       WebhookIntegration[]
-  slackIntegration          SlackIntegration? @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
-  jiraServiceMapping        JiraServiceMapping?
-  subscriptionServices      StatusPageSubscriptionService[]
-  microsoftTeamsDestinations MicrosoftTeamsDestination[]
+  id                              String                          @id @default(cuid())
+  name                            String                          @unique
+  description                     String?
+  region                          String?
+  slaTier                         String?
+  status                          ServiceStatus                   @default(OPERATIONAL)
+  targetAckMinutes                Int                             @default(15)
+  targetResolveMinutes            Int                             @default(120)
+  teamId                          String?
+  escalationPolicyId              String?
+  slackWebhookUrl                 String?
+  slackChannel                    String?
+  slackWorkspaceId                String?
+  slackIntegrationId              String?
+  webhookUrl                      String?
+  serviceNotificationChannels     NotificationChannel[]           @default([])
+  serviceNotifyOnTriggered        Boolean                         @default(true)
+  serviceNotifyOnAck              Boolean                         @default(true)
+  serviceNotifyOnResolved         Boolean                         @default(true)
+  serviceNotifyOnSlaBreach        Boolean                         @default(false)
+  defaultIncidentVisibility       IncidentVisibility              @default(PUBLIC)
+  autoCreateWarRoom               Boolean                         @default(false)
+  microsoftTeamsWarRoomAutoCreate Boolean                         @default(false)
+  warRoomVideoBridge              String?
+  warRoomCustomBridgeUrl          String?
+  slaDefinitions                  SLADefinition[]
+  serviceObjectives               ServiceObjective[]
+  createdAt                       DateTime                        @default(now())
+  updatedAt                       DateTime                        @updatedAt
+  team                            Team?                           @relation(fields: [teamId], references: [id])
+  incidents                       Incident[]
+  policy                          EscalationPolicy?               @relation(fields: [escalationPolicyId], references: [id])
+  integrations                    Integration[]
+  alerts                          Alert[]
+  incidentTemplates               IncidentTemplate[]
+  statusPageServices              StatusPageService[]
+  webhookIntegrations             WebhookIntegration[]
+  slackIntegration                SlackIntegration?               @relation("ServiceSlackIntegration", fields: [slackIntegrationId], references: [id], onDelete: SetNull)
+  jiraServiceMapping              JiraServiceMapping?
+  subscriptionServices            StatusPageSubscriptionService[]
+  microsoftTeamsDestinations      MicrosoftTeamsDestination[]
+
   @@index([teamId])
   @@index([escalationPolicyId])
   @@index([slackIntegrationId])
 }
 
 model EscalationPolicy {
-  id          String  @id @default(cuid())
-  name        String  @unique
+  id          String           @id @default(cuid())
+  name        String           @unique
   description String?
-  steps EscalationRule[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  services Service[]
+  steps       EscalationRule[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  services    Service[]
 }
 
 model EscalationRule {
-  id       String           @id @default(cuid())
-  policyId String
-  policy   EscalationPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
-  delayMinutes Int @default(0)
-  stepOrder    Int
-  targetType       EscalationTargetType @default(USER)
-  targetUserId     String?
-  targetTeamId     String?
-  targetScheduleId String?
+  id                   String                    @id @default(cuid())
+  policyId             String
+  policy               EscalationPolicy          @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  delayMinutes         Int                       @default(0)
+  stepOrder            Int
+  targetType           EscalationTargetType      @default(USER)
+  targetUserId         String?
+  targetTeamId         String?
+  targetScheduleId     String?
   notificationChannels NotificationChannel[]
-  notifyOnlyTeamLead Boolean @default(false)
-  targetUser     User? @relation(fields: [targetUserId], references: [id])
-  targetTeam     Team? @relation(fields: [targetTeamId], references: [id])
-  targetSchedule OnCallSchedule? @relation(fields: [targetScheduleId], references: [id])
-  conditions     EscalationRuleCondition[]
+  notifyOnlyTeamLead   Boolean                   @default(false)
+  targetUser           User?                     @relation(fields: [targetUserId], references: [id])
+  targetTeam           Team?                     @relation(fields: [targetTeamId], references: [id])
+  targetSchedule       OnCallSchedule?           @relation(fields: [targetScheduleId], references: [id])
+  conditions           EscalationRuleCondition[]
+
   @@unique([policyId, stepOrder])
   @@index([policyId])
   @@index([targetUserId])
@@ -643,6 +648,7 @@ model EscalationRuleCondition {
   operator String
   values   String[]
   rule     EscalationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
   @@index([ruleId])
 }
 
@@ -657,7 +663,8 @@ model Integration {
   serviceId       String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  service         Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   @@index([serviceId])
   @@index([type, snsTopicArn])
 }
@@ -675,6 +682,7 @@ model InboundDelivery {
   completedAt    DateTime?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
+
   @@unique([integrationId, deliveryHash])
   @@index([status, leaseExpiresAt])
 }
@@ -690,7 +698,8 @@ model WebhookIntegration {
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   @@unique([serviceId, name])
   @@index([serviceId])
 }
@@ -705,72 +714,76 @@ model SlackOAuthConfig {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   updatedBy     String?
-  updater       User? @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  updater       User?    @relation("SlackOAuthConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
   @@unique([id])
 }
 
 model OidcConfig {
-  id                      String   @id @default("default")
-  issuer                  String
-  clientId                String
-  clientSecret            String
-  enabled                 Boolean  @default(true)
-  configVersion           Int      @default(1)
-  autoProvision           Boolean  @default(true)
-  allowedDomains          String[] @default([])
-  roleMapping             Json?    @default("[]")
-  customScopes            String?
-  providerType            String?
-  providerLabel           String?
-  organizationId          String?
-  tokenEndpointAuthMethod String?  @default("client_secret_basic")
-  profileMapping          Json?    @default("{}")
+  id                        String   @id @default("default")
+  issuer                    String
+  clientId                  String
+  clientSecret              String
+  enabled                   Boolean  @default(true)
+  configVersion             Int      @default(1)
+  autoProvision             Boolean  @default(true)
+  allowedDomains            String[] @default([])
+  roleMapping               Json?    @default("[]")
+  customScopes              String?
+  providerType              String?
+  providerLabel             String?
+  organizationId            String?
+  tokenEndpointAuthMethod   String?  @default("client_secret_basic")
+  profileMapping            Json?    @default("{}")
   sessionMaxAgeSeconds      Int?
   sessionIdleTimeoutSeconds Int?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-  updatedBy               String?
-  updater                 User? @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  updatedBy                 String?
+  updater                   User?    @relation(fields: [updatedBy], references: [id], onDelete: SetNull)
+
   @@unique([id])
 }
 
 model SlackIntegration {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   workspaceId   String
   workspaceName String?
   botToken      String
   signingSecret String?
   installedBy   String?
   scopes        String[]
-  enabled       Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  services  Service[] @relation("ServiceSlackIntegration")
-  installer User? @relation(fields: [installedBy], references: [id], onDelete: SetNull)
+  enabled       Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  services      Service[] @relation("ServiceSlackIntegration")
+  installer     User?     @relation(fields: [installedBy], references: [id], onDelete: SetNull)
+
   @@unique([workspaceId])
   @@index([workspaceId])
 }
 
 model MicrosoftTeamsConfig {
-  id           String                   @id @default(cuid())
-  clientId     String
-  clientSecret String
-  tenantId     String?
-  tenantMode   MicrosoftTeamsTenantMode @default(SINGLE)
-  enabled      Boolean                  @default(true)
-  interactiveEnabled Boolean            @default(false)
-  warRoomsEnabled    Boolean            @default(false)
-  defaultWarRoomMembershipType WarRoomMembershipType @default(STANDARD)
-  defaultMeetingOrganizerUpn String?
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
-  updatedBy    String?
-  updater      User? @relation("MicrosoftTeamsConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  id                           String                   @id @default(cuid())
+  clientId                     String
+  clientSecret                 String
+  tenantId                     String?
+  tenantMode                   MicrosoftTeamsTenantMode @default(SINGLE)
+  enabled                      Boolean                  @default(true)
+  interactiveEnabled           Boolean                  @default(false)
+  warRoomsEnabled              Boolean                  @default(false)
+  defaultWarRoomMembershipType WarRoomMembershipType    @default(STANDARD)
+  defaultMeetingOrganizerUpn   String?
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
+  updatedBy                    String?
+  updater                      User?                    @relation("MicrosoftTeamsConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+
   @@index([enabled])
 }
 
 model MicrosoftTeamsInstallation {
-  id             String   @id @default(cuid())
+  id             String                      @id @default(cuid())
   tenantId       String
   teamId         String
   teamName       String?
@@ -779,11 +792,12 @@ model MicrosoftTeamsInstallation {
   conversationId String?
   botRecipientId String?
   installedBy    String?
-  enabled        Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  installer    User? @relation("MicrosoftTeamsInstallationInstaller", fields: [installedBy], references: [id], onDelete: SetNull)
-  destinations MicrosoftTeamsDestination[]
+  enabled        Boolean                     @default(true)
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  installer      User?                       @relation("MicrosoftTeamsInstallationInstaller", fields: [installedBy], references: [id], onDelete: SetNull)
+  destinations   MicrosoftTeamsDestination[]
+
   @@unique([tenantId, teamId])
   @@index([tenantId])
   @@index([teamId])
@@ -791,26 +805,27 @@ model MicrosoftTeamsInstallation {
 }
 
 model MicrosoftTeamsDestination {
-  id             String   @id @default(cuid())
-  serviceId      String
-  tenantId       String
-  teamId         String
-  channelId      String
-  channelName    String?
-  teamName       String?
-  installationId String?
-  enabled        Boolean  @default(true)
-  interactiveEnabled Boolean @default(false)
-  warRoomEnabled    Boolean  @default(false)
-  warRoomAutoCreate Boolean  @default(true)
+  id                    String                          @id @default(cuid())
+  serviceId             String
+  tenantId              String
+  teamId                String
+  channelId             String
+  channelName           String?
+  teamName              String?
+  installationId        String?
+  enabled               Boolean                         @default(true)
+  interactiveEnabled    Boolean                         @default(false)
+  warRoomEnabled        Boolean                         @default(false)
+  warRoomAutoCreate     Boolean                         @default(true)
   warRoomMembershipType WarRoomMembershipType?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  updatedBy      String?
-  service      Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  installation MicrosoftTeamsInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
-  updater      User? @relation("MicrosoftTeamsDestinationUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
-  messages     MicrosoftTeamsIncidentMessage[]
+  createdAt             DateTime                        @default(now())
+  updatedAt             DateTime                        @updatedAt
+  updatedBy             String?
+  service               Service                         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  installation          MicrosoftTeamsInstallation?     @relation(fields: [installationId], references: [id], onDelete: SetNull)
+  updater               User?                           @relation("MicrosoftTeamsDestinationUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  messages              MicrosoftTeamsIncidentMessage[]
+
   @@unique([serviceId, tenantId, teamId, channelId])
   @@index([serviceId])
   @@index([tenantId, teamId])
@@ -820,7 +835,7 @@ model MicrosoftTeamsDestination {
 }
 
 model MicrosoftTeamsIncidentMessage {
-  id                     String    @id @default(cuid())
+  id                     String                    @id @default(cuid())
   incidentId             String
   destinationId          String
   conversationId         String?
@@ -831,12 +846,13 @@ model MicrosoftTeamsIncidentMessage {
   mutationLeaseToken     String?
   mutationLeaseExpiresAt DateTime?
   createOperationId      String?
-  createState            String    @default("NONE")
-  messageGeneration      Int       @default(1)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  destination MicrosoftTeamsDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+  createState            String                    @default("NONE")
+  messageGeneration      Int                       @default(1)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  incident               Incident                  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  destination            MicrosoftTeamsDestination @relation(fields: [destinationId], references: [id], onDelete: Cascade)
+
   @@unique([incidentId, destinationId])
   @@index([incidentId])
   @@index([destinationId])
@@ -847,59 +863,60 @@ model MicrosoftTeamsIncidentMessage {
 }
 
 model IncidentWarRoom {
-  id                    String                @id @default(cuid())
-  incidentId            String
-  provider              WarRoomProvider
-  generation            Int                   @default(1)
-  state                 WarRoomState          @default(PROVISIONING)
-  destinationId         String?
-  installationId        String?
-  providerTenantId      String?
-  providerContainerId   String?
-  providerChannelId     String?
-  providerChannelName   String?
-  providerChannelUrl    String?
-  membershipType        WarRoomMembershipType?
-  commandMessageId      String?
-  commandConversationId String?
-  commandCreateAttemptedAt DateTime?
-  messageGeneration     Int                   @default(1)
+  id                           String                 @id @default(cuid())
+  incidentId                   String
+  provider                     WarRoomProvider
+  generation                   Int                    @default(1)
+  state                        WarRoomState           @default(PROVISIONING)
+  destinationId                String?
+  installationId               String?
+  providerTenantId             String?
+  providerContainerId          String?
+  providerChannelId            String?
+  providerChannelName          String?
+  providerChannelUrl           String?
+  membershipType               WarRoomMembershipType?
+  commandMessageId             String?
+  commandConversationId        String?
+  commandCreateAttemptedAt     DateTime?
+  messageGeneration            Int                    @default(1)
   projectionVersion     Int                   @default(0)
-  lastProjectedVersion  Int                   @default(0)
+  lastProjectedVersion         Int                    @default(0)
   lastProjectedAt       DateTime?
-  projectionLeaseToken  String?
-  projectionLeaseExpiresAt DateTime?
-  provisioningToken     String?
-  provisioningStartedAt DateTime?
-  createAttemptedAt     DateTime?
-  createOperationId     String?
+  projectionLeaseToken         String?
+  projectionLeaseExpiresAt     DateTime?
+  provisioningToken            String?
+  provisioningStartedAt        DateTime?
+  createAttemptedAt            DateTime?
+  createOperationId            String?
   // Durable planned identity for this generation — set BEFORE conversations.create
   // and never overwritten by reconciliation. Lost-response recovery reconciles
   // only this exact name (plus marker); generic name fallback is forbidden.
-  plannedExternalName   String?
-  readyAt               DateTime?
-  closedAt              DateTime?
-  archivedAt            DateTime?
+  plannedExternalName          String?
+  readyAt                      DateTime?
+  closedAt                     DateTime?
+  archivedAt                   DateTime?
   // Resolve-driven close intent — persisted for AMBIGUOUS rooms so the
   // close lifecycle waits for external identity rather than stranding it.
-  closeRequestedAt      DateTime?
-  lastError             String?
-  lastErrorCode         String?
-  health                WarRoomHealthState    @default(HEALTHY)
+  closeRequestedAt             DateTime?
+  lastError                    String?
+  lastErrorCode                String?
+  health                       WarRoomHealthState     @default(HEALTHY)
   lastReconciledAt      DateTime?
   // Terminal drift debt: set when reconciliation window expires with
   // unverified external outcome. A low-frequency lane scans these rooms
   // by marker/planned name and archives any orphan channel idempotently
   // without reopening the lifecycle. Cleared on next marker scan.
-  externalCleanupPending     Boolean   @default(false)
-  externalCleanupReason      String?
+  externalCleanupPending       Boolean                @default(false)
+  externalCleanupReason        String?
   externalCleanupLastAttemptAt DateTime?
-  externalCleanupCompletedAt DateTime?
-  metadata              Json?
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  incident     Incident             @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  participants WarRoomParticipant[]
+  externalCleanupCompletedAt   DateTime?
+  metadata                     Json?
+  createdAt                    DateTime               @default(now())
+  updatedAt                    DateTime               @updatedAt
+  incident                     Incident               @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  participants                 WarRoomParticipant[]
+
   @@unique([incidentId, provider, generation])
   @@index([incidentId, provider, state])
   @@index([provider, providerTenantId, providerContainerId, providerChannelId])
@@ -908,36 +925,36 @@ model IncidentWarRoom {
 }
 
 model IncidentMeeting {
-  id                    String                  @id @default(cuid())
-  incidentId            String
-  provider              IncidentMeetingProvider
-  generation            Int                     @default(1)
-  state                 IncidentMeetingState    @default(REQUESTED)
-  health                IncidentMeetingHealth   @default(HEALTHY)
-  externalId            String                  @unique
-  joinUrl               String
-  joinWebUrl            String?
-  conferenceId          String?
-  tollNumber            String?
-  tollFreeNumber        String?
-  organizerEmail        String?
-  providerMeetingId     String?
-  provisioningToken     String?
-  provisioningStartedAt DateTime?
-  closeStartedAt        DateTime?
-  closeToken            String?
-  readyAt               DateTime?
-  closedAt              DateTime?
-  cleanupAttemptedAt    DateTime?
-  cleanupRetryCount     Int                     @default(0)
-  lastReconciledAt      DateTime?
-  externalCleanupPending Boolean                @default(false)
-  lastErrorCode         String?
-  lastErrorMessage      String?
-  metadata              Json?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
-  incident              Incident                @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  id                     String                  @id @default(cuid())
+  incidentId             String
+  provider               IncidentMeetingProvider
+  generation             Int                     @default(1)
+  state                  IncidentMeetingState    @default(REQUESTED)
+  health                 IncidentMeetingHealth   @default(HEALTHY)
+  externalId             String                  @unique
+  joinUrl                String
+  joinWebUrl             String?
+  conferenceId           String?
+  tollNumber             String?
+  tollFreeNumber         String?
+  organizerEmail         String?
+  providerMeetingId      String?
+  provisioningToken      String?
+  provisioningStartedAt  DateTime?
+  closeStartedAt         DateTime?
+  closeToken             String?
+  readyAt                DateTime?
+  closedAt               DateTime?
+  cleanupAttemptedAt     DateTime?
+  cleanupRetryCount      Int                     @default(0)
+  lastReconciledAt       DateTime?
+  externalCleanupPending Boolean                 @default(false)
+  lastErrorCode          String?
+  lastErrorMessage       String?
+  metadata               Json?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  incident               Incident                @relation(fields: [incidentId], references: [id], onDelete: Cascade)
 
   @@unique([incidentId, generation])
   @@index([incidentId, state])
@@ -947,22 +964,23 @@ model IncidentMeeting {
 }
 
 model WarRoomParticipant {
-  id               String                  @id @default(cuid())
+  id               String                   @id @default(cuid())
   warRoomId        String
   userId           String?
   providerUserId   String?
   providerObjectId String?
   source           WarRoomParticipantSource
-  state            WarRoomParticipantState @default(DESIRED)
-  desiredVersion   Int                     @default(0)
+  state            WarRoomParticipantState  @default(DESIRED)
+  desiredVersion   Int                      @default(0)
   lastSyncAt       DateTime?
   lastError        String?
   lastErrorCode    String?
   addedAt          DateTime?
-  createdAt        DateTime                @default(now())
-  updatedAt        DateTime                @updatedAt
-  warRoom IncidentWarRoom @relation(fields: [warRoomId], references: [id], onDelete: Cascade)
-  user    User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  warRoom          IncidentWarRoom          @relation(fields: [warRoomId], references: [id], onDelete: Cascade)
+  user             User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([warRoomId, state])
   @@index([userId])
 }
@@ -984,23 +1002,24 @@ enum WarRoomProviderEventStageStatus {
 }
 
 model WarRoomProviderEventDelivery {
-  id             String                              @id @default(cuid())
+  id             String                             @id @default(cuid())
   provider       WarRoomProvider
   idempotencyKey String
   incidentId     String
   kind           String
   eventPayload   Json
   status         WarRoomProviderEventDeliveryStatus @default(PENDING)
-  attempts       Int                                 @default(0)
+  attempts       Int                                @default(0)
   leaseToken     String?
   leaseExpiresAt DateTime?
   completedAt    DateTime?
   failedAt       DateTime?
   lastError      String?
   lastErrorCode  String?
-  createdAt      DateTime                            @default(now())
-  updatedAt      DateTime                            @updatedAt
+  createdAt      DateTime                           @default(now())
+  updatedAt      DateTime                           @updatedAt
   stages         WarRoomProviderEventStage[]
+
   @@unique([provider, idempotencyKey])
   @@index([status, leaseExpiresAt])
   @@index([incidentId, kind])
@@ -1022,21 +1041,23 @@ model WarRoomProviderEventStage {
   completedAt      DateTime?
   createdAt        DateTime                        @default(now())
   updatedAt        DateTime                        @updatedAt
-  delivery WarRoomProviderEventDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  delivery         WarRoomProviderEventDelivery    @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
   @@unique([deliveryId, stage])
   @@index([deliveryId])
 }
 
 model Alert {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   dedupKey   String?
-  status     String   @default("TRIGGERED")
+  status     String    @default("TRIGGERED")
   payload    Json
   serviceId  String
   incidentId String?
-  createdAt  DateTime @default(now())
-  service  Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  incident Incident? @relation(fields: [incidentId], references: [id])
+  createdAt  DateTime  @default(now())
+  service    Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  incident   Incident? @relation(fields: [incidentId], references: [id])
+
   @@index([serviceId, status])
   @@index([incidentId])
   @@index([dedupKey, status])
@@ -1046,12 +1067,12 @@ model Alert {
 }
 
 model Incident {
-  id                                  String                        @id @default(cuid())
+  id                                  String                          @id @default(cuid())
   title                               String
   description                         String?
-  status                              IncidentStatus                @default(OPEN)
-  urgency                             IncidentUrgency               @default(HIGH)
-  visibility                          IncidentVisibility            @default(PUBLIC)
+  status                              IncidentStatus                  @default(OPEN)
+  urgency                             IncidentUrgency                 @default(HIGH)
+  visibility                          IncidentVisibility              @default(PUBLIC)
   priority                            String?
   dedupKey                            String?
   serviceId                           String
@@ -1061,13 +1082,13 @@ model Incident {
   nextEscalationAt                    DateTime?
   escalationStatus                    String?
   escalationProcessingAt              DateTime?
-  escalationGeneration                Int                           @default(0)
+  escalationGeneration                Int                             @default(0)
   acknowledgedAt                      DateTime?
   resolvedAt                          DateTime?
   resolutionKind                      IncidentResolutionKind?
   snoozedUntil                        DateTime?
   snoozeReason                        String?
-  slaPausedMs                         BigInt                        @default(0)
+  slaPausedMs                         BigInt                          @default(0)
   slaPauseStartedAt                   DateTime?
   slaAckElapsedMs                     BigInt?
   slaResolveElapsedMs                 BigInt?
@@ -1094,39 +1115,40 @@ model Incident {
   classificationUrgencyScope          String?
   nextSlaTransitionAt                 DateTime?
   nextSlaTransitionKind               String?
-  slaPolicy                           IncidentSlaPolicy? @relation(fields: [slaPolicyId], references: [id], onDelete: Restrict)
-  classificationPolicy                IncidentClassificationPolicy? @relation("IncidentClassificationPolicy", fields: [classificationPolicyId], references: [id], onDelete: Restrict)
-  classificationPriorityPolicy        IncidentClassificationPolicy? @relation("IncidentClassificationPriorityPolicy", fields: [classificationPriorityPolicyId], references: [id], onDelete: Restrict)
-  classificationUrgencyPolicy         IncidentClassificationPolicy? @relation("IncidentClassificationUrgencyPolicy", fields: [classificationUrgencyPolicyId], references: [id], onDelete: Restrict)
+  slaPolicy                           IncidentSlaPolicy?              @relation(fields: [slaPolicyId], references: [id], onDelete: Restrict)
+  classificationPolicy                IncidentClassificationPolicy?   @relation("IncidentClassificationPolicy", fields: [classificationPolicyId], references: [id], onDelete: Restrict)
+  classificationPriorityPolicy        IncidentClassificationPolicy?   @relation("IncidentClassificationPriorityPolicy", fields: [classificationPriorityPolicyId], references: [id], onDelete: Restrict)
+  classificationUrgencyPolicy         IncidentClassificationPolicy?   @relation("IncidentClassificationUrgencyPolicy", fields: [classificationUrgencyPolicyId], references: [id], onDelete: Restrict)
   slackWorkspaceId                    String?
   slackChannelId                      String?
   slackChannelName                    String?
   warRoomUrl                          String?
   warRoomArchivedAt                   DateTime?
-  warRoomProvisioningStatus           WarRoomProvisioningStatus     @default(NONE)
+  warRoomProvisioningStatus           WarRoomProvisioningStatus       @default(NONE)
   warRoomProvisioningToken            String?
   warRoomProvisioningAt               DateTime?
-  createdAt                           DateTime                      @default(now())
-  updatedAt                           DateTime                      @updatedAt
-  service                 Service @relation(fields: [serviceId], references: [id], onDelete: Restrict)
-  assignee                User? @relation(fields: [assigneeId], references: [id])
-  team                    Team? @relation(fields: [teamId], references: [id])
-  events                  IncidentEvent[]
-  notes                   IncidentNote[]
-  postmortem              Postmortem?
-  statusPageAnnouncements StatusPageAnnouncement[]
-  customFieldValues       CustomFieldValue[]
-  alerts                  Alert[]
-  notifications           Notification[]
-  watchers                IncidentWatcher[]
-  tags                    IncidentTag[]
-  actionItemRecords       ActionItem[]
-  externalIssueLinks      ExternalIssueLink[]
-  pinnedMessages          SlackPinnedMessage[]
-  microsoftTeamsMessages  MicrosoftTeamsIncidentMessage[]
-  warRooms                IncidentWarRoom[]
-  meetings                IncidentMeeting[]
-  slaPauses               IncidentSlaPause[]
+  createdAt                           DateTime                        @default(now())
+  updatedAt                           DateTime                        @updatedAt
+  service                             Service                         @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  assignee                            User?                           @relation(fields: [assigneeId], references: [id])
+  team                                Team?                           @relation(fields: [teamId], references: [id])
+  events                              IncidentEvent[]
+  notes                               IncidentNote[]
+  postmortem                          Postmortem?
+  statusPageAnnouncements             StatusPageAnnouncement[]
+  customFieldValues                   CustomFieldValue[]
+  alerts                              Alert[]
+  notifications                       Notification[]
+  watchers                            IncidentWatcher[]
+  tags                                IncidentTag[]
+  actionItemRecords                   ActionItem[]
+  externalIssueLinks                  ExternalIssueLink[]
+  pinnedMessages                      SlackPinnedMessage[]
+  microsoftTeamsMessages              MicrosoftTeamsIncidentMessage[]
+  warRooms                            IncidentWarRoom[]
+  meetings                            IncidentMeeting[]
+  slaPauses                           IncidentSlaPause[]
+
   @@index([dedupKey])
   @@index([serviceId, dedupKey, status])
   @@index([nextEscalationAt, escalationStatus])
@@ -1174,6 +1196,7 @@ model IncidentSlaPolicy {
   sealedAt            DateTime?
   rules               IncidentSlaPolicyRule[]
   incidents           Incident[]
+
   @@unique([scopeKey, version])
 }
 
@@ -1185,6 +1208,7 @@ model IncidentSlaPolicyRule {
   resolveTargetMs Int
   label           String?
   policy          IncidentSlaPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
   @@unique([policyId, priority])
 }
 
@@ -1199,9 +1223,10 @@ model IncidentClassificationPolicy {
   createdById               String?
   sealedAt                  DateTime?
   rules                     IncidentClassificationPolicyRule[]
-  incidents                 Incident[] @relation("IncidentClassificationPolicy")
-  priorityIncidents         Incident[] @relation("IncidentClassificationPriorityPolicy")
-  urgencyIncidents          Incident[] @relation("IncidentClassificationUrgencyPolicy")
+  incidents                 Incident[]                         @relation("IncidentClassificationPolicy")
+  priorityIncidents         Incident[]                         @relation("IncidentClassificationPriorityPolicy")
+  urgencyIncidents          Incident[]                         @relation("IncidentClassificationUrgencyPolicy")
+
   @@unique([scopeKey, version])
 }
 
@@ -1216,6 +1241,7 @@ model IncidentClassificationPolicyRule {
   urgencyMode  String
   label        String?
   policy       IncidentClassificationPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
   @@unique([policyId, matchType, matchValue], map: "IncidentClassificationPolicyRule_match_key")
 }
 
@@ -1231,6 +1257,7 @@ model ResponseSupportHoursPolicy {
   sealedAt         DateTime?
   windows          ResponseSupportWindow[]
   exceptions       ResponseSupportException[]
+
   @@unique([scopeKey, version])
 }
 
@@ -1241,6 +1268,7 @@ model ResponseSupportWindow {
   startMinute Int
   endMinute   Int
   policy      ResponseSupportHoursPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
   @@index([policyId, dayOfWeek])
 }
 
@@ -1253,6 +1281,7 @@ model ResponseSupportException {
   endMinute   Int?
   label       String?
   policy      ResponseSupportHoursPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
   @@unique([policyId, localDate])
 }
 
@@ -1275,16 +1304,17 @@ model IncidentSlaPause {
   actorId             String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
-  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incident            Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
   @@index([incidentId, startedAt])
   @@index([incidentId, endedAt])
 }
 
 model Tag {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id        String        @id @default(cuid())
+  name      String        @unique
   color     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime      @default(now())
   incidents IncidentTag[]
 }
 
@@ -1293,8 +1323,9 @@ model IncidentTag {
   incidentId String
   tagId      String
   createdAt  DateTime @default(now())
-  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
   @@unique([incidentId, tagId])
   @@index([incidentId])
   @@index([tagId])
@@ -1313,10 +1344,11 @@ model IncidentTemplate {
   isPublic         Boolean         @default(false)
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
-  createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  defaultService Service? @relation(fields: [defaultServiceId], references: [id])
-  Team           Team?    @relation(fields: [teamId], references: [id])
-  teamId         String?
+  createdBy        User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  defaultService   Service?        @relation(fields: [defaultServiceId], references: [id])
+  Team             Team?           @relation(fields: [teamId], references: [id])
+  teamId           String?
+
   @@index([createdById])
 }
 
@@ -1326,8 +1358,9 @@ model IncidentWatcher {
   userId     String
   role       String   @default("FOLLOWER")
   createdAt  DateTime @default(now())
-  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id])
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id])
+
   @@unique([incidentId, userId])
 }
 
@@ -1337,7 +1370,8 @@ model IncidentEvent {
   message    String
   type       IncidentEventType?
   createdAt  DateTime           @default(now())
-  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incident   Incident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
   @@index([incidentId, createdAt])
   @@index([incidentId, message, createdAt], name: "idx_event_ack_search")
   @@index([incidentId, type], name: "idx_event_type")
@@ -1350,54 +1384,57 @@ model IncidentNote {
   userId     String?
   content    String
   createdAt  DateTime @default(now())
-  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  user     User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([incidentId, createdAt])
 }
 
 model Postmortem {
-  id          String    @id @default(cuid())
-  incidentId  String    @unique
-  title       String
-  summary     String?
-  timeline    Json?
-  impact      Json?
-  rootCause   String?
-  resolution  String?
-  actionItems Json?
-  lessons     String?
-  status      String    @default("DRAFT")
-  isPublic    Boolean   @default(true)
-  publishedAt DateTime?
-  createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                String       @id @default(cuid())
+  incidentId        String       @unique
+  title             String
+  summary           String?
+  timeline          Json?
+  impact            Json?
+  rootCause         String?
+  resolution        String?
+  actionItems       Json?
+  lessons           String?
+  status            String       @default("DRAFT")
+  isPublic          Boolean      @default(true)
+  publishedAt       DateTime?
+  createdById       String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
   incident          Incident     @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   createdBy         User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   actionItemRecords ActionItem[]
+
   @@index([incidentId])
   @@index([status, createdAt])
   @@index([createdById])
 }
 
 model ActionItem {
-  id           String             @id @default(cuid())
-  postmortemId String
-  incidentId   String
-  title        String
-  description  String?
-  ownerId      String?
-  dueDate      DateTime?
-  status       ActionItemStatus   @default(OPEN)
-  priority     ActionItemPriority @default(MEDIUM)
-  source       ActionItemSource   @default(POSTMORTEM)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  completedAt  DateTime?
+  id                 String              @id @default(cuid())
+  postmortemId       String
+  incidentId         String
+  title              String
+  description        String?
+  ownerId            String?
+  dueDate            DateTime?
+  status             ActionItemStatus    @default(OPEN)
+  priority           ActionItemPriority  @default(MEDIUM)
+  source             ActionItemSource    @default(POSTMORTEM)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  completedAt        DateTime?
   postmortem         Postmortem          @relation(fields: [postmortemId], references: [id], onDelete: Cascade)
   incident           Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   owner              User?               @relation(fields: [ownerId], references: [id], onDelete: SetNull)
   externalIssueLinks ExternalIssueLink[]
+
   @@index([postmortemId])
   @@index([incidentId, status])
   @@index([ownerId, status])
@@ -1416,7 +1453,7 @@ model JiraConfig {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
   updatedBy              String?
-  updatedByUser User? @relation("JiraConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+  updatedByUser          User?    @relation("JiraConfigUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
 }
 
 model JiraServiceMapping {
@@ -1432,7 +1469,8 @@ model JiraServiceMapping {
   syncEnabled                 Boolean  @default(true)
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
-  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  service                     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   @@index([projectKey])
 }
 
@@ -1450,8 +1488,9 @@ model ExternalIssueLink {
   lastSyncedAt     DateTime?
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
-  incident   Incident?   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  actionItem ActionItem? @relation(fields: [actionItemId], references: [id], onDelete: Cascade)
+  incident         Incident?              @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  actionItem       ActionItem?            @relation(fields: [actionItemId], references: [id], onDelete: Cascade)
+
   @@unique([provider, externalId])
   @@unique([provider, externalKey])
   @@index([incidentId])
@@ -1473,103 +1512,108 @@ model OnCallSchedule {
 }
 
 model OnCallLayer {
-  id                  String    @id @default(cuid())
+  id                  String            @id @default(cuid())
   scheduleId          String
   name                String
   start               DateTime
   end                 DateTime?
-  rotationLengthHours Int       @default(24)
+  rotationLengthHours Int               @default(24)
   shiftLengthHours    Int?
   restrictions        Json?
-  priority            Int       @default(0)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  schedule OnCallSchedule    @relation(fields: [scheduleId], references: [id])
-  users    OnCallLayerUser[]
+  priority            Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  schedule            OnCallSchedule    @relation(fields: [scheduleId], references: [id])
+  users               OnCallLayerUser[]
+
   @@index([scheduleId])
 }
 
 model OnCallLayerUser {
-  id       String @id @default(cuid())
+  id       String      @id @default(cuid())
   layerId  String
   userId   String
-  position Int    @default(0)
-  layer OnCallLayer @relation(fields: [layerId], references: [id])
-  user  User        @relation(fields: [userId], references: [id])
+  position Int         @default(0)
+  layer    OnCallLayer @relation(fields: [layerId], references: [id])
+  user     User        @relation(fields: [userId], references: [id])
+
   @@unique([layerId, userId])
 }
 
 model OnCallOverride {
-  id             String   @id @default(cuid())
+  id             String         @id @default(cuid())
   scheduleId     String
   userId         String
   replacesUserId String?
   start          DateTime
   end            DateTime
-  createdAt      DateTime @default(now())
-  schedule     OnCallSchedule @relation(fields: [scheduleId], references: [id])
-  user         User           @relation("OverrideUser", fields: [userId], references: [id])
-  replacesUser User?          @relation("OverrideReplacesUser", fields: [replacesUserId], references: [id])
+  createdAt      DateTime       @default(now())
+  schedule       OnCallSchedule @relation(fields: [scheduleId], references: [id])
+  user           User           @relation("OverrideUser", fields: [userId], references: [id])
+  replacesUser   User?          @relation("OverrideReplacesUser", fields: [replacesUserId], references: [id])
+
   @@unique([scheduleId, userId, start, end])
   @@index([scheduleId, start, end])
   @@index([userId, start, end])
 }
 
 model OnCallShift {
-  id         String   @id @default(cuid())
+  id         String         @id @default(cuid())
   scheduleId String
   userId     String
   start      DateTime
   end        DateTime
-  schedule OnCallSchedule @relation(fields: [scheduleId], references: [id])
-  user     User           @relation(fields: [userId], references: [id])
+  schedule   OnCallSchedule @relation(fields: [scheduleId], references: [id])
+  user       User           @relation(fields: [userId], references: [id])
+
   @@index([start, end])
   @@index([scheduleId])
   @@index([userId, start, end])
 }
 
 model Notification {
-  id                String                    @id @default(cuid())
+  id                String                        @id @default(cuid())
   incidentId        String?
   userId            String?
   channel           NotificationChannel
-  status            NotificationStatus        @default(PENDING)
+  status            NotificationStatus            @default(PENDING)
   message           String?
-  eventType         String                    @default("triggered")
-  category          NotificationCategory      @default(INCIDENT)
-  recipientType     NotificationRecipientType @default(USER)
+  eventType         String                        @default("triggered")
+  category          NotificationCategory          @default(INCIDENT)
+  recipientType     NotificationRecipientType     @default(USER)
   recipientId       String?
   recipientDisplay  String?
   recipientHash     String?
   templateKey       String?
   sourceType        String?
   sourceId          String?
-  deliveryKey       String?                   @unique
+  deliveryKey       String?                       @unique
   payloadEncrypted  String?
   contentId         String?
   fanoutId          String?
-  trafficClass      NotificationTrafficClass  @default(TRANSACTIONAL)
-  tenantKey         String                    @default("system")
-  priority          Int                       @default(5)
-  scheduledAt       DateTime                  @default(now())
-  nextAttemptAt     DateTime                  @default(now())
+  trafficClass      NotificationTrafficClass      @default(TRANSACTIONAL)
+  tenantKey         String                        @default("system")
+  priority          Int                           @default(5)
+  scheduledAt       DateTime                      @default(now())
+  nextAttemptAt     DateTime                      @default(now())
   lastAttemptAt     DateTime?
   claimToken        String?
   claimedBy         String?
-  maxAttempts       Int                       @default(3)
+  maxAttempts       Int                           @default(3)
   expiresAt         DateTime?
   sentAt            DateTime?
   deliveredAt       DateTime?
   failedAt          DateTime?
   errorMsg          String?
-  providerMessageId String?                   @unique
-  attempts          Int                       @default(0)
-  createdAt         DateTime                  @default(now())
-  incident         Incident? @relation(fields: [incidentId], references: [id])
-  user             User? @relation(fields: [userId], references: [id], onDelete: SetNull)
-  deliveryAttempts NotificationDeliveryAttempt[]
-  content          NotificationContent? @relation(fields: [contentId], references: [id], onDelete: SetNull)
-  fanout           NotificationFanout? @relation(fields: [fanoutId], references: [id], onDelete: SetNull)
+  providerMessageId String?                       @unique
+  attempts          Int                           @default(0)
+  createdAt         DateTime                      @default(now())
+  incident          Incident?                     @relation(fields: [incidentId], references: [id])
+  user              User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  deliveryAttempts  NotificationDeliveryAttempt[]
+  content           NotificationContent?          @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  fanout            NotificationFanout?           @relation(fields: [fanoutId], references: [id], onDelete: SetNull)
+
   @@index([incidentId])
   @@index([userId])
   @@index([userId, createdAt])
@@ -1619,15 +1663,16 @@ model NotificationFanout {
   completedAt         DateTime?
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
-  content             NotificationContent @relation(fields: [contentId], references: [id], onDelete: Restrict)
+  content             NotificationContent      @relation(fields: [contentId], references: [id], onDelete: Restrict)
   notifications       Notification[]
+
   @@unique([statusPageId, sourceType, sourceId, eventKey])
   @@index([status, createdAt])
   @@index([statusPageId, createdAt])
 }
 
 model NotificationDeliveryAttempt {
-  id                String    @id @default(cuid())
+  id                String       @id @default(cuid())
   notificationId    String
   ordinal           Int
   outcome           String
@@ -1635,10 +1680,11 @@ model NotificationDeliveryAttempt {
   providerMessageId String?
   errorCode         String?
   errorMessage      String?
-  startedAt         DateTime  @default(now())
+  startedAt         DateTime     @default(now())
   finishedAt        DateTime?
   latencyMs         Int?
-  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  notification      Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
   @@unique([notificationId, ordinal])
   @@index([notificationId, startedAt])
   @@index([outcome, startedAt])
@@ -1653,6 +1699,7 @@ model NotificationProviderFeedback {
   recipientHash     String?
   occurredAt        DateTime
   createdAt         DateTime @default(now())
+
   @@unique([provider, providerEventId])
   @@index([providerMessageId])
   @@index([eventType, occurredAt])
@@ -1668,7 +1715,8 @@ model InAppNotification {
   entityId   String?
   readAt     DateTime?
   createdAt  DateTime              @default(now())
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@index([userId, readAt, createdAt])
@@ -1686,7 +1734,8 @@ model UserDevice {
   lastUsed  DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([userId, deviceId])
   @@index([userId])
   @@index([token])
@@ -1704,7 +1753,8 @@ model AuditLog {
   targetEmail String?
   ip          String?
   createdAt   DateTime        @default(now())
-  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actor       User?           @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
   @@index([createdAt])
@@ -1726,7 +1776,8 @@ model UserToken {
   revokedAt  DateTime?
   createdAt  DateTime      @default(now())
   metadata   Json?
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([identifier, type])
   @@index([userId, type, generation])
   @@index([expiresAt])
@@ -1747,7 +1798,8 @@ model OidcLinkingApproval {
   generation        Int       @default(1)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([approvedById])
 }
 
@@ -1762,7 +1814,8 @@ model ApiKey {
   lastUsedAt DateTime?
   revokedAt  DateTime?
   expiresAt  DateTime?
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([tokenHash])
   @@index([expiresAt])
@@ -1786,6 +1839,7 @@ model NotificationProviderCapacity {
   revision             Int                      @default(1)
   createdAt            DateTime                 @default(now())
   updatedAt            DateTime                 @updatedAt
+
   @@unique([provider, channel])
   @@index([updatedAt])
 }
@@ -1802,14 +1856,15 @@ model NotificationRuntimeSettings {
 }
 
 model NotificationProvider {
-  id        String   @id @default(cuid())
-  provider  String   @unique
-  enabled   Boolean  @default(false)
-  config    Json
-  updatedBy String?
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
-  updatedByUser User? @relation(fields: [updatedBy], references: [id])
+  id            String   @id @default(cuid())
+  provider      String   @unique
+  enabled       Boolean  @default(false)
+  config        Json
+  updatedBy     String?
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedByUser User?    @relation(fields: [updatedBy], references: [id])
+
   @@index([provider])
 }
 
@@ -1858,6 +1913,7 @@ model BackgroundJob {
   payload     Json
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
   @@index([type, status, scheduledAt])
   @@index([status, scheduledAt])
   @@index([scheduledAt])
@@ -1887,7 +1943,8 @@ model ChatIdentityLink {
   revokedAt          DateTime?
   createdAt          DateTime                       @default(now())
   updatedAt          DateTime                       @updatedAt
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([provider, providerTenantId, providerUserId])
   @@unique([provider, providerTenantId, providerObjectId])
   @@index([userId, provider])
@@ -1895,16 +1952,17 @@ model ChatIdentityLink {
 }
 
 model ChatIdentityChallenge {
-  id                String       @id @default(cuid())
-  tokenHash         String       @unique
-  provider          ChatProvider
-  providerTenantId  String
-  providerUserId    String
-  providerObjectId  String?
-  displayName       String?
-  expiresAt         DateTime
-  consumedAt        DateTime?
-  createdAt         DateTime     @default(now())
+  id               String       @id @default(cuid())
+  tokenHash        String       @unique
+  provider         ChatProvider
+  providerTenantId String
+  providerUserId   String
+  providerObjectId String?
+  displayName      String?
+  expiresAt        DateTime
+  consumedAt       DateTime?
+  createdAt        DateTime     @default(now())
+
   @@index([expiresAt])
   @@index([provider, providerTenantId, providerUserId])
 }
@@ -1937,32 +1995,33 @@ enum WarRoomProvisioningStatus {
 }
 
 model ChatOpsIntent {
-  id                  String              @id @default(cuid())
-  provider            ChatProvider        @default(SLACK)
-  kind                ChatOpsIntentKind
-  deliveryHash        String
-  workspaceId         String
-  channelId           String?
-  slackUserId         String?
-  providerTenantId    String?
+  id                     String              @id @default(cuid())
+  provider               ChatProvider        @default(SLACK)
+  kind                   ChatOpsIntentKind
+  deliveryHash           String
+  workspaceId            String
+  channelId              String?
+  slackUserId            String?
+  providerTenantId       String?
   providerConversationId String?
-  providerChannelId   String?
-  providerActivityId  String?
-  providerUserId      String?
-  providerObjectId    String?
-  encryptedPayload    String
-  responseMode        ChatOpsResponseMode @default(DEFERRED)
-  payloadDigest       String?
-  status              ChatOpsIntentStatus @default(PENDING)
-  attempt             Int                 @default(0)
-  leaseToken          String?
-  leaseExpiresAt      DateTime?
-  effectCompletedAt   DateTime?
-  responseCompletedAt DateTime?
-  responsePayload     Json?
-  lastError           String?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  providerChannelId      String?
+  providerActivityId     String?
+  providerUserId         String?
+  providerObjectId       String?
+  encryptedPayload       String
+  responseMode           ChatOpsResponseMode @default(DEFERRED)
+  payloadDigest          String?
+  status                 ChatOpsIntentStatus @default(PENDING)
+  attempt                Int                 @default(0)
+  leaseToken             String?
+  leaseExpiresAt         DateTime?
+  effectCompletedAt      DateTime?
+  responseCompletedAt    DateTime?
+  responsePayload        Json?
+  lastError              String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
   @@unique([provider, kind, deliveryHash])
   @@index([status, leaseExpiresAt])
   @@index([workspaceId, channelId])
@@ -1971,69 +2030,70 @@ model ChatOpsIntent {
 }
 
 model StatusPage {
-  id               String  @id @default(cuid())
-  name             String  @unique @default("Status Page")
-  slug             String? @unique
-  isDefault        Boolean @default(false)
-  organizationName String?
-  subdomain        String? @unique
-  customDomain     String? @unique
-  enabled          Boolean @default(false)
-  showServices     Boolean @default(true)
-  showIncidents    Boolean @default(true)
-  showMetrics      Boolean @default(true)
-  showSubscribe    Boolean @default(true)
-  branding         Json?
-  footerText       String?
-  contactEmail     String?
-  contactUrl       String?
-  privacyMode                String? @default("PUBLIC")
-  showIncidentDetails        Boolean @default(true)
-  showIncidentTitles         Boolean @default(true)
-  showIncidentDescriptions   Boolean @default(true)
-  showAffectedServices       Boolean @default(true)
-  showIncidentTimestamps     Boolean @default(true)
-  showServiceMetrics         Boolean @default(true)
-  showServiceDescriptions    Boolean @default(true)
-  showServiceRegions         Boolean @default(true)
-  showServicesByRegion       Boolean @default(false)
-  showServiceOwners          Boolean @default(false)
-  showServiceSlaTier         Boolean @default(false)
-  showTeamInformation        Boolean @default(false)
-  showCustomFields           Boolean @default(false)
-  showIncidentAssignees      Boolean @default(false)
-  showIncidentUrgency        Boolean @default(true)
-  showUptimeHistory          Boolean @default(true)
-  showRecentIncidents        Boolean @default(true)
-  showIncidentHistoryDetails Boolean @default(true)
-  incidentHistoryDetailDays  Int     @default(7)
-  showChangelog              Boolean @default(true)
-  showRegionHeatmap          Boolean @default(true)
-  showPostIncidentReview     Boolean @default(true)
-  maxIncidentsToShow         Int     @default(50)
-  incidentHistoryDays        Int     @default(90)
-  allowedCustomFields        Json?
-  dataRetentionDays          Int?
-  requireAuth                Boolean @default(false)
-  authProvider               String?
-  emailProvider              String?
-  enableUptimeExports        Boolean @default(false)
-  statusApiRequireToken       Boolean @default(false)
-  statusApiRateLimitEnabled   Boolean @default(false)
-  statusApiRateLimitMax       Int     @default(120)
-  statusApiRateLimitWindowSec Int     @default(60)
-  uptimeExcellentThreshold Float @default(99.9)
-  uptimeGoodThreshold      Float @default(99.0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  services        StatusPageService[]
-  announcements   StatusPageAnnouncement[]
-  apiTokens       StatusPageApiToken[]
-  subscriptions   StatusPageSubscription[]
-  webhooks        StatusPageWebhook[]
-  snapshot        StatusPageSnapshot?
-  assets          StatusPageAsset[]
-  routeOperations StatusPageRouteOperation[]
+  id                          String                     @id @default(cuid())
+  name                        String                     @unique @default("Status Page")
+  slug                        String?                    @unique
+  isDefault                   Boolean                    @default(false)
+  organizationName            String?
+  subdomain                   String?                    @unique
+  customDomain                String?                    @unique
+  enabled                     Boolean                    @default(false)
+  showServices                Boolean                    @default(true)
+  showIncidents               Boolean                    @default(true)
+  showMetrics                 Boolean                    @default(true)
+  showSubscribe               Boolean                    @default(true)
+  branding                    Json?
+  footerText                  String?
+  contactEmail                String?
+  contactUrl                  String?
+  privacyMode                 String?                    @default("PUBLIC")
+  showIncidentDetails         Boolean                    @default(true)
+  showIncidentTitles          Boolean                    @default(true)
+  showIncidentDescriptions    Boolean                    @default(true)
+  showAffectedServices        Boolean                    @default(true)
+  showIncidentTimestamps      Boolean                    @default(true)
+  showServiceMetrics          Boolean                    @default(true)
+  showServiceDescriptions     Boolean                    @default(true)
+  showServiceRegions          Boolean                    @default(true)
+  showServicesByRegion        Boolean                    @default(false)
+  showServiceOwners           Boolean                    @default(false)
+  showServiceSlaTier          Boolean                    @default(false)
+  showTeamInformation         Boolean                    @default(false)
+  showCustomFields            Boolean                    @default(false)
+  showIncidentAssignees       Boolean                    @default(false)
+  showIncidentUrgency         Boolean                    @default(true)
+  showUptimeHistory           Boolean                    @default(true)
+  showRecentIncidents         Boolean                    @default(true)
+  showIncidentHistoryDetails  Boolean                    @default(true)
+  incidentHistoryDetailDays   Int                        @default(7)
+  showChangelog               Boolean                    @default(true)
+  showRegionHeatmap           Boolean                    @default(true)
+  showPostIncidentReview      Boolean                    @default(true)
+  maxIncidentsToShow          Int                        @default(50)
+  incidentHistoryDays         Int                        @default(90)
+  allowedCustomFields         Json?
+  dataRetentionDays           Int?
+  requireAuth                 Boolean                    @default(false)
+  authProvider                String?
+  emailProvider               String?
+  enableUptimeExports         Boolean                    @default(false)
+  statusApiRequireToken       Boolean                    @default(false)
+  statusApiRateLimitEnabled   Boolean                    @default(false)
+  statusApiRateLimitMax       Int                        @default(120)
+  statusApiRateLimitWindowSec Int                        @default(60)
+  uptimeExcellentThreshold    Float                      @default(99.9)
+  uptimeGoodThreshold         Float                      @default(99.0)
+  createdAt                   DateTime                   @default(now())
+  updatedAt                   DateTime                   @updatedAt
+  services                    StatusPageService[]
+  announcements               StatusPageAnnouncement[]
+  apiTokens                   StatusPageApiToken[]
+  subscriptions               StatusPageSubscription[]
+  webhooks                    StatusPageWebhook[]
+  snapshot                    StatusPageSnapshot?
+  assets                      StatusPageAsset[]
+  routeOperations             StatusPageRouteOperation[]
+
   @@index([enabled])
   @@index([isDefault, enabled])
 }
@@ -2050,6 +2110,7 @@ model StatusPageRouteOperation {
   createdAt     DateTime   @default(now())
   completedAt   DateTime?
   statusPage    StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
   @@unique([statusPageId, routeKey, operation])
   @@index([state, nextAttemptAt])
 }
@@ -2065,6 +2126,7 @@ model StatusPageSnapshot {
   buildLeaseToken     String?
   buildLeaseExpiresAt DateTime?
   statusPage          StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
   @@index([generatedAt])
   @@index([buildLeaseExpiresAt])
 }
@@ -2076,85 +2138,90 @@ model StatusPageAsset {
   data         Bytes
   createdAt    DateTime   @default(now())
   statusPage   StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
   @@index([statusPageId])
 }
 
 model StatusPageService {
-  id           String   @id @default(cuid())
+  id           String     @id @default(cuid())
   statusPageId String
   serviceId    String
   displayName  String?
-  showOnPage   Boolean  @default(true)
-  order        Int      @default(0)
-  createdAt    DateTime @default(now())
-  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
-  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  showOnPage   Boolean    @default(true)
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+  statusPage   StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  service      Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   @@unique([statusPageId, serviceId])
   @@index([statusPageId, order])
 }
 
 model StatusPageAnnouncement {
-  id                     String                                  @id @default(cuid())
+  id                     String                                   @id @default(cuid())
   statusPageId           String
   title                  String
   message                String
-  type                   String                                  @default("INFO")
+  type                   String                                   @default("INFO")
   incidentId             String?
   affectedServiceIds     Json?
   startDate              DateTime
   endDate                DateTime?
-  allDay                 Boolean                                 @default(false)
-  timeMode               String                                  @default("EXACT")
-  publishAt              DateTime                                @default(now())
+  allDay                 Boolean                                  @default(false)
+  timeMode               String                                   @default("EXACT")
+  publishAt              DateTime                                 @default(now())
   notificationTiming     StatusPageAnnouncementNotificationTiming @default(NONE)
-  notificationGeneration Int                                     @default(0)
-  isActive               Boolean                                 @default(true)
-  createdAt              DateTime                                @default(now())
-  updatedAt              DateTime                                @updatedAt
-  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
-  incident   Incident?  @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  notificationGeneration Int                                      @default(0)
+  isActive               Boolean                                  @default(true)
+  createdAt              DateTime                                 @default(now())
+  updatedAt              DateTime                                 @updatedAt
+  statusPage             StatusPage                               @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  incident               Incident?                                @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+
   @@index([statusPageId, isActive, startDate])
   @@index([statusPageId, isActive, publishAt])
   @@index([incidentId])
 }
 
 model StatusPageApiToken {
-  id           String    @id @default(cuid())
+  id           String     @id @default(cuid())
   statusPageId String
   name         String
   prefix       String
   tokenHash    String
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
   lastUsedAt   DateTime?
   revokedAt    DateTime?
-  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  statusPage   StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
   @@unique([tokenHash])
   @@index([statusPageId, revokedAt])
 }
 
 model StatusPageSubscription {
-  id                         String                      @id @default(cuid())
+  id                         String                          @id @default(cuid())
   statusPageId               String
   email                      String
   phone                      String?
-  token                      String                      @unique
-  subscribedAt               DateTime                    @default(now())
+  token                      String                          @unique
+  subscribedAt               DateTime                        @default(now())
   unsubscribedAt             DateTime?
-  verified                   Boolean                     @default(false)
-  state                      StatusPageSubscriptionState @default(PENDING)
+  verified                   Boolean                         @default(false)
+  state                      StatusPageSubscriptionState     @default(PENDING)
   suppressionReason          String?
   lastBounceAt               DateTime?
-  bounceCount                Int                         @default(0)
+  bounceCount                Int                             @default(0)
   complainedAt               DateTime?
   lastDeliveredAt            DateTime?
   lastFailedAt               DateTime?
   verificationToken          String?
   verificationTokenExpiresAt DateTime?
   preferences                Json?
-  timezone                   String?   @default("UTC")
-  statusPage       StatusPage                      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
-  deliveryTokens   StatusPageSubscriptionToken[]
-  selectedServices StatusPageSubscriptionService[]
+  timezone                   String?                         @default("UTC")
+  statusPage                 StatusPage                      @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  deliveryTokens             StatusPageSubscriptionToken[]
+  selectedServices           StatusPageSubscriptionService[]
+
   @@unique([statusPageId, email])
   @@index([statusPageId, verified])
   @@index([token])
@@ -2163,9 +2230,10 @@ model StatusPageSubscription {
 model StatusPageSubscriptionService {
   subscriptionId String
   serviceId      String
-  createdAt      DateTime @default(now())
-  subscription StatusPageSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  service      Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  createdAt      DateTime               @default(now())
+  subscription   StatusPageSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  service        Service                @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
   @@id([subscriptionId, serviceId])
   @@index([serviceId])
   @@index([subscriptionId])
@@ -2176,36 +2244,39 @@ model StatusPageSubscriptionToken {
   subscriptionId String
   createdAt      DateTime               @default(now())
   subscription   StatusPageSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
   @@index([subscriptionId])
 }
 
 model StatusPageWebhook {
-  id              String    @id @default(cuid())
+  id              String     @id @default(cuid())
   statusPageId    String
   url             String
   secret          String
   events          Json
-  enabled         Boolean   @default(true)
+  enabled         Boolean    @default(true)
   lastTriggeredAt DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  statusPage StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  statusPage      StatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
   @@index([statusPageId, enabled])
 }
 
 model CustomField {
-  id           String          @id @default(cuid())
+  id           String             @id @default(cuid())
   name         String
-  key          String          @unique
+  key          String             @unique
   type         CustomFieldType
-  required     Boolean         @default(false)
+  required     Boolean            @default(false)
   defaultValue String?
   options      Json?
-  order        Int             @default(0)
-  showInList   Boolean         @default(false)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  values CustomFieldValue[]
+  order        Int                @default(0)
+  showInList   Boolean            @default(false)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  values       CustomFieldValue[]
+
   @@index([key])
   @@index([order])
 }
@@ -2221,14 +2292,15 @@ enum CustomFieldType {
 }
 
 model CustomFieldValue {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   incidentId    String
   customFieldId String
   value         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  incident    Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  customField CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  incident      Incident    @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  customField   CustomField @relation(fields: [customFieldId], references: [id], onDelete: Cascade)
+
   @@unique([incidentId, customFieldId])
   @@index([incidentId])
   @@index([customFieldId])
@@ -2246,72 +2318,74 @@ model MetricRollup {
   max       Float?
   tags      Json?
   createdAt DateTime @default(now())
+
   @@index([name, bucket])
   @@index([serviceId, bucket])
   @@index([bucket])
 }
 
 model SystemSettings {
-  id            String  @id @default("default")
-  appUrl        String?
-  encryptionKey String?
-  incidentRetentionDays               Int @default(730)
-  alertRetentionDays                  Int @default(365)
-  logRetentionDays                    Int @default(365)
-  metricsRetentionDays                Int @default(365)
-  realTimeWindowDays                  Int @default(90)
-  businessHoursTimeZone               String @default("UTC")
-  completedPrivacyRequestRetentionDays Int @default(730)
-  expiredPrivacyArtifactRetentionDays  Int @default(30)
-  unsubscribedSubscriberRetentionDays  Int @default(30)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                                   String   @id @default("default")
+  appUrl                               String?
+  encryptionKey                        String?
+  incidentRetentionDays                Int      @default(730)
+  alertRetentionDays                   Int      @default(365)
+  logRetentionDays                     Int      @default(365)
+  metricsRetentionDays                 Int      @default(365)
+  realTimeWindowDays                   Int      @default(90)
+  businessHoursTimeZone                String   @default("UTC")
+  completedPrivacyRequestRetentionDays Int      @default(730)
+  expiredPrivacyArtifactRetentionDays  Int      @default(30)
+  unsubscribedSubscriberRetentionDays  Int      @default(30)
+  createdAt                            DateTime @default(now())
+  updatedAt                            DateTime @updatedAt
 }
 
 model IncidentMetricRollup {
-  id          String   @id @default(cuid())
-  date        DateTime
-  granularity String   @default("daily")
-  serviceId   String?
-  teamId      String?
-  totalIncidents         Int @default(0)
-  openIncidents          Int @default(0)
-  acknowledgedIncidents  Int @default(0)
-  resolvedIncidents      Int @default(0)
-  highUrgencyIncidents   Int @default(0)
-  mediumUrgencyIncidents Int @default(0)
-  lowUrgencyIncidents    Int @default(0)
-  p1Incidents Int @default(0)
-  p2Incidents Int @default(0)
-  p3Incidents Int @default(0)
-  p4Incidents Int @default(0)
-  p5Incidents Int @default(0)
-  mttaSum   BigInt @default(0)
-  mttaCount Int    @default(0)
-  mttrSum   BigInt @default(0)
-  mttrCount Int    @default(0)
-  ackSlaMet                      Int @default(0)
-  ackSlaBreached                 Int @default(0)
-  ackSlaNotRequired              Int @default(0)
-  autoResolvedBeforeAck          Int @default(0)
-  manualResolvedWithoutAck       Int @default(0)
-  sourceRecoveryAfterAckDeadline Int @default(0)
-  resolveSlaMet                  Int @default(0)
-  resolveSlaBreached             Int @default(0)
-  escalationCount           Int @default(0)
-  reopenCount               Int @default(0)
-  autoResolveCount          Int @default(0)
-  escalationEventCount      Int @default(0)
-  escalatedIncidentCount    Int @default(0)
-  reopenEventCount          Int @default(0)
-  reopenedIncidentCount     Int @default(0)
-  autoResolveEventCount     Int @default(0)
-  autoResolvedIncidentCount Int @default(0)
-  alertCount                Int @default(0)
-  afterHoursCount Int @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  perPriority IncidentMetricRollupByPriority[]
+  id                             String                           @id @default(cuid())
+  date                           DateTime
+  granularity                    String                           @default("daily")
+  serviceId                      String?
+  teamId                         String?
+  totalIncidents                 Int                              @default(0)
+  openIncidents                  Int                              @default(0)
+  acknowledgedIncidents          Int                              @default(0)
+  resolvedIncidents              Int                              @default(0)
+  highUrgencyIncidents           Int                              @default(0)
+  mediumUrgencyIncidents         Int                              @default(0)
+  lowUrgencyIncidents            Int                              @default(0)
+  p1Incidents                    Int                              @default(0)
+  p2Incidents                    Int                              @default(0)
+  p3Incidents                    Int                              @default(0)
+  p4Incidents                    Int                              @default(0)
+  p5Incidents                    Int                              @default(0)
+  mttaSum                        BigInt                           @default(0)
+  mttaCount                      Int                              @default(0)
+  mttrSum                        BigInt                           @default(0)
+  mttrCount                      Int                              @default(0)
+  ackSlaMet                      Int                              @default(0)
+  ackSlaBreached                 Int                              @default(0)
+  ackSlaNotRequired              Int                              @default(0)
+  autoResolvedBeforeAck          Int                              @default(0)
+  manualResolvedWithoutAck       Int                              @default(0)
+  sourceRecoveryAfterAckDeadline Int                              @default(0)
+  resolveSlaMet                  Int                              @default(0)
+  resolveSlaBreached             Int                              @default(0)
+  escalationCount                Int                              @default(0)
+  reopenCount                    Int                              @default(0)
+  autoResolveCount               Int                              @default(0)
+  escalationEventCount           Int                              @default(0)
+  escalatedIncidentCount         Int                              @default(0)
+  reopenEventCount               Int                              @default(0)
+  reopenedIncidentCount          Int                              @default(0)
+  autoResolveEventCount          Int                              @default(0)
+  autoResolvedIncidentCount      Int                              @default(0)
+  alertCount                     Int                              @default(0)
+  afterHoursCount                Int                              @default(0)
+  createdAt                      DateTime                         @default(now())
+  updatedAt                      DateTime                         @updatedAt
+  perPriority                    IncidentMetricRollupByPriority[]
+
   @@unique([date, granularity, serviceId, teamId])
   @@index([date])
   @@index([granularity, date])
@@ -2320,23 +2394,24 @@ model IncidentMetricRollup {
 }
 
 model IncidentMetricRollupByPriority {
-  id       String @id @default(cuid())
-  rollupId String
-  priority String
-  incidents                      Int    @default(0)
-  mttaSum                        BigInt @default(0)
-  mttaCount                      Int    @default(0)
-  mttrSum                        BigInt @default(0)
-  mttrCount                      Int    @default(0)
-  ackSlaMet                      Int    @default(0)
-  ackSlaBreached                 Int    @default(0)
-  ackSlaNotRequired              Int    @default(0)
-  autoResolvedBeforeAck          Int    @default(0)
-  manualResolvedWithoutAck       Int    @default(0)
-  sourceRecoveryAfterAckDeadline Int    @default(0)
-  resolveSlaMet                  Int    @default(0)
-  resolveSlaBreached             Int    @default(0)
-  rollup IncidentMetricRollup @relation(fields: [rollupId], references: [id], onDelete: Cascade)
+  id                             String               @id @default(cuid())
+  rollupId                       String
+  priority                       String
+  incidents                      Int                  @default(0)
+  mttaSum                        BigInt               @default(0)
+  mttaCount                      Int                  @default(0)
+  mttrSum                        BigInt               @default(0)
+  mttrCount                      Int                  @default(0)
+  ackSlaMet                      Int                  @default(0)
+  ackSlaBreached                 Int                  @default(0)
+  ackSlaNotRequired              Int                  @default(0)
+  autoResolvedBeforeAck          Int                  @default(0)
+  manualResolvedWithoutAck       Int                  @default(0)
+  sourceRecoveryAfterAckDeadline Int                  @default(0)
+  resolveSlaMet                  Int                  @default(0)
+  resolveSlaBreached             Int                  @default(0)
+  rollup                         IncidentMetricRollup @relation(fields: [rollupId], references: [id], onDelete: Cascade)
+
   @@unique([rollupId, priority])
   @@index([priority])
 }
@@ -2356,62 +2431,145 @@ model LogEntry {
   serviceId String?
   context   Json?
   createdAt DateTime @default(now())
+
   @@index([timestamp])
   @@index([serviceId, timestamp])
   @@index([level, timestamp])
   @@index([serviceId, level, timestamp])
 }
 
+/// @deprecated Read-only compatibility/archive model. Never use this model to
+/// select or calculate an incident response SLA contract.
 model SLADefinition {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
+  id                String        @id @default(cuid())
+  name              String
+  description       String?
   targetAckTime     Int?
   targetResolveTime Int?
-  serviceId String?
-  service   Service? @relation(fields: [serviceId], references: [id])
-  priority  String?
-  target     Float
-  window     String
-  metricType String
-  version    Int    @default(1)
-  activeFrom DateTime  @default(now())
-  activeTo   DateTime?
-  snapshots SLASnapshot[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  serviceId         String?
+  service           Service?      @relation(fields: [serviceId], references: [id])
+  priority          String?
+  target            Float
+  window            String
+  metricType        String
+  version           Int           @default(1)
+  activeFrom        DateTime      @default(now())
+  activeTo          DateTime?
+  snapshots         SLASnapshot[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 }
 
+/// A metric-neutral reliability objective. Incident response SLA targets are
+/// owned exclusively by IncidentSlaPolicy and the frozen Incident contract.
+model ServiceObjective {
+  id                    String                     @id @default(cuid())
+  lineageId             String
+  serviceId             String?
+  service               Service?                   @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  name                  String
+  description           String?
+  metricType            ServiceObjectiveMetric
+  target                Float
+  comparator            ObjectiveComparator
+  windowType            ObjectiveWindow
+  windowValue           Int?
+  version               Int                        @default(1)
+  activeFrom            DateTime                   @default(now())
+  activeTo              DateTime?
+  legacySlaDefinitionId String?
+  snapshots             ServiceObjectiveSnapshot[]
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  @@index([serviceId, metricType, activeTo])
+  @@index([lineageId, version])
+  @@index([legacySlaDefinitionId])
+  @@index([activeFrom, activeTo])
+}
+
+model ServiceObjectiveSnapshot {
+  id                String             @id @default(cuid())
+  objectiveId       String
+  objective         ServiceObjective   @relation(fields: [objectiveId], references: [id], onDelete: Restrict)
+  periodStart       DateTime
+  periodEnd         DateTime
+  value             Float?
+  numerator         BigInt?
+  denominator       BigInt?
+  sampleCount       BigInt?
+  target            Float
+  breached          Boolean?
+  dataState         ObjectiveDataState
+  definitionVersion Int
+  createdAt         DateTime           @default(now())
+
+  @@unique([objectiveId, periodStart, periodEnd])
+  @@index([objectiveId, periodEnd])
+}
+
+enum ServiceObjectiveMetric {
+  UPTIME
+  AVAILABILITY
+  MTTA
+  MTTR
+  LATENCY_P99
+  ERROR_RATE
+}
+
+enum ObjectiveComparator {
+  GREATER_THAN_OR_EQUAL
+  LESS_THAN_OR_EQUAL
+}
+
+enum ObjectiveWindow {
+  SEVEN_DAYS
+  THIRTY_DAYS
+  NINETY_DAYS
+  QUARTERLY
+  YEARLY
+  ROLLING_DAYS
+}
+
+enum ObjectiveDataState {
+  AVAILABLE
+  NO_DATA
+  UNAVAILABLE
+}
+
+/// @deprecated Immutable legacy incident-SLA history. No new rows are written.
 model SLASnapshot {
-  id              String   @id @default(cuid())
-  slaDefinitionId String
-  date            DateTime
+  id                    String        @id @default(cuid())
+  slaDefinitionId       String
+  date                  DateTime
   totalIncidents        Int
   metAckTime            Int
   metResolveTime        Int
-  evaluatedAckCount     Int       @default(0)
-  evaluatedResolveCount Int       @default(0)
+  evaluatedAckCount     Int           @default(0)
+  evaluatedResolveCount Int           @default(0)
   complianceScore       Float?
-  denominatorUnknown    Boolean   @default(false)
+  denominatorUnknown    Boolean       @default(false)
   targetAckMinutes      Int?
   targetResolveMinutes  Int?
   definitionVersion     Int?
   targetCapturedAt      DateTime?
   targetSource          String?
-  slaDefinition SLADefinition @relation(fields: [slaDefinitionId], references: [id])
-  createdAt DateTime @default(now())
+  slaDefinition         SLADefinition @relation(fields: [slaDefinitionId], references: [id])
+  createdAt             DateTime      @default(now())
+
   @@unique([date, slaDefinitionId])
 }
 
 model SLAPerformanceLog {
-  id        String   @id @default(cuid())
-  timestamp DateTime @default(now())
-  serviceId  String?
-  teamId     String?
-  windowDays Int
+  id            String   @id @default(cuid())
+  timestamp     DateTime @default(now())
+  serviceId     String?
+  teamId        String?
+  windowDays    Int
   durationMs    Int
   incidentCount Int
-  dataSource    String @default("live")
+  dataSource    String   @default("live")
+
   @@index([timestamp])
   @@index([durationMs])
   @@index([serviceId, timestamp])
@@ -2429,9 +2587,14 @@ model CronSchedulerState {
   nextRunAt           DateTime?
   lastRollupDate      String?
   lastRollupRefreshAt DateTime?
+  lastObjectiveSnapshotAt         DateTime?
+  lastObjectiveSnapshotSuccessAt  DateTime?
+  lastObjectiveSnapshotDurationMs Int?
+  lastObjectiveSnapshotFailed     Int      @default(0)
   lockedBy            String?
   lockedAt            DateTime?
   updatedAt           DateTime  @updatedAt
+
   @@map("cron_scheduler_state")
 }
 
@@ -2449,25 +2612,27 @@ model Dashboard {
   teamId      String?
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
-  user    User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team    Team?             @relation(fields: [teamId], references: [id])
-  widgets DashboardWidget[]
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team        Team?               @relation(fields: [teamId], references: [id])
+  widgets     DashboardWidget[]
+
   @@index([userId])
   @@index([teamId])
   @@index([isTemplate])
 }
 
 model DashboardWidget {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   dashboardId String
   widgetType  String
   metricKey   String
   title       String?
   position    Json
   config      Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
   @@index([dashboardId])
 }
 
@@ -2475,6 +2640,7 @@ model RateLimit {
   key       String   @id
   count     Int      @default(0)
   expiresAt DateTime
+
   @@index([expiresAt])
 }
 
@@ -2486,7 +2652,8 @@ model SlackPinnedMessage {
   messageTs   String
   pinnedBy    String?
   createdAt   DateTime @default(now())
-  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
   @@unique([workspaceId, channelId, messageTs])
   @@index([incidentId])
   @@index([workspaceId, channelId])
@@ -2503,6 +2670,7 @@ model ChatOpsConfig {
   customBridgeUrlTemplate String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+
   @@unique([id])
 }
 
@@ -2526,10 +2694,10 @@ model PrivacyRequest {
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 
-  requestedBy       User?                   @relation("PrivacyRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
-  assignedTo        User?                   @relation("PrivacyRequestAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
-  exportArtifacts   PrivacyExportArtifact[]
-  erasureExecution  PrivacyErasureExecution?
+  requestedBy      User?                    @relation("PrivacyRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  assignedTo       User?                    @relation("PrivacyRequestAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  exportArtifacts  PrivacyExportArtifact[]
+  erasureExecution PrivacyErasureExecution?
 
   @@index([subjectType, subjectId])
   @@index([status, requestType])
@@ -2568,28 +2736,28 @@ model PrivacyExportArtifact {
 // resultSummary stores only per-domain counts (see src/lib/privacy/erasure/policy.ts)
 // — never subject PII.
 model PrivacyErasureExecution {
-  id                    String                        @id @default(cuid())
-  requestId             String                        @unique
-  status                PrivacyErasureExecutionStatus @default(PENDING)
-  planVersion           Int                           @default(1)
-  resultSummary         Json?
-  failureCode           String?
+  id                   String                        @id @default(cuid())
+  requestId            String                        @unique
+  status               PrivacyErasureExecutionStatus @default(PENDING)
+  planVersion          Int                           @default(1)
+  resultSummary        Json?
+  failureCode          String?
   // True when execute() completed but the plan contained a MANUAL_REVIEW_DOMAIN_IDS
   // domain with a non-zero count (e.g. free-text incident notes, audit log
   // details). The PrivacyRequest is deliberately NOT auto-transitioned to
   // COMPLETED in that case — an operator must review and complete it via the
   // standard transitionPrivacyRequest() state machine.
-  manualReviewRequired  Boolean                       @default(false)
+  manualReviewRequired Boolean                       @default(false)
   // Set the instant the destructive delete/anonymize transaction commits.
   // NULL means no data has been touched yet; once set, a retry must never
   // re-run discovery/mutation \u2014 the subject is already gone \u2014 and a
   // subsequent finalization failure is distinguishable from "the subject
   // vanished through some unrelated path before we ever got here".
-  mutationCommittedAt   DateTime?
-  startedAt             DateTime?
-  completedAt           DateTime?
-  createdAt             DateTime                      @default(now())
-  updatedAt             DateTime                      @updatedAt
+  mutationCommittedAt  DateTime?
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
 
   request PrivacyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
@@ -2601,25 +2769,25 @@ model PrivacyErasureExecution {
 // resource is protected while ANY active hold exists. The hold row is retained
 // forever as compliance evidence even after the resource is eventually deleted.
 model DataRetentionHold {
-  id                String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  scopeType         RetentionHoldScopeType
-  scopeId           String
+  scopeType RetentionHoldScopeType
+  scopeId   String
 
   reason            String
   externalReference String?
 
-  createdById       String?
-  releasedById      String?
+  createdById  String?
+  releasedById String?
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  expiresAt         DateTime?
-  releasedAt        DateTime?
+  expiresAt  DateTime?
+  releasedAt DateTime?
 
-  createdBy         User? @relation("RetentionHoldCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  releasedBy        User? @relation("RetentionHoldReleasedBy", fields: [releasedById], references: [id], onDelete: SetNull)
+  createdBy  User? @relation("RetentionHoldCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  releasedBy User? @relation("RetentionHoldReleasedBy", fields: [releasedById], references: [id], onDelete: SetNull)
 
   @@index([scopeType, scopeId])
   @@index([scopeType, scopeId, releasedAt])
@@ -2710,7 +2878,6 @@ model EncryptionMigrationIssue {
   @@index([runId, targetId])
   @@index([runId, classification])
 }
-
 enum ComplianceEvaluationStatus {
   IMPLEMENTED
   PARTIAL
@@ -2724,6 +2891,15 @@ enum ComplianceEvaluationTrigger {
   API
   SCHEDULED
   DEPLOYMENT
+}
+
+enum ComplianceEvidenceType {
+  CONFIGURATION_SNAPSHOT
+  VERIFICATION_RESULT
+  CAPABILITY_CHECK
+  SYSTEM_STATE
+  EXECUTION_SUMMARY
+  EVALUATION_FAILURE
 }
 
 // Immutable historical record of a runtime control evaluation.
@@ -2742,9 +2918,38 @@ model ComplianceEvaluation {
   validUntil       DateTime?
   createdAt        DateTime                    @default(now())
 
+  evidence         ComplianceEvidence[]
+
   @@index([controlId, evaluatedAt])
   @@index([status])
   @@index([batchId])
+}
+
+// Durable evidence captured during a runtime control evaluation.
+model ComplianceEvidence {
+  id               String                 @id @default(cuid())
+  evaluationId     String
+  controlId        String
+  type             ComplianceEvidenceType
+  collectorId      String
+  collectorVersion String
+  title            String
+  description      String?
+  resourceType     String?
+  resourceId       String?
+  observedAt       DateTime
+  collectedAt      DateTime               @default(now())
+  validUntil       DateTime?
+  contentHash      String
+  metadata         Json
+
+  evaluation       ComplianceEvaluation   @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
+
+  @@index([controlId, observedAt])
+  @@index([evaluationId])
+  @@index([type])
+  @@index([resourceType, resourceId])
+  @@index([contentHash])
 }
 
 // Cached projection of the latest evaluated state for a compliance control.
@@ -2761,4 +2966,3 @@ model ComplianceControlState {
 
   @@index([status])
 }
-

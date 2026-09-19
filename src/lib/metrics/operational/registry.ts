@@ -890,6 +890,31 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 80,
     buckets: [1, 5, 15, 30, 60, 120, 300, 900],
   },
+  {
+    name: 'opsknight_legacy_sla_api_requests_total',
+    help: 'Requests to deprecated SLA-definition endpoints by method and endpoint family',
+    kind: 'counter',
+    labels: ['method', 'endpoint_family'],
+    scope: 'counter',
+    estimatedMaxSeries: 12,
+  },
+  {
+    name: 'opsknight_service_objective_snapshot_runs_total',
+    help: 'Service-objective snapshot runs by outcome',
+    kind: 'counter',
+    labels: ['result'],
+    scope: 'counter',
+    estimatedMaxSeries: 2,
+  },
+  {
+    name: 'opsknight_service_objective_snapshot_duration_seconds',
+    help: 'Duration of service-objective snapshot runs',
+    kind: 'histogram',
+    labels: [],
+    scope: 'counter',
+    estimatedMaxSeries: 10,
+    buckets: [0.1, 0.5, 1, 5, 15, 30, 60, 300],
+  },
 ] as const satisfies readonly MetricDefinition[];
 
 type RegisteredMetricName = (typeof OPERATIONAL_METRICS)[number]['name'];

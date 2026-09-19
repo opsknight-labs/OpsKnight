@@ -63,6 +63,9 @@ export const LOCK_KEYS = {
    * their pre-processing and delete steps.
    */
   PRIVACY_ERASURE: BigInt(9141007),
+
+  /** Serializes SLA scheduler mode changes and Shadow observation counters. */
+  SLA_SCHEDULER: BigInt(1762184301),
 } as const;
 
 /**

@@ -401,6 +401,53 @@ describe('compliance evaluators (unit)', () => {
       const result = await authorizationEvaluator.evaluate(makeContext());
       expect(result.status).toBe('ACTION_REQUIRED');
       expect(result.summary).toContain('does not have any assigned capabilities');
+      expect(result.evidence).toHaveLength(1);
+      expect(result.evidence[0].type).toBe('CAPABILITY_CHECK');
+    });
+  });
+
+  describe('evaluator evidence generation & safety across all evaluators', () => {
+    it('produces valid, schema-compliant evidence without secrets for all evaluators', async () => {
+      mockPrisma.encryptionMigrationRun.findFirst.mockResolvedValue({
+        id: 'run-verify-1',
+        mode: 'VERIFY',
+        status: 'COMPLETED',
+        registryFingerprint: mockFingerprint,
+        activeKeyId: 'k2',
+        errorRecords: 0,
+        conflictRecords: 0,
+        targetStates: makeTargetStates(),
+      });
+
+      const context = makeContext();
+      const results = await Promise.all([
+        encryptionAtRestEvaluator.evaluate(context),
+        retentionEvaluator.evaluate(context),
+        retentionHoldEvaluator.evaluate(context),
+        privacyErasureEvaluator.evaluate(context),
+        privacyExportEvaluator.evaluate(context),
+        authorizationEvaluator.evaluate(context),
+      ]);
+
+      for (const res of results) {
+        expect(res.evidence.length).toBeGreaterThan(0);
+        for (const draft of res.evidence) {
+          expect(draft.title).toBeTruthy();
+          expect(draft.collectorId).toBeTruthy();
+          expect(draft.collectorVersion).toBe('1');
+          expect(draft.observedAt).toBeInstanceOf(Date);
+          expect(draft.metadata).toBeDefined();
+
+          // Ensure no sensitive or credential-related keys
+          const serialized = JSON.stringify(draft);
+          expect(serialized).not.toMatch(/"password"/i);
+          expect(serialized).not.toMatch(/"secret"/i);
+          expect(serialized).not.toMatch(/"token"/i);
+          expect(serialized).not.toMatch(/"privatekey"/i);
+          expect(serialized).not.toMatch(/"encryptionkey"/i);
+          expect(serialized).not.toMatch(/"authorization"/i);
+        }
+      }
     });
   });
 });

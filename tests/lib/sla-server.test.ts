@@ -231,7 +231,6 @@ const setupBaseMocks = ({
 
   prismaMock.service.findMany.mockResolvedValueOnce([]);
   prismaMock.incidentEvent.findMany
-    .mockResolvedValueOnce([])
     .mockResolvedValueOnce(escalationEvents)
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([]);

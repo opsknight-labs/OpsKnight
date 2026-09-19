@@ -99,6 +99,7 @@ export interface CleanupResult {
   auditLogs: number;
   inAppNotifications: number;
   slaPerformanceLogs: number;
+  serviceObjectiveSnapshots: number;
   // New lifecycle fields (additive)
   held: {
     incidents: number;
@@ -217,6 +218,7 @@ export async function performDataCleanup(
   let auditLogCount = 0;
   let inAppNotificationCount = 0;
   let slaPerformanceLogCount = 0;
+  let serviceObjectiveSnapshotCount = 0;
   let privacyRequestCount = 0;
   let expiredExportArtifactCount = 0;
   let unsubscribedSubscriberCount = 0;
@@ -296,6 +298,7 @@ export async function performDataCleanup(
       metricsToDelete,
       inAppNotificationsToDelete,
       slaPerformanceLogsToDelete,
+      serviceObjectiveSnapshotsToDelete,
       incidentEventsFromIncidents,
     ] = await Promise.all([
       Promise.resolve(deletableIncidents.length),
@@ -328,6 +331,9 @@ export async function performDataCleanup(
       prisma.sLAPerformanceLog?.count
         ? prisma.sLAPerformanceLog.count({ where: { timestamp: { lt: metricsCutoff } } })
         : Promise.resolve(0),
+      prisma.serviceObjectiveSnapshot?.count
+        ? prisma.serviceObjectiveSnapshot.count({ where: { periodEnd: { lt: metricsCutoff } } })
+        : Promise.resolve(0),
       prisma.incidentEvent.count({
         where: {
           incidentId: { in: deletableIncidents },
@@ -345,6 +351,7 @@ export async function performDataCleanup(
       metrics: metricsToDelete,
       inAppNotifications: inAppNotificationsToDelete,
       slaPerformanceLogs: slaPerformanceLogsToDelete,
+      serviceObjectiveSnapshots: serviceObjectiveSnapshotsToDelete,
       cutoffs: {
         incident: incidentCutoff.toISOString(),
         alert: alertCutoff.toISOString(),
@@ -363,6 +370,7 @@ export async function performDataCleanup(
         auditLogs: auditLogsToDelete,
         inAppNotifications: inAppNotificationsToDelete,
         slaPerformanceLogs: slaPerformanceLogsToDelete,
+        serviceObjectiveSnapshots: serviceObjectiveSnapshotsToDelete,
         held: {
           incidents: heldIncidentCount,
           privacyRequests: heldPrivacyRequestCount,
@@ -989,6 +997,19 @@ export async function performDataCleanup(
       ids => prisma.sLAPerformanceLog.deleteMany({ where: { id: { in: ids } } })
     );
 
+    if (prisma.serviceObjectiveSnapshot?.findMany && prisma.serviceObjectiveSnapshot?.deleteMany) {
+      serviceObjectiveSnapshotCount = await deleteInBatches(
+        () =>
+          prisma.serviceObjectiveSnapshot.findMany({
+            where: { periodEnd: { lt: metricsCutoff } },
+            select: { id: true },
+            orderBy: { id: 'asc' },
+            take: BATCH_SIZE,
+          }),
+        ids => prisma.serviceObjectiveSnapshot.deleteMany({ where: { id: { in: ids } } })
+      );
+    }
+
     // Cleanup old metric rollups (with exact cutoff matching preview)
     metricsCount = await cleanupOldRollups(metricsCutoff);
 
@@ -1003,6 +1024,7 @@ export async function performDataCleanup(
       metrics: metricsCount,
       inAppNotifications: inAppNotificationCount,
       slaPerformanceLogs: slaPerformanceLogCount,
+      serviceObjectiveSnapshots: serviceObjectiveSnapshotCount,
       privacyRequests: privacyRequestCount,
       expiredExportArtifacts: expiredExportArtifactCount,
       unsubscribedSubscribers: unsubscribedSubscriberCount,
@@ -1020,6 +1042,7 @@ export async function performDataCleanup(
       auditLogs: auditLogCount,
       inAppNotifications: inAppNotificationCount,
       slaPerformanceLogs: slaPerformanceLogCount,
+      serviceObjectiveSnapshots: serviceObjectiveSnapshotCount,
       held: {
         incidents: heldIncidentCount,
         privacyRequests: heldPrivacyRequestCount,

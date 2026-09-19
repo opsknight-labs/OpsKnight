@@ -2,6 +2,7 @@ import prisma from '@/lib/prisma';
 import { addOperationalMetric, setOperationalGauge } from '@/lib/metrics/operational/registry';
 import type { Prisma } from '@prisma/client';
 import { logger } from '@/lib/logger';
+import { acquireAdvisoryLock, LOCK_KEYS } from '@/lib/db-locks';
 
 export type SlaSchedulerMode = 'LEGACY' | 'SHADOW' | 'INDEXED';
 export const MIN_CLEAN_SHADOW_CHECKS = 3;
@@ -56,7 +57,7 @@ export async function recordSlaSchedulerShadowObservation(input: {
 }) {
   try {
     await prisma.$transaction(async tx => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(1762184301)`;
+      await acquireAdvisoryLock(tx, LOCK_KEYS.SLA_SCHEDULER);
       const row = await tx.systemConfig.findUnique({
         where: { key: 'incident_sla_scheduler' },
         select: { value: true },

@@ -18,7 +18,6 @@ import {
   Target,
   AlertTriangle,
   CheckCircle2,
-  TrendingUp,
   BarChart3,
   Zap,
 } from 'lucide-react';
@@ -33,7 +32,7 @@ export default function SLAHelpPanel() {
           className="h-7 gap-1.5 text-xs text-slate-500 hover:text-indigo-600"
         >
           <HelpCircle className="h-3.5 w-3.5" />
-          What are SLAs?
+          What are service objectives?
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
@@ -42,10 +41,10 @@ export default function SLAHelpPanel() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
               <Shield className="h-4 w-4" />
             </div>
-            Understanding SLA Definitions
+            Understanding Service Objectives
           </DialogTitle>
           <DialogDescription className="text-slate-500">
-            Service Level Agreements define performance targets for your services
+            Service objectives define measurable reliability targets for your services
           </DialogDescription>
         </DialogHeader>
 
@@ -70,12 +69,12 @@ export default function SLAHelpPanel() {
             <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
               <h4 className="font-semibold text-slate-800 mb-2 flex items-center gap-2">
                 <Target className="h-4 w-4 text-indigo-500" />
-                What is an SLA?
+                What is a service objective?
               </h4>
               <p className="text-sm text-slate-600">
-                A <strong>Service Level Agreement (SLA)</strong> is a commitment to maintain a
-                specific level of service quality. SLAs define measurable targets that your team
-                must meet.
+                A <strong>service objective (SLO)</strong> measures a reliability outcome over a
+                defined window. Incident ACK and resolution SLAs are configured separately under
+                Incident Response.
               </p>
             </div>
 
@@ -104,7 +103,7 @@ export default function SLAHelpPanel() {
                   <span className="text-sm font-medium text-slate-800">Metric</span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  What you're measuring: uptime, response time, resolution time, etc.
+                  What you&apos;re measuring: uptime, response time, resolution time, etc.
                 </p>
               </div>
               <div className="rounded-lg border border-slate-100 bg-white p-3">
@@ -179,9 +178,12 @@ export default function SLAHelpPanel() {
                 <div className="flex items-start gap-3">
                   <Zap className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
-                    <p className="text-sm font-semibold text-blue-800">Latency P99</p>
+                    <p className="text-sm font-semibold text-blue-800">
+                      Latency P99 (reserved)
+                    </p>
                     <p className="text-xs text-blue-700 mt-1">
-                      99th percentile response time. 99% of requests complete within this time.
+                      Reserved for future request-telemetry support; it cannot currently be
+                      configured as a Service Objective.
                       <br />
                       <span className="font-mono text-[10px] bg-blue-100 px-1 rounded mt-1 inline-block">
                         Target: Maximum milliseconds allowed
@@ -227,8 +229,8 @@ export default function SLAHelpPanel() {
                 <div>
                   <p className="text-xs font-medium text-blue-800">Rolling Windows</p>
                   <p className="text-xs text-blue-700 mt-1">
-                    All windows are rolling (e.g., "last 30 days"), not calendar-fixed. This ensures
-                    continuous monitoring without monthly resets.
+                    All windows are rolling (e.g., &quot;last 30 days&quot;), not calendar-fixed.
+                    This ensures continuous monitoring without monthly resets.
                   </p>
                 </div>
               </div>
@@ -255,9 +257,11 @@ export default function SLAHelpPanel() {
                 <div className="flex items-start gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-emerald-800">Define SLAs per service</p>
+                    <p className="text-sm font-medium text-emerald-800">
+                      Define objectives per service
+                    </p>
                     <p className="text-xs text-emerald-700 mt-0.5">
-                      Critical services (payments) need stricter SLAs than internal tools.
+                      Critical services (payments) need stricter objectives than internal tools.
                     </p>
                   </div>
                 </div>
@@ -295,9 +299,9 @@ export default function SLAHelpPanel() {
                   <p className="text-sm font-medium text-amber-800">Avoid These Mistakes</p>
                   <ul className="text-xs text-amber-700 mt-1 space-y-1 list-disc list-inside">
                     <li>Setting unrealistic targets (100% is impossible)</li>
-                    <li>Using only one metric (uptime doesn't capture response quality)</li>
+                    <li>Using only one metric (uptime doesn&apos;t capture response quality)</li>
                     <li>Ignoring near-miss events that almost breached</li>
-                    <li>Setting and forgetting - review SLAs quarterly</li>
+                    <li>Setting and forgetting - review objectives quarterly</li>
                   </ul>
                 </div>
               </div>

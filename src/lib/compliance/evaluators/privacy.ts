@@ -4,6 +4,7 @@ import type {
   ComplianceEvaluatorResult,
 } from './types';
 import { personalDataRegistry } from '@/lib/privacy/registry';
+import { createEvidenceDraft } from '../evidence/build';
 
 export const retentionHoldEvaluator: ComplianceControlEvaluator = {
   id: 'privacy.holds',
@@ -25,6 +26,22 @@ export const retentionHoldEvaluator: ComplianceControlEvaluator = {
         { code: 'SUPPORTED_SCOPES', value: 'USER, INCIDENT, PRIVACY_REQUEST' },
         { code: 'ACTIVE_HOLD_COUNT', value: activeHoldCount },
         { code: 'CLEANUP_FENCING_AVAILABLE', value: true },
+      ],
+      evidence: [
+        createEvidenceDraft({
+          type: 'CAPABILITY_CHECK',
+          collectorId: 'privacy.holds',
+          collectorVersion: '1',
+          title: 'Retention Legal Hold Subsystem Verification',
+          description: 'Validated hold-aware lifecycle protection for supported scopes.',
+          resourceType: 'DataRetentionHold',
+          observedAt: context.now,
+          metadata: {
+            supportedScopes: ['USER', 'INCIDENT', 'PRIVACY_REQUEST'],
+            activeHoldCount,
+            cleanupFencingAvailable: true,
+          },
+        }),
       ],
       evidenceRefs: [
         {
@@ -52,6 +69,24 @@ export const privacyErasureEvaluator: ComplianceControlEvaluator = {
         { code: 'ERASURE_EXECUTION_ENGINE_AVAILABLE', value: true },
         { code: 'PERSONAL_DATA_DOMAINS_COUNT', value: personalDataRegistry.length },
         { code: 'HISTORICAL_ERASURES_COUNT', value: executionCount },
+      ],
+      evidence: [
+        createEvidenceDraft({
+          type: 'CAPABILITY_CHECK',
+          collectorId: 'privacy.erasure',
+          collectorVersion: '1',
+          title: 'Privacy Erasure Pipeline Verification',
+          description:
+            'Validated subject erasure workflow, registered personal data domains, and execution history.',
+          resourceType: 'PrivacyErasureExecution',
+          observedAt: context.now,
+          metadata: {
+            subjectDiscoveryAvailable: true,
+            erasureExecutionEngineAvailable: true,
+            registeredPersonalDataDomains: personalDataRegistry.length,
+            historicalErasuresCount: executionCount,
+          },
+        }),
       ],
       evidenceRefs: [
         {
@@ -83,6 +118,24 @@ export const privacyExportEvaluator: ComplianceControlEvaluator = {
         { code: 'ENCRYPTED_EXPORT_ARTIFACTS_AVAILABLE', value: true },
         { code: 'ARTIFACT_EXPIRY_SUPPORTED', value: true },
         { code: 'HISTORICAL_ARTIFACTS_COUNT', value: artifactCount },
+      ],
+      evidence: [
+        createEvidenceDraft({
+          type: 'CAPABILITY_CHECK',
+          collectorId: 'privacy.export',
+          collectorVersion: '1',
+          title: 'Privacy Export Capability Verification',
+          description:
+            'Validated subject discovery and encrypted export artifact generation with expiry.',
+          resourceType: 'PrivacyExportArtifact',
+          observedAt: context.now,
+          metadata: {
+            subjectDiscoveryAvailable: true,
+            encryptedExportArtifactsAvailable: true,
+            artifactExpirySupported: true,
+            historicalArtifactsCount: artifactCount,
+          },
+        }),
       ],
       evidenceRefs: [
         {
