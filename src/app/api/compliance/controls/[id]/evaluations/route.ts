@@ -23,6 +23,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       where: { controlId: id },
       orderBy: { evaluatedAt: 'desc' },
       take: 20,
+      include: {
+        _count: {
+          select: { evidence: true },
+        },
+      },
     });
 
     return jsonOk({

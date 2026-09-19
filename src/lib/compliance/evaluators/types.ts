@@ -4,6 +4,7 @@ import type {
   ControlFinding,
   ControlEvidenceReference,
 } from '../types';
+import type { ComplianceEvidenceDraft } from '../evidence/types';
 
 export interface ComplianceEvaluationActor {
   readonly id: string;
@@ -22,7 +23,8 @@ export interface ComplianceEvaluatorResult {
   readonly status: ComplianceEvaluationStatus;
   readonly summary: string;
   readonly findings: readonly ControlFinding[];
-  readonly evidenceRefs: readonly ControlEvidenceReference[];
+  readonly evidence: readonly ComplianceEvidenceDraft[];
+  readonly evidenceRefs?: readonly ControlEvidenceReference[];
   readonly validUntil?: Date | null;
 }
 

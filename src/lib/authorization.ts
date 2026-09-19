@@ -46,6 +46,7 @@ export const CAPABILITIES = {
   ENCRYPTION_MANAGE: 'encryption.manage',
   COMPLIANCE_READ: 'compliance.read',
   COMPLIANCE_EVALUATE: 'compliance.evaluate',
+  COMPLIANCE_EVIDENCE_READ: 'compliance.evidence.read',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
@@ -104,6 +105,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.ENCRYPTION_READ,
   // Auditors may inspect compliance controls and runtime evaluation state.
   CAPABILITIES.COMPLIANCE_READ,
+  // Auditors may inspect immutable compliance evidence snapshots.
+  CAPABILITIES.COMPLIANCE_EVIDENCE_READ,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_CREATE_SCOPED,

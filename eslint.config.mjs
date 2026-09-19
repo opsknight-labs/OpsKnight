@@ -54,6 +54,12 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    files: ['tests/architecture/compliance-evidence-contract.test.ts'],
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
+    },
+  },
+  {
     // Save-feedback enterprise contract: only "@/lib/toast" + the global Toaster may touch `sonner`.
     // Prevent ad-hoc direct sonner toasts that bypass stable ids / durations / bypass-resistance.
     files: ['src/**/*.{ts,tsx,js,jsx}'],
