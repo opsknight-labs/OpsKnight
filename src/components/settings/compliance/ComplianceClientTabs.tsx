@@ -387,7 +387,6 @@ export default function ComplianceClientTabs({
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {frameworks.map(fw => {
               const total = fw.counts.IMPLEMENTED + fw.counts.PARTIAL + fw.counts.MISSING;
-              const pct = total > 0 ? Math.round((fw.counts.IMPLEMENTED / total) * 100) : 0;
 
               return (
                 <div
@@ -411,20 +410,12 @@ export default function ComplianceClientTabs({
                         variant="outline"
                         className="text-[11px] font-mono font-bold bg-muted/40"
                       >
-                        {fw.counts.IMPLEMENTED}/{total} Baseline
+                        Repository Baseline: {fw.counts.IMPLEMENTED}/{total}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 line-clamp-2 leading-relaxed">
                       {fw.scope}
                     </p>
-
-                    {/* Progress Bar */}
-                    <div className="w-full bg-muted/60 rounded-full h-1.5 mt-3.5 overflow-hidden">
-                      <div
-                        className="bg-emerald-500 h-1.5 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
 
                     <div className="grid grid-cols-3 gap-1.5 mt-3.5 pt-3 border-t border-border/50 text-center">
                       <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestUser, resetDatabase, testPrisma } from '../helpers/test-db';
 import { evaluateControl, evaluateControls } from '@/lib/compliance/evaluation';
 import { computeRegistryFingerprint, ENCRYPTION_TARGETS } from '@/lib/encryption/registry';
+import { getActiveKeyId } from '@/lib/encryption';
 import { computeComplianceControlRegistryFingerprint } from '@/lib/compliance/registry';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
 
@@ -59,7 +60,7 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint,
-        activeKeyId: 'default-active-key',
+        activeKeyId: getActiveKeyId() ?? 'dev',
         initiatedById: admin.id,
         completedAt: new Date(),
         errorRecords: 0,
@@ -103,6 +104,61 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
     );
   });
 
+  it('evaluates SEC-ENC-001 as UNVERIFIED if active key changed since latest verification', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const registryFingerprint = computeRegistryFingerprint();
+
+    const verifyRun = await testPrisma.encryptionMigrationRun.create({
+      data: {
+        mode: 'VERIFY',
+        status: 'COMPLETED',
+        registryFingerprint,
+        activeKeyId: 'stale-pre-rotation-key',
+        initiatedById: admin.id,
+        completedAt: new Date(),
+        errorRecords: 0,
+        conflictRecords: 0,
+      },
+    });
+
+    await testPrisma.encryptionMigrationTargetState.createMany({
+      data: ENCRYPTION_TARGETS.map(t => ({
+        runId: verifyRun.id,
+        targetId: t.id,
+        status: 'COMPLETED' as const,
+        totalCount: 10,
+        processedCount: 10,
+        migratedCount: 0,
+        errorCount: 0,
+        conflictCount: 0,
+        inspectionStats: { currentV3: 10 },
+      })),
+    });
+
+    const context = {
+      prisma: testPrisma,
+      now: new Date(),
+      controlRegistryFingerprint: computeComplianceControlRegistryFingerprint(),
+    };
+
+    const outcome = await evaluateControl({
+      controlId: 'SEC-ENC-001',
+      context,
+      trigger: 'MANUAL',
+    });
+
+    expect(outcome.evaluation.status).toBe('UNVERIFIED');
+    expect(outcome.controlState.status).toBe('UNVERIFIED');
+    expect(outcome.evaluation.summary).toContain(
+      'active encryption key changed since the latest verification'
+    );
+    expect(outcome.evaluation.findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'ACTIVE_KEY_CHANGED_SINCE_VERIFICATION' }),
+      ])
+    );
+  });
+
   it('evaluates SEC-ENC-001 as IMPLEMENTED when all registered targets are verified clean on active key', async () => {
     const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
     const registryFingerprint = computeRegistryFingerprint();
@@ -112,7 +168,7 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint,
-        activeKeyId: 'default-active-key',
+        activeKeyId: getActiveKeyId() ?? 'dev',
         initiatedById: admin.id,
         completedAt: new Date(),
         errorRecords: 0,
@@ -171,7 +227,7 @@ describeIfRealDB('compliance runtime control evaluation (real PostgreSQL)', () =
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint,
-        activeKeyId: 'default-active-key',
+        activeKeyId: getActiveKeyId() ?? 'dev',
         initiatedById: admin.id,
         completedAt: new Date(),
         errorRecords: 2,

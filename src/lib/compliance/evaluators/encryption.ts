@@ -14,6 +14,26 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
     const currentFingerprint = computeRegistryFingerprint();
     const activeKeyId = getActiveKeyId();
 
+    if (!activeKeyId) {
+      return {
+        status: 'ACTION_REQUIRED',
+        summary: 'No active encryption key is configured.',
+        findings: [
+          {
+            code: 'NO_ACTIVE_KEY',
+            message: 'No active encryption key is configured in the environment keyring.',
+            severity: 'ERROR',
+          },
+        ],
+        evidenceRefs: [
+          {
+            source: 'Keyring',
+            description: 'Active key missing from configuration.',
+          },
+        ],
+      };
+    }
+
     const latestVerifyRun = await context.prisma.encryptionMigrationRun.findFirst({
       where: {
         mode: 'VERIFY',
@@ -62,6 +82,28 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
             source: 'EncryptionMigrationRun',
             referenceId: latestVerifyRun.id,
             description: 'Run registryFingerprint does not match current schema fingerprint.',
+          },
+        ],
+      };
+    }
+
+    if (latestVerifyRun.activeKeyId !== activeKeyId) {
+      return {
+        status: 'UNVERIFIED',
+        summary:
+          'The active encryption key changed since the latest verification. Run verification again.',
+        findings: [
+          {
+            code: 'ACTIVE_KEY_CHANGED_SINCE_VERIFICATION',
+            message: `Active key changed from "${latestVerifyRun.activeKeyId ?? 'none'}" during verification to "${activeKeyId}".`,
+            severity: 'WARNING',
+          },
+        ],
+        evidenceRefs: [
+          {
+            source: 'EncryptionMigrationRun',
+            referenceId: latestVerifyRun.id,
+            description: `Verification performed with active key "${latestVerifyRun.activeKeyId ?? 'none'}", but runtime active key is "${activeKeyId}".`,
           },
         ],
       };

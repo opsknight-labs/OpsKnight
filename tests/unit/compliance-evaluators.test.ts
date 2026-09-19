@@ -10,6 +10,7 @@ import {
 } from '@/lib/compliance/evaluators/privacy';
 import { authorizationEvaluator } from '@/lib/compliance/evaluators/authorization';
 import * as encryptionRegistry from '@/lib/encryption/registry';
+import * as encryptionModule from '@/lib/encryption';
 import * as authorization from '@/lib/authorization';
 
 interface MockPrisma {
@@ -69,6 +70,7 @@ describe('compliance evaluators (unit)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(encryptionRegistry, 'computeRegistryFingerprint').mockReturnValue(mockFingerprint);
+    vi.spyOn(encryptionModule, 'getActiveKeyId').mockReturnValue('k2');
 
     mockPrisma = {
       encryptionMigrationRun: {
@@ -104,6 +106,17 @@ describe('compliance evaluators (unit)', () => {
   }
 
   describe('encryption.at-rest evaluator', () => {
+    it('returns ACTION_REQUIRED when no active encryption key is configured', async () => {
+      vi.spyOn(encryptionModule, 'getActiveKeyId').mockReturnValue(null);
+
+      const result = await encryptionAtRestEvaluator.evaluate(makeContext());
+      expect(result.status).toBe('ACTION_REQUIRED');
+      expect(result.summary).toContain('No active encryption key is configured');
+      expect(result.findings).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'NO_ACTIVE_KEY' })])
+      );
+    });
+
     it('returns UNVERIFIED when no completed VERIFY run exists', async () => {
       mockPrisma.encryptionMigrationRun.findFirst.mockResolvedValue(null);
 
@@ -121,6 +134,7 @@ describe('compliance evaluators (unit)', () => {
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint: 'stale-fingerprint-old',
+        activeKeyId: 'k2',
         errorRecords: 0,
         conflictRecords: 0,
         targetStates: [],
@@ -134,6 +148,32 @@ describe('compliance evaluators (unit)', () => {
       );
     });
 
+    it('returns UNVERIFIED when active key changed since the latest verification run', async () => {
+      vi.spyOn(encryptionModule, 'getActiveKeyId').mockReturnValue('k3');
+
+      mockPrisma.encryptionMigrationRun.findFirst.mockResolvedValue({
+        id: 'run-k2',
+        mode: 'VERIFY',
+        status: 'COMPLETED',
+        registryFingerprint: mockFingerprint,
+        activeKeyId: 'k2',
+        errorRecords: 0,
+        conflictRecords: 0,
+        targetStates: makeTargetStates(),
+      });
+
+      const result = await encryptionAtRestEvaluator.evaluate(makeContext());
+      expect(result.status).toBe('UNVERIFIED');
+      expect(result.summary).toContain(
+        'active encryption key changed since the latest verification'
+      );
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'ACTIVE_KEY_CHANGED_SINCE_VERIFICATION' }),
+        ])
+      );
+    });
+
     it('returns UNVERIFIED when latest verification is missing targets or incomplete', async () => {
       // Only 1 target state provided instead of all ENCRYPTION_TARGETS
       mockPrisma.encryptionMigrationRun.findFirst.mockResolvedValue({
@@ -141,6 +181,7 @@ describe('compliance evaluators (unit)', () => {
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint: mockFingerprint,
+        activeKeyId: 'k2',
         errorRecords: 0,
         conflictRecords: 0,
         targetStates: [
@@ -172,6 +213,7 @@ describe('compliance evaluators (unit)', () => {
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint: mockFingerprint,
+        activeKeyId: 'k2',
         errorRecords: 2, // Matches unavailable (1) + unreadable (1)
         conflictRecords: 1,
         targetStates: makeTargetStates({
@@ -213,6 +255,7 @@ describe('compliance evaluators (unit)', () => {
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint: mockFingerprint,
+        activeKeyId: 'k2',
         errorRecords: 0,
         conflictRecords: 0,
         targetStates: makeTargetStates({
@@ -249,6 +292,7 @@ describe('compliance evaluators (unit)', () => {
         mode: 'VERIFY',
         status: 'COMPLETED',
         registryFingerprint: mockFingerprint,
+        activeKeyId: 'k2',
         errorRecords: 0,
         conflictRecords: 0,
         targetStates: makeTargetStates(),
