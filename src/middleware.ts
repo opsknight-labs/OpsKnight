@@ -351,6 +351,7 @@ type StatusDomainConfig = {
   enabled: boolean;
   pages?: StatusDomainPage[];
   appHost?: string | null;
+  appUrl?: string | null;
 };
 type CachedDomainConfig = {
   value: StatusDomainConfig | null;
@@ -762,7 +763,7 @@ export default async function middleware(req: NextRequest) {
   // 4. Canonical host 308 redirection for domain aliases (e.g. opsnite.com -> www.opsnite.com)
   const canonicalHost = getCanonicalApplicationHost(statusConfig?.appHost);
   if (shouldRedirectToCanonicalAppHost(requestHost, canonicalHost, pathname, req.method)) {
-    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
     const originUrl = new URL(authoritativeOrigin);
     const targetHost = canonicalHost.includes(':')
       ? canonicalHost
@@ -780,7 +781,7 @@ export default async function middleware(req: NextRequest) {
 
   // Old mobile reset links remain valid but converge on the single responsive page.
   if (pathname === '/m/reset-password') {
-    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
     const resetUrl = new URL('/reset-password', authoritativeOrigin);
     resetUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(resetUrl);
@@ -814,7 +815,7 @@ export default async function middleware(req: NextRequest) {
     );
 
   if (shouldRedirectToMobile && mobileDestination) {
-    const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+    const authoritativeOrigin = getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
     const mobileUrl = new URL(mobileDestination, authoritativeOrigin);
     mobileUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(mobileUrl);
@@ -892,7 +893,7 @@ export default async function middleware(req: NextRequest) {
         req.nextUrl.searchParams.get('callbackUrl'),
         defaultDest
       );
-      const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+      const authoritativeOrigin = getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
       const redirectResponse = NextResponse.redirect(new URL(redirectUrl, authoritativeOrigin));
       Object.entries(securityHeaders).forEach(([key, value]) =>
         redirectResponse.headers.set(key, value)
@@ -904,7 +905,7 @@ export default async function middleware(req: NextRequest) {
 
   if (isPublicPath(pathname)) return response;
 
-  const authoritativeOrigin = getAuthoritativeRequestOrigin(req) || req.nextUrl.origin;
+  const authoritativeOrigin = getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
   const loginPath = pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
   const url = new URL(loginPath, authoritativeOrigin);
   url.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
