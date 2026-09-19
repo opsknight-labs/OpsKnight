@@ -1,34 +1,52 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockPerformDataCleanup, MockCleanupConflictError } = vi.hoisted(() => {
-  class MockCleanupConflictError extends Error {
-    readonly status = 409;
-    constructor(message: string) {
-      super(message);
-      this.name = 'CleanupConflictError';
+const { mockPerformDataCleanup, MockCleanupConflictError, mockAssertCapability, mockPrisma } =
+  vi.hoisted(() => {
+    class MockCleanupConflictError extends Error {
+      readonly status = 409;
+      constructor(message: string) {
+        super(message);
+        this.name = 'CleanupConflictError';
+      }
     }
-  }
 
-  return {
-    mockPerformDataCleanup: vi.fn().mockResolvedValue({
-      incidents: 3,
-      alerts: 5,
-      logs: 0,
-      metrics: 12,
-      events: 8,
-      auditLogs: 0,
-      inAppNotifications: 0,
-      slaPerformanceLogs: 0,
-      executionTimeMs: 15,
-      dryRun: true,
-    }),
-    MockCleanupConflictError,
-  };
-});
+    const mockPrisma = {
+      systemSettings: {
+        findUnique: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
+        updateMany: vi.fn(),
+        create: vi.fn(),
+      },
+      $transaction: vi.fn(async (callback: (tx: any) => unknown) => callback(mockPrisma)),
+    };
+
+    return {
+      mockPerformDataCleanup: vi.fn().mockResolvedValue({
+        incidents: 3,
+        alerts: 5,
+        logs: 0,
+        metrics: 12,
+        events: 8,
+        auditLogs: 0,
+        inAppNotifications: 0,
+        slaPerformanceLogs: 0,
+        executionTimeMs: 15,
+        dryRun: true,
+      }),
+      MockCleanupConflictError,
+      mockAssertCapability: vi.fn().mockResolvedValue({ id: 'usr-admin-1', role: 'ADMIN' }),
+      mockPrisma,
+    };
+  });
+
+vi.mock('@/lib/prisma', () => ({
+  default: mockPrisma,
+}));
 
 vi.mock('@/lib/rbac', () => ({
   assertAdmin: vi.fn().mockResolvedValue({ id: 'usr-admin-1', role: 'ADMIN' }),
+  assertCapability: (...args: unknown[]) => mockAssertCapability(...args),
 }));
 
 vi.mock('@/lib/audit', () => ({
@@ -37,16 +55,30 @@ vi.mock('@/lib/audit', () => ({
 
 vi.mock('@/lib/data-cleanup', () => ({
   performDataCleanup: (...args: unknown[]) => mockPerformDataCleanup(...args),
-  getStorageStats: vi.fn(),
+  getStorageStats: vi.fn().mockResolvedValue({
+    totalRows: 1000,
+    tableBreakdown: [],
+  }),
   CleanupConflictError: MockCleanupConflictError,
 }));
 
 vi.mock('@/lib/retention-policy', () => ({
-  getRetentionPolicy: vi.fn(),
+  getRetentionPolicy: vi.fn().mockResolvedValue({
+    incidentRetentionDays: 30,
+    alertRetentionDays: 7,
+    logRetentionDays: 90,
+    metricsRetentionDays: 365,
+    realTimeWindowDays: 90,
+    completedPrivacyRequestRetentionDays: 730,
+    expiredPrivacyArtifactRetentionDays: 30,
+    unsubscribedSubscriberRetentionDays: 30,
+  }),
   updateRetentionPolicy: vi.fn(),
+  clearRetentionPolicyCache: vi.fn(),
 }));
 
-import { POST } from '@/app/api/settings/retention/route';
+import { GET, PUT, POST } from '@/app/api/settings/retention/route';
+import { CAPABILITIES } from '@/lib/authorization';
 
 describe('POST /api/settings/retention', () => {
   beforeEach(() => {
@@ -152,5 +184,107 @@ describe('POST /api/settings/retention', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(409);
+  });
+
+  it('enforces retention.read capability for dryRun and retention.manage for live purge', async () => {
+    // Dry run -> retention.read
+    const dryRunReq = new NextRequest('http://localhost:3000/api/settings/retention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dryRun: true }),
+    });
+    await POST(dryRunReq);
+    expect(mockAssertCapability).toHaveBeenCalledWith(CAPABILITIES.RETENTION_READ);
+
+    // Live run -> retention.manage
+    const liveRunReq = new NextRequest('http://localhost:3000/api/settings/retention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dryRun: false }),
+    });
+    await POST(liveRunReq);
+    expect(mockAssertCapability).toHaveBeenCalledWith(CAPABILITIES.RETENTION_MANAGE);
+  });
+
+  it('supports lifecycle retention fields in policy override', async () => {
+    const req = new NextRequest('http://localhost:3000/api/settings/retention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        dryRun: true,
+        policy: {
+          completedPrivacyRequestRetentionDays: 365,
+          expiredPrivacyArtifactRetentionDays: 14,
+          unsubscribedSubscriberRetentionDays: 60,
+        },
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockPerformDataCleanup).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({
+        completedPrivacyRequestRetentionDays: 365,
+        expiredPrivacyArtifactRetentionDays: 14,
+        unsubscribedSubscriberRetentionDays: 60,
+      })
+    );
+  });
+});
+
+describe('GET /api/settings/retention', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrisma.systemSettings.findUnique.mockResolvedValue({
+      updatedAt: new Date('2026-09-18T00:00:00.000Z'),
+    });
+  });
+
+  it('enforces retention.read capability and returns policy with lifecycle fields', async () => {
+    const res = await GET();
+    expect(res.status).toBe(200);
+    expect(mockAssertCapability).toHaveBeenCalledWith(CAPABILITIES.RETENTION_READ);
+
+    const body = await res.json();
+    expect(body.data.policy.completedPrivacyRequestRetentionDays).toBe(730);
+    expect(body.data.policy.expiredPrivacyArtifactRetentionDays).toBe(30);
+    expect(body.data.policy.unsubscribedSubscriberRetentionDays).toBe(30);
+  });
+});
+
+describe('PUT /api/settings/retention', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrisma.systemSettings.findUnique.mockResolvedValue({
+      updatedAt: new Date('2026-09-18T00:00:00.000Z'),
+    });
+    mockPrisma.systemSettings.findUniqueOrThrow.mockResolvedValue({
+      updatedAt: new Date('2026-09-18T01:00:00.000Z'),
+    });
+    mockPrisma.systemSettings.updateMany.mockResolvedValue({ count: 1 });
+  });
+
+  it('enforces retention.manage capability and updates lifecycle fields', async () => {
+    const req = new NextRequest('http://localhost:3000/api/settings/retention', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        completedPrivacyRequestRetentionDays: 365,
+        expiredPrivacyArtifactRetentionDays: 15,
+        unsubscribedSubscriberRetentionDays: 45,
+        expectedUpdatedAt: '2026-09-18T00:00:00.000Z',
+      }),
+    });
+
+    const res = await PUT(req);
+    expect(res.status).toBe(200);
+    expect(mockAssertCapability).toHaveBeenCalledWith(CAPABILITIES.RETENTION_MANAGE);
+
+    const body = await res.json();
+    expect(body.data.success).toBe(true);
+    expect(body.data.policy.completedPrivacyRequestRetentionDays).toBe(365);
+    expect(body.data.policy.expiredPrivacyArtifactRetentionDays).toBe(15);
+    expect(body.data.policy.unsubscribedSubscriberRetentionDays).toBe(45);
   });
 });

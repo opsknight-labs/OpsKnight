@@ -7,7 +7,8 @@ import {
   type RetentionPolicy,
 } from '@/lib/retention-policy';
 import { getStorageStats, performDataCleanup, CleanupConflictError } from '@/lib/data-cleanup';
-import { assertAdmin } from '@/lib/rbac';
+import { assertCapability } from '@/lib/rbac';
+import { CAPABILITIES } from '@/lib/authorization';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -26,6 +27,9 @@ const RetentionFieldsSchema = z.object({
   logRetentionDays: z.number().int().min(1).max(3650).optional(),
   metricsRetentionDays: z.number().int().min(30).max(3650).optional(),
   realTimeWindowDays: z.number().int().min(7).max(365).optional(),
+  completedPrivacyRequestRetentionDays: z.number().int().min(30).max(3650).optional(),
+  expiredPrivacyArtifactRetentionDays: z.number().int().min(1).max(365).optional(),
+  unsubscribedSubscriberRetentionDays: z.number().int().min(1).max(3650).optional(),
 });
 
 const RetentionPolicyPatchSchema = RetentionFieldsSchema.refine(hasRetentionFieldUpdate, {
@@ -44,7 +48,10 @@ function hasRetentionFieldUpdate(data: Partial<RetentionPolicy>): boolean {
     data.alertRetentionDays !== undefined ||
     data.logRetentionDays !== undefined ||
     data.metricsRetentionDays !== undefined ||
-    data.realTimeWindowDays !== undefined
+    data.realTimeWindowDays !== undefined ||
+    data.completedPrivacyRequestRetentionDays !== undefined ||
+    data.expiredPrivacyArtifactRetentionDays !== undefined ||
+    data.unsubscribedSubscriberRetentionDays !== undefined
   );
 }
 
@@ -84,12 +91,15 @@ function retentionAuditSnapshot(policy: RetentionPolicy): Prisma.InputJsonObject
     metricsRetentionDays: policy.metricsRetentionDays,
     realTimeWindowDays: policy.realTimeWindowDays,
     businessHoursTimeZone: policy.businessHoursTimeZone,
+    completedPrivacyRequestRetentionDays: policy.completedPrivacyRequestRetentionDays,
+    expiredPrivacyArtifactRetentionDays: policy.expiredPrivacyArtifactRetentionDays,
+    unsubscribedSubscriberRetentionDays: policy.unsubscribedSubscriberRetentionDays,
   };
 }
 
 export async function GET() {
   try {
-    await assertAdmin();
+    await assertCapability(CAPABILITIES.RETENTION_READ);
     const [policy, stats, settings] = await Promise.all([
       getRetentionPolicy(),
       getStorageStats(),
@@ -155,7 +165,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const admin = await assertAdmin();
+    const admin = await assertCapability(CAPABILITIES.RETENTION_MANAGE);
 
     let body: unknown;
     try {
@@ -197,6 +207,9 @@ export async function PUT(request: NextRequest) {
             logRetentionDays: effective.logRetentionDays,
             metricsRetentionDays: effective.metricsRetentionDays,
             realTimeWindowDays: effective.realTimeWindowDays,
+            completedPrivacyRequestRetentionDays: effective.completedPrivacyRequestRetentionDays,
+            expiredPrivacyArtifactRetentionDays: effective.expiredPrivacyArtifactRetentionDays,
+            unsubscribedSubscriberRetentionDays: effective.unsubscribedSubscriberRetentionDays,
           },
         });
         if (updated.count !== 1) throw new SettingsChangedMutationError();
@@ -210,6 +223,9 @@ export async function PUT(request: NextRequest) {
             metricsRetentionDays: effective.metricsRetentionDays,
             realTimeWindowDays: effective.realTimeWindowDays,
             businessHoursTimeZone: effective.businessHoursTimeZone,
+            completedPrivacyRequestRetentionDays: effective.completedPrivacyRequestRetentionDays,
+            expiredPrivacyArtifactRetentionDays: effective.expiredPrivacyArtifactRetentionDays,
+            unsubscribedSubscriberRetentionDays: effective.unsubscribedSubscriberRetentionDays,
           },
         });
       }
@@ -252,8 +268,6 @@ export async function PUT(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = await assertAdmin();
-
     let body: unknown;
     try {
       body = await request.json();
@@ -262,6 +276,10 @@ export async function POST(request: NextRequest) {
     }
     const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
     const dryRun = payload.dryRun !== false;
+
+    const user = await assertCapability(
+      dryRun ? CAPABILITIES.RETENTION_READ : CAPABILITIES.RETENTION_MANAGE
+    );
 
     let policyOverride: Partial<RetentionPolicy> | undefined;
     if (payload.policy && typeof payload.policy === 'object') {
@@ -283,14 +301,14 @@ export async function POST(request: NextRequest) {
       await logAudit({
         action: 'retention.data.purged',
         entityType: 'USER',
-        entityId: admin.id,
-        actorId: admin.id,
+        entityId: user.id,
+        actorId: user.id,
         details: JSON.parse(JSON.stringify(result)),
       });
     }
 
     logger.info('[API] Data cleanup executed', {
-      userId: admin.id,
+      userId: user.id,
       dryRun,
       result,
       policyOverride,

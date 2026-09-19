@@ -48,6 +48,7 @@ enum AuditEntityType {
   PRIVACY_REQUEST
   PRIVACY_EXPORT_ARTIFACT
   PRIVACY_ERASURE_EXECUTION
+  DATA_RETENTION_HOLD
 }
 
 // Data subject a privacy request concerns. Only USER is operable in Phase 2;
@@ -90,6 +91,12 @@ enum PrivacyErasureExecutionStatus {
   PARTIAL
   COMPLETED
   FAILED
+}
+
+enum RetentionHoldScopeType {
+  USER
+  INCIDENT
+  PRIVACY_REQUEST
 }
 
 enum UserTokenType {
@@ -481,6 +488,8 @@ model User {
   tokens                      UserToken[]
   privacyRequestsAssigned     PrivacyRequest[]             @relation("PrivacyRequestAssignedTo")
   privacyRequestsRequested    PrivacyRequest[]             @relation("PrivacyRequestRequestedBy")
+  createdRetentionHolds       DataRetentionHold[]          @relation("RetentionHoldCreatedBy")
+  releasedRetentionHolds      DataRetentionHold[]          @relation("RetentionHoldReleasedBy")
 
   @@index([email])
   @@index([role, status])
@@ -2242,12 +2251,15 @@ model SystemSettings {
   id            String  @id @default("default")
   appUrl        String?
   encryptionKey String?
-  incidentRetentionDays Int @default(730)
-  alertRetentionDays    Int @default(365)
-  logRetentionDays      Int @default(365)
-  metricsRetentionDays  Int @default(365)
-  realTimeWindowDays    Int @default(90)
-  businessHoursTimeZone String @default("UTC")
+  incidentRetentionDays               Int @default(730)
+  alertRetentionDays                  Int @default(365)
+  logRetentionDays                    Int @default(365)
+  metricsRetentionDays                Int @default(365)
+  realTimeWindowDays                  Int @default(90)
+  businessHoursTimeZone               String @default("UTC")
+  completedPrivacyRequestRetentionDays Int @default(730)
+  expiredPrivacyArtifactRetentionDays  Int @default(30)
+  unsubscribedSubscriberRetentionDays  Int @default(30)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -2578,4 +2590,35 @@ model PrivacyErasureExecution {
   request PrivacyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([status])
+}
+
+// A retention hold protects a specific resource from being deleted by the
+// automated cleanup job. Multiple holds can exist on the same resource; the
+// resource is protected while ANY active hold exists. The hold row is retained
+// forever as compliance evidence even after the resource is eventually deleted.
+model DataRetentionHold {
+  id                String   @id @default(cuid())
+
+  scopeType         RetentionHoldScopeType
+  scopeId           String
+
+  reason            String
+  externalReference String?
+
+  createdById       String?
+  releasedById      String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  expiresAt         DateTime?
+  releasedAt        DateTime?
+
+  createdBy         User? @relation("RetentionHoldCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  releasedBy        User? @relation("RetentionHoldReleasedBy", fields: [releasedById], references: [id], onDelete: SetNull)
+
+  @@index([scopeType, scopeId])
+  @@index([scopeType, scopeId, releasedAt])
+  @@index([expiresAt, releasedAt])
+  @@index([createdAt])
 }
