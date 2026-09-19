@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   checkSLABreaches,
   formatBreachWarning,
+  isBreachWarningBreached,
   type BreachWarning,
 } from '@/lib/sla-breach-monitor';
 import { enqueueCentralNotification } from '@/lib/notification-control-plane';
@@ -43,6 +44,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('sla-breach-monitor', () => {
+  it('does not classify the exact deadline as breached', () => {
+    expect(isBreachWarningBreached({ phaseStatus: 'PENDING' })).toBe(false);
+    expect(isBreachWarningBreached({ phaseStatus: 'BREACHED' })).toBe(true);
+  });
+
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
@@ -396,6 +402,7 @@ describe('sla-breach-monitor', () => {
         serviceId: 'svc-1',
         serviceName: 'Test Service',
         breachType: 'ack',
+        phaseStatus: 'PENDING',
         timeRemainingMs: 3 * 60 * 1000, // 3 minutes
         targetMinutes: 15,
         urgency: 'HIGH',
@@ -417,6 +424,7 @@ describe('sla-breach-monitor', () => {
         serviceId: 'svc-1',
         serviceName: 'Test Service',
         breachType: 'resolve',
+        phaseStatus: 'PENDING',
         timeRemainingMs: 10 * 60 * 1000, // 10 minutes
         targetMinutes: 120,
         urgency: 'MEDIUM',
