@@ -5,6 +5,7 @@ import type {
 } from './types';
 import { computeRegistryFingerprint, ENCRYPTION_TARGETS } from '@/lib/encryption/registry';
 import { getActiveKeyId } from '@/lib/encryption';
+import { createEvidenceDraft } from '../evidence/build';
 
 export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
   id: 'encryption.at-rest',
@@ -24,6 +25,20 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
             message: 'No active encryption key is configured in the environment keyring.',
             severity: 'ERROR',
           },
+        ],
+        evidence: [
+          createEvidenceDraft({
+            type: 'EVALUATION_FAILURE',
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Active Encryption Key Check',
+            description: 'No active encryption key is configured in the environment keyring.',
+            observedAt: context.now,
+            metadata: {
+              activeKeyConfigured: false,
+              errorCode: 'NO_ACTIVE_KEY',
+            },
+          }),
         ],
         evidenceRefs: [
           {
@@ -56,6 +71,20 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
             severity: 'WARNING',
           },
         ],
+        evidence: [
+          createEvidenceDraft({
+            type: 'VERIFICATION_RESULT',
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Encryption Verification Run Missing',
+            description: 'No completed verification run found in database.',
+            observedAt: context.now,
+            metadata: {
+              completedVerifyRunFound: false,
+              activeKeyId,
+            },
+          }),
+        ],
         evidenceRefs: [
           {
             source: 'EncryptionMigrationRun',
@@ -76,6 +105,24 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
             message: 'Target secret definitions have changed since the last verification run.',
             severity: 'WARNING',
           },
+        ],
+        evidence: [
+          createEvidenceDraft({
+            type: 'VERIFICATION_RESULT',
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Encryption Verification Registry Fingerprint Mismatch',
+            description: 'Run registry fingerprint does not match current schema fingerprint.',
+            resourceType: 'EncryptionMigrationRun',
+            resourceId: latestVerifyRun.id,
+            observedAt: latestVerifyRun.completedAt ?? context.now,
+            metadata: {
+              runId: latestVerifyRun.id,
+              runFingerprint: latestVerifyRun.registryFingerprint,
+              currentFingerprint,
+              fingerprintMatches: false,
+            },
+          }),
         ],
         evidenceRefs: [
           {
@@ -98,6 +145,24 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
             message: `Active key changed from "${latestVerifyRun.activeKeyId ?? 'none'}" during verification to "${activeKeyId}".`,
             severity: 'WARNING',
           },
+        ],
+        evidence: [
+          createEvidenceDraft({
+            type: 'VERIFICATION_RESULT',
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Encryption Verification Active Key Mismatch',
+            description: 'Active encryption key changed since the latest verification run.',
+            resourceType: 'EncryptionMigrationRun',
+            resourceId: latestVerifyRun.id,
+            observedAt: latestVerifyRun.completedAt ?? context.now,
+            metadata: {
+              runId: latestVerifyRun.id,
+              verificationActiveKeyId: latestVerifyRun.activeKeyId,
+              currentActiveKeyId: activeKeyId,
+              keyMatches: false,
+            },
+          }),
         ],
         evidenceRefs: [
           {
@@ -140,6 +205,26 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
             ? [{ code: 'INCOMPLETE_TARGET_COUNT', value: incompleteTargetIds.length }]
             : []),
         ],
+        evidence: [
+          createEvidenceDraft({
+            type: 'VERIFICATION_RESULT',
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Encryption Target Verification Incomplete',
+            description:
+              'Verification does not cover all registered encryption targets completely.',
+            resourceType: 'EncryptionMigrationRun',
+            resourceId: latestVerifyRun.id,
+            observedAt: latestVerifyRun.completedAt ?? context.now,
+            metadata: {
+              runId: latestVerifyRun.id,
+              expectedTargets: ENCRYPTION_TARGETS.length,
+              verifiedTargets: latestVerifyRun.targetStates.length,
+              missingTargetCount: missingTargetIds.length,
+              incompleteTargetCount: incompleteTargetIds.length,
+            },
+          }),
+        ],
         evidenceRefs: [
           {
             source: 'EncryptionMigrationRun',
@@ -177,6 +262,36 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
 
     const legacyRecords = oldKeyCount + legacyV2Count + legacyV1Count + plaintextCount;
 
+    const evidenceDraft = createEvidenceDraft({
+      type: 'VERIFICATION_RESULT',
+      collectorId: 'encryption.at-rest',
+      collectorVersion: '1',
+      title: 'Encryption Verification Summary',
+      description: 'Stored-secret verification results across all registered targets.',
+      resourceType: 'EncryptionMigrationRun',
+      resourceId: latestVerifyRun.id,
+      observedAt: latestVerifyRun.completedAt ?? context.now,
+      metadata: {
+        runId: latestVerifyRun.id,
+        registryFingerprint: latestVerifyRun.registryFingerprint,
+        verificationActiveKeyId: latestVerifyRun.activeKeyId,
+        currentActiveKeyId: activeKeyId,
+        expectedTargets: ENCRYPTION_TARGETS.length,
+        verifiedTargets: latestVerifyRun.targetStates.length,
+        currentV3: currentV3Count,
+        oldKeyV3: oldKeyCount,
+        legacyV2: legacyV2Count,
+        legacyV1: legacyV1Count,
+        plaintext: plaintextCount,
+        unavailableKey: unavailableKeyCount,
+        ambiguous: ambiguousCount,
+        unreadable: unreadableCount,
+        conflicts: latestVerifyRun.conflictRecords,
+        blockingIssues,
+        legacyRecords,
+      },
+    });
+
     if (blockingIssues > 0) {
       return {
         status: 'ACTION_REQUIRED',
@@ -205,6 +320,7 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
             severity: latestVerifyRun.conflictRecords > 0 ? 'ERROR' : 'INFO',
           },
         ],
+        evidence: [evidenceDraft],
         evidenceRefs: [
           {
             source: 'EncryptionMigrationRun',
@@ -227,6 +343,7 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
           { code: 'LEGACY_V1_RECORDS', value: legacyV1Count },
           { code: 'PLAINTEXT_RECORDS', value: plaintextCount },
         ],
+        evidence: [evidenceDraft],
         evidenceRefs: [
           {
             source: 'EncryptionMigrationRun',
@@ -248,6 +365,7 @@ export const encryptionAtRestEvaluator: ComplianceControlEvaluator = {
         { code: 'UNREADABLE_RECORDS', value: 0 },
         { code: 'BLOCKING_ISSUES', value: 0 },
       ],
+      evidence: [evidenceDraft],
       evidenceRefs: [
         {
           source: 'EncryptionMigrationRun',

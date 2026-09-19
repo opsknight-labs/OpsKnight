@@ -16,6 +16,9 @@ import {
 } from '../registry';
 import { getComplianceEvaluator } from '../evaluators';
 import type { ComplianceEvaluatorResult } from '../evaluators/types';
+import { createEvidenceDraft } from '../evidence/build';
+import { validateEvidenceDrafts } from '../evidence/validate';
+import { persistEvidenceDrafts } from '../evidence/persist';
 import type {
   EvaluateControlOptions,
   EvaluateControlsOptions,
@@ -24,7 +27,11 @@ import type {
 
 export async function evaluateControl(
   options: EvaluateControlOptions
-): Promise<{ evaluation: ComplianceEvaluation; controlState: ComplianceControlState }> {
+): Promise<{
+  evaluation: ComplianceEvaluation;
+  controlState: ComplianceControlState;
+  evidenceCount: number;
+}> {
   const { controlId, context, trigger, batchId } = options;
 
   const control = getComplianceControl(controlId);
@@ -70,42 +77,108 @@ export async function evaluateControl(
           severity: 'ERROR',
         },
       ],
+      evidence: [
+        createEvidenceDraft({
+          type: 'EVALUATION_FAILURE',
+          collectorId: evaluator.id,
+          collectorVersion: evaluator.version,
+          title: 'Evaluator Runtime Exception',
+          description: 'Evaluator threw an unhandled runtime error during execution.',
+          observedAt: context.now,
+          metadata: {
+            controlId: control.id,
+            evaluatorId: evaluator.id,
+            evaluatorVersion: evaluator.version,
+            runtimeError: true,
+          },
+        }),
+      ],
       evidenceRefs: [],
     };
   }
 
-  // Persist immutable historical evaluation record
-  const evaluation = await context.prisma.complianceEvaluation.create({
-    data: {
-      controlId: control.id,
-      status: result.status,
+  // Strictly validate evidence drafts against safety policy before persistence
+  try {
+    if (!Array.isArray(result.evidence)) {
+      throw new Error('Evaluator result must include an array of evidence drafts');
+    }
+    validateEvidenceDrafts(result.evidence);
+  } catch (err: unknown) {
+    logger.error('[Compliance Engine] Evidence validation failed', {
+      controlId,
       evaluatorId: evaluator.id,
-      evaluatorVersion: evaluator.version,
-      summary: result.summary,
-      findings: result.findings as unknown as Prisma.InputJsonValue,
-      evidenceRefs: result.evidenceRefs as unknown as Prisma.InputJsonValue,
-      trigger,
-      batchId: batchId ?? null,
-      evaluatedAt: context.now,
-      validUntil: result.validUntil ?? null,
-    },
-  });
+      error: err instanceof Error ? err.message : String(err),
+    });
 
-  // Update current state projection cache with transaction advisory lock and monotonic protection
-  const controlState = await context.prisma.$transaction(async tx => {
+    result = {
+      status: 'UNVERIFIED',
+      summary: 'Runtime evaluation evidence validation failed.',
+      findings: [
+        {
+          code: 'EVIDENCE_VALIDATION_FAILED',
+          message: 'Evidence draft violated compliance safety rules.',
+          severity: 'ERROR',
+        },
+      ],
+      evidence: [
+        createEvidenceDraft({
+          type: 'EVALUATION_FAILURE',
+          collectorId: evaluator.id,
+          collectorVersion: evaluator.version,
+          title: 'Evidence Validation Failure',
+          description: 'Evidence draft violated compliance safety rules.',
+          observedAt: context.now,
+          metadata: {
+            controlId: control.id,
+            evaluatorId: evaluator.id,
+            validationFailure: true,
+          },
+        }),
+      ],
+      evidenceRefs: [],
+    };
+  }
+
+  // Atomically persist evaluation, evidence, and state projection under advisory lock
+  const { evaluation, controlState } = await context.prisma.$transaction(async tx => {
     // Acquire transaction-scoped advisory lock for this controlId
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`compliance-control:${control.id}`}, 0))`;
+
+    const evaluationRecord = await tx.complianceEvaluation.create({
+      data: {
+        controlId: control.id,
+        status: result.status,
+        evaluatorId: evaluator.id,
+        evaluatorVersion: evaluator.version,
+        summary: result.summary,
+        findings: result.findings as unknown as Prisma.InputJsonValue,
+        evidenceRefs: result.evidenceRefs as unknown as Prisma.InputJsonValue,
+        trigger,
+        batchId: batchId ?? null,
+        evaluatedAt: context.now,
+        validUntil: result.validUntil ?? null,
+      },
+    });
+
+    await persistEvidenceDrafts({
+      tx,
+      evaluationId: evaluationRecord.id,
+      controlId: control.id,
+      drafts: result.evidence,
+      collectedAt: context.now,
+    });
 
     const existingState = await tx.complianceControlState.findUnique({
       where: { controlId: control.id },
     });
 
+    let stateRecord: ComplianceControlState;
     if (!existingState) {
-      return tx.complianceControlState.create({
+      stateRecord = await tx.complianceControlState.create({
         data: {
           controlId: control.id,
           status: result.status,
-          latestEvaluationId: evaluation.id,
+          latestEvaluationId: evaluationRecord.id,
           evaluatorId: evaluator.id,
           evaluatorVersion: evaluator.version,
           evaluatedAt: context.now,
@@ -113,14 +186,12 @@ export async function evaluateControl(
           summary: result.summary,
         },
       });
-    }
-
-    if (context.now >= existingState.evaluatedAt) {
-      return tx.complianceControlState.update({
+    } else if (context.now >= existingState.evaluatedAt) {
+      stateRecord = await tx.complianceControlState.update({
         where: { controlId: control.id },
         data: {
           status: result.status,
-          latestEvaluationId: evaluation.id,
+          latestEvaluationId: evaluationRecord.id,
           evaluatorId: evaluator.id,
           evaluatorVersion: evaluator.version,
           evaluatedAt: context.now,
@@ -128,13 +199,15 @@ export async function evaluateControl(
           summary: result.summary,
         },
       });
+    } else {
+      // A newer evaluation was committed before lock acquisition; retain newer state
+      stateRecord = existingState;
     }
 
-    // A newer evaluation was committed before lock acquisition; retain newer state
-    return existingState;
+    return { evaluation: evaluationRecord, controlState: stateRecord };
   });
 
-  return { evaluation, controlState };
+  return { evaluation, controlState, evidenceCount: result.evidence.length };
 }
 
 export async function evaluateControls(
@@ -194,6 +267,7 @@ export async function evaluateControls(
 
   const evaluations: ComplianceEvaluation[] = [];
   const controlStates: ComplianceControlState[] = [];
+  let totalEvidenceCount = 0;
 
   try {
     for (const controlId of targetControlIds) {
@@ -205,6 +279,7 @@ export async function evaluateControls(
       });
       evaluations.push(outcome.evaluation);
       controlStates.push(outcome.controlState);
+      totalEvidenceCount += outcome.evidenceCount ?? 0;
     }
   } catch (err: unknown) {
     logger.error('[Compliance Engine] Batch evaluation failed fatally', {
@@ -233,6 +308,7 @@ export async function evaluateControls(
     actionRequired: evaluations.filter(e => e.status === 'ACTION_REQUIRED').length,
     unverified: evaluations.filter(e => e.status === 'UNVERIFIED').length,
     notApplicable: evaluations.filter(e => e.status === 'NOT_APPLICABLE').length,
+    evidenceRecordsCreated: totalEvidenceCount,
   };
 
   await emitAuditEvent({

@@ -3,6 +3,7 @@ import type {
   ComplianceEvaluationContext,
   ComplianceEvaluatorResult,
 } from './types';
+import { createEvidenceDraft } from '../evidence/build';
 
 export const retentionEvaluator: ComplianceControlEvaluator = {
   id: 'data.retention',
@@ -31,6 +32,21 @@ export const retentionEvaluator: ComplianceControlEvaluator = {
             message: 'Default SystemSettings row is missing in the database.',
             severity: 'ERROR',
           },
+        ],
+        evidence: [
+          createEvidenceDraft({
+            type: 'EVALUATION_FAILURE',
+            collectorId: 'data.retention',
+            collectorVersion: '1',
+            title: 'System Retention Configuration Check',
+            description: 'System retention settings row missing in database.',
+            resourceType: 'SystemSettings',
+            resourceId: 'default',
+            observedAt: context.now,
+            metadata: {
+              settingsFound: false,
+            },
+          }),
         ],
         evidenceRefs: [
           {
@@ -71,6 +87,39 @@ export const retentionEvaluator: ComplianceControlEvaluator = {
         },
         { code: 'HOLD_AWARE_CLEANUP_AVAILABLE', value: true },
         { code: 'ACTIVE_RETENTION_HOLDS', value: activeHoldCount },
+      ],
+      evidence: [
+        createEvidenceDraft({
+          type: 'CONFIGURATION_SNAPSHOT',
+          collectorId: 'data.retention',
+          collectorVersion: '1',
+          title: 'Data Retention Configuration Snapshot',
+          description:
+            'Configured retention windows for incidents, alerts, logs, metrics, and completed privacy requests.',
+          resourceType: 'SystemSettings',
+          resourceId: 'default',
+          observedAt: context.now,
+          metadata: {
+            incidentRetentionDays,
+            alertRetentionDays,
+            logRetentionDays,
+            metricsRetentionDays,
+            completedPrivacyRequestRetentionDays,
+          },
+        }),
+        createEvidenceDraft({
+          type: 'SYSTEM_STATE',
+          collectorId: 'data.retention',
+          collectorVersion: '1',
+          title: 'Data Retention Hold Subsystem State',
+          description: 'Count of active retention holds currently preventing record purging.',
+          resourceType: 'DataRetentionHold',
+          observedAt: context.now,
+          metadata: {
+            activeRetentionHolds: activeHoldCount,
+            holdSubsystemOperational: true,
+          },
+        }),
       ],
       evidenceRefs: [
         {
