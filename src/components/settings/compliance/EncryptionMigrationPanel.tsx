@@ -676,7 +676,7 @@ export function EncryptionMigrationPanel() {
                   }
                 }
                 const migrationCandidates = oldKeyV3 + legacyV2 + legacyV1 + plaintext;
-                const blockingIssues = errorTotal + selectedRun.errorRecords;
+                const blockingIssues = errorTotal;
 
                 return (
                   <div className="grid grid-cols-4 gap-2">
@@ -785,10 +785,11 @@ export function EncryptionMigrationPanel() {
                                   {s?.plaintext ?? 0}
                                 </td>
                                 <td className="py-2 px-3 font-mono text-right text-rose-600 dark:text-rose-400">
-                                  {(s?.unavailableKey ?? 0) +
-                                    (s?.ambiguous ?? 0) +
-                                    (s?.unreadable ?? 0) +
-                                    t.errorCount}
+                                  {s
+                                    ? (s.unavailableKey ?? 0) +
+                                      (s.ambiguous ?? 0) +
+                                      (s.unreadable ?? 0)
+                                    : t.errorCount}
                                 </td>
                               </>
                             )}
