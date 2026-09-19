@@ -8,6 +8,7 @@ import {
   renewCleanupMutexLease,
   releaseCleanupMutexLease,
   CLEANUP_MUTEX_KEY,
+  CleanupConflictError,
 } from '@/lib/data-cleanup';
 import {
   createTestIncident,
@@ -716,51 +717,100 @@ describeIfRealDB('retention holds integration (real PostgreSQL)', () => {
     }
   });
 
-  it('cleanup mutex lease enforces fencing tokens and supports renewal', async () => {
-    // 1. Acquire initial lease
-    const token1 = await acquireCleanupMutexLease();
-    expect(token1).not.toBeNull();
-    expect(typeof token1).toBe('number');
+  it('cleanup mutex lease enforces monotonic fencing tokens and safe ownership release without row deletion', async () => {
+    // 1. Worker A acquires initial lease (token 1)
+    const tokenA = await acquireCleanupMutexLease();
+    expect(tokenA).not.toBeNull();
+    expect(typeof tokenA).toBe('number');
 
-    // 2. Another concurrent acquisition while lease is active should fail (return null)
-    const token2 = await acquireCleanupMutexLease();
-    expect(token2).toBeNull();
+    // 2. Another concurrent acquisition while lease is active fails (returns null)
+    const concurrentAttempt = await acquireCleanupMutexLease();
+    expect(concurrentAttempt).toBeNull();
 
-    // 3. Renew the active lease with the matching fencing token
-    const renewed = await renewCleanupMutexLease(token1!);
-    expect(renewed).toBe(true);
+    // 3. Worker A successfully renews its active lease
+    const renewedA = await renewCleanupMutexLease(tokenA!);
+    expect(renewedA).toBe(true);
 
-    // 4. Simulating lease expiry and takeover by another worker:
-    // Update expiresAt to past and let worker 2 acquire it (incrementing count)
+    // 4. Worker A's lease expires in background
     await testPrisma.$executeRaw`
       UPDATE "RateLimit"
       SET "expiresAt" = NOW() - INTERVAL '1 second'
       WHERE "key" = ${CLEANUP_MUTEX_KEY}
     `;
 
-    const token3 = await acquireCleanupMutexLease();
-    expect(token3).not.toBeNull();
-    expect(token3).toBeGreaterThan(token1!);
+    // 5. Worker B acquires the expired lease -> gets incremented token B
+    const tokenB = await acquireCleanupMutexLease();
+    expect(tokenB).not.toBeNull();
+    expect(tokenB!).toBeGreaterThan(tokenA!);
 
-    // 5. Worker 1 tries to release using its stale token1:
-    // It must NOT delete worker 2's lease!
-    const staleRelease = await releaseCleanupMutexLease(token1!);
-    expect(staleRelease).toBe(false);
+    // 6. Worker A tries to renew or release using stale token A:
+    // It must return false and NOT disturb Worker B's lease
+    const staleRenewA = await renewCleanupMutexLease(tokenA!);
+    expect(staleRenewA).toBe(false);
 
-    // Verify worker 2's lease row is still present in DB
-    const activeLease = await testPrisma.rateLimit.findUnique({
+    const staleReleaseA = await releaseCleanupMutexLease(tokenA!);
+    expect(staleReleaseA).toBe(false);
+
+    // Verify Worker B's lease is untouched
+    const leaseB = await testPrisma.rateLimit.findUnique({
       where: { key: CLEANUP_MUTEX_KEY },
     });
-    expect(activeLease).not.toBeNull();
-    expect(activeLease!.count).toBe(token3);
+    expect(leaseB).not.toBeNull();
+    expect(leaseB!.count).toBe(tokenB);
 
-    // 6. Worker 2 releases with its valid token3:
-    const validRelease = await releaseCleanupMutexLease(token3!);
-    expect(validRelease).toBe(true);
+    // 7. Worker B finishes and releases its lease
+    const validReleaseB = await releaseCleanupMutexLease(tokenB!);
+    expect(validReleaseB).toBe(true);
 
-    const deletedLease = await testPrisma.rateLimit.findUnique({
+    // 8. Crucial check: row is NOT deleted! It is expired in-place to prevent ABA token reset
+    const expiredRowB = await testPrisma.rateLimit.findUnique({
       where: { key: CLEANUP_MUTEX_KEY },
     });
-    expect(deletedLease).toBeNull();
+    expect(expiredRowB).not.toBeNull();
+    expect(expiredRowB!.count).toBe(tokenB);
+    expect(expiredRowB!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+
+    // 9. Worker C acquires: receives monotonic token C = tokenB + 1
+    const tokenC = await acquireCleanupMutexLease();
+    expect(tokenC).not.toBeNull();
+    expect(tokenC!).toBe(tokenB! + 1);
+
+    // 10. Worker A tries stale renew/release with token A against Worker C
+    expect(await renewCleanupMutexLease(tokenA!)).toBe(false);
+    expect(await releaseCleanupMutexLease(tokenA!)).toBe(false);
+
+    // Verify Worker C's lease remains valid and active
+    const activeLeaseC = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(activeLeaseC).not.toBeNull();
+    expect(activeLeaseC!.count).toBe(tokenC);
+
+    // Cleanup: Worker C releases
+    expect(await releaseCleanupMutexLease(tokenC!)).toBe(true);
+  });
+
+  it('renewCleanupMutexLease returns false and rejects stale token after lease takeover', async () => {
+    const token1 = await acquireCleanupMutexLease();
+    expect(token1).not.toBeNull();
+
+    // Force lease expiration
+    await testPrisma.$executeRaw`
+      UPDATE "RateLimit"
+      SET "expiresAt" = NOW() - INTERVAL '1 second'
+      WHERE "key" = ${CLEANUP_MUTEX_KEY}
+    `;
+
+    // Second worker takes over
+    const token2 = await acquireCleanupMutexLease();
+    expect(token2).not.toBeNull();
+    expect(token2!).toBeGreaterThan(token1!);
+
+    // First worker tries to renew with stale token -> rejected
+    const renewed = await renewCleanupMutexLease(token1!);
+    expect(renewed).toBe(false);
+
+    // Clean up
+    await releaseCleanupMutexLease(token2!);
   });
 });

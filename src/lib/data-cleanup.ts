@@ -54,20 +54,25 @@ export async function renewCleanupMutexLease(token: number): Promise<boolean> {
 
 /**
  * Releases the cleanup mutex lease only if the fencing token matches.
+ * Instead of deleting the row (which causes token wrap-around / ABA issues),
+ * it marks the lease as expired (expiresAt in past) so future acquisitions
+ * increment the version token monotonically.
  * If the lease expired and was claimed by another worker, this release safely does nothing.
  */
 export async function releaseCleanupMutexLease(token: number): Promise<boolean> {
   const { default: prisma } = await import('./prisma');
   if (prisma.$executeRaw) {
     const res = await prisma.$executeRaw`
-      DELETE FROM "RateLimit"
+      UPDATE "RateLimit"
+      SET "expiresAt" = NOW() - INTERVAL '1 second'
       WHERE "key" = ${CLEANUP_MUTEX_KEY} AND "count" = ${token}
     `;
     return res > 0;
   }
-  if (prisma.rateLimit?.deleteMany) {
-    const res = await prisma.rateLimit.deleteMany({
+  if (prisma.rateLimit?.updateMany) {
+    const res = await prisma.rateLimit.updateMany({
       where: { key: CLEANUP_MUTEX_KEY, count: token },
+      data: { expiresAt: new Date(Date.now() - 1000) },
     });
     return res.count > 0;
   }
@@ -372,6 +377,16 @@ export async function performDataCleanup(
       };
     }
 
+    // Helper to renew mutex lease and immediately abort with ConflictError if lease was lost
+    const assertLeaseOwnership = async () => {
+      if (leaseToken !== null) {
+        const renewed = await renewCleanupMutexLease(leaseToken);
+        if (!renewed) {
+          throw new CleanupConflictError('Data cleanup lease ownership was lost.');
+        }
+      }
+    };
+
     // 2. Delete in order with strict FK dependency ordering
     // Use pre-filtered deletable incidents to respect retention holds
     const BATCH_SIZE = 500;
@@ -522,7 +537,7 @@ export async function performDataCleanup(
       );
 
       if (batchFullyHeld) {
-        if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
+        await assertLeaseOwnership();
         continue;
       }
 
@@ -534,7 +549,7 @@ export async function performDataCleanup(
         break;
       }
 
-      if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
+      await assertLeaseOwnership();
     }
 
     // 3. Lifecycle cleanup: Privacy Requests (COMPLETED/REJECTED)
@@ -579,7 +594,7 @@ export async function performDataCleanup(
         );
 
         if (prBatchFullyHeld) {
-          if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
+          await assertLeaseOwnership();
           continue;
         }
 
@@ -593,7 +608,7 @@ export async function performDataCleanup(
           break;
         }
 
-        if (leaseToken !== null) await renewCleanupMutexLease(leaseToken);
+        await assertLeaseOwnership();
       }
     }
 
@@ -695,9 +710,7 @@ export async function performDataCleanup(
           break;
         }
 
-        if (leaseToken !== null) {
-          await renewCleanupMutexLease(leaseToken);
-        }
+        await assertLeaseOwnership();
       }
 
       return {
@@ -740,6 +753,7 @@ export async function performDataCleanup(
           where: { id: { in: batch } },
         });
         unsubscribedSubscriberCount += deleted.count;
+        await assertLeaseOwnership();
       }
     }
 
@@ -757,6 +771,7 @@ export async function performDataCleanup(
           break;
         }
         deleted += res.count;
+        await assertLeaseOwnership();
       }
       return deleted;
     };
