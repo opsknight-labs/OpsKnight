@@ -541,6 +541,15 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
         'x-forwarded-proto': 'http',
       });
       expect(getAuthoritativeRequestOrigin(headers)).toBe('https://status.customer.test');
+
+      // NextRequest with non-standard port and spoofed x-forwarded-proto
+      const req = new NextRequest('https://www.opsknight.test:3100/login', {
+        headers: {
+          host: 'www.opsknight.test:3100',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      expect(getAuthoritativeRequestOrigin(req)).toBe('http://www.opsknight.test:3100');
     });
 
     it('getAuthoritativeRequestOrigin respects XFH/XFP when TRUST_PROXY_HEADERS is true', async () => {
