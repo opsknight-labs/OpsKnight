@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { resetDatabase, testPrisma } from '../helpers/test-db';
 import { encryptWithKey, decryptWithKey, decrypt } from '@/lib/encryption';
@@ -319,5 +320,112 @@ describeIfRealDB('encryption migration integration (real PostgreSQL)', () => {
     expect(decryptedConfig.vapidPrivateKey).toBe('active-vapid-key');
     const history = decryptedConfig.vapidKeyHistory as Array<{ privateKey: string }>;
     expect(history[0].privateKey).toBe('retired-vapid-key');
+  });
+
+  it('handles duplicate key material (env k1 == SystemSettings.encryptionKey) for legacy v1/v2 without false AMBIGUOUS', async () => {
+    // 1. Configure SystemSettings with the exact same key as k1
+    await testPrisma.systemSettings.upsert({
+      where: { id: 'default' },
+      update: { encryptionKey: KEY_1 },
+      create: { id: 'default', encryptionKey: KEY_1 },
+    });
+
+    // 2. Generate legacy v1 AES-256-CBC ciphertext using KEY_1
+    const iv1 = crypto.randomBytes(16);
+    const cipher1 = crypto.createCipheriv('aes-256-cbc', Buffer.from(KEY_1, 'hex'), iv1);
+    let encrypted1 = cipher1.update('legacy-v1-oidc-secret', 'utf8', 'hex');
+    encrypted1 += cipher1.final('hex');
+    const legacyV1Secret = `${iv1.toString('hex')}:${encrypted1}`;
+
+    await testPrisma.oidcConfig.create({
+      data: {
+        id: 'oidc-duplicate-key-test',
+        issuer: 'https://issuer.example.com',
+        clientId: 'client-dup',
+        clientSecret: legacyV1Secret,
+        updatedBy: testUser.id,
+      },
+    });
+
+    // 3. Generate legacy v2 envelope ciphertext using KEY_1
+    const dek = crypto.randomBytes(32);
+    const dekIv = crypto.randomBytes(16);
+    const dekCipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(KEY_1, 'hex'), dekIv);
+    let encryptedDek = dekCipher.update(dek.toString('hex'), 'utf8', 'hex');
+    encryptedDek += dekCipher.final('hex');
+
+    const payloadIv = crypto.randomBytes(16);
+    const payloadCipher = crypto.createCipheriv('aes-256-cbc', dek, payloadIv);
+    let encryptedPayload = payloadCipher.update('legacy-v2-slack-secret', 'utf8', 'hex');
+    encryptedPayload += payloadCipher.final('hex');
+    const legacyV2Secret = `v2:${dekIv.toString('hex')}:${encryptedDek}:${payloadIv.toString('hex')}:${encryptedPayload}`;
+
+    await testPrisma.slackIntegration.create({
+      data: {
+        id: 'slack-duplicate-key-test',
+        workspaceId: 'T-DUP-KEY',
+        botToken: legacyV2Secret,
+        scopes: ['chat:write'],
+        installedBy: testUser.id,
+      },
+    });
+
+    // 4. PREVIEW: Verifies legacy v1 & v2 are detected as LEGACY_V1 and LEGACY_V2, NOT AMBIGUOUS
+    const previewRun = await startEncryptionRun(testPrisma, {
+      mode: 'PREVIEW',
+      runSynchronously: true,
+    });
+    expect(previewRun.status).toBe('COMPLETED');
+    expect(previewRun.errorRecords).toBe(0);
+
+    const oidcState = await testPrisma.encryptionMigrationTargetState.findFirst({
+      where: { runId: previewRun.id, targetId: 'oidc.client-secret' },
+    });
+    expect(oidcState?.errorCount).toBe(0);
+
+    const slackState = await testPrisma.encryptionMigrationTargetState.findFirst({
+      where: { runId: previewRun.id, targetId: 'slack.bot-token' },
+    });
+    expect(slackState?.errorCount).toBe(0);
+
+    // 5. MIGRATE: Successfully migrates records to v3:k2
+    const migrateRun = await startEncryptionRun(testPrisma, {
+      mode: 'MIGRATE',
+      runSynchronously: true,
+    });
+    expect(migrateRun.status).toBe('COMPLETED');
+    expect(migrateRun.errorRecords).toBe(0);
+
+    const migratedOidc = await testPrisma.oidcConfig.findUniqueOrThrow({
+      where: { id: 'oidc-duplicate-key-test' },
+    });
+    expect(migratedOidc.clientSecret.startsWith('v3:k2:')).toBe(true);
+
+    const migratedSlack = await testPrisma.slackIntegration.findUniqueOrThrow({
+      where: { id: 'slack-duplicate-key-test' },
+    });
+    expect(migratedSlack.botToken.startsWith('v3:k2:')).toBe(true);
+
+    // 6. VERIFY: Verifies 0 references remain to retired keys
+    await runFullVerification(testPrisma);
+    const report = await evaluateKeyRetirementReadiness(testPrisma);
+
+    const k1Assessment = report.assessments.find(a => a.keyId === 'k1');
+    expect(k1Assessment?.status).toBe('DATABASE_READY_FOR_RETIREMENT');
+    expect(k1Assessment?.remainingReferences).toBe(0);
+
+    const dbKeyAssessment = report.assessments.find(a => a.keyId === 'database_legacy');
+    expect(dbKeyAssessment?.status).toBe('DATABASE_READY_FOR_RETIREMENT');
+    expect(dbKeyAssessment?.remainingReferences).toBe(0);
+
+    expect(report.allEligibleRetiredFromDatabase).toBe(true);
+
+    // Also verify run-level safeForDatabaseKeyRetirement matches the authoritative calculator
+    const verifyRun = await testPrisma.encryptionMigrationRun.findFirst({
+      where: { mode: 'VERIFY', status: 'COMPLETED' },
+      orderBy: { completedAt: 'desc' },
+    });
+    expect(verifyRun?.safeForDatabaseKeyRetirement).toContain('k1');
+    expect(verifyRun?.safeForDatabaseKeyRetirement).toContain('database_legacy');
   });
 });

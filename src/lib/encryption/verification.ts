@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import { executeMigrationRun } from './migration';
 import { computeRegistryFingerprint, ENCRYPTION_TARGETS } from './registry';
 import { getEncryptionKeyringEntries } from '../encryption';
+import { evaluateKeyRetirementReadiness } from './retirement';
 
 export async function createVerificationRun(
   prisma: PrismaClient,
@@ -35,34 +36,19 @@ export async function runFullVerification(
   const runId = await createVerificationRun(prisma, initiatedById);
   await executeMigrationRun({ runId, prisma });
 
-  // Post-process to calculate which inactive keys have exactly 0 database occurrences
+  // Post-process to calculate which inactive keys are ready for database retirement.
+  // Uses the authoritative evaluateKeyRetirementReadiness calculator to guarantee
+  // that safeForDatabaseKeyRetirement matches the retirement panel and fails closed on errors.
   const run = await prisma.encryptionMigrationRun.findUniqueOrThrow({
     where: { id: runId },
     include: { targetStates: true },
   });
 
   if (run.status === 'COMPLETED') {
-    const keyring = getEncryptionKeyringEntries();
-    const activeKeyId = keyring[0]?.id;
-
-    // Aggregate detected key occurrences across all target states
-    const keyCounts = new Map<string, number>();
-    for (const state of run.targetStates) {
-      if (state.keysDetected && typeof state.keysDetected === 'object') {
-        for (const [keyId, count] of Object.entries(state.keysDetected as Record<string, number>)) {
-          keyCounts.set(keyId, (keyCounts.get(keyId) ?? 0) + count);
-        }
-      }
-    }
-
-    // Inactive keys with 0 detected occurrences
-    const retiredKeys: string[] = [];
-    for (const entry of keyring) {
-      const count = keyCounts.get(entry.id) ?? 0;
-      if (entry.id !== activeKeyId && count === 0) {
-        retiredKeys.push(entry.id);
-      }
-    }
+    const retirementReport = await evaluateKeyRetirementReadiness(prisma);
+    const retiredKeys = retirementReport.assessments
+      .filter(a => a.status === 'DATABASE_READY_FOR_RETIREMENT')
+      .map(a => a.keyId);
 
     await prisma.encryptionMigrationRun.update({
       where: { id: runId },

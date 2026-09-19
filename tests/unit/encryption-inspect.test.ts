@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
-import { inspectValue, inspectTargetRecord } from '@/lib/encryption/inspect';
+import {
+  inspectValue,
+  inspectTargetRecord,
+  getUniqueLegacyKeyCandidates,
+} from '@/lib/encryption/inspect';
 import { encryptWithKey } from '@/lib/encryption';
 import { EncryptionTargetDefinition } from '@/lib/encryption/types';
 
@@ -171,5 +175,66 @@ describe('Encryption Inspector Unit Tests', () => {
     expect(results[1].classification).toBe('OLD_KEY_V3');
     expect(results[1].detectedKeyId).toBe('k2');
     expect(results[2].classification).toBe('PLAINTEXT');
+  });
+
+  it('getUniqueLegacyKeyCandidates deduplicates identical key material and prefers env keys over database_legacy', () => {
+    // Case 1: k1 and database_legacy share the exact same key bytes
+    const keyringWithDb = [
+      { id: 'k2', key: key2 },
+      { id: 'k1', key: key1 },
+      { id: 'database_legacy', key: key1 },
+    ];
+    const unique = getUniqueLegacyKeyCandidates(keyringWithDb, 'k2');
+    expect(unique).toHaveLength(2);
+    expect(unique.map(e => e.id)).toEqual(['k2', 'k1']);
+    expect(unique.find(e => e.id === 'k1')?.key).toBe(key1);
+
+    // Case 2: database_legacy appears before env key
+    const keyringReversed = [
+      { id: 'database_legacy', key: key1 },
+      { id: 'k1', key: key1 },
+    ];
+    const uniqueReversed = getUniqueLegacyKeyCandidates(keyringReversed, 'k1');
+    expect(uniqueReversed).toHaveLength(1);
+    expect(uniqueReversed[0].id).toBe('k1');
+  });
+
+  it('classifies legacy v1/v2 as NOT AMBIGUOUS when env k1 and database_legacy share the same key material', async () => {
+    const duplicatedKeyring = [
+      { id: 'k2', key: key2 },
+      { id: 'k1', key: key1 },
+      { id: 'database_legacy', key: key1 },
+    ];
+
+    // Legacy v1 ciphertext encrypted with key1
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key1, 'hex'), iv);
+    let encrypted = cipher.update('legacy-v1-secret', 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const v1Ciphertext = `${iv.toString('hex')}:${encrypted}`;
+
+    const v1Result = await inspectValue(v1Ciphertext, false, duplicatedKeyring, 'k2');
+    expect(v1Result.classification).toBe('LEGACY_V1');
+    expect(v1Result.detectedKeyId).toBe('k1');
+    expect(v1Result.details).toBeUndefined();
+
+    // Legacy v2 ciphertext encrypted with key1
+    const dek = crypto.randomBytes(32);
+    const dekIv = crypto.randomBytes(16);
+    const dekCipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key1, 'hex'), dekIv);
+    let encryptedDek = dekCipher.update(dek.toString('hex'), 'utf8', 'hex');
+    encryptedDek += dekCipher.final('hex');
+
+    const payloadIv = crypto.randomBytes(16);
+    const payloadCipher = crypto.createCipheriv('aes-256-cbc', dek, payloadIv);
+    let encryptedPayload = payloadCipher.update('legacy-v2-secret', 'utf8', 'hex');
+    encryptedPayload += payloadCipher.final('hex');
+
+    const v2Ciphertext = `v2:${dekIv.toString('hex')}:${encryptedDek}:${payloadIv.toString('hex')}:${encryptedPayload}`;
+
+    const v2Result = await inspectValue(v2Ciphertext, false, duplicatedKeyring, 'k2');
+    expect(v2Result.classification).toBe('LEGACY_V2');
+    expect(v2Result.detectedKeyId).toBe('k1');
+    expect(v2Result.details).toBeUndefined();
   });
 });

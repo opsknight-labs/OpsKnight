@@ -13,6 +13,38 @@ export interface InspectionResult {
 }
 
 /**
+ * Canonicalize keyring entries by unique cryptographic key material for legacy decryption.
+ * If multiple entries share the exact same key material (e.g. env key k1 and database_legacy,
+ * or duplicate environment keys), we test that key material only once.
+ * Preference order for resolving canonical identity:
+ *   1. Environment keys over database_legacy
+ *   2. The active key (if it shares key material)
+ *   3. The first occurring entry in the keyring
+ */
+export function getUniqueLegacyKeyCandidates(
+  keyring: Array<{ id: string; key: string }>,
+  activeKeyId?: string | null
+): Array<{ id: string; key: string }> {
+  const byKeyMaterial = new Map<string, { id: string; key: string }>();
+
+  for (const entry of keyring) {
+    const existing = byKeyMaterial.get(entry.key);
+    if (!existing) {
+      byKeyMaterial.set(entry.key, entry);
+    } else {
+      // If the existing entry was database_legacy and current is an env key, prefer the env key
+      if (existing.id === 'database_legacy' && entry.id !== 'database_legacy') {
+        byKeyMaterial.set(entry.key, entry);
+      } else if (entry.id === activeKeyId && existing.id !== activeKeyId) {
+        byKeyMaterial.set(entry.key, entry);
+      }
+    }
+  }
+
+  return Array.from(byKeyMaterial.values());
+}
+
+/**
  * Inspect a single raw ciphertext or plaintext string.
  */
 export async function inspectValue(
@@ -56,8 +88,9 @@ export async function inspectValue(
 
   // 2. Legacy v2 format: v2:dekIv:encryptedDek:payloadIv:encryptedPayload
   if (trimmed.startsWith('v2:')) {
+    const legacyCandidates = getUniqueLegacyKeyCandidates(keyring, activeKeyId);
     const matchingKeys: string[] = [];
-    for (const entry of keyring) {
+    for (const entry of legacyCandidates) {
       try {
         await decryptWithKey(trimmed, entry.key);
         matchingKeys.push(entry.id);
@@ -86,8 +119,9 @@ export async function inspectValue(
   // 3. Legacy v1 format: iv:ciphertext (hex)
   const isV1Format = /^[0-9a-f]{32}:[0-9a-f]+$/i.test(trimmed);
   if (isV1Format) {
+    const legacyCandidates = getUniqueLegacyKeyCandidates(keyring, activeKeyId);
     const matchingKeys: string[] = [];
-    for (const entry of keyring) {
+    for (const entry of legacyCandidates) {
       try {
         await decryptWithKey(trimmed, entry.key);
         matchingKeys.push(entry.id);
