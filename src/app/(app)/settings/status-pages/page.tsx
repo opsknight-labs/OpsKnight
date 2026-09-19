@@ -69,7 +69,7 @@ export default async function StatusPagesControlCenter() {
             <Globe className="h-8 w-8" />
           </div>
         }
-        actions={<StatusPageManager />}
+        actions={<StatusPageManager canCreate={totalPages < 1} />}
         badges={
           <>
             <Badge
@@ -125,7 +125,7 @@ export default async function StatusPagesControlCenter() {
             publish when ready.
           </p>
           <div className="mt-5 flex justify-center">
-            <StatusPageManager variant="default" />
+            <StatusPageManager variant="default" canCreate={totalPages < 1} />
           </div>
         </Card>
       ) : (

@@ -105,9 +105,26 @@ export function isStatusStaticAsset(pathname: string): boolean {
     pathname === '/apple-icon.png' ||
     pathname === '/robots.txt' ||
     pathname === '/sitemap.xml' ||
-    pathname === '/manifest.webmanifest'
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/manifest.json' ||
+    pathname === '/sw.js' ||
+    pathname === '/custom-sw.js' ||
+    pathname.startsWith('/workbox-')
   ) {
     return true;
+  }
+  // String-based logo check: avoids nested quantifiers that ESLint flags as unsafe regex.
+  // Matches /logo.ext and /logo-<suffix>.ext for any known image extension.
+  const LOGO_EXTENSIONS = new Set(['svg', 'png', 'webp', 'gif', 'jpg', 'jpeg', 'ico']);
+  const lowerPath = pathname.toLowerCase();
+  if (lowerPath.startsWith('/logo')) {
+    const dotIdx = lowerPath.lastIndexOf('.');
+    if (dotIdx > 0 && LOGO_EXTENSIONS.has(lowerPath.slice(dotIdx + 1))) {
+      const middle = lowerPath.slice(5, dotIdx); // chars between '/logo' and '.ext'
+      if (middle === '' || middle.startsWith('-')) {
+        return true;
+      }
+    }
   }
   if (
     pathname.startsWith('/icons/') ||
@@ -124,6 +141,7 @@ const STATUS_API_EXACT_GET = new Set([
   '/api/status/history',
   '/api/status/rss',
   '/api/status/uptime-export',
+  '/api/health',
 ]);
 
 const STATUS_API_EXACT_POST = new Set([
@@ -148,7 +166,7 @@ const RESERVED_STATUS_API_SLUGS = new Set([
 ]);
 
 export function isAllowedStatusApi(pathname: string, method: string): boolean {
-  if (method === 'GET') {
+  if (method === 'GET' || method === 'HEAD') {
     if (STATUS_API_EXACT_GET.has(pathname)) return true;
     if (pathname.startsWith('/api/status-page/logo/')) return true;
     if (pathname.startsWith('/api/status/')) {
