@@ -18,7 +18,6 @@ const mockStatusRoute = {
   revision: '1',
 };
 
-
 describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -39,14 +38,13 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
   });
 
   function setupStatusServingMocks() {
-    const statusHosts = new Set(['status.example.com', 'status.customer.com']);
     const fetchMock = vi.fn().mockImplementation((url: string | URL) => {
       const urlStr = String(url);
-      // Match status route lookups by checking the route key in the URL path
-      for (const host of statusHosts) {
-        if (urlStr.includes(encodeURIComponent(`domain:${host}`))) {
-          return Promise.resolve(Response.json(mockStatusRoute));
-        }
+      if (urlStr.includes(encodeURIComponent('domain:status.example.com'))) {
+        return Promise.resolve(Response.json(mockStatusRoute));
+      }
+      if (urlStr.includes(encodeURIComponent('domain:status.customer.com'))) {
+        return Promise.resolve(Response.json(mockStatusRoute));
       }
       return Promise.resolve(new Response(null, { status: 404 }));
     });
@@ -139,7 +137,6 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // Typical container/reverse-proxy topology where raw Host is internal upstream
       const req = new NextRequest('http://internal-app:3000/login', {
         headers: {
           host: 'internal-app:3000',
@@ -157,7 +154,6 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // Ingress correctly overwrites X-Forwarded-Host with the real client hostname
       const req = new NextRequest('https://www.opsnite.com/users', {
         headers: {
           host: 'www.opsnite.com',
@@ -166,19 +162,15 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       });
       const res = await middleware(req);
 
-      // Status domain firewall enforces 404 on application routes like /users
       expect(res.status).toBe(404);
     });
   });
 
   describe('Untrusted Proxy Headers (default — TRUST_PROXY_HEADERS not set)', () => {
     it('ignores X-Forwarded-Host when TRUST_PROXY_HEADERS is not set', async () => {
-      // TRUST_PROXY_HEADERS is NOT set (default)
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // Even though X-Forwarded-Host is a valid app host, middleware ignores it
-      // and uses rawHost (internal-app) which is unrecognized => 421
       const req = new NextRequest('http://internal-app:3000/login', {
         headers: {
           host: 'internal-app:3000',
@@ -191,12 +183,9 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
     });
 
     it('CRITICAL: spoofed X-Forwarded-Host with app hostname cannot escape status firewall', async () => {
-      // TRUST_PROXY_HEADERS is NOT set (default)
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // Attacker connects to status.customer.com and spoofs X-Forwarded-Host
-      // with the actual configured application hostname
       const req = new NextRequest('https://status.customer.com/users', {
         headers: {
           host: 'status.customer.com',
@@ -206,19 +195,14 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       });
       const res = await middleware(req);
 
-      // rawHost is status.customer.com => status route matched => 404 for /users
       expect(res.status).toBe(404);
     });
 
     it('CRITICAL: spoofed X-Forwarded-Host cannot turn status request into app request even with TRUST_PROXY_HEADERS=true', async () => {
-      // Even with proxy trust enabled, rawHost=status.customer.com takes priority
-      // when X-Forwarded-Host points at the app. The ingress should overwrite XFH,
-      // but if it doesn't, the adversary must not escape the status boundary.
       vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // Attacker scenario: real connection is to status host, but XFH claims app host
       const req = new NextRequest('https://status.customer.com/users', {
         headers: {
           host: 'status.customer.com',
@@ -228,14 +212,72 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       });
       const res = await middleware(req);
 
-      // X-Forwarded-Host is www.opsnite.com (app host), so middleware uses it.
-      // www.opsnite.com is NOT a status host, so status firewall doesn't apply.
-      // This is the inherent risk when TRUST_PROXY_HEADERS=true and the ingress
-      // does not sanitize X-Forwarded-Host. Middleware cannot distinguish a
-      // legitimately-forwarded header from an attacker-supplied one in this case.
-      // The deployment documentation requires the ingress to OVERWRITE XFH.
-      // With untrusted proxy (default), rawHost wins and this returns 404.
+      // XFH wins when trusted, but ingress MUST sanitize. Documented requirement.
       expect([200, 307, 404, 421]).toContain(res.status);
+    });
+  });
+
+  describe('Bootstrap Setup on Unknown Host', () => {
+    it('allows GET /setup on unknown host (fresh installation)', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://opsknight-devtest.corporateroot.net/setup', {
+        headers: { host: 'opsknight-devtest.corporateroot.net' },
+      });
+      const res = await middleware(req);
+
+      // /setup is allowed even on unknown hosts for initial bootstrap
+      expect(res.status).toBe(200);
+    });
+
+    it('rejects GET /login on unknown host (not setup)', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://opsknight-devtest.corporateroot.net/login', {
+        headers: { host: 'opsknight-devtest.corporateroot.net' },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(421);
+    });
+
+    it('rejects GET /users on unknown host', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://opsknight-devtest.corporateroot.net/users', {
+        headers: { host: 'opsknight-devtest.corporateroot.net' },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(421);
+    });
+
+    it('rejects GET /settings on unknown host', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://opsknight-devtest.corporateroot.net/settings', {
+        headers: { host: 'opsknight-devtest.corporateroot.net' },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(421);
+    });
+
+    it('status domain /setup => 404 (status firewall takes precedence)', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://status.example.com/setup', {
+        headers: { host: 'status.example.com' },
+      });
+      const res = await middleware(req);
+
+      // Status domain firewall blocks /setup — it's not a valid status surface path
+      expect(res.status).toBe(404);
     });
   });
 
@@ -244,7 +286,6 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // Configured canonical is https://www.opsnite.com
       const req = new NextRequest('https://opsnite.com/login?source=nav', {
         headers: { host: 'opsnite.com' },
       });
@@ -260,7 +301,6 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // Configured canonical is https://opsnite.com
       const req = new NextRequest('https://www.opsnite.com/login', {
         headers: { host: 'www.opsnite.com' },
       });
@@ -302,7 +342,6 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
-      // www.portal.opsnite.com was NOT explicitly configured and should NOT be auto-aliased
       const req = new NextRequest('https://www.portal.opsnite.com/', {
         headers: { host: 'www.portal.opsnite.com' },
       });
@@ -314,7 +353,6 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
 
   describe('External Serving Store & Database Canonical App Host Precedence', () => {
     it('recognizes DB SystemSettings.appUrl when external serving store is enabled', async () => {
-      // Env has an older / different hostname
       vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://old-env.opsnite.test');
       vi.stubEnv('NEXTAUTH_URL', 'https://old-env.opsnite.test');
 
@@ -364,7 +402,6 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
 
       const { default: middleware } = await import('@/middleware');
 
-      // Apex request should redirect to canonical DB host
       const req = new NextRequest('https://db-configured.opsnite.com/login', {
         headers: { host: 'db-configured.opsnite.com' },
       });

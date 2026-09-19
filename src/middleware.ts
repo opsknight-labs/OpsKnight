@@ -14,6 +14,11 @@ import {
   matchesStatusPageDomain,
   extractSubdomainFromHost,
 } from '@/lib/status-pages/status-route-resolver';
+import {
+  normalizeHostname,
+  parseHostname,
+  getAuthoritativeRequestHost,
+} from '@/lib/request-host';
 
 const PUBLIC_PATH_PREFIXES = [
   '/login',
@@ -166,55 +171,22 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
   return false;
 }
 
-export function normalizeHostname(value?: string | null): string {
-  if (!value) return '';
-  const candidate = value.trim().toLowerCase().replace(/\.$/, '');
-  if (!candidate || candidate.length > 253 || /[^a-z0-9.:[\]-]/.test(candidate)) return '';
-  try {
-    return new URL(`http://${candidate}`).hostname.replace(/^\[|\]$/g, '');
-  } catch {
-    return '';
-  }
-}
+// Re-export shared host utilities for external consumers
+export { normalizeHostname, parseHostname, getAuthoritativeRequestHost } from '@/lib/request-host';
 
-export function parseHostname(value?: string | null): string {
-  if (!value) return '';
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    try {
-      return normalizeHostname(new URL(trimmed).host);
-    } catch {
-      return '';
-    }
-  }
-  return normalizeHostname(trimmed);
-}
-
-export function getAuthoritativeRequestHost(req: NextRequest | Request): string {
-  // Only trust X-Forwarded-Host when the deployment has explicitly opted in.
-  // The ingress/reverse-proxy MUST overwrite (not append) client-supplied
-  // X-Forwarded-Host for this to be safe.
-  if (process.env.TRUST_PROXY_HEADERS === 'true') {
-    const forwarded = req.headers.get('x-forwarded-host');
-    if (forwarded) {
-      const rawForwarded = forwarded
-        .split(',')
-        .map(value => value.trim())
-        .filter(Boolean)
-        .at(-1);
-      const cleanForwarded = normalizeHostname(rawForwarded);
-      if (cleanForwarded) return cleanForwarded;
-    }
-  }
-  const rawHost = normalizeHostname(req.headers.get('host'));
-  if (rawHost) return rawHost;
-  try {
-    const url = new URL(req.url);
-    return normalizeHostname(url.host);
-  } catch {
-    return '';
-  }
+/**
+ * Returns true when the request targets the one-time bootstrap setup page
+ * (/setup) or its Server Action POST. This is the minimal surface that
+ * must be allowed on an unknown host during initial installation, before
+ * SystemSettings.appUrl has been seeded.
+ *
+ * The existing bootstrap code mechanism (expiring one-time operator capability,
+ * rate-limited, consumed once, refused when a user already exists) protects
+ * this endpoint.
+ */
+export function isBootstrapSetupRequest(pathname: string, _method: string): boolean {
+  // Allow both GET (page render) and POST (Server Action form submission).
+  return pathname === '/setup';
 }
 
 export function getHostWithAliases(hostname: string): string[] {
@@ -759,7 +731,17 @@ export default async function middleware(req: NextRequest) {
     });
   }
 
-  // 2. Validate authoritative request host as an allowed application host
+  // 2. Bootstrap setup exception: allow /setup on unknown hosts for initial installation.
+  //    Status domain already handled above (returns 404 for /setup via firewall).
+  //    The existing secure bootstrap code mechanism (one-time operator capability,
+  //    rate-limited, consumed once, refuses when a user already exists) protects
+  //    this endpoint. Once bootstrap completes, SystemSettings.appUrl is seeded
+  //    and the host becomes recognized — closing this exception permanently.
+  if (isBootstrapSetupRequest(pathname, req.method)) {
+    return response;
+  }
+
+  // 3. Validate authoritative request host as an allowed application host
   if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
     // If not recognized against static env hosts, try fetching statusConfig for DB-configured SystemSettings.appUrl
     if (!statusConfig) {

@@ -17,9 +17,45 @@ import {
   hashBootstrapCode,
   parseBootstrapState,
 } from '@/lib/bootstrap-security';
+import { normalizeHostname } from '@/lib/request-host';
 
 const BOOTSTRAP_TRANSACTION_ATTEMPTS = 3;
 const BOOTSTRAP_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+/**
+ * Resolve the canonical application URL for seeding SystemSettings.appUrl
+ * during bootstrap. Uses the same trust model as the middleware:
+ *   - When TRUST_PROXY_HEADERS=true, prefer X-Forwarded-Host + X-Forwarded-Proto.
+ *   - Otherwise, use the raw Host header.
+ *
+ * This must stay in sync with getAuthoritativeRequestHost() from @/lib/request-host.
+ */
+function resolveBootstrapAppUrl(headerStore: Headers): string | null {
+  let hostname: string | undefined;
+
+  if (process.env.TRUST_PROXY_HEADERS === 'true') {
+    const forwarded = headerStore.get('x-forwarded-host');
+    if (forwarded) {
+      const rawForwarded = forwarded
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean)
+        .at(-1);
+      hostname = normalizeHostname(rawForwarded) || undefined;
+    }
+  }
+  if (!hostname) {
+    hostname = normalizeHostname(headerStore.get('host')) || undefined;
+  }
+  if (!hostname) return null;
+
+  const proto =
+    process.env.TRUST_PROXY_HEADERS === 'true'
+      ? headerStore.get('x-forwarded-proto')?.split(',').at(0)?.trim() || 'https'
+      : 'https';
+
+  return `${proto}://${hostname}`;
+}
 
 const schema = z
   .object({
@@ -119,6 +155,31 @@ export async function bootstrapAdmin(formData: FormData) {
               updatedBy: created.id,
             },
           });
+
+          // Seed SystemSettings.appUrl from the request hostname so the
+          // middleware host firewall immediately recognizes this domain
+          // after bootstrap — eliminating the chicken-and-egg problem.
+          const bootstrapAppUrl = resolveBootstrapAppUrl(headerStore);
+          if (bootstrapAppUrl) {
+            await tx.systemSettings.upsert({
+              where: { id: 'default' },
+              create: { id: 'default', appUrl: bootstrapAppUrl },
+              update: { appUrl: bootstrapAppUrl },
+            });
+            await logAudit(
+              {
+                action: 'settings.app_url.bootstrap_seeded',
+                entityType: 'USER',
+                entityId: created.id,
+                actorId: null,
+                source: 'AUTH',
+                newValue: { appUrl: bootstrapAppUrl },
+                details: { method: 'operator_bootstrap_capability' },
+              },
+              tx
+            );
+          }
+
           await logAudit(
             {
               action: 'user.bootstrap',
