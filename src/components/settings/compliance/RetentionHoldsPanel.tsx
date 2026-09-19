@@ -5,18 +5,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  ShieldAlert,
-  Plus,
-  Unlock,
-  RotateCcw,
-  Loader2,
-  Calendar,
-  User,
-  AlertCircle,
-  Clock,
-  CheckCircle2,
-} from 'lucide-react';
+import { ShieldAlert, Plus, Unlock, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
 import { notify } from '@/lib/toast';
 
 interface HoldItem {
@@ -39,6 +28,8 @@ interface HoldItem {
 export default function RetentionHoldsPanel() {
   const [holds, setHolds] = useState<HoldItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'EXPIRED' | 'RELEASED' | 'ALL'>(
     'ACTIVE'
   );
@@ -60,26 +51,60 @@ export default function RetentionHoldsPanel() {
   const [selectedHold, setSelectedHold] = useState<HoldItem | null>(null);
   const [releasing, setReleasing] = useState(false);
 
-  const fetchHolds = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'ALL') params.set('status', statusFilter);
-      if (scopeFilter !== 'ALL') params.set('scopeType', scopeFilter);
+  const requestGenRef = React.useRef(0);
+  const abortControllerRef = React.useRef<AbortController | null>(null);
 
-      const res = await fetch(`/api/compliance/retention-holds?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load retention holds');
-      const data = await res.json();
-      setHolds(data.holds || []);
-    } catch (err) {
-      notify.error(err instanceof Error ? err.message : 'Error loading retention holds');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, scopeFilter]);
+  const fetchHolds = useCallback(
+    async (reset = true, cursorToUse?: string | null) => {
+      if (reset && abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const currentGen = ++requestGenRef.current;
+
+      if (reset) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+      try {
+        const params = new URLSearchParams();
+        if (statusFilter !== 'ALL') params.set('status', statusFilter);
+        if (scopeFilter !== 'ALL') params.set('scopeType', scopeFilter);
+        if (!reset && cursorToUse) params.set('cursor', cursorToUse);
+
+        const res = await fetch(`/api/compliance/retention-holds?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error('Failed to load retention holds');
+        const data = await res.json();
+
+        // Discard stale response if filter changed while request was in flight
+        if (currentGen !== requestGenRef.current) return;
+
+        if (reset) {
+          setHolds(data.holds || []);
+        } else {
+          setHolds(prev => [...prev, ...(data.holds || [])]);
+        }
+        setNextCursor(data.nextCursor || null);
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === 'AbortError') return;
+        if (currentGen !== requestGenRef.current) return;
+        notify.error(err instanceof Error ? err.message : 'Error loading retention holds');
+      } finally {
+        if (currentGen === requestGenRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+      }
+    },
+    [statusFilter, scopeFilter]
+  );
 
   useEffect(() => {
-    fetchHolds();
+    fetchHolds(true);
   }, [fetchHolds]);
 
   const handleCreateHold = async (e: React.FormEvent) => {
@@ -306,6 +331,27 @@ export default function RetentionHoldsPanel() {
             )}
           </tbody>
         </table>
+
+        {nextCursor && (
+          <div className="flex justify-center p-3 border-t border-border/40">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchHolds(false, nextCursor)}
+              disabled={loadingMore}
+              className="text-xs"
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Loading more...
+                </>
+              ) : (
+                'Load More Holds'
+              )}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Create Modal */}

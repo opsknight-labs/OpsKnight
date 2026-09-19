@@ -227,8 +227,8 @@ export async function listRetentionHolds(
 
   let nextCursor: string | null = null;
   if (holds.length > limit) {
-    const nextHold = holds.pop();
-    nextCursor = nextHold!.id;
+    holds.pop();
+    nextCursor = holds[holds.length - 1]?.id ?? null;
   }
 
   return {
@@ -309,18 +309,21 @@ export async function createRetentionHold(
 
     // Audit log
     const { emitAuditEvent } = await import('@/lib/audit');
-    await emitAuditEvent({
-      action: 'retention.hold.created',
-      source: 'UI',
-      target: { type: 'DATA_RETENTION_HOLD', id: hold.id },
-      actor: { type: 'USER', id: actorId },
-      metadata: {
-        scopeType: input.scopeType,
-        scopeId: input.scopeId,
-        reasonProvided: true,
-        externalReferenceProvided: Boolean(input.externalReference),
+    await emitAuditEvent(
+      {
+        action: 'retention.hold.created',
+        source: 'UI',
+        target: { type: 'DATA_RETENTION_HOLD', id: hold.id },
+        actor: { type: 'USER', id: actorId },
+        metadata: {
+          scopeType: input.scopeType,
+          scopeId: input.scopeId,
+          reasonProvided: true,
+          externalReferenceProvided: Boolean(input.externalReference),
+        },
       },
-    });
+      txClient
+    );
 
     return {
       hold: {
@@ -343,6 +346,22 @@ export async function releaseRetentionHold(
   tx?: Prisma.TransactionClient
 ): Promise<{ hold: RetentionHold; wasAlreadyReleased: boolean }> {
   const execute = async (txClient: Prisma.TransactionClient) => {
+    const initialHold = await txClient.dataRetentionHold.findUnique({
+      where: { id: holdId },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        releasedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    if (!initialHold) {
+      throw new RetentionHoldNotFoundError(`Retention hold ${holdId} not found`);
+    }
+
+    // Acquire resource lock to prevent race with cleanup
+    await acquireRetentionResourceLock(txClient, initialHold.scopeType, initialHold.scopeId);
+
+    // Re-read hold AFTER acquiring resource lock to prevent concurrent release race
     const existingHold = await txClient.dataRetentionHold.findUnique({
       where: { id: holdId },
       include: {
@@ -355,11 +374,8 @@ export async function releaseRetentionHold(
       throw new RetentionHoldNotFoundError(`Retention hold ${holdId} not found`);
     }
 
-    // Acquire resource lock to prevent race with cleanup
-    await acquireRetentionResourceLock(txClient, existingHold.scopeType, existingHold.scopeId);
-
     if (existingHold.releasedAt) {
-      // Already released - idempotent no-op
+      // Already released - idempotent no-op without mutation or duplicate audit
       return {
         hold: {
           ...existingHold,
@@ -383,17 +399,20 @@ export async function releaseRetentionHold(
 
     // Audit log
     const { emitAuditEvent } = await import('@/lib/audit');
-    await emitAuditEvent({
-      action: 'retention.hold.released',
-      source: 'UI',
-      target: { type: 'DATA_RETENTION_HOLD', id: hold.id },
-      actor: { type: 'USER', id: actorId },
-      metadata: {
-        scopeType: hold.scopeType,
-        scopeId: hold.scopeId,
-        wasAlreadyReleased: false,
+    await emitAuditEvent(
+      {
+        action: 'retention.hold.released',
+        source: 'UI',
+        target: { type: 'DATA_RETENTION_HOLD', id: hold.id },
+        actor: { type: 'USER', id: actorId },
+        metadata: {
+          scopeType: hold.scopeType,
+          scopeId: hold.scopeId,
+          wasAlreadyReleased: false,
+        },
       },
-    });
+      txClient
+    );
 
     return {
       hold: {

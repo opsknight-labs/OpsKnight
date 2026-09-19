@@ -2,7 +2,14 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { isAppError } from '@/lib/errors';
 import { executeErasure } from '@/lib/privacy/erasure/execute';
 import { createRetentionHold, releaseRetentionHold } from '@/lib/retention/holds';
-import { performDataCleanup } from '@/lib/data-cleanup';
+import {
+  performDataCleanup,
+  acquireCleanupMutexLease,
+  renewCleanupMutexLease,
+  releaseCleanupMutexLease,
+  CLEANUP_MUTEX_KEY,
+} from '@/lib/data-cleanup';
+import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
 import {
   createTestIncident,
   createTestService,
@@ -296,5 +303,562 @@ describeIfRealDB('retention holds integration (real PostgreSQL)', () => {
       where: { id: pr.id },
     });
     expect(prDeleted).toBeNull();
+  });
+
+  it('concurrent incident hold creation vs cleanup race: resource is NEVER deleted if hold succeeds', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const service = await createTestService('Race Test Service');
+
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+    const incident = await createTestIncident('Race Incident', service.id, {
+      status: 'RESOLVED',
+      createdAt: fortyDaysAgo,
+      resolvedAt: fortyDaysAgo,
+    });
+
+    const policyOverride = { incidentRetentionDays: 30 };
+
+    // Launch cleanup and hold creation concurrently
+    const [cleanupResult, holdResult] = await Promise.allSettled([
+      performDataCleanup(false, policyOverride),
+      createRetentionHold(
+        {
+          scopeType: 'INCIDENT',
+          scopeId: incident.id,
+          reason: 'Legal litigation hold during concurrent cleanup',
+        },
+        admin.id
+      ),
+    ]);
+
+    const incidentInDb = await testPrisma.incident.findUnique({
+      where: { id: incident.id },
+    });
+
+    // Invariant: NEVER can hold creation succeed AND the incident be deleted
+    if (holdResult.status === 'fulfilled') {
+      expect(incidentInDb).not.toBeNull();
+      expect(holdResult.value.hold.status).toBe('ACTIVE');
+    } else {
+      // If hold creation failed, cleanup won the race and deleted it before hold creation
+      expect(incidentInDb).toBeNull();
+      expect(cleanupResult.status).toBe('fulfilled');
+    }
+  });
+
+  it('concurrent privacy request hold creation vs cleanup race: resource is NEVER deleted if hold succeeds', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+
+    const pr = await testPrisma.privacyRequest.create({
+      data: {
+        subjectType: 'USER',
+        subjectId: admin.id,
+        requestType: 'ACCESS',
+        status: 'COMPLETED',
+        updatedAt: fortyDaysAgo,
+      },
+    });
+
+    const policyOverride = { completedPrivacyRequestRetentionDays: 30 };
+
+    // Launch cleanup and hold creation concurrently
+    const [cleanupResult, holdResult] = await Promise.allSettled([
+      performDataCleanup(false, policyOverride),
+      createRetentionHold(
+        {
+          scopeType: 'PRIVACY_REQUEST',
+          scopeId: pr.id,
+          reason: 'Regulatory hold during concurrent cleanup',
+        },
+        admin.id
+      ),
+    ]);
+
+    const prInDb = await testPrisma.privacyRequest.findUnique({
+      where: { id: pr.id },
+    });
+
+    // Invariant: NEVER can hold creation succeed AND the privacy request be deleted
+    if (holdResult.status === 'fulfilled') {
+      expect(prInDb).not.toBeNull();
+      expect(holdResult.value.hold.status).toBe('ACTIVE');
+    } else {
+      expect(prInDb).toBeNull();
+      expect(cleanupResult.status).toBe('fulfilled');
+    }
+  });
+
+  it('incident hold preserves linked alerts while unlinked old alerts are pruned', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const service = await createTestService('Alert Preservation Service');
+
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+    const incident = await createTestIncident('Held Incident With Alerts', service.id, {
+      status: 'RESOLVED',
+      createdAt: fortyDaysAgo,
+      resolvedAt: fortyDaysAgo,
+    });
+
+    // 1. Create alert linked to the held incident (older than alert retention)
+    const linkedAlert = await testPrisma.alert.create({
+      data: {
+        payload: { summary: 'Linked alert for held incident' },
+        serviceId: service.id,
+        incidentId: incident.id,
+        createdAt: fortyDaysAgo,
+        status: 'RESOLVED',
+      },
+    });
+
+    // 2. Create unlinked standalone alert (older than alert retention)
+    const unlinkedAlert = await testPrisma.alert.create({
+      data: {
+        payload: { summary: 'Unlinked old alert' },
+        serviceId: service.id,
+        incidentId: null,
+        createdAt: fortyDaysAgo,
+        status: 'RESOLVED',
+      },
+    });
+
+    // Place hold on incident
+    await createRetentionHold(
+      {
+        scopeType: 'INCIDENT',
+        scopeId: incident.id,
+        reason: 'Hold preserving incident aggregate and linked alerts',
+      },
+      admin.id
+    );
+
+    const policyOverride = { incidentRetentionDays: 30, alertRetentionDays: 30 };
+    await performDataCleanup(false, policyOverride);
+
+    // Linked alert must survive because its parent incident is held
+    const linkedSurvives = await testPrisma.alert.findUnique({
+      where: { id: linkedAlert.id },
+    });
+    expect(linkedSurvives).not.toBeNull();
+
+    // Unlinked alert must be deleted
+    const unlinkedDeleted = await testPrisma.alert.findUnique({
+      where: { id: unlinkedAlert.id },
+    });
+    expect(unlinkedDeleted).toBeNull();
+  });
+
+  it('privacy request hold preserves expired export artifacts from deletion', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+
+    const pr = await testPrisma.privacyRequest.create({
+      data: {
+        subjectType: 'USER',
+        subjectId: admin.id,
+        requestType: 'ACCESS',
+        status: 'COMPLETED',
+        updatedAt: fortyDaysAgo,
+      },
+    });
+
+    const artifact = await testPrisma.privacyExportArtifact.create({
+      data: {
+        requestId: pr.id,
+        status: 'EXPIRED',
+        expiresAt: fortyDaysAgo,
+      },
+    });
+
+    // Put hold on the privacy request
+    await createRetentionHold(
+      {
+        scopeType: 'PRIVACY_REQUEST',
+        scopeId: pr.id,
+        reason: 'Hold preserving request and artifact evidence',
+      },
+      admin.id
+    );
+
+    const policyOverride = {
+      completedPrivacyRequestRetentionDays: 30,
+      expiredPrivacyArtifactRetentionDays: 30,
+    };
+    await performDataCleanup(false, policyOverride);
+
+    // Both request and artifact must be preserved
+    const prSurvives = await testPrisma.privacyRequest.findUnique({
+      where: { id: pr.id },
+    });
+    expect(prSurvives).not.toBeNull();
+
+    const artifactSurvives = await testPrisma.privacyExportArtifact.findUnique({
+      where: { id: artifact.id },
+    });
+    expect(artifactSurvives).not.toBeNull();
+  });
+
+  it('concurrent release calls are strictly idempotent and emit exactly one audit event', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const service = await createTestService('Concurrent Release Service');
+
+    const incident = await createTestIncident('Concurrent Release Incident', service.id);
+    const { hold } = await createRetentionHold(
+      {
+        scopeType: 'INCIDENT',
+        scopeId: incident.id,
+        reason: 'Hold for concurrency test',
+      },
+      admin.id
+    );
+
+    // Concurrently release the same hold twice
+    const [resA, resB] = await Promise.all([
+      releaseRetentionHold(hold.id, admin.id),
+      releaseRetentionHold(hold.id, admin.id),
+    ]);
+
+    // Exactly one must be the initial release (wasAlreadyReleased: false)
+    // and the other must be the idempotent no-op (wasAlreadyReleased: true)
+    const releasedFlags = [resA.wasAlreadyReleased, resB.wasAlreadyReleased];
+    expect(releasedFlags).toContain(false);
+    expect(releasedFlags).toContain(true);
+
+    // Exactly one release audit event should be logged in AuditLog
+    const releaseAudits = await testPrisma.auditLog.findMany({
+      where: {
+        entityType: 'DATA_RETENTION_HOLD',
+        entityId: hold.id,
+        action: 'retention.hold.released',
+      },
+    });
+    expect(releaseAudits.length).toBe(1);
+  });
+
+  it('concurrent incident hold creation vs cleanup of linked alert/event: if hold succeeds, child evidence survives', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const service = await createTestService('Child Evidence Race Service');
+
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+    // Incident is recent enough or open so it is NOT eligible for incident deletion itself,
+    // but its linked alert and event are older than retention cutoffs and eligible for standalone cleanup.
+    const incident = await createTestIncident('Parent Incident With Old Children', service.id, {
+      status: 'OPEN',
+      createdAt: fortyDaysAgo,
+    });
+
+    const alert = await testPrisma.alert.create({
+      data: {
+        payload: { summary: 'Old alert linked to open incident' },
+        serviceId: service.id,
+        incidentId: incident.id,
+        createdAt: fortyDaysAgo,
+        status: 'RESOLVED',
+      },
+    });
+
+    const event = await testPrisma.incidentEvent.create({
+      data: {
+        incidentId: incident.id,
+        message: 'Old incident event',
+        createdAt: fortyDaysAgo,
+      },
+    });
+
+    const policyOverride = {
+      incidentRetentionDays: 90, // Incident itself will not be deleted
+      alertRetentionDays: 30, // Alert is eligible for standalone cleanup
+      logRetentionDays: 30, // Event is eligible for standalone cleanup
+    };
+
+    // Run standalone cleanup and hold creation concurrently
+    const [cleanupResult, holdResult] = await Promise.allSettled([
+      performDataCleanup(false, policyOverride),
+      createRetentionHold(
+        {
+          scopeType: 'INCIDENT',
+          scopeId: incident.id,
+          reason: 'Hold protecting incident and all child evidence',
+        },
+        admin.id
+      ),
+    ]);
+
+    const alertInDb = await testPrisma.alert.findUnique({
+      where: { id: alert.id },
+    });
+    const eventInDb = await testPrisma.incidentEvent.findUnique({
+      where: { id: event.id },
+    });
+
+    // Invariant: If hold creation succeeded, child evidence MUST survive
+    if (holdResult.status === 'fulfilled') {
+      expect(alertInDb).not.toBeNull();
+      expect(eventInDb).not.toBeNull();
+      expect(holdResult.value.hold.status).toBe('ACTIVE');
+    } else {
+      expect(cleanupResult.status).toBe('fulfilled');
+    }
+  });
+
+  it('concurrent privacy request hold creation vs artifact cleanup race: if hold succeeds, artifact survives', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+
+    // Create privacy request (with completed request retention long enough so parent is not pruned)
+    const pr = await testPrisma.privacyRequest.create({
+      data: {
+        subjectType: 'USER',
+        subjectId: admin.id,
+        requestType: 'ACCESS',
+        status: 'COMPLETED',
+        updatedAt: fortyDaysAgo,
+      },
+    });
+
+    // Create expired export artifact older than artifact retention cutoff
+    const artifact = await testPrisma.privacyExportArtifact.create({
+      data: {
+        requestId: pr.id,
+        status: 'EXPIRED',
+        createdAt: fortyDaysAgo,
+        expiresAt: fortyDaysAgo,
+      },
+    });
+
+    const policyOverride = {
+      completedPrivacyRequestRetentionDays: 90, // Parent request will not be pruned
+      expiredPrivacyArtifactRetentionDays: 30, // Artifact is eligible for expired artifact cleanup
+    };
+
+    // Run cleanup and hold creation concurrently
+    const [cleanupResult, holdResult] = await Promise.allSettled([
+      performDataCleanup(false, policyOverride),
+      createRetentionHold(
+        {
+          scopeType: 'PRIVACY_REQUEST',
+          scopeId: pr.id,
+          reason: 'Regulatory hold preserving artifact evidence',
+        },
+        admin.id
+      ),
+    ]);
+
+    const artifactInDb = await testPrisma.privacyExportArtifact.findUnique({
+      where: { id: artifact.id },
+    });
+
+    // Invariant: If hold creation succeeded, the export artifact MUST survive
+    if (holdResult.status === 'fulfilled') {
+      expect(artifactInDb).not.toBeNull();
+      expect(holdResult.value.hold.status).toBe('ACTIVE');
+    } else {
+      expect(artifactInDb).toBeNull();
+      expect(cleanupResult.status).toBe('fulfilled');
+    }
+  });
+
+  it('fully-held first batch of >500 incidents continues and processes subsequent batches', async () => {
+    const admin = await createTestUser({ role: 'ADMIN', status: 'ACTIVE' });
+    const service = await createTestService('Multi-Batch Service');
+
+    const fortyDaysAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+
+    // Create 502 resolved old incidents:
+    // Batch 1 (500 incidents) will be placed under retention hold
+    // Batch 2 (2 incidents) will have no holds and should be deleted
+    const totalIncidents = 502;
+    const incidentData = Array.from({ length: totalIncidents }, (_, i) => ({
+      title: `Batch Test Incident ${i}`,
+      status: 'RESOLVED' as const,
+      urgency: 'LOW' as const,
+      serviceId: service.id,
+      createdAt: fortyDaysAgo,
+      resolvedAt: fortyDaysAgo,
+    }));
+
+    await testPrisma.incident.createMany({ data: incidentData });
+
+    // Fetch created incidents ordered deterministically by id
+    const createdIncidents = await testPrisma.incident.findMany({
+      where: { serviceId: service.id },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    expect(createdIncidents.length).toBe(totalIncidents);
+
+    // Hold the first 500 incidents (entire first batch)
+    const firstBatchIds = createdIncidents.slice(0, 500).map(inc => inc.id);
+    const holdData = firstBatchIds.map(id => ({
+      scopeType: 'INCIDENT' as const,
+      scopeId: id,
+      reason: 'Batch 1 retention hold',
+      createdById: admin.id,
+    }));
+
+    await testPrisma.dataRetentionHold.createMany({ data: holdData });
+
+    const policyOverride = { incidentRetentionDays: 30 };
+    const cleanupResult = await performDataCleanup(false, policyOverride);
+
+    // Batch 2 (remaining 2 incidents) must be successfully deleted
+    expect(cleanupResult.incidents).toBe(2);
+    expect(cleanupResult.held.incidents).toBeGreaterThanOrEqual(500);
+
+    // Verify first batch survived in DB
+    const remainingIncidents = await testPrisma.incident.findMany({
+      where: { serviceId: service.id },
+      select: { id: true },
+    });
+    expect(remainingIncidents.length).toBe(500);
+    const remainingIds = new Set(remainingIncidents.map(inc => inc.id));
+    for (const heldId of firstBatchIds) {
+      expect(remainingIds.has(heldId)).toBe(true);
+    }
+  });
+
+  it('cleanup mutex lease enforces monotonic fencing tokens and safe ownership release without row deletion', async () => {
+    // 1. Worker A acquires initial lease (token 1)
+    const tokenA = await acquireCleanupMutexLease();
+    expect(tokenA).not.toBeNull();
+    expect(typeof tokenA).toBe('number');
+
+    // 2. Another concurrent acquisition while lease is active fails (returns null)
+    const concurrentAttempt = await acquireCleanupMutexLease();
+    expect(concurrentAttempt).toBeNull();
+
+    // 3. Worker A successfully renews its active lease
+    const renewedA = await renewCleanupMutexLease(tokenA!);
+    expect(renewedA).toBe(true);
+
+    // 4. Worker A's lease expires in background
+    await testPrisma.$executeRaw`
+      UPDATE "RateLimit"
+      SET "expiresAt" = NOW() - INTERVAL '1 second'
+      WHERE "key" = ${CLEANUP_MUTEX_KEY}
+    `;
+
+    // 5. Worker B acquires the expired lease -> gets incremented token B
+    const tokenB = await acquireCleanupMutexLease();
+    expect(tokenB).not.toBeNull();
+    expect(tokenB!).toBeGreaterThan(tokenA!);
+
+    // 6. Worker A tries to renew or release using stale token A:
+    // It must return false and NOT disturb Worker B's lease
+    const staleRenewA = await renewCleanupMutexLease(tokenA!);
+    expect(staleRenewA).toBe(false);
+
+    const staleReleaseA = await releaseCleanupMutexLease(tokenA!);
+    expect(staleReleaseA).toBe(false);
+
+    // Verify Worker B's lease is untouched
+    const leaseB = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(leaseB).not.toBeNull();
+    expect(leaseB!.count).toBe(tokenB);
+
+    // 7. Worker B finishes and releases its lease
+    const validReleaseB = await releaseCleanupMutexLease(tokenB!);
+    expect(validReleaseB).toBe(true);
+
+    // 8. Crucial check: row is NOT deleted! It is expired in-place to prevent ABA token reset
+    const expiredRowB = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(expiredRowB).not.toBeNull();
+    expect(expiredRowB!.count).toBe(tokenB);
+    expect(expiredRowB!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+
+    // 9. Worker C acquires: receives monotonic token C = tokenB + 1
+    const tokenC = await acquireCleanupMutexLease();
+    expect(tokenC).not.toBeNull();
+    expect(tokenC!).toBe(tokenB! + 1);
+
+    // 10. Worker A tries stale renew/release with token A against Worker C
+    expect(await renewCleanupMutexLease(tokenA!)).toBe(false);
+    expect(await releaseCleanupMutexLease(tokenA!)).toBe(false);
+
+    // Verify Worker C's lease remains valid and active
+    const activeLeaseC = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(activeLeaseC).not.toBeNull();
+    expect(activeLeaseC!.count).toBe(tokenC);
+
+    // Cleanup: Worker C releases
+    expect(await releaseCleanupMutexLease(tokenC!)).toBe(true);
+  });
+
+  it('renewCleanupMutexLease returns false and rejects stale token after lease takeover', async () => {
+    const token1 = await acquireCleanupMutexLease();
+    expect(token1).not.toBeNull();
+
+    // Force lease expiration
+    await testPrisma.$executeRaw`
+      UPDATE "RateLimit"
+      SET "expiresAt" = NOW() - INTERVAL '1 second'
+      WHERE "key" = ${CLEANUP_MUTEX_KEY}
+    `;
+
+    // Second worker takes over
+    const token2 = await acquireCleanupMutexLease();
+    expect(token2).not.toBeNull();
+    expect(token2!).toBeGreaterThan(token1!);
+
+    // First worker tries to renew with stale token -> rejected
+    const renewed = await renewCleanupMutexLease(token1!);
+    expect(renewed).toBe(false);
+
+    // Clean up
+    await releaseCleanupMutexLease(token2!);
+  });
+
+  it('cleanupExpiredRateLimits preserves mutex lease rows to prevent ABA fencing token reset', async () => {
+    // 1. Worker A acquires token 1
+    const token1 = await acquireCleanupMutexLease();
+    expect(token1).not.toBeNull();
+
+    // 2. Worker A releases -> row marked expired (expiresAt in past)
+    const released = await releaseCleanupMutexLease(token1!);
+    expect(released).toBe(true);
+
+    // 3. Seed an ordinary expired rate limit record
+    const standardKey = 'ratelimit:api:user-123';
+    await testPrisma.rateLimit.upsert({
+      where: { key: standardKey },
+      create: {
+        key: standardKey,
+        count: 5,
+        expiresAt: new Date(Date.now() - 60000),
+      },
+      update: {
+        expiresAt: new Date(Date.now() - 60000),
+      },
+    });
+
+    // 4. Run cron rate limit cleanup
+    await cleanupExpiredRateLimits();
+
+    // 5. Standard expired rate limit record MUST be deleted
+    const standardRecord = await testPrisma.rateLimit.findUnique({
+      where: { key: standardKey },
+    });
+    expect(standardRecord).toBeNull();
+
+    // 6. Mutex row MUST still exist!
+    const mutexRow = await testPrisma.rateLimit.findUnique({
+      where: { key: CLEANUP_MUTEX_KEY },
+    });
+    expect(mutexRow).not.toBeNull();
+    expect(mutexRow!.count).toBe(token1);
+
+    // 7. Worker B acquires again -> must receive token 2, NOT reset to 1
+    const token2 = await acquireCleanupMutexLease();
+    expect(token2).not.toBeNull();
+    expect(token2!).toBe(token1! + 1);
+
+    // Clean up
+    await releaseCleanupMutexLease(token2!);
   });
 });

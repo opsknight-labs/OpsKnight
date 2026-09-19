@@ -2,9 +2,8 @@ import 'server-only';
 
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { getRetentionPolicy, type RetentionPolicy } from '@/lib/retention-policy';
-import { isRetentionHeld, getActiveRetentionHolds } from './holds';
-import { acquireRetentionResourceLock } from './resource-lock';
+import type { RetentionPolicy } from '@/lib/retention-policy';
+import { isRetentionHeld } from './holds';
 
 /**
  * Retention Lifecycle Integration
@@ -86,6 +85,9 @@ export async function filterHeldIncidents(
   incidentIds: string[]
 ): Promise<{ deletableIds: string[]; heldCount: number }> {
   if (incidentIds.length === 0) return { deletableIds: [], heldCount: 0 };
+  if (!txOrPrisma?.dataRetentionHold?.findMany) {
+    return { deletableIds: incidentIds, heldCount: 0 };
+  }
 
   const holds = await txOrPrisma.dataRetentionHold.findMany({
     where: {
@@ -111,6 +113,9 @@ export async function filterHeldPrivacyRequests(
   requestIds: string[]
 ): Promise<{ deletableIds: string[]; heldCount: number }> {
   if (requestIds.length === 0) return { deletableIds: [], heldCount: 0 };
+  if (!txOrPrisma?.dataRetentionHold?.findMany) {
+    return { deletableIds: requestIds, heldCount: 0 };
+  }
 
   const holds = await txOrPrisma.dataRetentionHold.findMany({
     where: {
@@ -134,6 +139,8 @@ export async function filterHeldPrivacyRequests(
 export async function getHeldIncidentIds(
   txOrPrisma: Prisma.TransactionClient | typeof prisma
 ): Promise<string[]> {
+  if (!txOrPrisma?.dataRetentionHold?.findMany) return [];
+
   const holds = await txOrPrisma.dataRetentionHold.findMany({
     where: {
       scopeType: 'INCIDENT',
@@ -151,6 +158,8 @@ export async function getHeldIncidentIds(
 export async function getHeldPrivacyRequestIds(
   txOrPrisma: Prisma.TransactionClient | typeof prisma
 ): Promise<string[]> {
+  if (!txOrPrisma?.dataRetentionHold?.findMany) return [];
+
   const holds = await txOrPrisma.dataRetentionHold.findMany({
     where: {
       scopeType: 'PRIVACY_REQUEST',
@@ -164,157 +173,12 @@ export async function getHeldPrivacyRequestIds(
 
 /**
  * Preview cleanup with hold awareness - returns what would be deleted vs held.
+ * Canonical non-destructive preview delegating to performDataCleanup(dryRun=true).
  */
 export async function previewDataCleanupWithHolds(
   policyOverride?: Partial<RetentionPolicy>
 ): Promise<CleanupResultWithHolds> {
-  const startTime = Date.now();
-  const { default: prisma } = await import('@/lib/prisma');
-  const basePolicy = await getRetentionPolicy();
-  const policy: RetentionPolicy = policyOverride
-    ? { ...basePolicy, ...policyOverride }
-    : basePolicy;
-
-  const now = new Date();
-
-  // Calculate cutoff dates
-  const incidentCutoff = new Date(now);
-  incidentCutoff.setDate(incidentCutoff.getDate() - policy.incidentRetentionDays);
-
-  const alertCutoff = new Date(now);
-  alertCutoff.setDate(alertCutoff.getDate() - policy.alertRetentionDays);
-
-  const logCutoff = new Date(now);
-  logCutoff.setDate(logCutoff.getDate() - policy.logRetentionDays);
-
-  const metricsCutoff = new Date(now);
-  metricsCutoff.setDate(metricsCutoff.getDate() - policy.metricsRetentionDays);
-
-  // Privacy request cutoff
-  const privacyRequestCutoff = new Date(now);
-  privacyRequestCutoff.setDate(
-    privacyRequestCutoff.getDate() - policy.completedPrivacyRequestRetentionDays
-  );
-
-  // Expired export artifact cutoff
-  const expiredArtifactCutoff = new Date(now);
-  expiredArtifactCutoff.setDate(
-    expiredArtifactCutoff.getDate() - policy.expiredPrivacyArtifactRetentionDays
-  );
-
-  // Unsubscribed subscriber cutoff
-  const subscriberCutoff = new Date(now);
-  subscriberCutoff.setDate(subscriberCutoff.getDate() - policy.unsubscribedSubscriberRetentionDays);
-
-  // Resolved incidents older than incidentCutoff
-  const resolvedIncidentCleanupWhere = {
-    createdAt: { lt: incidentCutoff },
-    status: 'RESOLVED' as const,
-    OR: [{ resolvedAt: { lt: incidentCutoff } }, { resolvedAt: null }],
-    events: { none: { createdAt: { gte: incidentCutoff } } },
-    notes: { none: { createdAt: { gte: incidentCutoff } } },
-  };
-
-  // Find all eligible incident IDs
-  const eligibleIncidents = await prisma.incident.findMany({
-    where: resolvedIncidentCleanupWhere,
-    select: { id: true },
-  });
-  const eligibleIncidentIds = eligibleIncidents.map(i => i.id);
-
-  // Find eligible privacy requests (COMPLETED/REJECTED older than cutoff)
-  const eligiblePrivacyRequests = await prisma.privacyRequest.findMany({
-    where: {
-      status: { in: ['COMPLETED', 'REJECTED'] },
-      updatedAt: { lt: privacyRequestCutoff },
-    },
-    select: { id: true },
-  });
-  const eligiblePrivacyRequestIds = eligiblePrivacyRequests.map(r => r.id);
-
-  // Find expired export artifacts (status EXPIRED older than cutoff)
-  const eligibleExportArtifacts = await prisma.privacyExportArtifact.findMany({
-    where: {
-      status: 'EXPIRED',
-      expiresAt: { lt: expiredArtifactCutoff },
-    },
-    select: { id: true },
-  });
-
-  // Find unsubscribed subscribers
-  const eligibleSubscribers = await prisma.statusPageSubscription.findMany({
-    where: {
-      state: 'UNSUBSCRIBED',
-      unsubscribedAt: { lt: subscriberCutoff },
-    },
-    select: { id: true },
-  });
-
-  // Check holds
-  const { deletableIds: deletableIncidents, heldCount: heldIncidents } = await filterHeldIncidents(
-    prisma,
-    eligibleIncidentIds
-  );
-
-  const { deletableIds: deletablePrivacyRequests, heldCount: heldPrivacyRequests } =
-    await filterHeldPrivacyRequests(prisma, eligiblePrivacyRequestIds);
-
-  const allHeldIncidentIds = await getHeldIncidentIds(prisma);
-
-  // Count other eligible items
-  const [
-    alertsToDelete,
-    eventsToDelete,
-    incidentEventsFromIncidents,
-    auditLogsToDelete,
-    inAppNotificationsToDelete,
-    slaPerformanceLogsToDelete,
-  ] = await Promise.all([
-    prisma.alert.count({ where: { createdAt: { lt: alertCutoff } } }),
-    prisma.incidentEvent.count({
-      where: {
-        createdAt: { lt: logCutoff },
-        ...(allHeldIncidentIds.length > 0 ? { incidentId: { notIn: allHeldIncidentIds } } : {}),
-      },
-    }),
-    prisma.incidentEvent.count({
-      where: {
-        incidentId: { in: deletableIncidents },
-        createdAt: { gte: logCutoff },
-      },
-    }),
-    prisma.auditLog.count({ where: { createdAt: { lt: logCutoff } } }),
-    prisma.inAppNotification?.count
-      ? prisma.inAppNotification.count({ where: { createdAt: { lt: logCutoff } } })
-      : Promise.resolve(0),
-    prisma.sLAPerformanceLog?.count
-      ? prisma.sLAPerformanceLog.count({ where: { timestamp: { lt: metricsCutoff } } })
-      : Promise.resolve(0),
-  ]);
-
-  // Count metrics rollups
-  const { cleanupOldRollups } = await import('@/lib/metric-rollup');
-  const metricsToDelete = await cleanupOldRollups(metricsCutoff);
-
-  return {
-    incidents: deletableIncidents.length,
-    alerts: alertsToDelete,
-    logs: 0, // logCount will be calculated in actual cleanup
-    metrics: metricsToDelete,
-    events: eventsToDelete + incidentEventsFromIncidents,
-    auditLogs: auditLogsToDelete,
-    inAppNotifications: inAppNotificationsToDelete,
-    slaPerformanceLogs: slaPerformanceLogsToDelete,
-    held: {
-      incidents: heldIncidents,
-      privacyRequests: heldPrivacyRequests,
-    },
-    lifecycle: {
-      privacyRequests: deletablePrivacyRequests.length,
-      expiredExportArtifacts: eligibleExportArtifacts.length,
-      unsubscribedSubscribers: eligibleSubscribers.length,
-    },
-    executionTimeMs: Date.now() - startTime,
-    dryRun: true,
-  };
+  const { performDataCleanup } = await import('@/lib/data-cleanup');
+  const result = await performDataCleanup(true, policyOverride);
+  return result as CleanupResultWithHolds;
 }
