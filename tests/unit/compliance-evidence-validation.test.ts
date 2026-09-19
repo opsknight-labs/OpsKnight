@@ -71,14 +71,23 @@ describe('compliance evidence safety validation', () => {
     expect(() => validateEvidenceDraft(draft)).toThrowError(/forbidden sensitive key/i);
   });
 
-  it('rejects raw credentials in title, description, or resource fields', () => {
+  it('rejects raw credentials in title, description, or resource fields without echoing the secret', () => {
+    const sensitiveToken = 'super-secret-value-xyz1234567890abcdef';
     const draftWithSecretTitle: ComplianceEvidenceDraft = {
       ...validDraft,
-      title: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sensitive',
+      title: `Bearer ${sensitiveToken}`,
     };
-    expect(() => validateEvidenceDraft(draftWithSecretTitle)).toThrowError(
-      /forbidden sensitive credential pattern/i
-    );
+
+    try {
+      validateEvidenceDraft(draftWithSecretTitle);
+      expect.unreachable('Should have thrown');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(EvidenceValidationError);
+      const valErr = err as EvidenceValidationError;
+      expect(valErr.code).toBe('FORBIDDEN_CREDENTIAL_PATTERN');
+      expect(valErr.message).not.toContain(sensitiveToken);
+      expect(valErr.message).toContain('forbidden sensitive credential pattern');
+    }
 
     const draftWithPrivateKey: ComplianceEvidenceDraft = {
       ...validDraft,
@@ -87,6 +96,46 @@ describe('compliance evidence safety validation', () => {
     expect(() => validateEvidenceDraft(draftWithPrivateKey)).toThrowError(
       /forbidden sensitive credential pattern/i
     );
+  });
+
+  it('rejects credential patterns in metadata string values without echoing the secret', () => {
+    const sensitivePayload = 'Bearer super-secret-value-in-metadata-1234567890';
+    const draftWithSecretInMetadata: ComplianceEvidenceDraft = {
+      ...validDraft,
+      metadata: {
+        completedVerifyRunFound: false,
+        activeKeyId: sensitivePayload,
+      },
+    };
+
+    try {
+      validateEvidenceDraft(draftWithSecretInMetadata);
+      expect.unreachable('Should have thrown');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(EvidenceValidationError);
+      const valErr = err as EvidenceValidationError;
+      expect(valErr.code).toBe('FORBIDDEN_CREDENTIAL_PATTERN');
+      expect(valErr.message).not.toContain(sensitivePayload);
+      expect(valErr.message).not.toContain('super-secret-value');
+      expect(valErr.message).toContain('forbidden sensitive credential pattern');
+    }
+  });
+
+  it('fails with EVIDENCE_SCHEMA_MISSING when a runtime evaluator lacks an exact evidence schema', () => {
+    const draftWithUnregisteredCollector: ComplianceEvidenceDraft = {
+      ...validDraft,
+      collectorId: 'unregistered.evaluator',
+    };
+
+    try {
+      validateEvidenceDraft(draftWithUnregisteredCollector);
+      expect.unreachable('Should have thrown');
+    } catch (err: unknown) {
+      expect(err).toBeInstanceOf(EvidenceValidationError);
+      const valErr = err as EvidenceValidationError;
+      expect(valErr.code).toBe('EVIDENCE_SCHEMA_MISSING');
+      expect(valErr.message).toContain('No registered evidence schema for evaluator');
+    }
   });
 
   it('rejects collector provenance mismatch', () => {

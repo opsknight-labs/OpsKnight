@@ -62,8 +62,8 @@ function checkTextForSecrets(field: string, text: string | null | undefined): vo
   for (const pattern of FORBIDDEN_TEXT_PATTERNS) {
     if (pattern.test(text)) {
       throw new EvidenceValidationError(
-        `Evidence ${field} contains forbidden sensitive credential pattern: "${text}"`,
-        'FORBIDDEN_KEY_DETECTED'
+        `Evidence ${field} contains a forbidden sensitive credential pattern`,
+        'FORBIDDEN_CREDENTIAL_PATTERN'
       );
     }
   }
@@ -82,12 +82,7 @@ function scanValue(val: unknown, currentDepth: number): void {
   }
 
   if (typeof val === 'string') {
-    if (val.length > MAX_STRING_LENGTH) {
-      throw new EvidenceValidationError(
-        `Evidence metadata string exceeds maximum allowed length of ${MAX_STRING_LENGTH} characters`,
-        'STRING_TOO_LONG'
-      );
-    }
+    checkTextForSecrets('metadata', val);
     return;
   }
 
@@ -237,14 +232,18 @@ export function validateEvidenceDraft(
     }
   } else {
     const collectorSchema = COLLECTOR_EVIDENCE_SCHEMAS[draft.collectorId];
-    if (collectorSchema) {
-      const parseResult = collectorSchema.safeParse(draft.metadata);
-      if (!parseResult.success) {
-        throw new EvidenceValidationError(
-          `Evidence metadata violates collector "${draft.collectorId}" schema: ${parseResult.error.message}`,
-          'SCHEMA_VALIDATION_FAILED'
-        );
-      }
+    if (!collectorSchema) {
+      throw new EvidenceValidationError(
+        'No registered evidence schema for evaluator',
+        'EVIDENCE_SCHEMA_MISSING'
+      );
+    }
+    const parseResult = collectorSchema.safeParse(draft.metadata);
+    if (!parseResult.success) {
+      throw new EvidenceValidationError(
+        `Evidence metadata violates collector "${draft.collectorId}" schema: ${parseResult.error.message}`,
+        'SCHEMA_VALIDATION_FAILED'
+      );
     }
   }
 }

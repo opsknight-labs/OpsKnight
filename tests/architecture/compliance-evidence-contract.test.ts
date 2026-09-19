@@ -3,26 +3,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { COMPLIANCE_EVIDENCE_TYPES } from '@/lib/compliance/evidence/types';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
+import { COLLECTOR_EVIDENCE_SCHEMAS } from '@/lib/compliance/evidence/schemas';
 
 describe('compliance evidence architecture contract', () => {
   it('guarantees compliance evidence records are strictly append-only (no update or delete in application code)', () => {
-    const srcDir = path.resolve(process.cwd(), 'src');
+    const rootSrcDirectory = path.resolve(process.cwd(), 'src');
 
-    function scanFiles(dir: string): string[] {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      const files: string[] = [];
-      for (const entry of entries) {
-        const fullPath = path.join(dir, entry.name);
+    function walkDirectory(targetDir: string): string[] {
+      const dirEntries = fs.readdirSync(targetDir, { withFileTypes: true });
+      const accumulatedFiles: string[] = [];
+      for (const entry of dirEntries) {
+        const resolvedPath = path.join(targetDir, entry.name);
         if (entry.isDirectory()) {
-          files.push(...scanFiles(fullPath));
+          accumulatedFiles.push(...walkDirectory(resolvedPath));
         } else if (/\.(ts|tsx)$/.test(entry.name)) {
-          files.push(fullPath);
+          accumulatedFiles.push(resolvedPath);
         }
       }
-      return files;
+      return accumulatedFiles;
     }
 
-    const allTsFiles = scanFiles(srcDir);
+    const allTsFiles = walkDirectory(rootSrcDirectory);
     const forbiddenPatterns = [
       /\.complianceEvidence\.update\(/,
       /\.complianceEvidence\.updateMany\(/,
@@ -30,12 +31,12 @@ describe('compliance evidence architecture contract', () => {
       /\.complianceEvidence\.deleteMany\(/,
     ];
 
-    for (const file of allTsFiles) {
-      const content = fs.readFileSync(file, 'utf8');
+    for (const filePath of allTsFiles) {
+      const fileSource = fs.readFileSync(filePath, 'utf8');
       for (const pattern of forbiddenPatterns) {
         expect(
-          pattern.test(content),
-          `File ${file} violates evidence immutability contract by matching ${pattern}`
+          pattern.test(fileSource),
+          `File ${filePath} violates evidence immutability contract by matching ${pattern}`
         ).toBe(false);
       }
     }
@@ -79,5 +80,18 @@ describe('compliance evidence architecture contract', () => {
 
     expect(COMPLIANCE_EVIDENCE_TYPES).toEqual(expect.arrayContaining(expectedTypes));
     expect(COMPLIANCE_EVIDENCE_TYPES).toHaveLength(expectedTypes.length);
+  });
+
+  it('guarantees every registered compliance evaluator has a registered evidence schema', () => {
+    const evaluatorIds = Object.keys(complianceEvaluatorRegistry);
+    expect(evaluatorIds.length).toBeGreaterThanOrEqual(6);
+
+    const schemaKeys = new Set(Object.keys(COLLECTOR_EVIDENCE_SCHEMAS));
+    for (const id of evaluatorIds) {
+      expect(
+        schemaKeys.has(id),
+        `Evaluator "${id}" is registered in complianceEvaluatorRegistry but missing in COLLECTOR_EVIDENCE_SCHEMAS`
+      ).toBe(true);
+    }
   });
 });
