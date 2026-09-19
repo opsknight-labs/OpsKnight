@@ -113,7 +113,24 @@ export function isStatusStaticAsset(pathname: string): boolean {
   ) {
     return true;
   }
-  if (/^\/logo(-[a-z0-9_-]+)?\.(svg|png|webp|gif|jpe?g|ico)$/i.test(pathname)) {
+  // Explicit allowlist instead of regex to avoid nested quantifiers (ESLint unsafe-regex).
+  const LOGO_ASSETS = new Set([
+    '/logo.svg',
+    '/logo.png',
+    '/logo.webp',
+    '/logo.gif',
+    '/logo.jpg',
+    '/logo.jpeg',
+    '/logo.ico',
+    '/logo-mark.svg',
+    '/logo-mark.png',
+    '/logo-mark.webp',
+    '/logo-mark.gif',
+    '/logo-mark.jpg',
+    '/logo-mark.jpeg',
+    '/logo-mark.ico',
+  ]);
+  if (LOGO_ASSETS.has(pathname.toLowerCase())) {
     return true;
   }
   if (
