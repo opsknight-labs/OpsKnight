@@ -86,6 +86,51 @@ export function getEncryptionKeyringEntries(): Array<{ id: string; key: string }
 }
 
 /**
+ * Returns full keyring for migration and inspection purposes:
+ * includes all environment keys, plus the database legacy fallback key
+ * (id: 'database_legacy') if SystemSettings.encryptionKey is set.
+ * The DB key is strictly an inspect/read key and will never be active.
+ */
+export async function getMigrationKeyring(
+  dbClient?: unknown
+): Promise<Array<{ id: string; key: string; source: 'env' | 'database_legacy' }>> {
+  const envEntries: Array<{ id: string; key: string; source: 'env' | 'database_legacy' }> =
+    getEncryptionKeyring().map(e => ({
+      id: e.id,
+      key: e.key,
+      source: 'env' as const,
+    }));
+
+  try {
+    let client = dbClient;
+    if (!client) {
+      const prismaModule = await import('./prisma');
+      client = prismaModule.default;
+    }
+    const prisma = client as {
+      systemSettings: {
+        findUnique: (args: unknown) => Promise<{ encryptionKey: string | null } | null>;
+      };
+    };
+    const settings = await prisma.systemSettings.findUnique({
+      where: { id: 'default' },
+      select: { encryptionKey: true },
+    });
+    if (settings?.encryptionKey && isValidHexKey(settings.encryptionKey)) {
+      envEntries.push({
+        id: 'database_legacy',
+        key: settings.encryptionKey,
+        source: 'database_legacy' as const,
+      });
+    }
+  } catch {
+    // Ignore DB errors
+  }
+
+  return envEntries;
+}
+
+/**
  * Returns sanitized metadata about configured encryption keys without exposing key material.
  */
 export async function getEncryptionKeyringMetadata(): Promise<{

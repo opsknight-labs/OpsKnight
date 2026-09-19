@@ -74,7 +74,7 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     model: 'MicrosoftTeamsConfig',
     field: 'clientSecret',
     storageType: 'SCALAR',
-    plaintextLegacyAllowed: false,
+    plaintextLegacyAllowed: true,
     label: 'Microsoft Teams Client Secret',
     description: 'Microsoft Entra client secret for Teams Bot Framework integration',
   },
@@ -83,7 +83,7 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     model: 'Integration',
     field: 'signatureSecret',
     storageType: 'SCALAR',
-    plaintextLegacyAllowed: false,
+    plaintextLegacyAllowed: true,
     label: 'Integration Signature Secret',
     description: 'Shared secret for authenticating inbound webhook integrations',
   },
@@ -111,16 +111,21 @@ export const ENCRYPTION_TARGETS: EncryptionTargetDefinition[] = [
     field: 'config',
     storageType: 'JSON_FIELD',
     jsonKeys: [
+      'accountSid',
       'authToken',
+      'whatsappAccountSid',
       'whatsappAuthToken',
+      'accessKeyId',
       'secretAccessKey',
       'vapidPrivateKey',
       'apiKey',
       'password',
     ],
+    nestedArrayPaths: [{ arrayField: 'vapidKeyHistory', itemField: 'privateKey' }],
     plaintextLegacyAllowed: true,
     label: 'Notification Provider Credentials',
-    description: 'Encrypted sensitive credentials in provider JSON configuration',
+    description:
+      'Encrypted sensitive credentials in provider JSON configuration (including nested VAPID keys)',
   },
   {
     id: 'notification.payload-encrypted',
@@ -188,6 +193,9 @@ export function computeRegistryFingerprint(
       plaintextLegacyAllowed: t.plaintextLegacyAllowed,
       filter: t.filter ?? null,
       jsonKeys: t.jsonKeys ? [...t.jsonKeys].sort() : null,
+      nestedArrayPaths: t.nestedArrayPaths
+        ? [...t.nestedArrayPaths].sort((a, b) => a.arrayField.localeCompare(b.arrayField))
+        : null,
     }));
 
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');

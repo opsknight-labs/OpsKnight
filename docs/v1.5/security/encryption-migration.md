@@ -62,7 +62,7 @@ OpsKnight actively tracks and protects 17 distinct targets across database model
 - **Jira**: `JiraConfig.apiTokenEncrypted`, `JiraConfig.webhookSecretEncrypted`
 - **Microsoft Teams**: `MicrosoftTeamsConfig.clientSecret`
 - **Inbound Integrations & Webhooks**: `Integration.signatureSecret`, `WebhookIntegration.secret`, `StatusPageWebhook.secret`
-- **Notification Infrastructure**: `NotificationProvider.config` (sensitive keys), `Notification.payloadEncrypted`, `NotificationContent.encryptedTemplate`
+- **Notification Infrastructure**: `NotificationProvider.config` (all provider secrets including `accountSid`, `authToken`, `whatsappAccountSid`, `whatsappAuthToken`, `accessKeyId`, `secretAccessKey`, `vapidPrivateKey`, `apiKey`, `password`, as well as nested `vapidKeyHistory[].privateKey`), `Notification.payloadEncrypted`, `NotificationContent.encryptedTemplate`
 - **ChatOps & Privacy**: `ChatOpsIntent.encryptedPayload`, `PrivacyExportArtifact.encryptedPayload`
 - **User Devices**: `UserDevice.token` (Web Push subscription tokens)
 
@@ -71,7 +71,17 @@ OpsKnight actively tracks and protects 17 distinct targets across database model
 During automated batch migration, another administrator or integration might update a credential concurrently. To prevent overwriting fresher credentials:
 
 - **Scalar fields**: Updated with `WHERE id = :id AND field = :originalValue`. If the update affects 0 rows, it is recorded as a conflict (`conflictRecords++`) and left untouched for subsequent inspection.
-- **Provider JSON configs**: Verified in a transactional read-and-compare check before updating only the targeted secret slots.
+- **Provider JSON configs**: Uses optimistic CAS with `updatedAt` versioning: `WHERE id = :id AND updatedAt = :versionRead`. If the record was modified in the interim, the update affects 0 rows and is recorded as a conflict without mutating the newer configuration.
+
+## Key Retirement Readiness Certification Criteria
+
+Before OpsKnight authoritatively certifies a key as `DATABASE_READY_FOR_RETIREMENT`:
+
+1. A fresh `VERIFY` run must have completed with a matching schema registry fingerprint.
+2. All 17 registered encryption targets must have completed scanning (`status: 'COMPLETED'`).
+3. The verification run must have detected 0 error records (`unreadable`, `ambiguous`, `unavailableKey`) and 0 unresolved conflicts.
+4. The candidate key must have 0 detected references in the database.
+5. If legacy database fallback key (`SystemSettings.encryptionKey`) is configured, it is evaluated identically under key ID `database_legacy`.
 
 ## Permissions & Compliance Audits
 

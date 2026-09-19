@@ -22,6 +22,7 @@ export interface EncryptionTargetDefinition {
   field: string;
   storageType: EncryptionStorageType;
   jsonKeys?: string[];
+  nestedArrayPaths?: Array<{ arrayField: string; itemField: string }>;
   plaintextLegacyAllowed: boolean;
   label: string;
   description: string;
@@ -47,7 +48,12 @@ export interface KeyringMetadata {
 
 export interface KeyRetirementAssessment {
   keyId: string;
-  status: 'DATABASE_READY_FOR_RETIREMENT' | 'ACTIVE_KEY' | 'ACTIVE_REFERENCES_EXIST' | 'UNVERIFIED';
+  status:
+    | 'DATABASE_READY_FOR_RETIREMENT'
+    | 'ACTIVE_KEY'
+    | 'ACTIVE_REFERENCES_EXIST'
+    | 'UNVERIFIED'
+    | 'UNRESOLVED_RECORDS_EXIST';
   remainingReferences: number;
   targetsWithReferences: string[];
   message: string;
@@ -62,6 +68,8 @@ export interface KeyRetirementReport {
   activeKeyId: string | null;
   assessments: KeyRetirementAssessment[];
   allEligibleRetiredFromDatabase: boolean;
+  unresolvedRecordsCount?: number;
+  legacyRecordsCount?: number;
 }
 
 export interface TargetInspectionStats {

@@ -17,7 +17,6 @@ const listQuerySchema = z.object({
 
 const startRunSchema = z.object({
   mode: z.enum(['PREVIEW', 'MIGRATE', 'VERIFY']),
-  runSynchronously: z.boolean().optional().default(false),
 });
 
 export async function GET(request: NextRequest) {
@@ -101,7 +100,7 @@ export async function POST(request: NextRequest) {
     const run = await startEncryptionRun(prisma, {
       mode: parsed.data.mode,
       initiatedById: user.id,
-      runSynchronously: parsed.data.runSynchronously,
+      runSynchronously: false,
     });
 
     await emitAuditEvent({

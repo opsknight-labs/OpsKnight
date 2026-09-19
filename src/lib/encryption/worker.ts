@@ -22,19 +22,6 @@ export async function startEncryptionRun(
 ): Promise<EncryptionMigrationRun> {
   const { mode, initiatedById, runSynchronously = false } = options;
 
-  // 1. Check for any active RUNNING run
-  const activeRun = await prisma.encryptionMigrationRun.findFirst({
-    where: {
-      status: { in: ['PENDING', 'RUNNING'] },
-    },
-  });
-
-  if (activeRun) {
-    throw new Error(
-      `An encryption migration run (${activeRun.id}, mode: ${activeRun.mode}) is currently in progress. Only one run can execute at a time.`
-    );
-  }
-
   const keyring = getEncryptionKeyringEntries();
   const activeKey = keyring[0];
 
@@ -44,18 +31,35 @@ export async function startEncryptionRun(
 
   const fingerprint = computeRegistryFingerprint(ENCRYPTION_TARGETS);
 
-  const run = await prisma.encryptionMigrationRun.create({
-    data: {
-      mode,
-      status: 'PENDING',
-      registryFingerprint: fingerprint,
-      activeKeyId: activeKey?.id ?? null,
-      initiatedById: initiatedById ?? null,
-    },
+  // Atomically serialize run creation using a transaction-level advisory lock
+  const run = await prisma.$transaction(async tx => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended('encryption-run-creation', 0))`;
+
+    const activeRun = await tx.encryptionMigrationRun.findFirst({
+      where: {
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+    });
+
+    if (activeRun) {
+      throw new Error(
+        `An encryption migration run (${activeRun.id}, mode: ${activeRun.mode}) is currently in progress. Only one run can execute at a time.`
+      );
+    }
+
+    return await tx.encryptionMigrationRun.create({
+      data: {
+        mode,
+        status: 'PENDING',
+        registryFingerprint: fingerprint,
+        activeKeyId: activeKey?.id ?? null,
+        initiatedById: initiatedById ?? null,
+      },
+    });
   });
 
   if (runSynchronously) {
-    // Execute directly in-process
+    // Execute directly in-process (e.g. for testing)
     await executeMigrationRun({ runId: run.id, prisma });
     return await prisma.encryptionMigrationRun.findUniqueOrThrow({
       where: { id: run.id },
@@ -63,20 +67,26 @@ export async function startEncryptionRun(
     });
   }
 
-  // Schedule durable background job
+  // Schedule durable background job (fail closed without ephemeral in-memory fallback)
   try {
     await scheduleJob('ENCRYPTION_LIFECYCLE', new Date(), { runId: run.id });
   } catch (scheduleError) {
-    logger.error(
-      '[Encryption Lifecycle] Failed to enqueue background job, falling back to async execution',
-      { scheduleError }
+    logger.error('[Encryption Lifecycle] Failed to enqueue background job', { scheduleError });
+    await prisma.encryptionMigrationRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'FAILED',
+        errorMessage: `Failed to enqueue background job: ${
+          scheduleError instanceof Error ? scheduleError.message : String(scheduleError)
+        }`,
+        completedAt: new Date(),
+      },
+    });
+    throw new Error(
+      `Failed to enqueue encryption lifecycle job: ${
+        scheduleError instanceof Error ? scheduleError.message : String(scheduleError)
+      }`
     );
-    // In environments where background queue worker is disabled, trigger asynchronously
-    setTimeout(() => {
-      executeMigrationRun({ runId: run.id, prisma }).catch(err => {
-        logger.error('[Encryption Lifecycle] Async execution failed', { err });
-      });
-    }, 10);
   }
 
   return run;

@@ -5,20 +5,22 @@
 
 import { Prisma, PrismaClient } from '@prisma/client';
 import { logger } from '../logger';
-import { decryptWithKey, encryptWithKey, getEncryptionKeyringEntries } from '../encryption';
+import { decryptWithKey, encryptWithKey, getMigrationKeyring } from '../encryption';
 import { ENCRYPTION_TARGETS, computeRegistryFingerprint } from './registry';
 import { EncryptionTargetDefinition, MigrationMode } from './types';
 import { getModelDelegate, scanTargetBatch, countTargetTotal } from './inventory';
 import { inspectValue } from './inspect';
+import { emitAuditEvent } from '../audit';
 
 export interface ExecuteRunOptions {
   runId: string;
   prisma: PrismaClient;
   onProgress?: (summary: { processed: number; total: number }) => Promise<void>;
+  _beforeCasUpdate?: (targetId: string, recordId: string) => Promise<void>;
 }
 
 export async function executeMigrationRun(options: ExecuteRunOptions): Promise<void> {
-  const { runId, prisma } = options;
+  const { runId, prisma, _beforeCasUpdate } = options;
 
   const run = await prisma.encryptionMigrationRun.findUnique({
     where: { id: runId },
@@ -33,10 +35,10 @@ export async function executeMigrationRun(options: ExecuteRunOptions): Promise<v
     return;
   }
 
-  const keyring = getEncryptionKeyringEntries();
-  const activeKey = keyring[0];
+  const keyring = await getMigrationKeyring(prisma);
+  const activeKey = keyring.find(k => k.source === 'env') ?? keyring[0];
 
-  if (run.mode === 'MIGRATE' && !activeKey) {
+  if (run.mode === 'MIGRATE' && (!activeKey || activeKey.source !== 'env')) {
     await prisma.encryptionMigrationRun.update({
       where: { id: runId },
       data: {
@@ -109,6 +111,7 @@ export async function executeMigrationRun(options: ExecuteRunOptions): Promise<v
         targetState: targetState!,
         keyring,
         activeKey: activeKey ?? null,
+        _beforeCasUpdate,
       });
     }
 
@@ -138,6 +141,23 @@ export async function executeMigrationRun(options: ExecuteRunOptions): Promise<v
       },
     });
 
+    await emitAuditEvent({
+      action:
+        run.mode === 'VERIFY'
+          ? 'ENCRYPTION_VERIFICATION_COMPLETED'
+          : 'ENCRYPTION_MIGRATION_COMPLETED',
+      source: 'BACKGROUND',
+      target: { type: 'ENCRYPTION_MIGRATION', id: runId },
+      metadata: {
+        mode: run.mode,
+        totalRecords,
+        processedRecords,
+        migratedRecords,
+        errorRecords,
+        conflictRecords,
+      },
+    });
+
     logger.info(`[Encryption Migration] Run ${runId} (${run.mode}) completed successfully.`, {
       totalRecords,
       migratedRecords,
@@ -153,6 +173,15 @@ export async function executeMigrationRun(options: ExecuteRunOptions): Promise<v
         status: 'FAILED',
         errorMessage: errorMsg,
         completedAt: new Date(),
+      },
+    });
+    await emitAuditEvent({
+      action: 'ENCRYPTION_MIGRATION_FAILED',
+      source: 'BACKGROUND',
+      target: { type: 'ENCRYPTION_MIGRATION', id: runId },
+      metadata: {
+        mode: run.mode,
+        error: errorMsg,
       },
     });
     throw error;
@@ -175,6 +204,7 @@ interface TargetLifecycleContext {
   };
   keyring: Array<{ id: string; key: string }>;
   activeKey: { id: string; key: string } | null;
+  _beforeCasUpdate?: (targetId: string, recordId: string) => Promise<void>;
 }
 
 async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void> {
@@ -228,8 +258,7 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
     if (mode === 'PREVIEW' || mode === 'VERIFY') {
       // Non-destructive read-only classification
       processedCount += batch.recordsScanned;
-      migratedCount +=
-        batch.stats.oldKeyV3 + batch.stats.legacyV2 + batch.stats.legacyV1 + batch.stats.plaintext;
+      // In PREVIEW and VERIFY, migratedCount remains 0 because nothing is modified
       errorCount += batch.stats.unavailableKey + batch.stats.ambiguous + batch.stats.unreadable;
 
       // Log issues for unreadable / unavailable keys during verify or preview
@@ -323,6 +352,11 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
             // Encrypt with active key
             const newCiphertext = await encryptWithKey(plaintext, activeKey!.key, activeKey!.id);
 
+            // Optional test hook for concurrent race testing
+            if (ctx._beforeCasUpdate) {
+              await ctx._beforeCasUpdate(target.id, recordId);
+            }
+
             // CAS update
             const delegate = getModelDelegate(prisma, target.model);
             const whereClause: Record<string, unknown> = {
@@ -371,6 +405,13 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
           const jsonKeys = target.jsonKeys || [];
           let needsUpdate = false;
           const slotsToMigrate: Array<{ key: string; originalVal: string; plaintext: string }> = [];
+          const nestedSlotsToMigrate: Array<{
+            arrayField: string;
+            index: number;
+            itemField: string;
+            originalVal: string;
+            plaintext: string;
+          }> = [];
 
           for (const key of jsonKeys) {
             if (Object.prototype.hasOwnProperty.call(rawConfig, key)) {
@@ -435,25 +476,139 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
             }
           }
 
-          if (needsUpdate && slotsToMigrate.length > 0) {
+          // Check nested array paths like vapidKeyHistory[].privateKey
+          if (target.nestedArrayPaths) {
+            for (const nested of target.nestedArrayPaths) {
+              if (Object.prototype.hasOwnProperty.call(rawConfig, nested.arrayField)) {
+                const arr = Reflect.get(rawConfig, nested.arrayField);
+                if (Array.isArray(arr)) {
+                  for (const [i, item] of (arr as unknown[]).entries()) {
+                    if (
+                      item &&
+                      typeof item === 'object' &&
+                      Object.prototype.hasOwnProperty.call(item, nested.itemField)
+                    ) {
+                      const itemVal = Reflect.get(
+                        item as Record<string, unknown>,
+                        nested.itemField
+                      );
+                      if (itemVal !== undefined && itemVal !== null && itemVal !== '') {
+                        const strVal = String(itemVal);
+                        const isEncPrefixed = strVal.startsWith('enc:');
+                        const toInspect = isEncPrefixed ? strVal.slice(4) : strVal;
+
+                        const insp = await inspectValue(
+                          toInspect,
+                          target.plaintextLegacyAllowed,
+                          keyring,
+                          activeKey?.id ?? null
+                        );
+                        if (
+                          insp.classification === 'CURRENT_V3' ||
+                          insp.classification === 'EMPTY'
+                        ) {
+                          continue;
+                        }
+                        if (
+                          insp.classification === 'UNAVAILABLE_KEY' ||
+                          insp.classification === 'AMBIGUOUS' ||
+                          insp.classification === 'UNREADABLE'
+                        ) {
+                          errorCount++;
+                          await recordIssue(
+                            prisma,
+                            runId,
+                            target.id,
+                            recordId,
+                            `${target.field}.${nested.arrayField}[${i}].${nested.itemField}`,
+                            insp.classification,
+                            insp.details
+                          );
+                          continue;
+                        }
+
+                        try {
+                          let plaintext: string;
+                          if (insp.classification === 'PLAINTEXT') {
+                            plaintext = toInspect;
+                          } else {
+                            const keyEntry = keyring.find(k => k.id === insp.detectedKeyId);
+                            if (!keyEntry) throw new Error(`Key ${insp.detectedKeyId} not found`);
+                            plaintext = await decryptWithKey(toInspect, keyEntry.key);
+                          }
+                          nestedSlotsToMigrate.push({
+                            arrayField: nested.arrayField,
+                            index: i,
+                            itemField: nested.itemField,
+                            originalVal: strVal,
+                            plaintext,
+                          });
+                          needsUpdate = true;
+                        } catch (err: unknown) {
+                          errorCount++;
+                          const msg =
+                            err instanceof Error
+                              ? err.message
+                              : 'Nested JSON slot migration failed';
+                          await recordIssue(
+                            prisma,
+                            runId,
+                            target.id,
+                            recordId,
+                            `${target.field}.${nested.arrayField}[${i}].${nested.itemField}`,
+                            'MIGRATION_ERROR',
+                            msg
+                          );
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          if (needsUpdate && (slotsToMigrate.length > 0 || nestedSlotsToMigrate.length > 0)) {
             try {
-              // Optimistic CAS inside a transaction
+              if (ctx._beforeCasUpdate) {
+                await ctx._beforeCasUpdate(target.id, recordId);
+              }
+
+              // Optimistic CAS inside a transaction using updatedAt versioning
               const outcome = await prisma.$transaction(async tx => {
                 const current = await tx.notificationProvider.findUnique({
                   where: { id: recordId },
-                  select: { id: true, config: true },
+                  select: { id: true, config: true, updatedAt: true },
                 });
                 if (!current || !current.config || typeof current.config !== 'object') {
                   return 'CONFLICT';
                 }
-                const currentCfg = { ...(current.config as Record<string, unknown>) };
+                const versionRead = current.updatedAt;
+                const currentCfg = JSON.parse(JSON.stringify(current.config)) as Record<
+                  string,
+                  unknown
+                >;
 
+                // Validate root slots
                 for (const slot of slotsToMigrate) {
                   if (String(currentCfg[slot.key]) !== slot.originalVal) {
                     return 'CONFLICT';
                   }
                 }
 
+                // Validate nested slots
+                for (const nSlot of nestedSlotsToMigrate) {
+                  const arr = currentCfg[nSlot.arrayField];
+                  if (!Array.isArray(arr) || !arr[nSlot.index]) {
+                    return 'CONFLICT';
+                  }
+                  const item = arr[nSlot.index] as Record<string, unknown>;
+                  if (String(item[nSlot.itemField]) !== nSlot.originalVal) {
+                    return 'CONFLICT';
+                  }
+                }
+
+                // Re-encrypt root slots
                 for (const slot of slotsToMigrate) {
                   const newCipher = await encryptWithKey(
                     slot.plaintext,
@@ -463,17 +618,35 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
                   currentCfg[slot.key] = 'enc:' + newCipher;
                 }
 
-                await tx.notificationProvider.update({
-                  where: { id: recordId },
+                // Re-encrypt nested slots
+                for (const nSlot of nestedSlotsToMigrate) {
+                  const arr = currentCfg[nSlot.arrayField] as Array<Record<string, unknown>>;
+                  const newCipher = await encryptWithKey(
+                    nSlot.plaintext,
+                    activeKey!.key,
+                    activeKey!.id
+                  );
+                  arr[nSlot.index][nSlot.itemField] = 'enc:' + newCipher;
+                }
+
+                const updateRes = await tx.notificationProvider.updateMany({
+                  where: {
+                    id: recordId,
+                    updatedAt: versionRead,
+                  },
                   data: { config: currentCfg as Prisma.InputJsonObject },
                 });
+
+                if (updateRes.count === 0) {
+                  return 'CONFLICT';
+                }
                 return 'SUCCESS';
               });
 
               if (outcome === 'CONFLICT') {
                 conflictCount++;
               } else {
-                migratedCount += slotsToMigrate.length;
+                migratedCount += slotsToMigrate.length + nestedSlotsToMigrate.length;
               }
             } catch (err: unknown) {
               errorCount++;
@@ -498,7 +671,7 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
 
     const keysDetectedObj = Object.fromEntries(keysDetectedMap.entries());
 
-    // Save checkpoint
+    // Save checkpoint for this target
     await prisma.encryptionMigrationTargetState.update({
       where: { id: ctx.targetState.id },
       data: {
@@ -511,14 +684,28 @@ async function executeTargetLifecycle(ctx: TargetLifecycleContext): Promise<void
       },
     });
 
-    // Update parent run progress
+    // Update parent run progress by aggregating across ALL target states
+    const allStates = await prisma.encryptionMigrationTargetState.findMany({
+      where: { runId },
+      select: {
+        processedCount: true,
+        migratedCount: true,
+        errorCount: true,
+        conflictCount: true,
+      },
+    });
+    const totalProcessed = allStates.reduce((acc, s) => acc + s.processedCount, 0);
+    const totalMigrated = allStates.reduce((acc, s) => acc + s.migratedCount, 0);
+    const totalErrors = allStates.reduce((acc, s) => acc + s.errorCount, 0);
+    const totalConflicts = allStates.reduce((acc, s) => acc + s.conflictCount, 0);
+
     await prisma.encryptionMigrationRun.update({
       where: { id: runId },
       data: {
-        processedRecords: processedCount,
-        migratedRecords: migratedCount,
-        errorRecords: errorCount,
-        conflictRecords: conflictCount,
+        processedRecords: totalProcessed,
+        migratedRecords: totalMigrated,
+        errorRecords: totalErrors,
+        conflictRecords: totalConflicts,
       },
     });
   }

@@ -125,4 +125,51 @@ describe('Encryption Inspector Unit Tests', () => {
     const passwordResult = results[1];
     expect(passwordResult.classification).toBe('PLAINTEXT');
   });
+
+  it('classifies corrupted/tampered v3 ciphertext as UNREADABLE (cryptographic authentication)', async () => {
+    const validCiphertext = await encryptWithKey('sensitive-payload', key1, 'k1');
+    const parts = validCiphertext.split(':');
+    // Corrupt the payload ciphertext
+    parts[6] = 'ff' + parts[6].slice(2);
+    const tampered = parts.join(':');
+
+    const result = await inspectValue(tampered, false, keyring, activeKeyId);
+    expect(result.classification).toBe('UNREADABLE');
+    expect(result.details).toContain('cryptographic authentication');
+  });
+
+  it('inspects nested array paths such as vapidKeyHistory[].privateKey in JSON_FIELD', async () => {
+    const v3Cipher = await encryptWithKey('vapid-private-key-data', key2, 'k2');
+
+    const target: EncryptionTargetDefinition = {
+      id: 'notification-provider.config',
+      model: 'NotificationProvider',
+      field: 'config',
+      storageType: 'JSON_FIELD',
+      jsonKeys: ['vapidPrivateKey'],
+      nestedArrayPaths: [{ arrayField: 'vapidKeyHistory', itemField: 'privateKey' }],
+      plaintextLegacyAllowed: true,
+      label: 'Provider Config',
+      description: 'Test',
+    };
+
+    const record = {
+      id: 'np-webpush',
+      config: {
+        vapidPrivateKey: `enc:${v3Cipher}`,
+        vapidKeyHistory: [
+          { keyId: 'prev-1', privateKey: `enc:${v3Cipher}` },
+          { keyId: 'prev-2', privateKey: 'plaintext-unencrypted-key' },
+        ],
+      },
+    };
+
+    const results = await inspectTargetRecord(record, target, keyring, activeKeyId);
+    expect(results).toHaveLength(3); // 1 root + 2 nested
+    expect(results[0].classification).toBe('OLD_KEY_V3');
+    expect(results[0].detectedKeyId).toBe('k2');
+    expect(results[1].classification).toBe('OLD_KEY_V3');
+    expect(results[1].detectedKeyId).toBe('k2');
+    expect(results[2].classification).toBe('PLAINTEXT');
+  });
 });

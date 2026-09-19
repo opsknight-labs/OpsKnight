@@ -46,6 +46,13 @@ describe('Encryption Retirement Calculator Unit Tests', () => {
       hasLegacyDbKey: false,
     });
 
+    const targetStates = registryModule.ENCRYPTION_TARGETS.map((t, idx) => ({
+      id: `ts-${idx}`,
+      targetId: t.id,
+      status: 'COMPLETED',
+      keysDetected: { k2: 5 }, // No k1 references
+    }));
+
     const mockPrisma = {
       encryptionMigrationRun: {
         findFirst: vi.fn().mockResolvedValue({
@@ -53,19 +60,10 @@ describe('Encryption Retirement Calculator Unit Tests', () => {
           mode: 'VERIFY',
           status: 'COMPLETED',
           registryFingerprint: fingerprint,
+          errorRecords: 0,
+          conflictRecords: 0,
           completedAt: new Date(),
-          targetStates: [
-            {
-              id: 'ts-1',
-              targetId: 'oidc.client-secret',
-              keysDetected: { k2: 5 }, // No k1
-            },
-            {
-              id: 'ts-2',
-              targetId: 'slack.bot-token',
-              keysDetected: { k2: 2 }, // No k1
-            },
-          ],
+          targetStates,
         }),
       },
     } as unknown as DbClient;
@@ -91,6 +89,13 @@ describe('Encryption Retirement Calculator Unit Tests', () => {
       hasLegacyDbKey: false,
     });
 
+    const targetStates = registryModule.ENCRYPTION_TARGETS.map((t, idx) => ({
+      id: `ts-${idx}`,
+      targetId: t.id,
+      status: 'COMPLETED',
+      keysDetected: t.id === 'oidc.client-secret' ? { k1: 3, k2: 2 } : { k2: 5 },
+    }));
+
     const mockPrisma = {
       encryptionMigrationRun: {
         findFirst: vi.fn().mockResolvedValue({
@@ -98,14 +103,10 @@ describe('Encryption Retirement Calculator Unit Tests', () => {
           mode: 'VERIFY',
           status: 'COMPLETED',
           registryFingerprint: fingerprint,
+          errorRecords: 0,
+          conflictRecords: 0,
           completedAt: new Date(),
-          targetStates: [
-            {
-              id: 'ts-1',
-              targetId: 'oidc.client-secret',
-              keysDetected: { k1: 3, k2: 2 },
-            },
-          ],
+          targetStates,
         }),
       },
     } as unknown as DbClient;
@@ -117,5 +118,90 @@ describe('Encryption Retirement Calculator Unit Tests', () => {
     expect(k1Assessment?.remainingReferences).toBe(3);
     expect(k1Assessment?.targetsWithReferences).toContain('oidc.client-secret');
     expect(report.allEligibleRetiredFromDatabase).toBe(false);
+  });
+
+  it('fails closed with UNRESOLVED_RECORDS_EXIST when errors exist in verified run', async () => {
+    const fingerprint = registryModule.computeRegistryFingerprint();
+
+    vi.spyOn(encryptionModule, 'getEncryptionKeyringMetadata').mockResolvedValueOnce({
+      activeKeyId: 'k2',
+      keys: [
+        { id: 'k2', source: 'env', isActive: true },
+        { id: 'k1', source: 'env', isActive: false },
+      ],
+      totalKeys: 2,
+      hasLegacyDbKey: false,
+    });
+
+    const targetStates = registryModule.ENCRYPTION_TARGETS.map((t, idx) => ({
+      id: `ts-${idx}`,
+      targetId: t.id,
+      status: 'COMPLETED',
+      keysDetected: { k2: 5 },
+    }));
+
+    const mockPrisma = {
+      encryptionMigrationRun: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'run-verify-1',
+          mode: 'VERIFY',
+          status: 'COMPLETED',
+          registryFingerprint: fingerprint,
+          errorRecords: 2, // 2 unreadable records!
+          conflictRecords: 0,
+          completedAt: new Date(),
+          targetStates,
+        }),
+      },
+    } as unknown as DbClient;
+
+    const report = await evaluateKeyRetirementReadiness(mockPrisma);
+
+    const k1Assessment = report.assessments.find(a => a.keyId === 'k1');
+    expect(k1Assessment?.status).toBe('UNRESOLVED_RECORDS_EXIST');
+    expect(report.allEligibleRetiredFromDatabase).toBe(false);
+  });
+
+  it('evaluates database_legacy fallback key readiness', async () => {
+    const fingerprint = registryModule.computeRegistryFingerprint();
+
+    vi.spyOn(encryptionModule, 'getEncryptionKeyringMetadata').mockResolvedValueOnce({
+      activeKeyId: 'k2',
+      keys: [
+        { id: 'k2', source: 'env', isActive: true },
+        { id: 'database_legacy', source: 'database_legacy', isActive: false },
+      ],
+      totalKeys: 2,
+      hasLegacyDbKey: true,
+    });
+
+    const targetStates = registryModule.ENCRYPTION_TARGETS.map((t, idx) => ({
+      id: `ts-${idx}`,
+      targetId: t.id,
+      status: 'COMPLETED',
+      keysDetected: { k2: 5 }, // 0 database_legacy references
+    }));
+
+    const mockPrisma = {
+      encryptionMigrationRun: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'run-verify-1',
+          mode: 'VERIFY',
+          status: 'COMPLETED',
+          registryFingerprint: fingerprint,
+          errorRecords: 0,
+          conflictRecords: 0,
+          completedAt: new Date(),
+          targetStates,
+        }),
+      },
+    } as unknown as DbClient;
+
+    const report = await evaluateKeyRetirementReadiness(mockPrisma);
+
+    const dbKeyAssessment = report.assessments.find(a => a.keyId === 'database_legacy');
+    expect(dbKeyAssessment?.status).toBe('DATABASE_READY_FOR_RETIREMENT');
+    expect(dbKeyAssessment?.message).toContain('legacy database encryption key');
+    expect(report.allEligibleRetiredFromDatabase).toBe(true);
   });
 });

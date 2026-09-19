@@ -32,11 +32,21 @@ export async function inspectValue(
     const parts = trimmed.split(':');
     if (parts.length === 8 && parts[1]) {
       const keyId = parts[1];
-      const hasKey = keyring.some(k => k.id === keyId);
-      if (keyId === activeKeyId) {
-        return { classification: 'CURRENT_V3', detectedKeyId: keyId };
-      }
-      if (hasKey) {
+      const matchedKey = keyring.find(k => k.id === keyId);
+      if (matchedKey) {
+        // Cryptographically validate AES-GCM envelope and authentication tag
+        try {
+          await decryptWithKey(trimmed, matchedKey.key);
+        } catch {
+          return {
+            classification: 'UNREADABLE',
+            detectedKeyId: keyId,
+            details: 'Failed cryptographic authentication/decryption of v3 payload',
+          };
+        }
+        if (keyId === activeKeyId) {
+          return { classification: 'CURRENT_V3', detectedKeyId: keyId };
+        }
         return { classification: 'OLD_KEY_V3', detectedKeyId: keyId };
       }
       return { classification: 'UNAVAILABLE_KEY', detectedKeyId: keyId };
@@ -157,6 +167,38 @@ export async function inspectTargetRecord(
             activeKeyId
           );
           results.push(res);
+        }
+      }
+    }
+
+    if (target.nestedArrayPaths) {
+      for (const nested of target.nestedArrayPaths) {
+        if (Object.prototype.hasOwnProperty.call(rawObj, nested.arrayField)) {
+          const arr = Reflect.get(rawObj, nested.arrayField);
+          if (Array.isArray(arr)) {
+            for (const item of arr) {
+              if (
+                item &&
+                typeof item === 'object' &&
+                Object.prototype.hasOwnProperty.call(item, nested.itemField)
+              ) {
+                const itemVal = Reflect.get(item as Record<string, unknown>, nested.itemField);
+                if (itemVal !== undefined && itemVal !== null && itemVal !== '') {
+                  let valToInspect = String(itemVal);
+                  if (valToInspect.startsWith('enc:')) {
+                    valToInspect = valToInspect.slice(4);
+                  }
+                  const res = await inspectValue(
+                    valToInspect,
+                    target.plaintextLegacyAllowed,
+                    keyring,
+                    activeKeyId
+                  );
+                  results.push(res);
+                }
+              }
+            }
+          }
         }
       }
     }
