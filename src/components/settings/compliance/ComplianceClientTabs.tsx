@@ -15,14 +15,24 @@ import {
   ShieldAlert,
   Activity,
   SlidersHorizontal,
+  Database,
+  Key,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { cn } from '@/lib/utils';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import type { ComplianceControl, ControlStatus, ComplianceFramework } from '@/lib/compliance/types';
+import type {
+  ComplianceControl,
+  ControlStatus,
+  ComplianceFramework,
+  ComplianceEvaluationStatus,
+} from '@/lib/compliance/types';
 import type { PersonalDataDomain } from '@/lib/privacy/types';
+import { EncryptionMigrationPanel } from './EncryptionMigrationPanel';
+import { useRouter } from 'next/navigation';
+import { notify } from '@/lib/toast';
 
 const statusPresentation: Record<
   ControlStatus,
@@ -41,6 +51,37 @@ const statusPresentation: Record<
   MISSING: {
     label: 'Missing',
     className: 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    icon: CircleDashed,
+  },
+};
+
+const runtimeStatusPresentation: Record<
+  ComplianceEvaluationStatus,
+  { label: string; className: string; icon: typeof CheckCircle2 }
+> = {
+  IMPLEMENTED: {
+    label: 'Implemented',
+    className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    icon: CheckCircle2,
+  },
+  PARTIAL: {
+    label: 'Partial',
+    className: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    icon: TriangleAlert,
+  },
+  ACTION_REQUIRED: {
+    label: 'Action Required',
+    className: 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400',
+    icon: ShieldAlert,
+  },
+  UNVERIFIED: {
+    label: 'Unverified',
+    className: 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-400',
+    icon: CircleDashed,
+  },
+  NOT_APPLICABLE: {
+    label: 'Not Applicable',
+    className: 'border-zinc-500/30 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
     icon: CircleDashed,
   },
 };
@@ -67,11 +108,24 @@ type SubjectDiscoveryData = {
   readonly limitations: readonly string[];
 } | null;
 
+export type ControlStateItem = {
+  controlId: string;
+  status: ComplianceEvaluationStatus;
+  latestEvaluationId: string;
+  evaluatorId: string;
+  evaluatorVersion: string;
+  evaluatedAt: string;
+  validUntil: string | null;
+  summary: string;
+};
+
 type Props = {
   overall: Record<ControlStatus, number>;
   frameworks: FrameworkItem[];
   controls: readonly ComplianceControl[];
   personalDataRegistry: readonly PersonalDataDomain[];
+  controlStates?: ControlStateItem[];
+  canEvaluate?: boolean;
   privacyData: {
     users: UserOption[];
     userCount: number;
@@ -89,23 +143,90 @@ export default function ComplianceClientTabs({
   frameworks,
   controls,
   personalDataRegistry,
+  controlStates = [],
+  canEvaluate = false,
   privacyData,
 }: Props) {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'security' | 'privacy' | 'cra' | 'evidence'
+    'overview' | 'security' | 'privacy' | 'encryption' | 'cra' | 'evidence'
   >(privacyData.userId || privacyData.query ? 'privacy' : 'overview');
   const [statusFilter, setStatusFilter] = useState<ControlStatus | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   const totalControls = overall.IMPLEMENTED + overall.PARTIAL + overall.MISSING;
-  const percentImplemented =
-    totalControls > 0 ? Math.round((overall.IMPLEMENTED / totalControls) * 100) : 0;
+
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const router = useRouter();
+
+  const stateMap = useMemo(
+    () => new Map(controlStates.map(s => [s.controlId, s])),
+    [controlStates]
+  );
+
+  const runtimeControls = useMemo(
+    () => controls.filter(c => c.assessmentMode === 'RUNTIME'),
+    [controls]
+  );
+
+  const runtimeStats = useMemo(() => {
+    let implemented = 0;
+    let partial = 0;
+    let actionRequired = 0;
+    let unverified = 0;
+
+    for (const c of runtimeControls) {
+      const s = stateMap.get(c.id);
+      if (!s) {
+        unverified++;
+      } else if (s.status === 'IMPLEMENTED') {
+        implemented++;
+      } else if (s.status === 'PARTIAL') {
+        partial++;
+      } else if (s.status === 'ACTION_REQUIRED') {
+        actionRequired++;
+      } else {
+        unverified++;
+      }
+    }
+
+    return {
+      total: runtimeControls.length,
+      implemented,
+      partial,
+      actionRequired,
+      unverified,
+    };
+  }, [runtimeControls, stateMap]);
+
+  const handleEvaluateControls = async () => {
+    setIsEvaluating(true);
+    try {
+      const res = await fetch('/api/compliance/evaluations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || 'Failed to evaluate controls');
+      }
+      notify.success('Runtime controls evaluated successfully');
+      router.refresh();
+    } catch (err: unknown) {
+      notify.error(err instanceof Error ? err.message : 'Evaluation failed');
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
 
   // Filtered security controls
   const securityControls = useMemo(() => {
     return controls.filter(c => {
       if (!c.id.startsWith('SEC-')) return false;
-      if (statusFilter !== 'ALL' && c.status !== statusFilter) return false;
+      const s = stateMap.get(c.id);
+      const effectiveStatus =
+        c.assessmentMode === 'RUNTIME' && s ? s.status : (c.catalogStatus ?? c.status);
+      if (statusFilter !== 'ALL' && effectiveStatus !== statusFilter) return false;
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         return (
@@ -116,7 +237,7 @@ export default function ComplianceClientTabs({
       }
       return true;
     });
-  }, [controls, statusFilter, searchQuery]);
+  }, [controls, statusFilter, searchQuery, stateMap]);
 
   // CRA controls
   const craControls = useMemo(() => {
@@ -141,7 +262,7 @@ export default function ComplianceClientTabs({
               variant="outline"
               className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-xs font-semibold"
             >
-              {percentImplemented}% Implemented
+              Repository Baseline: {overall.IMPLEMENTED}/{totalControls}
             </Badge>
             <Badge
               variant="outline"
@@ -179,22 +300,22 @@ export default function ComplianceClientTabs({
         }
         stats={[
           {
-            label: 'Implemented',
-            value: `${overall.IMPLEMENTED} (${percentImplemented}%)`,
+            label: 'Baseline Implemented',
+            value: `${overall.IMPLEMENTED} of ${totalControls}`,
             icon: <CheckCircle2 className="h-3.5 w-3.5" />,
-            subtext: 'Controls verified',
+            subtext: 'Repository baseline claims',
           },
           {
-            label: 'Partial Controls',
+            label: 'Baseline Partial',
             value: `${overall.PARTIAL}`,
             icon: <TriangleAlert className="h-3.5 w-3.5" />,
-            subtext: 'In-progress remediations',
+            subtext: 'Identified catalog gaps',
           },
           {
-            label: 'Missing / Gaps',
+            label: 'Baseline Missing',
             value: `${overall.MISSING}`,
             icon: <CircleDashed className="h-3.5 w-3.5" />,
-            subtext: 'Unaddressed requirements',
+            subtext: 'Unaddressed features',
           },
           {
             label: 'Frameworks',
@@ -225,6 +346,7 @@ export default function ComplianceClientTabs({
             icon: ShieldCheck,
           },
           { id: 'privacy', label: 'Privacy & DSR', icon: Lock },
+          { id: 'encryption', label: 'Encryption & Keys', icon: Key },
           { id: 'cra', label: `CRA Readiness (${craControls.length})`, icon: Shield },
           { id: 'evidence', label: 'Evidence Catalog', icon: FileCode },
         ].map(tab => {
@@ -248,6 +370,15 @@ export default function ComplianceClientTabs({
             </button>
           );
         })}
+
+        <a
+          href="/settings/system"
+          className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium border border-border/50 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-all ml-auto shrink-0"
+        >
+          <Database className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span>Data Lifecycle &amp; Retention</span>
+          <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+        </a>
       </div>
 
       {/* TAB 1: FRAMEWORKS OVERVIEW */}
@@ -256,7 +387,6 @@ export default function ComplianceClientTabs({
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {frameworks.map(fw => {
               const total = fw.counts.IMPLEMENTED + fw.counts.PARTIAL + fw.counts.MISSING;
-              const pct = total > 0 ? Math.round((fw.counts.IMPLEMENTED / total) * 100) : 0;
 
               return (
                 <div
@@ -280,20 +410,12 @@ export default function ComplianceClientTabs({
                         variant="outline"
                         className="text-[11px] font-mono font-bold bg-muted/40"
                       >
-                        {pct}%
+                        Repository Baseline: {fw.counts.IMPLEMENTED}/{total}
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-3 line-clamp-2 leading-relaxed">
                       {fw.scope}
                     </p>
-
-                    {/* Progress Bar */}
-                    <div className="w-full bg-muted/60 rounded-full h-1.5 mt-3.5 overflow-hidden">
-                      <div
-                        className="bg-emerald-500 h-1.5 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
 
                     <div className="grid grid-cols-3 gap-1.5 mt-3.5 pt-3 border-t border-border/50 text-center">
                       <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
@@ -332,6 +454,70 @@ export default function ComplianceClientTabs({
       {/* TAB 2: SECURITY CONTROLS */}
       {activeTab === 'security' && (
         <div className="space-y-4 animate-in fade-in-50 duration-150">
+          {/* Runtime Control State Overview Section */}
+          <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-base text-foreground">Runtime Control State</h3>
+                  <Badge variant="outline" className="text-xs font-mono font-semibold">
+                    {runtimeStats.total} runtime controls
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Dynamic readiness evaluated directly against deployment encryption, retention,
+                  privacy, and authorization states.
+                </p>
+              </div>
+              {canEvaluate && (
+                <Button
+                  onClick={handleEvaluateControls}
+                  disabled={isEvaluating}
+                  size="sm"
+                  className="font-semibold shadow-xs shrink-0"
+                >
+                  <Activity className={cn('h-4 w-4 mr-1.5', isEvaluating && 'animate-spin')} />
+                  {isEvaluating ? 'Evaluating Controls...' : 'Evaluate Controls'}
+                </Button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                  Implemented
+                </div>
+                <div className="text-xl font-bold font-mono text-emerald-700 dark:text-emerald-300 mt-0.5">
+                  {runtimeStats.implemented}
+                </div>
+              </div>
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                <div className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  Partial
+                </div>
+                <div className="text-xl font-bold font-mono text-amber-700 dark:text-amber-300 mt-0.5">
+                  {runtimeStats.partial}
+                </div>
+              </div>
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
+                <div className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                  Action Required
+                </div>
+                <div className="text-xl font-bold font-mono text-rose-700 dark:text-rose-300 mt-0.5">
+                  {runtimeStats.actionRequired}
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-500/20 bg-slate-500/5 p-3">
+                <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                  Unverified
+                </div>
+                <div className="text-xl font-bold font-mono text-slate-700 dark:text-slate-300 mt-0.5">
+                  {runtimeStats.unverified}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Controls Filter Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
             <div className="relative w-full sm:w-80">
@@ -367,7 +553,14 @@ export default function ComplianceClientTabs({
           {/* Controls List */}
           <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs overflow-hidden divide-y divide-border/50 shadow-xs">
             {securityControls.map(control => {
-              const presentation = statusPresentation[control.status];
+              const runtimeState = stateMap.get(control.id);
+              const isRuntime = control.assessmentMode === 'RUNTIME';
+              const presentation =
+                isRuntime && runtimeState
+                  ? runtimeStatusPresentation[runtimeState.status]
+                  : isRuntime
+                    ? runtimeStatusPresentation['UNVERIFIED']
+                    : statusPresentation[control.catalogStatus ?? control.status];
               const StatusIcon = presentation.icon;
 
               return (
@@ -393,6 +586,43 @@ export default function ComplianceClientTabs({
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     {control.implementation}
                   </p>
+                  {isRuntime ? (
+                    <div className="pt-1">
+                      {runtimeState ? (
+                        <div className="rounded-xl bg-muted/40 border border-border/60 p-3 text-xs space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              <Activity className="h-3.5 w-3.5 text-primary" />
+                              Runtime Evaluated
+                            </span>
+                            <span className="font-mono">
+                              {new Date(runtimeState.evaluatedAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-foreground/90 font-medium">
+                            {runtimeState.summary}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl bg-slate-500/5 border border-slate-500/20 p-2.5 text-xs text-muted-foreground flex items-center gap-2">
+                          <CircleDashed className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span>
+                            Runtime evaluation pending. Click <strong>Evaluate Controls</strong>{' '}
+                            above to evaluate deployment state.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl bg-muted/30 border border-border/50 px-3 py-2 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <span className="font-semibold text-foreground/80">
+                        Repository baseline: {control.catalogStatus ?? control.status}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Not evaluated at runtime · Operator evidence required
+                      </span>
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <span className="font-semibold text-foreground">Owner:</span>{' '}
@@ -558,7 +788,14 @@ export default function ComplianceClientTabs({
         <div className="space-y-4 animate-in fade-in-50 duration-150">
           <div className="rounded-2xl border border-border/80 dark:border-border/60 bg-card/90 dark:bg-card/60 backdrop-blur-xs overflow-hidden divide-y divide-border/50 shadow-xs">
             {craControls.map(control => {
-              const presentation = statusPresentation[control.status];
+              const runtimeState = stateMap.get(control.id);
+              const isRuntime = control.assessmentMode === 'RUNTIME';
+              const presentation =
+                isRuntime && runtimeState
+                  ? runtimeStatusPresentation[runtimeState.status]
+                  : isRuntime
+                    ? runtimeStatusPresentation['UNVERIFIED']
+                    : statusPresentation[control.catalogStatus ?? control.status];
               const StatusIcon = presentation.icon;
 
               return (
@@ -584,10 +821,51 @@ export default function ComplianceClientTabs({
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     {control.implementation}
                   </p>
+                  {isRuntime ? (
+                    <div className="pt-1">
+                      {runtimeState ? (
+                        <div className="rounded-xl bg-muted/40 border border-border/60 p-3 text-xs space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              <Activity className="h-3.5 w-3.5 text-primary" />
+                              Runtime Evaluated
+                            </span>
+                            <span className="font-mono">
+                              {new Date(runtimeState.evaluatedAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-foreground/90 font-medium">
+                            {runtimeState.summary}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl bg-slate-500/5 border border-slate-500/20 p-2.5 text-xs text-muted-foreground flex items-center gap-2">
+                          <CircleDashed className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <span>Runtime evaluation pending.</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl bg-muted/30 border border-border/50 px-3 py-2 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <span className="font-semibold text-foreground/80">
+                        Repository baseline: {control.catalogStatus ?? control.status}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        Not evaluated at runtime · Operator evidence required
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* TAB: ENCRYPTION & KEY RETIREMENT */}
+      {activeTab === 'encryption' && (
+        <div className="space-y-4 animate-in fade-in-50 duration-150">
+          <EncryptionMigrationPanel />
         </div>
       )}
 
@@ -619,7 +897,7 @@ export default function ComplianceClientTabs({
                     <span className="font-semibold text-foreground truncate">{control.title}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {control.evidence.map(path => (
+                    {(control.evidence ?? []).map(path => (
                       <span
                         key={path}
                         className="rounded-md border border-border/70 bg-background px-2 py-0.5 font-mono text-[10px] text-primary"

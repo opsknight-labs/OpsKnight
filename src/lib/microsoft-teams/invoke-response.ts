@@ -19,3 +19,25 @@ export function teamsActionError(statusCode: number, code: string, message: stri
     value: { code, message, innerHttpError: { statusCode, body: { error: message } } },
   };
 }
+
+export function teamsActionLoginRequest(
+  url: string,
+  text = 'Link your OpsKnight account, then retry this action.'
+): TeamsInvokeResponse {
+  return {
+    statusCode: 401,
+    type: 'application/vnd.microsoft.activity.loginRequest',
+    value: {
+      text,
+      buttons: [
+        {
+          type: 'signin',
+          title: 'Link OpsKnight Account',
+          text: 'Link OpsKnight Account',
+          value: url,
+        },
+      ],
+    },
+  };
+}
+

@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/shadcn/label';
 import { Alert, AlertDescription } from '@/components/ui/shadcn/alert';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { InlineNotice } from '@/components/ui/InlineNotice';
-import ConfirmDialog from '@/components/settings/ConfirmDialog';
 import { notify } from '@/lib/toast';
 import {
   Trash2,
@@ -26,7 +25,11 @@ import {
   XCircle,
   Sparkles,
   RefreshCw,
+  UserX,
+  FileKey,
 } from 'lucide-react';
+import RetentionHoldsPanel from '@/components/settings/compliance/RetentionHoldsPanel';
+import CleanupPreview from '@/components/settings/compliance/CleanupPreview';
 
 interface RetentionPolicy {
   incidentRetentionDays: number;
@@ -34,6 +37,9 @@ interface RetentionPolicy {
   logRetentionDays: number;
   metricsRetentionDays: number;
   realTimeWindowDays: number;
+  completedPrivacyRequestRetentionDays: number;
+  expiredPrivacyArtifactRetentionDays: number;
+  unsubscribedSubscriberRetentionDays: number;
 }
 
 interface StorageStats {
@@ -51,6 +57,9 @@ interface Preset {
   logRetentionDays: number;
   metricsRetentionDays: number;
   realTimeWindowDays: number;
+  completedPrivacyRequestRetentionDays?: number;
+  expiredPrivacyArtifactRetentionDays?: number;
+  unsubscribedSubscriberRetentionDays?: number;
 }
 
 interface CleanupResult {
@@ -70,6 +79,9 @@ const DEFAULT_POLICY: RetentionPolicy = {
   logRetentionDays: 365,
   metricsRetentionDays: 365,
   realTimeWindowDays: 90,
+  completedPrivacyRequestRetentionDays: 730,
+  expiredPrivacyArtifactRetentionDays: 30,
+  unsubscribedSubscriberRetentionDays: 30,
 };
 
 function displayError(error: unknown, fallback: string): string {
@@ -86,15 +98,11 @@ export default function RetentionPolicySettings() {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
 
   const [validationErrors, setValidationErrors] = useState<
     Partial<Record<keyof RetentionPolicy, string>>
   >({});
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingCleanupAction, setPendingCleanupAction] = useState<(() => void) | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -149,6 +157,27 @@ export default function RetentionPolicySettings() {
       errors.realTimeWindowDays = 'Cannot exceed metrics retention period';
       isValid = false;
     }
+    if (
+      currentPolicy.completedPrivacyRequestRetentionDays < 30 ||
+      currentPolicy.completedPrivacyRequestRetentionDays > 3650
+    ) {
+      errors.completedPrivacyRequestRetentionDays = 'Must be between 30 days and 10 years';
+      isValid = false;
+    }
+    if (
+      currentPolicy.expiredPrivacyArtifactRetentionDays < 1 ||
+      currentPolicy.expiredPrivacyArtifactRetentionDays > 365
+    ) {
+      errors.expiredPrivacyArtifactRetentionDays = 'Must be between 1 day and 1 year';
+      isValid = false;
+    }
+    if (
+      currentPolicy.unsubscribedSubscriberRetentionDays < 1 ||
+      currentPolicy.unsubscribedSubscriberRetentionDays > 3650
+    ) {
+      errors.unsubscribedSubscriberRetentionDays = 'Must be between 1 day and 10 years';
+      isValid = false;
+    }
 
     setValidationErrors(errors);
     return isValid;
@@ -161,7 +190,13 @@ export default function RetentionPolicySettings() {
       policy.alertRetentionDays !== initialPolicy.alertRetentionDays ||
       policy.logRetentionDays !== initialPolicy.logRetentionDays ||
       policy.metricsRetentionDays !== initialPolicy.metricsRetentionDays ||
-      policy.realTimeWindowDays !== initialPolicy.realTimeWindowDays
+      policy.realTimeWindowDays !== initialPolicy.realTimeWindowDays ||
+      policy.completedPrivacyRequestRetentionDays !==
+        initialPolicy.completedPrivacyRequestRetentionDays ||
+      policy.expiredPrivacyArtifactRetentionDays !==
+        initialPolicy.expiredPrivacyArtifactRetentionDays ||
+      policy.unsubscribedSubscriberRetentionDays !==
+        initialPolicy.unsubscribedSubscriberRetentionDays
     );
   }, [policy, initialPolicy]);
 
@@ -204,54 +239,6 @@ export default function RetentionPolicySettings() {
     }
   };
 
-  const executeCleanup = async (dryRun: boolean) => {
-    if (!policy || conflict) return;
-
-    if (!validatePolicy(policy)) {
-      setGeneralError(
-        `Please fix validation errors below before running ${dryRun ? 'preview' : 'cleanup'}.`
-      );
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setGeneralError(null);
-      setCleanupResult(null);
-
-      const res = await fetch('/api/settings/retention', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dryRun, policy }),
-      });
-
-      if (!res.ok) {
-        throw await errorFromResponse(res, 'Failed to run cleanup');
-      }
-
-      const data = await res.json();
-      setCleanupResult(data.result);
-
-      if (!dryRun) {
-        notify.success('Data cleanup completed', { id: 'settings:retention:cleanup' });
-        fetchData();
-      }
-    } catch (err) {
-      setGeneralError(displayError(err, 'Failed to run cleanup'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCleanupClick = (dryRun: boolean) => {
-    if (dryRun) {
-      executeCleanup(true);
-    } else {
-      setPendingCleanupAction(() => () => executeCleanup(false));
-      setConfirmOpen(true);
-    }
-  };
-
   const handleResetDefaults = () => {
     setPolicy(DEFAULT_POLICY);
     setValidationErrors({});
@@ -284,7 +271,9 @@ export default function RetentionPolicySettings() {
   };
 
   const handlePresetClick = (preset: Preset) => {
+    if (!policy) return;
     setPolicy({
+      ...policy,
       incidentRetentionDays: preset.incidentRetentionDays,
       alertRetentionDays: preset.alertRetentionDays,
       logRetentionDays: preset.logRetentionDays,
@@ -316,7 +305,13 @@ export default function RetentionPolicySettings() {
               <strong>Settings changed elsewhere.</strong> Your unsaved retention values are still
               present. Reload the latest policy before saving or running cleanup.
             </span>
-            <Button type="button" variant="outline" size="sm" onClick={fetchData} className="gap-1.5 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={fetchData}
+              className="gap-1.5 shrink-0"
+            >
               <RefreshCw className="h-3.5 w-3.5" />
               Reload latest
             </Button>
@@ -512,110 +507,51 @@ export default function RetentionPolicySettings() {
               shortcuts={[14, 30, 60, 90]}
               error={validationErrors.realTimeWindowDays}
             />
+
+            <RetentionFieldRow
+              icon={<FileText className="w-4 h-4 text-blue-500" />}
+              label="Completed &amp; Rejected Privacy Requests"
+              description="Retention period for terminal GDPR/CCPA privacy requests before the request record is cleaned up."
+              value={policy.completedPrivacyRequestRetentionDays}
+              onChange={v => handleInputChange('completedPrivacyRequestRetentionDays', v)}
+              min={30}
+              max={3650}
+              shortcuts={[90, 180, 365, 730]}
+              error={validationErrors.completedPrivacyRequestRetentionDays}
+            />
+
+            <RetentionFieldRow
+              icon={<FileKey className="w-4 h-4 text-amber-500" />}
+              label="Expired Privacy Export Artifact Metadata"
+              description="Period to retain expired export metadata records after artifact payloads have already expired and been wiped."
+              value={policy.expiredPrivacyArtifactRetentionDays}
+              onChange={v => handleInputChange('expiredPrivacyArtifactRetentionDays', v)}
+              min={1}
+              max={365}
+              shortcuts={[7, 14, 30, 90]}
+              error={validationErrors.expiredPrivacyArtifactRetentionDays}
+            />
+
+            <RetentionFieldRow
+              icon={<UserX className="w-4 h-4 text-purple-500" />}
+              label="Unsubscribed Status Page Subscribers"
+              description="Retention period for status page subscribers in UNSUBSCRIBED state before deletion."
+              value={policy.unsubscribedSubscriberRetentionDays}
+              onChange={v => handleInputChange('unsubscribedSubscriberRetentionDays', v)}
+              min={1}
+              max={3650}
+              shortcuts={[14, 30, 90, 180]}
+              error={validationErrors.unsubscribedSubscriberRetentionDays}
+            />
           </div>
         )}
       </div>
 
-      <div className="rounded-xl border border-rose-500/20 bg-card p-5 sm:p-6 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
-              <Trash2 className="h-5 w-5" />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-bold text-foreground">
-                  Data Pruning & Lifecycle Maintenance
-                </h3>
-                <Badge
-                  variant="outline"
-                  className="text-[10px] font-semibold text-rose-600 border-rose-500/30 bg-rose-500/5"
-                >
-                  Permanent Action
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Purge records older than your configured retention thresholds to reclaim database
-                storage. Always run a dry run preview first to audit affected row counts.
-              </p>
-            </div>
-          </div>
+      {/* Retention Holds Management */}
+      <RetentionHoldsPanel />
 
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleCleanupClick(true)}
-              disabled={saving || Boolean(conflict)}
-              className="h-8 text-xs gap-1.5 font-medium"
-            >
-              {saving ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-              )}
-              <span>Preview (Dry Run)</span>
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              onClick={() => handleCleanupClick(false)}
-              disabled={saving || Boolean(conflict)}
-              className="h-8 text-xs gap-1.5 font-semibold"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span>Execute Cleanup</span>
-            </Button>
-          </div>
-        </div>
-
-        {cleanupResult && (
-          <div
-            className={`rounded-xl border p-4 space-y-3 ${
-              cleanupResult.dryRun
-                ? 'bg-blue-500/5 border-blue-500/20'
-                : 'bg-emerald-500/5 border-emerald-500/20'
-            }`}
-          >
-            <div className="flex items-center justify-between border-b border-border/50 pb-2.5">
-              <div className="flex items-center gap-2">
-                <CheckCircle2
-                  className={`h-4 w-4 ${cleanupResult.dryRun ? 'text-blue-600 dark:text-blue-400' : 'text-emerald-600 dark:text-emerald-400'}`}
-                />
-                <span className="text-xs font-bold text-foreground">
-                  {cleanupResult.dryRun
-                    ? 'Simulation Audit Result (Dry Run)'
-                    : 'Cleanup Execution Complete'}
-                </span>
-              </div>
-              <Badge variant="secondary" className="text-[10px] font-mono">
-                {cleanupResult.executionTimeMs}ms execution
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-1">
-              <StatItem label="Incidents" value={cleanupResult.incidents} />
-              <StatItem label="Alerts" value={cleanupResult.alerts} />
-              <StatItem label="Logs" value={cleanupResult.logs} />
-              <StatItem label="Audit Logs" value={cleanupResult.auditLogs} />
-              <StatItem label="Events" value={cleanupResult.events} />
-              <StatItem label="Metrics" value={cleanupResult.metrics} />
-            </div>
-
-            {cleanupResult.dryRun && (
-              <p className="text-[11px] text-muted-foreground pt-1 flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                <span>
-                  Zero database rows were deleted. These counts reflect records eligible for
-                  deletion.
-                </span>
-              </p>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Cleanup Preview & Execution */}
+      <CleanupPreview onCleanupCompleted={fetchData} />
 
       <div className="sticky bottom-4 z-10 rounded-xl border bg-card/95 backdrop-blur-md p-4 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
         <div className="flex items-center gap-2">
@@ -665,23 +601,6 @@ export default function RetentionPolicySettings() {
           </Button>
         </div>
       </div>
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title="Permanently Delete Data?"
-        message="This action will permanently delete all data older than the configured retention periods across database tables. This action cannot be undone."
-        confirmLabel="Yes, Delete Data"
-        cancelLabel="Cancel"
-        variant="danger"
-        onConfirm={() => {
-          if (pendingCleanupAction) pendingCleanupAction();
-          setConfirmOpen(false);
-        }}
-        onCancel={() => {
-          setConfirmOpen(false);
-          setPendingCleanupAction(null);
-        }}
-      />
     </div>
   );
 }

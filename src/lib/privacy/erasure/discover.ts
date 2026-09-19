@@ -5,6 +5,7 @@ import prisma from '@/lib/prisma';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { discoverUserDependencies, type UserDependencyReport } from '@/lib/users/dependencies';
 import { assertUserIsNotSoleOwner, assertNotLastAdmin } from '@/app/(app)/users/actions';
+import { isRetentionHeld } from '@/lib/retention/holds';
 
 /**
  * Per-domain row counts for a subject, keyed by the domain ids in
@@ -100,6 +101,12 @@ export async function discoverErasureBlockersTx(
 ): Promise<string[]> {
   const blockers: string[] = [];
 
+  // --- Retention hold check ---
+  const { held: isHeld } = await isRetentionHeld(tx, 'USER', subjectId);
+  if (isHeld) {
+    blockers.push('Subject is protected by an active retention hold.');
+  }
+
   // --- Admin invariants: last-admin + sole-owner ---
   // Mirrors src/app/(app)/users/actions.ts:assertUserIsNotSoleOwner +
   // assertNotLastAdmin, read against the same SERIALIZABLE snapshot that
@@ -153,18 +160,13 @@ export async function discoverErasureBlockersTx(
       }),
     ]);
 
-  if (layers > 0)
-    blockers.push(`Still assigned to ${layers} on-call rotation layer(s).`);
-  if (shifts > 0)
-    blockers.push(`Assigned to ${shifts} active/future on-call shift(s).`);
-  if (overrides > 0)
-    blockers.push(`Referenced by ${overrides} active/future on-call override(s).`);
+  if (layers > 0) blockers.push(`Still assigned to ${layers} on-call rotation layer(s).`);
+  if (shifts > 0) blockers.push(`Assigned to ${shifts} active/future on-call shift(s).`);
+  if (overrides > 0) blockers.push(`Referenced by ${overrides} active/future on-call override(s).`);
   if (escalationSteps > 0)
     blockers.push(`Still targeted by ${escalationSteps} escalation policy step(s).`);
-  if (openActionItems > 0)
-    blockers.push(`Owns ${openActionItems} open postmortem action item(s).`);
-  if (activeIncidents > 0)
-    blockers.push(`Assigned to ${activeIncidents} active incident(s).`);
+  if (openActionItems > 0) blockers.push(`Owns ${openActionItems} open postmortem action item(s).`);
+  if (activeIncidents > 0) blockers.push(`Assigned to ${activeIncidents} active incident(s).`);
 
   return blockers;
 }
@@ -209,6 +211,7 @@ export async function discoverSubjectErasureData(
     slackOAuthConfigAttribution,
     notificationProviderAttribution,
     microsoftTeamsAttribution,
+    retentionHoldStatus,
   ] = await Promise.all([
     discoverUserDependencies(subjectId),
     collectAdminInvariantBlockers(subjectId),
@@ -248,6 +251,7 @@ export async function discoverSubjectErasureData(
       prisma.microsoftTeamsInstallation.count({ where: { installedBy: subjectId } }),
       prisma.microsoftTeamsDestination.count({ where: { updatedBy: subjectId } }),
     ]).then(counts => counts.reduce((sum, count) => sum + count, 0)),
+    isRetentionHeld(prisma, 'USER', subjectId),
   ]);
 
   const domainCounts: ErasureDomainCounts = {
@@ -279,9 +283,14 @@ export async function discoverSubjectErasureData(
     notifications,
     inAppNotifications,
     auditLogSnapshots,
+    retentionHold: retentionHoldStatus.held ? retentionHoldStatus.activeHoldCount : 0,
   };
 
-  const blockingConditions = [...adminBlockers, ...collectDependencyBlockers(dependencyReport)];
+  const blockingConditions = [
+    ...(retentionHoldStatus.held ? ['Subject is protected by an active retention hold.'] : []),
+    ...adminBlockers,
+    ...collectDependencyBlockers(dependencyReport),
+  ];
 
   return {
     subjectId,

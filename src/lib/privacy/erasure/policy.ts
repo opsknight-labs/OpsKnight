@@ -312,6 +312,15 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
       'Covers names/emails embedded in incident notes, postmortems and templates written by others (not captured by the author-count domains above), Notification message bodies / encrypted payloads / provider-side copies, AuditLog details JSON, and application/external log sinks. These surfaces are undiscoverable by ID — every erasure therefore requires explicit operator acknowledgement that any remaining free-text/log/external copies have been reviewed before the request is closed. See incident-content / audit-and-application-logs / notifications PARTIAL dispositions in src/lib/privacy/registry.ts.',
   },
 
+  // --- Retention holds: REVIEW (blocking if active holds exist) ---
+  {
+    id: 'retentionHold',
+    label: 'Active retention holds',
+    strategy: 'REVIEW',
+    blocking: true,
+    notes: 'Subject is protected by an active retention hold.',
+  },
+
   // --- Privacy request record itself ---
   {
     id: 'privacyRequestRecord',

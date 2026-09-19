@@ -23,6 +23,7 @@ import { createMicrosoftTeamsIdentityChallenge, resolveMicrosoftTeamsUser } from
 import {
   teamsActionCard,
   teamsActionError,
+  teamsActionLoginRequest,
   teamsActionSuccess,
   type TeamsInvokeResponse,
 } from './invoke-response';
@@ -136,10 +137,98 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
         'Microsoft Teams interactive actions are currently disabled.'
       );
     }
+    const rawCandidateTeamIds = [
+      input.activity.channelData?.team?.aadGroupId?.trim(),
+      input.activity.channelData?.team?.id?.trim(),
+      input.activity.conversation?.id?.trim(),
+      input.activity.conversation?.id?.split(';')[0]?.trim(),
+      teamId,
+    ].filter(Boolean) as string[];
+
+    const candidateTeamIds = [...new Set(rawCandidateTeamIds)];
+
+    // In Microsoft Teams, a Team has two identifiers:
+    // 1) The Azure AD Group Object ID (GUID) used by Microsoft Graph API (stored in destination.teamId, warRoom.providerContainerId, installation.teamId)
+    // 2) The Teams internal thread ID (format: 19:...@thread.tacv2) used by Bot Framework in channelData.team.id
+    // Teams Bot Framework invokes frequently omit aadGroupId, so we bridge them via the installation ledger.
+    if (destination?.installation) {
+      const inst = destination.installation;
+      const instIdentifiers = [inst.teamId, inst.channelId, inst.conversationId].filter(Boolean) as string[];
+      if (instIdentifiers.some(id => candidateTeamIds.includes(id.trim()))) {
+        for (const id of instIdentifiers) {
+          candidateTeamIds.push(id.trim());
+        }
+      }
+    }
+
+    if (prisma?.microsoftTeamsInstallation?.findMany) {
+      const matchingInstallations = await prisma.microsoftTeamsInstallation.findMany({
+        where: {
+          tenantId,
+          enabled: true,
+          OR: [
+            { teamId: { in: candidateTeamIds } },
+            { channelId: { in: candidateTeamIds } },
+            { conversationId: { in: candidateTeamIds } },
+          ],
+        },
+        select: { teamId: true, channelId: true, conversationId: true },
+      });
+      for (const inst of matchingInstallations) {
+        if (inst.teamId) candidateTeamIds.push(inst.teamId.trim());
+        if (inst.channelId) candidateTeamIds.push(inst.channelId.trim());
+        if (inst.conversationId) candidateTeamIds.push(inst.conversationId.trim());
+      }
+    }
+
+    const candidateChannelIds = [
+      channelId,
+      input.activity.channelData?.channel?.id?.trim(),
+      input.activity.conversation?.id?.split(';')[0]?.trim(),
+    ].filter(Boolean) as string[];
+    const isChannelMatch = (storedId: string | null | undefined) =>
+      Boolean(storedId && candidateChannelIds.includes(storedId.trim()));
+
+    if (warRoom?.providerChannelId && isChannelMatch(warRoom.providerChannelId)) {
+      if (warRoom.providerContainerId) candidateTeamIds.push(warRoom.providerContainerId.trim());
+      if (destination?.teamId) candidateTeamIds.push(destination.teamId.trim());
+      if (destination?.installation?.teamId) candidateTeamIds.push(destination.installation.teamId.trim());
+    }
+
+    const isTeamMatch = (storedId: string | null | undefined) => {
+      if (!storedId) return true;
+      const target = storedId.trim();
+      return candidateTeamIds.includes(target);
+    };
+
+    const matchesConversation = (
+      storedConvId: string | null | undefined,
+      incomingConvId: string | null | undefined
+    ) => {
+      if (!storedConvId || !incomingConvId) return true;
+      const s = storedConvId.trim();
+      const i = incomingConvId.trim();
+      if (s === i) return true;
+      return s.split(';')[0] === i.split(';')[0];
+    };
+
+    const matchesMessage = (
+      storedMsgId: string | null | undefined,
+      replyToId: string | null | undefined,
+      incomingConvId: string | null | undefined
+    ) => {
+      if (!storedMsgId) return true;
+      const s = storedMsgId.trim();
+      if (replyToId && replyToId.trim() === s) return true;
+      if (incomingConvId && incomingConvId.includes(`;messageid=${s}`)) return true;
+      if (!replyToId) return true;
+      return false;
+    };
+
     const destinationRouteMatches =
       destination.tenantId === tenantId &&
-      destination.teamId === teamId &&
-      destination.channelId === channelId &&
+      isTeamMatch(destination.teamId) &&
+      isChannelMatch(destination.channelId) &&
       incident?.serviceId === destination.serviceId;
     const warRoomDestinationBound = Boolean(
       warRoom &&
@@ -147,29 +236,46 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
       incident.serviceId === destination.serviceId &&
       (!warRoom.installationId || warRoom.installationId === destination.installationId) &&
       (!warRoom.providerTenantId || warRoom.providerTenantId === destination.tenantId) &&
-      (!warRoom.providerContainerId || warRoom.providerContainerId === destination.teamId)
+      (!warRoom.providerContainerId || isTeamMatch(warRoom.providerContainerId))
     );
     const warRoomRouteMatches = Boolean(
       warRoom &&
       warRoom.state === 'READY' &&
       warRoom.providerTenantId === tenantId &&
-      warRoom.providerContainerId === teamId &&
-      warRoom.providerChannelId === channelId &&
+      isTeamMatch(warRoom.providerContainerId) &&
+      isChannelMatch(warRoom.providerChannelId) &&
       warRoomDestinationBound
     );
     // P1 fencing: when warRoomId is present, only READY war-room authority counts; no fallback to generic destination.
     const routeMatches = warRoomId ? warRoomRouteMatches : destinationRouteMatches;
     const messageMatches = warRoom
       ? warRoom.messageGeneration === messageGeneration &&
-        (!input.activity.conversation?.id ||
-          warRoom.commandConversationId === input.activity.conversation.id) &&
-        (!input.activity.replyToId || warRoom.commandMessageId === input.activity.replyToId)
+        matchesConversation(warRoom.commandConversationId, input.activity.conversation?.id) &&
+        matchesMessage(warRoom.commandMessageId, input.activity.replyToId, input.activity.conversation?.id)
       : canonical &&
         canonical.messageGeneration === messageGeneration &&
-        (!input.activity.conversation?.id ||
-          canonical.conversationId === input.activity.conversation.id) &&
-        (!input.activity.replyToId || canonical.messageId === input.activity.replyToId);
+        matchesConversation(canonical.conversationId, input.activity.conversation?.id) &&
+        matchesMessage(canonical.messageId, input.activity.replyToId, input.activity.conversation?.id);
     if (!routeMatches || !messageMatches) {
+      logger.warn('[MicrosoftTeams] StaleCard verification failed', {
+        routeMatches,
+        messageMatches,
+        isWarRoom: Boolean(warRoomId),
+        destinationRouteMatches,
+        warRoomRouteMatches,
+        tenantId,
+        candidateTeamIds,
+        candidateChannelIds,
+        destinationTeamId: destination.teamId,
+        destinationChannelId: destination.channelId,
+        warRoomContainerId: warRoom?.providerContainerId,
+        warRoomChannelId: warRoom?.providerChannelId,
+        activityConversationId: input.activity.conversation?.id,
+        activityReplyToId: input.activity.replyToId,
+        messageGeneration,
+        canonicalGeneration: canonical?.messageGeneration,
+        warRoomGeneration: warRoom?.messageGeneration,
+      });
       return teamsActionError(
         409,
         'StaleCard',
@@ -188,12 +294,11 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
       provider: 'MICROSOFT_TEAMS',
       result: linked ? 'linked' : 'unlinked',
     });
-    if (!linked) {
+    if (!linked && !isRefresh) {
       const token = await createMicrosoftTeamsIdentityChallenge(identityInput);
       const url = `${getBaseUrl().replace(/\/+$/, '')}/settings/chatops/link?token=${encodeURIComponent(token)}`;
-      return teamsActionError(
-        401,
-        'AccountLinkRequired',
+      return teamsActionLoginRequest(
+        url,
         `Link your OpsKnight account, then retry this action: ${url}`
       );
     }
@@ -205,7 +310,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
       teamId,
       channelId,
       providerUserId,
-      userId: linked.userId,
+      userId: linked?.userId ?? '',
     };
     const payloadDigest = payloadDigestFromPayload(canonicalPayload);
     // prettier-ignore
@@ -256,72 +361,87 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
             { code: 'custom', path: ['verb'], message: 'Unknown Teams verb' } as never,
           ]);
         }
-        switch (semanticKind) {
-          case 'REFRESH': {
-            const capabilities = await getIncidentChatOpsCapabilities({
-              incidentId,
-              userId: linked.userId,
-            });
-            const eventType =
-              incident.status === 'RESOLVED'
-                ? 'resolved'
-                : incident.acknowledgedAt
-                  ? 'acknowledged'
-                  : 'triggered';
-            const { getIncidentMeeting } =
-              await import('@/lib/incident-collaboration/meeting-store');
-            const activeMeeting = await getIncidentMeeting(incident.id).catch(() => null);
-            const meetingProjection =
-              activeMeeting?.state === 'READY' && activeMeeting.joinUrl
-                ? {
-                    provider: activeMeeting.provider,
-                    joinUrl: activeMeeting.joinUrl,
-                    joinWebUrl: activeMeeting.joinWebUrl,
-                    conferenceId: activeMeeting.conferenceId,
-                    tollNumber: activeMeeting.tollNumber,
-                  }
-                : null;
-            const card = buildMicrosoftTeamsIncidentCard(
-              {
-                incident: {
-                  id: incident.id,
-                  title: incident.title,
-                  description: incident.description,
-                  status: incident.status,
-                  urgency: incident.urgency,
-                  priority: incident.priority,
-                  serviceName: incident.service.name,
-                  assigneeName: incident.assignee?.name ?? null,
-                  incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incident.id}`,
-                  createdAt: incident.createdAt,
-                  acknowledgedAt: incident.acknowledgedAt,
-                  resolvedAt: incident.resolvedAt,
-                },
-                eventType,
+        const activeLink = linked;
+        if (semanticKind === 'REFRESH') {
+          const capabilities = activeLink
+            ? await getIncidentChatOpsCapabilities({
+                incidentId,
+                userId: activeLink.userId,
+              })
+            : {
+                canRead: true,
+                canAcknowledge: true,
+                canResolve: true,
+                canAssignSelf: true,
+                canAddNote: true,
+                canSetPriority: true,
+                canSnooze: true,
+                canEscalate: true,
+                canJoinResponder: true,
+              };
+          const eventType =
+            incident.status === 'RESOLVED'
+              ? 'resolved'
+              : incident.acknowledgedAt
+                ? 'acknowledged'
+                : 'triggered';
+          const { getIncidentMeeting } =
+            await import('@/lib/incident-collaboration/meeting-store');
+          const activeMeeting = await getIncidentMeeting(incident.id).catch(() => null);
+          const meetingProjection =
+            activeMeeting?.state === 'READY' && activeMeeting.joinUrl
+              ? {
+                  provider: activeMeeting.provider,
+                  joinUrl: activeMeeting.joinUrl,
+                  joinWebUrl: activeMeeting.joinWebUrl,
+                  conferenceId: activeMeeting.conferenceId,
+                  tollNumber: activeMeeting.tollNumber,
+                }
+              : null;
+          const card = buildMicrosoftTeamsIncidentCard(
+            {
+              incident: {
+                id: incident.id,
+                title: incident.title,
+                description: incident.description,
+                status: incident.status,
+                urgency: incident.urgency,
+                priority: incident.priority,
+                serviceName: incident.service.name,
+                assigneeName: incident.assignee?.name ?? null,
+                incidentUrl: `${getBaseUrl().replace(/\/+$/, '')}/incidents/${incident.id}`,
+                createdAt: incident.createdAt,
+                acknowledgedAt: incident.acknowledgedAt,
+                resolvedAt: incident.resolvedAt,
               },
-              {
-                disableActions: incident.status === 'RESOLVED',
-                meeting: meetingProjection,
-                interactive: {
-                  destinationId,
-                  messageGeneration,
-                  warRoomId,
-                  capabilities,
-                  refreshUserIds: [providerUserId],
-                },
-              }
-            );
-            addOperationalMetric('opsknight_chatops_refresh_total', 1, {
-              provider: 'MICROSOFT_TEAMS',
-              result: 'success',
-            });
-            result = teamsActionCard(card);
-            break;
+              eventType,
+            },
+            {
+              disableActions: incident.status === 'RESOLVED',
+              meeting: meetingProjection,
+              interactive: {
+                destinationId,
+                messageGeneration,
+                warRoomId,
+                capabilities,
+                refreshUserIds: [providerUserId],
+              },
+            }
+          );
+          addOperationalMetric('opsknight_chatops_refresh_total', 1, {
+            provider: 'MICROSOFT_TEAMS',
+            result: 'success',
+          });
+          result = teamsActionCard(card);
+        } else {
+          if (!activeLink) {
+            throw new Error('Unlinked identity cannot perform mutating actions');
           }
-          case 'ACKNOWLEDGE':
+          switch (semanticKind) {
+            case 'ACKNOWLEDGE':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: { kind: 'ACKNOWLEDGE', incidentId },
               idempotency,
             });
@@ -330,7 +450,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'RESOLVE':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: { kind: 'RESOLVE', incidentId, resolutionNote: actionData.resolutionNote },
               idempotency,
             });
@@ -339,8 +459,8 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'ASSIGN_SELF':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
-              command: { kind: 'ASSIGN', incidentId, targetUserId: linked.userId },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
+              command: { kind: 'ASSIGN', incidentId, targetUserId: activeLink.userId },
               idempotency,
             });
             result = teamsActionSuccess('Incident assigned to you.');
@@ -348,7 +468,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'ADD_NOTE':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: { kind: 'NOTE', incidentId, content: actionData.note! },
               idempotency,
             });
@@ -357,7 +477,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'SET_PRIORITY':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: { kind: 'SET_PRIORITY', incidentId, priority: actionData.priority! },
               idempotency,
             });
@@ -366,7 +486,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'SNOOZE':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: {
                 kind: 'SNOOZE',
                 incidentId,
@@ -380,7 +500,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'ESCALATE':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: { kind: 'ESCALATE', incidentId },
               idempotency,
             });
@@ -389,7 +509,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'JOIN_RESPONDER':
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: { kind: 'JOIN_RESPONDER', incidentId },
               idempotency,
             });
@@ -398,7 +518,7 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           case 'VIEW_RESPONDERS': {
             await executeChatOpsCommand({
               provider: 'MICROSOFT_TEAMS',
-              actor: { id: linked.userId, name: linked.displayName },
+              actor: { id: activeLink.userId, name: activeLink.displayName },
               command: { kind: 'READ', incidentId },
               idempotency,
             });
@@ -423,11 +543,12 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
           default:
             throw new Error(`Unhandled ChatOps kind: ${semanticKind}`);
         }
+        }
         await emitAuditEvent({
           action: `microsoftTeams.chatops.${action.action.verb.split('.').pop()}`,
           source: 'INTEGRATION',
           target: { type: 'INCIDENT', id: incidentId },
-          actor: { type: 'USER', id: linked.userId },
+          actor: { type: 'USER', id: linked?.userId ?? providerUserId },
           metadata: {
             provider: 'MICROSOFT_TEAMS',
             tenantId,
@@ -451,7 +572,12 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     return response as unknown as TeamsInvokeResponse;
   } catch (error) {
     logger.error('[MicrosoftTeams] Adaptive Card invoke error', {
-      error: error instanceof Error ? { message: error.message, stack: error.stack } : error,
+      error:
+        error instanceof ZodError
+          ? { name: 'ZodError', issues: error.issues }
+          : error instanceof Error
+            ? { message: error.message, stack: error.stack }
+            : error,
       activityValue: input.activity.value,
     });
     addOperationalMetric('opsknight_chatops_invokes_total', 1, {

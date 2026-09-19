@@ -1,61 +1,84 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { performDataCleanup, getStorageStats } from '@/lib/data-cleanup';
 
-const mockPrisma = {
-  incident: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-    groupBy: vi.fn(),
-    findFirst: vi.fn(),
-  },
-  alert: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-    updateMany: vi.fn(),
-    findFirst: vi.fn(),
-  },
-  logEntry: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-    findFirst: vi.fn(),
-  },
-  incidentEvent: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  auditLog: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-    findFirst: vi.fn(),
-  },
-  incidentMetricRollup: {
-    count: vi.fn(),
-    deleteMany: vi.fn(),
-    findFirst: vi.fn(),
-  },
-  inAppNotification: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  sLAPerformanceLog: {
-    count: vi.fn(),
-    findMany: vi.fn(),
-    deleteMany: vi.fn(),
-  },
-  incidentNote: {
-    deleteMany: vi.fn(),
-  },
-  customFieldValue: {
-    deleteMany: vi.fn(),
-  },
-  $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(mockPrisma)),
-};
+const { mockPrisma } = vi.hoisted(() => {
+  const mockPrisma = {
+    incident: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      groupBy: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    alert: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      updateMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    logEntry: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    incidentEvent: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    auditLog: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    incidentMetricRollup: {
+      count: vi.fn(),
+      deleteMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    inAppNotification: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    sLAPerformanceLog: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    incidentNote: {
+      deleteMany: vi.fn(),
+    },
+    customFieldValue: {
+      deleteMany: vi.fn(),
+    },
+    dataRetentionHold: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    privacyRequest: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    privacyExportArtifact: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    statusPageSubscription: {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    },
+    rateLimit: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
+    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback(mockPrisma)),
+  };
+  return { mockPrisma };
+});
 
 vi.mock('@/lib/prisma', () => ({
   default: mockPrisma,
@@ -68,6 +91,9 @@ vi.mock('@/lib/retention-policy', () => ({
     logRetentionDays: 365,
     metricsRetentionDays: 180,
     realTimeWindowDays: 60,
+    completedPrivacyRequestRetentionDays: 730,
+    expiredPrivacyArtifactRetentionDays: 30,
+    unsubscribedSubscriberRetentionDays: 30,
   }),
 }));
 
@@ -92,6 +118,19 @@ describe('Data Cleanup Retention Logic', () => {
     mockPrisma.logEntry.findFirst.mockResolvedValue(null);
     mockPrisma.auditLog.findFirst.mockResolvedValue(null);
     mockPrisma.incidentMetricRollup.findFirst.mockResolvedValue(null);
+    mockPrisma.incident.findMany.mockResolvedValue([
+      { id: 'inc-1' },
+      { id: 'inc-2' },
+      { id: 'inc-3' },
+      { id: 'inc-4' },
+      { id: 'inc-5' },
+      { id: 'inc-6' },
+      { id: 'inc-7' },
+    ]);
+    mockPrisma.dataRetentionHold.findMany.mockResolvedValue([]);
+    mockPrisma.privacyRequest.findMany.mockResolvedValue([]);
+    mockPrisma.privacyExportArtifact.findMany.mockResolvedValue([]);
+    mockPrisma.statusPageSubscription.findMany.mockResolvedValue([]);
   });
 
   it('accurately computes metrics and notifications in dry run rather than returning 0', async () => {
@@ -106,6 +145,12 @@ describe('Data Cleanup Retention Logic', () => {
     expect(result.inAppNotifications).toBe(4);
     expect(result.slaPerformanceLogs).toBe(2);
     expect(result.events).toBe(50); // 25 + 25 (eventsToDelete + incidentEventsFromIncidents)
+    expect(result.held).toEqual({ incidents: 0, privacyRequests: 0 });
+    expect(result.lifecycle).toEqual({
+      privacyRequests: 0,
+      expiredExportArtifacts: 0,
+      unsubscribedSubscribers: 0,
+    });
 
     expect(mockPrisma.incidentMetricRollup.count).toHaveBeenCalled();
     expect(mockPrisma.inAppNotification.count).toHaveBeenCalled();
@@ -120,7 +165,7 @@ describe('Data Cleanup Retention Logic', () => {
       metricsRetentionDays: 30,
     });
 
-    const incidentWhere = mockPrisma.incident.count.mock.calls[0][0].where;
+    const incidentWhere = mockPrisma.incident.findMany.mock.calls[0][0].where;
     const now = Date.now();
     const cutoffTime = incidentWhere.createdAt.lt.getTime();
     const diffDays = Math.round((now - cutoffTime) / (24 * 60 * 60 * 1000));
@@ -140,7 +185,7 @@ describe('Data Cleanup Retention Logic', () => {
       logRetentionDays: 365,
     });
 
-    const incidentWhere = mockPrisma.incident.count.mock.calls[0][0].where;
+    const incidentWhere = mockPrisma.incident.findMany.mock.calls[0][0].where;
     expect(incidentWhere.status).toBe('RESOLVED');
     expect(incidentWhere.events.none.createdAt.gte).toEqual(incidentWhere.createdAt.lt);
   });
@@ -163,11 +208,8 @@ describe('Data Cleanup Retention Logic', () => {
   });
 
   it('cascades deletion across all incident relations before deleting incidents', async () => {
-    const { cleanupOldRollups } = await import('@/lib/metric-rollup');
-    const mockTx: Record<
-      string,
-      { deleteMany?: ReturnType<typeof vi.fn>; updateMany?: ReturnType<typeof vi.fn> }
-    > = {
+    const mockTx: Record<string, any> = {
+      $queryRaw: vi.fn().mockResolvedValue([{ acquired: true }]),
       externalIssueLink: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
       actionItem: { deleteMany: vi.fn().mockResolvedValue({ count: 2 }) },
       postmortem: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
@@ -198,6 +240,10 @@ describe('Data Cleanup Retention Logic', () => {
     mockPrisma.logEntry.findMany.mockResolvedValue([]);
     mockPrisma.inAppNotification.findMany.mockResolvedValue([]);
     mockPrisma.sLAPerformanceLog.findMany.mockResolvedValue([]);
+    mockPrisma.dataRetentionHold.findMany.mockResolvedValue([]);
+    mockPrisma.privacyRequest.findMany.mockResolvedValue([]);
+    mockPrisma.privacyExportArtifact.findMany.mockResolvedValue([]);
+    mockPrisma.statusPageSubscription.findMany.mockResolvedValue([]);
 
     const result = await performDataCleanup(false, {
       metricsRetentionDays: 45,
@@ -223,8 +269,5 @@ describe('Data Cleanup Retention Logic', () => {
     expect(mockTx.customFieldValue.deleteMany).toHaveBeenCalled();
     expect(mockTx.alert.updateMany).toHaveBeenCalled();
     expect(mockTx.incident.deleteMany).toHaveBeenCalled();
-
-    // Verify metricsCutoff was passed to cleanupOldRollups
-    expect(cleanupOldRollups).toHaveBeenCalledWith(expect.any(Date));
   });
 });

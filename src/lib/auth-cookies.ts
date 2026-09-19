@@ -16,9 +16,12 @@
  */
 
 export const useSecureCookies =
-  (process.env.NEXTAUTH_URL ?? '').startsWith('https://') ||
-  (process.env.NODE_ENV === 'production' &&
-    !(process.env.NEXTAUTH_URL ?? '').startsWith('http://'));
+  process.env.NEXTAUTH_COOKIE_SECURE !== 'false' &&
+  ((process.env.NEXTAUTH_URL ?? '').startsWith('https://') ||
+    (process.env.NEXT_PUBLIC_APP_URL ?? '').startsWith('https://') ||
+    (process.env.NODE_ENV === 'production' &&
+      !(process.env.NEXTAUTH_URL ?? '').startsWith('http://') &&
+      !(process.env.NEXT_PUBLIC_APP_URL ?? '').startsWith('http://')));
 
 const cookiePrefix = useSecureCookies ? '__Secure-' : '';
 const hostCookiePrefix = useSecureCookies ? '__Host-' : '';

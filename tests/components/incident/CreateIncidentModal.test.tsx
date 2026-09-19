@@ -182,11 +182,11 @@ describe('CreateIncidentModal', () => {
 
     await screen.findByText('Declare Incident');
 
-    const internalBtn = screen.getByRole('button', { name: /Internal System Only/i });
+    const internalBtn = await screen.findByRole('button', { name: /Internal System Only/i });
     fireEvent.click(internalBtn);
     expect(internalBtn.getAttribute('aria-pressed')).toBe('true');
 
-    const customerBtn = screen.getByRole('button', { name: /Customer-Facing Outage/i });
+    const customerBtn = await screen.findByRole('button', { name: /Customer-Facing Outage/i });
     fireEvent.click(customerBtn);
     expect(customerBtn.getAttribute('aria-pressed')).toBe('true');
   });

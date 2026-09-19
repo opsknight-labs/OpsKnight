@@ -142,4 +142,27 @@ describe('Microsoft Teams Action.Execute contract', () => {
     expect(parsed.action.verb).toBe(TEAMS_CHATOPS_VERBS.NOTE);
     expect((parsed.data as unknown as { note: string }).note).toBe('Submitted from card input');
   });
+
+  it('accepts real-world Teams production payload with trigger and isRefresh inside action.data', () => {
+    const productionPayload = {
+      action: {
+        type: 'Action.Execute',
+        verb: TEAMS_CHATOPS_VERBS.REFRESH,
+        data: {
+          v: 2,
+          incidentId: 'cmu6wp24f001t11t3isuxhm04',
+          destinationId: 'cmu5qqzrn00024wvwf0rgwm9o',
+          messageGeneration: 1,
+          warRoomId: 'cmu6wp3bo002i11t3cbuab12x',
+          trigger: 'automatic',
+          isRefresh: true,
+        },
+      },
+      trigger: 'automatic',
+    };
+    const parsed = parseMicrosoftTeamsAction(productionPayload);
+    expect(parsed.action.verb).toBe(TEAMS_CHATOPS_VERBS.REFRESH);
+    expect(parsed.data.incidentId).toBe('cmu6wp24f001t11t3isuxhm04');
+    expect(parsed.data.warRoomId).toBe('cmu6wp3bo002i11t3cbuab12x');
+  });
 });
