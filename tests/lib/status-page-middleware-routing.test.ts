@@ -46,7 +46,10 @@ describe('status page middleware serving routes', () => {
   it('coalesces concurrent lookups and positively caches a valid route', async () => {
     let release: ((response: Response) => void) | undefined;
     const fetchMock = vi.fn(
-      () => new Promise<Response>(resolve => { release = resolve; })
+      () =>
+        new Promise<Response>(resolve => {
+          release = resolve;
+        })
     );
     vi.stubGlobal('fetch', fetchMock);
     const { fetchPublishedStatusDomain } = await import('@/middleware');
@@ -73,7 +76,8 @@ describe('status page middleware serving routes', () => {
   });
 
   it('serves the last known route briefly when refresh fails', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(Response.json(route))
       .mockRejectedValueOnce(new Error('serving store unavailable'));
     vi.stubGlobal('fetch', fetchMock);
@@ -86,7 +90,8 @@ describe('status page middleware serving routes', () => {
   });
 
   it('keeps the last known safe route when a refresh payload is malformed', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(Response.json(route))
       .mockResolvedValueOnce(Response.json({ ...route, slug: '../settings' }));
     vi.stubGlobal('fetch', fetchMock);
@@ -98,7 +103,8 @@ describe('status page middleware serving routes', () => {
   });
 
   it('does not serve a stale route beyond the bounded outage window', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(Response.json(route))
       .mockRejectedValue(new Error('serving store unavailable'));
     vi.stubGlobal('fetch', fetchMock);
@@ -128,5 +134,32 @@ describe('status page middleware serving routes', () => {
     expect(response.headers.get('x-middleware-rewrite')).toBe(
       'https://status.customer.test/status/customer-status'
     );
+  });
+
+  it('allows logo assets, manifests, and service worker scripts through on status domains', async () => {
+    const { isStatusStaticAsset } = await import('@/middleware');
+
+    expect(isStatusStaticAsset('/logo.svg')).toBe(true);
+    expect(isStatusStaticAsset('/logo.png')).toBe(true);
+    expect(isStatusStaticAsset('/logo-mark.png')).toBe(true);
+    expect(isStatusStaticAsset('/logo-compressed.png')).toBe(true);
+    expect(isStatusStaticAsset('/manifest.json')).toBe(true);
+    expect(isStatusStaticAsset('/manifest.webmanifest')).toBe(true);
+    expect(isStatusStaticAsset('/sw.js')).toBe(true);
+    expect(isStatusStaticAsset('/custom-sw.js')).toBe(true);
+    expect(isStatusStaticAsset('/workbox-55ca3fbd.js')).toBe(true);
+    expect(isStatusStaticAsset('/api/users')).toBe(false);
+  });
+
+  it('allows GET and HEAD requests for status APIs including logo endpoints and health check', async () => {
+    const { isAllowedStatusApi } = await import('@/middleware');
+
+    expect(isAllowedStatusApi('/api/status', 'GET')).toBe(true);
+    expect(isAllowedStatusApi('/api/status', 'HEAD')).toBe(true);
+    expect(isAllowedStatusApi('/api/status-page/logo/page_123', 'GET')).toBe(true);
+    expect(isAllowedStatusApi('/api/status-page/logo/page_123', 'HEAD')).toBe(true);
+    expect(isAllowedStatusApi('/api/health', 'GET')).toBe(true);
+    expect(isAllowedStatusApi('/api/health', 'HEAD')).toBe(true);
+    expect(isAllowedStatusApi('/api/users', 'GET')).toBe(false);
   });
 });

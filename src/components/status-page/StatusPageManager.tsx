@@ -2,7 +2,7 @@
 
 import React, { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Globe, Loader2 } from 'lucide-react';
+import { Plus, Globe, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
 import { Label } from '@/components/ui/shadcn/label';
@@ -19,12 +19,15 @@ import { cn } from '@/lib/utils';
 export function StatusPageManager({
   className,
   variant = 'hero',
+  canCreate = true,
 }: {
   className?: string;
   variant?: 'hero' | 'default';
+  canCreate?: boolean;
 } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [limitOpen, setLimitOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -74,6 +77,10 @@ export function StatusPageManager({
     <>
       <Button
         onClick={() => {
+          if (!canCreate) {
+            setLimitOpen(true);
+            return;
+          }
           setName('');
           setSlug('');
           setError(null);
@@ -87,7 +94,7 @@ export function StatusPageManager({
           className
         )}
       >
-        <Plus className="h-4 w-4" />
+        {canCreate ? <Plus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
         <span>Create status page</span>
       </Button>
 
@@ -176,6 +183,44 @@ export function StatusPageManager({
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Limit reached notice */}
+      <Dialog open={limitOpen} onOpenChange={setLimitOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <div className="flex items-center gap-2.5 mb-1 text-amber-600 dark:text-amber-400">
+              <div className="p-2 rounded-lg bg-amber-500/10">
+                <Lock className="h-5 w-5" />
+              </div>
+              <DialogTitle className="text-lg font-bold">Page Limit Reached</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
+              OpsKnight doesn&apos;t allow multiple status pages. Contact OpsKnight if you want more
+              pages.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-700 dark:text-amber-400 space-y-1">
+            <p className="font-medium">Need more status pages?</p>
+            <p>
+              Reach out to us at{' '}
+              <a
+                href="mailto:support@opsknight.com"
+                className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+              >
+                support@opsknight.com
+              </a>{' '}
+              and we&apos;ll get you set up.
+            </p>
+          </div>
+
+          <DialogFooter className="pt-1">
+            <Button size="sm" onClick={() => setLimitOpen(false)}>
+              Got it
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

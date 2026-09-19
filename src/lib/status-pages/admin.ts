@@ -9,12 +9,16 @@ import { rebuildStatusPageSnapshot } from './snapshot';
 
 const STATUS_PAGE_LIFECYCLE_LOCK = 'opsknight:status-pages:lifecycle:v1';
 
+/** Maximum number of status pages any account may create. */
+export const MAX_STATUS_PAGES = 1;
+
 export class StatusPageAdminError extends Error {
   constructor(
     readonly code:
       | 'STATUS_PAGE_NOT_FOUND'
       | 'STATUS_PAGE_DEFAULT_REPLACEMENT_REQUIRED'
-      | 'STATUS_PAGE_DEFAULT_REPLACEMENT_INVALID',
+      | 'STATUS_PAGE_DEFAULT_REPLACEMENT_INVALID'
+      | 'STATUS_PAGE_LIMIT_REACHED',
     message: string
   ) {
     super(message);
@@ -43,6 +47,14 @@ export async function createStatusPage(input: {
   return prisma.$transaction(async tx => {
     await lockLifecycle(tx);
     const count = await tx.statusPage.count();
+
+    if (count >= MAX_STATUS_PAGES) {
+      throw new StatusPageAdminError(
+        'STATUS_PAGE_LIMIT_REACHED',
+        `OpsKnight doesn't allow multiple status pages. Contact OpsKnight if you want more pages.`
+      );
+    }
+
     const isDefault = count === 0 || input.makeDefault === true;
     if (isDefault) {
       await tx.statusPage.updateMany({ where: { isDefault: true }, data: { isDefault: false } });
@@ -201,10 +213,13 @@ export async function deleteStatusPage(statusPageId: string, replacementDefaultI
       data: { status: 'SKIPPED', errorMsg: 'Status page deleted' },
     });
     await tx.statusPage.delete({ where: { id: statusPageId } });
-    await emitAuditEvent({
-      action: 'STATUS_PAGE_DELETED',
-      source: 'UI',
-      target: { type: 'STATUS_PAGE', id: statusPageId },
-    }, tx);
+    await emitAuditEvent(
+      {
+        action: 'STATUS_PAGE_DELETED',
+        source: 'UI',
+        target: { type: 'STATUS_PAGE', id: statusPageId },
+      },
+      tx
+    );
   });
 }

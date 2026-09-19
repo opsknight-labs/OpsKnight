@@ -4,7 +4,12 @@ import prisma from '@/lib/prisma';
 import { assertAdmin } from '@/lib/rbac';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { isStatusPageSlug } from '@/lib/validation';
-import { createStatusPage, deleteStatusPage, StatusPageAdminError } from '@/lib/status-pages/admin';
+import {
+  createStatusPage,
+  deleteStatusPage,
+  StatusPageAdminError,
+  MAX_STATUS_PAGES,
+} from '@/lib/status-pages/admin';
 
 const CreatePageSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -19,7 +24,7 @@ export async function GET() {
       select: { id: true, name: true, slug: true, isDefault: true, enabled: true, updatedAt: true },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     });
-    return jsonOk({ pages }, 200);
+    return jsonOk({ pages, canCreate: pages.length < MAX_STATUS_PAGES }, 200);
   } catch {
     return jsonError('Unauthorized', 403);
   }
@@ -37,7 +42,10 @@ export async function POST(req: NextRequest) {
       makeDefault: parsed.data.isDefault,
     });
     return jsonOk({ page }, 201);
-  } catch {
+  } catch (error) {
+    if (error instanceof StatusPageAdminError && error.code === 'STATUS_PAGE_LIMIT_REACHED') {
+      return jsonError(error.message, 403, { code: error.code });
+    }
     return jsonError('Failed to create status page.', 500);
   }
 }
