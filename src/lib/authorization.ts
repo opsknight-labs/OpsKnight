@@ -42,6 +42,8 @@ export const CAPABILITIES = {
   RETENTION_READ: 'retention.read',
   RETENTION_MANAGE: 'retention.manage',
   RETENTION_HOLDS_MANAGE: 'retention.holds.manage',
+  ENCRYPTION_READ: 'encryption.read',
+  ENCRYPTION_MANAGE: 'encryption.manage',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
@@ -96,6 +98,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.PRIVACY_READ,
   // Auditors may view retention settings and cleanup previews.
   CAPABILITIES.RETENTION_READ,
+  // Auditors may inspect encryption migration status and key retirement readiness.
+  CAPABILITIES.ENCRYPTION_READ,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_CREATE_SCOPED,
