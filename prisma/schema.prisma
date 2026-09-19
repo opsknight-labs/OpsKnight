@@ -2726,6 +2726,15 @@ enum ComplianceEvaluationTrigger {
   DEPLOYMENT
 }
 
+enum ComplianceEvidenceType {
+  CONFIGURATION_SNAPSHOT
+  VERIFICATION_RESULT
+  CAPABILITY_CHECK
+  SYSTEM_STATE
+  EXECUTION_SUMMARY
+  EVALUATION_FAILURE
+}
+
 // Immutable historical record of a runtime control evaluation.
 model ComplianceEvaluation {
   id               String                      @id @default(cuid())
@@ -2742,9 +2751,37 @@ model ComplianceEvaluation {
   validUntil       DateTime?
   createdAt        DateTime                    @default(now())
 
+  evidence         ComplianceEvidence[]
+
   @@index([controlId, evaluatedAt])
   @@index([status])
   @@index([batchId])
+}
+
+// Durable evidence captured during a runtime control evaluation.
+model ComplianceEvidence {
+  id               String                 @id @default(cuid())
+  evaluationId     String
+  controlId        String
+  type             ComplianceEvidenceType
+  collectorId      String
+  collectorVersion String
+  title            String
+  description      String?
+  resourceType     String?
+  resourceId       String?
+  observedAt       DateTime
+  collectedAt      DateTime               @default(now())
+  validUntil       DateTime?
+  contentHash      String
+  metadata         Json
+
+  evaluation       ComplianceEvaluation   @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([controlId, observedAt])
+  @@index([evaluationId])
+  @@index([type])
+  @@index([resourceType, resourceId])
 }
 
 // Cached projection of the latest evaluated state for a compliance control.
