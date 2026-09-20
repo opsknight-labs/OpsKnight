@@ -119,6 +119,7 @@ export async function GET(req: NextRequest) {
               slaPausedMs: true,
               slaPauseStartedAt: true,
               slaAckElapsedMs: true,
+              slaFirstAcknowledgedAt: true,
               slaResolveElapsedMs: true,
               serviceId: true,
               service: {

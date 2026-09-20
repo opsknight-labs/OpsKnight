@@ -1092,6 +1092,7 @@ model Incident {
   snoozeReason                        String?
   slaPausedMs                         BigInt                          @default(0)
   slaPauseStartedAt                   DateTime?
+  slaFirstAcknowledgedAt              DateTime?
   slaAckElapsedMs                     BigInt?
   slaResolveElapsedMs                 BigInt?
   slaAckTargetMs                      Int?
@@ -1294,6 +1295,13 @@ model IncidentSlaLegacyCapture {
   lastIncidentId  String?
   lastServiceId   String?
   lastCaptureKind String?
+}
+
+model IncidentSlaLegacyAckMutation {
+  day            DateTime @id @db.Date
+  count          BigInt   @default(0)
+  lastSeenAt     DateTime @default(now())
+  lastIncidentId String?
 }
 
 model IncidentSlaPause {

@@ -114,7 +114,8 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ count: BigInt(7), lastSeenAt: new Date(Date.now() - 5_000) }]);
+      .mockResolvedValueOnce([{ count: BigInt(7), lastSeenAt: new Date(Date.now() - 5_000) }])
+      .mockResolvedValueOnce([{ count: BigInt(2), lastSeenAt: new Date(Date.now() - 3_000) }]);
     vi.mocked(prisma.backgroundJob.groupBy).mockResolvedValue([]);
     vi.mocked(prisma.incident.count).mockResolvedValue(0);
     vi.mocked(prisma.user.count).mockResolvedValue(1);
@@ -134,5 +135,13 @@ describe('API Route - Prometheus Metrics (/api/metrics)', () => {
       );
     expect(Number(lastSeenLine?.split(' ').at(1))).toBeGreaterThanOrEqual(5);
     expect(Number(lastSeenLine?.split(' ').at(1))).toBeLessThan(10);
+    expect(text).toContain('opsknight_incident_sla_legacy_ack_mutations_total 2');
+    const mutationLastSeenLine = text
+      .split('\n')
+      .find(line =>
+        line.startsWith('opsknight_incident_sla_legacy_ack_mutation_last_seen_age_seconds ')
+      );
+    expect(Number(mutationLastSeenLine?.split(' ').at(1))).toBeGreaterThanOrEqual(3);
+    expect(Number(mutationLastSeenLine?.split(' ').at(1))).toBeLessThan(10);
   });
 });

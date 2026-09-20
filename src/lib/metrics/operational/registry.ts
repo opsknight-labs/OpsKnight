@@ -462,6 +462,22 @@ export const OPERATIONAL_METRICS = [
     estimatedMaxSeries: 1,
   },
   {
+    name: 'opsknight_incident_sla_legacy_ack_mutations_total',
+    help: 'Cumulative old-writer ACK capture mutations preserved during the rolling upgrade',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
+    name: 'opsknight_incident_sla_legacy_ack_mutation_last_seen_age_seconds',
+    help: 'Age of the newest old-writer ACK capture mutation preserved during the rolling upgrade',
+    kind: 'gauge',
+    labels: [],
+    scope: 'cluster_snapshot',
+    estimatedMaxSeries: 1,
+  },
+  {
     name: 'opsknight_metrics_collection_errors',
     help: 'Collectors that failed in the latest scrape snapshot',
     kind: 'gauge',

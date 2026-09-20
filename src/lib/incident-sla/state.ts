@@ -36,6 +36,7 @@ function validationReason(input: IncidentSlaProjectionInput, now: Date): string 
   if (!isDate(input.createdAt)) return 'Invalid incident creation date';
   const dateValues: Array<[string, Date | null]> = [
     ['acknowledgedAt', input.acknowledgedAt],
+    ['slaFirstAcknowledgedAt', input.slaFirstAcknowledgedAt ?? null],
     ['resolvedAt', input.resolvedAt],
     ['slaPauseStartedAt', input.slaPauseStartedAt],
   ];
@@ -120,15 +121,18 @@ export function projectIncidentSlaState(
 
   function projectPhase(phase: IncidentSlaPhase): IncidentSlaPhaseState {
     const targetMs = phase === 'ack' ? contract.ackTargetMs : contract.resolveTargetMs;
-    const completedAt = phase === 'ack' ? input.acknowledgedAt : input.resolvedAt;
-    const resolvedWithoutAck =
-      phase === 'ack' && input.status === 'RESOLVED' && input.acknowledgedAt === null;
+    const completedAt =
+      phase === 'ack' ? (input.slaFirstAcknowledgedAt ?? input.acknowledgedAt) : input.resolvedAt;
     const capturedElapsedMs = phase === 'ack' ? input.slaAckElapsedMs : input.slaResolveElapsedMs;
+    // ACK capture is incident-lifetime completion. The operational
+    // acknowledgedAt field may be cleared by REOPEN/UNACKNOWLEDGE.
+    const completed = completedAt !== null || (phase === 'ack' && capturedElapsedMs !== null);
+    const resolvedWithoutAck = phase === 'ack' && input.status === 'RESOLVED' && !completed;
     const evaluationAt = completedAt ?? (resolvedWithoutAck ? input.resolvedAt! : now);
     // Captures protect completed ACK from later pauses. Legacy rows use the existing
     // materialized clock; this API does not invent pause history it was not given.
     const elapsedMs =
-      completedAt !== null && capturedElapsedMs !== null
+      completed && capturedElapsedMs !== null
         ? capturedOrEffectiveElapsedMs({
             capturedElapsedMs,
             startedAt: input.createdAt,
@@ -149,10 +153,10 @@ export function projectIncidentSlaState(
         ? 'BREACHED'
         : elapsedMs > targetMs
           ? 'BREACHED'
-          : completedAt !== null
+          : completed
             ? 'MET'
             : 'PENDING';
-    const actionable = !resolvedWithoutAck && completedAt === null && !clock.paused;
+    const actionable = !resolvedWithoutAck && !completed && !clock.paused;
     const windowMs = getIncidentSlaWarningWindowMs(phase, targetMs, policy);
     // With no open pause, the deadline is creation + closed pauses + target.
     // The first noncompliant Date is one millisecond after that deadline.

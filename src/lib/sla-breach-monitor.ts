@@ -120,6 +120,7 @@ export async function checkSLABreaches(
       slaTargetCapturedAt: true,
       slaPausedMs: true,
       slaPauseStartedAt: true,
+      slaFirstAcknowledgedAt: true,
       slaAckElapsedMs: true,
       slaResolveElapsedMs: true,
       nextSlaTransitionAt: true,

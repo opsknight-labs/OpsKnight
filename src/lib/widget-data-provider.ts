@@ -122,6 +122,7 @@ export async function getWidgetRealtimeProjection(
       slaPausedMs: true,
       slaPauseStartedAt: true,
       slaAckElapsedMs: true,
+      slaFirstAcknowledgedAt: true,
       slaResolveElapsedMs: true,
       service: {
         select: { name: true },
@@ -212,7 +213,7 @@ export async function getWidgetData(
   userId: string,
   _userRole: string,
   filters: SLAMetricsFilter = {},
-  providedSlaMetrics?: any
+  providedSlaMetrics?: SLAServerMetrics
 ): Promise<WidgetDataContext> {
   const now = new Date();
 

@@ -5,6 +5,8 @@ export interface IncidentSlaProjectionInput {
   status: IncidentStatus;
   createdAt: Date;
   acknowledgedAt: Date | null;
+  /** Immutable lifetime first acknowledgement; legacy inputs may omit it. */
+  slaFirstAcknowledgedAt?: Date | null;
   resolvedAt: Date | null;
   resolutionKind?: IncidentResolutionKind | null;
   slaAckTargetMs: number | null;

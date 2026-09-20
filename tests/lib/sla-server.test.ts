@@ -329,8 +329,9 @@ describe('calculateSLAMetrics trend series', () => {
         urgency: 'LOW',
         assigneeId: null,
         serviceId: 'service-1',
-        acknowledgedAt: new Date('2026-01-01T05:30:00Z'),
+        acknowledgedAt: null,
         resolvedAt: null,
+        slaAckElapsedMs: BigInt(5 * 60_000),
         slaAckTargetMs: 15 * 60_000,
         slaResolveTargetMs: 120 * 60_000,
         slaTargetSource: 'SERVICE_DEFAULT',
@@ -378,7 +379,7 @@ describe('calculateSLAMetrics trend series', () => {
     expect(hourFive?.count).toBe(1);
     expect(hourFive?.ackRate).toBe(100);
     expect(hourFive?.resolveRate).toBe(0);
-    expect(hourFive?.ackCompliance).toBe(0);
+    expect(hourFive?.ackCompliance).toBe(100);
     expect(hourFive?.escalationRate).toBe(100);
   });
 
