@@ -404,7 +404,11 @@ export async function completePasswordReset(
         smsNotificationsEnabled: true,
       },
     });
-    if (!user || (user.status !== 'ACTIVE' && user.status !== 'INVITED')) {
+    if (
+      !user ||
+      (user.status !== 'ACTIVE' && user.status !== 'INVITED') ||
+      (record.type === 'INVITE' && user.status !== 'INVITED')
+    ) {
       return {
         success: false,
         code: 'INVALID_TOKEN',

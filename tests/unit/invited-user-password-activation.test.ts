@@ -157,5 +157,28 @@ describe('Invited User Password Activation and Recovery Flow', () => {
       expect(result.code).toBe('INVALID_TOKEN');
       expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
     });
+
+    it('rejects INVITE tokens when the target account has already become ACTIVE', async () => {
+      const rawToken = 'test-token-invite-already-active-12345';
+
+      mockPrisma.userToken.findFirst.mockResolvedValue({
+        id: 'token-rec-3',
+        userId: 'active-user-id',
+        identifier: 'active@example.com',
+        type: 'INVITE',
+      });
+
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 'active-user-id',
+        email: 'active@example.com',
+        name: 'Active User',
+        status: 'ACTIVE',
+      });
+
+      const result = await completePasswordReset(rawToken, 'SecurePassphrase123!', '127.0.0.1');
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('INVALID_TOKEN');
+      expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
+    });
   });
 });

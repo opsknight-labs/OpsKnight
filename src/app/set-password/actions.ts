@@ -181,7 +181,7 @@ export async function setPassword(
         where: {
           id: user.id,
           status: 'INVITED',
-          ...(record.userId && typeof record.generation === 'number'
+          ...(record.type === 'INVITE' && record.userId && typeof record.generation === 'number'
             ? { invitationGeneration: record.generation }
             : {}),
         },

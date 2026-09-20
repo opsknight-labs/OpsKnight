@@ -284,7 +284,7 @@ export async function addUser(
       return { error: 'A user with that email already exists.' };
     }
 
-    let inviteUrl = '';
+    let inviteToken = '';
     const user = await prisma.$transaction(async tx => {
       const newUser = await tx.user.create({
         data: {
@@ -318,10 +318,12 @@ export async function addUser(
         },
       });
 
-      inviteUrl = await buildInviteUrl(token);
+      inviteToken = token;
 
       return newUser;
     });
+
+    const inviteUrl = await buildInviteUrl(inviteToken);
 
     await logAudit({
       action: 'user.invited',
