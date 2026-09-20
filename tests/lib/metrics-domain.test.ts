@@ -7,7 +7,7 @@ import {
 } from '@/lib/metrics/domain/accumulator';
 import { intervalDurationMs, intervalGaps, mergeIntervals } from '@/lib/metrics/domain/interval';
 import { effectiveElapsedMs } from '@/lib/metrics/domain/sla-clock';
-import { resolveSlaTarget } from '@/lib/metrics/domain/sla-target';
+import { resolveLegacySlaTarget } from '@/lib/metrics/domain/sla-target';
 
 const at = (hour: number, minute = 0) => new Date(Date.UTC(2026, 0, 1, hour, minute));
 
@@ -52,18 +52,18 @@ describe('canonical metric domain', () => {
 
   it('uses definition, priority, service, then global target precedence', () => {
     expect(
-      resolveSlaTarget({
+      resolveLegacySlaTarget({
         priority: 'P1',
         definitionOverride: { ackMinutes: 2, resolveMinutes: 20 },
       }).source
     ).toBe('definition');
     expect(
-      resolveSlaTarget({ priority: '1', serviceTargets: { ackMinutes: 90, resolveMinutes: 900 } })
+      resolveLegacySlaTarget({ priority: '1', serviceTargets: { ackMinutes: 90, resolveMinutes: 900 } })
     ).toMatchObject({ ackTargetMs: 300_000, source: 'priority' });
     expect(
-      resolveSlaTarget({ serviceTargets: { ackMinutes: 20, resolveMinutes: 200 } })
+      resolveLegacySlaTarget({ serviceTargets: { ackMinutes: 20, resolveMinutes: 200 } })
     ).toMatchObject({ ackTargetMs: 1_200_000, source: 'service' });
-    expect(resolveSlaTarget({})).toMatchObject({ ackTargetMs: 900_000, source: 'global' });
+    expect(resolveLegacySlaTarget({})).toMatchObject({ ackTargetMs: 900_000, source: 'global' });
   });
 
   it('merges additive state exactly and preserves no-data semantics', () => {

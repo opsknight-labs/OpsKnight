@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   });
   const actor = await getCurrentAuthorizationActor();
   const serviceId = new URL(request.url).searchParams.get('serviceId');
-  const [legacyDefinitions, objectives] = await Promise.all([
+  const [legacyDefinitions, objectives, migratedObjectives] = await Promise.all([
     prisma.sLADefinition.findMany({
       where: {
         activeTo: null,
@@ -32,9 +32,17 @@ export async function GET(request: NextRequest) {
       include: { service: { select: { id: true, name: true } } },
       orderBy: { activeFrom: 'desc' },
     }),
+    prisma.serviceObjective.findMany({
+      where: {
+        legacySlaDefinitionId: { not: null },
+        ...(serviceId ? { serviceId } : {}),
+        ...serviceObjectiveReadWhere(actor),
+      },
+      select: { legacySlaDefinitionId: true },
+    }),
   ]);
   const migratedLegacyIds = new Set(
-    objectives.flatMap(objective =>
+    migratedObjectives.flatMap(objective =>
       objective.legacySlaDefinitionId ? [objective.legacySlaDefinitionId] : []
     )
   );

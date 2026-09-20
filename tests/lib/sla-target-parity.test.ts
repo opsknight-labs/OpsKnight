@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSlaTarget } from '@/lib/metrics/domain/sla-target';
+import { resolveLegacySlaTarget } from '@/lib/metrics/domain/sla-target';
 import { slaTargetSql } from '@/lib/metrics/domain/sla-target-sql';
 import { effectiveElapsedMs, effectiveMaterializedElapsedMs } from '@/lib/metrics/domain/sla-clock';
 
@@ -11,7 +11,7 @@ describe('canonical SLA target and pause clock', () => {
     ['P4', 60, 1440],
     ['P5', 120, 2880],
   ])('applies %s before conflicting service targets', (priority, ack, resolve) => {
-    const target = resolveSlaTarget({
+    const target = resolveLegacySlaTarget({
       priority,
       serviceTargets: { ackMinutes: 90, resolveMinutes: 9000 },
     });
@@ -24,26 +24,27 @@ describe('canonical SLA target and pause clock', () => {
 
   it('falls back from malformed priority to service and then global defaults', () => {
     expect(
-      resolveSlaTarget({ priority: 'critical', serviceTargets: { ackMinutes: 22 } })
+      resolveLegacySlaTarget({ priority: 'critical', serviceTargets: { ackMinutes: 22 } })
     ).toMatchObject({ ackTargetMs: 22 * 60_000, source: 'service' });
-    expect(resolveSlaTarget({ priority: 'critical' })).toMatchObject({
+    expect(resolveLegacySlaTarget({ priority: 'critical' })).toMatchObject({
       ackTargetMs: 15 * 60_000,
       resolveTargetMs: 120 * 60_000,
       source: 'global',
     });
   });
 
-  it('builds parameterized SQL from the same priority constants', () => {
+  it('builds SQL that accepts only a complete frozen incident contract', () => {
     const sql = slaTargetSql({
       kind: 'ackMinutes',
       serviceTargetMap: new Map([['service-a', { ackMinutes: 90, resolveMinutes: 900 }]]),
       fallbackMinutes: 15,
     });
-    expect(sql.strings.join(' ')).toContain('UPPER');
-    expect(sql.strings.join(' ')).toContain('REGEXP_REPLACE');
-    expect(sql.values).toEqual(expect.arrayContaining(['P1', 5 * 60_000]));
-    expect(sql.strings.join(' ')).toContain('FROM "Service"');
-    expect(sql.values).not.toContain('service-a');
+    expect(sql.strings.join(' ')).toContain('"slaAckTargetMs" > 0');
+    expect(sql.strings.join(' ')).toContain('"slaResolveTargetMs" > 0');
+    expect(sql.strings.join(' ')).toContain('"slaTargetSource"');
+    expect(sql.strings.join(' ')).toContain('"slaTargetCapturedAt" IS NOT NULL');
+    expect(sql.strings.join(' ')).not.toContain('FROM "Service"');
+    expect(sql.strings.join(' ')).not.toContain('priority');
   });
 
   it('does not subtract a pause that starts after the evaluated event', () => {
