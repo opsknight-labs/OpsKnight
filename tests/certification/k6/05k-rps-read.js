@@ -1,5 +1,5 @@
 import http from "k6/http";
-import { check, sleep } from "k6";
+import { check } from "k6";
 import { Rate, Trend } from "k6/metrics";
 
 const errorRate = new Rate("errors");
@@ -27,7 +27,7 @@ export const options = {
   },
 };
 
-export default function () {
+export default function runReadWorkload() {
   const res = http.get("http://127.0.0.1:3300/api/status", {
     headers: { "Accept": "application/json" },
     timeout: "3s",

@@ -58,6 +58,7 @@ verify_fix.ts
 !prisma/migrations/**/*.sql
 /reports/
 /ci-artifacts/
+/artifacts/
 
 # debug API routes
 /src/app/api/debug/

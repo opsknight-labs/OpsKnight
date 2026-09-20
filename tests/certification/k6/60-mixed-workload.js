@@ -30,7 +30,7 @@ export const options = {
 const STATUS_URL = "http://127.0.0.1:3300/api/status";
 const HEALTH_URL = "http://127.0.0.1:3300/api/health";
 
-export default function () {
+export default function runMixedWorkload() {
   const isHealthCheck = __VU <= 20;
   const res = http.get(isHealthCheck ? HEALTH_URL : STATUS_URL, { timeout: "3s" });
   const ok = check(res, { "2xx": (r) => r.status >= 200 && r.status < 300 });

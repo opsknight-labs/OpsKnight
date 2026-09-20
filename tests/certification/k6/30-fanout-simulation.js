@@ -21,7 +21,7 @@ export const options = {
   },
 };
 
-export default function () {
+export default function runFanoutSimulation() {
   const res = http.get("http://127.0.0.1:3300/api/status", { timeout: "5s" });
   const ok = check(res, {
     "200 OK": (r) => r.status === 200,
