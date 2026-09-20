@@ -116,7 +116,7 @@ describe('projectIncidentSlaState', () => {
       {
         status: 'RESOLVED',
         resolvedAt: at(70 * minute),
-        slaAckElapsedMs: BigInt(100 * minute),
+        slaAckElapsedMs: null,
       },
       at(80 * minute)
     );
@@ -221,24 +221,28 @@ describe('projectIncidentSlaState', () => {
     expect(state({ slaPausedMs: 20 * minute }, at(30 * minute + 1)).ack.status).toBe('BREACHED');
   });
 
-  it('reopening retains original creation, contract and accumulated pause budget', () => {
+  it('reopening retains first-ACK truth and continues resolution from original creation', () => {
     const result = state(
       {
         status: 'OPEN',
         slaPausedMs: BigInt(20 * minute),
-        // Lifecycle clears these on reopen; stale captures must not complete a phase either.
-        slaAckElapsedMs: BigInt(minute),
-        slaResolveElapsedMs: BigInt(2 * minute),
+        slaAckElapsedMs: BigInt(5 * minute),
+        slaFirstAcknowledgedAt: at(5 * minute),
+        slaResolveElapsedMs: null,
       },
       at(90 * minute)
     );
     expect(result.contract.ackTargetMs).toBe(10 * minute);
     expect(result.contract.resolveTargetMs).toBe(60 * minute);
-    expect(result.ack.elapsedMs).toBe(70 * minute);
+    expect(result.ack.elapsedMs).toBe(5 * minute);
     expect(result.resolve.elapsedMs).toBe(70 * minute);
-    expect(result.ack.completedAt).toBeNull();
+    expect(result.ack.completedAt).toEqual(at(5 * minute));
     expect(result.resolve.completedAt).toBeNull();
     expect(result.resolve.status).toBe('BREACHED');
+    expect(result.ack.status).toBe('MET');
+    expect(result.ack.warning).toBe('NONE');
+    expect(result.ack.warningAt).toBeNull();
+    expect(result.ack.breachAt).toBeNull();
   });
 
   it('clamps before-creation evaluation and excessive pause budgets to zero', () => {

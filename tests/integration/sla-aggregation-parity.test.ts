@@ -6,6 +6,7 @@ import { generateDailyRollup, queryRollupMetrics } from '@/lib/metric-rollup';
 import { clearRetentionPolicyCache } from '@/lib/retention-policy';
 import { applyIncidentCreation } from '@/lib/incidents/creation';
 import { resolveIncidentClassification } from '@/lib/incidents/classification';
+import { executeIncidentLifecycleCommand } from '@/lib/incidents/lifecycle';
 import { resetDatabase, testPrisma } from '../helpers/test-db';
 
 const describeIfRealDB =
@@ -79,6 +80,119 @@ describeIfRealDB('SLA aggregation threshold parity', { timeout: 60_000 }, () => 
     expect(belowThreshold.mttd).toBeCloseTo(20, 8);
     expect(aboveThreshold.mttd).toBeCloseTo(belowThreshold.mttd ?? 0, 8);
     expect(aboveThreshold.ackRate).toBe(belowThreshold.ackRate);
+  });
+
+  it('keeps reopened lifetime SLA values identical across projector, live, SQL, and rollup paths', async () => {
+    const service = await testPrisma.service.create({
+      data: { name: `SLA reopen parity ${crypto.randomUUID()}` },
+    });
+    const createdAt = new Date();
+    createdAt.setUTCDate(createdAt.getUTCDate() - 1);
+    createdAt.setUTCHours(10, 0, 0, 0);
+    const firstAckAt = new Date(createdAt.getTime() + 5 * 60_000);
+    const firstResolveAt = new Date(createdAt.getTime() + 30 * 60_000);
+    const reopenAt = new Date(createdAt.getTime() + 10 * 60 * 60_000);
+    const secondAckAt = new Date(reopenAt.getTime() + 5 * 60_000);
+    const finalResolveAt = new Date(createdAt.getTime() + 10.5 * 60 * 60_000);
+    const incident = await testPrisma.incident.create({
+      data: { title: 'Reopen parity', serviceId: service.id, urgency: 'HIGH', createdAt },
+    });
+    for (const [command, now] of [
+      ['ACKNOWLEDGE', firstAckAt],
+      ['RESOLVE', firstResolveAt],
+      ['REOPEN', reopenAt],
+      ['ACKNOWLEDGE', secondAckAt],
+      ['RESOLVE', finalResolveAt],
+    ] as const) {
+      await executeIncidentLifecycleCommand({
+        incidentId: incident.id,
+        command,
+        source: 'WEB',
+        now,
+      });
+    }
+
+    const stored = await testPrisma.incident.findUniqueOrThrow({ where: { id: incident.id } });
+    const projected = projectIncidentSlaState(stored, { now: finalResolveAt });
+    if (!projected.valid) throw new Error(projected.reason);
+    const range = {
+      serviceId: service.id,
+      startDate: new Date(createdAt.getTime() - 1),
+      endDate: new Date(finalResolveAt.getTime() + 1),
+      userTimeZone: 'UTC',
+      _forceLive: true,
+    } as const;
+    const live = await calculateSLAMetrics(range);
+
+    expect(projected.ack.elapsedMs).toBe(5 * 60_000);
+    expect(projected.ack.completedAt).toEqual(firstAckAt);
+    expect(projected.resolve.elapsedMs).toBe(10.5 * 60 * 60_000);
+    expect(live.mttd).toBe(5);
+    expect(live.mttr).toBe(630);
+    expect(live.ackRate).toBe(100);
+    expect(live.ackCompliance).toBe(100);
+
+    await testPrisma.incident.createMany({
+      data: Array.from({ length: 500 }, (_, index) => ({
+        title: `Reopen SQL parity ${index}`,
+        serviceId: service.id,
+        urgency: 'HIGH' as const,
+        status: 'RESOLVED' as const,
+        createdAt,
+        acknowledgedAt: secondAckAt,
+        slaFirstAcknowledgedAt: firstAckAt,
+        resolvedAt: finalResolveAt,
+        resolutionKind: 'MANUAL' as const,
+        slaAckElapsedMs: BigInt(5 * 60_000),
+        slaResolveElapsedMs: BigInt(10.5 * 60 * 60_000),
+      })),
+    });
+    const sql = await calculateSLAMetrics(range);
+    expect(sql.mttd).toBe(5);
+    expect(sql.mttr).toBe(630);
+    expect(sql.ackRate).toBe(100);
+    expect(sql.ackCompliance).toBe(100);
+
+    await generateDailyRollup(createdAt, service.id);
+    const rollup = await queryRollupMetrics(createdAt, createdAt, { serviceId: service.id });
+    expect(rollup.avgMtta).toBe(5);
+    expect(rollup.avgMttr).toBe(630);
+    expect(rollup.ackCompliance).toBe(100);
+  });
+
+  it('resumes lifetime ACK evaluation after timely source recovery is reopened', async () => {
+    const service = await testPrisma.service.create({
+      data: { name: `SLA source recovery reopen ${crypto.randomUUID()}` },
+    });
+    const createdAt = new Date(Date.now() - 60 * 60_000);
+    const resolvedAt = new Date(createdAt.getTime() + 5 * 60_000);
+    const incident = await testPrisma.incident.create({
+      data: {
+        title: 'Source recovery reopened',
+        serviceId: service.id,
+        urgency: 'HIGH',
+        status: 'RESOLVED',
+        createdAt,
+        resolvedAt,
+        resolutionKind: 'SOURCE_RECOVERY',
+      },
+    });
+    const before = projectIncidentSlaState(incident, { now: resolvedAt });
+    expect(before.valid && before.ack.status).toBe('NOT_REQUIRED');
+
+    const reopenAt = new Date(createdAt.getTime() + 30 * 60_000);
+    await executeIncidentLifecycleCommand({
+      incidentId: incident.id,
+      command: 'REOPEN',
+      source: 'WEB',
+      now: reopenAt,
+    });
+    const reopened = await testPrisma.incident.findUniqueOrThrow({ where: { id: incident.id } });
+    const after = projectIncidentSlaState(reopened, { now: reopenAt });
+
+    expect(reopened.slaAckElapsedMs).toBeNull();
+    expect(after.valid && after.ack.status).toBe('BREACHED');
+    expect(after.valid && after.ack.applicability).toBe('REQUIRED');
   });
 
   it('keeps resolved-without-ACK compliance identical across projector, live, compatibility, and rollup engines', async () => {

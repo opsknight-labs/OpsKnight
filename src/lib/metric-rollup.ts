@@ -1,4 +1,5 @@
 // import 'server-only';
+import type { Prisma } from '@prisma/client';
 import { logger } from './logger';
 import { getRetentionPolicy } from './retention-policy';
 import {
@@ -128,7 +129,7 @@ export async function generateDailyRollup(
   }
 
   // Build where clause using exclusive upper bound to prevent microsecond drops
-  const whereClause: any = {
+  const whereClause: Prisma.IncidentWhereInput = {
     createdAt: { gte: dayStart, lt: nextDayStart },
   };
   if (serviceId) whereClause.serviceId = serviceId;
@@ -163,6 +164,7 @@ export async function generateDailyRollup(
             slaPausedMs: true,
             slaPauseStartedAt: true,
             slaAckElapsedMs: true,
+            slaFirstAcknowledgedAt: true,
             slaResolveElapsedMs: true,
             slaAckTargetMs: true,
             slaResolveTargetMs: true,
@@ -343,8 +345,8 @@ export async function generateDailyRollup(
             });
 
           // MTTA calculation
-          if (incident.acknowledgedAt) {
-            const mtta = ackElapsedAt(incident.acknowledgedAt);
+          if (incident.acknowledgedAt || incident.slaAckElapsedMs !== null) {
+            const mtta = ackElapsedAt(incident.acknowledgedAt ?? incident.createdAt);
             if (mtta >= 0) {
               mttaSum += BigInt(mtta);
               mttaCount++;
@@ -596,7 +598,7 @@ export async function generateDailyRollup(
         // aggregate-only when per-priority rows aren't found.
         try {
           for (const priority of ['P1', 'P2', 'P3', 'P4', 'P5'] as const) {
-            const sums = perPriority[priority];
+            const sums = getPrioritySums(priority)!;
             await tx.incidentMetricRollupByPriority.upsert({
               where: { rollupId_priority: { rollupId, priority } },
               create: {

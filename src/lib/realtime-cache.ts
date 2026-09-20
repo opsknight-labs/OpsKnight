@@ -38,7 +38,7 @@ let lastCleanup = Date.now();
 /**
  * Generate a simple hash for change detection
  */
-function hashData(data: any): string {
+function hashData(data: unknown): string {
   return JSON.stringify(data);
 }
 
@@ -170,7 +170,7 @@ export async function getCachedDashboardMetrics(
   lastHash?: string,
   generation?: string | null,
   metricFilter: IncidentMetricFilter = {}
-): Promise<{ data: any; changed: boolean; hash: string } | null> {
+) {
   const hasGlobalMetrics = isAppRole(role) && hasCapability(role, CAPABILITIES.METRICS_READ_ALL);
   const scope = hasGlobalMetrics ? 'global' : `user:${userId}`;
   const filterKey = JSON.stringify({
@@ -262,7 +262,7 @@ export async function getCachedRecentIncidents(
   teamIds: string[],
   lastHash?: string,
   generation?: string | null
-): Promise<{ data: any; changed: boolean; hash: string } | null> {
+) {
   const isPrivileged = isAppRole(role) && hasCapability(role, CAPABILITIES.INCIDENT_READ_ALL);
   const scopeKey = isPrivileged
     ? CacheKeys.recentIncidents('global')
@@ -300,6 +300,7 @@ export async function getCachedRecentIncidents(
         slaPausedMs: true,
         slaPauseStartedAt: true,
         slaAckElapsedMs: true,
+        slaFirstAcknowledgedAt: true,
         slaResolveElapsedMs: true,
         assigneeId: true,
         teamId: true,
@@ -337,10 +338,7 @@ export async function getCachedRecentIncidents(
 /**
  * Get service incidents with caching
  */
-export async function getCachedServiceIncidents(
-  serviceId: string,
-  lastHash?: string
-): Promise<{ data: any; changed: boolean; hash: string } | null> {
+export async function getCachedServiceIncidents(serviceId: string, lastHash?: string) {
   const key = CacheKeys.serviceIncidents(serviceId);
 
   const fetcher = async () => {
@@ -369,10 +367,7 @@ export async function getCachedServiceIncidents(
 /**
  * Get incident details with caching
  */
-export async function getCachedIncidentDetails(
-  incidentId: string,
-  lastHash?: string
-): Promise<{ data: any; changed: boolean; hash: string } | null> {
+export async function getCachedIncidentDetails(incidentId: string, lastHash?: string) {
   const key = `incident:${incidentId}`;
 
   const fetcher = async () => {
