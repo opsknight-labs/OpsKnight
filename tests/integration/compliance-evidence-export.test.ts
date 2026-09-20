@@ -345,6 +345,7 @@ describeIfRealDB('verifiable compliance evidence package export (real PostgreSQL
       scope: { type: 'CONTROLS', controlIds: ['SEC-ENC-001'] },
       evidenceSelection: { mode: 'SNAPSHOT' },
       userId: 'usr_auditor',
+      now: new Date('2026-09-20T10:00:00.000Z'),
       prisma: testPrisma,
     });
 
