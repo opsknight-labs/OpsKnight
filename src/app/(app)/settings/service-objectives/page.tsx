@@ -23,10 +23,8 @@ const windowLabel = {
 } as const;
 
 export default async function ServiceObjectivesPage() {
-  const permissions = await getUserPermissions();
-  if (!permissions.authenticated || !permissions.capabilities.includes('admin.manage')) {
-    redirect('/settings');
-  }
+  // Service objectives UI is deferred to a future release
+  redirect('/settings');
   const objectives = await prisma.serviceObjective.findMany({
     where: { activeTo: null },
     include: { service: { select: { name: true } } },
@@ -59,8 +57,8 @@ export default async function ServiceObjectivesPage() {
           <Target className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
           <h2 className="font-semibold">No service objectives yet</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create objectives through the v1 service-objectives API. Incident response SLA policy
-            is configured separately.
+            Create objectives through the v1 service-objectives API. Incident response SLA policy is
+            configured separately.
           </p>
         </Card>
       ) : (
