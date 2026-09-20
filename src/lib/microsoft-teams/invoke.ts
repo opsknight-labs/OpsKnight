@@ -238,15 +238,18 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
       (!warRoom.providerTenantId || warRoom.providerTenantId === destination.tenantId) &&
       (!warRoom.providerContainerId || isTeamMatch(warRoom.providerContainerId))
     );
+    const warRoomStateAllowed = isRefresh
+      ? Boolean(warRoom && ['READY', 'CLOSING', 'CLOSED', 'ARCHIVED'].includes(warRoom.state))
+      : warRoom?.state === 'READY';
     const warRoomRouteMatches = Boolean(
       warRoom &&
-      warRoom.state === 'READY' &&
+      warRoomStateAllowed &&
       warRoom.providerTenantId === tenantId &&
       isTeamMatch(warRoom.providerContainerId) &&
       isChannelMatch(warRoom.providerChannelId) &&
       warRoomDestinationBound
     );
-    // P1 fencing: when warRoomId is present, only READY war-room authority counts; no fallback to generic destination.
+    // P1 fencing: when warRoomId is present, only active (or refreshing terminal) war-room authority counts; no fallback to generic destination.
     const routeMatches = warRoomId ? warRoomRouteMatches : destinationRouteMatches;
     const messageMatches = warRoom
       ? warRoom.messageGeneration === messageGeneration &&
@@ -417,7 +420,8 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
               eventType,
             },
             {
-              disableActions: incident.status === 'RESOLVED',
+              disableActions:
+                incident.status === 'RESOLVED' || Boolean(warRoom && warRoom.state !== 'READY'),
               meeting: meetingProjection,
               interactive: {
                 destinationId,
