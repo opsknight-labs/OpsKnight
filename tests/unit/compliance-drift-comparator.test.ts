@@ -143,12 +143,11 @@ describe('compareComplianceObservations', () => {
     };
 
     const drifts = compareComplianceObservations(withFindings, clearedFindings);
-    const findingRecovery = drifts.find(
-      d => d.isRecovery && d.recoveryKind === 'FINDING_SET_CHANGED'
-    );
+    const findingDrifts = drifts.filter(d => d.kind === 'FINDING_SET_CHANGED');
 
-    expect(findingRecovery).toBeDefined();
-    expect(findingRecovery?.details).toMatchObject({
+    expect(findingDrifts).toHaveLength(1);
+    expect(findingDrifts[0].isRecovery).toBe(true);
+    expect(findingDrifts[0].details).toMatchObject({
       clearedFindings: ['weak-cipher'],
     });
   });

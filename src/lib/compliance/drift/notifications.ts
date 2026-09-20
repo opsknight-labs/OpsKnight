@@ -12,6 +12,15 @@ const ACTIONABLE_KINDS = new Set([
   'EVIDENCE_INTEGRITY_MISMATCH',
 ]);
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Handles durable notification dispatch and deduplication for a compliance drift event.
  * Enforces anti-alert-storm rules, per-event generation deduplication, and flapping cooldowns.
@@ -134,6 +143,11 @@ export async function dispatchComplianceDriftNotification(
   );
 
   // 7. Route through OpsKnight central notification control plane with real EMAIL payload
+  const safeControlId = escapeHtml(params.driftEvent.controlId ?? 'Unknown');
+  const safeSummary = escapeHtml(params.driftEvent.summary);
+  const safeKind = escapeHtml(params.driftEvent.kind);
+  const safeImpact = escapeHtml(params.driftEvent.impact);
+
   for (const user of recipients) {
     await createCentralNotificationIntent(
       {
@@ -153,7 +167,7 @@ export async function dispatchComplianceDriftNotification(
           to: user.email,
           subject: `[OpsKnight Compliance Drift] Control ${params.driftEvent.controlId ?? 'Unknown'}: ${params.driftEvent.summary}`,
           text: `Compliance drift observed for control ${params.driftEvent.controlId ?? 'Unknown'}.\n\nSummary: ${params.driftEvent.summary}\nKind: ${params.driftEvent.kind}\nImpact: ${params.driftEvent.impact}\nDetected At: ${params.driftEvent.firstDetectedAt.toISOString()}`,
-          html: `<h2>OpsKnight Compliance Drift Alert</h2><p><strong>Control:</strong> ${params.driftEvent.controlId ?? 'Unknown'}</p><p><strong>Summary:</strong> ${params.driftEvent.summary}</p><p><strong>Kind:</strong> ${params.driftEvent.kind}</p><p><strong>Impact:</strong> ${params.driftEvent.impact}</p>`,
+          html: `<h2>OpsKnight Compliance Drift Alert</h2><p><strong>Control:</strong> ${safeControlId}</p><p><strong>Summary:</strong> ${safeSummary}</p><p><strong>Kind:</strong> ${safeKind}</p><p><strong>Impact:</strong> ${safeImpact}</p>`,
         },
       },
       tx

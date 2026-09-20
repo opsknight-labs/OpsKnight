@@ -11,11 +11,15 @@ const PROHIBITED_PHRASES = [
   /compliance\s+guarantee/i,
 ];
 
+const REPO_ROOT = path.resolve(process.cwd());
+
 function scanDirectory(dir: string, fileList: string[] = []): string[] {
-  if (!fs.existsSync(dir)) return fileList;
-  const files = fs.readdirSync(dir);
+  const resolvedDir = path.resolve(REPO_ROOT, dir);
+  if (!resolvedDir.startsWith(REPO_ROOT) || !fs.existsSync(resolvedDir)) return fileList;
+  const files = fs.readdirSync(resolvedDir);
   for (const file of files) {
-    const filePath = path.join(dir, file);
+    const filePath = path.resolve(resolvedDir, file);
+    if (!filePath.startsWith(REPO_ROOT)) continue;
     const stat = fs.statSync(filePath);
     if (stat.isDirectory()) {
       scanDirectory(filePath, fileList);

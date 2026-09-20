@@ -128,8 +128,10 @@ export function compareComplianceObservations(
     current.findings.map((f: ObservationFinding) => [f.code, f.severity.toUpperCase()])
   );
 
+  const allFindingsCleared = prevFindingMap.size > 0 && currFindingMap.size === 0;
+
   // Recovery: All previous technical findings have been cleared
-  if (prevFindingMap.size > 0 && currFindingMap.size === 0) {
+  if (allFindingsCleared) {
     drifts.push({
       kind: 'FINDING_SET_CHANGED',
       impact: 'INFORMATIONAL',
@@ -169,7 +171,11 @@ export function compareComplianceObservations(
     }
   }
 
-  if (added.length > 0 || removed.length > 0 || changedSeverity.length > 0) {
+  // Only create generic finding-set drift if this is NOT the complete-clear recovery case
+  if (
+    !allFindingsCleared &&
+    (added.length > 0 || removed.length > 0 || changedSeverity.length > 0)
+  ) {
     const hasHighSeverity = added.some(
       f => f.severity === 'ERROR' || f.severity === 'CRITICAL' || f.severity === 'HIGH'
     );

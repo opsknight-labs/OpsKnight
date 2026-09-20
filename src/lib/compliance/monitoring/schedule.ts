@@ -66,15 +66,19 @@ export async function ensureComplianceMonitoringScheduled(
       });
 
       if (existingRun) {
-        // Also check if background job exists
-        const existingJob = await tx.backgroundJob.findFirst({
+        // Verify if a background job specifically for this monitoring run exists
+        const activeJobs = await tx.backgroundJob.findMany({
           where: {
             type: 'COMPLIANCE_EVALUATION_SWEEP',
             status: { in: ['PENDING', 'PROCESSING'] },
           },
         });
 
-        if (existingJob) {
+        const jobForThisRun = activeJobs.find(
+          j => (j.payload as { monitorRunId?: string } | null)?.monitorRunId === existingRun.id
+        );
+
+        if (jobForThisRun) {
           return { scheduled: false, monitorRunId: existingRun.id, reason: 'ALREADY_SCHEDULED' };
         }
 

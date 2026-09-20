@@ -121,7 +121,7 @@ describe('ensureComplianceMonitoringScheduled', () => {
         update: vi.fn(),
       },
       backgroundJob: {
-        findFirst: vi.fn().mockResolvedValue(null), // Job missing!
+        findMany: vi.fn().mockResolvedValue([]), // Job missing!
         create: vi.fn().mockResolvedValue({ id: 'job-recreated' }),
       },
     };
@@ -166,7 +166,7 @@ describe('ensureComplianceMonitoringScheduled', () => {
         create: vi.fn().mockResolvedValue({ id: 'run-replacement' }),
       },
       backgroundJob: {
-        findFirst: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
         create: vi.fn().mockResolvedValue({ id: 'job-replacement' }),
       },
     };
@@ -192,5 +192,100 @@ describe('ensureComplianceMonitoringScheduled', () => {
     );
     expect(mockTx.complianceMonitoringRun.create).toHaveBeenCalled();
     expect(mockTx.backgroundJob.create).toHaveBeenCalled();
+  });
+
+  it('recreates background job when PENDING run exists and active job belongs to a different run', async () => {
+    const { ensureComplianceMonitoringScheduled } =
+      await import('@/lib/compliance/monitoring/schedule');
+
+    const mockRun = {
+      id: 'run-pending-A',
+      scheduledFor: new Date('2026-09-20T12:00:00.000Z'),
+      status: 'PENDING',
+    };
+
+    const unrelatedJob = {
+      id: 'job-unrelated-B',
+      type: 'COMPLIANCE_EVALUATION_SWEEP',
+      status: 'PENDING',
+      payload: { monitorRunId: 'run-unrelated-B' },
+    };
+
+    const mockTx = {
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      complianceMonitoringRun: {
+        findFirst: vi.fn().mockResolvedValue(mockRun),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      backgroundJob: {
+        findMany: vi.fn().mockResolvedValue([unrelatedJob]),
+        create: vi.fn().mockResolvedValue({ id: 'job-recreated-A' }),
+      },
+    };
+
+    const mockPrisma = {
+      $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockTx)),
+    };
+
+    const result = await ensureComplianceMonitoringScheduled(
+      mockPrisma as never,
+      new Date('2026-09-20T12:05:00.000Z')
+    );
+
+    expect(result.scheduled).toBe(true);
+    expect(result.reason).toBe('RECREATED_JOB_FOR_PENDING_RUN');
+    expect(mockTx.backgroundJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'COMPLIANCE_EVALUATION_SWEEP',
+          payload: { monitorRunId: 'run-pending-A' },
+        }),
+      })
+    );
+  });
+
+  it('returns ALREADY_SCHEDULED when an active job matches the existing run', async () => {
+    const { ensureComplianceMonitoringScheduled } =
+      await import('@/lib/compliance/monitoring/schedule');
+
+    const mockRun = {
+      id: 'run-active-1',
+      scheduledFor: new Date('2026-09-20T12:00:00.000Z'),
+      status: 'PENDING',
+    };
+
+    const matchingJob = {
+      id: 'job-active-1',
+      type: 'COMPLIANCE_EVALUATION_SWEEP',
+      status: 'PENDING',
+      payload: { monitorRunId: 'run-active-1' },
+    };
+
+    const mockTx = {
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      complianceMonitoringRun: {
+        findFirst: vi.fn().mockResolvedValue(mockRun),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      backgroundJob: {
+        findMany: vi.fn().mockResolvedValue([matchingJob]),
+        create: vi.fn(),
+      },
+    };
+
+    const mockPrisma = {
+      $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockTx)),
+    };
+
+    const result = await ensureComplianceMonitoringScheduled(
+      mockPrisma as never,
+      new Date('2026-09-20T12:05:00.000Z')
+    );
+
+    expect(result.scheduled).toBe(false);
+    expect(result.reason).toBe('ALREADY_SCHEDULED');
+    expect(mockTx.backgroundJob.create).not.toHaveBeenCalled();
   });
 });
