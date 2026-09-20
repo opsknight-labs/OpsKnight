@@ -29,6 +29,7 @@ const schema = z
     name: z.string().trim().min(1).max(100),
     email: z.string().trim().email().max(254),
     appUrl: z.string().trim().url().max(256).optional().or(z.literal('')),
+    setupSecret: z.string().trim().max(256).optional().or(z.literal('')),
     password: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
     confirmPassword: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
   })
@@ -50,6 +51,7 @@ export async function bootstrapAdmin(formData: FormData) {
     name: formData.get('name'),
     email: formData.get('email'),
     appUrl: formData.get('appUrl') || undefined,
+    setupSecret: formData.get('setupSecret') || undefined,
     password: formData.get('password'),
     confirmPassword: formData.get('confirmPassword'),
   });
@@ -57,6 +59,15 @@ export async function bootstrapAdmin(formData: FormData) {
 
   const { name, password, confirmPassword } = parsed.data;
   const email = parsed.data.email.toLowerCase();
+
+  const requiredSecret = process.env.SETUP_SECRET || process.env.BOOTSTRAP_SECRET;
+  if (requiredSecret) {
+    const submittedSecret = parsed.data.setupSecret || '';
+    if (!constantTimeUtf8Equal(submittedSecret, requiredSecret.trim())) {
+      return { error: 'Invalid or missing setup secret.' };
+    }
+  }
+
   if (!constantTimeUtf8Equal(password, confirmPassword)) {
     return { error: 'Passwords do not match.' };
   }

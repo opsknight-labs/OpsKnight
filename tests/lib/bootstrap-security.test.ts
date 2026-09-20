@@ -176,4 +176,21 @@ describe('bootstrap administrator security', () => {
       })
     );
   });
+
+  it('rejects setup when SETUP_SECRET is configured in env and missing/invalid in form', async () => {
+    process.env.SETUP_SECRET = 'production-deployment-secret-key';
+    const form = bootstrapForm();
+    const result = await bootstrapAdmin(form);
+    expect(result).toEqual({ error: 'Invalid or missing setup secret.' });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('accepts setup when SETUP_SECRET matches', async () => {
+    process.env.SETUP_SECRET = 'production-deployment-secret-key';
+    const form = bootstrapForm();
+    form.set('setupSecret', 'production-deployment-secret-key');
+    const result = await bootstrapAdmin(form);
+    expect(result).toEqual({ success: true, email: 'admin@example.com' });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
 });

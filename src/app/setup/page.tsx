@@ -77,6 +77,8 @@ export default async function SetupPage({
     process.env.NEXTAUTH_URL ||
     'http://localhost:3000';
 
+  const requiresSecret = Boolean(process.env.SETUP_SECRET || process.env.BOOTSTRAP_SECRET);
+
   return (
     <AuthLayout>
       <AuthCard>
@@ -96,6 +98,9 @@ export default async function SetupPage({
               OpsKnight
             </span>
           </div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 mb-2">
+            System initialization
+          </div>
           <h2 className="text-[clamp(1.55rem,6vw,1.875rem)] 2xl:text-4xl font-bold text-slate-950 dark:text-white mb-2 tracking-tight min-h-[1.25em] flex items-center justify-center">
             Welcome to OpsKnight
           </h2>
@@ -104,7 +109,7 @@ export default async function SetupPage({
           </p>
         </div>
 
-        <BootstrapSetupForm initialAppUrl={detectedAppUrl} />
+        <BootstrapSetupForm initialAppUrl={detectedAppUrl} requiresSecret={requiresSecret} />
       </AuthCard>
     </AuthLayout>
   );

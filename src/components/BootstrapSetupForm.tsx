@@ -2,7 +2,18 @@
 
 import { useActionState, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Mail, User, CheckCircle2, AlertCircle, Lock, Eye, EyeOff, X, Globe } from 'lucide-react';
+import {
+  Mail,
+  User,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+  Eye,
+  EyeOff,
+  X,
+  Globe,
+  KeyRound,
+} from 'lucide-react';
 import { bootstrapAdmin } from '@/app/setup/actions';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
 import Spinner from '@/components/ui/Spinner';
@@ -18,6 +29,7 @@ type FormState = {
 
 type Props = {
   initialAppUrl?: string;
+  requiresSecret?: boolean;
 };
 
 function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
@@ -58,10 +70,11 @@ function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
   );
 }
 
-export default function BootstrapSetupForm({ initialAppUrl = '' }: Props) {
+export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret = false }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [appUrl, setAppUrl] = useState(initialAppUrl);
+  const [setupSecret, setSetupSecret] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -112,6 +125,7 @@ export default function BootstrapSetupForm({ initialAppUrl = '' }: Props) {
   const canSubmit =
     Boolean(name.trim()) &&
     isEmailValid &&
+    (!requiresSecret || Boolean(setupSecret.trim())) &&
     isPasswordStrong(password, passwordContext) &&
     passwordsMatch;
 
@@ -243,6 +257,41 @@ export default function BootstrapSetupForm({ initialAppUrl = '' }: Props) {
           Canonical URL used for redirects, invite links, and webhook callbacks.
         </p>
       </div>
+
+      {/* Setup Secret (only shown when required by server environment) */}
+      {requiresSecret && (
+        <div>
+          <label
+            htmlFor="setup-secret"
+            className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+          >
+            Setup secret
+          </label>
+          <div className="group relative flex items-center">
+            <div className="absolute left-4 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+              <KeyRound className="h-4 w-4" />
+            </div>
+            <input
+              id="setup-secret"
+              name="setupSecret"
+              type="password"
+              autoComplete="off"
+              placeholder="Enter environment setup secret"
+              required
+              maxLength={256}
+              value={setupSecret}
+              onChange={event => {
+                setSetupSecret(event.target.value);
+                setDismissedError(null);
+              }}
+              className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+            />
+          </div>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+            Required by the server environment configuration (SETUP_SECRET).
+          </p>
+        </div>
+      )}
 
       {/* Password */}
       <div>
