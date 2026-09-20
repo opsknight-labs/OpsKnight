@@ -253,9 +253,17 @@ export default function BootstrapSetupForm({ initialAppUrl = '', requiresSecret 
             className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
           />
         </div>
-        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-          Canonical URL used for redirects, invite links, and webhook callbacks.
-        </p>
+        <div className="mt-1.5 space-y-1 text-[11px] leading-relaxed">
+          <p className="text-slate-500 dark:text-slate-400">
+            The web address where your team accesses OpsKnight. Used to generate login redirects,
+            email invite links, and webhook callbacks.
+          </p>
+          <p className="text-amber-600/90 dark:text-amber-400/90">
+            <span className="font-semibold">Important:</span> Enter the exact address (domain or IP)
+            you will use. For security, accessing OpsKnight from any unlisted address will be
+            blocked with a &quot;Misdirected Request&quot; error.
+          </p>
+        </div>
       </div>
 
       {/* Setup Secret (only shown when required by server environment) */}
