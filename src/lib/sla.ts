@@ -174,6 +174,8 @@ export type SLAMetrics = {
     dynamicStatus: 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
     activeCount: number;
     criticalCount: number;
+    slaEvaluatedCount: number;
+    slaUnknownCount: number;
   }>;
   insights: Array<{
     type: 'positive' | 'negative';

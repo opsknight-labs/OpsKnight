@@ -403,9 +403,25 @@ describe('calculateSLAMetrics trend series', () => {
         targetResolveMinutes: 120,
       },
     };
+    const validIncident = {
+      ...invalidIncident,
+      id: 'inc-valid',
+      title: 'Valid SLA provenance',
+      createdAt: new Date('2026-01-01T07:00:00Z'),
+      updatedAt: new Date('2026-01-01T07:05:00Z'),
+      acknowledgedAt: new Date('2026-01-01T07:05:00Z'),
+      slaTargetSource: 'SERVICE_DEFAULT',
+      slaTargetCapturedAt: new Date('2026-01-01T07:00:00Z'),
+    };
+    const invalidClockIncident = {
+      ...validIncident,
+      id: 'inc-invalid-clock',
+      title: 'Invalid SLA clock',
+      slaPausedMs: -1,
+    };
     setupBaseMocks({
-      activeIncidents: [invalidIncident],
-      recentIncidents: [invalidIncident],
+      activeIncidents: [invalidClockIncident],
+      recentIncidents: [invalidIncident, validIncident],
       previousIncidents: [],
       heatmapIncidents: [],
       escalationEvents: [],
@@ -421,9 +437,13 @@ describe('calculateSLAMetrics trend series', () => {
     expect(hour?.ackRate).toBe(100);
     expect(hour?.ackCompliance).toBeNull();
     expect(metrics.serviceMetrics[0]?.status).toBe('Unknown');
+    expect(metrics.serviceMetrics[0]).toMatchObject({
+      slaEvaluatedCount: 1,
+      slaUnknownCount: 1,
+    });
     expect(metrics.activeIncidentSummaries).toEqual([
       expect.objectContaining({
-        id: 'inc-invalid',
+        id: 'inc-invalid-clock',
         slaState: 'INVALID',
         targetAckMinutes: null,
         targetResolveMinutes: null,

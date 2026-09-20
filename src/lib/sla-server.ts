@@ -1039,10 +1039,16 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         serviceId: true,
         createdAt: true,
         acknowledgedAt: true,
+        resolvedAt: true,
+        resolutionKind: true,
         slaAckTargetMs: true,
         slaResolveTargetMs: true,
         slaTargetSource: true,
         slaTargetCapturedAt: true,
+        slaPausedMs: true,
+        slaPauseStartedAt: true,
+        slaAckElapsedMs: true,
+        slaResolveElapsedMs: true,
         slaPauses: { select: { startedAt: true, endedAt: true } },
       },
       orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
@@ -1949,7 +1955,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
       slaBreaches: s.ackBreaches + s.resolveBreaches, // FIX: Include both types
       status:
-        s.slaEvaluatedCount === 0 && s.slaUnknownCount > 0
+        s.slaUnknownCount > 0
           ? 'Unknown'
           : s.ackBreaches + s.resolveBreaches === 0
             ? 'Healthy'
@@ -1962,6 +1968,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       }),
       activeCount: s.activeCount,
       criticalCount: s.criticalCount,
+      slaEvaluatedCount: s.slaEvaluatedCount,
+      slaUnknownCount: s.slaUnknownCount,
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -2149,19 +2157,24 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 
   const activeIncidentSummaries = filters.includeActiveIncidents
     ? activeIncidentsData.flatMap(incident => {
-        const target = resolveFrozenSlaTarget({
-          ackTargetMs: incident.slaAckTargetMs,
-          resolveTargetMs: incident.slaResolveTargetMs,
-          source: incident.slaTargetSource,
-          capturedAt: incident.slaTargetCapturedAt,
-        });
-        const elapsedMs = effectiveElapsedMs({
-          startedAt: incident.createdAt,
-          evaluationAt: now,
-          pauses: incident.slaPauses,
-        });
-        const ackRemainingMs = target ? Math.max(0, target.ackTargetMs - elapsedMs) : null;
-        const resolveRemainingMs = target ? Math.max(0, target.resolveTargetMs - elapsedMs) : null;
+        const sla = projectIncidentSlaState(
+          {
+            status: incident.status,
+            createdAt: incident.createdAt,
+            acknowledgedAt: incident.acknowledgedAt,
+            resolvedAt: incident.resolvedAt,
+            resolutionKind: incident.resolutionKind,
+            slaAckTargetMs: incident.slaAckTargetMs,
+            slaResolveTargetMs: incident.slaResolveTargetMs,
+            slaTargetSource: incident.slaTargetSource,
+            slaTargetCapturedAt: incident.slaTargetCapturedAt,
+            slaPausedMs: incident.slaPausedMs,
+            slaPauseStartedAt: incident.slaPauseStartedAt,
+            slaAckElapsedMs: incident.slaAckElapsedMs,
+            slaResolveElapsedMs: incident.slaResolveElapsedMs,
+          },
+          { now }
+        );
         return [
           {
             id: incident.id,
@@ -2173,14 +2186,11 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
             serviceId: incident.serviceId,
             serviceName: serviceNameMap.get(incident.serviceId) || 'Unknown service',
             assigneeId: incident.assigneeId ?? null,
-            targetAckMinutes: target ? target.ackTargetMs / 60_000 : null,
-            targetResolveMinutes: target ? target.resolveTargetMs / 60_000 : null,
-            slaAckDeadline:
-              !target || incident.status === 'ACKNOWLEDGED'
-                ? null
-                : new Date(now.getTime() + ackRemainingMs!),
-            slaResolveDeadline: target ? new Date(now.getTime() + resolveRemainingMs!) : null,
-            slaState: target ? ('VALID' as const) : ('INVALID' as const),
+            targetAckMinutes: sla.valid ? sla.contract.ackTargetMs / 60_000 : null,
+            targetResolveMinutes: sla.valid ? sla.contract.resolveTargetMs / 60_000 : null,
+            slaAckDeadline: sla.valid ? sla.ack.breachAt : null,
+            slaResolveDeadline: sla.valid ? sla.resolve.breachAt : null,
+            slaState: sla.contractState,
           },
         ];
       })
