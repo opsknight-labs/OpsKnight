@@ -9,6 +9,7 @@ import { assertAdmin } from '@/lib/rbac';
 import { getClientIp } from '@/lib/client-ip';
 import { emitAuditEvent } from '@/lib/audit';
 import { checkRateLimit, issuePasswordResetToken } from '@/lib/password-reset';
+import { issueUserInviteToken } from '@/lib/invitations';
 import { readJsonBodyWithLimit } from '@/lib/request-body';
 
 const schema = z.object({ userId: z.string().trim().min(1).max(128) }).strict();
@@ -45,7 +46,7 @@ async function postGenerateResetLink(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { id: parsed.data.userId },
-      select: { id: true, email: true },
+      select: { id: true, email: true, status: true },
     });
     if (!user) {
       return jsonError(
@@ -55,6 +56,36 @@ async function postGenerateResetLink(req: NextRequest) {
           details: { resource: 'user', userId: parsed.data.userId },
         })
       );
+    }
+
+    if (user.status === 'DISABLED') {
+      return jsonError(
+        new AppError({
+          code: 'USER_DISABLED',
+          userMessage: 'User is disabled. Reactivate before generating a link.',
+        })
+      );
+    }
+
+    if (user.status === 'INVITED') {
+      const { inviteUrl } = await issueUserInviteToken(user.id, user.email);
+
+      await emitAuditEvent({
+        action: 'ADMIN_GENERATED_INVITE_LINK',
+        source: 'API',
+        target: { type: 'USER', id: user.id },
+        actor: {
+          type: 'USER',
+          id: sessionUser.id,
+          email: sessionUser.email,
+          name: sessionUser.name,
+        },
+        targetEmail: user.email,
+        ip,
+        metadata: { generatedFor: user.id },
+      });
+
+      return jsonOk({ link: inviteUrl, type: 'INVITE' }, 200);
     }
 
     const { token } = await issuePasswordResetToken({
@@ -83,7 +114,7 @@ async function postGenerateResetLink(req: NextRequest) {
       metadata: { generatedFor: user.id },
     });
 
-    return jsonOk({ link: resetLink }, 200);
+    return jsonOk({ link: resetLink, type: 'PASSWORD_RESET' }, 200);
   } catch (error) {
     if (isAppError(error)) return jsonError(error);
     logger.error('API Error /admin/generate-reset-link', {
