@@ -1,4 +1,4 @@
-import { processPendingJobs, processPendingJobsByType } from './jobs/queue';
+import { processPendingJobs, processPendingJobsByType, runQueueMaintenance } from './jobs/queue';
 import { logger } from './logger';
 import {
   consumeEscalationWakeRequest,
@@ -19,6 +19,7 @@ const MAX_BATCH_SIZE = 500;
 const MAX_CONCURRENCY = 50;
 const MAX_IDLE_POLL_MS = 60_000;
 const MAX_BUSY_POLL_MS = 5_000;
+const QUEUE_MAINTENANCE_INTERVAL_MS = 30_000;
 
 export interface JobWorkerConfig {
   batchSize: number;
@@ -41,6 +42,7 @@ interface JobWorkerSharedState {
   workerLane: JobWorkerLane;
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
   lastControlPlaneProbeAt: number;
+  lastQueueMaintenanceAt: number;
 }
 
 declare global {
@@ -59,6 +61,7 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   workerLane: 'all',
   controlPlaneState: 'UNINITIALIZED',
   lastControlPlaneProbeAt: 0,
+  lastQueueMaintenanceAt: 0,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -178,6 +181,16 @@ async function runOnce(): Promise<void> {
   }
 
   try {
+    const now = Date.now();
+    if (now - workerState.lastQueueMaintenanceAt >= QUEUE_MAINTENANCE_INTERVAL_MS) {
+      workerState.lastQueueMaintenanceAt = now;
+      if (typeof runQueueMaintenance === 'function') {
+        runQueueMaintenance().catch(err =>
+          logger.warn('[JobWorker] Periodic queue maintenance failed', { error: err })
+        );
+      }
+    }
+
     if (workerState.controlPlaneState === 'UNINITIALIZED') {
       const laneLabel =
         workerState.workerLane === 'bulk' ? 'Bulk lane' : `${workerState.workerLane} lane`;

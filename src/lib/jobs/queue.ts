@@ -272,15 +272,19 @@ export async function getPendingJobs(limit: number = 50): Promise<unknown[]> {
   });
 }
 
-export async function claimPendingJobs(
-  limit: number = 50,
-  type?: JobType,
-  excludeTypes: readonly JobType[] = []
-): Promise<QueuedJob[]> {
+export interface QueueMaintenanceResult {
+  readonly executedAt: Date;
+}
+
+export interface ClaimJobsOptions {
+  readonly runMaintenance?: boolean;
+}
+
+export async function runQueueMaintenance(prismaClient = prisma): Promise<QueueMaintenanceResult> {
   // Reconcile and sweep any zombie/timed-out encryption lifecycle jobs atomically
   try {
     const { reconcileTerminalEncryptionLifecycleJobs } = await import('../encryption/worker');
-    await reconcileTerminalEncryptionLifecycleJobs(prisma);
+    await reconcileTerminalEncryptionLifecycleJobs(prismaClient);
   } catch (reconcileErr) {
     logger.warn('[Queue] Failed to reconcile terminal encryption lifecycle jobs', {
       error: reconcileErr,
@@ -291,7 +295,7 @@ export async function claimPendingJobs(
   try {
     const { reconcileTerminalComplianceMonitoringJobs } =
       await import('../compliance/monitoring/reconcile');
-    await reconcileTerminalComplianceMonitoringJobs(prisma);
+    await reconcileTerminalComplianceMonitoringJobs(prismaClient);
   } catch (reconcileErr) {
     logger.warn('[Queue] Failed to reconcile terminal compliance monitoring jobs', {
       error: reconcileErr,
@@ -302,14 +306,14 @@ export async function claimPendingJobs(
   try {
     const { ensureComplianceMonitoringScheduled } =
       await import('../compliance/monitoring/schedule');
-    await ensureComplianceMonitoringScheduled(prisma);
+    await ensureComplianceMonitoringScheduled(prismaClient);
   } catch (scheduleErr) {
     logger.warn('[Queue] Failed to ensure compliance monitoring schedule', {
       error: scheduleErr,
     });
   }
 
-  await prisma
+  await prismaClient
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING state after exceeding maxAttempts' ELSE NULL END WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`
     )
@@ -317,22 +321,37 @@ export async function claimPendingJobs(
       logger.warn('[Queue] Failed to account stale bulk processing jobs (V1)', { error: err })
     );
 
-  await prisma
+  await prismaClient
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING_V2'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING_V2 state after exceeding maxAttempts' ELSE NULL END WHERE "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" AND "status"='PROCESSING_V2'::"JobStatus" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts";`
     )
     .catch(err => logger.warn('[Queue] Failed to account stale V2 fan-out jobs', { error: err }));
 
-  await prisma
+  await prismaClient
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING state after exceeding maxAttempts',"failedAt"=NOW() WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie processing jobs', { error: err }));
-  await prisma
+  await prismaClient
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "status"='FAILED',"error"='Job timed out in PROCESSING_V2 state after exceeding maxAttempts',"failedAt"=NOW() WHERE "type"='STATUS_PAGE_ANNOUNCEMENT_FANOUT_V2'::"JobType" AND "status"='PROCESSING_V2'::"JobStatus" AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts">="maxAttempts";`
     )
     .catch(err => logger.warn('[Queue] Failed to sweep zombie V2 fan-out jobs', { error: err }));
+
+  return { executedAt: new Date() };
+}
+
+export async function claimPendingJobs(
+  limit: number = 50,
+  type?: JobType,
+  excludeTypes: readonly JobType[] = [],
+  options?: ClaimJobsOptions
+): Promise<QueuedJob[]> {
+  if (options?.runMaintenance) {
+    await runQueueMaintenance(prisma).catch(err =>
+      logger.warn('[Queue] Explicit maintenance run during job claim failed', { error: err })
+    );
+  }
 
   const typeFilter = type ? Prisma.sql`AND candidate."type"=${type}::"JobType"` : Prisma.empty;
   const excludedTypeFilter = excludeTypes.length

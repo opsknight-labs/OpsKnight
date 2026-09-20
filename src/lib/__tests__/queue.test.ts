@@ -431,7 +431,7 @@ describe('queue bulk backpressure crash semantics', () => {
         maxAttempts: 3,
       },
     ]);
-    await queue.claimPendingJobs(10);
+    await queue.claimPendingJobs(10, undefined, [], { runMaintenance: true });
     const firstSql = String(
       (executeCalls[0] as { strings?: string[] })?.strings?.join('') ?? String(executeCalls[0])
     );
@@ -446,6 +446,25 @@ describe('queue bulk backpressure crash semantics', () => {
     // After 3 increments 0->1->2->3 the third should produce FAILED
     // Verify the SQL handles the FAILED transition via CASE WHEN attempts+1>=maxAttempts
     expect(firstSql).toContain('CASE WHEN "attempts"+1>="maxAttempts"');
+  });
+
+  it('runQueueMaintenance executes stale job cleanup directly', async () => {
+    const prismaRaw = prisma as unknown as {
+      $executeRaw: ReturnType<typeof vi.fn>;
+      $queryRaw: ReturnType<typeof vi.fn>;
+    };
+    const executeCalls: unknown[] = [];
+    prismaRaw.$executeRaw.mockImplementation(async (sql: unknown) => {
+      executeCalls.push(sql);
+      return 1;
+    });
+    await queue.runQueueMaintenance();
+    expect(executeCalls.length).toBeGreaterThanOrEqual(2);
+    const sqls = executeCalls.map(call =>
+      String((call as { strings?: string[] })?.strings?.join('') ?? String(call))
+    );
+    expect(sqls.some(sql => sql.includes('attempts"+1'))).toBe(true);
+    expect(sqls.some(sql => sql.includes('exceeding maxAttempts'))).toBe(true);
   });
 
   it('100 backpressure defers do not consume failure budget', async () => {

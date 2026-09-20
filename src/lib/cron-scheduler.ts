@@ -1,5 +1,5 @@
 import { processPendingEscalations } from './escalation';
-import { processPendingJobs, cleanupOldJobs } from './jobs/queue';
+import { processPendingJobs, cleanupOldJobs, runQueueMaintenance } from './jobs/queue';
 import { logger } from './logger';
 import { getNextNotificationRetryAt, retryFailedNotifications } from './notification-retry';
 import {
@@ -360,8 +360,16 @@ async function runOnce() {
     const escalationResult = await processPendingEscalations();
 
     // Reconciliation also runs here so a deployment with no job-worker process
-    // (OPSKNIGHT_PROCESS_ROLE=scheduler) still repairs escalations. Every repair
+    // (OPSKNIGHT_PROCESS_ROLE=scheduler) still repairs escalations and maintains queues. Every repair
     // is idempotent, so both callers running is harmless.
+    try {
+      await runQueueMaintenance();
+    } catch (queueMaintErr) {
+      logger.warn('[Cron] Periodic queue maintenance sweep failed', {
+        error: queueMaintErr instanceof Error ? queueMaintErr.message : String(queueMaintErr),
+      });
+    }
+
     const { reconcileEscalations } = await import('./escalation/recovery');
     const reconciliation = await reconcileEscalations();
     const { reconcileIntegrationControlPlane } = await import('./integrations/reconciliation');
