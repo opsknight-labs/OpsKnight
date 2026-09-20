@@ -116,8 +116,8 @@ export type SLAMetrics = {
     key: string;
     label: string;
     count: number;
-    mtta: number;
-    mttr: number;
+    mtta: number | null;
+    mttr: number | null;
     ackRate: number;
     resolveRate: number;
     ackCompliance: number | null;
@@ -167,8 +167,8 @@ export type SLAMetrics = {
     id: string;
     name: string;
     count: number;
-    mtta: number;
-    mttr: number;
+    mtta: number | null;
+    mttr: number | null;
     slaBreaches: number;
     status: string;
     dynamicStatus: 'OPERATIONAL' | 'DEGRADED' | 'CRITICAL';
