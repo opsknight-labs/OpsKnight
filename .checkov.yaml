@@ -36,6 +36,6 @@ framework:
   - dockerfile
   - secrets
 
-exception:
+skip-path:
   - eslint_output.json
   - reports/security.sarif

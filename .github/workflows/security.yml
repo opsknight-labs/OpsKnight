@@ -281,30 +281,13 @@ jobs:
       - name: Create reports directory
         run: mkdir -p reports
 
-      - name: Run Checkov (SARIF)
+      - name: Run Checkov (SARIF & JUnit)
         uses: bridgecrewio/checkov-action@master
         with:
           directory: .
-          output_format: sarif
+          output_format: sarif,junitxml
           output_file_path: reports
           soft_fail: true
-        continue-on-error: true
-
-      - name: Run Checkov (JUnit)
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: .
-          output_format: junitxml
-          output_file_path: reports
-          soft_fail: true
-        continue-on-error: true
-
-      - name: Ensure Checkov JUnit file exists
-        run: |
-          ls -la reports/ || true
-          if [ ! -f reports/results_junitxml.xml ]; then
-            echo '<?xml version="1.0"?><testsuites><testsuite name="checkov" tests="0"/></testsuites>' > reports/results_junitxml.xml
-          fi
         continue-on-error: true
 
       - name: Upload Checkov SARIF
