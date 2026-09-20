@@ -1955,7 +1955,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
       slaBreaches: s.ackBreaches + s.resolveBreaches, // FIX: Include both types
       status:
-        s.slaUnknownCount > 0
+        s.slaEvaluatedCount === 0 && s.slaUnknownCount > 0
           ? 'Unknown'
           : s.ackBreaches + s.resolveBreaches === 0
             ? 'Healthy'

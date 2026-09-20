@@ -382,7 +382,7 @@ describe('calculateSLAMetrics trend series', () => {
       urgency: 'HIGH',
       priority: 'P1',
       assigneeId: null,
-      serviceId: 'service-1',
+      serviceId: 'service-unknown',
       acknowledgedAt: new Date('2026-01-01T06:05:00Z'),
       resolvedAt: null,
       resolutionKind: null,
@@ -396,32 +396,48 @@ describe('calculateSLAMetrics trend series', () => {
       slaResolveElapsedMs: null,
       slaPauses: [],
       service: {
-        id: 'service-1',
-        name: 'Service One',
+        id: 'service-unknown',
+        name: 'Unknown Contract Service',
         region: null,
         targetAckMinutes: 15,
         targetResolveMinutes: 120,
       },
     };
-    const validIncident = {
+    const breachedIncident = {
       ...invalidIncident,
-      id: 'inc-valid',
-      title: 'Valid SLA provenance',
+      id: 'inc-breached-1',
+      title: 'Known SLA breach',
       createdAt: new Date('2026-01-01T07:00:00Z'),
-      updatedAt: new Date('2026-01-01T07:05:00Z'),
-      acknowledgedAt: new Date('2026-01-01T07:05:00Z'),
+      updatedAt: new Date('2026-01-01T07:30:00Z'),
+      acknowledgedAt: new Date('2026-01-01T07:30:00Z'),
+      serviceId: 'service-1',
       slaTargetSource: 'SERVICE_DEFAULT',
       slaTargetCapturedAt: new Date('2026-01-01T07:00:00Z'),
+      service: {
+        ...invalidIncident.service,
+        id: 'service-1',
+        name: 'Critical Service',
+      },
     };
     const invalidClockIncident = {
-      ...validIncident,
+      ...breachedIncident,
       id: 'inc-invalid-clock',
       title: 'Invalid SLA clock',
       slaPausedMs: -1,
     };
+    const breachedIncidents = [1, 2, 3].map(index => ({
+      ...breachedIncident,
+      id: `inc-breached-${index}`,
+    }));
+    const mixedUnknownIncident = {
+      ...invalidIncident,
+      id: 'inc-mixed-unknown',
+      serviceId: 'service-1',
+      service: breachedIncident.service,
+    };
     setupBaseMocks({
       activeIncidents: [invalidClockIncident],
-      recentIncidents: [invalidIncident, validIncident],
+      recentIncidents: [invalidIncident, mixedUnknownIncident, ...breachedIncidents],
       previousIncidents: [],
       heatmapIncidents: [],
       escalationEvents: [],
@@ -436,9 +452,14 @@ describe('calculateSLAMetrics trend series', () => {
     const hour = metrics.trendSeries.find(entry => entry.key === toHourKey(createdAt));
     expect(hour?.ackRate).toBe(100);
     expect(hour?.ackCompliance).toBeNull();
-    expect(metrics.serviceMetrics[0]?.status).toBe('Unknown');
-    expect(metrics.serviceMetrics[0]).toMatchObject({
-      slaEvaluatedCount: 1,
+    expect(metrics.serviceMetrics.find(service => service.id === 'service-1')).toMatchObject({
+      status: 'Critical',
+      slaEvaluatedCount: 3,
+      slaUnknownCount: 1,
+    });
+    expect(metrics.serviceMetrics.find(service => service.id === 'service-unknown')).toMatchObject({
+      status: 'Unknown',
+      slaEvaluatedCount: 0,
       slaUnknownCount: 1,
     });
     expect(metrics.activeIncidentSummaries).toEqual([
