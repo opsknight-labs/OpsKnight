@@ -354,4 +354,148 @@ describeIfRealDB('verifiable compliance evidence package export (real PostgreSQL
     const indexCsv = await zip.file('summary/evidence-index.csv')!.async('text');
     expect(indexCsv).not.toContain('Old evaluation evidence');
   });
+
+  it('guarantees REPEATABLE READ snapshot isolation against concurrently committing transactions', async () => {
+    // 1. Seed baseline healthy evaluation
+    const baseEval = await testPrisma.complianceEvaluation.create({
+      data: {
+        batchId: 'batch_base',
+        controlId: 'SEC-ENC-001',
+        evaluatorId: 'encryption.at-rest',
+        evaluatorVersion: '1',
+        status: 'IMPLEMENTED',
+        trigger: 'MANUAL',
+        evaluatedAt: new Date(),
+        validUntil: new Date(Date.now() + 86400000),
+        summary: 'Baseline healthy state',
+        findings: [],
+      },
+    });
+
+    await testPrisma.complianceControlState.create({
+      data: {
+        controlId: 'SEC-ENC-001',
+        status: 'IMPLEMENTED',
+        latestEvaluationId: baseEval.id,
+        evaluatorId: 'encryption.at-rest',
+        evaluatorVersion: '1',
+        evaluatedAt: baseEval.evaluatedAt,
+        validUntil: baseEval.validUntil,
+        summary: baseEval.summary,
+      },
+    });
+
+    // 2. Set up Transaction A (concurrent evaluation/evidence writer)
+    let resolveTxACommit: () => void;
+    const txACommitPromise = new Promise<void>(resolve => {
+      resolveTxACommit = resolve;
+    });
+
+    let resolveTxAStarted: () => void;
+    const txAStartedPromise = new Promise<void>(resolve => {
+      resolveTxAStarted = resolve;
+    });
+
+    const txAPromise = testPrisma.$transaction(async txA => {
+      const lateEval = await txA.complianceEvaluation.create({
+        data: {
+          batchId: 'batch_race',
+          controlId: 'SEC-ENC-001',
+          evaluatorId: 'encryption.at-rest',
+          evaluatorVersion: '1',
+          status: 'ACTION_REQUIRED',
+          trigger: 'SCHEDULED',
+          evaluatedAt: new Date(),
+          validUntil: new Date(Date.now() + 86400000),
+          summary: 'Concurrent evaluation',
+          findings: [],
+        },
+      });
+
+      await txA.complianceControlState.update({
+        where: { controlId: 'SEC-ENC-001' },
+        data: {
+          status: 'ACTION_REQUIRED',
+          latestEvaluationId: lateEval.id,
+          evaluatorVersion: '1',
+          evaluatedAt: lateEval.evaluatedAt,
+          validUntil: lateEval.validUntil,
+          summary: lateEval.summary,
+        },
+      });
+
+      await txA.complianceEvidence.create({
+        data: {
+          evaluationId: lateEval.id,
+          controlId: 'SEC-ENC-001',
+          type: 'CONFIGURATION_SNAPSHOT',
+          collectorId: 'encryption.at-rest',
+          collectorVersion: '1.0.0',
+          title: 'Concurrent evidence',
+          observedAt: new Date(),
+          contentHash: 'sha256:abcd',
+          metadata: { note: 'created in Tx A' },
+        },
+      });
+
+      // Signal Tx A has written records
+      resolveTxAStarted();
+
+      // Hold Tx A open until released
+      await txACommitPromise;
+    });
+
+    // Wait until Tx A has written rows
+    await txAStartedPromise;
+
+    // Start export package generation.
+    // Export begins its own REPEATABLE READ transaction while Tx A is still uncommitted!
+    const exportPromise = exportComplianceEvidencePackage({
+      scope: { type: 'CONTROLS', controlIds: ['SEC-ENC-001'] },
+      evidenceSelection: { mode: 'SNAPSHOT' },
+      userId: 'usr_auditor',
+      prisma: testPrisma,
+    });
+
+    // Give export transaction a moment to start and establish its snapshot
+    await new Promise(r => setTimeout(r, 60));
+
+    // Release Tx A to commit
+    resolveTxACommit!();
+    await txAPromise;
+
+    // Wait for export package to finish
+    const pkg1 = await exportPromise;
+    const zip1 = await JSZip.loadAsync(pkg1.zipBuffer);
+
+    // Verify: Transaction A's evaluation and evidence are strictly ABSENT from this export
+    const controlJson1 = JSON.parse(
+      await zip1.file('controls/SEC-ENC-001/control.json')!.async('string')
+    );
+    expect(controlJson1.resolvedCurrentState).toBe('IMPLEMENTED'); // Baseline state, not ACTION_REQUIRED!
+    expect(controlJson1.summary).toBe('Baseline healthy state');
+
+    const evalJson1 = JSON.parse(
+      await zip1.file('controls/SEC-ENC-001/evaluation.json')!.async('string')
+    );
+    expect(evalJson1.evaluationId).toBe(baseEval.id);
+
+    const indexCsv1 = await zip1.file('summary/evidence-index.csv')!.async('text');
+    expect(indexCsv1).not.toContain('Concurrent evidence');
+
+    // 3. A subsequent export after Tx A is committed sees Tx A's state
+    const pkg2 = await exportComplianceEvidencePackage({
+      scope: { type: 'CONTROLS', controlIds: ['SEC-ENC-001'] },
+      evidenceSelection: { mode: 'SNAPSHOT' },
+      userId: 'usr_auditor',
+      prisma: testPrisma,
+    });
+
+    const zip2 = await JSZip.loadAsync(pkg2.zipBuffer);
+    const controlJson2 = JSON.parse(
+      await zip2.file('controls/SEC-ENC-001/control.json')!.async('string')
+    );
+    expect(controlJson2.resolvedCurrentState).toBe('ACTION_REQUIRED');
+    expect(controlJson2.summary).toBe('Concurrent evaluation');
+  });
 });
