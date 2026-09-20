@@ -105,11 +105,12 @@ export function getAuthoritativeRequestOrigin(
   if (process.env.TRUST_PROXY_HEADERS === 'true') {
     const forwarded = getHeader('x-forwarded-host');
     if (forwarded) {
-      hostCandidate = forwarded
-        .split(',')
-        .map(v => v.trim())
-        .filter(Boolean)
-        .at(-1) ?? null;
+      hostCandidate =
+        forwarded
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean)
+          .at(-1) ?? null;
     }
   }
   if (!hostCandidate) {
@@ -195,14 +196,13 @@ export function getAuthoritativeRequestOrigin(
             // 4) If loopback/localhost, transport is HTTP
             // 5) Otherwise, retain transportProto (preserving https on standard and non-standard TLS ports like 8443)
             const configuredUrl =
-              fallbackAppUrl ||
-              process.env.NEXT_PUBLIC_APP_URL ||
-              process.env.NEXTAUTH_URL;
+              fallbackAppUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
             let matchedConfigScheme: string | null = null;
             if (configuredUrl) {
               try {
                 const parsedConfig = new URL(configuredUrl);
-                const configPort = parsedConfig.port || (parsedConfig.protocol === 'https:' ? '443' : '80');
+                const configPort =
+                  parsedConfig.port || (parsedConfig.protocol === 'https:' ? '443' : '80');
                 const requestPort = port || (transportProto === 'http' ? '80' : '443');
                 if (
                   normalizeHostname(parsedConfig.host) === hostname &&
@@ -245,6 +245,25 @@ export function getAuthoritativeRequestOrigin(
         }
       }
     }
+
+    // When source is Headers without Origin/Referer (e.g. Server Component during initial GET),
+    // check if the environment or hostname dictates HTTP over default HTTPS
+    if (
+      proto === 'https' &&
+      !originHeader &&
+      !getHeader('referer') &&
+      (!('url' in source) || typeof (source as { url?: unknown }).url !== 'string')
+    ) {
+      if (process.env.NEXTAUTH_COOKIE_SECURE === 'false') {
+        proto = 'http';
+      } else if (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname.endsWith('.localhost')
+      ) {
+        proto = 'http';
+      }
+    }
   }
 
   // Strip default ports
@@ -254,4 +273,3 @@ export function getAuthoritativeRequestOrigin(
 
   return `${proto}://${hostname}${port ? `:${port}` : ''}`;
 }
-
