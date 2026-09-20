@@ -4,6 +4,8 @@ import type { PrismaClient } from '@prisma/client';
 import type { ComplianceEvaluationContext } from '@/lib/compliance/evaluators/types';
 import { evaluateControl } from '@/lib/compliance/evaluation/engine';
 import { complianceEvaluatorRegistry } from '@/lib/compliance/evaluators';
+import { COLLECTOR_EVIDENCE_SCHEMAS } from '@/lib/compliance/evidence/schemas';
+import { z } from 'zod';
 
 vi.mock('@/lib/audit', () => ({
   emitAuditEvent: vi.fn().mockResolvedValue(undefined),
@@ -13,6 +15,10 @@ interface MockPrisma {
   $transaction: ReturnType<typeof vi.fn>;
   $executeRaw: ReturnType<typeof vi.fn>;
   complianceEvaluation: {
+    create: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  };
+  complianceEvidence: {
     create: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
   };
@@ -36,6 +42,14 @@ describe('compliance evaluation engine (unit)', () => {
       complianceEvaluation: {
         create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
           id: `eval_${Math.random().toString(36).slice(2, 8)}`,
+          ...data,
+          createdAt: new Date(),
+        })),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      complianceEvidence: {
+        create: vi.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) => ({
+          id: `ev_${Math.random().toString(36).slice(2, 8)}`,
           ...data,
           createdAt: new Date(),
         })),
@@ -67,41 +81,66 @@ describe('compliance evaluation engine (unit)', () => {
     };
   }
 
-  it('evaluates a runtime control and persists evaluation and state projection', async () => {
-    const fakeEvaluator = {
-      id: 'test.evaluator',
-      version: '1',
-      evaluate: vi.fn().mockResolvedValue({
-        status: 'IMPLEMENTED' as const,
-        summary: 'Control operates as expected.',
-        findings: [{ code: 'TEST_CHECK', value: true }],
-        evidenceRefs: [{ source: 'TestModel', description: 'Verified' }],
-        validUntil: null,
-      }),
-    };
+  it('evaluates a runtime control and persists evaluation, evidence, and state projection', async () => {
+    COLLECTOR_EVIDENCE_SCHEMAS['test.evaluator'] = z.object({ testPassed: z.boolean() }).strict();
+    try {
+      const fakeEvaluator = {
+        id: 'test.evaluator',
+        version: '1',
+        evaluate: vi.fn().mockResolvedValue({
+          status: 'IMPLEMENTED' as const,
+          summary: 'Control operates as expected.',
+          findings: [{ code: 'TEST_CHECK', value: true }],
+          evidence: [
+            {
+              type: 'VERIFICATION_RESULT' as const,
+              collectorId: 'test.evaluator',
+              collectorVersion: '1',
+              title: 'Test Evidence',
+              description: 'Test evidence description',
+              observedAt: new Date('2026-09-19T14:00:00.000Z'),
+              metadata: { testPassed: true },
+            },
+          ],
+          evidenceRefs: [{ source: 'TestModel', description: 'Verified' }],
+          validUntil: null,
+        }),
+      };
 
-    complianceEvaluatorRegistry['encryption.at-rest'] = fakeEvaluator;
+      complianceEvaluatorRegistry['encryption.at-rest'] = fakeEvaluator;
 
-    const context = makeContext({
-      actor: { id: 'admin-1', email: 'admin@example.com', name: 'Admin' },
-    });
+      const context = makeContext({
+        actor: { id: 'admin-1', email: 'admin@example.com', name: 'Admin' },
+      });
 
-    const { evaluation, controlState } = await evaluateControl({
-      controlId: 'SEC-ENC-001',
-      context,
-      trigger: 'MANUAL',
-      batchId: 'batch-1',
-    });
+      const { evaluation, controlState, evidenceCount } = await evaluateControl({
+        controlId: 'SEC-ENC-001',
+        context,
+        trigger: 'MANUAL',
+        batchId: 'batch-1',
+      });
 
-    expect(evaluation.controlId).toBe('SEC-ENC-001');
-    expect(evaluation.status).toBe('IMPLEMENTED');
-    expect(evaluation.evaluatorVersion).toBe('1');
-    expect(evaluation.batchId).toBe('batch-1');
+      expect(evaluation.controlId).toBe('SEC-ENC-001');
+      expect(evaluation.status).toBe('IMPLEMENTED');
+      expect(evaluation.evaluatorVersion).toBe('1');
+      expect(evaluation.batchId).toBe('batch-1');
+      expect(evidenceCount).toBe(1);
 
-    expect(controlState.controlId).toBe('SEC-ENC-001');
-    expect(controlState.status).toBe('IMPLEMENTED');
-    expect(controlState.latestEvaluationId).toBe(evaluation.id);
-    expect(mockPrisma.complianceControlState.create).toHaveBeenCalled();
+      expect(controlState.controlId).toBe('SEC-ENC-001');
+      expect(controlState.status).toBe('IMPLEMENTED');
+      expect(controlState.latestEvaluationId).toBe(evaluation.id);
+      expect(mockPrisma.complianceControlState.create).toHaveBeenCalled();
+      expect(mockPrisma.complianceEvidence.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          evaluationId: evaluation.id,
+          controlId: 'SEC-ENC-001',
+          title: 'Test Evidence',
+          contentHash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        }),
+      });
+    } finally {
+      delete COLLECTOR_EVIDENCE_SCHEMAS['test.evaluator'];
+    }
   });
 
   it('rejects an unknown control ID', async () => {
@@ -143,6 +182,92 @@ describe('compliance evaluation engine (unit)', () => {
       expect.arrayContaining([expect.objectContaining({ code: 'EVALUATOR_ERROR' })])
     );
     expect(controlState.status).toBe('UNVERIFIED');
+    expect(mockPrisma.complianceEvidence.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'EVALUATION_FAILURE',
+        title: 'Evaluator Runtime Exception',
+      }),
+    });
+  });
+
+  it('fails safely to UNVERIFIED with EVIDENCE_VALIDATION_FAILED when evidence contains forbidden sensitive keys', async () => {
+    complianceEvaluatorRegistry['encryption.at-rest'] = {
+      id: 'encryption.at-rest',
+      version: '1',
+      evaluate: vi.fn().mockResolvedValue({
+        status: 'IMPLEMENTED' as const,
+        summary: 'Malicious or leaky evaluator',
+        findings: [],
+        evidence: [
+          {
+            type: 'VERIFICATION_RESULT' as const,
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Leaky Evidence',
+            observedAt: new Date('2026-09-19T14:00:00.000Z'),
+            metadata: {
+              serverPassword: 'raw_super_secret_password',
+            },
+          },
+        ],
+        evidenceRefs: [],
+      }),
+    };
+
+    const { evaluation, controlState } = await evaluateControl({
+      controlId: 'SEC-ENC-001',
+      context: makeContext(),
+      trigger: 'API',
+    });
+
+    expect(evaluation.status).toBe('UNVERIFIED');
+    expect(evaluation.summary).toContain('evidence validation failed');
+    expect(evaluation.findings).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'EVIDENCE_VALIDATION_FAILED' })])
+    );
+    expect(controlState.status).toBe('UNVERIFIED');
+    // Safe evidence record created instead of leaky payload
+    expect(mockPrisma.complianceEvidence.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'EVALUATION_FAILURE',
+        title: 'Evidence Validation Failure',
+        metadata: {
+          controlId: 'SEC-ENC-001',
+          evaluatorId: 'encryption.at-rest',
+          validationFailure: true,
+        },
+      }),
+    });
+  });
+
+  it('fails safely to UNVERIFIED with EVIDENCE_VALIDATION_FAILED when evaluator returns zero evidence drafts', async () => {
+    complianceEvaluatorRegistry['encryption.at-rest'] = {
+      id: 'encryption.at-rest',
+      version: '1',
+      evaluate: vi.fn().mockResolvedValue({
+        status: 'IMPLEMENTED' as const,
+        summary: 'No evidence evaluator',
+        findings: [],
+        evidence: [],
+        evidenceRefs: [],
+      }),
+    };
+
+    const { evaluation, controlState } = await evaluateControl({
+      controlId: 'SEC-ENC-001',
+      context: makeContext(),
+      trigger: 'API',
+    });
+
+    expect(evaluation.status).toBe('UNVERIFIED');
+    expect(evaluation.summary).toContain('evidence validation failed');
+    expect(controlState.status).toBe('UNVERIFIED');
+    expect(mockPrisma.complianceEvidence.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'EVALUATION_FAILURE',
+        title: 'Evidence Validation Failure',
+      }),
+    });
   });
 
   it('protects against race conditions by not overwriting newer state with an older evaluation', async () => {
@@ -153,6 +278,19 @@ describe('compliance evaluation engine (unit)', () => {
         status: 'IMPLEMENTED' as const,
         summary: 'Older evaluation finished late.',
         findings: [],
+        evidence: [
+          {
+            type: 'VERIFICATION_RESULT' as const,
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1',
+            title: 'Encryption Verification',
+            observedAt: new Date('2026-09-19T14:00:00.000Z'),
+            metadata: {
+              completedVerifyRunFound: false,
+              activeKeyId: 'k3',
+            },
+          },
+        ],
         evidenceRefs: [],
       }),
     };

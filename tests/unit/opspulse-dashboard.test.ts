@@ -66,6 +66,7 @@ describe('Ops Pulse dashboard contract', () => {
         assigneeId: null,
         targetAckMinutes: 15,
         targetResolveMinutes: 120,
+        slaState: 'VALID',
       },
     ];
 

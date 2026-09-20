@@ -9,6 +9,10 @@ const { mockAssertCapability, mockPrisma, mockEvaluateControls } = vi.hoisted(()
     },
     complianceEvaluation: {
       findMany: vi.fn(),
+      findUnique: vi.fn(),
+    },
+    complianceEvidence: {
+      findMany: vi.fn(),
     },
   };
 
@@ -58,6 +62,9 @@ vi.mock('@/lib/compliance/evaluation', () => ({
 import { GET as getControls } from '@/app/api/compliance/controls/route';
 import { POST as postEvaluations } from '@/app/api/compliance/evaluations/route';
 import { GET as getControlEvaluations } from '@/app/api/compliance/controls/[id]/evaluations/route';
+import { GET as getControlEvidenceRoute } from '@/app/api/compliance/controls/[id]/evidence/route';
+import { GET as getEvaluationEvidenceRoute } from '@/app/api/compliance/evaluations/[id]/evidence/route';
+import { GET as getEvidenceCatalogRoute } from '@/app/api/compliance/evidence/route';
 
 describe('Compliance API Routes Unit Tests', () => {
   beforeEach(() => {
@@ -237,6 +244,184 @@ describe('Compliance API Routes Unit Tests', () => {
       const body = await res.json();
       expect(body.data.controlId).toBe('SEC-ENC-001');
       expect(body.data.evaluations).toHaveLength(1);
+    });
+  });
+
+  describe('GET /api/compliance/controls/[id]/evidence', () => {
+    it('enforces COMPLIANCE_EVIDENCE_READ capability', async () => {
+      mockAssertCapability.mockRejectedValueOnce(
+        new AuthorizationError('You lack compliance.evidence.read', 'compliance.evidence.read')
+      );
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/compliance/controls/SEC-ENC-001/evidence'
+      );
+      const res = await getControlEvidenceRoute(req, {
+        params: Promise.resolve({ id: 'SEC-ENC-001' }),
+      });
+
+      expect(res.status).toBe(403);
+      expect(mockAssertCapability).toHaveBeenCalledWith('compliance.evidence.read');
+    });
+
+    it('returns 404 for unknown control ID', async () => {
+      const req = new NextRequest(
+        'http://localhost:3000/api/compliance/controls/UNKNOWN-001/evidence'
+      );
+      const res = await getControlEvidenceRoute(req, {
+        params: Promise.resolve({ id: 'UNKNOWN-001' }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 400 for invalid evidence type parameter', async () => {
+      const req = new NextRequest(
+        'http://localhost:3000/api/compliance/controls/SEC-ENC-001/evidence?type=INVALID_TYPE'
+      );
+      const res = await getControlEvidenceRoute(req, {
+        params: Promise.resolve({ id: 'SEC-ENC-001' }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('returns evidence records for valid control', async () => {
+      mockPrisma.complianceEvidence.findMany.mockResolvedValueOnce([
+        {
+          id: 'ev-1',
+          evaluationId: 'eval-1',
+          controlId: 'SEC-ENC-001',
+          type: 'VERIFICATION_RESULT',
+          collectorId: 'encryption.at-rest',
+          collectorVersion: '1',
+          title: 'Verification Run',
+          description: null,
+          resourceType: 'EncryptionMigrationRun',
+          resourceId: 'run-1',
+          observedAt: new Date(),
+          collectedAt: new Date(),
+          validUntil: null,
+          contentHash: 'sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+          metadata: { clean: true },
+        },
+      ]);
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/compliance/controls/SEC-ENC-001/evidence'
+      );
+      const res = await getControlEvidenceRoute(req, {
+        params: Promise.resolve({ id: 'SEC-ENC-001' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.controlId).toBe('SEC-ENC-001');
+      expect(body.data.evidence).toHaveLength(1);
+      expect(body.data.evidence[0].title).toBe('Verification Run');
+    });
+  });
+
+  describe('GET /api/compliance/evaluations/[id]/evidence', () => {
+    it('enforces COMPLIANCE_EVIDENCE_READ capability', async () => {
+      mockAssertCapability.mockRejectedValueOnce(
+        new AuthorizationError('You lack compliance.evidence.read', 'compliance.evidence.read')
+      );
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/compliance/evaluations/eval-1/evidence'
+      );
+      const res = await getEvaluationEvidenceRoute(req, {
+        params: Promise.resolve({ id: 'eval-1' }),
+      });
+
+      expect(res.status).toBe(403);
+      expect(mockAssertCapability).toHaveBeenCalledWith('compliance.evidence.read');
+    });
+
+    it('returns 404 for non-existent evaluation', async () => {
+      mockPrisma.complianceEvaluation.findUnique.mockResolvedValueOnce(null);
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/compliance/evaluations/non-existent/evidence'
+      );
+      const res = await getEvaluationEvidenceRoute(req, {
+        params: Promise.resolve({ id: 'non-existent' }),
+      });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns evidence records for valid evaluation', async () => {
+      mockPrisma.complianceEvaluation.findUnique.mockResolvedValueOnce({
+        id: 'eval-1',
+        controlId: 'SEC-ENC-001',
+      });
+
+      mockPrisma.complianceEvidence.findMany.mockResolvedValueOnce([
+        {
+          id: 'ev-1',
+          evaluationId: 'eval-1',
+          controlId: 'SEC-ENC-001',
+          type: 'VERIFICATION_RESULT',
+          collectorId: 'encryption.at-rest',
+          collectorVersion: '1',
+          title: 'Verification Run',
+          description: null,
+          resourceType: null,
+          resourceId: null,
+          observedAt: new Date(),
+          collectedAt: new Date(),
+          validUntil: null,
+          contentHash: 'sha256:abcd',
+          metadata: {},
+        },
+      ]);
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/compliance/evaluations/eval-1/evidence'
+      );
+      const res = await getEvaluationEvidenceRoute(req, {
+        params: Promise.resolve({ id: 'eval-1' }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.evaluationId).toBe('eval-1');
+      expect(body.data.evidence).toHaveLength(1);
+    });
+  });
+
+  describe('GET /api/compliance/evidence', () => {
+    it('returns evidence across controls with pagination', async () => {
+      mockPrisma.complianceEvidence.findMany.mockResolvedValueOnce([
+        {
+          id: 'ev-1',
+          evaluationId: 'eval-1',
+          controlId: 'SEC-ENC-001',
+          type: 'VERIFICATION_RESULT',
+          collectorId: 'encryption.at-rest',
+          collectorVersion: '1',
+          title: 'Evidence 1',
+          description: null,
+          resourceType: null,
+          resourceId: null,
+          observedAt: new Date(),
+          collectedAt: new Date(),
+          validUntil: null,
+          contentHash: 'sha256:1111',
+          metadata: {},
+        },
+      ]);
+
+      const req = new NextRequest('http://localhost:3000/api/compliance/evidence?limit=10');
+      const res = await getEvidenceCatalogRoute(req);
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.data.evidence).toHaveLength(1);
     });
   });
 });

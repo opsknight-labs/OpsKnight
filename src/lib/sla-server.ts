@@ -12,12 +12,7 @@ import {
 import { getServiceDynamicStatus } from './service-status';
 import { logger } from './logger';
 import { activeIncidentStatuses, activeIncidentStatusesForFilter } from './incident-status';
-import {
-  getRetentionPolicy,
-  getQueryDateBounds,
-  shouldUseRollups,
-  type RetentionPolicy,
-} from './retention-policy';
+import { getRetentionPolicy, getQueryDateBounds, shouldUseRollups } from './retention-policy';
 import { incidentEventSqlPredicate, incidentEventWhereFor } from './incident-event-classifier';
 import { mergeHybridMetrics } from './sla-hybrid-merge';
 import { getActiveOnCallShifts, getWindowOnCallShifts } from './oncall-shifts';
@@ -26,7 +21,7 @@ import { intervalDurationMs, intervalGaps, type TimeInterval } from './metrics/d
 import { compileIncidentMetricFilter, type IncidentMetricFilter } from './metrics/domain/filter';
 import { isRollupCompatibleIncidentFilter } from './metrics/domain/rollup-eligibility';
 import { METRIC_ACCUMULATOR } from './metrics/domain/accumulator';
-import { resolveSlaTarget } from './metrics/domain/sla-target';
+import { resolveFrozenSlaTarget } from './metrics/domain/sla-target';
 import { projectIncidentSlaState } from './incident-sla/state';
 import { slaTargetSql } from './metrics/domain/sla-target-sql';
 import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/domain/sla-clock';
@@ -611,27 +606,6 @@ function formatHourLabel(date: Date, timeZone: string = 'UTC') {
 }
 
 /**
- * Checks if a date falls outside business hours in a specific timezone
- * Business hours: Monday-Friday, 8am-6pm
- */
-function isAfterHoursInTimeZone(date: Date, timeZone: string): boolean {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    hour: 'numeric',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(date);
-  const weekday = parts.find(p => p.type === 'weekday')?.value || '';
-  const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '12', 10);
-
-  const isWeekend = weekday === 'Sat' || weekday === 'Sun';
-  const isBusinessHours = hour >= 8 && hour < 18;
-
-  return isWeekend || !isBusinessHours;
-}
-
-/**
  * Calculate SLA metrics with all filters & legacy parity
  *
  * FEATURES:
@@ -914,10 +888,6 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   const coverageWindowEnd = new Date(now);
   coverageWindowEnd.setDate(now.getDate() + coverageWindowDays);
 
-  // Pagination settings
-  const pageSize = filters.pageSize || DEFAULT_PAGE_SIZE;
-  const page = Math.max(1, filters.page || 1);
-
   // 2. Build Where Clauses. Selection and authorization are compiled once,
   // then ANDed with snapshot-specific status predicates.
   const mutedStatusList = ['SNOOZED', 'SUPPRESSED'] as const;
@@ -1017,6 +987,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     slaResolveElapsedMs: true,
     slaAckTargetMs: true,
     slaResolveTargetMs: true,
+    slaTargetSource: true,
+    slaTargetCapturedAt: true,
     slaPauses: { select: { startedAt: true, endedAt: true } },
     service: {
       select: {
@@ -1067,8 +1039,16 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         serviceId: true,
         createdAt: true,
         acknowledgedAt: true,
+        resolvedAt: true,
+        resolutionKind: true,
         slaAckTargetMs: true,
         slaResolveTargetMs: true,
+        slaTargetSource: true,
+        slaTargetCapturedAt: true,
+        slaPausedMs: true,
+        slaPauseStartedAt: true,
+        slaAckElapsedMs: true,
+        slaResolveElapsedMs: true,
         slaPauses: { select: { startedAt: true, endedAt: true } },
       },
       orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
@@ -1362,17 +1342,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   // are both matched during the rolling-deploy window. After the
   // backfill release the fallback can be deleted.
   const recentIncidentIds = recentIncidents.map(i => i.id);
-  const [ackEvents, escalationEvents, reopenEvents, autoResolveEvents] = recentIncidentIds.length
+  const [escalationEvents, reopenEvents, autoResolveEvents] = recentIncidentIds.length
     ? await Promise.all([
-        // CRITICAL: Get earliest ack event first so MTTA is deterministic.
-        prisma.incidentEvent.findMany({
-          where: {
-            incidentId: { in: recentIncidentIds },
-            ...incidentEventWhereFor('ACKNOWLEDGED'),
-          },
-          select: { incidentId: true, createdAt: true },
-          orderBy: { createdAt: 'asc' },
-        }),
         // Escalation / reopen / auto-resolve are used for in-memory
         // rate calculation on the displayed (potentially-truncated)
         // window; DB-aggregation counts come from the raw-SQL query.
@@ -1399,7 +1370,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           select: { incidentId: true },
         }),
       ])
-    : [[], [], [], []];
+    : [[], [], []];
 
   const [firstNotes, firstAlerts] = recentIncidentIds.length
     ? await Promise.all([
@@ -1416,18 +1387,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ])
     : [[], []];
 
-  // Build Global Ack Map - FIX: Use earliest ack event due to ordering above
+  // Current incident state is authoritative. Timeline ACK events are historical
+  // facts and must not resurrect ACK after UNACKNOWLEDGE or REOPEN.
   const ackMap = new Map<string, Date>();
-  // First, use acknowledgedAt from incident (most reliable)
   for (const i of recentIncidents) {
     if (i.acknowledgedAt) {
       ackMap.set(i.id, i.acknowledgedAt);
-    }
-  }
-  // Then, fall back to earliest ack event (events are now ordered by createdAt asc)
-  for (const e of ackEvents) {
-    if (!ackMap.has(e.incidentId)) {
-      ackMap.set(e.incidentId, e.createdAt);
     }
   }
 
@@ -1705,17 +1670,13 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
   } else {
     // In-memory calculation for small datasets
     for (const incident of recentIncidents) {
-      const target = resolveSlaTarget({
-        incidentTargets: {
-          ackTargetMs: incident.slaAckTargetMs,
-          resolveTargetMs: incident.slaResolveTargetMs,
-        },
-        priority: incident.priority,
-        serviceTargets: {
-          ackMinutes: incident.service.targetAckMinutes,
-          resolveMinutes: incident.service.targetResolveMinutes,
-        },
+      const target = resolveFrozenSlaTarget({
+        ackTargetMs: incident.slaAckTargetMs,
+        resolveTargetMs: incident.slaResolveTargetMs,
+        source: incident.slaTargetSource,
+        capturedAt: incident.slaTargetCapturedAt,
       });
+      if (!target) continue;
       const elapsedAt = (evaluationAt: Date) =>
         effectiveElapsedMs({
           startedAt: incident.createdAt,
@@ -1801,6 +1762,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ackSum: 0,
       ackCount: 0,
       ackSlaMet: 0,
+      ackSlaEvaluated: 0,
       resolveSum: 0,
       resolveCount: 0,
       escalationCount: 0,
@@ -1829,20 +1791,16 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         });
         trendEntry.ackSum += ackElapsed;
         trendEntry.ackCount += 1;
-        const serviceTargets = serviceTargetMap.get(incident.serviceId);
-        const target = resolveSlaTarget({
-          incidentTargets: {
-            ackTargetMs: incident.slaAckTargetMs,
-            resolveTargetMs: incident.slaResolveTargetMs,
-          },
-          priority: incident.priority,
-          serviceTargets,
-          globalDefaults: {
-            ackMinutes: DEFAULT_ACK_TARGET_MINUTES,
-            resolveMinutes: DEFAULT_RESOLVE_TARGET_MINUTES,
-          },
+        const target = resolveFrozenSlaTarget({
+          ackTargetMs: incident.slaAckTargetMs,
+          resolveTargetMs: incident.slaResolveTargetMs,
+          source: incident.slaTargetSource,
+          capturedAt: incident.slaTargetCapturedAt,
         });
-        if (ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
+        if (target) {
+          trendEntry.ackSlaEvaluated += 1;
+          if (ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
+        }
       }
       if (incident.status === 'RESOLVED' && incident.resolvedAt) {
         trendEntry.resolveSum += capturedOrEffectiveElapsedMs({
@@ -1880,6 +1838,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       resolveBreaches: number;
       activeCount: number;
       criticalCount: number;
+      slaEvaluatedCount: number;
+      slaUnknownCount: number;
     }
   >();
 
@@ -1898,6 +1858,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       resolveBreaches: 0,
       activeCount: 0,
       criticalCount: 0,
+      slaEvaluatedCount: 0,
+      slaUnknownCount: 0,
     });
   }
 
@@ -1932,23 +1894,22 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         resolveBreaches: 0,
         activeCount: 0,
         criticalCount: 0,
+        slaEvaluatedCount: 0,
+        slaUnknownCount: 0,
       };
       serviceMap.set(incident.serviceId, s);
       serviceNameMap.set(incident.serviceId, incident.service.name);
     }
 
     s.count++;
-    const target = resolveSlaTarget({
-      incidentTargets: {
-        ackTargetMs: incident.slaAckTargetMs,
-        resolveTargetMs: incident.slaResolveTargetMs,
-      },
-      priority: incident.priority,
-      serviceTargets: {
-        ackMinutes: incident.service.targetAckMinutes,
-        resolveMinutes: incident.service.targetResolveMinutes,
-      },
+    const target = resolveFrozenSlaTarget({
+      ackTargetMs: incident.slaAckTargetMs,
+      resolveTargetMs: incident.slaResolveTargetMs,
+      source: incident.slaTargetSource,
+      capturedAt: incident.slaTargetCapturedAt,
     });
+    if (target) s.slaEvaluatedCount++;
+    else s.slaUnknownCount++;
     const elapsedAt = (evaluationAt: Date) =>
       effectiveElapsedMs({
         startedAt: incident.createdAt,
@@ -1960,12 +1921,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     if (ackAt) {
       s.ackSum += elapsedAt(ackAt);
       s.ackCount++;
-      if (elapsedAt(ackAt) > target.ackTargetMs) {
+      if (target && elapsedAt(ackAt) > target.ackTargetMs) {
         s.ackBreaches++;
       }
     } else if (incident.status !== 'RESOLVED') {
       // Check for overdue unacked
-      if (elapsedAt(now) > target.ackTargetMs) {
+      if (target && elapsedAt(now) > target.ackTargetMs) {
         s.ackBreaches++;
       }
     }
@@ -1973,12 +1934,12 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     if (incident.status === 'RESOLVED' && incident.resolvedAt) {
       s.resolveSum += elapsedAt(incident.resolvedAt);
       s.resolveCount++;
-      if (elapsedAt(incident.resolvedAt) > target.resolveTargetMs) {
+      if (target && elapsedAt(incident.resolvedAt) > target.resolveTargetMs) {
         s.resolveBreaches++;
       }
     } else if (incident.status !== 'RESOLVED') {
       // Check for overdue unresolved
-      if (elapsedAt(now) > target.resolveTargetMs) {
+      if (target && elapsedAt(now) > target.resolveTargetMs) {
         s.resolveBreaches++;
       }
     }
@@ -1994,17 +1955,21 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
       slaBreaches: s.ackBreaches + s.resolveBreaches, // FIX: Include both types
       status:
-        s.ackBreaches + s.resolveBreaches === 0
-          ? 'Healthy'
-          : s.ackBreaches + s.resolveBreaches < 3
-            ? 'Degraded'
-            : 'Critical',
+        s.slaEvaluatedCount === 0 && s.slaUnknownCount > 0
+          ? 'Unknown'
+          : s.ackBreaches + s.resolveBreaches === 0
+            ? 'Healthy'
+            : s.ackBreaches + s.resolveBreaches < 3
+              ? 'Degraded'
+              : 'Critical',
       dynamicStatus: getServiceDynamicStatus({
         activeIncidentCount: s.activeCount,
         hasCritical: s.criticalCount > 0,
       }),
       activeCount: s.activeCount,
       criticalCount: s.criticalCount,
+      slaEvaluatedCount: s.slaEvaluatedCount,
+      slaUnknownCount: s.slaUnknownCount,
     }))
     .sort((a, b) => b.count - a.count);
 
@@ -2191,39 +2156,43 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     : recentIncidents.slice(0, filters.incidentLimit || DEFAULT_INCIDENT_DISPLAY_LIMIT);
 
   const activeIncidentSummaries = filters.includeActiveIncidents
-    ? activeIncidentsData.map(incident => {
-        const serviceTargets = serviceTargetMap.get(incident.serviceId);
-        const target = resolveSlaTarget({
-          incidentTargets: {
-            ackTargetMs: incident.slaAckTargetMs,
-            resolveTargetMs: incident.slaResolveTargetMs,
+    ? activeIncidentsData.flatMap(incident => {
+        const sla = projectIncidentSlaState(
+          {
+            status: incident.status,
+            createdAt: incident.createdAt,
+            acknowledgedAt: incident.acknowledgedAt,
+            resolvedAt: incident.resolvedAt,
+            resolutionKind: incident.resolutionKind,
+            slaAckTargetMs: incident.slaAckTargetMs,
+            slaResolveTargetMs: incident.slaResolveTargetMs,
+            slaTargetSource: incident.slaTargetSource,
+            slaTargetCapturedAt: incident.slaTargetCapturedAt,
+            slaPausedMs: incident.slaPausedMs,
+            slaPauseStartedAt: incident.slaPauseStartedAt,
+            slaAckElapsedMs: incident.slaAckElapsedMs,
+            slaResolveElapsedMs: incident.slaResolveElapsedMs,
           },
-          priority: incident.priority,
-          serviceTargets,
-        });
-        const elapsedMs = effectiveElapsedMs({
-          startedAt: incident.createdAt,
-          evaluationAt: now,
-          pauses: incident.slaPauses,
-        });
-        const ackRemainingMs = Math.max(0, target.ackTargetMs - elapsedMs);
-        const resolveRemainingMs = Math.max(0, target.resolveTargetMs - elapsedMs);
-        return {
-          id: incident.id,
-          title: incident.title,
-          status: incident.status,
-          urgency: incident.urgency,
-          createdAt: incident.createdAt,
-          acknowledgedAt: incident.acknowledgedAt ?? null,
-          serviceId: incident.serviceId,
-          serviceName: serviceNameMap.get(incident.serviceId) || 'Unknown service',
-          assigneeId: incident.assigneeId ?? null,
-          targetAckMinutes: target.ackTargetMs / 60_000,
-          targetResolveMinutes: target.resolveTargetMs / 60_000,
-          slaAckDeadline:
-            incident.status === 'ACKNOWLEDGED' ? null : new Date(now.getTime() + ackRemainingMs),
-          slaResolveDeadline: new Date(now.getTime() + resolveRemainingMs),
-        };
+          { now }
+        );
+        return [
+          {
+            id: incident.id,
+            title: incident.title,
+            status: incident.status,
+            urgency: incident.urgency,
+            createdAt: incident.createdAt,
+            acknowledgedAt: incident.acknowledgedAt ?? null,
+            serviceId: incident.serviceId,
+            serviceName: serviceNameMap.get(incident.serviceId) || 'Unknown service',
+            assigneeId: incident.assigneeId ?? null,
+            targetAckMinutes: sla.valid ? sla.contract.ackTargetMs / 60_000 : null,
+            targetResolveMinutes: sla.valid ? sla.contract.resolveTargetMs / 60_000 : null,
+            slaAckDeadline: sla.valid ? sla.ack.breachAt : null,
+            slaResolveDeadline: sla.valid ? sla.resolve.breachAt : null,
+            slaState: sla.contractState,
+          },
+        ];
       })
     : undefined;
 
@@ -2450,7 +2419,7 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ackRate: s.count ? (s.ackCount / s.count) * 100 : 0,
       resolveRate: s.count ? (s.resolveCount / s.count) * 100 : 0,
       resolveCount: s.resolveCount,
-      ackCompliance: s.ackCount ? (s.ackSlaMet / s.ackCount) * 100 : 0,
+      ackCompliance: s.ackSlaEvaluated ? (s.ackSlaMet / s.ackSlaEvaluated) * 100 : null,
       escalationRate: s.count ? (s.escalationCount / s.count) * 100 : 0,
     })),
     statusMix,
@@ -2501,10 +2470,17 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
 }
 
 /**
- * Generate a daily SLA compliance snapshot for a specific definition and date
- * Consolidated from SLAService
+ * @deprecated Legacy SLASnapshot writes are retired. This compatibility symbol
+ * remains for one release so out-of-tree callers fail closed without writing.
  */
 export async function generateDailySnapshot(definitionId: string, date: Date): Promise<void> {
+  logger.info('[Legacy SLA] Ignored retired snapshot request', {
+    definitionId,
+    date: date.toISOString(),
+  });
+  return;
+
+  /* Retained temporarily as rollback archaeology; this block is not executable.
   const { default: prisma } = await import('./prisma');
 
   const definition = await prisma.sLADefinition.findUnique({
@@ -2667,6 +2643,7 @@ export async function generateDailySnapshot(definitionId: string, date: Date): P
   });
 
   logger.info(`[SLA] Snapshot updated`, { definitionId, date: start.toISOString(), score });
+  */
 }
 
 export async function checkIncidentSLA(incidentId: string): Promise<IncidentSLAResult> {
@@ -2711,6 +2688,8 @@ function calculateMergedDuration(intervals: Array<{ start: Date; end: Date }>): 
   let current = { start: sorted[0].start, end: sorted[0].end };
 
   for (let i = 1; i < sorted.length; i += 1) {
+    // Index is bounded by the array length in this loop.
+    // eslint-disable-next-line security/detect-object-injection
     const next = sorted[i];
 
     if (next.start <= current.end) {
@@ -2746,7 +2725,7 @@ export async function calculateMultiServiceUptime(
     | {
         visibility?: 'PUBLIC' | 'PRIVATE' | 'ALL';
         incidentWhere?: import('@prisma/client').Prisma.IncidentWhereInput;
-  } = {},
+      } = {},
   db?: Pick<import('@prisma/client').PrismaClient, 'incident'>
 ): Promise<Record<string, number>> {
   const { default: prisma } = await import('./prisma');
@@ -2796,6 +2775,8 @@ export async function calculateMultiServiceUptime(
 
   for (const serviceId of serviceIds) {
     if (totalMs <= 0) {
+      // Service IDs are authorized database values, not object-property paths.
+      // eslint-disable-next-line security/detect-object-injection
       uptimeByService[serviceId] = 100;
       continue;
     }
@@ -2817,6 +2798,8 @@ export async function calculateMultiServiceUptime(
 
     const downtimeMs = calculateMergedDuration(intervals);
     const uptime = ((totalMs - downtimeMs) / totalMs) * 100;
+    // Service IDs are authorized database values, not object-property paths.
+    // eslint-disable-next-line security/detect-object-injection
     uptimeByService[serviceId] = Math.max(0, Math.min(100, uptime));
   }
 

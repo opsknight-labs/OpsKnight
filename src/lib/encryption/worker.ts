@@ -2,7 +2,7 @@
  * Encryption lifecycle worker and run orchestrator.
  */
 
-import { PrismaClient, EncryptionMigrationRun } from '@prisma/client';
+import { PrismaClient, EncryptionMigrationRun, Prisma } from '@prisma/client';
 import { MigrationMode } from './types';
 import { executeMigrationRun } from './migration';
 import { scheduleJob } from '@/lib/jobs/queue';
@@ -115,4 +115,108 @@ export async function cancelEncryptionRun(
       completedAt: new Date(),
     },
   });
+}
+
+/**
+ * Settles an EncryptionMigrationRun into FAILED state upon terminal failure of its background job.
+ * Conditionally transitions only runs that are currently PENDING or RUNNING via updateMany;
+ * never overwrites COMPLETED, CANCELLED, or already FAILED runs.
+ */
+export async function settleEncryptionLifecycleFailure(
+  prismaClient: PrismaClient | Prisma.TransactionClient,
+  runId: string,
+  error: string,
+  now: Date = new Date()
+): Promise<boolean> {
+  const safeErrorMessage = error ? error.slice(0, 1000) : 'Background job execution failed';
+
+  const result = await prismaClient.encryptionMigrationRun.updateMany({
+    where: {
+      id: runId,
+      status: { in: ['PENDING', 'RUNNING'] },
+    },
+    data: {
+      status: 'FAILED',
+      errorMessage: safeErrorMessage,
+      completedAt: now,
+    },
+  });
+
+  return result.count > 0;
+}
+
+/**
+ * Sweeps and reconciles timed-out zombie or terminal encryption lifecycle background jobs,
+ * ensuring both the BackgroundJob and its referenced EncryptionMigrationRun are settled to FAILED
+ * in a single atomic transaction.
+ */
+export async function reconcileTerminalEncryptionLifecycleJobs(
+  prismaClient: PrismaClient
+): Promise<number> {
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  const now = new Date();
+
+  let reconciledCount = 0;
+
+  // 1. Timed-out PROCESSING encryption lifecycle jobs with attempts >= maxAttempts
+  const staleProcessingJobs = await prismaClient.backgroundJob.findMany({
+    where: {
+      type: 'ENCRYPTION_LIFECYCLE',
+      status: 'PROCESSING',
+      OR: [{ startedAt: null }, { startedAt: { lt: tenMinutesAgo } }],
+    },
+  });
+
+  for (const job of staleProcessingJobs) {
+    if (job.attempts >= job.maxAttempts) {
+      const payload = job.payload as Record<string, unknown> | null;
+      const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : null;
+      const errorMsg = 'Job timed out in PROCESSING state after exceeding maxAttempts';
+
+      await prismaClient.$transaction(async tx => {
+        await tx.backgroundJob.updateMany({
+          where: { id: job.id, status: 'PROCESSING' },
+          data: { status: 'FAILED', failedAt: now, error: errorMsg },
+        });
+
+        if (runId) {
+          await tx.encryptionMigrationRun.updateMany({
+            where: { id: runId, status: { in: ['PENDING', 'RUNNING'] } },
+            data: { status: 'FAILED', errorMessage: errorMsg, completedAt: now },
+          });
+        }
+      });
+      reconciledCount++;
+    }
+  }
+
+  // 2. FAILED encryption jobs from the last 24 hours whose run is still PENDING or RUNNING
+  const terminalFailedJobs = await prismaClient.backgroundJob.findMany({
+    where: {
+      type: 'ENCRYPTION_LIFECYCLE',
+      status: 'FAILED',
+      failedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    select: { id: true, payload: true, error: true, failedAt: true },
+  });
+
+  for (const job of terminalFailedJobs) {
+    const payload = job.payload as Record<string, unknown> | null;
+    const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : null;
+    if (runId) {
+      const result = await prismaClient.encryptionMigrationRun.updateMany({
+        where: { id: runId, status: { in: ['PENDING', 'RUNNING'] } },
+        data: {
+          status: 'FAILED',
+          errorMessage: job.error
+            ? job.error.slice(0, 1000)
+            : 'Associated background job failed terminally',
+          completedAt: job.failedAt ?? now,
+        },
+      });
+      if (result.count > 0) reconciledCount++;
+    }
+  }
+
+  return reconciledCount;
 }

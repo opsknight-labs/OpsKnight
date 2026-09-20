@@ -259,9 +259,9 @@ export default async function AnalyticsContent({
     metrics.trendSeries.map(entry => entry.mttr),
     smoothingWindow
   );
-  const ackComplianceSeries = smoothSeries(
-    metrics.trendSeries.map(entry => entry.ackCompliance),
-    smoothingWindow
+  const ackComplianceSeries = metrics.trendSeries.map(entry => entry.ackCompliance);
+  const ackComplianceSparkline = ackComplianceSeries.filter(
+    (value): value is number => value !== null
   );
   const resolveRateSeries = smoothSeries(
     metrics.trendSeries.map(entry => entry.resolveRate),
@@ -524,11 +524,11 @@ export default async function AnalyticsContent({
             >
               <path
                 className="analytics-sparkline-area"
-                d={buildSparklineAreaPath(ackComplianceSeries)}
+                d={buildSparklineAreaPath(ackComplianceSparkline)}
               />
               <path
                 className="analytics-sparkline-line"
-                d={buildSparklinePath(ackComplianceSeries)}
+                d={buildSparklinePath(ackComplianceSparkline)}
               />
             </svg>
           </div>

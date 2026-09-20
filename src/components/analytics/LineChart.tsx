@@ -1,6 +1,6 @@
 import React from 'react';
 
-type ChartDatum = Record<string, number | string | undefined>;
+type ChartDatum = Record<string, number | string | null | undefined>;
 
 interface LineChartProps {
   data: ChartDatum[];

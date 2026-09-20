@@ -148,6 +148,8 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.provisioningToken;
     case 'projectionVersion':
       return values.projectionVersion;
+    case 'runId':
+      return values.runId;
     default:
       return undefined;
   }
@@ -267,6 +269,16 @@ export async function claimPendingJobs(
   type?: JobType,
   excludeTypes: readonly JobType[] = []
 ): Promise<QueuedJob[]> {
+  // Reconcile and sweep any zombie/timed-out encryption lifecycle jobs atomically
+  try {
+    const { reconcileTerminalEncryptionLifecycleJobs } = await import('../encryption/worker');
+    await reconcileTerminalEncryptionLifecycleJobs(prisma);
+  } catch (reconcileErr) {
+    logger.warn('[Queue] Failed to reconcile terminal encryption lifecycle jobs', {
+      error: reconcileErr,
+    });
+  }
+
   await prisma
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING state after exceeding maxAttempts' ELSE NULL END WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`
@@ -539,11 +551,45 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
     return;
   }
   const shouldRetry = job.attempts < job.maxAttempts && !isNonRetryableBackgroundJobError(error);
+  const now = new Date();
+
+  if (!shouldRetry && job.type === 'ENCRYPTION_LIFECYCLE') {
+    const runId = payloadValue(job.payload, 'runId');
+    const safeRunId = typeof runId === 'string' ? runId.trim() : null;
+    const safeError = error ? error.slice(0, 1000) : 'Background job execution failed';
+
+    await prisma.$transaction(async tx => {
+      await tx.backgroundJob.updateMany({
+        where: { id: jobId, status: { in: ['PROCESSING', 'PENDING'] } },
+        data: {
+          status: 'FAILED',
+          failedAt: now,
+          error,
+        },
+      });
+
+      if (safeRunId) {
+        await tx.encryptionMigrationRun.updateMany({
+          where: {
+            id: safeRunId,
+            status: { in: ['PENDING', 'RUNNING'] },
+          },
+          data: {
+            status: 'FAILED',
+            errorMessage: safeError,
+            completedAt: now,
+          },
+        });
+      }
+    });
+    return;
+  }
+
   await prisma.backgroundJob.update({
     where: { id: jobId },
     data: {
       status: shouldRetry ? 'PENDING' : 'FAILED',
-      failedAt: shouldRetry ? null : new Date(),
+      failedAt: shouldRetry ? null : now,
       error: shouldRetry ? null : error,
       scheduledAt: shouldRetry
         ? new Date(

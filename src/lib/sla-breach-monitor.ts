@@ -32,6 +32,8 @@ export interface BreachWarning {
   serviceId: string;
   serviceName: string;
   breachType: 'ack' | 'resolve';
+  /** Canonical projector outcome. remainingMs must never classify a breach. */
+  phaseStatus: 'MET' | 'BREACHED' | 'PENDING' | 'NOT_REQUIRED';
   timeRemainingMs: number;
   targetMinutes: number;
   urgency: string;
@@ -58,6 +60,10 @@ export interface BreachMonitorConfig {
   notifyEmail?: boolean;
   notifyWebhook?: boolean;
   alertEmail?: string;
+}
+
+export function isBreachWarningBreached(warning: Pick<BreachWarning, 'phaseStatus'>): boolean {
+  return warning.phaseStatus === 'BREACHED';
 }
 
 /**
@@ -220,6 +226,7 @@ export async function checkSLABreaches(
         serviceId: incident.service.id,
         serviceName: incident.service.name,
         breachType,
+        phaseStatus: phase.status,
         timeRemainingMs: phase.remainingMs,
         targetMinutes: phase.targetMs / 60000,
         urgency: incident.urgency,
@@ -271,7 +278,7 @@ export async function checkSLABreaches(
       // otherwise a crash or enqueue failure would suppress it forever.
       try {
         if (prisma.incidentEvent?.create) {
-          const isBreached = warning.timeRemainingMs <= 0;
+          const isBreached = isBreachWarningBreached(warning);
           await prisma.incidentEvent.create({
             data: {
               incidentId: warning.incidentId,
@@ -309,7 +316,8 @@ async function notifyBreachWarning(
   config: BreachMonitorConfig
 ): Promise<boolean> {
   let materialized = true;
-  const isBreached = warning.timeRemainingMs <= 0;
+  let durableIntentCount = 0;
+  const isBreached = isBreachWarningBreached(warning);
   const remainingMinutes = Math.round(warning.timeRemainingMs / 60000);
   const breachEmoji = isBreached ? '🚨' : warning.breachType === 'ack' ? '⏰' : '⚠️';
   const breachAction = isBreached ? 'BREACHED' : 'WARNING';
@@ -380,6 +388,7 @@ async function notifyBreachWarning(
               additionalMessage: message,
             },
       });
+      durableIntentCount++;
     }
   }
 
@@ -424,6 +433,7 @@ async function notifyBreachWarning(
               secret: webhook.secret ? await decryptStoredSecret(webhook.secret) : undefined,
             },
           });
+          durableIntentCount++;
           logger.info('[SLA Breach Monitor] Webhook notification enqueued', {
             webhookId: webhook.id,
             type: webhook.type,
@@ -517,6 +527,7 @@ async function notifyBreachWarning(
           priority: isBreached ? 0 : 1,
           payload: { kind: 'EMAIL', to: alertEmail, subject, html, text: plainText },
         });
+        durableIntentCount++;
 
         logger.info('[SLA Breach Monitor] Email notification enqueued', { to: alertEmail });
       } else {
@@ -528,7 +539,7 @@ async function notifyBreachWarning(
     }
   }
 
-  return materialized;
+  return materialized && durableIntentCount > 0;
 }
 
 /**

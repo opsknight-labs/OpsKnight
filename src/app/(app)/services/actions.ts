@@ -553,6 +553,13 @@ export async function deleteService(serviceId: string) {
     );
   }
 
+  const objectiveCount = await prisma.serviceObjective.count({ where: { serviceId } });
+  if (objectiveCount > 0) {
+    throw new Error(
+      `Cannot delete this service while it has ${objectiveCount} service objective revision(s). Reliability history must retain its original service scope.`
+    );
+  }
+
   // Now delete the service
   await prisma.service.delete({
     where: { id: serviceId },

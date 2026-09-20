@@ -178,6 +178,10 @@ export async function updateState(data: {
   nextRunAt?: Date | null;
   lastRollupDate?: string | null;
   lastRollupRefreshAt?: Date | null;
+  lastObjectiveSnapshotAt?: Date | null;
+  lastObjectiveSnapshotSuccessAt?: Date | null;
+  lastObjectiveSnapshotDurationMs?: number | null;
+  lastObjectiveSnapshotFailed?: number;
 }): Promise<void> {
   const { default: prisma } = await import('./prisma');
 
@@ -495,13 +499,20 @@ async function runOnce() {
         const { getRetentionPolicy } = await import('./retention-policy');
         const { default: prisma } = await import('./prisma');
         const policy = await getRetentionPolicy();
+        const generateCompleteDailyRollups = async (day: Date) => {
+          const result = await generateAllDailyRollups(day);
+          if (result.failures > 0) {
+            throw new Error(
+              `${result.failures} service rollup(s) failed for ${day.toISOString().split('T')[0]}`
+            );
+          }
+        };
 
         // Run data cleanup according to retention policy
         await performDataCleanup(false).catch(cleanupErr => {
           logger.warn('[Cron] Daily data cleanup completed with warnings', { error: cleanupErr });
         });
         const overdueNotifications = await notifyOverdueActionItems(now);
-
         // Run automated SLA drift detection and self-healing
         try {
           const { runSLADriftDetection } = await import('./sla-drift-detection');
@@ -578,7 +589,7 @@ async function runOnce() {
           `
         ).map(row => row.day);
         for (const day of dirtyDays) {
-          await generateAllDailyRollups(day);
+          await generateCompleteDailyRollups(day);
         }
 
         if (toGenerate.length > 0) {
@@ -589,7 +600,28 @@ async function runOnce() {
             oldest: toGenerate[toGenerate.length - 1]?.toISOString().split('T')[0],
           });
           for (const day of toGenerate) {
-            await generateAllDailyRollups(day);
+            await generateCompleteDailyRollups(day);
+          }
+        }
+
+        // Objective snapshots may consume historical incident rollups. Materialize them only
+        // after dirty-day reconciliation and once the missing-rollup backlog is fully drained.
+        let serviceObjectiveSnapshots = null;
+        if (missingDays.length <= MAX_BACKFILL_PER_RUN) {
+          const { processServiceObjectiveSnapshots } =
+            await import('@/jobs/service-objective-scheduler');
+          serviceObjectiveSnapshots = await processServiceObjectiveSnapshots(now);
+          await updateState({
+            lastObjectiveSnapshotAt: now,
+            lastObjectiveSnapshotSuccessAt:
+              serviceObjectiveSnapshots.failed === 0 ? now : undefined,
+            lastObjectiveSnapshotDurationMs: serviceObjectiveSnapshots.durationMs,
+            lastObjectiveSnapshotFailed: serviceObjectiveSnapshots.failed,
+          });
+          if (serviceObjectiveSnapshots.failed > 0) {
+            throw new Error(
+              `${serviceObjectiveSnapshots.failed} service objective snapshot(s) failed; retrying the daily run`
+            );
           }
         }
 
@@ -605,6 +637,7 @@ async function runOnce() {
           stillMissing: Math.max(0, missingDays.length - toGenerate.length),
           reconciled: dirtyDays.length,
           overdueNotifications,
+          serviceObjectiveSnapshots,
           rollupsDeleted: 'handled-by-data-cleanup',
         });
       } catch (error) {
