@@ -252,9 +252,7 @@ export async function initiatePasswordReset(
     const emailConfig = await getEmailConfig();
 
     if (emailConfig?.enabled) {
-      const { getPasswordResetEmailTemplate } = await import(
-        '@/lib/password-reset-email-template'
-      );
+      const { getPasswordResetEmailTemplate } = await import('@/lib/password-reset-email-template');
       const template = getPasswordResetEmailTemplate({
         userName: user.name || 'User',
         resetLink,
@@ -374,12 +372,12 @@ export async function completePasswordReset(
     const record = await prisma.userToken.findFirst({
       where: {
         tokenHash,
-        type: 'PASSWORD_RESET',
+        type: { in: ['PASSWORD_RESET', 'INVITE'] },
         usedAt: null,
         revokedAt: null,
         expiresAt: { gt: new Date() },
       },
-      select: { id: true, userId: true, identifier: true },
+      select: { id: true, userId: true, identifier: true, type: true },
     });
     if (!record) {
       await auditRecoveryEvent({
@@ -406,7 +404,11 @@ export async function completePasswordReset(
         smsNotificationsEnabled: true,
       },
     });
-    if (!user || user.status !== 'ACTIVE') {
+    if (
+      !user ||
+      (user.status !== 'ACTIVE' && user.status !== 'INVITED') ||
+      (record.type === 'INVITE' && user.status !== 'INVITED')
+    ) {
       return {
         success: false,
         code: 'INVALID_TOKEN',
@@ -430,7 +432,7 @@ export async function completePasswordReset(
         where: {
           id: record.id,
           tokenHash,
-          type: 'PASSWORD_RESET',
+          type: record.type,
           usedAt: null,
           revokedAt: null,
           expiresAt: { gt: now },
@@ -439,11 +441,34 @@ export async function completePasswordReset(
       });
       if (claimed.count !== 1) throw new Error('RESET_TOKEN_ALREADY_USED');
 
-      const updated = await tx.user.updateMany({
-        where: { id: user.id, status: 'ACTIVE' },
-        data: { passwordHash, tokenVersion: { increment: 1 } },
-      });
-      if (updated.count !== 1) throw new Error('RESET_USER_STATE_CHANGED');
+      if (user.status === 'INVITED') {
+        const activated = await tx.user.updateMany({
+          where: { id: user.id, status: 'INVITED' },
+          data: {
+            passwordHash,
+            status: 'ACTIVE',
+            invitedAt: null,
+            tokenVersion: { increment: 1 },
+          },
+        });
+        if (activated.count !== 1) throw new Error('RESET_USER_STATE_CHANGED');
+
+        await tx.userToken.updateMany({
+          where: {
+            type: 'INVITE',
+            usedAt: null,
+            revokedAt: null,
+            OR: [{ userId: user.id }, { identifier: user.email }],
+          },
+          data: { revokedAt: now },
+        });
+      } else {
+        const updated = await tx.user.updateMany({
+          where: { id: user.id, status: 'ACTIVE' },
+          data: { passwordHash, tokenVersion: { increment: 1 } },
+        });
+        if (updated.count !== 1) throw new Error('RESET_USER_STATE_CHANGED');
+      }
 
       await tx.userToken.updateMany({
         where: {
@@ -456,6 +481,24 @@ export async function completePasswordReset(
       });
     });
     invalidateSessionSecurityProjection(user.id);
+
+    if (user.status === 'INVITED') {
+      try {
+        const { logAudit } = await import('@/lib/audit');
+        await logAudit({
+          action: 'user.active',
+          entityType: 'USER',
+          entityId: user.id,
+          actorId: user.id,
+          source: 'AUTH',
+          details: { method: 'recovery_activation' },
+        });
+      } catch (err) {
+        logger.warn('Failed to emit user.active audit log during invited user reset', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
 
     await auditRecoveryEvent({
       action: 'auth.password_reset.completed',
