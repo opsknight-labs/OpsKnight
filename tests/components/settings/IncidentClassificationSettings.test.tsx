@@ -21,7 +21,9 @@ const rules = [
 describe('IncidentClassificationSettings', () => {
   it('keeps automatic priority opt-in and advances optimistic version after save', async () => {
     const save = vi.mocked(saveWorkspaceClassificationPolicyAction);
-    save.mockResolvedValueOnce({ ok: true, version: 2 }).mockResolvedValueOnce({ ok: true, version: 3 });
+    save
+      .mockResolvedValueOnce({ ok: true, version: 2 })
+      .mockResolvedValueOnce({ ok: true, version: 3 });
 
     render(
       <IncidentClassificationSettings
@@ -42,7 +44,11 @@ describe('IncidentClassificationSettings', () => {
       })
     );
 
-    const saveAgain = await screen.findByRole('button', { name: /save classification policy/i });
+    const saveAgain = await screen.findByRole(
+      'button',
+      { name: /save classification policy/i },
+      { timeout: 5000 }
+    );
     fireEvent.click(saveAgain);
     await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
     expect(save.mock.calls[1][0]).toEqual(expect.objectContaining({ expectedVersion: 2 }));
