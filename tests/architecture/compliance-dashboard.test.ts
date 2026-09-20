@@ -21,11 +21,10 @@ describe('compliance diagnostics navigation and language', () => {
     expect(page).not.toMatch(/\b(compliance score|\d+% compliant)\b/i);
   });
 
-  it('searches and paginates the subject selector on the server', () => {
+  it('enforces strict PII-free architectural boundary on the compliance control center', () => {
     const page = readFileSync('src/app/(app)/settings/security-compliance/page.tsx', 'utf8');
-    expect(page).toContain('USER_SEARCH_PAGE_SIZE = 30');
-    expect(page).toContain('contains: query');
-    expect(page).toContain('skip: (page - 1) * USER_SEARCH_PAGE_SIZE');
-    expect(page).not.toContain('take: 200');
+    expect(page).not.toContain('discoverSubjectData');
+    expect(page).not.toContain('prisma.user');
+    expect(page).not.toContain('USER_SEARCH_PAGE_SIZE');
   });
 });

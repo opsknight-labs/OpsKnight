@@ -24,6 +24,41 @@ export async function GET(_request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
+    let isOrphaned = false;
+    let orphanReason: string | null = null;
+
+    if (activeRun) {
+      const ageMs = Date.now() - activeRun.createdAt.getTime();
+      const LEASE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+      if (ageMs > LEASE_THRESHOLD_MS) {
+        const candidateJobs = await prisma.backgroundJob.findMany({
+          where: {
+            type: 'ENCRYPTION_LIFECYCLE',
+            status: { in: ['PENDING', 'PROCESSING'] },
+          },
+        });
+
+        const hasActiveJob = candidateJobs.some(
+          job => (job.payload as Record<string, unknown>)?.runId === activeRun.id
+        );
+
+        if (!hasActiveJob) {
+          isOrphaned = true;
+          orphanReason =
+            'No active background worker job found for this run after lease threshold (5m). It may have been interrupted or orphaned.';
+        }
+      }
+    }
+
+    const activeRunView = activeRun
+      ? {
+          ...activeRun,
+          isOrphaned,
+          orphanReason,
+        }
+      : null;
+
     const latestCompletedRuns = await prisma.encryptionMigrationRun.findMany({
       where: { status: 'COMPLETED' },
       orderBy: { completedAt: 'desc' },
@@ -35,7 +70,7 @@ export async function GET(_request: NextRequest) {
         keyring,
         registryFingerprint,
         targetsCount: ENCRYPTION_TARGETS.length,
-        activeRun,
+        activeRun: activeRunView,
         latestCompletedRuns,
       },
       200,
