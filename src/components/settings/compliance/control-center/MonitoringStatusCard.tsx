@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Activity, AlertTriangle, CheckCircle2, Clock, Play } from 'lucide-react';
 import {
