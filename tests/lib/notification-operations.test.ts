@@ -51,4 +51,12 @@ describe('notification operations query', () => {
       expect.objectContaining({ take: 101 })
     );
   });
+
+  it.each(['SENT', 'DELIVERED'] as const)('filters %s without merging delivery states', async status => {
+    await getNotificationOperations({ status });
+    const rowArgs = vi.mocked(prisma.notification.findMany).mock.calls[0]![0]!;
+    const categoryArgs = vi.mocked(prisma.notification.groupBy).mock.calls[1]![0]!;
+    expect(rowArgs.where).toMatchObject({ status });
+    expect(categoryArgs.where).toMatchObject({ status });
+  });
 });

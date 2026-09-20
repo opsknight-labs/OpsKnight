@@ -1,6 +1,7 @@
 import 'server-only';
 import { Prisma } from '@prisma/client';
 import prisma from './prisma';
+import { recordUserNotificationEndpointOutcome } from './user-notification-endpoints';
 
 export type ProviderFeedbackType =
   | 'DELIVERED'
@@ -39,8 +40,27 @@ export async function ingestNotificationProviderFeedback(event: ProviderFeedback
     if (!event.providerMessageId) return { processed: true, subscriptionId: null };
     const notification = await tx.notification.findUnique({
       where: { providerMessageId: event.providerMessageId },
-      select: { recipientType: true, recipientId: true },
+      select: { recipientType: true, recipientId: true, userId: true, channel: true, recipientHash: true },
     });
+    if (notification?.userId) {
+      const terminalStatus =
+        event.type === 'HARD_BOUNCE'
+          ? 'BOUNCED'
+          : event.type === 'INVALID_RECIPIENT'
+            ? 'INVALID'
+            : event.type === 'COMPLAINT' || event.type === 'SUPPRESSION'
+              ? 'OPTED_OUT'
+              : undefined;
+      await recordUserNotificationEndpointOutcome(tx, {
+        userId: notification.userId,
+        channel: notification.channel,
+        addressHash: notification.recipientHash,
+        delivered: event.type === 'DELIVERED',
+        errorCode: event.type === 'DELIVERED' ? undefined : event.type,
+        terminalStatus,
+        occurredAt: event.occurredAt,
+      });
+    }
     if (notification?.recipientType !== 'SUBSCRIBER' || !notification.recipientId) {
       return { processed: true, subscriptionId: null };
     }

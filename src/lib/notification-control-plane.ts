@@ -31,6 +31,7 @@ import {
   NOTIFICATION_AGING_FLOOR,
 } from './notification-priority';
 import { z } from 'zod';
+import { decideNotificationNoise, notificationNoiseDecision } from './notification-noise-controller';
 
 const MAX_ENCRYPTED_PAYLOAD_BYTES = 768 * 1024;
 const MAX_ERROR_LENGTH = 1_000;
@@ -38,6 +39,21 @@ const CLAIM_TIMEOUT_MS = 10 * 60_000;
 const SYSTEM_NOTIFICATION_BATCH_SIZE = 100;
 const SYSTEM_NOTIFICATION_CONCURRENCY = 10;
 const EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE = 100;
+export const UNKNOWN_RECONCILIATION_DELAY_MS = 5 * 60_000;
+
+export type DeliveryReconciliationCapability = 'LOOKUP' | 'IDEMPOTENT_RETRY' | 'UNSUPPORTED';
+
+export function deliveryReconciliationCapability(
+  channel: NotificationChannel,
+  provider?: string | null
+): DeliveryReconciliationCapability {
+  const normalized = provider?.toLowerCase() ?? '';
+  if ((channel === 'SMS' || channel === 'WHATSAPP') && normalized.includes('twilio')) return 'LOOKUP';
+  // Push dispatches are keyed by the durable notification id, which providers
+  // supporting collapse/idempotency can safely receive again.
+  if (channel === 'PUSH') return 'IDEMPOTENT_RETRY';
+  return 'UNSUPPORTED';
+}
 
 type IncidentPresentation = {
   id: string;
@@ -496,6 +512,16 @@ export async function createCentralNotificationIntent(
     9
   );
   const id = intentId(deliveryKey);
+  const noiseDecision = await notificationNoiseDecision(store, {
+    recipientId: input.recipientId || recipientHash,
+    sourceType: input.sourceType,
+    sourceId: input.sourceId,
+    eventType: input.templateKey,
+    trafficClass,
+    priority,
+  });
+  const effectiveScheduledAt =
+    noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
 
   try {
     await store.notification.create({
@@ -504,8 +530,11 @@ export async function createCentralNotificationIntent(
         incidentId: input.incidentId,
         userId: input.userId,
         channel: input.channel,
-        status: 'PENDING',
-        message: input.displayMessage.slice(0, 2_000),
+        status: noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
+        message:
+          noiseDecision.action === 'GROUP'
+            ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(0, 2_000)
+            : input.displayMessage.slice(0, 2_000),
         eventType: input.templateKey,
         category: input.category,
         recipientType: input.recipientType,
@@ -522,10 +551,11 @@ export async function createCentralNotificationIntent(
         priority,
         trafficClass,
         tenantKey: tenantKeyForInput(input),
-        scheduledAt,
-        nextAttemptAt: scheduledAt,
+        scheduledAt: effectiveScheduledAt,
+        nextAttemptAt: effectiveScheduledAt,
         maxAttempts,
         expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
+        errorMsg: noiseDecision.action === 'SUPPRESS' ? noiseDecision.reason : undefined,
       },
       select: { id: true },
     });
@@ -545,6 +575,7 @@ export async function createCentralNotificationIntentsBatch(
   inputs: CentralNotificationInput[]
 ): Promise<{ created: number; skipped: number }> {
   const now = new Date();
+  const batchNoiseCounts = new Map<string, number>();
   const rows: Prisma.NotificationCreateManyInput[] = await Promise.all(
     inputs.map(async input => {
       assertValidInput(input);
@@ -565,13 +596,36 @@ export async function createCentralNotificationIntentsBatch(
       const scheduledAt = input.scheduledAt ?? now;
       const policy = defaultNotificationPolicy(input.category, input.templateKey);
       const trafficClass = input.trafficClass ?? policy.trafficClass;
+      const priority = Math.min(
+        Math.max(input.priority ?? policy.priority, notificationAgingFloor(trafficClass)),
+        9
+      );
+      const noiseKey = [input.recipientId || recipientHash, input.sourceType, input.sourceId, input.templateKey].join(':');
+      const relatedCount = batchNoiseCounts.get(noiseKey) ?? 0;
+      batchNoiseCounts.set(noiseKey, relatedCount + 1);
+      const noiseDecision = decideNotificationNoise(
+        {
+          recipientId: input.recipientId || recipientHash,
+          sourceType: input.sourceType,
+          sourceId: input.sourceId,
+          eventType: input.templateKey,
+          trafficClass,
+          priority,
+        },
+        relatedCount,
+        now
+      );
+      const effectiveScheduledAt = noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
       return {
         id: intentId(deliveryKey),
         incidentId: input.incidentId,
         userId: input.userId,
         channel: input.channel,
-        status: 'PENDING',
-        message: input.displayMessage.slice(0, 2_000),
+        status: noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
+        message:
+          noiseDecision.action === 'GROUP'
+            ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(0, 2_000)
+            : input.displayMessage.slice(0, 2_000),
         eventType: input.templateKey,
         category: input.category,
         recipientType: input.recipientType,
@@ -585,19 +639,17 @@ export async function createCentralNotificationIntentsBatch(
         payloadEncrypted: await encrypt(serializedPayload),
         contentId: input.contentId,
         fanoutId: input.fanoutId,
-        priority: Math.min(
-          Math.max(input.priority ?? policy.priority, notificationAgingFloor(trafficClass)),
-          9
-        ),
+        priority,
         trafficClass,
         tenantKey: tenantKeyForInput(input),
-        scheduledAt,
-        nextAttemptAt: scheduledAt,
+        scheduledAt: effectiveScheduledAt,
+        nextAttemptAt: effectiveScheduledAt,
         maxAttempts: Math.min(
           Math.max(input.maxAttempts ?? NOTIFICATION_RETRY_POLICY.maxAttempts, 1),
           20
         ),
         expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
+        errorMsg: noiseDecision.action === 'SUPPRESS' ? noiseDecision.reason : undefined,
       };
     })
   );
@@ -2009,13 +2061,13 @@ export async function deliverCentralNotification(
     const errorMessage = safeError(error);
     const exhausted = deliveryAttempt >= candidate.maxAttempts;
     if (ambiguous) {
+      const reconciliationDeadline = new Date(Date.now() + UNKNOWN_RECONCILIATION_DELAY_MS);
       const ambiguousState = {
-        status: 'FAILED' as const,
-        attempts: candidate.maxAttempts,
-        failedAt: new Date(),
+        status: 'UNKNOWN' as const,
+        failedAt: null,
+        reconciliationDeadline,
         errorMsg: `Ambiguous provider outcome: ${errorMessage}`,
         lastAttemptAt: null,
-        ...terminalPayload(candidate.category),
       };
       try {
         await prisma.$transaction(async tx => {
@@ -2032,6 +2084,7 @@ export async function deliverCentralNotification(
               errorMessage,
               startedAt,
               finishedAt: new Date(),
+              reconciliationDeadline,
             },
           });
         });
@@ -2088,6 +2141,74 @@ export async function deliverCentralNotification(
   }
 }
 
+/**
+ * Resolves due ambiguous attempts with a single compare-and-set decision.
+ * Callback-capable providers remain UNKNOWN while their receipt is outstanding;
+ * idempotent push delivery is returned to the normal queue without spending a
+ * second attempt budget. Unsupported providers remain visible for operator action.
+ */
+export async function reconcileUnknownNotifications(
+  now: Date = new Date(),
+  limit = 100
+): Promise<{ retried: number; awaitingCallback: number; unsupported: number }> {
+  const rows = await prisma.notification.findMany({
+    where: { status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
+    orderBy: { reconciliationDeadline: 'asc' },
+    take: Math.max(1, Math.min(limit, 500)),
+    select: {
+      id: true,
+      channel: true,
+      attempts: true,
+      providerMessageId: true,
+      deliveryAttempts: {
+        orderBy: { ordinal: 'desc' },
+        take: 1,
+        select: { provider: true },
+      },
+    },
+  });
+  let retried = 0;
+  let awaitingCallback = 0;
+  let unsupported = 0;
+  for (const row of rows) {
+    const capability = deliveryReconciliationCapability(
+      row.channel,
+      row.deliveryAttempts?.[0]?.provider
+    );
+    if (capability === 'IDEMPOTENT_RETRY') {
+      const updated = await prisma.notification.updateMany({
+        where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
+        data: {
+          status: 'PENDING',
+          attempts: Math.max(0, row.attempts - 1),
+          nextAttemptAt: now,
+          reconciliationDeadline: null,
+          errorMsg: 'Ambiguous attempt cleared for idempotent reconciliation retry.',
+        },
+      });
+      retried += updated.count;
+      continue;
+    }
+    const nextReview = new Date(now.getTime() + UNKNOWN_RECONCILIATION_DELAY_MS);
+    const updated = await prisma.notification.updateMany({
+      where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
+      data: {
+        reconciliationDeadline: nextReview,
+        errorMsg:
+          capability === 'LOOKUP' && row.providerMessageId
+            ? 'Awaiting provider delivery receipt for ambiguous attempt.'
+            : 'Ambiguous delivery requires operator reconciliation or fallback channel.',
+      },
+    });
+    if (capability === 'LOOKUP' && row.providerMessageId) awaitingCallback += updated.count;
+    else unsupported += updated.count;
+  }
+  if (unsupported > 0) {
+    logger.warn('notification.reconciliation_operator_action_required', { count: unsupported });
+  }
+  return { retried, awaitingCallback, unsupported };
+}
+
 const ALL_NOTIFICATION_TRAFFIC_CLASSES: readonly NotificationTrafficClass[] = [
   'CRITICAL',
   'TRANSACTIONAL',
@@ -2107,6 +2228,7 @@ export async function processCentralNotificationQueue(
   failed: number;
 }> {
   const now = new Date();
+  await reconcileUnknownNotifications(now);
   await cleanupExpiredNotifications(now);
   const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
   const bulkPaused = await isBulkNotificationDeliveryPaused();
@@ -2194,13 +2316,26 @@ export async function processCentralNotificationQueue(
   return { processed: succeeded + failed, succeeded, failed };
 }
 
-export async function getNextCentralNotificationAt(now: Date = new Date()): Promise<Date | null> {
+export async function getNextCentralNotificationAt(
+  now: Date = new Date(),
+  options: { trafficClasses?: readonly NotificationTrafficClass[] } = {}
+): Promise<Date | null> {
+  const { isBulkNotificationDeliveryPaused } = await import('./notification-capacity-control');
+  const bulkPaused = await isBulkNotificationDeliveryPaused();
+  const requestedTrafficClasses = options.trafficClasses?.length
+    ? Array.from(new Set(options.trafficClasses))
+    : [...ALL_NOTIFICATION_TRAFFIC_CLASSES];
+  const trafficClasses = bulkPaused
+    ? requestedTrafficClasses.filter(value => value !== 'PUBLIC_INCIDENT' && value !== 'BULK')
+    : requestedTrafficClasses;
+  if (trafficClasses.length === 0) return null;
   const staleClaimBefore = new Date(now.getTime() - CLAIM_TIMEOUT_MS);
   const expiredNotification = await prisma.notification.findFirst({
     where: {
       payloadEncrypted: { not: null },
       expiresAt: { lte: now },
       status: { in: ['PENDING', 'FAILED'] },
+      trafficClass: { in: trafficClasses },
       OR: [
         { status: 'FAILED' },
         { status: 'PENDING', lastAttemptAt: null },
@@ -2210,6 +2345,20 @@ export async function getNextCentralNotificationAt(now: Date = new Date()): Prom
     select: { id: true },
   });
   if (expiredNotification) return now;
+
+  const unknown = await prisma.notification.findFirst({
+    where: {
+      status: 'UNKNOWN',
+      reconciliationDeadline: { not: null },
+      trafficClass: { in: trafficClasses },
+    },
+    orderBy: { reconciliationDeadline: 'asc' },
+    select: { reconciliationDeadline: true },
+  });
+
+  const trafficFilter = Prisma.sql`AND "trafficClass" IN (${Prisma.join(
+    trafficClasses.map(value => Prisma.sql`${value}::"NotificationTrafficClass"`)
+  )})`;
 
   const rows = await prisma.$queryRaw<Array<{ nextEligibleAt: Date }>>(Prisma.sql`
     SELECT GREATEST(
@@ -2225,11 +2374,16 @@ export async function getNextCentralNotificationAt(now: Date = new Date()): Prom
     WHERE "payloadEncrypted" IS NOT NULL
       AND "attempts" < "maxAttempts"
       AND "status" IN ('PENDING'::"NotificationStatus", 'FAILED'::"NotificationStatus")
+      ${trafficFilter}
       AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
     ORDER BY "nextEligibleAt" ASC
     LIMIT 1
   `);
-  return rows[0]?.nextEligibleAt ?? null;
+  const deliveryAt = rows[0]?.nextEligibleAt ?? null;
+  const reconciliationAt = unknown?.reconciliationDeadline ?? null;
+  if (!deliveryAt) return reconciliationAt;
+  if (!reconciliationAt) return deliveryAt;
+  return deliveryAt <= reconciliationAt ? deliveryAt : reconciliationAt;
 }
 
 export async function requeueCentralNotification(notificationId: string): Promise<boolean> {

@@ -16,15 +16,10 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import { NOTIFICATION_PRIORITY } from '../notification-priority';
-import { logger } from '../logger';
 import { createInAppNotifications } from '../in-app-notifications';
 import { buildNotificationEnvelope, encodeNotificationEnvelope } from '../notification-payload';
 import { notificationIntentId } from '../notification-identity';
-import {
-  dispatchNotificationAttempt,
-  NOTIFICATION_CHANNELS,
-  type NotificationDeliveryChannel,
-} from '../notification-delivery';
+import { NOTIFICATION_CHANNELS, type NotificationDeliveryChannel } from '../notification-delivery';
 import { filterChannelsForQuietHours } from '../quiet-hours';
 import { getUserNotificationChannels } from '../user-notifications';
 
@@ -35,11 +30,6 @@ const PERSONAL_CHANNELS: readonly NotificationDeliveryChannel[] = [
   'PUSH',
   'WHATSAPP',
 ];
-
-/** See rolling-upgrade safety notes in src/lib/notifications.ts. */
-function personalControlPlaneEnabled(): boolean {
-  return process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL !== 'false';
-}
 
 export interface EscalationPageIntent {
   /**
@@ -109,7 +99,7 @@ export function emptyEscalationNotificationPlan(
     intents: [],
     inAppUserIds: [],
     unreachableUserIds: [],
-    controlPlane: personalControlPlaneEnabled(),
+    controlPlane: true,
   };
 }
 
@@ -290,11 +280,10 @@ export async function materializeEscalationNotificationIntents(
 
   if (plan.intents.length === 0) return { created: 0 };
 
-  if (plan.controlPlane) {
-    const { createCentralNotificationIntent } = await import('../notification-control-plane');
-    let created = 0;
-    for (const intent of plan.intents) {
-      const result = await createCentralNotificationIntent(
+  const { createCentralNotificationIntent } = await import('../notification-control-plane');
+  let created = 0;
+  for (const intent of plan.intents) {
+    const result = await createCentralNotificationIntent(
         {
           category: 'INCIDENT',
           channel: intent.channel,
@@ -329,29 +318,10 @@ export async function materializeEscalationNotificationIntents(
       );
       // The control plane derives its own row id. Delivery has to use that id,
       // not the legacy one this plan computed.
-      intent.storedId = result.id;
-      if (result.created) created += 1;
-    }
-    return { created };
+    intent.storedId = result.id;
+    if (result.created) created += 1;
   }
-
-  // Legacy shape: one PENDING intent row per recipient/channel, with the same
-  // deterministic id the delivery path would have used, so a replay dedupes.
-  for (const intent of plan.intents) intent.storedId = intent.notificationId;
-  const result = await tx.notification.createMany({
-    data: plan.intents.map(intent => ({
-      id: intent.notificationId,
-      incidentId: plan.incidentId,
-      userId: intent.userId,
-      channel: intent.channel,
-      message: plan.durableMessage,
-      eventType: 'triggered',
-      status: 'PENDING',
-      attempts: 0,
-    })),
-    skipDuplicates: true,
-  });
-  return { created: result.count };
+  return { created };
 }
 
 /**
@@ -371,92 +341,18 @@ export async function deliverEscalationNotificationIntents(
     if (!storedId) continue;
 
     try {
-      if (plan.controlPlane) {
-        const { deliverCentralNotification } = await import('../notification-control-plane');
-        const result = await deliverCentralNotification(storedId);
-        outcomes.push({
-          userId: intent.userId,
-          channel: intent.channel,
-          outcome: result.success ? 'DELIVERED' : 'QUEUED',
-        });
-        continue;
-      }
-
-      const attempt = await dispatchNotificationAttempt({
-        notificationId: storedId,
-        incidentId: plan.incidentId,
-        userId: intent.userId,
-        channel: intent.channel,
-        eventType: 'triggered',
-        message: plan.durableMessage,
-      });
-      await applyLegacyAttemptOutcome(storedId, attempt);
-      outcomes.push({ userId: intent.userId, channel: intent.channel, outcome: attempt.outcome });
-    } catch (error) {
-      // Leave the row for the retry sweeper rather than losing the page.
-      await markLegacyIntentForRetry(
-        storedId,
-        error instanceof Error ? error.message : String(error)
-      );
+      const { deliverCentralNotification } = await import('../notification-control-plane');
+      const result = await deliverCentralNotification(storedId);
       outcomes.push({
         userId: intent.userId,
         channel: intent.channel,
-        outcome: 'RETRYABLE_FAILURE',
+        outcome: result.success ? 'DELIVERED' : 'QUEUED',
       });
-      logger.warn('escalation.notification.dispatch_failed', {
-        incidentId: plan.incidentId,
-        userId: intent.userId,
-        channel: intent.channel,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    } catch {
+      // The central worker owns retries; immediate dispatch is only a fast path.
+      outcomes.push({ userId: intent.userId, channel: intent.channel, outcome: 'QUEUED' });
     }
   }
 
   return outcomes;
-}
-
-async function applyLegacyAttemptOutcome(
-  notificationId: string,
-  attempt: { outcome: string; error?: string; providerMessageId?: string }
-): Promise<void> {
-  if (attempt.outcome === 'DELIVERED') {
-    await prisma.notification.updateMany({
-      where: { id: notificationId, status: 'PENDING' },
-      data: { status: 'SENT', sentAt: new Date(), providerMessageId: attempt.providerMessageId },
-    });
-    return;
-  }
-  if (attempt.outcome === 'SKIPPED') {
-    await prisma.notification.updateMany({
-      where: { id: notificationId, status: 'PENDING' },
-      data: {
-        status: 'SKIPPED',
-        errorMsg: attempt.error || 'Delivery skipped by notification policy.',
-      },
-    });
-    return;
-  }
-  await markLegacyIntentForRetry(notificationId, attempt.error);
-}
-
-/**
- * Parks a legacy intent in FAILED so `retryFailedNotifications()` owns it from
- * here. Attempt counting and backoff stay with that one retry policy.
- */
-async function markLegacyIntentForRetry(notificationId: string, error?: string): Promise<void> {
-  // Never throws. The step is already durable at this point, so a failure to
-  // even record the handoff must not surface as a step failure — the
-  // pending-timeout sweeper picks the intent up regardless.
-  try {
-    await prisma.notification.updateMany({
-      where: { id: notificationId, status: 'PENDING' },
-      data: {
-        status: 'FAILED',
-        failedAt: new Date(),
-        errorMsg: error || 'Escalation page awaiting retry',
-      },
-    });
-  } catch {
-    // Intentionally ignored.
-  }
 }
