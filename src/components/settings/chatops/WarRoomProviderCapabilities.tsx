@@ -60,7 +60,7 @@ export function WarRoomProviderCapabilities() {
     manageMembers: true,
     interactiveProjection: true,
     projectionUpdates: true,
-    archiveRoom: false,
+    archiveRoom: true,
     reconciliation: true,
   };
 
