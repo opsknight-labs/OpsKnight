@@ -92,17 +92,6 @@ export const SETTINGS_NAV_SECTIONS: SettingsNavSection[] = [
         ],
       },
       {
-        id: 'service-objectives',
-        label: 'Service Objectives',
-        description:
-          'Track uptime, availability, MTTA, MTTR, latency, and error-rate objectives separately from incident response SLAs',
-        href: '/settings/service-objectives',
-        icon: 'target',
-        requiresAdmin: true,
-        badge: 'Admin',
-        keywords: ['slo', 'objective', 'uptime', 'availability', 'mtta', 'mttr', 'latency'],
-      },
-      {
         id: 'custom-fields',
         label: 'Custom Fields',
         description: 'Define custom incident metadata, dropdown attributes, and validation rules',

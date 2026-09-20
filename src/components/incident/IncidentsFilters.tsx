@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useTransition } from 'react';
+import { useCallback, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useCreateIncidentModal } from '@/contexts/IncidentCreationModalContext';
@@ -13,6 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/shadcn/command';
 import { Button } from '@/components/ui/shadcn/button';
 import {
   Card,
@@ -33,6 +42,8 @@ import {
   ShieldAlert,
   ArrowUpDown,
   Server,
+  Check,
+  ChevronsUpDown,
 } from 'lucide-react';
 
 type IncidentsFiltersProps = {
@@ -64,6 +75,7 @@ export default function IncidentsFilters({
   const { openCreateIncident } = useCreateIncidentModal();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const [serviceOpen, setServiceOpen] = useState(false);
 
   const updateParams = useCallback(
     (updates: Record<string, string>) => {
@@ -465,25 +477,77 @@ export default function IncidentsFilters({
               <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
                 Service
               </Label>
-              <Select
-                value={currentServiceId}
-                onValueChange={val => updateParams({ serviceId: val === 'all' ? '' : val })}
-              >
-                <SelectTrigger className="h-9 bg-muted/30 focus:bg-background transition-colors text-sm">
-                  <div className="flex items-center gap-2">
-                    <Server className="h-4 w-4 text-muted-foreground" />
-                    <SelectValue placeholder="All services" />
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All services</SelectItem>
-                  {services.map(service => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={serviceOpen} onOpenChange={setServiceOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={serviceOpen}
+                    aria-label="Filter by service"
+                    className="h-9 w-full justify-between font-normal text-sm bg-muted/30 hover:bg-muted/50 focus:bg-background border-input transition-colors px-3"
+                  >
+                    <div className="flex items-center gap-2 truncate min-w-0">
+                      <Server className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">
+                        {currentServiceId && currentServiceId !== 'all'
+                          ? services.find(s => s.id === currentServiceId)?.name || 'All services'
+                          : 'All services'}
+                      </span>
+                    </div>
+                    <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0 shadow-lg"
+                  align="start"
+                >
+                  <Command>
+                    <CommandInput placeholder="Search services..." className="h-9 text-xs" />
+                    <CommandList className="max-h-[240px]">
+                      <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
+                        No services found.
+                      </CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="All services all"
+                          onSelect={() => {
+                            updateParams({ serviceId: '' });
+                            setServiceOpen(false);
+                          }}
+                          className="cursor-pointer flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span>All services</span>
+                          </div>
+                          {(!currentServiceId || currentServiceId === 'all') && (
+                            <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
+                          )}
+                        </CommandItem>
+                        {services.map(service => (
+                          <CommandItem
+                            key={service.id}
+                            value={`${service.name} ${service.id}`}
+                            onSelect={() => {
+                              updateParams({ serviceId: service.id });
+                              setServiceOpen(false);
+                            }}
+                            className="cursor-pointer flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2 truncate min-w-0">
+                              <Server className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="truncate">{service.name}</span>
+                            </div>
+                            {service.id === currentServiceId && (
+                              <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 
