@@ -8,15 +8,9 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
-import { logger } from '@/lib/logger';
 import { getClientIp } from '@/lib/client-ip';
-import { consumeAuthRateLimit, authPrivacyDigest } from '@/lib/auth-abuse';
+import { consumeAuthRateLimit } from '@/lib/auth-abuse';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS, validatePasswordStrength } from '@/lib/passwords';
-import {
-  BOOTSTRAP_CONFIG_KEY,
-  hashBootstrapCode,
-  parseBootstrapState,
-} from '@/lib/bootstrap-security';
 import { getAuthoritativeRequestOrigin } from '@/lib/request-host';
 
 const BOOTSTRAP_TRANSACTION_ATTEMPTS = 3;
@@ -34,7 +28,8 @@ const schema = z
   .object({
     name: z.string().trim().min(1).max(100),
     email: z.string().trim().email().max(254),
-    bootstrapCode: z.string().trim().min(16).max(256),
+    appUrl: z.string().trim().url().max(256).optional().or(z.literal('')),
+    setupSecret: z.string().trim().max(256).optional().or(z.literal('')),
     password: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
     confirmPassword: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
   })
@@ -42,11 +37,6 @@ const schema = z
 
 function isTransactionConflict(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'P2034');
-}
-
-function constantTimeHexEqual(left: string, right: string): boolean {
-  if (!/^[a-f0-9]{64}$/.test(left) || !/^[a-f0-9]{64}$/.test(right)) return false;
-  return timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
 }
 
 function constantTimeUtf8Equal(left: string, right: string): boolean {
@@ -60,14 +50,24 @@ export async function bootstrapAdmin(formData: FormData) {
   const parsed = schema.safeParse({
     name: formData.get('name'),
     email: formData.get('email'),
-    bootstrapCode: formData.get('bootstrapCode'),
+    appUrl: formData.get('appUrl') || undefined,
+    setupSecret: formData.get('setupSecret') || undefined,
     password: formData.get('password'),
     confirmPassword: formData.get('confirmPassword'),
   });
   if (!parsed.success) return { error: 'Check the setup fields and try again.' };
 
-  const { name, bootstrapCode, password, confirmPassword } = parsed.data;
+  const { name, password, confirmPassword } = parsed.data;
   const email = parsed.data.email.toLowerCase();
+
+  const requiredSecret = process.env.SETUP_SECRET || process.env.BOOTSTRAP_SECRET;
+  if (requiredSecret) {
+    const submittedSecret = parsed.data.setupSecret || '';
+    if (!constantTimeUtf8Equal(submittedSecret, requiredSecret.trim())) {
+      return { error: 'Invalid or missing setup secret.' };
+    }
+  }
+
   if (!constantTimeUtf8Equal(password, confirmPassword)) {
     return { error: 'Passwords do not match.' };
   }
@@ -76,13 +76,9 @@ export async function bootstrapAdmin(formData: FormData) {
 
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
-  const submittedHash = hashBootstrapCode(bootstrapCode);
-  const [ipRate, codeRate] = await Promise.all([
-    consumeAuthRateLimit('bootstrap:ip', ip, 20, BOOTSTRAP_RATE_WINDOW_MS),
-    consumeAuthRateLimit('bootstrap:code', submittedHash, 5, BOOTSTRAP_RATE_WINDOW_MS),
-  ]);
-  if (!ipRate.allowed || !codeRate.allowed) {
-    return { error: 'Setup temporarily unavailable. Check the authorization code and try later.' };
+  const ipRate = await consumeAuthRateLimit('bootstrap:ip', ip, 20, BOOTSTRAP_RATE_WINDOW_MS);
+  if (!ipRate.allowed) {
+    return { error: 'Setup temporarily unavailable. Please try again later.' };
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
@@ -93,20 +89,6 @@ export async function bootstrapAdmin(formData: FormData) {
       user = await prisma.$transaction(
         async tx => {
           if ((await tx.user.count()) > 0) throw new Error('SYSTEM_ALREADY_INITIALIZED');
-
-          const config = await tx.systemConfig.findUnique({
-            where: { key: BOOTSTRAP_CONFIG_KEY },
-            select: { value: true },
-          });
-          const state = parseBootstrapState(config?.value);
-          if (
-            !state ||
-            state.usedAt ||
-            new Date(state.expiresAt) <= new Date() ||
-            !constantTimeHexEqual(state.tokenHash, submittedHash)
-          ) {
-            throw new Error('INVALID_BOOTSTRAP_AUTHORIZATION');
-          }
 
           const created = await tx.user.create({
             data: {
@@ -121,49 +103,37 @@ export async function bootstrapAdmin(formData: FormData) {
             select: { id: true, email: true },
           });
 
-          await tx.systemConfig.update({
-            where: { key: BOOTSTRAP_CONFIG_KEY },
-            data: {
-              value: { ...state, usedAt: new Date().toISOString() },
-              updatedBy: created.id,
-            },
-          });
-
-          // Seed SystemSettings.appUrl from the request origin ONLY when no canonical
-          // URL is already configured (in DB, NEXT_PUBLIC_APP_URL, or NEXTAUTH_URL).
-          // This eliminates the chicken-and-egg problem on fresh installations without
-          // overwriting deliberate pre-configuration.
+          // Seed or update SystemSettings.appUrl from user input or authoritative request origin.
           const existingSettings = await tx.systemSettings.findUnique({
             where: { id: 'default' },
             select: { appUrl: true },
           });
           const hasPreconfiguredAppUrl = Boolean(
-            existingSettings?.appUrl ||
-            process.env.NEXT_PUBLIC_APP_URL ||
-            process.env.NEXTAUTH_URL
+            existingSettings?.appUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
           );
 
-          if (!hasPreconfiguredAppUrl) {
-            const bootstrapAppUrl = resolveBootstrapAppUrl(headerStore);
-            if (bootstrapAppUrl) {
-              await tx.systemSettings.upsert({
-                where: { id: 'default' },
-                create: { id: 'default', appUrl: bootstrapAppUrl },
-                update: { appUrl: bootstrapAppUrl },
-              });
-              await logAudit(
-                {
-                  action: 'settings.app_url.bootstrap_seeded',
-                  entityType: 'USER',
-                  entityId: created.id,
-                  actorId: null,
-                  source: 'AUTH',
-                  newValue: { appUrl: bootstrapAppUrl },
-                  details: { method: 'operator_bootstrap_capability' },
-                },
-                tx
-              );
-            }
+          const customAppUrl = parsed.data.appUrl ? parsed.data.appUrl.replace(/\/+$/, '') : null;
+          const targetAppUrl =
+            customAppUrl || (!hasPreconfiguredAppUrl ? resolveBootstrapAppUrl(headerStore) : null);
+
+          if (targetAppUrl) {
+            await tx.systemSettings.upsert({
+              where: { id: 'default' },
+              create: { id: 'default', appUrl: targetAppUrl },
+              update: { appUrl: targetAppUrl },
+            });
+            await logAudit(
+              {
+                action: 'settings.app_url.bootstrap_seeded',
+                entityType: 'USER',
+                entityId: created.id,
+                actorId: null,
+                source: 'AUTH',
+                newValue: { appUrl: targetAppUrl },
+                details: { method: 'first_user_claim' },
+              },
+              tx
+            );
           }
 
           await logAudit(
@@ -173,7 +143,7 @@ export async function bootstrapAdmin(formData: FormData) {
               entityId: created.id,
               actorId: null,
               source: 'AUTH',
-              details: { method: 'operator_bootstrap_capability' },
+              details: { method: 'first_user_claim' },
             },
             tx
           );
@@ -185,18 +155,6 @@ export async function bootstrapAdmin(formData: FormData) {
     } catch (error) {
       if (error instanceof Error && error.message === 'SYSTEM_ALREADY_INITIALIZED') {
         redirect('/login');
-      }
-      if (error instanceof Error && error.message === 'INVALID_BOOTSTRAP_AUTHORIZATION') {
-        const [emailHash, ipHash] = await Promise.all([
-          authPrivacyDigest('audit:bootstrap:email', email),
-          authPrivacyDigest('audit:bootstrap:ip', ip),
-        ]);
-        logger.warn('auth.bootstrap.authorization_rejected', {
-          component: 'setup',
-          emailHash,
-          ipHash,
-        });
-        return { error: 'Invalid or expired setup authorization code.' };
       }
       if (isTransactionConflict(error) && attempt < BOOTSTRAP_TRANSACTION_ATTEMPTS) continue;
       throw error;

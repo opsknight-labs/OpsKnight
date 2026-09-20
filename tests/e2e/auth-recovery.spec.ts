@@ -89,21 +89,9 @@ test.describe.serial('authentication browser contracts', () => {
   }) => {
     await resetBootstrapFixture();
 
-    const output = execFileSync('node', ['scripts/create-bootstrap-code.mjs'], {
-      env: { ...process.env, DATABASE_URL: databaseUrl },
-      encoding: 'utf8',
-    });
-    const bootstrapCode = output
-      .split(/\r?\n/)
-      .map(line => line.trim())
-      .find(line => /^[A-Za-z0-9_-]{32}$/.test(line));
-    expect(bootstrapCode).toBeTruthy();
-
     await page.goto('/setup');
-    await expect(page.getByText('Operator authorization ready')).toBeVisible();
     await page.getByLabel('Full name').fill('E2E Administrator');
     await page.getByLabel('Email address').fill('e2e-admin@example.com');
-    await page.getByLabel('Setup authorization code').fill(bootstrapCode!);
     await page.getByLabel('Administrator password').fill('Cobalt-orbit-library-492!');
     await page.getByLabel('Confirm password').fill('Cobalt-orbit-library-492!');
     await page.getByRole('button', { name: 'Create administrator' }).click();
@@ -112,11 +100,6 @@ test.describe.serial('authentication browser contracts', () => {
     const admin = await prisma.user.findUnique({ where: { email: 'e2e-admin@example.com' } });
     expect(admin?.status).toBe('ACTIVE');
     expect(admin?.role).toBe('ADMIN');
-
-    const bootstrapRow = await prisma.systemConfig.findUnique({
-      where: { key: BOOTSTRAP_CONFIG_KEY },
-    });
-    expect((bootstrapRow?.value as { usedAt?: string | null } | null)?.usedAt).toBeTruthy();
   });
 
   test('reset fragment is scrubbed, password changes, replay fails, and login accepts only the new password', async ({
