@@ -77,6 +77,33 @@ export async function ensureComplianceMonitoringScheduled(
         if (existingJob) {
           return { scheduled: false, monitorRunId: existingRun.id, reason: 'ALREADY_SCHEDULED' };
         }
+
+        if (existingRun.status === 'PENDING') {
+          // Recreate missing background job for the existing pending run
+          const scheduledAt = existingRun.scheduledFor <= now ? now : existingRun.scheduledFor;
+          await tx.backgroundJob.create({
+            data: {
+              type: 'COMPLIANCE_EVALUATION_SWEEP',
+              scheduledAt,
+              payload: { monitorRunId: existingRun.id },
+            },
+          });
+          return {
+            scheduled: true,
+            monitorRunId: existingRun.id,
+            reason: 'RECREATED_JOB_FOR_PENDING_RUN',
+          };
+        }
+
+        // Stale RUNNING run without active job: mark FAILED and create replacement run
+        await tx.complianceMonitoringRun.update({
+          where: { id: existingRun.id },
+          data: {
+            status: 'FAILED',
+            completedAt: now,
+            errorSummary: { reason: 'ORPHAN_RUN_WITHOUT_ACTIVE_JOB' },
+          },
+        });
       }
 
       // 3. Create next monitoring run and background job atomically

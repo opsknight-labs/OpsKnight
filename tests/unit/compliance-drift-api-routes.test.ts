@@ -20,6 +20,7 @@ const { mockAssertCapability, mockHasCapability, mockPrisma } = vi.hoisted(() =>
     },
     complianceMonitoringRun: {
       findFirst: vi.fn(),
+      create: vi.fn(),
     },
     $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockPrisma)),
   };
@@ -156,6 +157,30 @@ describe('compliance drift API routes RBAC', () => {
 
       expect(res.status).toBe(403);
       expect(json.error).toBeDefined();
+    });
+
+    it('queues a monitoring sweep job and returns 202 Accepted', async () => {
+      mockAssertCapability.mockResolvedValueOnce({ id: 'usr-1', role: 'ADMIN' });
+      mockPrisma.complianceMonitoringRun.create.mockResolvedValueOnce({
+        id: 'run-123',
+        scheduledFor: new Date('2026-09-20T12:00:00.000Z'),
+        status: 'PENDING',
+      });
+      mockPrisma.backgroundJob.create.mockResolvedValueOnce({
+        id: 'job-123',
+      });
+
+      const req = new NextRequest('http://localhost:3000/api/compliance/monitoring/runs', {
+        method: 'POST',
+      });
+      const res = await triggerMonitoringRun(req);
+      const json = await res.json();
+
+      expect(res.status).toBe(202);
+      expect(json.data).toMatchObject({
+        monitorRunId: 'run-123',
+        status: 'PENDING',
+      });
     });
   });
 

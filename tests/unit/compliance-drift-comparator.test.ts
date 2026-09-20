@@ -111,4 +111,45 @@ describe('compareComplianceObservations', () => {
     expect(recovery?.recoveryKind).toBe('CONTROL_STATUS_REGRESSION');
     expect(recovery?.impact).toBe('INFORMATIONAL');
   });
+
+  it('does NOT auto-resolve EVIDENCE_INTEGRITY_MISMATCH when subsequent observation is clean', () => {
+    const mismatchedObs: ComplianceObservation = {
+      ...implementedObs,
+      evidenceIntegrity: { total: 1, mismatches: 1 },
+    };
+
+    const cleanObs: ComplianceObservation = {
+      ...implementedObs,
+      evidenceIntegrity: { total: 1, mismatches: 0 },
+    };
+
+    const drifts = compareComplianceObservations(mismatchedObs, cleanObs);
+    const integrityRecovery = drifts.find(
+      d => d.isRecovery && d.recoveryKind === 'EVIDENCE_INTEGRITY_MISMATCH'
+    );
+
+    expect(integrityRecovery).toBeUndefined();
+  });
+
+  it('detects FINDING_SET_CHANGED recovery when all previous findings are cleared', () => {
+    const withFindings: ComplianceObservation = {
+      ...implementedObs,
+      findings: [{ code: 'weak-cipher', severity: 'HIGH' }],
+    };
+
+    const clearedFindings: ComplianceObservation = {
+      ...implementedObs,
+      findings: [],
+    };
+
+    const drifts = compareComplianceObservations(withFindings, clearedFindings);
+    const findingRecovery = drifts.find(
+      d => d.isRecovery && d.recoveryKind === 'FINDING_SET_CHANGED'
+    );
+
+    expect(findingRecovery).toBeDefined();
+    expect(findingRecovery?.details).toMatchObject({
+      clearedFindings: ['weak-cipher'],
+    });
+  });
 });

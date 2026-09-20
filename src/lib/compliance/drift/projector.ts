@@ -176,19 +176,22 @@ export async function projectControlDrift(params: {
             });
             if (resolved > 0) {
               driftsResolved += resolved;
-              await emitAuditEvent({
-                action: 'COMPLIANCE_DRIFT_RESOLVED',
-                source: 'BACKGROUND',
-                target: { type: 'COMPLIANCE_DRIFT_EVENT', id: controlId },
-                actor: { type: 'SYSTEM' },
-                occurredAt: nextEval.evaluatedAt,
-                metadata: {
-                  controlId,
-                  recoveryKind: drift.recoveryKind,
-                  resolutionEvaluationId: nextEval.id,
-                  currentStatus: nextEval.status,
+              await emitAuditEvent(
+                {
+                  action: 'COMPLIANCE_DRIFT_RESOLVED',
+                  source: 'BACKGROUND',
+                  target: { type: 'COMPLIANCE_DRIFT_EVENT', id: controlId },
+                  actor: { type: 'SYSTEM' },
+                  occurredAt: nextEval.evaluatedAt,
+                  metadata: {
+                    controlId,
+                    recoveryKind: drift.recoveryKind,
+                    resolutionEvaluationId: nextEval.id,
+                    currentStatus: nextEval.status,
+                  },
                 },
-              });
+                tx
+              );
             }
           } else {
             const outcome = await applyDetectedDrift(tx, {
@@ -213,19 +216,22 @@ export async function projectControlDrift(params: {
                 });
               }
 
-              await emitAuditEvent({
-                action: 'COMPLIANCE_DRIFT_DETECTED',
-                source: 'BACKGROUND',
-                target: { type: 'COMPLIANCE_DRIFT_EVENT', id: outcome.eventId },
-                actor: { type: 'SYSTEM' },
-                occurredAt: nextEval.evaluatedAt,
-                metadata: {
-                  controlId,
-                  kind: drift.kind,
-                  impact: drift.impact,
-                  status: nextEval.status,
+              await emitAuditEvent(
+                {
+                  action: 'COMPLIANCE_DRIFT_DETECTED',
+                  source: 'BACKGROUND',
+                  target: { type: 'COMPLIANCE_DRIFT_EVENT', id: outcome.eventId },
+                  actor: { type: 'SYSTEM' },
+                  occurredAt: nextEval.evaluatedAt,
+                  metadata: {
+                    controlId,
+                    kind: drift.kind,
+                    impact: drift.impact,
+                    status: nextEval.status,
+                  },
                 },
-              });
+                tx
+              );
             } else if (outcome.isWorsened) {
               const eventRecord = await tx.complianceDriftEvent.findUnique({
                 where: { id: outcome.eventId },
@@ -238,19 +244,22 @@ export async function projectControlDrift(params: {
                 });
               }
 
-              await emitAuditEvent({
-                action: 'COMPLIANCE_DRIFT_WORSENED',
-                source: 'BACKGROUND',
-                target: { type: 'COMPLIANCE_DRIFT_EVENT', id: outcome.eventId },
-                actor: { type: 'SYSTEM' },
-                occurredAt: nextEval.evaluatedAt,
-                metadata: {
-                  controlId,
-                  kind: drift.kind,
-                  generation: outcome.notificationGeneration,
-                  status: nextEval.status,
+              await emitAuditEvent(
+                {
+                  action: 'COMPLIANCE_DRIFT_WORSENED',
+                  source: 'BACKGROUND',
+                  target: { type: 'COMPLIANCE_DRIFT_EVENT', id: outcome.eventId },
+                  actor: { type: 'SYSTEM' },
+                  occurredAt: nextEval.evaluatedAt,
+                  metadata: {
+                    controlId,
+                    kind: drift.kind,
+                    generation: outcome.notificationGeneration,
+                    status: nextEval.status,
+                  },
                 },
-              });
+                tx
+              );
             }
           }
         }

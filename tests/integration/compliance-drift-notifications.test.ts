@@ -2,6 +2,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { resetDatabase, testPrisma, createTestUser } from '../helpers/test-db';
 import { dispatchComplianceDriftNotification } from '@/lib/compliance/drift/notifications';
+import { decrypt } from '@/lib/encryption';
 
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
@@ -15,9 +16,9 @@ describeIfRealDB('compliance drift notifications anti-storm & cooldown (real Pos
     await testPrisma.$disconnect();
   });
 
-  it('dispatches notification for actionable drift and suppresses subsequent flapping within cooldown', async () => {
+  it('dispatches valid central EMAIL intent for actionable drift and suppresses subsequent flapping within cooldown', async () => {
     // 1. Create an admin user to receive compliance drift notifications
-    const _admin = await createTestUser({
+    const admin = await createTestUser({
       email: 'admin@opsknight.local',
       role: 'ADMIN',
     });
@@ -54,14 +55,40 @@ describeIfRealDB('compliance drift notifications anti-storm & cooldown (real Pos
 
     expect(result1.dispatched).toBe(true);
 
-    // Verify notifications were created
+    // Verify notification row was created in central Notification table
     const notifications = await testPrisma.notification.findMany({
       where: { sourceId: driftEvent.id },
     });
     expect(notifications.length).toBeGreaterThanOrEqual(1);
-    expect(notifications[0].deliveryKey).toContain(`compliance-drift:${driftEvent.id}:1`);
 
-    // 4. Test flapping cooldown: simulate a previous event resolved 5 minutes ago (cooldown is 60 mins default)
+    const emailNotification = notifications[0];
+    expect(emailNotification.channel).toBe('EMAIL');
+    expect(emailNotification.category).toBe('SECURITY');
+    expect(emailNotification.userId).toBe(admin.id);
+    expect(emailNotification.payloadEncrypted).toBeTruthy();
+
+    // Verify central notification payload contract: decrypt and validate payload structure
+    const decryptedPayload = JSON.parse(await decrypt(emailNotification.payloadEncrypted!));
+    expect(decryptedPayload).toMatchObject({
+      kind: 'EMAIL',
+      to: admin.email,
+      subject: expect.stringContaining('[OpsKnight Compliance Drift] Control ENC-01'),
+      text: expect.stringContaining('TLS 1.0 enabled on ingress'),
+      html: expect.stringContaining('TLS 1.0 enabled on ingress'),
+    });
+
+    // 4. Test anti-storm limit: generation > 5 is suppressed
+    const resultMaxGen = await testPrisma.$transaction(async tx => {
+      return await dispatchComplianceDriftNotification(tx, {
+        driftEvent,
+        generation: 6,
+        now,
+      });
+    });
+    expect(resultMaxGen.dispatched).toBe(false);
+    expect(resultMaxGen.reason).toBe('MAX_GENERATIONS_EXCEEDED');
+
+    // 5. Test flapping cooldown: simulate a previous event resolved 5 minutes ago (cooldown is 60 mins default)
     await testPrisma.complianceDriftEvent.create({
       data: {
         controlId,

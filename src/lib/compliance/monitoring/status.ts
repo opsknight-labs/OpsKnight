@@ -2,9 +2,12 @@ import type { PrismaClient, ComplianceMonitoringRun } from '@prisma/client';
 import prismaClient from '../../prisma';
 import { getComplianceMonitoringConfig } from './config';
 
+export type ComplianceMonitoringHealth = 'DISABLED' | 'STARTING' | 'HEALTHY' | 'DEGRADED' | 'STALE';
+
 export interface ComplianceMonitoringStatusSummary {
   readonly enabled: boolean;
   readonly intervalMinutes: number;
+  readonly healthState: ComplianceMonitoringHealth;
   readonly lastRun: ComplianceMonitoringRun | null;
   readonly nextRunAt: string | null;
   readonly isStale: boolean;
@@ -51,9 +54,23 @@ export async function getComplianceMonitoringStatus(
     }
   }
 
+  let healthState: ComplianceMonitoringHealth = 'HEALTHY';
+  if (!config.enabled) {
+    healthState = 'DISABLED';
+  } else if (!lastRun) {
+    healthState = 'STARTING';
+  } else if (isStale) {
+    healthState = 'STALE';
+  } else if (lastRun.status === 'FAILED' || lastRun.status === 'PARTIAL_FAILED') {
+    healthState = 'DEGRADED';
+  } else {
+    healthState = 'HEALTHY';
+  }
+
   return {
     enabled: config.enabled,
     intervalMinutes: config.intervalMinutes,
+    healthState,
     lastRun,
     nextRunAt: nextRun ? nextRun.scheduledFor.toISOString() : null,
     isStale,

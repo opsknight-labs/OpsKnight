@@ -2,7 +2,9 @@ import type { Prisma, ComplianceDriftEvent } from '@prisma/client';
 import { getComplianceMonitoringConfig } from '../monitoring/config';
 import { emitAuditEvent } from '../../audit';
 import { createInAppNotifications } from '../../in-app-notifications';
-import { encrypt } from '../../encryption';
+import { createCentralNotificationIntent } from '../../notification-control-plane';
+
+export const MAX_NOTIFICATIONS_PER_EPISODE = 5;
 
 const ACTIONABLE_KINDS = new Set([
   'CONTROL_STATUS_REGRESSION',
@@ -27,17 +29,20 @@ export async function dispatchComplianceDriftNotification(
 
   // 1. Check if notifications are enabled globally
   if (!config.notificationsEnabled) {
-    await emitAuditEvent({
-      action: 'COMPLIANCE_DRIFT_NOTIFICATION_SUPPRESSED',
-      source: 'BACKGROUND',
-      target: { type: 'COMPLIANCE_DRIFT_EVENT', id: params.driftEvent.id },
-      actor: { type: 'SYSTEM' },
-      occurredAt: now,
-      metadata: {
-        driftEventId: params.driftEvent.id,
-        reason: 'NOTIFICATIONS_DISABLED',
+    await emitAuditEvent(
+      {
+        action: 'COMPLIANCE_DRIFT_NOTIFICATION_SUPPRESSED',
+        source: 'BACKGROUND',
+        target: { type: 'COMPLIANCE_DRIFT_EVENT', id: params.driftEvent.id },
+        actor: { type: 'SYSTEM' },
+        occurredAt: now,
+        metadata: {
+          driftEventId: params.driftEvent.id,
+          reason: 'NOTIFICATIONS_DISABLED',
+        },
       },
-    });
+      tx
+    );
     return { dispatched: false, reason: 'NOTIFICATIONS_DISABLED' };
   }
 
@@ -46,7 +51,28 @@ export async function dispatchComplianceDriftNotification(
     return { dispatched: false, reason: 'INFORMATIONAL_EVENT' };
   }
 
-  // 3. Flapping cooldown protection: check if a previous episode for this control was resolved recently
+  // 3. Enforce maximum notification generation per episode (anti-alert storm)
+  if (params.generation > MAX_NOTIFICATIONS_PER_EPISODE) {
+    await emitAuditEvent(
+      {
+        action: 'COMPLIANCE_DRIFT_NOTIFICATION_SUPPRESSED',
+        source: 'BACKGROUND',
+        target: { type: 'COMPLIANCE_DRIFT_EVENT', id: params.driftEvent.id },
+        actor: { type: 'SYSTEM' },
+        occurredAt: now,
+        metadata: {
+          driftEventId: params.driftEvent.id,
+          controlId: params.driftEvent.controlId,
+          generation: params.generation,
+          reason: 'MAX_GENERATIONS_EXCEEDED',
+        },
+      },
+      tx
+    );
+    return { dispatched: false, reason: 'MAX_GENERATIONS_EXCEEDED' };
+  }
+
+  // 4. Flapping cooldown protection: check if a previous episode for this control was resolved recently
   if (params.driftEvent.controlId) {
     const cooldownCutoff = new Date(now.getTime() - config.renotifyCooldownMinutes * 60 * 1000);
 
@@ -60,27 +86,30 @@ export async function dispatchComplianceDriftNotification(
     });
 
     if (recentlyResolved) {
-      await emitAuditEvent({
-        action: 'COMPLIANCE_DRIFT_NOTIFICATION_SUPPRESSED',
-        source: 'BACKGROUND',
-        target: { type: 'COMPLIANCE_DRIFT_EVENT', id: params.driftEvent.id },
-        actor: { type: 'SYSTEM' },
-        occurredAt: now,
-        metadata: {
-          driftEventId: params.driftEvent.id,
-          controlId: params.driftEvent.controlId,
-          reason: 'FLAPPING_COOLDOWN',
-          cooldownMinutes: config.renotifyCooldownMinutes,
+      await emitAuditEvent(
+        {
+          action: 'COMPLIANCE_DRIFT_NOTIFICATION_SUPPRESSED',
+          source: 'BACKGROUND',
+          target: { type: 'COMPLIANCE_DRIFT_EVENT', id: params.driftEvent.id },
+          actor: { type: 'SYSTEM' },
+          occurredAt: now,
+          metadata: {
+            driftEventId: params.driftEvent.id,
+            controlId: params.driftEvent.controlId,
+            reason: 'FLAPPING_COOLDOWN',
+            cooldownMinutes: config.renotifyCooldownMinutes,
+          },
         },
-      });
+        tx
+      );
       return { dispatched: false, reason: 'FLAPPING_COOLDOWN' };
     }
   }
 
-  // 4. Retrieve recipients: active workspace administrators (operational compliance managers)
+  // 5. Retrieve recipients: active workspace administrators (operational compliance managers)
   const recipients = await tx.user.findMany({
     where: { role: 'ADMIN', status: 'ACTIVE' },
-    select: { id: true },
+    select: { id: true, email: true },
   });
 
   if (recipients.length === 0) {
@@ -90,7 +119,7 @@ export async function dispatchComplianceDriftNotification(
   const recipientUserIds = recipients.map(u => u.id);
   const dedupeKey = `compliance-drift:${params.driftEvent.id}:${params.generation}`;
 
-  // 5. Create in-app notifications
+  // 6. Create in-app notifications
   await createInAppNotifications(
     {
       userIds: recipientUserIds,
@@ -104,60 +133,55 @@ export async function dispatchComplianceDriftNotification(
     tx as never
   );
 
-  const serializedPayload = JSON.stringify({
-    summary: params.driftEvent.summary,
-    controlId: params.driftEvent.controlId,
-    kind: params.driftEvent.kind,
-    generation: params.generation,
-  });
-  let payloadEncrypted: string | null = null;
-  try {
-    payloadEncrypted = await encrypt(serializedPayload);
-  } catch {
-    payloadEncrypted = Buffer.from(serializedPayload).toString('base64');
-  }
-
-  // 6. Create durable notification intents with unique deliveryKey
-  for (const userId of recipientUserIds) {
-    const deliveryKey = `${dedupeKey}:email:${userId}`;
-    await tx.notification.createMany({
-      data: [
-        {
-          userId,
-          channel: 'EMAIL',
-          status: 'PENDING',
-          category: 'SECURITY',
-          message: params.driftEvent.summary,
-          eventType: 'COMPLIANCE_DRIFT',
-          sourceType: 'COMPLIANCE_DRIFT_EVENT',
-          sourceId: params.driftEvent.id,
-          deliveryKey,
-          payloadEncrypted,
+  // 7. Route through OpsKnight central notification control plane with real EMAIL payload
+  for (const user of recipients) {
+    await createCentralNotificationIntent(
+      {
+        userId: user.id,
+        channel: 'EMAIL',
+        category: 'SECURITY',
+        recipientType: 'USER',
+        recipientId: user.id,
+        recipientAddress: user.email,
+        templateKey: 'COMPLIANCE_DRIFT',
+        sourceType: 'COMPLIANCE_DRIFT_EVENT',
+        sourceId: params.driftEvent.id,
+        eventKey: `${params.driftEvent.id}:${params.generation}`,
+        displayMessage: params.driftEvent.summary,
+        payload: {
+          kind: 'EMAIL',
+          to: user.email,
+          subject: `[OpsKnight Compliance Drift] Control ${params.driftEvent.controlId ?? 'Unknown'}: ${params.driftEvent.summary}`,
+          text: `Compliance drift observed for control ${params.driftEvent.controlId ?? 'Unknown'}.\n\nSummary: ${params.driftEvent.summary}\nKind: ${params.driftEvent.kind}\nImpact: ${params.driftEvent.impact}\nDetected At: ${params.driftEvent.firstDetectedAt.toISOString()}`,
+          html: `<h2>OpsKnight Compliance Drift Alert</h2><p><strong>Control:</strong> ${params.driftEvent.controlId ?? 'Unknown'}</p><p><strong>Summary:</strong> ${params.driftEvent.summary}</p><p><strong>Kind:</strong> ${params.driftEvent.kind}</p><p><strong>Impact:</strong> ${params.driftEvent.impact}</p>`,
         },
-      ],
-      skipDuplicates: true,
-    });
+      },
+      tx
+    );
   }
 
-  // 7. Update event's lastNotifiedAt
+  // 8. Update event's lastNotifiedAt
   await tx.complianceDriftEvent.update({
     where: { id: params.driftEvent.id },
     data: { lastNotifiedAt: now },
   });
 
-  await emitAuditEvent({
-    action: 'COMPLIANCE_DRIFT_NOTIFICATION_QUEUED',
-    source: 'BACKGROUND',
-    target: { type: 'COMPLIANCE_DRIFT_EVENT', id: params.driftEvent.id },
-    actor: { type: 'SYSTEM' },
-    occurredAt: now,
-    metadata: {
-      driftEventId: params.driftEvent.id,
-      controlId: params.driftEvent.controlId,
-      generation: params.generation,
-      recipientCount: recipientUserIds.length,
+  await emitAuditEvent(
+    {
+      action: 'COMPLIANCE_DRIFT_NOTIFICATION_QUEUED',
+      source: 'BACKGROUND',
+      target: { type: 'COMPLIANCE_DRIFT_EVENT', id: params.driftEvent.id },
+      actor: { type: 'SYSTEM' },
+      occurredAt: now,
+      metadata: {
+        driftEventId: params.driftEvent.id,
+        controlId: params.driftEvent.controlId,
+        generation: params.generation,
+        recipientCount: recipientUserIds.length,
+      },
     },
-  });
+    tx
+  );
 
   return { dispatched: true };
 }

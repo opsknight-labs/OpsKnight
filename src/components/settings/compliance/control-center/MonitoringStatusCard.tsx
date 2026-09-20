@@ -16,6 +16,7 @@ import { notify } from '@/lib/toast';
 export interface MonitoringStatusData {
   readonly enabled: boolean;
   readonly intervalMinutes: number;
+  readonly healthState?: 'DISABLED' | 'STARTING' | 'HEALTHY' | 'DEGRADED' | 'STALE';
   readonly lastRun: {
     readonly status: string;
     readonly startedAt: string | null;
@@ -57,7 +58,7 @@ export function MonitoringStatusCard({
       if (!res.ok) {
         throw new Error(data.error?.message || 'Failed to trigger monitoring run');
       }
-      notify.success('Continuous monitoring sweep completed');
+      notify.success('Continuous monitoring sweep queued');
       if (onSweepTriggered) onSweepTriggered();
     } catch (err: unknown) {
       notify.error(err instanceof Error ? err.message : 'Sweep failed');
@@ -67,7 +68,9 @@ export function MonitoringStatusCard({
   };
 
   const isDegraded =
-    status.lastRun?.status === 'PARTIAL_FAILED' || status.lastRun?.status === 'FAILED';
+    status.lastRun?.status === 'PARTIAL_FAILED' ||
+    status.lastRun?.status === 'FAILED' ||
+    status.healthState === 'DEGRADED';
 
   return (
     <Card className="border border-border bg-card">
@@ -83,10 +86,18 @@ export function MonitoringStatusCard({
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
-          {status.isStale ? (
+          {status.healthState === 'STALE' || status.isStale ? (
             <Badge variant="destructive" className="flex items-center gap-1 font-semibold">
               <AlertTriangle className="h-3 w-3" />
               MONITORING STALE
+            </Badge>
+          ) : status.healthState === 'STARTING' ? (
+            <Badge
+              variant="secondary"
+              className="bg-sky-500/10 text-sky-500 border-sky-500/20 font-semibold"
+            >
+              <Clock className="h-3 w-3 mr-1" />
+              Starting ({status.intervalMinutes}m cycle)
             </Badge>
           ) : isDegraded ? (
             <Badge
@@ -94,6 +105,10 @@ export function MonitoringStatusCard({
               className="bg-amber-500/10 text-amber-500 border-amber-500/20 font-semibold"
             >
               Monitoring Degraded
+            </Badge>
+          ) : !status.enabled || status.healthState === 'DISABLED' ? (
+            <Badge variant="outline" className="text-muted-foreground font-semibold">
+              Disabled
             </Badge>
           ) : (
             <Badge

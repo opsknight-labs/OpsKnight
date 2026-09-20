@@ -30,42 +30,47 @@ export async function acknowledgeComplianceDrift(params: {
   prisma?: PrismaClient;
   now?: Date;
 }) {
-  const prisma = params.prisma ?? prismaClient;
+  const client = params.prisma ?? prismaClient;
   const now = params.now ?? new Date();
 
-  const event = await prisma.complianceDriftEvent.findUnique({
-    where: { id: params.driftEventId },
+  return await client.$transaction(async tx => {
+    const event = await tx.complianceDriftEvent.findUnique({
+      where: { id: params.driftEventId },
+    });
+
+    if (!event) {
+      throw new DriftNotFoundError(params.driftEventId);
+    }
+
+    if (event.status === 'RESOLVED') {
+      throw new DriftAlreadyResolvedError(params.driftEventId);
+    }
+
+    const updated = await tx.complianceDriftEvent.update({
+      where: { id: params.driftEventId },
+      data: {
+        status: 'ACKNOWLEDGED',
+        acknowledgedAt: now,
+        acknowledgedByUserId: params.userId,
+      },
+    });
+
+    await emitAuditEvent(
+      {
+        action: 'COMPLIANCE_DRIFT_ACKNOWLEDGED',
+        source: 'UI',
+        target: { type: 'COMPLIANCE_DRIFT_EVENT', id: event.id },
+        actor: { type: 'USER', id: params.userId },
+        occurredAt: now,
+        metadata: {
+          controlId: event.controlId,
+          kind: event.kind,
+          status: 'ACKNOWLEDGED',
+        },
+      },
+      tx
+    );
+
+    return updated;
   });
-
-  if (!event) {
-    throw new DriftNotFoundError(params.driftEventId);
-  }
-
-  if (event.status === 'RESOLVED') {
-    throw new DriftAlreadyResolvedError(params.driftEventId);
-  }
-
-  const updated = await prisma.complianceDriftEvent.update({
-    where: { id: params.driftEventId },
-    data: {
-      status: 'ACKNOWLEDGED',
-      acknowledgedAt: now,
-      acknowledgedByUserId: params.userId,
-    },
-  });
-
-  await emitAuditEvent({
-    action: 'COMPLIANCE_DRIFT_ACKNOWLEDGED',
-    source: 'UI',
-    target: { type: 'COMPLIANCE_DRIFT_EVENT', id: event.id },
-    actor: { type: 'USER', id: params.userId },
-    occurredAt: now,
-    metadata: {
-      controlId: event.controlId,
-      kind: event.kind,
-      status: 'ACKNOWLEDGED',
-    },
-  });
-
-  return updated;
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { shouldEvaluateControl } from '@/lib/compliance/monitoring/schedule';
 import type { ComplianceControlEvaluator } from '@/lib/compliance/evaluators/types';
 import type { ComplianceControlState } from '@prisma/client';
@@ -99,5 +99,98 @@ describe('shouldEvaluateControl', () => {
     });
     expect(result.due).toBe(true);
     expect(result.reason).toBe('INTERVAL_ELAPSED');
+  });
+});
+
+describe('ensureComplianceMonitoringScheduled', () => {
+  it('recreates background job when PENDING run exists without active job', async () => {
+    const { ensureComplianceMonitoringScheduled } =
+      await import('@/lib/compliance/monitoring/schedule');
+
+    const mockRun = {
+      id: 'run-pending-1',
+      scheduledFor: new Date('2026-09-20T12:00:00.000Z'),
+      status: 'PENDING',
+    };
+
+    const mockTx = {
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      complianceMonitoringRun: {
+        findFirst: vi.fn().mockResolvedValue(mockRun),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
+      backgroundJob: {
+        findFirst: vi.fn().mockResolvedValue(null), // Job missing!
+        create: vi.fn().mockResolvedValue({ id: 'job-recreated' }),
+      },
+    };
+
+    const mockPrisma = {
+      $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockTx)),
+    };
+
+    const result = await ensureComplianceMonitoringScheduled(
+      mockPrisma as never,
+      new Date('2026-09-20T12:05:00.000Z')
+    );
+
+    expect(result.scheduled).toBe(true);
+    expect(result.reason).toBe('RECREATED_JOB_FOR_PENDING_RUN');
+    expect(mockTx.backgroundJob.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'COMPLIANCE_EVALUATION_SWEEP',
+          payload: { monitorRunId: 'run-pending-1' },
+        }),
+      })
+    );
+    expect(mockTx.complianceMonitoringRun.create).not.toHaveBeenCalled();
+  });
+
+  it('marks orphan RUNNING run as FAILED and creates replacement run when job is missing', async () => {
+    const { ensureComplianceMonitoringScheduled } =
+      await import('@/lib/compliance/monitoring/schedule');
+
+    const mockRun = {
+      id: 'run-abandoned-1',
+      scheduledFor: new Date('2026-09-20T11:00:00.000Z'),
+      status: 'RUNNING',
+    };
+
+    const mockTx = {
+      $executeRaw: vi.fn().mockResolvedValue(1),
+      complianceMonitoringRun: {
+        findFirst: vi.fn().mockResolvedValue(mockRun),
+        update: vi.fn().mockResolvedValue({ ...mockRun, status: 'FAILED' }),
+        create: vi.fn().mockResolvedValue({ id: 'run-replacement' }),
+      },
+      backgroundJob: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockResolvedValue({ id: 'job-replacement' }),
+      },
+    };
+
+    const mockPrisma = {
+      $transaction: vi.fn(async (cb: (tx: unknown) => unknown) => cb(mockTx)),
+    };
+
+    const result = await ensureComplianceMonitoringScheduled(
+      mockPrisma as never,
+      new Date('2026-09-20T12:05:00.000Z')
+    );
+
+    expect(result.scheduled).toBe(true);
+    expect(mockTx.complianceMonitoringRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'run-abandoned-1' },
+        data: expect.objectContaining({
+          status: 'FAILED',
+          errorSummary: { reason: 'ORPHAN_RUN_WITHOUT_ACTIVE_JOB' },
+        }),
+      })
+    );
+    expect(mockTx.complianceMonitoringRun.create).toHaveBeenCalled();
+    expect(mockTx.backgroundJob.create).toHaveBeenCalled();
   });
 });

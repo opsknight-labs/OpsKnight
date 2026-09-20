@@ -298,6 +298,17 @@ export async function claimPendingJobs(
     });
   }
 
+  // Ensure continuous compliance monitoring sweep is scheduled if enabled
+  try {
+    const { ensureComplianceMonitoringScheduled } =
+      await import('../compliance/monitoring/schedule');
+    await ensureComplianceMonitoringScheduled(prisma);
+  } catch (scheduleErr) {
+    logger.warn('[Queue] Failed to ensure compliance monitoring schedule', {
+      error: scheduleErr,
+    });
+  }
+
   await prisma
     .$executeRaw(
       Prisma.sql`UPDATE "BackgroundJob" SET "attempts"="attempts"+1,"status"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'FAILED'::"JobStatus" ELSE 'PENDING'::"JobStatus" END,"startedAt"=NULL,"scheduledAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN "scheduledAt" ELSE NOW() END,"failedAt"=CASE WHEN "attempts"+1>="maxAttempts" THEN NOW() ELSE NULL END,"error"=CASE WHEN "attempts"+1>="maxAttempts" THEN 'Job timed out in PROCESSING state after exceeding maxAttempts' ELSE NULL END WHERE "status"='PROCESSING' AND ("startedAt" IS NULL OR "startedAt"<NOW()-INTERVAL '10 minutes') AND "attempts"<"maxAttempts" AND "type" IN ('STATUS_PAGE_NOTIFICATION'::"JobType",'STATUS_PAGE_ANNOUNCEMENT_FANOUT'::"JobType");`

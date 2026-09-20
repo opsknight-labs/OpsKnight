@@ -118,20 +118,6 @@ export function compareComplianceObservations(
         previousMismatches: prevMismatches,
       },
     });
-  } else if (prevMismatches > 0 && currMismatches === 0) {
-    drifts.push({
-      kind: 'EVIDENCE_INTEGRITY_MISMATCH',
-      impact: 'INFORMATIONAL',
-      isRecovery: true,
-      recoveryKind: 'EVIDENCE_INTEGRITY_MISMATCH',
-      previousStatus: prevStatus,
-      currentStatus: currStatus,
-      summary: `Evidence integrity verified without mismatches for current evaluation.`,
-      details: {
-        totalEvidence: current.evidenceIntegrity.total,
-        mismatches: 0,
-      },
-    });
   }
 
   // 4. Finding set changes (stable codes)
@@ -141,6 +127,22 @@ export function compareComplianceObservations(
   const currFindingMap = new Map<string, string>(
     current.findings.map((f: ObservationFinding) => [f.code, f.severity.toUpperCase()])
   );
+
+  // Recovery: All previous technical findings have been cleared
+  if (prevFindingMap.size > 0 && currFindingMap.size === 0) {
+    drifts.push({
+      kind: 'FINDING_SET_CHANGED',
+      impact: 'INFORMATIONAL',
+      isRecovery: true,
+      recoveryKind: 'FINDING_SET_CHANGED',
+      previousStatus: prevStatus,
+      currentStatus: currStatus,
+      summary: `All previously observed technical findings have been resolved.`,
+      details: {
+        clearedFindings: Array.from(prevFindingMap.keys()),
+      },
+    });
+  }
 
   const added: Array<{ code: string; severity: string }> = [];
   const removed: Array<{ code: string; severity: string }> = [];

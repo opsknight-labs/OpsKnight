@@ -51,13 +51,14 @@ export async function recordFrameworkLifecycleTransitions(
   let recorded = 0;
 
   for (const transition of transitions) {
-    const dedupeKey = `framework-lifecycle:${transition.framework}:${transition.requirementId}:${transition.currentLifecycle}`;
+    const dedupeKey = `framework-lifecycle:${transition.framework}:${transition.requirementId}:${transition.previousLifecycle}->${transition.currentLifecycle}`;
 
     const existing = await tx.complianceDriftEvent.findFirst({
       where: {
         framework: transition.framework,
         requirementId: transition.requirementId,
         kind: 'FRAMEWORK_LIFECYCLE_CHANGED',
+        fingerprint: dedupeKey,
       },
     });
 
@@ -87,19 +88,22 @@ export async function recordFrameworkLifecycleTransitions(
       },
     });
 
-    await emitAuditEvent({
-      action: 'FRAMEWORK_LIFECYCLE_CHANGED',
-      source: 'BACKGROUND',
-      target: { type: 'COMPLIANCE_DRIFT_EVENT', id: transition.requirementId },
-      actor: { type: 'SYSTEM' },
-      occurredAt: now,
-      metadata: {
-        framework: transition.framework,
-        requirementId: transition.requirementId,
-        from: transition.previousLifecycle,
-        to: transition.currentLifecycle,
+    await emitAuditEvent(
+      {
+        action: 'FRAMEWORK_LIFECYCLE_CHANGED',
+        source: 'BACKGROUND',
+        target: { type: 'COMPLIANCE_DRIFT_EVENT', id: transition.requirementId },
+        actor: { type: 'SYSTEM' },
+        occurredAt: now,
+        metadata: {
+          framework: transition.framework,
+          requirementId: transition.requirementId,
+          from: transition.previousLifecycle,
+          to: transition.currentLifecycle,
+        },
       },
-    });
+      tx
+    );
 
     recorded++;
   }

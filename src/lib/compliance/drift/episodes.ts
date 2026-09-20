@@ -77,6 +77,42 @@ export async function applyDetectedDrift(
   isWorsened: boolean;
   notificationGeneration: number;
 }> {
+  const fingerprint = computeComplianceObservationFingerprint(params.currentObservation);
+
+  // Evaluator version changes are point-in-time informational records; they are resolved immediately upon recording
+  if (params.drift.kind === 'EVALUATOR_VERSION_CHANGED') {
+    const created = await tx.complianceDriftEvent.create({
+      data: {
+        subjectType: 'COMPLIANCE_CONTROL',
+        subjectId: params.controlId,
+        controlId: params.controlId,
+        kind: params.drift.kind,
+        impact: 'INFORMATIONAL',
+        status: 'RESOLVED',
+        resolvedAt: params.observedAt,
+        fingerprint,
+        activeDedupeKey: null,
+        baselineEvaluationId: params.baselineEvaluationId,
+        detectedEvaluationId: params.detectedEvaluationId,
+        previousStatus: params.drift.previousStatus ?? null,
+        currentStatus: params.drift.currentStatus ?? null,
+        summary: params.drift.summary,
+        details: params.drift.details as unknown as Prisma.InputJsonValue,
+        firstDetectedAt: params.observedAt,
+        lastObservedAt: params.observedAt,
+        occurrenceCount: 1,
+        notificationGeneration: 0,
+      },
+    });
+
+    return {
+      eventId: created.id,
+      isNew: true,
+      isWorsened: false,
+      notificationGeneration: 0,
+    };
+  }
+
   const activeKey = buildActiveDedupeKey(
     params.controlId,
     params.drift.kind,
@@ -90,8 +126,6 @@ export async function applyDetectedDrift(
       status: { in: ['OPEN', 'ACKNOWLEDGED'] },
     },
   });
-
-  const fingerprint = computeComplianceObservationFingerprint(params.currentObservation);
 
   if (existingActive) {
     // Check if worsening (e.g. PARTIAL -> ACTION_REQUIRED)
