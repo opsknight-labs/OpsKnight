@@ -43,6 +43,7 @@ interface JobWorkerSharedState {
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
   lastControlPlaneProbeAt: number;
   lastQueueMaintenanceAt: number;
+  queueMaintenanceInFlight: Promise<void> | null;
 }
 
 declare global {
@@ -62,6 +63,7 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   controlPlaneState: 'UNINITIALIZED',
   lastControlPlaneProbeAt: 0,
   lastQueueMaintenanceAt: 0,
+  queueMaintenanceInFlight: null,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -182,12 +184,25 @@ async function runOnce(): Promise<void> {
 
   try {
     const now = Date.now();
-    if (now - workerState.lastQueueMaintenanceAt >= QUEUE_MAINTENANCE_INTERVAL_MS) {
-      workerState.lastQueueMaintenanceAt = now;
+    if (
+      !workerState.queueMaintenanceInFlight &&
+      now - workerState.lastQueueMaintenanceAt >= QUEUE_MAINTENANCE_INTERVAL_MS
+    ) {
+      // Add slight jitter (+/- 3s) to prevent lock synchronization across replicas
+      const jitter = Math.floor((Math.random() - 0.5) * 6000);
+      workerState.lastQueueMaintenanceAt = now + jitter;
       if (typeof runQueueMaintenance === 'function') {
-        runQueueMaintenance().catch(err =>
-          logger.warn('[JobWorker] Periodic queue maintenance failed', { error: err })
-        );
+        const maintPromise = runQueueMaintenance()
+          .then(() => undefined)
+          .catch(err =>
+            logger.warn('[JobWorker] Periodic queue maintenance failed', { error: err })
+          )
+          .finally(() => {
+            if (workerState.queueMaintenanceInFlight === maintPromise) {
+              workerState.queueMaintenanceInFlight = null;
+            }
+          });
+        workerState.queueMaintenanceInFlight = maintPromise;
       }
     }
 
@@ -433,6 +448,11 @@ export async function stopJobWorker(): Promise<void> {
   const inFlight = workerState.activeRun;
   if (inFlight) {
     await inFlight;
+  }
+
+  const inFlightMaint = workerState.queueMaintenanceInFlight;
+  if (inFlightMaint) {
+    await inFlightMaint.catch(() => undefined);
   }
 
   workerState.workerConfig = null;

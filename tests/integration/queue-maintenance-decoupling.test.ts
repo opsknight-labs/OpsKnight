@@ -6,6 +6,12 @@ import { evaluateControl } from '@/lib/compliance/evaluation/engine';
 import { computeComplianceControlRegistryFingerprint } from '@/lib/compliance/registry';
 import { projectControlDrift, MAX_DRIFT_PROJECTION_BATCH } from '@/lib/compliance/drift/projector';
 
+interface DriftProjectJobPayload {
+  readonly controlId?: string;
+  readonly evaluationId?: string;
+  readonly continuation?: boolean;
+}
+
 const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
@@ -66,10 +72,10 @@ describeIfRealDB('queue maintenance decoupling & drift projection optimizations'
     expect(updatedJob.error).toContain('timed out in PROCESSING state');
   });
 
-  it('does not enqueue duplicate COMPLIANCE_DRIFT_PROJECT job during scheduled sweeps', async () => {
+  it('transactionally enqueues durable COMPLIANCE_DRIFT_PROJECT recovery jobs for evaluations', async () => {
     const fingerprint = computeComplianceControlRegistryFingerprint();
 
-    // Evaluate a runtime control with SCHEDULED trigger
+    // Evaluate a runtime control with SCHEDULED trigger (durable recovery insurance)
     await evaluateControl({
       controlId: 'SEC-ENC-001',
       trigger: 'SCHEDULED',
@@ -83,7 +89,9 @@ describeIfRealDB('queue maintenance decoupling & drift projection optimizations'
     const scheduledJobs = await testPrisma.backgroundJob.findMany({
       where: { type: 'COMPLIANCE_DRIFT_PROJECT' },
     });
-    expect(scheduledJobs).toHaveLength(0);
+    expect(scheduledJobs).toHaveLength(1);
+    const scheduledPayload = scheduledJobs[0]?.payload as DriftProjectJobPayload | null;
+    expect(scheduledPayload?.controlId).toBe('SEC-ENC-001');
 
     // Evaluate with MANUAL trigger
     await evaluateControl({
@@ -96,11 +104,12 @@ describeIfRealDB('queue maintenance decoupling & drift projection optimizations'
       },
     });
 
-    const manualJobs = await testPrisma.backgroundJob.findMany({
+    const allJobs = await testPrisma.backgroundJob.findMany({
       where: { type: 'COMPLIANCE_DRIFT_PROJECT' },
     });
-    expect(manualJobs).toHaveLength(1);
-    expect((manualJobs[0].payload as any).controlId).toBe('SEC-ENC-001');
+    expect(allJobs).toHaveLength(2);
+    const manualPayload = allJobs[1]?.payload as DriftProjectJobPayload | null;
+    expect(manualPayload?.controlId).toBe('SEC-ENC-001');
   });
 
   it('bounds drift projection backlog and creates continuation job when batch ceiling is reached', async () => {
@@ -164,17 +173,34 @@ describeIfRealDB('queue maintenance decoupling & drift projection optimizations'
     // Should only process up to MAX_DRIFT_PROJECTION_BATCH = 100
     expect(result.evaluationsProcessed).toBe(100);
 
-    // Should have created continuation background job
+    // Should have created continuation background job because 5 evaluations remain
     const continuationJobs = await testPrisma.backgroundJob.findMany({
       where: {
         type: 'COMPLIANCE_DRIFT_PROJECT',
       },
     });
     expect(continuationJobs.length).toBeGreaterThanOrEqual(1);
-    const continuationJob = continuationJobs.find(
-      j =>
-        (j.payload as any)?.continuation === true && (j.payload as any)?.controlId === 'SEC-ENC-001'
-    );
+    const continuationJob = continuationJobs.find(j => {
+      const payload = j.payload as DriftProjectJobPayload | null;
+      return payload?.continuation === true && payload?.controlId === 'SEC-ENC-001';
+    });
     expect(continuationJob).toBeDefined();
+
+    // Verify when remaining backlog is drained (exactly 5 evaluations left), NO continuation job is scheduled
+    await testPrisma.backgroundJob.deleteMany({
+      where: { type: 'COMPLIANCE_DRIFT_PROJECT' },
+    });
+
+    const secondResult = await projectControlDrift({
+      controlId: 'SEC-ENC-001',
+      prisma: testPrisma,
+      now: new Date('2026-09-01T14:00:00.000Z'),
+    });
+
+    expect(secondResult.evaluationsProcessed).toBe(5);
+    const remainingContinuationJobs = await testPrisma.backgroundJob.findMany({
+      where: { type: 'COMPLIANCE_DRIFT_PROJECT' },
+    });
+    expect(remainingContinuationJobs).toHaveLength(0);
   });
 });

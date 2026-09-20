@@ -205,9 +205,10 @@ export async function evaluateControl(options: EvaluateControlOptions): Promise<
       stateRecord = existingState;
     }
 
-    // Atomically enqueue drift projection background job if not scheduled sweep
-    // (scheduled sweeps project drift synchronously to track run stats)
-    if (tx.backgroundJob && trigger !== 'SCHEDULED') {
+    // Atomically enqueue durable drift projection background job.
+    // Scheduled sweeps also project drift synchronously for run stats,
+    // but this durable job ensures crash recovery if the runner process dies.
+    if (tx.backgroundJob) {
       await tx.backgroundJob.create({
         data: {
           type: 'COMPLIANCE_DRIFT_PROJECT',

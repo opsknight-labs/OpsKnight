@@ -106,8 +106,8 @@ export async function projectControlDrift(params: {
         };
       }
 
-      // 4. Baseline exists: query newer evaluations in bounded batches for this control in deterministic order
-      const newerEvaluations = await tx.complianceEvaluation.findMany({
+      // 4. Baseline exists: query newer evaluations in bounded batches (+1 to detect remaining backlog)
+      const fetchedEvaluations = await tx.complianceEvaluation.findMany({
         where: {
           controlId,
           OR: [
@@ -119,10 +119,10 @@ export async function projectControlDrift(params: {
           ],
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        take: MAX_DRIFT_PROJECTION_BATCH,
+        take: MAX_DRIFT_PROJECTION_BATCH + 1,
       });
 
-      if (newerEvaluations.length === 0) {
+      if (fetchedEvaluations.length === 0) {
         return {
           controlId,
           baselineEstablished: false,
@@ -131,6 +131,11 @@ export async function projectControlDrift(params: {
           driftsResolved: 0,
         };
       }
+
+      const hasMore = fetchedEvaluations.length > MAX_DRIFT_PROJECTION_BATCH;
+      const newerEvaluations = hasMore
+        ? fetchedEvaluations.slice(0, MAX_DRIFT_PROJECTION_BATCH)
+        : fetchedEvaluations;
 
       // 5. Bulk-fetch evidence for baseline and all newer evaluations in a single round-trip
       const baselineEval = await tx.complianceEvaluation.findUnique({
@@ -304,8 +309,8 @@ export async function projectControlDrift(params: {
         },
       });
 
-      // If we reached the batch limit, enqueue a continuation job to drain remaining backlog
-      if (newerEvaluations.length === MAX_DRIFT_PROJECTION_BATCH && tx.backgroundJob) {
+      // If additional unprocessed evaluations remain, enqueue a continuation job to drain backlog
+      if (hasMore && tx.backgroundJob) {
         await tx.backgroundJob.create({
           data: {
             type: 'COMPLIANCE_DRIFT_PROJECT',
