@@ -157,7 +157,18 @@ describeIfRealDB('materialized SLA lifecycle elapsed values', { timeout: 30_000 
       migration.indexOf('WITH first_ack_events AS'),
       migration.indexOf('-- END legacy first-ACK repair')
     );
-    await testPrisma.$executeRawUnsafe(repair);
+    // The repair precedes the preservation trigger in the migration. The test
+    // database has already applied the whole migration, so mirror that order.
+    await testPrisma.$executeRawUnsafe(
+      'ALTER TABLE "Incident" DISABLE TRIGGER incident_first_ack_capture_preserved'
+    );
+    try {
+      await testPrisma.$executeRawUnsafe(repair);
+    } finally {
+      await testPrisma.$executeRawUnsafe(
+        'ALTER TABLE "Incident" ENABLE TRIGGER incident_first_ack_capture_preserved'
+      );
+    }
 
     const stored = await testPrisma.incident.findUniqueOrThrow({ where: { id: incident.id } });
     expect(stored.acknowledgedAt).toBeNull();
@@ -206,7 +217,18 @@ describeIfRealDB('materialized SLA lifecycle elapsed values', { timeout: 30_000 
       migration.indexOf('WITH first_ack_events AS'),
       migration.indexOf('-- END legacy first-ACK repair')
     );
-    await testPrisma.$executeRawUnsafe(repair);
+    // The repair precedes the preservation trigger in the migration. The test
+    // database has already applied the whole migration, so mirror that order.
+    await testPrisma.$executeRawUnsafe(
+      'ALTER TABLE "Incident" DISABLE TRIGGER incident_first_ack_capture_preserved'
+    );
+    try {
+      await testPrisma.$executeRawUnsafe(repair);
+    } finally {
+      await testPrisma.$executeRawUnsafe(
+        'ALTER TABLE "Incident" ENABLE TRIGGER incident_first_ack_capture_preserved'
+      );
+    }
 
     const stored = await testPrisma.incident.findUniqueOrThrow({ where: { id: incident.id } });
     expect(stored.acknowledgedAt).toEqual(secondAckAt);
