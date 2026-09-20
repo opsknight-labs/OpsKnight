@@ -9,10 +9,7 @@ import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { getClientIp } from '@/lib/client-ip';
 import { checkRateLimit, simulateWork } from '@/lib/password-reset';
-import {
-  PASSWORD_TRANSPORT_MAX_CODE_UNITS,
-  validatePasswordStrength,
-} from '@/lib/passwords';
+import { PASSWORD_TRANSPORT_MAX_CODE_UNITS, validatePasswordStrength } from '@/lib/passwords';
 import { authPrivacyDigest } from '@/lib/auth-abuse';
 import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -37,11 +34,7 @@ function secretTextEqual(left: string, right: string): boolean {
   return timingSafeEqual(leftBytes, rightBytes);
 }
 
-async function auditInviteFailure(params: {
-  reason: string;
-  ip: string;
-  userId?: string | null;
-}) {
+async function auditInviteFailure(params: { reason: string; ip: string; userId?: string | null }) {
   const ipHash = await authPrivacyDigest('audit:invite:ip', params.ip);
   try {
     await logAudit({
@@ -101,12 +94,12 @@ export async function setPassword(
   const record = await prisma.userToken.findFirst({
     where: {
       tokenHash,
-      type: 'INVITE',
+      type: { in: ['INVITE', 'PASSWORD_RESET'] },
       usedAt: null,
       revokedAt: null,
       expiresAt: { gt: new Date() },
     },
-    select: { id: true, userId: true, identifier: true, generation: true },
+    select: { id: true, userId: true, identifier: true, generation: true, type: true },
   });
 
   if (!record) {
@@ -128,7 +121,11 @@ export async function setPassword(
 
   if (!user || user.status !== 'INVITED') {
     await auditInviteFailure({
-      reason: !user ? 'USER_NOT_FOUND' : user.status === 'DISABLED' ? 'USER_DISABLED' : 'ALREADY_ACTIVE',
+      reason: !user
+        ? 'USER_NOT_FOUND'
+        : user.status === 'DISABLED'
+          ? 'USER_DISABLED'
+          : 'ALREADY_ACTIVE',
       ip,
       userId: user?.id,
     });
@@ -142,6 +139,7 @@ export async function setPassword(
   }
 
   if (
+    record.type === 'INVITE' &&
     record.userId &&
     typeof record.generation === 'number' &&
     record.generation !== user.invitationGeneration
@@ -170,7 +168,7 @@ export async function setPassword(
         where: {
           id: record.id,
           tokenHash,
-          type: 'INVITE',
+          type: record.type,
           usedAt: null,
           revokedAt: null,
           expiresAt: { gt: now },
@@ -200,7 +198,7 @@ export async function setPassword(
       await tx.userToken.updateMany({
         where: {
           OR: [{ userId: user.id }, { identifier: user.email }],
-          type: 'INVITE',
+          type: { in: ['INVITE', 'PASSWORD_RESET'] },
           usedAt: null,
           revokedAt: null,
         },

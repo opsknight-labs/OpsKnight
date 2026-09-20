@@ -1,0 +1,161 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createHash } from 'crypto';
+
+const mockPrisma = vi.hoisted(() => ({
+  user: {
+    findFirst: vi.fn(),
+    findUnique: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  userToken: {
+    findFirst: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  auditLog: {
+    create: vi.fn(),
+  },
+  systemSettings: {
+    findUnique: vi.fn(),
+  },
+  notificationProvider: {
+    findMany: vi.fn().mockResolvedValue([]),
+  },
+  $transaction: vi.fn(),
+}));
+
+vi.mock('@/lib/prisma', () => ({
+  default: mockPrisma,
+}));
+
+vi.mock('@/lib/auth-abuse', () => ({
+  consumeAuthRateLimit: vi.fn().mockResolvedValue({ allowed: true }),
+  authPrivacyDigest: vi.fn().mockResolvedValue('hash'),
+}));
+
+vi.mock('@/lib/app-url', () => ({
+  getAppUrl: vi.fn().mockResolvedValue('https://opssentinal.com'),
+  getAppUrlSync: vi.fn().mockReturnValue('https://opssentinal.com'),
+}));
+
+vi.mock('@/lib/audit', () => ({
+  emitAuditEvent: vi.fn().mockResolvedValue(undefined),
+  logAudit: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/session-security-projection', () => ({
+  invalidateSessionSecurityProjection: vi.fn(),
+}));
+
+import { completePasswordReset } from '@/lib/password-reset';
+import { issueUserInviteToken, buildInviteUrl } from '@/lib/invitations';
+
+describe('Invited User Password Activation and Recovery Flow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrisma.$transaction.mockImplementation(async callback => callback(mockPrisma));
+  });
+
+  describe('issueUserInviteToken', () => {
+    it('generates an invite link pointing to set-password on the canonical appUrl', async () => {
+      mockPrisma.user.update.mockResolvedValue({ invitationGeneration: 2 });
+      mockPrisma.userToken.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.userToken.create.mockResolvedValue({ id: 'token-id' });
+
+      const result = await issueUserInviteToken('user-1', 'invited@example.com');
+
+      expect(result.token).toBeDefined();
+      expect(result.inviteUrl).toContain('https://opssentinal.com/set-password#token=');
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1', status: 'INVITED' },
+        data: expect.objectContaining({
+          invitationGeneration: { increment: 1 },
+        }),
+        select: { invitationGeneration: true },
+      });
+      expect(mockPrisma.userToken.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          identifier: 'invited@example.com',
+          userId: 'user-1',
+          generation: 2,
+          type: 'INVITE',
+        }),
+      });
+    });
+  });
+
+  describe('completePasswordReset with INVITED user', () => {
+    it('activates invited user and updates status to ACTIVE when setting password via recovery link', async () => {
+      const rawToken = 'test-recovery-token-for-invited-user-123456';
+      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+
+      mockPrisma.userToken.findFirst.mockResolvedValue({
+        id: 'token-rec-1',
+        userId: 'user-invited-id',
+        identifier: 'invited@example.com',
+        type: 'PASSWORD_RESET',
+      });
+
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 'user-invited-id',
+        email: 'invited@example.com',
+        name: 'Invited User',
+        status: 'INVITED',
+        phoneNumber: null,
+        smsNotificationsEnabled: false,
+      });
+
+      mockPrisma.userToken.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await completePasswordReset(rawToken, 'SecurePassphrase123!', '127.0.0.1');
+
+      expect(result.success).toBe(true);
+
+      // Verifies user is updated to ACTIVE with invitedAt: null
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user-invited-id', status: 'INVITED' },
+        data: expect.objectContaining({
+          status: 'ACTIVE',
+          invitedAt: null,
+          tokenVersion: { increment: 1 },
+        }),
+      });
+
+      // Verifies pending invite tokens are revoked
+      expect(mockPrisma.userToken.updateMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({
+          type: 'INVITE',
+        }),
+        data: expect.objectContaining({
+          revokedAt: expect.any(Date),
+        }),
+      });
+    });
+
+    it('rejects password completion when user is DISABLED', async () => {
+      const rawToken = 'test-token-disabled-user-1234567890123';
+
+      mockPrisma.userToken.findFirst.mockResolvedValue({
+        id: 'token-rec-2',
+        userId: 'disabled-user-id',
+        identifier: 'disabled@example.com',
+        type: 'PASSWORD_RESET',
+      });
+
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 'disabled-user-id',
+        email: 'disabled@example.com',
+        name: 'Disabled User',
+        status: 'DISABLED',
+      });
+
+      const result = await completePasswordReset(rawToken, 'SecurePassphrase123!', '127.0.0.1');
+      expect(result.success).toBe(false);
+      expect(result.code).toBe('INVALID_TOKEN');
+      expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
+    });
+  });
+});

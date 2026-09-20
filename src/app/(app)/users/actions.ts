@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit';
 import { randomBytes, createHash } from 'crypto';
 import { assertAdmin, assertAdminOrTeamOwner, assertNotSelf, getCurrentUser } from '@/lib/rbac';
-import { getBaseUrl } from '@/lib/env-validation';
+import { buildInviteUrl, issueUserInviteToken } from '@/lib/invitations';
 import { logger } from '@/lib/logger';
 import { isAppRole } from '@/lib/authorization';
 import type { Prisma, Role } from '@prisma/client';
@@ -23,11 +23,6 @@ type EmailInviteResult = {
   providerConfigured: boolean;
   providerName?: string | null;
 };
-
-function buildInviteUrl(token: string): string {
-  const baseUrl = getBaseUrl().replace(/\/$/, '');
-  return `${baseUrl}/set-password#token=${encodeURIComponent(token)}`;
-}
 
 function inviteEventKey(inviteUrl: string): string {
   // Never persist the plaintext invite capability as a dedup/event key.
@@ -233,35 +228,8 @@ export async function getUserDependencyReport(
 }
 
 async function createInviteToken(userId: string, email: string) {
-  const token = randomBytes(32).toString('base64url');
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-  const identifier = email.toLowerCase();
-
-  await prisma.$transaction(async tx => {
-    const rotated = await tx.user.update({
-      where: { id: userId, status: 'INVITED' },
-      data: { invitedAt: new Date(), invitationGeneration: { increment: 1 } },
-      select: { invitationGeneration: true },
-    });
-    await tx.userToken.updateMany({
-      where: { userId, type: 'INVITE', usedAt: null, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
-    await tx.userToken.create({
-      data: {
-        identifier,
-        userId,
-        generation: rotated.invitationGeneration,
-        type: 'INVITE',
-        tokenHash,
-        expiresAt: expires,
-      },
-    });
-  });
-
-  return buildInviteUrl(token);
+  const { inviteUrl } = await issueUserInviteToken(userId, email);
+  return inviteUrl;
 }
 
 export async function addUser(
@@ -350,7 +318,7 @@ export async function addUser(
         },
       });
 
-      inviteUrl = buildInviteUrl(token);
+      inviteUrl = await buildInviteUrl(token);
 
       return newUser;
     });
