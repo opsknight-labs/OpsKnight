@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Mail, User, CheckCircle2, AlertCircle, ShieldCheck, Lock } from 'lucide-react';
+import { Mail, User, CheckCircle2, AlertCircle, ShieldCheck, Lock, Globe } from 'lucide-react';
 import { bootstrapAdmin } from '@/app/setup/actions';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
 import Spinner from '@/components/ui/Spinner';
@@ -12,6 +12,10 @@ type FormState = {
   error?: string | null;
   success?: boolean;
   email?: string | null;
+};
+
+type Props = {
+  initialAppUrl?: string;
 };
 
 function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
@@ -37,9 +41,10 @@ function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
   );
 }
 
-export default function BootstrapSetupForm() {
+export default function BootstrapSetupForm({ initialAppUrl = '' }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [appUrl, setAppUrl] = useState(initialAppUrl);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [state, formAction] = useActionState<FormState, FormData>(
@@ -122,6 +127,35 @@ export default function BootstrapSetupForm() {
             className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label
+            htmlFor="setup-app-url"
+            className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+          >
+            Application URL
+          </label>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">Base URL</span>
+        </div>
+        <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
+          <Globe className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+          <input
+            id="setup-app-url"
+            name="appUrl"
+            type="url"
+            required
+            maxLength={256}
+            value={appUrl}
+            onChange={event => setAppUrl(event.target.value)}
+            placeholder="http://localhost:3000"
+            className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
+          />
+        </div>
+        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          Canonical URL used for redirects, invite links, and webhook callbacks.
+        </p>
       </div>
 
       <div className="space-y-1.5">

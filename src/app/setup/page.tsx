@@ -5,6 +5,7 @@ import BootstrapSetupForm from '@/components/BootstrapSetupForm';
 import { logger } from '@/lib/logger';
 import { AuthLayout, AuthCard } from '@/components/auth/AuthLayout';
 import { ShieldAlert } from 'lucide-react';
+import { getAuthoritativeRequestOrigin } from '@/lib/request-host';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,8 @@ const isNextRedirectError = (error: unknown) => {
 };
 
 export default async function SetupPage() {
-  const requestId = (await headers()).get('x-request-id') || 'unavailable';
+  const headerStore = await headers();
+  const requestId = headerStore.get('x-request-id') || 'unavailable';
 
   try {
     if ((await prisma.user.count()) > 0) redirect('/login');
@@ -48,6 +50,12 @@ export default async function SetupPage() {
     );
   }
 
+  const detectedAppUrl =
+    getAuthoritativeRequestOrigin(headerStore) ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXTAUTH_URL ||
+    'http://localhost:3000';
+
   return (
     <AuthLayout showAnimation={false}>
       <AuthCard>
@@ -61,7 +69,7 @@ export default async function SetupPage() {
           </p>
         </div>
 
-        <BootstrapSetupForm />
+        <BootstrapSetupForm initialAppUrl={detectedAppUrl} />
       </AuthCard>
     </AuthLayout>
   );

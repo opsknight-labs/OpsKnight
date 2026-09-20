@@ -160,4 +160,20 @@ describe('bootstrap administrator security', () => {
     expect(result).toEqual({ success: true, email: 'admin@example.com' });
     expect(upsertSettings).not.toHaveBeenCalled();
   });
+
+  it('saves custom appUrl when explicitly provided in setup form', async () => {
+    findUniqueSettings.mockResolvedValue(null);
+    const form = bootstrapForm();
+    form.set('appUrl', 'https://custom-ops.mycompany.com');
+
+    const result = await bootstrapAdmin(form);
+    expect(result).toEqual({ success: true, email: 'admin@example.com' });
+    expect(upsertSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'default' },
+        create: expect.objectContaining({ appUrl: 'https://custom-ops.mycompany.com' }),
+        update: expect.objectContaining({ appUrl: 'https://custom-ops.mycompany.com' }),
+      })
+    );
+  });
 });

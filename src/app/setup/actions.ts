@@ -28,6 +28,7 @@ const schema = z
   .object({
     name: z.string().trim().min(1).max(100),
     email: z.string().trim().email().max(254),
+    appUrl: z.string().trim().url().max(256).optional().or(z.literal('')),
     password: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
     confirmPassword: z.string().min(1).max(PASSWORD_TRANSPORT_MAX_CODE_UNITS),
   })
@@ -48,6 +49,7 @@ export async function bootstrapAdmin(formData: FormData) {
   const parsed = schema.safeParse({
     name: formData.get('name'),
     email: formData.get('email'),
+    appUrl: formData.get('appUrl') || undefined,
     password: formData.get('password'),
     confirmPassword: formData.get('confirmPassword'),
   });
@@ -90,10 +92,7 @@ export async function bootstrapAdmin(formData: FormData) {
             select: { id: true, email: true },
           });
 
-          // Seed SystemSettings.appUrl from the request origin ONLY when no canonical
-          // URL is already configured (in DB, NEXT_PUBLIC_APP_URL, or NEXTAUTH_URL).
-          // This eliminates the chicken-and-egg problem on fresh installations without
-          // overwriting deliberate pre-configuration.
+          // Seed or update SystemSettings.appUrl from user input or authoritative request origin.
           const existingSettings = await tx.systemSettings.findUnique({
             where: { id: 'default' },
             select: { appUrl: true },
@@ -102,27 +101,28 @@ export async function bootstrapAdmin(formData: FormData) {
             existingSettings?.appUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
           );
 
-          if (!hasPreconfiguredAppUrl) {
-            const bootstrapAppUrl = resolveBootstrapAppUrl(headerStore);
-            if (bootstrapAppUrl) {
-              await tx.systemSettings.upsert({
-                where: { id: 'default' },
-                create: { id: 'default', appUrl: bootstrapAppUrl },
-                update: { appUrl: bootstrapAppUrl },
-              });
-              await logAudit(
-                {
-                  action: 'settings.app_url.bootstrap_seeded',
-                  entityType: 'USER',
-                  entityId: created.id,
-                  actorId: null,
-                  source: 'AUTH',
-                  newValue: { appUrl: bootstrapAppUrl },
-                  details: { method: 'first_user_claim' },
-                },
-                tx
-              );
-            }
+          const customAppUrl = parsed.data.appUrl ? parsed.data.appUrl.replace(/\/+$/, '') : null;
+          const targetAppUrl =
+            customAppUrl || (!hasPreconfiguredAppUrl ? resolveBootstrapAppUrl(headerStore) : null);
+
+          if (targetAppUrl) {
+            await tx.systemSettings.upsert({
+              where: { id: 'default' },
+              create: { id: 'default', appUrl: targetAppUrl },
+              update: { appUrl: targetAppUrl },
+            });
+            await logAudit(
+              {
+                action: 'settings.app_url.bootstrap_seeded',
+                entityType: 'USER',
+                entityId: created.id,
+                actorId: null,
+                source: 'AUTH',
+                newValue: { appUrl: targetAppUrl },
+                details: { method: 'first_user_claim' },
+              },
+              tx
+            );
           }
 
           await logAudit(
