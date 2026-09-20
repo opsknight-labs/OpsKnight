@@ -485,7 +485,7 @@ export function resolveNotificationExpiry(
 export async function createCentralNotificationIntent(
   input: CentralNotificationInput,
   store: NotificationStore = prisma
-): Promise<{ id: string; created: boolean }> {
+): Promise<{ id: string; created: boolean; skipped?: boolean }> {
   assertValidInput(input);
   const recipientHash = recipientDigest(input.channel, input.recipientAddress);
   const deliveryKey = stableDigest(
@@ -497,13 +497,14 @@ export async function createCentralNotificationIntent(
     input.sourceId,
     input.eventKey
   );
+  let unavailableEndpointStatus: string | undefined;
   if (input.recipientType === 'USER' && input.userId) {
     const endpoint = await syncUserNotificationEndpoint({
       userId: input.userId,
       channel: input.channel,
       address: input.recipientAddress,
     });
-    if (!endpoint.available) return { id: intentId(deliveryKey), created: false };
+    if (!endpoint.available) unavailableEndpointStatus = endpoint.status;
   }
   const serializedPayload = JSON.stringify(input.payload);
   if (Buffer.byteLength(serializedPayload, 'utf8') > MAX_ENCRYPTED_PAYLOAD_BYTES) {
@@ -522,14 +523,16 @@ export async function createCentralNotificationIntent(
     9
   );
   const id = intentId(deliveryKey);
-  const noiseDecision = await notificationNoiseDecision(store, {
-    recipientId: input.recipientId || recipientHash,
-    sourceType: input.sourceType,
-    sourceId: input.sourceId,
-    eventType: input.templateKey,
-    trafficClass,
-    priority,
-  });
+  const noiseDecision = unavailableEndpointStatus
+    ? ({ action: 'DELIVER' } as const)
+    : await notificationNoiseDecision(store, {
+        recipientId: input.recipientId || recipientHash,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        eventType: input.templateKey,
+        trafficClass,
+        priority,
+      });
   const effectiveScheduledAt = noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
 
   try {
@@ -539,7 +542,8 @@ export async function createCentralNotificationIntent(
         incidentId: input.incidentId,
         userId: input.userId,
         channel: input.channel,
-        status: noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
+        status:
+          unavailableEndpointStatus || noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
         message:
           noiseDecision.action === 'GROUP'
             ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(
@@ -567,19 +571,25 @@ export async function createCentralNotificationIntent(
         nextAttemptAt: effectiveScheduledAt,
         maxAttempts,
         expiresAt: input.expiresAt ?? resolveNotificationExpiry(input, scheduledAt),
-        errorMsg: noiseDecision.action === 'SUPPRESS' ? noiseDecision.reason : undefined,
+        errorMsg: unavailableEndpointStatus
+          ? `Notification endpoint is unavailable: ${unavailableEndpointStatus}`
+          : noiseDecision.action === 'SUPPRESS'
+            ? noiseDecision.reason
+            : undefined,
       },
       select: { id: true },
     });
-    return { id, created: true };
+    return unavailableEndpointStatus ? { id, created: true, skipped: true } : { id, created: true };
   } catch (error) {
     if (!isUniqueConstraintError(error)) throw error;
     const existing = await store.notification.findUnique({
       where: { deliveryKey },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (!existing) throw error;
-    return { id: existing.id, created: false };
+    return existing.status === 'SKIPPED'
+      ? { id: existing.id, created: false, skipped: true }
+      : { id: existing.id, created: false };
   }
 }
 
@@ -716,7 +726,13 @@ export async function pinNotificationProviderKeys(
 export async function enqueueCentralNotification(
   input: CentralNotificationInput,
   options: { dispatchImmediately?: boolean } = {}
-): Promise<{ id: string; created: boolean; delivered?: boolean; error?: string }> {
+): Promise<{
+  id: string;
+  created: boolean;
+  skipped?: boolean;
+  delivered?: boolean;
+  error?: string;
+}> {
   let pinnedInput = input;
   if (
     (input.payload.kind === 'EMAIL' || input.payload.kind === 'INCIDENT_EMAIL') &&
@@ -763,7 +779,7 @@ export async function enqueueCentralNotification(
     if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
   }
   const intent = await createCentralNotificationIntent(pinnedInput);
-  if (!intent.created || options.dispatchImmediately === false) return intent;
+  if (intent.skipped || !intent.created || options.dispatchImmediately === false) return intent;
   const result = await deliverCentralNotification(intent.id);
   return { ...intent, delivered: result.success, error: result.error };
 }

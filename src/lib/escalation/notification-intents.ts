@@ -43,6 +43,8 @@ export interface EscalationPageIntent {
    * once the row is created — and delivery must be addressed by *that* id.
    */
   storedId?: string;
+  /** The durable row is terminally suppressed and must not be dispatched. */
+  storedSkipped?: boolean;
   userId: string;
   channel: NotificationDeliveryChannel;
   recipientAddress: string;
@@ -284,41 +286,42 @@ export async function materializeEscalationNotificationIntents(
   let created = 0;
   for (const intent of plan.intents) {
     const result = await createCentralNotificationIntent(
-        {
-          category: 'INCIDENT',
-          channel: intent.channel,
-          recipientType: 'USER',
-          recipientId: intent.userId,
-          recipientAddress: intent.recipientAddress,
+      {
+        category: 'INCIDENT',
+        channel: intent.channel,
+        recipientType: 'USER',
+        recipientId: intent.userId,
+        recipientAddress: intent.recipientAddress,
+        userId: intent.userId,
+        incidentId: plan.incidentId,
+        templateKey: 'incident-triggered',
+        sourceType: 'INCIDENT',
+        sourceId: plan.incidentId,
+        eventKey: plan.eventKey,
+        displayMessage: 'Incident notification',
+        trafficClass: 'CRITICAL',
+        priority: NOTIFICATION_PRIORITY.RESPONDER_CRITICAL,
+        eventAt: plan.eventAt,
+        payload: {
+          kind: `INCIDENT_${intent.channel}`,
           userId: intent.userId,
           incidentId: plan.incidentId,
-          templateKey: 'incident-triggered',
-          sourceType: 'INCIDENT',
-          sourceId: plan.incidentId,
-          eventKey: plan.eventKey,
-          displayMessage: 'Incident notification',
-          trafficClass: 'CRITICAL',
-          priority: NOTIFICATION_PRIORITY.RESPONDER_CRITICAL,
-          eventAt: plan.eventAt,
-          payload: {
-            kind: `INCIDENT_${intent.channel}`,
-            userId: intent.userId,
-            incidentId: plan.incidentId,
-            eventType: 'triggered',
-            // The event instant must match the identity the control plane
-            // checks against, which is the incident's creation instant.
-            eventAt: plan.eventAt.toISOString(),
-            escalationGeneration: plan.generation,
-            escalationStep: plan.stepIndex,
-            durableMessage: plan.durableMessage,
-            ...(intent.providerKey ? { providerKey: intent.providerKey } : {}),
-          } as never,
-        },
-        tx as never
-      );
-      // The control plane derives its own row id. Delivery has to use that id,
-      // not the legacy one this plan computed.
+          eventType: 'triggered',
+          // The event instant must match the identity the control plane
+          // checks against, which is the incident's creation instant.
+          eventAt: plan.eventAt.toISOString(),
+          escalationGeneration: plan.generation,
+          escalationStep: plan.stepIndex,
+          durableMessage: plan.durableMessage,
+          ...(intent.providerKey ? { providerKey: intent.providerKey } : {}),
+        } as never,
+      },
+      tx as never
+    );
+    // The control plane derives its own row id. Delivery has to use that id,
+    // not the legacy one this plan computed.
     intent.storedId = result.id;
+    intent.storedSkipped = result.skipped;
     if (result.created) created += 1;
   }
   return { created };
@@ -339,6 +342,10 @@ export async function deliverEscalationNotificationIntents(
     // so there is nothing to deliver.
     const storedId = intent.storedId;
     if (!storedId) continue;
+    if (intent.storedSkipped) {
+      outcomes.push({ userId: intent.userId, channel: intent.channel, outcome: 'SKIPPED' });
+      continue;
+    }
 
     try {
       const { deliverCentralNotification } = await import('../notification-control-plane');

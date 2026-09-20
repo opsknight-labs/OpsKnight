@@ -87,6 +87,26 @@ describe('personal notification control-plane routing', () => {
     expect(centralMocks.enqueue).not.toHaveBeenCalled();
   });
 
+  it('treats an endpoint that bounces after recipient resolution as skipped, not retryable', async () => {
+    centralMocks.enqueue.mockResolvedValue({
+      id: 'notification-skipped',
+      created: true,
+      skipped: true,
+    });
+    vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+      id: 'notification-skipped',
+      status: 'SKIPPED',
+      attempts: 0,
+      errorMsg: 'Notification endpoint is unavailable: BOUNCED',
+    } as never);
+
+    await expect(sendNotification('inc-1', 'user-1', 'EMAIL', 'page')).resolves.toMatchObject({
+      success: true,
+      outcome: 'SKIPPED',
+      skipped: true,
+    });
+  });
+
   it('does not restore the retired feature-flag fallback', async () => {
     process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'false';
     await sendNotification('inc-1', 'user-1', 'EMAIL', 'page');

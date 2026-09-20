@@ -143,19 +143,32 @@ describe('central notification control plane', () => {
     );
   });
 
-  it('blocks an unusable user endpoint at the central intent boundary', async () => {
-    vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue({
-      id: 'endpoint-1',
-      addressHash: notificationEndpointAddressHash('EMAIL', input.recipientAddress),
-      status: 'BOUNCED',
-    } as never);
+  it.each(['BOUNCED', 'INVALID', 'OPTED_OUT'] as const)(
+    'persists a durable SKIPPED intent for a %s user endpoint',
+    async status => {
+      vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue({
+        id: 'endpoint-1',
+        addressHash: notificationEndpointAddressHash('EMAIL', input.recipientAddress),
+        status,
+      } as never);
+      vi.mocked(prisma.notification.create).mockResolvedValue({
+        id: 'notification-skipped',
+      } as never);
 
-    await expect(
-      createCentralNotificationIntent({ ...input, recipientType: 'USER', userId: 'user-1' })
-    ).resolves.toMatchObject({ created: false });
+      await expect(
+        createCentralNotificationIntent({ ...input, recipientType: 'USER', userId: 'user-1' })
+      ).resolves.toMatchObject({ created: true, skipped: true });
 
-    expect(prisma.notification.create).not.toHaveBeenCalled();
-  });
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'SKIPPED',
+            errorMsg: `Notification endpoint is unavailable: ${status}`,
+          }),
+        })
+      );
+    }
+  );
 
   it('includes recently persisted intents when applying batch noise limits', async () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue(

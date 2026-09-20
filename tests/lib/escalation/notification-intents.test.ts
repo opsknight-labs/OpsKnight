@@ -88,4 +88,20 @@ describe('central escalation notification intents', () => {
     ]);
     expect(mocks.deliverCentralNotification).toHaveBeenCalledWith('notification-central');
   });
+
+  it('reports a newly unavailable endpoint as skipped without dispatching a phantom intent', async () => {
+    const plan = await planEscalationNotificationIntents(input);
+    mocks.createCentralNotificationIntent.mockResolvedValue({
+      id: 'notification-skipped',
+      created: true,
+      skipped: true,
+    });
+
+    await materializeEscalationNotificationIntents({} as never, plan);
+
+    await expect(deliverEscalationNotificationIntents(plan)).resolves.toEqual([
+      { userId: 'user-1', channel: 'SMS', outcome: 'SKIPPED' },
+    ]);
+    expect(mocks.deliverCentralNotification).not.toHaveBeenCalled();
+  });
 });
