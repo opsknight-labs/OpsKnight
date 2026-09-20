@@ -48,8 +48,9 @@ const SYSTEM_NOTIFICATION_BATCH_SIZE = 100;
 const SYSTEM_NOTIFICATION_CONCURRENCY = 10;
 const EXPIRED_NOTIFICATION_CLEANUP_BATCH_SIZE = 100;
 export const UNKNOWN_RECONCILIATION_DELAY_MS = 5 * 60_000;
+const UNKNOWN_CALLBACK_MAX_AGE_MS = 15 * 60_000;
 
-export type DeliveryReconciliationCapability = 'LOOKUP' | 'IDEMPOTENT_RETRY' | 'UNSUPPORTED';
+export type DeliveryReconciliationCapability = 'CALLBACK' | 'IDEMPOTENT_RETRY' | 'UNSUPPORTED';
 
 export function deliveryReconciliationCapability(
   channel: NotificationChannel,
@@ -57,7 +58,7 @@ export function deliveryReconciliationCapability(
 ): DeliveryReconciliationCapability {
   const normalized = provider?.toLowerCase() ?? '';
   if ((channel === 'SMS' || channel === 'WHATSAPP') && normalized.includes('twilio'))
-    return 'LOOKUP';
+    return 'CALLBACK';
   // Push dispatches are keyed by the durable notification id, which providers
   // supporting collapse/idempotency can safely receive again.
   if (channel === 'PUSH') return 'IDEMPOTENT_RETRY';
@@ -2184,6 +2185,7 @@ export async function reconcileUnknownNotifications(
     take: Math.max(1, Math.min(limit, 500)),
     select: {
       id: true,
+      createdAt: true,
       channel: true,
       attempts: true,
       providerMessageId: true,
@@ -2202,6 +2204,21 @@ export async function reconcileUnknownNotifications(
       row.channel,
       row.deliveryAttempts?.[0]?.provider
     );
+    if (
+      capability === 'CALLBACK' &&
+      row.providerMessageId &&
+      row.createdAt.getTime() <= now.getTime() - UNKNOWN_CALLBACK_MAX_AGE_MS
+    ) {
+      const updated = await prisma.notification.updateMany({
+        where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
+        data: {
+          reconciliationDeadline: null,
+          errorMsg: 'Provider receipt did not arrive; operator reconciliation is required.',
+        },
+      });
+      unsupported += updated.count;
+      continue;
+    }
     if (capability === 'IDEMPOTENT_RETRY') {
       const updated = await prisma.notification.updateMany({
         where: { id: row.id, status: 'UNKNOWN', reconciliationDeadline: { lte: now } },
@@ -2222,12 +2239,12 @@ export async function reconcileUnknownNotifications(
       data: {
         reconciliationDeadline: nextReview,
         errorMsg:
-          capability === 'LOOKUP' && row.providerMessageId
+          capability === 'CALLBACK' && row.providerMessageId
             ? 'Awaiting provider delivery receipt for ambiguous attempt.'
             : 'Ambiguous delivery requires operator reconciliation or fallback channel.',
       },
     });
-    if (capability === 'LOOKUP' && row.providerMessageId) awaitingCallback += updated.count;
+    if (capability === 'CALLBACK' && row.providerMessageId) awaitingCallback += updated.count;
     else unsupported += updated.count;
   }
   if (unsupported > 0) {

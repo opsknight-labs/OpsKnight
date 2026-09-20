@@ -571,6 +571,32 @@ describe('central notification control plane', () => {
     );
   });
 
+  it('hands an expired callback wait to operator reconciliation instead of rescheduling forever', async () => {
+    const due = new Date('2026-09-20T00:20:00.000Z');
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        id: 'notification_unknown_sms',
+        createdAt: new Date('2026-09-20T00:00:00.000Z'),
+        channel: 'SMS',
+        attempts: 1,
+        providerMessageId: 'SM123',
+        deliveryAttempts: [{ provider: 'twilio' }],
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    await expect(reconcileUnknownNotifications(due)).resolves.toEqual({
+      retried: 0,
+      awaitingCallback: 0,
+      unsupported: 1,
+    });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ reconciliationDeadline: null }),
+      })
+    );
+  });
+
   it('does not report provider acceptance as failure when attempt-ledger persistence aborts', async () => {
     const due = new Date(Date.now() - 60_000);
     vi.mocked(prisma.notification.findUnique).mockResolvedValue({
