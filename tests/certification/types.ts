@@ -22,7 +22,7 @@ export interface CertificationEnvironmentInfo {
   mailpitUrl?: string;
 }
 
-export interface Phase4CertificationSummary {
+export interface ComplianceCertificationSummary {
   certified: boolean;
   totalGates: number;
   passedGates: number;

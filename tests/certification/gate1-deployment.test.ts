@@ -36,7 +36,7 @@ describe('Gate 1: Deployment Certification', () => {
       // ignore
     }
 
-    const artifactDir = path.resolve(process.cwd(), 'artifacts/phase4-certification');
+    const artifactDir = path.resolve(process.cwd(), 'artifacts/compliance-certification');
     fs.mkdirSync(artifactDir, { recursive: true });
 
     const envInfo = {
@@ -45,7 +45,7 @@ describe('Gate 1: Deployment Certification', () => {
       databaseVersion: 'PostgreSQL 15',
       nodeVersion: process.version,
       deploymentMode: process.env.CERTIFICATION_DEPLOYMENT_MODE || 'docker-compose',
-      environment: 'phase4-certification',
+      environment: 'production-certification',
       timestamp: new Date().toISOString(),
       baseUrl: CERT_APP_URL,
     };

@@ -3,7 +3,7 @@ import { hasCapability, CAPABILITIES, AppRole } from '@/lib/authorization';
 
 describe('Gate 3: RBAC & Permission Boundaries Certification', () => {
   it('validates the complete compliance permission boundary matrix', () => {
-    // 1. Verify existence of all Phase 4 compliance capabilities
+    // 1. Verify existence of all continuous compliance capabilities
     expect(CAPABILITIES.COMPLIANCE_READ).toBe('compliance.read');
     expect(CAPABILITIES.COMPLIANCE_EVALUATE).toBe('compliance.evaluate');
     expect(CAPABILITIES.COMPLIANCE_EVIDENCE_READ).toBe('compliance.evidence.read');

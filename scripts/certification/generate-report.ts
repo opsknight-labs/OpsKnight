@@ -1,17 +1,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type {
-  Phase4CertificationSummary,
+  ComplianceCertificationSummary,
   GateResult,
   CertificationEnvironmentInfo,
 } from '../../tests/certification/types';
 
-const ARTIFACT_DIR = path.resolve(process.cwd(), 'artifacts/phase4-certification');
+const ARTIFACT_DIR = path.resolve(process.cwd(), 'artifacts/compliance-certification');
 
 export function generateCertificationReport(
   results: GateResult[],
   envInfo: CertificationEnvironmentInfo
-): Phase4CertificationSummary {
+): ComplianceCertificationSummary {
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
 
   const passedGates = results.filter(r => r.status === 'PASS').length;
@@ -22,7 +22,7 @@ export function generateCertificationReport(
 
   const durationSeconds = Math.round(results.reduce((acc, r) => acc + r.durationMs, 0) / 1000);
 
-  const summary: Phase4CertificationSummary = {
+  const summary: ComplianceCertificationSummary = {
     certified,
     totalGates,
     passedGates,
@@ -45,7 +45,7 @@ export function generateCertificationReport(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpsKnight Phase 4 Production Certification</title>
+  <title>OpsKnight Continuous Compliance & Audit Certification</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 2rem; }
     .container { max-width: 900px; margin: 0 auto; }
@@ -68,7 +68,7 @@ export function generateCertificationReport(
 <body>
   <div class="container">
     <div class="header">
-      <h1>OpsKnight Phase 4 Production Certification</h1>
+      <h1>OpsKnight Continuous Compliance & Audit Certification</h1>
       <div style="margin-top: 0.5rem;">
         <span class="badge ${certified ? 'badge-pass' : 'badge-fail'}">${certified ? 'CERTIFICATION PASSED' : 'CERTIFICATION FAILED'}</span>
         <span style="margin-left: 1rem; font-size: 1.125rem; font-weight: 600;">${summary.score}</span>
@@ -124,7 +124,7 @@ export function generateCertificationReport(
 
     <div class="terminal-box">
 ======================================================
-PHASE 4 PRODUCTION CERTIFICATION RESULT
+CONTINUOUS COMPLIANCE & AUDIT CERTIFICATION RESULT
 ======================================================
 ${results.map(r => `${r.gateName.padEnd(30)} ${r.status}`).join('\n')}
 ------------------------------------------------------
@@ -141,7 +141,7 @@ Commit: ${envInfo.commit}
 
   // 3. Write junit.xml
   const junit = `<?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="Phase4-Certification" tests="${totalGates}" failures="${failedGates}" errors="0" time="${durationSeconds}">
+<testsuites name="Compliance-Audit-Certification" tests="${totalGates}" failures="${failedGates}" errors="0" time="${durationSeconds}">
   <testsuite name="ProductionGates" tests="${totalGates}" failures="${failedGates}" errors="0" time="${durationSeconds}">
     ${results
       .map(
@@ -158,7 +158,7 @@ Commit: ${envInfo.commit}
   return summary;
 }
 
-// CLI runner when executed directly via tsx
+// CLI runner when executed directly via tsx / ts-node
 if (process.argv[1]?.endsWith('generate-report.ts')) {
   const envPath = path.join(ARTIFACT_DIR, 'environment.json');
   let envInfo: CertificationEnvironmentInfo = {
@@ -166,8 +166,8 @@ if (process.argv[1]?.endsWith('generate-report.ts')) {
     imageDigest: 'unknown',
     databaseVersion: 'PostgreSQL 15',
     nodeVersion: process.version,
-    deploymentMode: 'docker-compose',
-    environment: 'phase4-certification',
+    deploymentMode: 'local',
+    environment: 'compliance-certification',
     timestamp: new Date().toISOString(),
     baseUrl: 'http://localhost:3000',
   };

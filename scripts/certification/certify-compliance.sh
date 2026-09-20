@@ -3,14 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-ARTIFACT_DIR="$REPO_ROOT/artifacts/phase4-certification"
+ARTIFACT_DIR="$REPO_ROOT/artifacts/compliance-certification"
 
 mkdir -p "$ARTIFACT_DIR"
 mkdir -p "$REPO_ROOT/reports"
 
-echo "=========================================================="
-echo "  OpsKnight Phase 4 Production Certification Suite        "
-echo "=========================================================="
+echo "=================================================================="
+echo "  OpsKnight Continuous Compliance & Audit Certification Suite     "
+echo "=================================================================="
 
 GIT_SHA=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 echo "Git Commit SHA: $GIT_SHA"
@@ -22,7 +22,7 @@ export VITEST_USE_REAL_DB=1
 export DATABASE_URL="${DATABASE_URL:-postgresql://opsknight:opsknight_secure_password_change_me@127.0.0.1:5432/opsknight_db}"
 
 echo ""
-echo "Step 1: Executing Phase 4 Certification Gates..."
+echo "Step 1: Executing Compliance Certification Gates..."
 npx vitest run tests/certification/gate*.test.ts --no-file-parallelism --reporter=default --reporter=junit --outputFile="$ARTIFACT_DIR/junit.xml"
 
 # Also copy junit report to reports/ for CI ingest if available
@@ -37,18 +37,18 @@ if [ -f "$ARTIFACT_DIR/summary.json" ]; then
   CERTIFIED=$(jq -r '.certified' "$ARTIFACT_DIR/summary.json")
 
   echo ""
-  echo "=========================================================="
-  echo "  PHASE 4 PRODUCTION CERTIFICATION RESULT                 "
-  echo "=========================================================="
+  echo "=================================================================="
+  echo "  CONTINUOUS COMPLIANCE & AUDIT CERTIFICATION RESULT              "
+  echo "=================================================================="
   echo "  Score:    $SCORE"
   echo "  Verdict:  $([ "$CERTIFIED" = "true" ] && echo "CERTIFIED FOR PRODUCTION" || echo "NOT CERTIFIED")"
   echo "  Report:   $ARTIFACT_DIR/report.html"
-  echo "=========================================================="
+  echo "=================================================================="
 
   if [ "$CERTIFIED" != "true" ]; then
-    echo "❌ Mandatory certification gate(s) failed."
+    echo "❌ Mandatory compliance certification gate(s) failed."
     exit 1
   fi
 fi
 
-echo "✅ Phase 4 Production Certification PASSED."
+echo "✅ Continuous Compliance & Audit Certification PASSED."
