@@ -57,6 +57,9 @@ export default async function SecurityCompliancePage({
   const capabilities = {
     canEvaluate: permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVALUATE),
     canReadEvidence: permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVIDENCE_READ),
+    canExport:
+      permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EXPORT) &&
+      permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVIDENCE_READ),
     canReadEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_READ),
     canManageEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_MANAGE),
     canReadPrivacy: permissions.capabilities.includes(CAPABILITIES.PRIVACY_READ),

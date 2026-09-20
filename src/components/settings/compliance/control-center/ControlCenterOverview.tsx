@@ -4,7 +4,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/shadcn/card';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { ShieldCheck, Layers, FileCheck2, RefreshCw, Info } from 'lucide-react';
+import { ShieldCheck, Layers, FileCheck2, RefreshCw, Info, Download } from 'lucide-react';
 import type { ComplianceControlCenterOverview } from '@/lib/compliance/control-center/types';
 import { AttentionRequiredList } from './AttentionRequiredList';
 import { SharedResponsibilityCard } from './SharedResponsibilityCard';
@@ -14,6 +14,8 @@ interface ControlCenterOverviewProps {
   readonly canEvaluate: boolean;
   readonly isEvaluating: boolean;
   readonly onEvaluate: () => void;
+  readonly canExport?: boolean;
+  readonly onExport?: () => void;
   readonly onSelectControl: (controlId: string) => void;
   readonly onNavigateToTab: (tab: string) => void;
 }
@@ -23,6 +25,8 @@ export function ControlCenterOverview({
   canEvaluate,
   isEvaluating,
   onEvaluate,
+  canExport = false,
+  onExport,
   onSelectControl,
   onNavigateToTab,
 }: ControlCenterOverviewProps) {
@@ -51,6 +55,17 @@ export function ControlCenterOverview({
           <span className="text-[11px] text-muted-foreground hidden lg:inline">
             Generated: {new Date(overview.generatedAt).toLocaleTimeString()}
           </span>
+          {canExport && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExport}
+              className="gap-2 shrink-0 font-medium"
+            >
+              <Download className="h-3.5 w-3.5 text-primary" />
+              <span>Export Evidence Package</span>
+            </Button>
+          )}
           {canEvaluate && (
             <Button
               onClick={onEvaluate}

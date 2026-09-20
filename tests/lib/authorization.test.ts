@@ -30,6 +30,12 @@ describe('central authorization contract', () => {
     expect(hasCapability('AUDITOR', CAPABILITIES.METRICS_READ_ALL)).toBe(true);
     expect(hasCapability('AUDITOR', CAPABILITIES.SCHEDULE_READ_ALL)).toBe(true);
     expect(hasCapability('AUDITOR', CAPABILITIES.AUDIT_READ)).toBe(true);
+    expect(hasCapability('AUDITOR', CAPABILITIES.COMPLIANCE_READ)).toBe(true);
+    expect(hasCapability('AUDITOR', CAPABILITIES.COMPLIANCE_EVIDENCE_READ)).toBe(true);
+    expect(hasCapability('AUDITOR', CAPABILITIES.COMPLIANCE_EXPORT)).toBe(true);
+    expect(hasCapability('ADMIN', CAPABILITIES.COMPLIANCE_EXPORT)).toBe(true);
+    expect(hasCapability('RESPONDER', CAPABILITIES.COMPLIANCE_EXPORT)).toBe(false);
+    expect(hasCapability('USER', CAPABILITIES.COMPLIANCE_EXPORT)).toBe(false);
     expect(hasCapability('AUDITOR', CAPABILITIES.INCIDENT_SENSITIVE_READ)).toBe(false);
     expect(hasCapability('AUDITOR', CAPABILITIES.POSTMORTEM_DRAFT_READ)).toBe(false);
     expect(hasCapability('AUDITOR', CAPABILITIES.OPERATIONS_MANAGE)).toBe(false);

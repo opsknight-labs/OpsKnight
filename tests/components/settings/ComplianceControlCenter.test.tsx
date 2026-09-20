@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { ComplianceControlCenter } from '@/components/settings/compliance/control-center';
 import type { ComplianceControlCenterOverview } from '@/lib/compliance/control-center/types';
@@ -254,5 +254,45 @@ describe('ComplianceControlCenter Component', () => {
         expect.objectContaining({ method: 'POST' })
       );
     });
+  });
+
+  it('renders Export Evidence Package button when canExport is true and opens modal on click', () => {
+    render(
+      <ComplianceControlCenter
+        initialData={mockOverview}
+        frameworks={mockFrameworks}
+        capabilities={{ ...mockCapabilities, canExport: true }}
+      />
+    );
+
+    const exportBtn = screen.getByRole('button', { name: /Export Evidence Package/i });
+    expect(exportBtn).toBeInTheDocument();
+
+    fireEvent.click(exportBtn);
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        /This package exports observed technical state and supporting evidence/i
+      )
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText('Deployment')).toBeInTheDocument();
+    expect(within(dialog).getByText('Framework')).toBeInTheDocument();
+    expect(within(dialog).getByText('Selected Controls')).toBeInTheDocument();
+  });
+
+  it('hides Export Evidence Package button when canExport is false', () => {
+    render(
+      <ComplianceControlCenter
+        initialData={mockOverview}
+        frameworks={mockFrameworks}
+        capabilities={{ ...mockCapabilities, canExport: false }}
+      />
+    );
+
+    expect(
+      screen.queryByRole('button', { name: /Export Evidence Package/i })
+    ).not.toBeInTheDocument();
   });
 });
