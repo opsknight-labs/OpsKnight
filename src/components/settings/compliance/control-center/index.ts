@@ -10,3 +10,4 @@ export * from './EvidenceIntegrityBadge';
 export * from './RequirementLifecycleBadge';
 export * from './SharedResponsibilityCard';
 export * from './AttentionRequiredList';
+export * from './ExportEvidencePackageModal';

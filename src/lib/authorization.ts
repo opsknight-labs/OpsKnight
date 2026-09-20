@@ -47,6 +47,7 @@ export const CAPABILITIES = {
   COMPLIANCE_READ: 'compliance.read',
   COMPLIANCE_EVALUATE: 'compliance.evaluate',
   COMPLIANCE_EVIDENCE_READ: 'compliance.evidence.read',
+  COMPLIANCE_EXPORT: 'compliance.export',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
@@ -107,6 +108,8 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.COMPLIANCE_READ,
   // Auditors may inspect immutable compliance evidence snapshots.
   CAPABILITIES.COMPLIANCE_EVIDENCE_READ,
+  // Auditors may export verifiable audit evidence packages.
+  CAPABILITIES.COMPLIANCE_EXPORT,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.INCIDENT_CREATE_SCOPED,

@@ -12,10 +12,12 @@ import { ControlsView } from './ControlsView';
 import { FrameworksView, type FrameworkCardItem } from './FrameworksView';
 import { EvidenceView } from './EvidenceView';
 import { OperationsView } from './OperationsView';
+import { ExportEvidencePackageModal } from './ExportEvidencePackageModal';
 
 export interface ComplianceCapabilities {
   readonly canEvaluate: boolean;
   readonly canReadEvidence: boolean;
+  readonly canExport?: boolean;
   readonly canReadEncryption: boolean;
   readonly canManageEncryption: boolean;
   readonly canReadPrivacy: boolean;
@@ -41,6 +43,7 @@ export function ComplianceControlCenter({
 
   const [overviewData, setOverviewData] = useState<ComplianceControlCenterOverview>(initialData);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [selectedControlId, setSelectedControlId] = useState<string | null>(null);
   const [evidenceControlFilter, setEvidenceControlFilter] = useState<string | null>(null);
   const router = useRouter();
@@ -192,6 +195,8 @@ export function ComplianceControlCenter({
             canEvaluate={capabilities.canEvaluate}
             isEvaluating={isEvaluating}
             onEvaluate={handleEvaluateControls}
+            canExport={capabilities.canExport}
+            onExport={() => setIsExportModalOpen(true)}
             onSelectControl={handleSelectControl}
             onNavigateToTab={tab => setActiveTab(tab as typeof activeTab)}
           />
@@ -224,6 +229,12 @@ export function ComplianceControlCenter({
           />
         )}
       </div>
+
+      <ExportEvidencePackageModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        availableControls={overviewData.controls.map(c => ({ id: c.controlId, title: c.title }))}
+      />
     </div>
   );
 }
