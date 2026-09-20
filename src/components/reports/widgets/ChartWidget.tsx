@@ -106,9 +106,11 @@ const ChartWidget = memo(function ChartWidget({
             data={chartData.map((d, i) => ({
               key: String(i),
               label: d.label || '',
-              count: d.value ?? 0,
+              count: d.value,
             }))}
-            maxValue={Math.max(...chartData.map(d => d.value ?? 0)) * 1.1}
+            maxValue={
+              Math.max(0, ...chartData.flatMap(d => (d.value === null ? [] : [d.value]))) * 1.1
+            }
             height={height}
             showValues={chartData.length <= 7}
             showLabels={true}

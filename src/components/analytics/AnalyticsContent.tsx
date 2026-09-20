@@ -54,31 +54,56 @@ function getStatusColor(status: string): string {
   return colors[status] || '#6b7280';
 }
 
-function buildSparklinePath(values: number[], width: number = 72, height: number = 24): string {
-  if (values.length === 0) return '';
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+export function buildSparklinePath(
+  values: Array<number | null>,
+  width: number = 72,
+  height: number = 24
+): string {
+  const numericValues = values.filter((value): value is number => value !== null);
+  if (numericValues.length === 0) return '';
+  const min = Math.min(...numericValues);
+  const max = Math.max(...numericValues);
   const range = max - min || 1;
   const step = values.length > 1 ? width / (values.length - 1) : width;
 
-  if (values.length === 1) {
-    const y = height - ((values[0] - min) / range) * height;
-    return `M0,${y.toFixed(1)} L${width},${y.toFixed(1)}`;
-  }
-
   return values
-    .map((value, index) => {
+    .reduce<string[]>((commands, value, index) => {
+      if (value === null) return commands;
       const x = index * step;
       const y = height - ((value - min) / range) * height;
-      return `${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
+      const previousHasValue = index > 0 && values[index - 1] !== null;
+      commands.push(`${previousHasValue ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`);
+      return commands;
+    }, [])
     .join(' ');
 }
 
-function buildSparklineAreaPath(values: number[], width: number = 72, height: number = 24): string {
-  const linePath = buildSparklinePath(values, width, height);
-  if (!linePath) return '';
-  return `${linePath} L${width},${height} L0,${height} Z`;
+export function buildSparklineAreaPath(
+  values: Array<number | null>,
+  width: number = 72,
+  height: number = 24
+): string {
+  return values
+    .map((value, index) => ({ value, index }))
+    .reduce<Array<Array<{ value: number; index: number }>>>((segments, point) => {
+      if (point.value === null) return segments;
+      const current = segments.at(-1);
+      const previousHasValue = point.index > 0 && values[point.index - 1] !== null;
+      if (!current || !previousHasValue) segments.push([]);
+      segments.at(-1)!.push({ value: point.value, index: point.index });
+      return segments;
+    }, [])
+    .map(segment => {
+      const segmentValues = values.map((value, index) =>
+        segment.some(point => point.index === index) ? value : null
+      );
+      const linePath = buildSparklinePath(segmentValues, width, height);
+      const firstX = segment[0].index * (values.length > 1 ? width / (values.length - 1) : width);
+      const lastX =
+        segment.at(-1)!.index * (values.length > 1 ? width / (values.length - 1) : width);
+      return `${linePath} L${lastX.toFixed(1)},${height} L${firstX.toFixed(1)},${height} Z`;
+    })
+    .join(' ');
 }
 
 export default async function AnalyticsContent({
@@ -129,7 +154,6 @@ export default async function AnalyticsContent({
     val === null ? '--' : formatTimeMinutesMs(val * 60 * 1000);
   const formatPercent = (val: number | null) => (val === null ? '--' : `${val.toFixed(0)}%`);
   const formatPercentWidth = (val: number | null) => (val === null ? '0%' : `${val.toFixed(1)}%`);
-  const toGaugeValue = (val: number | null) => val ?? 0;
   const formatHours = (ms: number) => `${(ms / 3600000).toFixed(1)}h`;
   const getComplianceStatus = (val: number | null) => {
     if (val === null) return 'default';
@@ -253,12 +277,10 @@ export default async function AnalyticsContent({
   );
   const mttaSeries = metrics.trendSeries.map(entry => entry.mtta);
   const mttrSeries = metrics.trendSeries.map(entry => entry.mttr);
-  const mttaSparkline = mttaSeries.filter((value): value is number => value !== null);
-  const mttrSparkline = mttrSeries.filter((value): value is number => value !== null);
+  const mttaSparkline = mttaSeries;
+  const mttrSparkline = mttrSeries;
   const ackComplianceSeries = metrics.trendSeries.map(entry => entry.ackCompliance);
-  const ackComplianceSparkline = ackComplianceSeries.filter(
-    (value): value is number => value !== null
-  );
+  const ackComplianceSparkline = ackComplianceSeries;
   const resolveRateSeries = smoothSeries(
     metrics.trendSeries.map(entry => entry.resolveRate),
     smoothingWindow
@@ -1454,7 +1476,7 @@ export default async function AnalyticsContent({
                 <span>Ack SLA</span>
                 <strong>{formatPercent(metrics.ackCompliance)}</strong>
               </div>
-              <GaugeChart value={toGaugeValue(metrics.ackCompliance)} label="Ack SLA" size={110} />
+              <GaugeChart value={metrics.ackCompliance} label="Ack SLA" size={110} />
               <div className="sla-compliance-bar">
                 <span style={{ width: formatPercentWidth(metrics.ackCompliance) }} />
               </div>
@@ -1464,11 +1486,7 @@ export default async function AnalyticsContent({
                 <span>Resolve SLA</span>
                 <strong>{formatPercent(metrics.resolveCompliance)}</strong>
               </div>
-              <GaugeChart
-                value={toGaugeValue(metrics.resolveCompliance)}
-                label="Resolve SLA"
-                size={110}
-              />
+              <GaugeChart value={metrics.resolveCompliance} label="Resolve SLA" size={110} />
               <div className="sla-compliance-bar is-resolve">
                 <span style={{ width: formatPercentWidth(metrics.resolveCompliance) }} />
               </div>

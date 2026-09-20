@@ -1,6 +1,10 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import prisma from '@/lib/prisma';
-import { calculateMultiServiceUptime, calculateSLAMetrics } from '@/lib/sla-server';
+import {
+  calculateMultiServiceUptime,
+  calculateSLAMetrics,
+  deriveServiceSlaStatus,
+} from '@/lib/sla-server';
 import { clearRetentionPolicyCache } from '@/lib/retention-policy';
 
 // Local mock for this test file to ensure isolation
@@ -290,6 +294,13 @@ describe('calculateSLAMetrics trend series', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('does not classify zero evaluated SLA incidents as Healthy', () => {
+    expect(deriveServiceSlaStatus(0, 0)).toBe('Unknown');
+    expect(deriveServiceSlaStatus(0, 3)).toBe('Unknown');
+    expect(deriveServiceSlaStatus(1, 0)).toBe('Healthy');
+    expect(deriveServiceSlaStatus(100, 3)).toBe('Critical');
   });
 
   it('builds hourly trend series for a 1-day window with rate metrics', async () => {
