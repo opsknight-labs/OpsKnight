@@ -1,5 +1,3 @@
-ALTER TYPE "NotificationStatus" ADD VALUE IF NOT EXISTS 'UNKNOWN';
-
 CREATE TYPE "NotificationEndpointStatus" AS ENUM (
   'HEALTHY', 'UNVERIFIED', 'DEGRADED', 'INVALID', 'BOUNCED', 'OPTED_OUT'
 );

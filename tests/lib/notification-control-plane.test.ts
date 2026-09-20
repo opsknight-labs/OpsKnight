@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCentralNotificationIntent,
+  createCentralNotificationIntentsBatch,
   deliverCentralNotification,
   getNextCentralNotificationAt,
   maskedNotificationRecipient,
@@ -11,6 +12,7 @@ import {
 import prisma from '@/lib/prisma';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
 import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/provider-admission';
+import { notificationEndpointAddressHash } from '@/lib/user-notification-endpoints';
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
@@ -25,6 +27,7 @@ vi.mock('@/lib/prisma', () => ({
   default: {
     notification: {
       create: vi.fn(),
+      createMany: vi.fn(),
       count: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -35,6 +38,7 @@ vi.mock('@/lib/prisma', () => ({
     service: { findUnique: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
     notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
+    userNotificationEndpoint: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(async (operation: unknown) =>
       Array.isArray(operation)
@@ -114,6 +118,7 @@ describe('central notification control plane', () => {
     vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
     vi.mocked(prisma.notification.count).mockResolvedValue(0);
     vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.notificationDeliveryAttempt.count).mockResolvedValue(0);
     vi.mocked(prisma.systemConfig.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
@@ -136,6 +141,46 @@ describe('central notification control plane', () => {
         }),
       })
     );
+  });
+
+  it('blocks an unusable user endpoint at the central intent boundary', async () => {
+    vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue({
+      id: 'endpoint-1',
+      addressHash: notificationEndpointAddressHash('EMAIL', input.recipientAddress),
+      status: 'BOUNCED',
+    } as never);
+
+    await expect(
+      createCentralNotificationIntent({ ...input, recipientType: 'USER', userId: 'user-1' })
+    ).resolves.toMatchObject({ created: false });
+
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+  });
+
+  it('includes recently persisted intents when applying batch noise limits', async () => {
+    vi.mocked(prisma.notification.findMany).mockResolvedValue(
+      Array.from({ length: 15 }, () => ({
+        recipientId: 'person-1',
+        sourceType: 'USER',
+        sourceId: 'user-1',
+        eventType: 'password-reset',
+      })) as never
+    );
+    vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 1 });
+
+    await createCentralNotificationIntentsBatch([
+      { ...input, recipientId: 'person-1', category: 'STATUS_PAGE', trafficClass: 'BULK' },
+    ]);
+
+    expect(prisma.notification.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          message: expect.stringContaining('Grouped notification'),
+          status: 'PENDING',
+        }),
+      ],
+      skipDuplicates: true,
+    });
   });
 
   it('enforces the traffic-class aging floor when persisting a caller priority', async () => {

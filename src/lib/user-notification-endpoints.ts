@@ -1,8 +1,9 @@
 import 'server-only';
 
 import crypto from 'crypto';
-import type { NotificationChannel, NotificationEndpointStatus, Prisma } from '@prisma/client';
+import { Prisma, type NotificationChannel, type NotificationEndpointStatus } from '@prisma/client';
 import prisma from './prisma';
+import { getEncryptionKey } from './encryption';
 
 const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
   'INVALID',
@@ -10,8 +11,26 @@ const UNUSABLE_ENDPOINT_STATUSES: readonly NotificationEndpointStatus[] = [
   'OPTED_OUT',
 ];
 
-export function notificationEndpointAddressHash(address: string): string {
-  return crypto.createHash('sha256').update(address.trim().toLowerCase()).digest('hex');
+function normalizedEndpointAddress(channel: NotificationChannel, address: string): string {
+  const value = address.trim();
+  if (channel === 'EMAIL') return value.toLowerCase();
+  if (channel === 'SMS' || channel === 'WHATSAPP') return value.replace(/[\s().-]/g, '');
+  return value;
+}
+
+export function notificationEndpointAddressHash(
+  channel: NotificationChannel,
+  address: string
+): string {
+  const key = process.env.NEXTAUTH_SECRET?.trim() || getEncryptionKey();
+  if (!key) throw new Error('Notification encryption is not configured');
+  const keyBytes = /^[a-f0-9]{64}$/i.test(key)
+    ? Buffer.from(key, 'hex')
+    : crypto.createHash('sha256').update(key).digest();
+  return crypto
+    .createHmac('sha256', keyBytes)
+    .update(`${channel}\u001f${normalizedEndpointAddress(channel, address)}`)
+    .digest('hex');
 }
 
 export async function syncUserNotificationEndpoint(input: {
@@ -22,7 +41,7 @@ export async function syncUserNotificationEndpoint(input: {
   // Mixed-version deployments may briefly run generated clients from before
   // the endpoint-health migration. Preserve delivery until the new client is live.
   if (!prisma.userNotificationEndpoint) return { available: true, status: 'UNVERIFIED' };
-  const addressHash = notificationEndpointAddressHash(input.address);
+  const addressHash = notificationEndpointAddressHash(input.channel, input.address);
   const endpoint = await prisma.userNotificationEndpoint.findUnique({
     where: { userId_channel: { userId: input.userId, channel: input.channel } },
   });
@@ -52,7 +71,10 @@ export async function syncUserNotificationEndpoint(input: {
     });
     return { available: true, status: 'UNVERIFIED' };
   }
-  return { available: !UNUSABLE_ENDPOINT_STATUSES.includes(endpoint.status), status: endpoint.status };
+  return {
+    available: !UNUSABLE_ENDPOINT_STATUSES.includes(endpoint.status),
+    status: endpoint.status,
+  };
 }
 
 export async function recordUserNotificationEndpointOutcome(
@@ -67,32 +89,51 @@ export async function recordUserNotificationEndpointOutcome(
     occurredAt: Date;
   }
 ): Promise<void> {
-  await tx.userNotificationEndpoint.upsert({
+  if (!input.addressHash) return;
+  const existing = await tx.userNotificationEndpoint.findUnique({
     where: { userId_channel: { userId: input.userId, channel: input.channel } },
-    create: {
-      userId: input.userId,
-      channel: input.channel,
-      addressHash: input.addressHash,
-      status: input.delivered ? 'HEALTHY' : input.terminalStatus ?? 'DEGRADED',
-      failureCount: input.delivered ? 0 : 1,
-      lastSuccessAt: input.delivered ? input.occurredAt : undefined,
-      lastFailureAt: input.delivered ? undefined : input.occurredAt,
-      lastErrorCode: input.errorCode,
-      lastVerifiedAt: input.delivered ? input.occurredAt : undefined,
-    },
-    update: input.delivered
-      ? {
-          status: 'HEALTHY',
-          failureCount: 0,
-          lastSuccessAt: input.occurredAt,
-          lastErrorCode: null,
-          lastVerifiedAt: input.occurredAt,
-        }
-      : {
-          status: input.terminalStatus ?? 'DEGRADED',
-          failureCount: { increment: 1 },
-          lastFailureAt: input.occurredAt,
-          lastErrorCode: input.errorCode,
-        },
+    select: { id: true, addressHash: true },
   });
+  if (existing) {
+    if (existing.addressHash !== input.addressHash) return;
+    await tx.userNotificationEndpoint.updateMany({
+      where: { id: existing.id, addressHash: input.addressHash },
+      data: input.delivered
+        ? {
+            status: 'HEALTHY',
+            failureCount: 0,
+            lastSuccessAt: input.occurredAt,
+            lastErrorCode: null,
+            lastVerifiedAt: input.occurredAt,
+          }
+        : {
+            status: input.terminalStatus ?? 'DEGRADED',
+            failureCount: { increment: 1 },
+            lastFailureAt: input.occurredAt,
+            lastErrorCode: input.errorCode,
+          },
+    });
+    return;
+  }
+  try {
+    await tx.userNotificationEndpoint.create({
+      data: {
+        userId: input.userId,
+        channel: input.channel,
+        addressHash: input.addressHash,
+        status: input.delivered ? 'HEALTHY' : (input.terminalStatus ?? 'DEGRADED'),
+        failureCount: input.delivered ? 0 : 1,
+        lastSuccessAt: input.delivered ? input.occurredAt : undefined,
+        lastFailureAt: input.delivered ? undefined : input.occurredAt,
+        lastErrorCode: input.errorCode,
+        lastVerifiedAt: input.delivered ? input.occurredAt : undefined,
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+      throw error;
+    }
+    // A concurrent address refresh won the unique key. Never let this older
+    // provider outcome mutate it; a later matching callback can update it.
+  }
 }

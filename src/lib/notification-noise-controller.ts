@@ -43,7 +43,16 @@ export async function notificationNoiseDecision(
   if (input.trafficClass === 'CRITICAL' || input.trafficClass === 'TRANSACTIONAL') {
     return { action: 'DELIVER' };
   }
-  const relatedCount = await store.notification.count({
+  const relatedCount = await countRelatedNotifications(store, input, now);
+  return decideNotificationNoise(input, relatedCount, now);
+}
+
+export async function countRelatedNotifications(
+  store: Pick<Prisma.TransactionClient, 'notification'>,
+  input: Pick<NoiseControlInput, 'recipientId' | 'sourceType' | 'sourceId' | 'eventType'>,
+  now: Date = new Date()
+): Promise<number> {
+  return store.notification.count({
     where: {
       recipientId: input.recipientId,
       sourceType: input.sourceType,
@@ -52,5 +61,36 @@ export async function notificationNoiseDecision(
       createdAt: { gte: new Date(now.getTime() - 60_000) },
     },
   });
-  return decideNotificationNoise(input, relatedCount, now);
+}
+
+export async function countRelatedNotificationGroups(
+  store: Pick<Prisma.TransactionClient, 'notification'>,
+  inputs: Array<Pick<NoiseControlInput, 'recipientId' | 'sourceType' | 'sourceId' | 'eventType'>>,
+  now: Date = new Date()
+): Promise<Map<string, number>> {
+  const unique = new Map(
+    inputs.map(input => [
+      JSON.stringify([input.recipientId, input.sourceType, input.sourceId, input.eventType]),
+      input,
+    ])
+  );
+  if (unique.size === 0) return new Map();
+  const rows = await store.notification.findMany({
+    where: {
+      createdAt: { gte: new Date(now.getTime() - 60_000) },
+      OR: [...unique.values()].map(input => ({
+        recipientId: input.recipientId,
+        sourceType: input.sourceType,
+        sourceId: input.sourceId,
+        eventType: input.eventType,
+      })),
+    },
+    select: { recipientId: true, sourceType: true, sourceId: true, eventType: true },
+  });
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = JSON.stringify([row.recipientId, row.sourceType, row.sourceId, row.eventType]);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
 }

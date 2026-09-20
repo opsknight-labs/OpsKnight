@@ -130,21 +130,36 @@ function summarizeChannelAttempts(attempts: ChannelAttempt[]): {
 }
 
 /** Return every user-enabled and currently available external channel. */
-export async function getUserNotificationChannels(userId: string): Promise<NotificationChannel[]> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      status: true,
-      emailNotificationsEnabled: true,
-      smsNotificationsEnabled: true,
-      pushNotificationsEnabled: true,
-      whatsappNotificationsEnabled: true,
-      phoneNumber: true,
-      email: true,
-    },
-  });
+type NotificationPreferenceUser = {
+  status?: string;
+  emailNotificationsEnabled: boolean;
+  smsNotificationsEnabled: boolean;
+  pushNotificationsEnabled: boolean;
+  whatsappNotificationsEnabled: boolean;
+  phoneNumber: string | null;
+  email: string;
+};
 
-  if (!user || user.status !== 'ACTIVE') return [];
+export async function getUserNotificationChannels(
+  userId: string,
+  knownActiveUser?: NotificationPreferenceUser
+): Promise<NotificationChannel[]> {
+  const user =
+    knownActiveUser ??
+    (await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        status: true,
+        emailNotificationsEnabled: true,
+        smsNotificationsEnabled: true,
+        pushNotificationsEnabled: true,
+        whatsappNotificationsEnabled: true,
+        phoneNumber: true,
+        email: true,
+      },
+    }));
+
+  if (!user || (user.status !== undefined && user.status !== 'ACTIVE')) return [];
 
   const channels: NotificationChannel[] = [];
   const [pushAvailable, smsAvailable, emailAvailable, whatsappConfig] = await Promise.all([
@@ -543,13 +558,6 @@ export async function sendIncidentNotifications(
       },
     });
 
-    const [emailAvailable, smsAvailable, pushAvailable, whatsappConfig] = await Promise.all([
-      isChannelAvailable('EMAIL'),
-      isChannelAvailable('SMS'),
-      isChannelAvailable('PUSH'),
-      import('./notification-providers').then(module => module.getWhatsAppConfig()),
-    ]);
-    const whatsappAvailable = whatsappConfig.enabled && whatsappConfig.provider === 'twilio';
     const userMap = new Map(users.map(user => [user.id, user]));
 
     const recipientResults = await Promise.all(
@@ -559,13 +567,11 @@ export async function sendIncidentNotifications(
           return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
         }
 
-        const channels: NotificationChannel[] = [];
-        if (user.pushNotificationsEnabled && pushAvailable) channels.push('PUSH');
-        if (user.smsNotificationsEnabled && user.phoneNumber && smsAvailable) channels.push('SMS');
-        if (user.whatsappNotificationsEnabled && user.phoneNumber && whatsappAvailable) {
-          channels.push('WHATSAPP');
-        }
-        if (user.emailNotificationsEnabled && user.email && emailAvailable) channels.push('EMAIL');
+        // Resolve preferences, provider availability, recipient configuration,
+        // and persistent endpoint health through the same policy used by direct
+        // and escalation pages. Lifecycle fan-out must not bypass invalid,
+        // bounced, or opted-out endpoints.
+        const channels = await getUserNotificationChannels(userId, user);
         if (channels.length === 0) {
           return { userId, success: true, outcome: 'SKIPPED' as const, channelsUsed: [] };
         }

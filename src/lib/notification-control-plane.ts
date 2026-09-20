@@ -15,7 +15,7 @@ import {
   CircuitBreakers,
   type CircuitBreaker,
 } from './circuit-breaker';
-import { decrypt, encrypt, getEncryptionKey } from '@/lib/encryption';
+import { decrypt, encrypt } from '@/lib/encryption';
 import {
   acquireProviderAdmission,
   acquireProviderConcurrency,
@@ -31,7 +31,15 @@ import {
   NOTIFICATION_AGING_FLOOR,
 } from './notification-priority';
 import { z } from 'zod';
-import { decideNotificationNoise, notificationNoiseDecision } from './notification-noise-controller';
+import {
+  countRelatedNotificationGroups,
+  decideNotificationNoise,
+  notificationNoiseDecision,
+} from './notification-noise-controller';
+import {
+  notificationEndpointAddressHash,
+  syncUserNotificationEndpoint,
+} from './user-notification-endpoints';
 
 const MAX_ENCRYPTED_PAYLOAD_BYTES = 768 * 1024;
 const MAX_ERROR_LENGTH = 1_000;
@@ -48,7 +56,8 @@ export function deliveryReconciliationCapability(
   provider?: string | null
 ): DeliveryReconciliationCapability {
   const normalized = provider?.toLowerCase() ?? '';
-  if ((channel === 'SMS' || channel === 'WHATSAPP') && normalized.includes('twilio')) return 'LOOKUP';
+  if ((channel === 'SMS' || channel === 'WHATSAPP') && normalized.includes('twilio'))
+    return 'LOOKUP';
   // Push dispatches are keyed by the durable notification id, which providers
   // supporting collapse/idempotency can safely receive again.
   if (channel === 'PUSH') return 'IDEMPOTENT_RETRY';
@@ -292,15 +301,7 @@ export function maskedNotificationRecipient(
 }
 
 function recipientDigest(channel: NotificationChannel, recipient: string): string {
-  const key = process.env.NEXTAUTH_SECRET?.trim() || getEncryptionKey();
-  if (!key) throw new Error('Notification encryption is not configured');
-  const keyBytes = /^[a-f0-9]{64}$/i.test(key)
-    ? Buffer.from(key, 'hex')
-    : crypto.createHash('sha256').update(key).digest();
-  return crypto
-    .createHmac('sha256', keyBytes)
-    .update(`${channel}\u001f${normalizedRecipient(channel, recipient)}`)
-    .digest('hex');
+  return notificationEndpointAddressHash(channel, recipient);
 }
 
 function stableDigest(...parts: string[]): string {
@@ -495,6 +496,14 @@ export async function createCentralNotificationIntent(
     input.sourceId,
     input.eventKey
   );
+  if (input.recipientType === 'USER' && input.userId) {
+    const endpoint = await syncUserNotificationEndpoint({
+      userId: input.userId,
+      channel: input.channel,
+      address: input.recipientAddress,
+    });
+    if (!endpoint.available) return { id: intentId(deliveryKey), created: false };
+  }
   const serializedPayload = JSON.stringify(input.payload);
   if (Buffer.byteLength(serializedPayload, 'utf8') > MAX_ENCRYPTED_PAYLOAD_BYTES) {
     throw new Error('Notification payload exceeds the durable delivery limit');
@@ -520,8 +529,7 @@ export async function createCentralNotificationIntent(
     trafficClass,
     priority,
   });
-  const effectiveScheduledAt =
-    noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
+  const effectiveScheduledAt = noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
 
   try {
     await store.notification.create({
@@ -533,7 +541,10 @@ export async function createCentralNotificationIntent(
         status: noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
         message:
           noiseDecision.action === 'GROUP'
-            ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(0, 2_000)
+            ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(
+                0,
+                2_000
+              )
             : input.displayMessage.slice(0, 2_000),
         eventType: input.templateKey,
         category: input.category,
@@ -576,9 +587,19 @@ export async function createCentralNotificationIntentsBatch(
 ): Promise<{ created: number; skipped: number }> {
   const now = new Date();
   const batchNoiseCounts = new Map<string, number>();
+  inputs.forEach(assertValidInput);
+  const noiseInputs = inputs.map(input => {
+    const recipientHash = recipientDigest(input.channel, input.recipientAddress);
+    return {
+      recipientId: input.recipientId || recipientHash,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      eventType: input.templateKey,
+    };
+  });
+  const persistedNoiseCounts = await countRelatedNotificationGroups(prisma, noiseInputs, now);
   const rows: Prisma.NotificationCreateManyInput[] = await Promise.all(
-    inputs.map(async input => {
-      assertValidInput(input);
+    inputs.map(async (input, index) => {
       const recipientHash = recipientDigest(input.channel, input.recipientAddress);
       const deliveryKey = stableDigest(
         input.category,
@@ -600,9 +621,11 @@ export async function createCentralNotificationIntentsBatch(
         Math.max(input.priority ?? policy.priority, notificationAgingFloor(trafficClass)),
         9
       );
-      const noiseKey = [input.recipientId || recipientHash, input.sourceType, input.sourceId, input.templateKey].join(':');
-      const relatedCount = batchNoiseCounts.get(noiseKey) ?? 0;
-      batchNoiseCounts.set(noiseKey, relatedCount + 1);
+      const noiseInput = noiseInputs.at(index)!;
+      const noiseKey = JSON.stringify(Object.values(noiseInput));
+      const inputNoiseCount = batchNoiseCounts.get(noiseKey) ?? 0;
+      batchNoiseCounts.set(noiseKey, inputNoiseCount + 1);
+      const persistedNoiseCount = persistedNoiseCounts.get(noiseKey) ?? 0;
       const noiseDecision = decideNotificationNoise(
         {
           recipientId: input.recipientId || recipientHash,
@@ -612,10 +635,11 @@ export async function createCentralNotificationIntentsBatch(
           trafficClass,
           priority,
         },
-        relatedCount,
+        persistedNoiseCount + inputNoiseCount,
         now
       );
-      const effectiveScheduledAt = noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
+      const effectiveScheduledAt =
+        noiseDecision.action === 'DEFER' ? noiseDecision.until : scheduledAt;
       return {
         id: intentId(deliveryKey),
         incidentId: input.incidentId,
@@ -624,7 +648,10 @@ export async function createCentralNotificationIntentsBatch(
         status: noiseDecision.action === 'SUPPRESS' ? 'SKIPPED' : 'PENDING',
         message:
           noiseDecision.action === 'GROUP'
-            ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(0, 2_000)
+            ? `Grouped notification (${noiseDecision.groupKey}): ${input.displayMessage}`.slice(
+                0,
+                2_000
+              )
             : input.displayMessage.slice(0, 2_000),
         eventType: input.templateKey,
         category: input.category,
