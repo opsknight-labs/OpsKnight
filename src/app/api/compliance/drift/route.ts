@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
-import { jsonError } from '@/lib/api-response';
+import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
       nextCursor = data[data.length - 1].id;
     }
 
-    return NextResponse.json({ data, nextCursor });
+    return jsonOk(data, 200, undefined, { nextCursor });
   } catch (err: unknown) {
     if (err instanceof AppError) return jsonError(err);
     const message = err instanceof Error ? err.message : 'Failed to retrieve compliance drift';

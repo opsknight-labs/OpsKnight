@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
-import { jsonError } from '@/lib/api-response';
+import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
 import {
   acknowledgeComplianceDrift,
@@ -19,10 +19,7 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       userId: user.id,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: event,
-    });
+    return jsonOk(event);
   } catch (err: unknown) {
     if (err instanceof DriftNotFoundError) {
       return jsonError(new AppError({ code: 'RESOURCE_NOT_FOUND', userMessage: err.message }));

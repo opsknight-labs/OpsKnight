@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
-import { jsonError } from '@/lib/api-response';
+import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
 import { getComplianceMonitoringStatus } from '@/lib/compliance/monitoring/status';
 
@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest) {
 
     const status = await getComplianceMonitoringStatus();
 
-    return NextResponse.json({ data: status });
+    return jsonOk(status);
   } catch (err: unknown) {
     if (err instanceof AppError) return jsonError(err);
     const message =

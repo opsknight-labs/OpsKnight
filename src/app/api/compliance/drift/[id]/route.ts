@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
-import { jsonError } from '@/lib/api-response';
+import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
 import { getMappingsForControl } from '@/lib/compliance/framework-mappings/registry';
 
@@ -83,15 +83,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const mappings = event.controlId ? getMappingsForControl(event.controlId) : [];
 
-    return NextResponse.json({
-      data: {
-        ...event,
-        baselineEvaluation: baselineEval,
-        detectedEvaluation: detectedEval,
-        evidence: canReadEvidence ? evidence : null,
-        evidenceRestricted: !canReadEvidence,
-        frameworkMappings: mappings,
-      },
+    return jsonOk({
+      ...event,
+      baselineEvaluation: baselineEval,
+      detectedEvaluation: detectedEval,
+      evidence: canReadEvidence ? evidence : null,
+      evidenceRestricted: !canReadEvidence,
+      frameworkMappings: mappings,
     });
   } catch (err: unknown) {
     if (err instanceof AppError) return jsonError(err);

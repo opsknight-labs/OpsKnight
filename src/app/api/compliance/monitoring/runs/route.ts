@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
 import { assertCapability } from '@/lib/rbac';
-import { jsonError } from '@/lib/api-response';
+import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError } from '@/lib/errors';
 import { runComplianceEvaluationSweep } from '@/lib/compliance/monitoring/runner';
 
@@ -26,10 +26,7 @@ export async function POST(_request: NextRequest) {
       now,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: result,
-    });
+    return jsonOk(result);
   } catch (err: unknown) {
     if (err instanceof AppError) return jsonError(err);
     const message =
