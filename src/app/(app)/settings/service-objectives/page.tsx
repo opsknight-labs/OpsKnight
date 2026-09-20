@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Target } from 'lucide-react';
 import prisma from '@/lib/prisma';
-import { getUserPermissions } from '@/lib/rbac';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Card } from '@/components/ui/shadcn/card';
