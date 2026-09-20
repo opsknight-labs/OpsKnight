@@ -1,4 +1,4 @@
-import { processPendingJobs, processPendingJobsByType } from './jobs/queue';
+import { processPendingJobs, processPendingJobsByType, runQueueMaintenance } from './jobs/queue';
 import { logger } from './logger';
 import {
   consumeEscalationWakeRequest,
@@ -19,6 +19,7 @@ const MAX_BATCH_SIZE = 500;
 const MAX_CONCURRENCY = 50;
 const MAX_IDLE_POLL_MS = 60_000;
 const MAX_BUSY_POLL_MS = 5_000;
+const QUEUE_MAINTENANCE_INTERVAL_MS = 30_000;
 
 export interface JobWorkerConfig {
   batchSize: number;
@@ -41,6 +42,8 @@ interface JobWorkerSharedState {
   workerLane: JobWorkerLane;
   controlPlaneState: 'UNINITIALIZED' | 'HEALTHY' | 'EMERGENCY_LOCAL';
   lastControlPlaneProbeAt: number;
+  lastQueueMaintenanceAt: number;
+  queueMaintenanceInFlight: Promise<void> | null;
 }
 
 declare global {
@@ -59,6 +62,8 @@ const workerState: JobWorkerSharedState = globalThis.jobWorkerGlobalState ?? {
   workerLane: 'all',
   controlPlaneState: 'UNINITIALIZED',
   lastControlPlaneProbeAt: 0,
+  lastQueueMaintenanceAt: 0,
+  queueMaintenanceInFlight: null,
 };
 
 // Next.js standalone webpack builds isolate module scopes between
@@ -178,6 +183,29 @@ async function runOnce(): Promise<void> {
   }
 
   try {
+    const now = Date.now();
+    if (
+      !workerState.queueMaintenanceInFlight &&
+      now - workerState.lastQueueMaintenanceAt >= QUEUE_MAINTENANCE_INTERVAL_MS
+    ) {
+      // Add slight jitter (+/- 3s) to prevent lock synchronization across replicas
+      const jitter = Math.floor((Math.random() - 0.5) * 6000);
+      workerState.lastQueueMaintenanceAt = now + jitter;
+      if (typeof runQueueMaintenance === 'function') {
+        const maintPromise = runQueueMaintenance()
+          .then(() => undefined)
+          .catch(err =>
+            logger.warn('[JobWorker] Periodic queue maintenance failed', { error: err })
+          )
+          .finally(() => {
+            if (workerState.queueMaintenanceInFlight === maintPromise) {
+              workerState.queueMaintenanceInFlight = null;
+            }
+          });
+        workerState.queueMaintenanceInFlight = maintPromise;
+      }
+    }
+
     if (workerState.controlPlaneState === 'UNINITIALIZED') {
       const laneLabel =
         workerState.workerLane === 'bulk' ? 'Bulk lane' : `${workerState.workerLane} lane`;
@@ -420,6 +448,11 @@ export async function stopJobWorker(): Promise<void> {
   const inFlight = workerState.activeRun;
   if (inFlight) {
     await inFlight;
+  }
+
+  const inFlightMaint = workerState.queueMaintenanceInFlight;
+  if (inFlightMaint) {
+    await inFlightMaint.catch(() => undefined);
   }
 
   workerState.workerConfig = null;

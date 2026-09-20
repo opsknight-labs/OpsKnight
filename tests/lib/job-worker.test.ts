@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/jobs/queue', () => ({
   processPendingJobs: vi.fn(),
+  runQueueMaintenance: vi.fn().mockResolvedValue(undefined),
 }));
 
 // The critical lanes have their own tests. Here they are stubbed so this file

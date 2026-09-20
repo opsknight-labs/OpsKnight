@@ -12,6 +12,8 @@ import { dispatchComplianceDriftNotification } from './notifications';
 import { emitAuditEvent } from '../../audit';
 import type { ComplianceObservation } from './types';
 
+export const MAX_DRIFT_PROJECTION_BATCH = 100;
+
 export interface ProjectDriftResult {
   readonly controlId: string;
   readonly baselineEstablished: boolean;
@@ -104,8 +106,8 @@ export async function projectControlDrift(params: {
         };
       }
 
-      // 4. Baseline exists: query all newer evaluations for this control in deterministic order
-      const newerEvaluations = await tx.complianceEvaluation.findMany({
+      // 4. Baseline exists: query newer evaluations in bounded batches (+1 to detect remaining backlog)
+      const fetchedEvaluations = await tx.complianceEvaluation.findMany({
         where: {
           controlId,
           OR: [
@@ -117,9 +119,10 @@ export async function projectControlDrift(params: {
           ],
         },
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: MAX_DRIFT_PROJECTION_BATCH + 1,
       });
 
-      if (newerEvaluations.length === 0) {
+      if (fetchedEvaluations.length === 0) {
         return {
           controlId,
           baselineEstablished: false,
@@ -129,16 +132,35 @@ export async function projectControlDrift(params: {
         };
       }
 
-      // 5. Load baseline evaluation to reconstruct previous observation
+      const hasMore = fetchedEvaluations.length > MAX_DRIFT_PROJECTION_BATCH;
+      const newerEvaluations = hasMore
+        ? fetchedEvaluations.slice(0, MAX_DRIFT_PROJECTION_BATCH)
+        : fetchedEvaluations;
+
+      // 5. Bulk-fetch evidence for baseline and all newer evaluations in a single round-trip
       const baselineEval = await tx.complianceEvaluation.findUnique({
         where: { id: baseline.lastEvaluationId },
       });
 
+      const evalIdsToFetch = [
+        ...(baselineEval ? [baselineEval.id] : []),
+        ...newerEvaluations.map(e => e.id),
+      ];
+
+      const allEvidence = await tx.complianceEvidence.findMany({
+        where: { evaluationId: { in: evalIdsToFetch } },
+      });
+
+      const evidenceByEvalId = new Map<string, typeof allEvidence>();
+      for (const ev of allEvidence) {
+        const list = evidenceByEvalId.get(ev.evaluationId) || [];
+        list.push(ev);
+        evidenceByEvalId.set(ev.evaluationId, list);
+      }
+
       let currentBaselineObservation: ComplianceObservation;
       if (baselineEval) {
-        const baselineEvidence = await tx.complianceEvidence.findMany({
-          where: { evaluationId: baselineEval.id },
-        });
+        const baselineEvidence = evidenceByEvalId.get(baselineEval.id) || [];
         currentBaselineObservation = buildComplianceObservation(baselineEval, baselineEvidence);
       } else {
         // Fallback reconstructed observation
@@ -158,9 +180,7 @@ export async function projectControlDrift(params: {
       let lastProcessedEval: ComplianceEvaluation = newerEvaluations[0];
 
       for (const nextEval of newerEvaluations) {
-        const evidence = await tx.complianceEvidence.findMany({
-          where: { evaluationId: nextEval.id },
-        });
+        const evidence = evidenceByEvalId.get(nextEval.id) || [];
         const currentObs = buildComplianceObservation(nextEval, evidence);
 
         const detectedDrifts = compareComplianceObservations(previousObs, currentObs);
@@ -288,6 +308,17 @@ export async function projectControlDrift(params: {
           updatedAt: now,
         },
       });
+
+      // If additional unprocessed evaluations remain, enqueue a continuation job to drain backlog
+      if (hasMore && tx.backgroundJob) {
+        await tx.backgroundJob.create({
+          data: {
+            type: 'COMPLIANCE_DRIFT_PROJECT',
+            scheduledAt: now,
+            payload: { controlId, continuation: true },
+          },
+        });
+      }
 
       return {
         controlId,

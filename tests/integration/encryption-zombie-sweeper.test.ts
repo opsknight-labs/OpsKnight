@@ -47,8 +47,8 @@ describeIfRealDB('encryption zombie sweeper & non-clobbering settlement (real Po
       },
     });
 
-    // 3. Trigger claimPendingJobs() which invokes reconcileTerminalEncryptionLifecycleJobs()
-    await claimPendingJobs();
+    // 3. Trigger claimPendingJobs with maintenance option (or runQueueMaintenance)
+    await claimPendingJobs(50, undefined, [], { runMaintenance: true });
 
     // 4. Verify BackgroundJob was transitioned to FAILED
     const updatedJob = await testPrisma.backgroundJob.findUniqueOrThrow({

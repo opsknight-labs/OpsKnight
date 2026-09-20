@@ -205,7 +205,9 @@ export async function evaluateControl(options: EvaluateControlOptions): Promise<
       stateRecord = existingState;
     }
 
-    // Atomically enqueue drift projection background job
+    // Atomically enqueue durable drift projection background job.
+    // Scheduled sweeps also project drift synchronously for run stats,
+    // but this durable job ensures crash recovery if the runner process dies.
     if (tx.backgroundJob) {
       await tx.backgroundJob.create({
         data: {
