@@ -259,4 +259,79 @@ describe('Microsoft Teams invoke adapter', () => {
     });
     expect(response).toMatchObject({ statusCode: 200, value: 'Incident acknowledged.' });
   });
+
+  it.each(['CLOSING', 'CLOSED', 'ARCHIVED'] as const)(
+    'allows card refresh when war room is in %s state',
+    async (warRoomState) => {
+      const guidTeamId = 'e83b3788-96b6-49fc-a485-582b719e49d3';
+      const warRoomChannelId = '19:87262c3ec7c54a65b3e03769669af9a3@thread.tacv2';
+      const warRoomMessageId = '1789744465529';
+      const warRoomConvId = `${warRoomChannelId};messageid=${warRoomMessageId}`;
+
+      prismaMock.microsoftTeamsDestination.findUnique.mockResolvedValueOnce({
+        ...destination,
+        teamId: guidTeamId,
+        installationId: 'install-1',
+        installation: {
+          id: 'install-1',
+          enabled: true,
+          teamId: guidTeamId,
+        },
+      } as never);
+
+      prismaMock.incidentWarRoom.findFirst.mockResolvedValueOnce({
+        id: 'war-room-1',
+        incidentId: 'inc-1',
+        destinationId: 'dest-1',
+        installationId: 'install-1',
+        state: warRoomState,
+        providerTenantId: 'tenant-1',
+        providerContainerId: guidTeamId,
+        providerChannelId: warRoomChannelId,
+        commandMessageId: warRoomMessageId,
+        commandConversationId: warRoomConvId,
+        messageGeneration: 1,
+      } as never);
+
+      prismaMock.incident.findUnique.mockResolvedValueOnce({
+        ...incident,
+        status: 'RESOLVED',
+        resolvedAt: new Date(),
+      } as never);
+
+      const { handleMicrosoftTeamsAdaptiveCardAction } = await import('@/lib/microsoft-teams/invoke');
+
+      const refreshActivity = activity({
+        replyToId: warRoomMessageId,
+        conversation: { id: warRoomConvId },
+        channelData: {
+          tenant: { id: 'tenant-1' },
+          team: { id: '19:general@thread.tacv2' },
+          channel: { id: warRoomChannelId },
+        },
+        value: {
+          action: {
+            type: 'Action.Execute',
+            verb: 'opsknight.incident.refresh',
+            data: {
+              v: 2,
+              incidentId: 'inc-1',
+              destinationId: 'dest-1',
+              warRoomId: 'war-room-1',
+              messageGeneration: 1,
+            },
+          },
+        },
+      });
+
+      const response = await handleMicrosoftTeamsAdaptiveCardAction({
+        activity: refreshActivity,
+        verifiedTenantId: 'tenant-1',
+      });
+      expect(response).toMatchObject({
+        statusCode: 200,
+        type: 'application/vnd.microsoft.card.adaptive',
+      });
+    }
+  );
 });

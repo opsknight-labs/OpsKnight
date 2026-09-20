@@ -240,13 +240,13 @@ export async function handleMicrosoftTeamsAdaptiveCardAction(input: {
     );
     const warRoomRouteMatches = Boolean(
       warRoom &&
-      warRoom.state === 'READY' &&
+      ['READY', 'CLOSING', 'CLOSED', 'ARCHIVED'].includes(warRoom.state) &&
       warRoom.providerTenantId === tenantId &&
       isTeamMatch(warRoom.providerContainerId) &&
       isChannelMatch(warRoom.providerChannelId) &&
       warRoomDestinationBound
     );
-    // P1 fencing: when warRoomId is present, only READY war-room authority counts; no fallback to generic destination.
+    // P1 fencing: when warRoomId is present, only war-room authority counts; no fallback to generic destination.
     const routeMatches = warRoomId ? warRoomRouteMatches : destinationRouteMatches;
     const messageMatches = warRoom
       ? warRoom.messageGeneration === messageGeneration &&
