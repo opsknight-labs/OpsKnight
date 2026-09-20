@@ -15,12 +15,18 @@ const isNextRedirectError = (error: unknown) => {
   return typeof digest === 'string' && digest.startsWith('NEXT_REDIRECT');
 };
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ preview?: string }>;
+}) {
   const headerStore = await headers();
   const requestId = headerStore.get('x-request-id') || 'unavailable';
+  const params = searchParams ? await searchParams : {};
+  const isDevPreview = process.env.NODE_ENV === 'development' && params.preview === 'true';
 
   try {
-    if ((await prisma.user.count()) > 0) redirect('/login');
+    if (!isDevPreview && (await prisma.user.count()) > 0) redirect('/login');
   } catch (error) {
     if (isNextRedirectError(error)) throw error;
     logger.error('[Setup Page] Database/setup initialization error', {
