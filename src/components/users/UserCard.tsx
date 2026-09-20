@@ -968,7 +968,15 @@ export function UserCard({
               {user.status === 'INVITED' ? 'Get Invite Link' : 'Reset Password'}
             </DialogTitle>
             <DialogDescription>
-              Generating a secure link for <strong>{user.name}</strong>.
+              {user.status === 'INVITED' ? (
+                <>
+                  Generating an invitation link for <strong>{user.name}</strong>.
+                </>
+              ) : (
+                <>
+                  Generating a secure password reset link for <strong>{user.name}</strong>.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
