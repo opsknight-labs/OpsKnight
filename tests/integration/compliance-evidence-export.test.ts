@@ -281,4 +281,77 @@ describeIfRealDB('verifiable compliance evidence package export (real PostgreSQL
     expect(preview.counts.controls).toBeGreaterThan(0);
     expect(preview.estimatedSizeBytes).toBeGreaterThan(0);
   });
+
+  it('never borrows evidence from older evaluations when latest evaluation has zero evidence', async () => {
+    // 1. Old evaluation with supporting evidence
+    const evalOld = await testPrisma.complianceEvaluation.create({
+      data: {
+        batchId: 'batch_old',
+        controlId: 'SEC-ENC-001',
+        evaluatorId: 'encryption.at-rest',
+        evaluatorVersion: '1.0.0',
+        status: 'IMPLEMENTED',
+        trigger: 'MANUAL',
+        evaluatedAt: new Date('2026-09-20T08:00:00.000Z'),
+        summary: 'Old evaluation',
+        findings: [],
+      },
+    });
+
+    await testPrisma.complianceEvidence.create({
+      data: {
+        controlId: 'SEC-ENC-001',
+        evaluationId: evalOld.id,
+        type: 'CONFIGURATION_SNAPSHOT',
+        collectorId: 'encryption.at-rest',
+        collectorVersion: '1.0.0',
+        title: 'Old evaluation evidence',
+        observedAt: new Date('2026-09-20T08:00:00.000Z'),
+        collectedAt: new Date('2026-09-20T08:00:00.000Z'),
+        contentHash: 'sha256:old-hash',
+        metadata: {},
+      },
+    });
+
+    // 2. New evaluation with ZERO supporting evidence
+    const evalNew = await testPrisma.complianceEvaluation.create({
+      data: {
+        batchId: 'batch_new',
+        controlId: 'SEC-ENC-001',
+        evaluatorId: 'encryption.at-rest',
+        evaluatorVersion: '1.0.0',
+        status: 'IMPLEMENTED',
+        trigger: 'SCHEDULED',
+        evaluatedAt: new Date('2026-09-20T09:00:00.000Z'),
+        summary: 'New evaluation with no evidence',
+        findings: [],
+      },
+    });
+
+    await testPrisma.complianceControlState.create({
+      data: {
+        controlId: 'SEC-ENC-001',
+        status: 'IMPLEMENTED',
+        latestEvaluationId: evalNew.id,
+        evaluatorId: 'encryption.at-rest',
+        evaluatorVersion: '1.0.0',
+        evaluatedAt: evalNew.evaluatedAt,
+        summary: evalNew.summary,
+      },
+    });
+
+    // 3. Export snapshot
+    const pkg = await exportComplianceEvidencePackage({
+      scope: { type: 'CONTROLS', controlIds: ['SEC-ENC-001'] },
+      evidenceSelection: { mode: 'SNAPSHOT' },
+      userId: 'usr_auditor',
+      prisma: testPrisma,
+    });
+
+    // Must NOT borrow evidence from evalOld!
+    expect(pkg.counts.evidence).toBe(0);
+    const zip = await JSZip.loadAsync(pkg.zipBuffer);
+    const indexCsv = await zip.file('summary/evidence-index.csv')!.async('text');
+    expect(indexCsv).not.toContain('Old evaluation evidence');
+  });
 });

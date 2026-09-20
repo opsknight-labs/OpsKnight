@@ -15,6 +15,7 @@ export interface BuildManifestParams {
   readonly scope: EvidencePackageScope;
   readonly evidenceSelection: EvidenceSelection;
   readonly productVersion: string;
+  readonly buildId?: string;
   readonly controlRegistryFingerprint: string;
   readonly frameworkMappingFingerprint: string;
   readonly frameworks: readonly ExportedFrameworkDefinition[];
@@ -49,6 +50,7 @@ export function buildEvidencePackageManifest(params: BuildManifestParams): Built
     product: {
       name: 'OpsKnight',
       version: params.productVersion,
+      ...(params.buildId ? { buildId: params.buildId } : {}),
     },
     fingerprints: {
       controlRegistry: params.controlRegistryFingerprint,

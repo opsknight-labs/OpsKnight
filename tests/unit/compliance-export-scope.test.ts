@@ -45,4 +45,13 @@ describe('resolveExportScope', () => {
       })
     ).toThrow(UnknownControlIdError);
   });
+
+  it('rejects duplicate control IDs in resolveExportScope and validation schema', () => {
+    expect(() =>
+      resolveExportScope({
+        type: 'CONTROLS',
+        controlIds: ['SEC-ENC-001', 'SEC-ENC-001'],
+      })
+    ).toThrow('Duplicate control IDs are not permitted');
+  });
 });

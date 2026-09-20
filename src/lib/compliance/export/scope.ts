@@ -21,6 +21,13 @@ export class UnknownControlIdError extends Error {
   }
 }
 
+export class DuplicateControlIdError extends Error {
+  constructor() {
+    super('Duplicate control IDs are not permitted');
+    this.name = 'DuplicateControlIdError';
+  }
+}
+
 export interface ResolvedExportScope {
   readonly controls: readonly ComplianceControlDefinition[];
   readonly frameworks: readonly ComplianceFrameworkDefinition[];
@@ -87,6 +94,10 @@ export function resolveExportScope(scope: EvidencePackageScope): ResolvedExportS
   }
 
   if (scope.type === 'CONTROLS') {
+    if (new Set(scope.controlIds).size !== scope.controlIds.length) {
+      throw new DuplicateControlIdError();
+    }
+
     const controls: ComplianceControlDefinition[] = [];
     for (const id of scope.controlIds) {
       const c = controlMap.get(id);

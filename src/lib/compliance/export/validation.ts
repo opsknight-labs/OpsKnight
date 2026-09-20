@@ -4,6 +4,7 @@ import type { ComplianceFramework } from '../types';
 export const MAX_SELECTED_CONTROLS = 50;
 export const MAX_HISTORICAL_DAYS = 366;
 export const MAX_EVIDENCE_RECORDS = 10_000;
+export const MAX_UNCOMPRESSED_PACKAGE_BYTES = 50 * 1024 * 1024; // 50MB
 
 export const COMPLIANCE_FRAMEWORK_ENUM = [
   'GDPR',
@@ -32,7 +33,10 @@ const controlsScopeSchema = z.object({
     .max(
       MAX_SELECTED_CONTROLS,
       `Cannot select more than ${MAX_SELECTED_CONTROLS} controls in a single export`
-    ),
+    )
+    .refine(ids => new Set(ids).size === ids.length, {
+      message: 'Duplicate control IDs are not permitted',
+    }),
 });
 
 export const evidencePackageScopeSchema = z.discriminatedUnion('type', [

@@ -11,7 +11,15 @@ import {
 } from '@/components/ui/shadcn/dialog';
 import { Button } from '@/components/ui/shadcn/button';
 import { Label } from '@/components/ui/shadcn/label';
-import { Download, FileArchive, AlertTriangle, Loader2, Layers, CheckCircle2 } from 'lucide-react';
+import {
+  Download,
+  FileArchive,
+  AlertTriangle,
+  Loader2,
+  Layers,
+  CheckCircle2,
+  RefreshCw,
+} from 'lucide-react';
 import { notify } from '@/lib/toast';
 import type { ComplianceFramework } from '@/lib/compliance/types';
 import type {
@@ -44,6 +52,8 @@ export function ExportEvidencePackageModal({
   const [toDate, setToDate] = useState(defaultTo);
 
   const [preview, setPreview] = useState<ExportPackagePreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -72,13 +82,18 @@ export function ExportEvidencePackageModal({
   // Fetch count preview when parameters change
   useEffect(() => {
     if (!isOpen) return;
-    if (scopeType === 'CONTROLS' && selectedControlIds.length === 0) return;
+    if (scopeType === 'CONTROLS' && selectedControlIds.length === 0) {
+      setPreview(null);
+      setPreviewError(null);
+      return;
+    }
 
     const scopePayload = getScopePayload();
     const evidencePayload = getEvidencePayload();
 
     let cancelled = false;
     setIsLoadingPreview(true);
+    setPreviewError(null);
 
     fetch('/api/compliance/exports/preview', {
       method: 'POST',
@@ -88,14 +103,29 @@ export function ExportEvidencePackageModal({
         evidence: evidencePayload,
       }),
     })
-      .then(res => res.json())
+      .then(async res => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || 'Preview calculation failed');
+        }
+        return res.json();
+      })
       .then(data => {
-        if (!cancelled && data.data) {
-          setPreview(data.data);
+        if (!cancelled) {
+          if (data.data) {
+            setPreview(data.data);
+            setPreviewError(null);
+          } else {
+            throw new Error(data.error || 'Preview data unavailable');
+          }
         }
       })
-      .catch(() => {
-        // Silently ignore preview network errors
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Preview unavailable';
+          setPreviewError(msg);
+          setPreview(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoadingPreview(false);
@@ -104,7 +134,14 @@ export function ExportEvidencePackageModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, scopeType, selectedControlIds.length, getScopePayload, getEvidencePayload]);
+  }, [
+    isOpen,
+    scopeType,
+    selectedControlIds.length,
+    getScopePayload,
+    getEvidencePayload,
+    retryCount,
+  ]);
 
   const handleToggleControl = (controlId: string) => {
     setSelectedControlIds(prev =>
@@ -378,26 +415,41 @@ export function ExportEvidencePackageModal({
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              <div className="p-2 rounded bg-background border text-center">
-                <span className="block text-[11px] text-muted-foreground">Controls</span>
-                <span className="text-base font-bold text-foreground">
-                  {preview?.counts.controls ?? 0}
-                </span>
+            {previewError ? (
+              <div className="p-2.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 flex items-center justify-between text-xs">
+                <span className="font-medium">Preview unavailable ({previewError})</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRetryCount(c => c + 1)}
+                  className="h-6 px-2 text-[11px] gap-1 shrink-0 font-medium"
+                >
+                  <RefreshCw className="h-3 w-3" /> Retry
+                </Button>
               </div>
-              <div className="p-2 rounded bg-background border text-center">
-                <span className="block text-[11px] text-muted-foreground">Requirements</span>
-                <span className="text-base font-bold text-foreground">
-                  {preview?.counts.requirements ?? 0}
-                </span>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="p-2 rounded bg-background border text-center">
+                  <span className="block text-[11px] text-muted-foreground">Controls</span>
+                  <span className="text-base font-bold text-foreground">
+                    {preview?.counts.controls ?? 0}
+                  </span>
+                </div>
+                <div className="p-2 rounded bg-background border text-center">
+                  <span className="block text-[11px] text-muted-foreground">Requirements</span>
+                  <span className="text-base font-bold text-foreground">
+                    {preview?.counts.requirements ?? 0}
+                  </span>
+                </div>
+                <div className="p-2 rounded bg-background border text-center">
+                  <span className="block text-[11px] text-muted-foreground">Evidence Records</span>
+                  <span className="text-base font-bold text-foreground">
+                    {preview?.counts.evidence ?? 0}
+                  </span>
+                </div>
               </div>
-              <div className="p-2 rounded bg-background border text-center">
-                <span className="block text-[11px] text-muted-foreground">Evidence Records</span>
-                <span className="text-base font-bold text-foreground">
-                  {preview?.counts.evidence ?? 0}
-                </span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Package Inclusions */}

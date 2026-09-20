@@ -133,12 +133,8 @@ export async function verifyEvidencePackageManifest(
     entriesVerified++;
   }
 
-  // Check for any unlisted files in the ZIP (excluding manifest.json, manifest.sha256, and integrity/sha256sums.txt)
-  const ignoredRootFiles = new Set([
-    'manifest.json',
-    'manifest.sha256',
-    'integrity/sha256sums.txt',
-  ]);
+  // Check for any unlisted files in the ZIP (excluding manifest.json and manifest.sha256)
+  const ignoredRootFiles = new Set(['manifest.json', 'manifest.sha256']);
 
   zip.forEach((relativePath, file) => {
     if (file.dir) {

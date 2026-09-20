@@ -7,7 +7,9 @@ import type {
   ExportedControlSnapshot,
 } from './types';
 import type { AuditSnapshotData } from './snapshot';
-import type { CollectedExportEvidence } from './evidence';
+import { type CollectedExportEvidence, EvidenceExportLimitExceededError } from './evidence';
+import { MAX_UNCOMPRESSED_PACKAGE_BYTES } from './validation';
+import { APP_VERSION, DEPLOYMENT_ID } from '../../version';
 import { canonicalSerializeJson } from './serializer';
 import { generateControlsCsv, generateFrameworksCsv, generateEvidenceIndexCsv } from './csv';
 import { generatePackageReadme, generateSummaryReport } from './markdown';
@@ -66,12 +68,24 @@ export async function buildEvidencePackageZip(params: {
   readonly evidence: CollectedExportEvidence;
   readonly userId: string;
   readonly productVersion?: string;
+  readonly buildId?: string;
 }): Promise<GeneratedPackageResult> {
   const stagedFiles: StagedPackageFile[] = [];
-  const version = params.productVersion ?? '2.0.0';
+  const version = params.productVersion ?? APP_VERSION;
+  const buildId = params.buildId ?? DEPLOYMENT_ID;
   const generatedAt = new Date().toISOString();
 
+  let totalUncompressedBytes = 0;
+
   function stageFile(path: string, mediaType: string, buffer: Buffer) {
+    totalUncompressedBytes += buffer.byteLength;
+    if (totalUncompressedBytes > MAX_UNCOMPRESSED_PACKAGE_BYTES) {
+      throw new EvidenceExportLimitExceededError(
+        totalUncompressedBytes,
+        MAX_UNCOMPRESSED_PACKAGE_BYTES,
+        'BYTES'
+      );
+    }
     stagedFiles.push({
       path: sanitizePath(path),
       mediaType,
@@ -91,19 +105,15 @@ export async function buildEvidencePackageZip(params: {
 
   const frameworksCsv = generateFrameworksCsv(
     params.snapshot.requirements,
-    params.snapshot.requirements.flatMap(r =>
-      r.mappedControls.map(m => ({
-        id: `${r.requirementId}:${m.controlId}`,
-        framework: r.framework,
-        requirementId: r.requirementId,
-        controlId: m.controlId,
-        relationship: m.relationship,
-        evidenceExpectation: 'RUNTIME' as const,
-        rationale: 'Observed technical telemetry and system configuration',
-      }))
-    )
+    params.snapshot.mappings
   );
   stageFile('summary/frameworks.csv', 'text/csv', Buffer.from(frameworksCsv, 'utf8'));
+
+  stageFile(
+    'summary/mappings.json',
+    'application/json',
+    canonicalSerializeJson(params.snapshot.mappings)
+  );
 
   const evidenceIndexCsv = generateEvidenceIndexCsv(params.evidence.evidenceRecords);
   stageFile('summary/evidence-index.csv', 'text/csv', Buffer.from(evidenceIndexCsv, 'utf8'));
@@ -238,7 +248,20 @@ export async function buildEvidencePackageZip(params: {
   stageFile('README.md', 'text/markdown', readmeBuffer);
   stageFile('summary/report.md', 'text/markdown', reportBuffer);
 
-  // Re-calculate full file entries list including README and report
+  // 8. Generate and stage integrity/sha256sums.txt
+  const sha256sumsLines =
+    stagedFiles
+      .map(f => ({
+        path: f.path,
+        sha256: createHash('sha256').update(f.buffer).digest('hex'),
+      }))
+      .sort((a, b) => a.path.localeCompare(b.path))
+      .map(f => `${f.sha256}  ${f.path}`)
+      .join('\n') + '\n';
+
+  stageFile('integrity/sha256sums.txt', 'text/plain', Buffer.from(sha256sumsLines, 'utf8'));
+
+  // Full file entries list including sha256sums.txt
   const allStagedEntries: EvidencePackageFileEntry[] = stagedFiles.map(f => ({
     path: f.path,
     mediaType: f.mediaType,
@@ -246,7 +269,7 @@ export async function buildEvidencePackageZip(params: {
     sha256: createHash('sha256').update(f.buffer).digest('hex'),
   }));
 
-  // 8. Authoritative Manifest and SHA-256 Checksums
+  // 9. Authoritative Manifest and SHA-256 Checksums
   const manifestResult = buildEvidencePackageManifest({
     packageId: params.packageId,
     generatedAt,
@@ -254,6 +277,7 @@ export async function buildEvidencePackageZip(params: {
     scope: params.scope,
     evidenceSelection: params.evidenceSelection,
     productVersion: version,
+    buildId,
     controlRegistryFingerprint,
     frameworkMappingFingerprint,
     frameworks: params.snapshot.frameworks,
@@ -262,14 +286,13 @@ export async function buildEvidencePackageZip(params: {
     userId: params.userId,
   });
 
-  // 9. Assemble ZIP Archive
+  // 10. Assemble ZIP Archive
   const zip = new JSZip();
 
   for (const file of stagedFiles) {
     zip.file(file.path, file.buffer);
   }
 
-  zip.file('integrity/sha256sums.txt', manifestResult.sha256sumsContent);
   zip.file('manifest.json', manifestResult.manifestBuffer);
   zip.file('manifest.sha256', manifestResult.manifestSha256Content);
 

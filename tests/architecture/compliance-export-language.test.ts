@@ -54,6 +54,7 @@ describe('compliance export non-certification language boundary', () => {
         operatorAssessmentRequired: true,
       },
     ],
+    mappings: [],
     controlEvidenceCounts: new Map(),
   };
 

@@ -56,6 +56,8 @@ export function generateFrameworksCsv(
     'control_id',
     'relationship',
     'evidence_expectation',
+    'rationale',
+    'notes',
   ].join(',');
 
   const rows: string[] = [];
@@ -72,6 +74,8 @@ export function generateFrameworksCsv(
           '',
           '',
           '',
+          '',
+          '',
         ].join(',')
       );
     } else {
@@ -85,6 +89,8 @@ export function generateFrameworksCsv(
             escapeCsvField(m.controlId),
             escapeCsvField(m.relationship),
             escapeCsvField(m.evidenceExpectation),
+            escapeCsvField(m.rationale),
+            escapeCsvField(m.notes ?? ''),
           ].join(',')
         );
       }

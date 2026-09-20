@@ -41,6 +41,7 @@ describe('verifyEvidencePackageManifest', () => {
     ],
     frameworks: [],
     requirements: [],
+    mappings: [],
     controlEvidenceCounts: new Map([['SEC-ENC-001', 1]]),
   };
 

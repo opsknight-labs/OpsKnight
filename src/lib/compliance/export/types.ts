@@ -50,6 +50,7 @@ export interface EvidencePackageManifest {
   readonly product: {
     readonly name: 'OpsKnight';
     readonly version: string;
+    readonly buildId?: string;
   };
   readonly fingerprints: {
     readonly controlRegistry: string;
@@ -92,6 +93,8 @@ export interface ExportedControlSnapshot {
     readonly lifecycle: RequirementLifecycle;
     readonly relationship: FrameworkControlRelationship;
     readonly evidenceExpectation: string;
+    readonly rationale?: string;
+    readonly notes?: string;
   }>;
   readonly gaps: readonly string[];
   readonly implementation: string;

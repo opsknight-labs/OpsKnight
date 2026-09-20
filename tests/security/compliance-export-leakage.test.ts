@@ -49,6 +49,7 @@ describe('compliance export secret leakage prevention', () => {
     evaluations: [],
     frameworks: [],
     requirements: [],
+    mappings: [],
     controlEvidenceCounts: new Map(),
   };
 

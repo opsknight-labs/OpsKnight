@@ -25,7 +25,8 @@ export async function exportComplianceEvidencePackage(params: {
     controlIds,
     params.evidenceSelection,
     snapshotAt,
-    prisma
+    prisma,
+    snapshot.evaluations
   );
 
   const packageId = `pkg_${randomUUID()}`;
@@ -57,7 +58,10 @@ export async function previewComplianceEvidencePackage(params: {
 
   if (params.evidenceSelection.mode === 'SNAPSHOT') {
     const states = await prisma.complianceControlState.findMany({
-      where: { controlId: { in: controlIds } },
+      where: {
+        controlId: { in: controlIds },
+        evaluatedAt: { lte: snapshotAt },
+      },
       select: { latestEvaluationId: true },
     });
     const evalIds = states.map(s => s.latestEvaluationId).filter((id): id is string => Boolean(id));
@@ -66,6 +70,7 @@ export async function previewComplianceEvidencePackage(params: {
       evidenceCount = await prisma.complianceEvidence.count({
         where: {
           evaluationId: { in: evalIds },
+          observedAt: { lte: snapshotAt },
           collectedAt: { lte: snapshotAt },
         },
       });
@@ -73,11 +78,12 @@ export async function previewComplianceEvidencePackage(params: {
   } else {
     const fromDate = new Date(params.evidenceSelection.from);
     const toDate = new Date(params.evidenceSelection.to);
+    const effectiveTo = toDate.getTime() <= snapshotAt.getTime() ? toDate : snapshotAt;
 
     evidenceCount = await prisma.complianceEvidence.count({
       where: {
         controlId: { in: controlIds },
-        observedAt: { gte: fromDate, lte: toDate },
+        observedAt: { gte: fromDate, lte: effectiveTo },
         collectedAt: { lte: snapshotAt },
       },
     });

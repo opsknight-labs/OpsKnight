@@ -1,8 +1,14 @@
-import type { PrismaClient } from '@prisma/client';
+import type {
+  PrismaClient,
+  ComplianceEvaluationStatus,
+  ComplianceControlState,
+} from '@prisma/client';
 import prismaClient from '../../prisma';
 import type { ControlFinding } from '../types';
 import { resolveComplianceRuntimeState } from '../state';
 import { getComplianceEvaluator } from '../evaluators';
+import { resolveRequirementLifecycle } from '../framework-mappings/lifecycle';
+import type { FrameworkControlMapping } from '../framework-mappings/types';
 import type {
   ExportedControlSnapshot,
   ExportedEvaluationSnapshot,
@@ -17,6 +23,7 @@ export interface AuditSnapshotData {
   readonly evaluations: readonly ExportedEvaluationSnapshot[];
   readonly frameworks: readonly ExportedFrameworkDefinition[];
   readonly requirements: readonly ExportedFrameworkRequirement[];
+  readonly mappings: readonly FrameworkControlMapping[];
   readonly controlEvidenceCounts: ReadonlyMap<string, number>;
 }
 
@@ -34,25 +41,89 @@ export async function buildAuditSnapshot(
   });
   const stateByControl = new Map(states.map(s => [s.controlId, s]));
 
-  // 2. Fetch latest evaluations referenced by states
-  const evaluationIds = states
-    .map(s => s.latestEvaluationId)
-    .filter((id): id is string => Boolean(id));
+  // 2. Identify controls where the stored state was evaluated after snapshotAt or is missing
+  const controlsNeedingHistoricalEval: string[] = [];
+  const validCurrentEvalIds: string[] = [];
 
+  for (const controlId of controlIds) {
+    const s = stateByControl.get(controlId);
+    if (!s || s.evaluatedAt > snapshotAt) {
+      controlsNeedingHistoricalEval.push(controlId);
+    } else if (s.latestEvaluationId) {
+      validCurrentEvalIds.push(s.latestEvaluationId);
+    }
+  }
+
+  // 3. For controls evaluated after snapshotAt (or missing state), query the latest evaluation at or before snapshotAt
+  type HistoricalEvalRecord = {
+    id: string;
+    controlId: string;
+    evaluatorId: string;
+    evaluatorVersion: string;
+    status: ComplianceEvaluationStatus;
+    evaluatedAt: Date;
+    validUntil: Date | null;
+    summary: string | null;
+    findings: unknown;
+  };
+
+  const historicalEvalByControl = new Map<string, HistoricalEvalRecord>();
+  if (controlsNeedingHistoricalEval.length > 0) {
+    for (const cid of controlsNeedingHistoricalEval) {
+      const histEval = await prisma.complianceEvaluation.findFirst({
+        where: {
+          controlId: cid,
+          evaluatedAt: { lte: snapshotAt },
+        },
+        orderBy: { evaluatedAt: 'desc' },
+      });
+      if (histEval) {
+        historicalEvalByControl.set(cid, histEval);
+      }
+    }
+  }
+
+  // 4. Fetch the evaluations needed for valid current states
   const evaluations =
-    evaluationIds.length > 0
+    validCurrentEvalIds.length > 0
       ? await prisma.complianceEvaluation.findMany({
-          where: { id: { in: evaluationIds } },
+          where: { id: { in: validCurrentEvalIds } },
         })
       : [];
-  const evalById = new Map(evaluations.map(e => [e.id, e]));
+  const evalById = new Map<string, HistoricalEvalRecord>(evaluations.map(e => [e.id, e]));
 
-  // 3. Build authoritative control snapshots
+  // Add historical evaluations to evalById
+  for (const histEval of historicalEvalByControl.values()) {
+    evalById.set(histEval.id, histEval);
+  }
+
+  // 5. Build authoritative control snapshots
   const exportedControls: ExportedControlSnapshot[] = [];
   const exportedEvaluations: ExportedEvaluationSnapshot[] = [];
 
   for (const control of scope.controls) {
-    const rawState = stateByControl.get(control.id);
+    let rawState: ComplianceControlState | null = null;
+
+    const currentState = stateByControl.get(control.id);
+    if (currentState && currentState.evaluatedAt <= snapshotAt) {
+      rawState = currentState;
+    } else {
+      const histEval = historicalEvalByControl.get(control.id);
+      if (histEval) {
+        rawState = {
+          controlId: control.id,
+          status: histEval.status,
+          latestEvaluationId: histEval.id,
+          evaluatorId: histEval.evaluatorId,
+          evaluatorVersion: histEval.evaluatorVersion,
+          evaluatedAt: histEval.evaluatedAt,
+          validUntil: histEval.validUntil,
+          summary: histEval.summary ?? '',
+          updatedAt: histEval.evaluatedAt,
+        };
+      }
+    }
+
     const runtimeState = resolveComplianceRuntimeState(control, rawState, snapshotAt);
 
     let resolvedCurrentState: ExportedControlSnapshot['resolvedCurrentState'];
@@ -62,7 +133,7 @@ export async function buildAuditSnapshot(
 
     if (control.assessmentMode === 'RUNTIME') {
       if (!runtimeState) {
-        resolvedCurrentState = 'ACTION_REQUIRED';
+        resolvedCurrentState = 'UNVERIFIED';
         summary = 'Runtime control not yet evaluated; evaluation required.';
       } else {
         resolvedCurrentState = runtimeState.status;
@@ -71,8 +142,14 @@ export async function buildAuditSnapshot(
         summary = runtimeState.summary;
       }
     } else {
-      resolvedCurrentState = (control.catalogStatus ??
-        control.status) as ExportedControlSnapshot['resolvedCurrentState'];
+      // Non-runtime (catalog / repository) - normalize status exactly like PR4
+      const catalogStatus = control.catalogStatus ?? control.status;
+      resolvedCurrentState =
+        catalogStatus === 'IMPLEMENTED'
+          ? 'IMPLEMENTED'
+          : catalogStatus === 'PARTIAL'
+            ? 'PARTIAL'
+            : 'ACTION_REQUIRED';
       summary = control.description;
     }
 
@@ -83,7 +160,7 @@ export async function buildAuditSnapshot(
         }
       : null;
 
-    // Associated framework mappings for this control
+    // Associated framework mappings for this control with snapshot-resolved lifecycle
     const controlMappings = scope.mappings
       .filter(m => m.controlId === control.id)
       .map(m => {
@@ -92,14 +169,16 @@ export async function buildAuditSnapshot(
           framework: m.framework,
           requirementId: m.requirementId,
           reference: req?.reference ?? m.requirementId,
-          lifecycle: req?.lifecycle ?? 'ACTIVE',
+          lifecycle: req ? resolveRequirementLifecycle(req, snapshotAt) : 'ACTIVE',
           relationship: m.relationship,
           evidenceExpectation: m.evidenceExpectation,
+          rationale: m.rationale,
+          notes: m.notes,
         };
       })
       .sort((a, b) => a.requirementId.localeCompare(b.requirementId));
 
-    // If an evaluation exists, export evaluation details
+    // If an evaluation exists at or before snapshotAt, export evaluation details
     if (rawState?.latestEvaluationId) {
       const evaluation = evalById.get(rawState.latestEvaluationId);
       if (evaluation) {
@@ -137,7 +216,7 @@ export async function buildAuditSnapshot(
     });
   }
 
-  // 4. Build framework definitions
+  // 6. Build framework definitions
   const exportedFrameworks: ExportedFrameworkDefinition[] = scope.frameworks.map(fw => ({
     id: fw.id,
     title: fw.title,
@@ -149,7 +228,7 @@ export async function buildAuditSnapshot(
     notes: fw.notes ?? null,
   }));
 
-  // 5. Build framework requirements
+  // 7. Build framework requirements with snapshot-resolved lifecycle
   const exportedRequirements: ExportedFrameworkRequirement[] = scope.requirements.map(req => {
     const mapped = scope.mappings
       .filter(m => m.requirementId === req.id)
@@ -166,7 +245,7 @@ export async function buildAuditSnapshot(
       title: req.title,
       summary: req.summary,
       sourceUrl: req.sourceUrl,
-      lifecycle: req.lifecycle,
+      lifecycle: resolveRequirementLifecycle(req, snapshotAt),
       applicability: req.applicability,
       effectiveFrom: req.effectiveFrom ?? null,
       effectiveUntil: req.effectiveUntil ?? null,
@@ -181,6 +260,7 @@ export async function buildAuditSnapshot(
     evaluations: exportedEvaluations,
     frameworks: exportedFrameworks,
     requirements: exportedRequirements,
+    mappings: scope.mappings,
     controlEvidenceCounts: new Map(),
   };
 }
