@@ -106,9 +106,9 @@ const ChartWidget = memo(function ChartWidget({
             data={chartData.map((d, i) => ({
               key: String(i),
               label: d.label || '',
-              count: d.value || 0,
+              count: d.value ?? 0,
             }))}
-            maxValue={Math.max(...chartData.map(d => d.value || 0)) * 1.1}
+            maxValue={Math.max(...chartData.map(d => d.value ?? 0)) * 1.1}
             height={height}
             showValues={chartData.length <= 7}
             showLabels={true}
@@ -118,7 +118,7 @@ const ChartWidget = memo(function ChartWidget({
           <LineChart
             data={chartData.map(d => ({
               label: d.label || '',
-              value: d.value || 0,
+              value: d.value,
             }))}
             lines={[{ key: 'value', color, label: metricKey }]}
             height={height}
@@ -133,10 +133,10 @@ const ChartWidget = memo(function ChartWidget({
 export default ChartWidget;
 
 // Extract chart data from metrics based on metricKey
-function getChartData(
+export function getChartData(
   metricKey: string,
   metrics: SerializedSLAMetrics
-): Array<{ label: string; value: number }> {
+): Array<{ label: string; value: number | null }> {
   switch (metricKey) {
     case 'incidentTrend':
     case 'trendSeries':
@@ -171,20 +171,20 @@ function getChartData(
       // Create trend data from trendSeries
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
-        value: d.mtta || 0,
+        value: d.mtta,
       }));
 
     case 'resolutionTimesTrend':
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
-        value: d.mttr || 0,
+        value: d.mttr,
       }));
 
     case 'slaComplianceTrend':
     case 'ackComplianceTrend':
       return (metrics.trendSeries || []).map(d => ({
         label: d.label,
-        value: d.ackCompliance || 0,
+        value: d.ackCompliance,
       }));
 
     case 'topServicesChart':
@@ -212,12 +212,15 @@ function getChartData(
 }
 
 // Calculate trend percentage
-function calculateTrend(data: Array<{ value: number }>): number | null {
-  if (data.length < 2) return null;
+export function calculateTrend(data: Array<{ value: number | null }>): number | null {
+  const evaluable = data.filter(
+    (entry): entry is { value: number } => typeof entry.value === 'number'
+  );
+  if (evaluable.length < 2) return null;
 
-  const midpoint = Math.floor(data.length / 2);
-  const firstHalf = data.slice(0, midpoint);
-  const secondHalf = data.slice(midpoint);
+  const midpoint = Math.floor(evaluable.length / 2);
+  const firstHalf = evaluable.slice(0, midpoint);
+  const secondHalf = evaluable.slice(midpoint);
 
   const firstAvg = firstHalf.reduce((sum, d) => sum + d.value, 0) / firstHalf.length;
   const secondAvg = secondHalf.reduce((sum, d) => sum + d.value, 0) / secondHalf.length;

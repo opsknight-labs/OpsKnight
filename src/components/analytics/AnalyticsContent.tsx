@@ -251,14 +251,10 @@ export default async function AnalyticsContent({
     metrics.trendSeries.map(entry => entry.count),
     smoothingWindow
   );
-  const mttaSeries = smoothSeries(
-    metrics.trendSeries.map(entry => entry.mtta),
-    smoothingWindow
-  );
-  const mttrSeries = smoothSeries(
-    metrics.trendSeries.map(entry => entry.mttr),
-    smoothingWindow
-  );
+  const mttaSeries = metrics.trendSeries.map(entry => entry.mtta);
+  const mttrSeries = metrics.trendSeries.map(entry => entry.mttr);
+  const mttaSparkline = mttaSeries.filter((value): value is number => value !== null);
+  const mttrSparkline = mttrSeries.filter((value): value is number => value !== null);
   const ackComplianceSeries = metrics.trendSeries.map(entry => entry.ackCompliance);
   const ackComplianceSparkline = ackComplianceSeries.filter(
     (value): value is number => value !== null
@@ -442,8 +438,11 @@ export default async function AnalyticsContent({
         >
           <div className="analytics-kpi-meta">
             <svg className="analytics-sparkline analytics-sparkline-amber" viewBox="0 0 72 24">
-              <path className="analytics-sparkline-area" d={buildSparklineAreaPath(mttaSeries)} />
-              <path className="analytics-sparkline-line" d={buildSparklinePath(mttaSeries)} />
+              <path
+                className="analytics-sparkline-area"
+                d={buildSparklineAreaPath(mttaSparkline)}
+              />
+              <path className="analytics-sparkline-line" d={buildSparklinePath(mttaSparkline)} />
             </svg>
           </div>
         </MetricCard>
@@ -464,8 +463,11 @@ export default async function AnalyticsContent({
         >
           <div className="analytics-kpi-meta">
             <svg className="analytics-sparkline analytics-sparkline-emerald" viewBox="0 0 72 24">
-              <path className="analytics-sparkline-area" d={buildSparklineAreaPath(mttrSeries)} />
-              <path className="analytics-sparkline-line" d={buildSparklinePath(mttrSeries)} />
+              <path
+                className="analytics-sparkline-area"
+                d={buildSparklineAreaPath(mttrSparkline)}
+              />
+              <path className="analytics-sparkline-line" d={buildSparklinePath(mttrSparkline)} />
             </svg>
           </div>
         </MetricCard>
@@ -493,8 +495,11 @@ export default async function AnalyticsContent({
               viewBox="0 0 72 24"
               aria-hidden="true"
             >
-              <path className="analytics-sparkline-area" d={buildSparklineAreaPath(mttrSeries)} />
-              <path className="analytics-sparkline-line" d={buildSparklinePath(mttrSeries)} />
+              <path
+                className="analytics-sparkline-area"
+                d={buildSparklineAreaPath(mttrSparkline)}
+              />
+              <path className="analytics-sparkline-line" d={buildSparklinePath(mttrSparkline)} />
             </svg>
           </div>
         </MetricCard>

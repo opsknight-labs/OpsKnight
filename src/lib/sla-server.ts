@@ -1951,8 +1951,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       id: s.id,
       name: s.name,
       count: s.count,
-      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : 0,
-      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
+      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : null,
+      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : null,
       slaBreaches: s.ackBreaches + s.resolveBreaches, // FIX: Include both types
       status:
         s.slaEvaluatedCount === 0 && s.slaUnknownCount > 0
@@ -2414,8 +2414,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       key: s.key,
       label: s.label,
       count: s.count,
-      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : 0,
-      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
+      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : null,
+      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : null,
       ackRate: s.count ? (s.ackCount / s.count) * 100 : 0,
       resolveRate: s.count ? (s.resolveCount / s.count) * 100 : 0,
       resolveCount: s.resolveCount,

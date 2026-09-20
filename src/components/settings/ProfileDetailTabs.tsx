@@ -120,7 +120,7 @@ export default function ProfileDetailTabs({
   const totalSchedules = layerAssignments.length;
   const totalTeamsAndSchedules = totalTeams + totalSchedules;
 
-  const complianceVal = slaMetrics?.resolveCompliance ?? slaMetrics?.ackCompliance ?? 100;
+  const complianceVal = slaMetrics?.resolveCompliance ?? slaMetrics?.ackCompliance ?? null;
 
   const tabItems = [
     {
@@ -190,7 +190,9 @@ export default function ProfileDetailTabs({
                 variant="outline"
                 className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs font-semibold self-start sm:self-auto"
               >
-                {complianceVal.toFixed(1)}% Compliance (30d)
+                {complianceVal === null
+                  ? 'No evaluable SLA data (30d)'
+                  : `${complianceVal.toFixed(1)}% Compliance (30d)`}
               </Badge>
             </div>
           </CardHeader>

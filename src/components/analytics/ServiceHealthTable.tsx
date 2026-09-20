@@ -61,8 +61,10 @@ export default function ServiceHealthTable({
     const severity = { Critical: 3, Degraded: 2, Healthy: 1, Unknown: 0 };
 
     result.sort((a, b) => {
-      let valA: number | string = a[activeSort.field as keyof typeof a];
-      let valB: number | string = b[activeSort.field as keyof typeof b];
+      const rawA = a[activeSort.field as keyof typeof a];
+      const rawB = b[activeSort.field as keyof typeof b];
+      let valA: number | string = rawA ?? Number.POSITIVE_INFINITY;
+      let valB: number | string = rawB ?? Number.POSITIVE_INFINITY;
 
       if (activeSort.field === 'status') {
         valA = severity[a.status as keyof typeof severity] || 0;
@@ -142,11 +144,15 @@ export default function ServiceHealthTable({
               </div>
               <div>
                 <span>MTTA</span>
-                <strong>{formatTimeMinutesMs(service.mtta * 60000)}</strong>
+                <strong>
+                  {service.mtta === null ? 'No data' : formatTimeMinutesMs(service.mtta * 60000)}
+                </strong>
               </div>
               <div>
                 <span>MTTR</span>
-                <strong>{formatTimeMinutesMs(service.mttr * 60000)}</strong>
+                <strong>
+                  {service.mttr === null ? 'No data' : formatTimeMinutesMs(service.mttr * 60000)}
+                </strong>
               </div>
               <div>
                 <span>SLA breaches</span>
