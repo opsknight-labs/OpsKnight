@@ -10,6 +10,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/shadcn/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/shadcn/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/shadcn/command';
+import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import {
   AlertCircle,
@@ -22,6 +32,8 @@ import {
   ArrowUpDown,
   Activity,
   X,
+  Check,
+  ChevronsUpDown,
 } from 'lucide-react';
 import DashboardTimeRange from '@/components/DashboardTimeRange';
 import { cn } from '@/lib/utils';
@@ -69,6 +81,7 @@ export default function DashboardIncidentFilters({
 
   // Local state for search to prevent re-rendering server components on every keystroke
   const [searchValue, setSearchValue] = useState(currentSearch);
+  const [serviceOpen, setServiceOpen] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Synchronize local searchValue when currentSearch changes externally (e.g. clear filters or browser nav)
@@ -336,25 +349,77 @@ export default function DashboardIncidentFilters({
             </div>
 
             {/* Service */}
-            <Select
-              value={currentService}
-              onValueChange={val => updateParams({ service: val === 'all' ? 'all' : val })}
-            >
-              <SelectTrigger className="h-9 text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs">
-                <div className="flex items-center gap-1.5">
-                  <Briefcase className="h-3.5 w-3.5 text-blue-500" />
-                  <SelectValue placeholder="Service" />
-                </div>
-              </SelectTrigger>
-              <SelectContent className="rounded-lg">
-                <SelectItem value="all">All services</SelectItem>
-                {services.map(service => (
-                  <SelectItem key={service.id} value={service.id}>
-                    {service.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={serviceOpen} onOpenChange={setServiceOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={serviceOpen}
+                  aria-label="Filter by service"
+                  className="h-9 w-full justify-between font-normal text-xs bg-white border-border hover:border-slate-300 focus:border-zinc-400 rounded-lg shadow-2xs px-2.5"
+                >
+                  <div className="flex items-center gap-1.5 truncate min-w-0">
+                    <Briefcase className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                    <span className="truncate text-slate-700 dark:text-slate-200">
+                      {currentService && currentService !== 'all'
+                        ? services.find(s => s.id === currentService)?.name || 'Service'
+                        : 'All services'}
+                    </span>
+                  </div>
+                  <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 text-slate-400 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0 rounded-lg shadow-lg"
+                align="start"
+              >
+                <Command className="rounded-lg">
+                  <CommandInput placeholder="Search services..." className="h-8 text-xs" />
+                  <CommandList className="max-h-[220px]">
+                    <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">
+                      No services found.
+                    </CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="All services all"
+                        onSelect={() => {
+                          updateParams({ service: 'all' });
+                          setServiceOpen(false);
+                        }}
+                        className="cursor-pointer flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Briefcase className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                          <span>All services</span>
+                        </div>
+                        {(!currentService || currentService === 'all') && (
+                          <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
+                        )}
+                      </CommandItem>
+                      {services.map(service => (
+                        <CommandItem
+                          key={service.id}
+                          value={`${service.name} ${service.id}`}
+                          onSelect={() => {
+                            updateParams({ service: service.id });
+                            setServiceOpen(false);
+                          }}
+                          className="cursor-pointer flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-1.5 truncate min-w-0">
+                            <Briefcase className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <span className="truncate">{service.name}</span>
+                          </div>
+                          {service.id === currentService && (
+                            <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
             {/* Status */}
             <Select value={currentStatus} onValueChange={val => updateParams({ status: val })}>

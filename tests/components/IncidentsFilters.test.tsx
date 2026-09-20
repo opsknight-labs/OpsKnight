@@ -53,4 +53,67 @@ describe('IncidentsFilters', () => {
 
     expect(push).toHaveBeenCalledWith('/incidents');
   });
+
+  it('renders service combobox with selected service or All services', () => {
+    const services = [
+      { id: 'svc-1', name: 'Auth Service' },
+      { id: 'svc-2', name: 'Billing API' },
+    ];
+
+    const { rerender } = render(
+      <IncidentsFilters
+        currentFilter="all_open"
+        currentPriority="all"
+        currentUrgency="all"
+        currentSort="newest"
+        currentSearch=""
+        services={services}
+      />
+    );
+
+    const trigger = screen.getByRole('combobox', { name: /filter by service/i });
+    expect(trigger).toHaveTextContent('All services');
+
+    rerender(
+      <IncidentsFilters
+        currentFilter="all_open"
+        currentPriority="all"
+        currentUrgency="all"
+        currentSort="newest"
+        currentSearch=""
+        currentServiceId="svc-2"
+        services={services}
+      />
+    );
+
+    expect(screen.getByRole('combobox', { name: /filter by service/i })).toHaveTextContent(
+      'Billing API'
+    );
+  });
+
+  it('selects service from combobox and updates search params', () => {
+    const services = [
+      { id: 'svc-1', name: 'Auth Service' },
+      { id: 'svc-2', name: 'Billing API' },
+    ];
+
+    render(
+      <IncidentsFilters
+        currentFilter="all_open"
+        currentPriority="P1"
+        currentUrgency="all"
+        currentSort="newest"
+        currentSearch=""
+        services={services}
+      />
+    );
+
+    const trigger = screen.getByRole('combobox', { name: /filter by service/i });
+    fireEvent.click(trigger);
+
+    const option = screen.getByText('Auth Service');
+    fireEvent.click(option);
+
+    expect(push).toHaveBeenCalledWith('/incidents?priority=P1&serviceId=svc-1');
+  });
 });
