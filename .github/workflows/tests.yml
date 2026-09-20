@@ -99,6 +99,21 @@ jobs:
           VITEST_USE_REAL_DB: '1'
         run: npm run test:ci:db
 
+      - name: Phase 4 compliance certification suite
+        env:
+          VITEST_USE_REAL_DB: '1'
+        run: |
+          mkdir -p reports
+          npm run test:ci:certification
+          npx ts-node --project tsconfig.script.json scripts/certification/generate-report.ts
+
+      - name: Upload Phase 4 certification report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-certification-report
+          path: artifacts/phase4-certification/
+
       - name: Upload test report artifact (JUnit)
         if: always()
         uses: actions/upload-artifact@v4
