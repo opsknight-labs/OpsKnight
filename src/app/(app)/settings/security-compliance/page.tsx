@@ -9,7 +9,14 @@ import {
 import { getComplianceControlCenterData } from '@/lib/compliance/control-center';
 import { ComplianceControlCenter } from '@/components/settings/compliance/control-center';
 
-const VALID_TABS = ['overview', 'controls', 'frameworks', 'evidence', 'operations'] as const;
+const VALID_TABS = [
+  'overview',
+  'controls',
+  'drift',
+  'frameworks',
+  'evidence',
+  'operations',
+] as const;
 type ValidTab = (typeof VALID_TABS)[number];
 
 export default async function SecurityCompliancePage({
@@ -60,6 +67,7 @@ export default async function SecurityCompliancePage({
     canExport:
       permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EXPORT) &&
       permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVIDENCE_READ),
+    canManageDrift: permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_DRIFT_MANAGE),
     canReadEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_READ),
     canManageEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_MANAGE),
     canReadPrivacy: permissions.capabilities.includes(CAPABILITIES.PRIVACY_READ),

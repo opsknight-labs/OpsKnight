@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { scheduleJob, claimPendingJobs, markJobFailed, processJob } from '@/lib/jobs/queue';
 import { testPrisma, resetDatabase } from '../helpers/test-db';
 
@@ -6,8 +6,19 @@ const describeIfRealDB =
   process.env.VITEST_USE_REAL_DB === '1' || process.env.CI ? describe : describe.skip;
 
 describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
+  const originalComplianceMonitoringEnabled = process.env.COMPLIANCE_MONITORING_ENABLED;
+
   beforeEach(async () => {
+    process.env.COMPLIANCE_MONITORING_ENABLED = 'false';
     await resetDatabase();
+  });
+
+  afterAll(() => {
+    if (originalComplianceMonitoringEnabled !== undefined) {
+      process.env.COMPLIANCE_MONITORING_ENABLED = originalComplianceMonitoringEnabled;
+    } else {
+      delete process.env.COMPLIANCE_MONITORING_ENABLED;
+    }
   });
 
   describe('Atomic Job Claiming (FOR UPDATE SKIP LOCKED)', () => {
@@ -158,6 +169,46 @@ describeIfRealDB('Job Queue Resilience Tests', { timeout: 30000 }, () => {
 
       const updatedJob = await testPrisma.backgroundJob.findUnique({ where: { id: jobId } });
       expect(updatedJob?.status).toBe('CANCELLED');
+    });
+  });
+
+  describe('Compliance Monitoring Bootstrap and Queue Claiming Isolation', () => {
+    it('proves scheduler bootstrap + concurrent queue claiming does not contaminate unrelated job claims', async () => {
+      // Explicitly enable compliance monitoring for this isolation test
+      process.env.COMPLIANCE_MONITORING_ENABLED = 'true';
+
+      // 1. Create 5 pending SCHEDULED_TASK jobs
+      const scheduledIds: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        const id = await scheduleJob('SCHEDULED_TASK', new Date(), { task: `isolated-task-${i}` });
+        scheduledIds.push(id);
+      }
+
+      // 2. Simulate 3 concurrent workers claiming jobs
+      const workers = [claimPendingJobs(10), claimPendingJobs(10), claimPendingJobs(10)];
+      const results = await Promise.all(workers);
+
+      // Flatten claimed jobs
+      const claimedJobs = results.flat();
+      const claimedIds = new Set(claimedJobs.map(j => j.id));
+
+      // 3. Verify all 5 scheduled jobs were claimed exactly once without duplicates
+      for (const id of scheduledIds) {
+        expect(claimedIds.has(id)).toBe(true);
+      }
+
+      const scheduledTaskJobs = claimedJobs.filter(j => j.type === 'SCHEDULED_TASK');
+      expect(scheduledTaskJobs).toHaveLength(5);
+
+      // 4. Verify any auto-bootstrapped compliance sweep job is cleanly separated
+      const sweepJobs = claimedJobs.filter(j => j.type === 'COMPLIANCE_EVALUATION_SWEEP');
+      expect(sweepJobs.length).toBeLessThanOrEqual(1);
+
+      // 5. Verify no cross-contamination of payloads or job parameters
+      expect(claimedIds.size).toBe(claimedJobs.length);
+      for (const taskJob of scheduledTaskJobs) {
+        expect((taskJob.payload as { task?: string })?.task).toMatch(/^isolated-task-\d$/);
+      }
     });
   });
 });

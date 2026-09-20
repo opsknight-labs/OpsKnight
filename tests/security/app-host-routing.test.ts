@@ -553,9 +553,9 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
           'x-forwarded-proto': 'http',
         },
       });
-      expect(
-        getAuthoritativeRequestOrigin(reqTls, 'https://secure.example.com:8443')
-      ).toBe('https://secure.example.com:8443');
+      expect(getAuthoritativeRequestOrigin(reqTls, 'https://secure.example.com:8443')).toBe(
+        'https://secure.example.com:8443'
+      );
 
       // Default production behavior without insecure cookies flag preserves https on port 8443
       const reqTlsDefault = new NextRequest('https://secure.example.com:8443/login', {
@@ -578,6 +578,11 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
         },
       });
       expect(getAuthoritativeRequestOrigin(req)).toBe('http://www.opsknight.test:3100');
+
+      const headers = new Headers({
+        host: 'fresh.opsknight.test:3100',
+      });
+      expect(getAuthoritativeRequestOrigin(headers)).toBe('http://fresh.opsknight.test:3100');
     });
 
     it('getAuthoritativeRequestOrigin respects XFH/XFP when TRUST_PROXY_HEADERS is true', async () => {
@@ -647,12 +652,21 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
       const { getHostWithAliases } = await import('@/middleware');
 
       // Genuine apex domains get www pair in both directions
-      expect(getHostWithAliases('opssentinal.com')).toEqual(['opssentinal.com', 'www.opssentinal.com']);
-      expect(getHostWithAliases('www.opssentinal.com')).toEqual(['www.opssentinal.com', 'opssentinal.com']);
+      expect(getHostWithAliases('opssentinal.com')).toEqual([
+        'opssentinal.com',
+        'www.opssentinal.com',
+      ]);
+      expect(getHostWithAliases('www.opssentinal.com')).toEqual([
+        'www.opssentinal.com',
+        'opssentinal.com',
+      ]);
 
       // Complex ccTLDs (like .co.uk) are handled correctly via tldts
       expect(getHostWithAliases('example.co.uk')).toEqual(['example.co.uk', 'www.example.co.uk']);
-      expect(getHostWithAliases('www.example.co.uk')).toEqual(['www.example.co.uk', 'example.co.uk']);
+      expect(getHostWithAliases('www.example.co.uk')).toEqual([
+        'www.example.co.uk',
+        'example.co.uk',
+      ]);
 
       // Subdomains do NOT get paired in EITHER direction
       expect(getHostWithAliases('app.opsnite.com')).toEqual(['app.opsnite.com']);

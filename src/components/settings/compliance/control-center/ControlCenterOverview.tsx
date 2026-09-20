@@ -8,6 +8,7 @@ import { ShieldCheck, Layers, FileCheck2, RefreshCw, Info, Download } from 'luci
 import type { ComplianceControlCenterOverview } from '@/lib/compliance/control-center/types';
 import { AttentionRequiredList } from './AttentionRequiredList';
 import { SharedResponsibilityCard } from './SharedResponsibilityCard';
+import { MonitoringStatusCard, type MonitoringStatusData } from './MonitoringStatusCard';
 
 interface ControlCenterOverviewProps {
   readonly overview: ComplianceControlCenterOverview;
@@ -31,6 +32,28 @@ export function ControlCenterOverview({
   onNavigateToTab,
 }: ControlCenterOverviewProps) {
   const { runtime, evidence, frameworks, attention } = overview;
+  const [monitoringStatus, setMonitoringStatus] = React.useState<MonitoringStatusData | null>(null);
+
+  const fetchMonitoringStatus = React.useCallback(async () => {
+    try {
+      const res = await fetch('/api/compliance/monitoring');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) setMonitoringStatus(json.data);
+      }
+    } catch {
+      // Ignore background fetch error
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchMonitoringStatus();
+  }, [fetchMonitoringStatus]);
+
+  const handleSweepTriggered = () => {
+    fetchMonitoringStatus();
+    onEvaluate();
+  };
 
   return (
     <div className="space-y-6">
@@ -210,6 +233,13 @@ export function ControlCenterOverview({
           </CardContent>
         </Card>
       </div>
+
+      {/* Continuous Monitoring Status */}
+      <MonitoringStatusCard
+        status={monitoringStatus}
+        canEvaluate={canEvaluate}
+        onSweepTriggered={handleSweepTriggered}
+      />
 
       {/* Attention Required Section */}
       <AttentionRequiredList

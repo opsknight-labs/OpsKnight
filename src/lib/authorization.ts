@@ -48,6 +48,7 @@ export const CAPABILITIES = {
   COMPLIANCE_EVALUATE: 'compliance.evaluate',
   COMPLIANCE_EVIDENCE_READ: 'compliance.evidence.read',
   COMPLIANCE_EXPORT: 'compliance.export',
+  COMPLIANCE_DRIFT_MANAGE: 'compliance.drift.manage',
 } as const;
 
 export type Capability = (typeof CAPABILITIES)[keyof typeof CAPABILITIES];
