@@ -50,7 +50,7 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
     privateRooms: false,
     manageMembers: true,
     updateRoom: true,
-    archiveRoom: false,
+    archiveRoom: true,
     interactiveProjection: true,
     projectionUpdates: true,
     reconciliation: true,
@@ -139,6 +139,66 @@ export const microsoftTeamsWarRoomAdapter: WarRoomProviderAdapter = {
       },
     });
   },
+  archive: async warRoomId => {
+    const prisma = (await import('@/lib/prisma')).default;
+    const room = await prisma.incidentWarRoom.findUnique({
+      where: { id: warRoomId },
+      select: {
+        provider: true,
+        providerTenantId: true,
+        providerContainerId: true,
+        providerChannelId: true,
+      },
+    });
+    if (!room || room.provider !== 'MICROSOFT_TEAMS') {
+      return { ok: false as const, code: 'NOT_FOUND' as const, message: 'War room not found.' };
+    }
+    if (!room.providerTenantId || !room.providerContainerId || !room.providerChannelId) {
+      return {
+        ok: false as const,
+        code: 'NOT_FOUND' as const,
+        message: 'Teams channel identifiers missing.',
+      };
+    }
+
+    const { archiveChannel } = await import('@/lib/microsoft-teams/graph/channels');
+    const result = await archiveChannel({
+      tenantId: room.providerTenantId,
+      teamId: room.providerContainerId,
+      channelId: room.providerChannelId,
+    });
+
+    if (result.ok) {
+      return { ok: true as const, value: undefined };
+    }
+
+    if (result.code === 'TEAM_NOT_FOUND' || result.code === 'CHANNEL_NOT_FOUND') {
+      return { ok: false as const, code: 'NOT_FOUND' as const, message: result.message };
+    }
+    if (result.code === 'RATE_LIMITED') {
+      return {
+        ok: false as const,
+        code: 'RATE_LIMITED' as const,
+        retryAfterMs: result.retryAfterMs,
+        message: result.message,
+      };
+    }
+    if (result.code === 'MISSING_PERMISSION') {
+      return { ok: false as const, code: 'PERMISSION_DENIED' as const, message: result.message };
+    }
+    if (result.code === 'GRAPH_TOKEN_FAILED') {
+      return { ok: false as const, code: 'AUTH_FAILED' as const, message: result.message };
+    }
+    if (result.code === 'AMBIGUOUS_CREATE') {
+      return {
+        ok: false as const,
+        code: 'AMBIGUOUS_SIDE_EFFECT' as const,
+        message: result.message,
+      };
+    }
+
+    return { ok: false as const, code: 'TRANSIENT' as const, message: result.message };
+  },
   handleIncidentEvent,
-  // Teams has archiveRoom=false — engine treats CLOSED as terminal without external archive.
 };
+

@@ -12,6 +12,7 @@ type GraphOperation =
   | 'READ'
   | 'CREATE'
   | 'UPDATE'
+  | 'ARCHIVE'
   | 'MEMBER_ADD'
   | 'MEMBER_REMOVE'
   | 'MEMBER_UPDATE';
@@ -44,8 +45,11 @@ function failure(
   if (status === 404)
     return {
       ok: false,
-      code: 'TEAM_NOT_FOUND',
-      message: 'The configured Microsoft Team no longer exists or the app is not installed.',
+      code: operation === 'ARCHIVE' ? 'CHANNEL_NOT_FOUND' : 'TEAM_NOT_FOUND',
+      message:
+        operation === 'ARCHIVE'
+          ? 'The Microsoft Teams channel was not found.'
+          : 'The configured Microsoft Team no longer exists or the app is not installed.',
     };
   if (status === 409 && operation === 'MEMBER_ADD')
     return {
@@ -56,7 +60,10 @@ function failure(
   if (status >= 500)
     return {
       ok: false,
-      code: operation === 'CREATE' ? 'AMBIGUOUS_CREATE' : 'TRANSIENT_READ',
+      code:
+        operation === 'CREATE' || operation === 'ARCHIVE'
+          ? 'AMBIGUOUS_CREATE'
+          : 'TRANSIENT_READ',
       message: 'Microsoft Graph is temporarily unavailable.',
     };
   return {
@@ -280,4 +287,28 @@ export async function updateChannel(input: {
     'UPDATE'
   );
   return result.ok ? { ok: true, value: null } : result;
+}
+
+export async function archiveChannel(input: {
+  tenantId: string;
+  teamId: string;
+  channelId: string;
+}): Promise<WarRoomGraphResult<null>> {
+  const result = await microsoftTeamsGraphRequest(
+    input.tenantId,
+    `/teams/${encodeURIComponent(input.teamId)}/channels/${encodeURIComponent(input.channelId)}/archive`,
+    {
+      method: 'POST',
+      body: JSON.stringify({}),
+    },
+    'ARCHIVE'
+  );
+  if (!result.ok) {
+    // Idempotency: Microsoft Graph returns 400 Bad Request if the channel is already archived.
+    if (result.message.toLowerCase().includes('already archived')) {
+      return { ok: true, value: null };
+    }
+    return result;
+  }
+  return { ok: true, value: null };
 }
