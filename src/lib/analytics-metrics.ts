@@ -1,5 +1,5 @@
 import { effectiveElapsedMs } from './metrics/domain/sla-clock';
-import { resolveSlaTarget } from './metrics/domain/sla-target';
+import { resolveFrozenSlaTarget } from './metrics/domain/sla-target';
 
 export type StatusAgeEntry = { status: string; avgMs: number | null };
 
@@ -179,13 +179,15 @@ export function buildServiceSlaTable(
     priority?: string | null;
     slaAckTargetMs?: number | null;
     slaResolveTargetMs?: number | null;
+    slaTargetSource?: string | null;
+    slaTargetCapturedAt?: Date | null;
     slaPauses?: Array<{ startedAt: Date; endedAt: Date | null }>;
   }>,
   ackMap: Map<string, Date>,
-  serviceTargets: Map<string, { ackMinutes: number; resolveMinutes: number }>,
+  _serviceTargets: Map<string, { ackMinutes: number; resolveMinutes: number }>,
   serviceNameMap: Map<string, string>,
-  defaultAckMinutes: number = 15,
-  defaultResolveMinutes: number = 120,
+  _defaultAckMinutes: number = 15,
+  _defaultResolveMinutes: number = 120,
   limit: number = 8,
   now: Date = new Date()
 ): ServiceSlaEntry[] {
@@ -195,19 +197,13 @@ export function buildServiceSlaTable(
   >();
 
   for (const incident of incidents) {
-    const targets = serviceTargets.get(incident.serviceId);
-    const target = resolveSlaTarget({
-      incidentTargets: {
-        ackTargetMs: incident.slaAckTargetMs,
-        resolveTargetMs: incident.slaResolveTargetMs,
-      },
-      priority: incident.priority,
-      serviceTargets: targets,
-      globalDefaults: {
-        ackMinutes: defaultAckMinutes,
-        resolveMinutes: defaultResolveMinutes,
-      },
+    const target = resolveFrozenSlaTarget({
+      ackTargetMs: incident.slaAckTargetMs,
+      resolveTargetMs: incident.slaResolveTargetMs,
+      source: incident.slaTargetSource,
+      capturedAt: incident.slaTargetCapturedAt,
     });
+    if (!target) continue;
     const current = serviceSlaStats.get(incident.serviceId) || {
       ackMet: 0,
       ackTotal: 0,

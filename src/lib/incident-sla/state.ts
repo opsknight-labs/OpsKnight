@@ -15,6 +15,7 @@ import {
   getIncidentSlaWarningWindowMs,
   isValidIncidentSlaWarningPolicy,
 } from './warning-policy';
+import { validateCapturedIncidentSlaContract } from './contract';
 
 export type * from './types';
 
@@ -29,16 +30,8 @@ function isDuration(value: unknown): value is bigint | number {
 }
 
 function validationReason(input: IncidentSlaProjectionInput, now: Date): string | null {
-  if (!Number.isSafeInteger(input.slaAckTargetMs) || (input.slaAckTargetMs ?? 0) <= 0) {
-    return 'Missing or invalid captured ACK target';
-  }
-  if (!Number.isSafeInteger(input.slaResolveTargetMs) || (input.slaResolveTargetMs ?? 0) <= 0) {
-    return 'Missing or invalid captured resolution target';
-  }
-  if (typeof input.slaTargetSource !== 'string' || !input.slaTargetSource.trim()) {
-    return 'Missing or invalid captured target source';
-  }
-  if (!isDate(input.slaTargetCapturedAt)) return 'Missing or invalid target capture date';
+  const contractReason = validateCapturedIncidentSlaContract(input);
+  if (contractReason) return contractReason;
   if (!isDate(now)) return 'Invalid evaluation date';
   if (!isDate(input.createdAt)) return 'Invalid incident creation date';
   const dateValues: Array<[string, Date | null]> = [

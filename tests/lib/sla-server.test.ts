@@ -304,6 +304,10 @@ describe('calculateSLAMetrics trend series', () => {
         serviceId: 'service-1',
         acknowledgedAt: new Date('2026-01-01T01:10:00Z'),
         resolvedAt: new Date('2026-01-01T02:00:00Z'),
+        slaAckTargetMs: 15 * 60_000,
+        slaResolveTargetMs: 120 * 60_000,
+        slaTargetSource: 'SERVICE_DEFAULT',
+        slaTargetCapturedAt: new Date('2026-01-01T01:00:00Z'),
         service: { targetAckMinutes: 15, targetResolveMinutes: 120 },
       },
       {
@@ -316,6 +320,10 @@ describe('calculateSLAMetrics trend series', () => {
         serviceId: 'service-1',
         acknowledgedAt: new Date('2026-01-01T05:30:00Z'),
         resolvedAt: null,
+        slaAckTargetMs: 15 * 60_000,
+        slaResolveTargetMs: 120 * 60_000,
+        slaTargetSource: 'SERVICE_DEFAULT',
+        slaTargetCapturedAt: new Date('2026-01-01T05:00:00Z'),
         service: { targetAckMinutes: 15, targetResolveMinutes: 120 },
       },
     ];
@@ -361,6 +369,109 @@ describe('calculateSLAMetrics trend series', () => {
     expect(hourFive?.resolveRate).toBe(0);
     expect(hourFive?.ackCompliance).toBe(0);
     expect(hourFive?.escalationRate).toBe(100);
+  });
+
+  it('keeps invalid-contract incidents visible while excluding them from SLA health', async () => {
+    const createdAt = new Date('2026-01-01T06:00:00Z');
+    const invalidIncident = {
+      id: 'inc-invalid',
+      title: 'Invalid SLA provenance',
+      createdAt,
+      updatedAt: new Date('2026-01-01T06:05:00Z'),
+      status: 'OPEN',
+      urgency: 'HIGH',
+      priority: 'P1',
+      assigneeId: null,
+      serviceId: 'service-unknown',
+      acknowledgedAt: new Date('2026-01-01T06:05:00Z'),
+      resolvedAt: null,
+      resolutionKind: null,
+      slaAckTargetMs: 15 * 60_000,
+      slaResolveTargetMs: 120 * 60_000,
+      slaTargetSource: null,
+      slaTargetCapturedAt: null,
+      slaPausedMs: 0,
+      slaPauseStartedAt: null,
+      slaAckElapsedMs: null,
+      slaResolveElapsedMs: null,
+      slaPauses: [],
+      service: {
+        id: 'service-unknown',
+        name: 'Unknown Contract Service',
+        region: null,
+        targetAckMinutes: 15,
+        targetResolveMinutes: 120,
+      },
+    };
+    const breachedIncident = {
+      ...invalidIncident,
+      id: 'inc-breached-1',
+      title: 'Known SLA breach',
+      createdAt: new Date('2026-01-01T07:00:00Z'),
+      updatedAt: new Date('2026-01-01T07:30:00Z'),
+      acknowledgedAt: new Date('2026-01-01T07:30:00Z'),
+      serviceId: 'service-1',
+      slaTargetSource: 'SERVICE_DEFAULT',
+      slaTargetCapturedAt: new Date('2026-01-01T07:00:00Z'),
+      service: {
+        ...invalidIncident.service,
+        id: 'service-1',
+        name: 'Critical Service',
+      },
+    };
+    const invalidClockIncident = {
+      ...breachedIncident,
+      id: 'inc-invalid-clock',
+      title: 'Invalid SLA clock',
+      slaPausedMs: -1,
+    };
+    const breachedIncidents = [1, 2, 3].map(index => ({
+      ...breachedIncident,
+      id: `inc-breached-${index}`,
+    }));
+    const mixedUnknownIncident = {
+      ...invalidIncident,
+      id: 'inc-mixed-unknown',
+      serviceId: 'service-1',
+      service: breachedIncident.service,
+    };
+    setupBaseMocks({
+      activeIncidents: [invalidClockIncident],
+      recentIncidents: [invalidIncident, mixedUnknownIncident, ...breachedIncidents],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+
+    const metrics = await calculateSLAMetrics({
+      windowDays: 1,
+      userTimeZone: 'UTC',
+      includeActiveIncidents: true,
+    });
+
+    const hour = metrics.trendSeries.find(entry => entry.key === toHourKey(createdAt));
+    expect(hour?.ackRate).toBe(100);
+    expect(hour?.ackCompliance).toBeNull();
+    expect(metrics.serviceMetrics.find(service => service.id === 'service-1')).toMatchObject({
+      status: 'Critical',
+      slaEvaluatedCount: 3,
+      slaUnknownCount: 1,
+    });
+    expect(metrics.serviceMetrics.find(service => service.id === 'service-unknown')).toMatchObject({
+      status: 'Unknown',
+      slaEvaluatedCount: 0,
+      slaUnknownCount: 1,
+    });
+    expect(metrics.activeIncidentSummaries).toEqual([
+      expect.objectContaining({
+        id: 'inc-invalid-clock',
+        slaState: 'INVALID',
+        targetAckMinutes: null,
+        targetResolveMinutes: null,
+        slaAckDeadline: null,
+        slaResolveDeadline: null,
+      }),
+    ]);
   });
 
   it('builds daily trend series for multi-day windows with new fields', async () => {

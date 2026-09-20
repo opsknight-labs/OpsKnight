@@ -43,9 +43,10 @@ export default function ServiceHealthTable({
         if (s.status === 'Healthy') acc.healthy += 1;
         else if (s.status === 'Degraded') acc.degraded += 1;
         else if (s.status === 'Critical') acc.critical += 1;
+        else if (s.status === 'Unknown') acc.unknown += 1;
         return acc;
       },
-      { healthy: 0, degraded: 0, critical: 0 }
+      { healthy: 0, degraded: 0, critical: 0, unknown: 0 }
     );
   }, [services]);
 
@@ -106,6 +107,12 @@ export default function ServiceHealthTable({
           >
             <XCircle className="w-3.5 h-3.5" /> Critical <strong>{counts.critical}</strong>
           </button>
+          <button
+            className={`service-health-filter ${statusFilter === 'Unknown' ? 'is-active' : ''}`}
+            onClick={() => setStatusFilter(statusFilter === 'Unknown' ? null : 'Unknown')}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" /> Unknown <strong>{counts.unknown}</strong>
+          </button>
         </div>
         <div className="service-health-sort">
           <span>Sort</span>
@@ -144,6 +151,14 @@ export default function ServiceHealthTable({
               <div>
                 <span>SLA breaches</span>
                 <strong>{service.slaBreaches.toLocaleString()}</strong>
+              </div>
+              <div>
+                <span>SLA evaluated</span>
+                <strong>{service.slaEvaluatedCount.toLocaleString()}</strong>
+              </div>
+              <div>
+                <span>SLA unknown</span>
+                <strong>{service.slaUnknownCount.toLocaleString()}</strong>
               </div>
             </div>
           </article>

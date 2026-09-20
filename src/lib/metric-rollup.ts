@@ -8,7 +8,7 @@ import {
 } from './business-hours';
 import { incidentEventWhereFor } from './incident-event-classifier';
 import { acquireAdvisoryLock, LOCK_KEYS } from './db-locks';
-import { resolveSlaTarget } from './metrics/domain/sla-target';
+import { resolveFrozenSlaTarget } from './metrics/domain/sla-target';
 import { capturedOrEffectiveElapsedMs, effectiveElapsedMs } from './metrics/domain/sla-clock';
 
 /**
@@ -166,6 +166,8 @@ export async function generateDailyRollup(
             slaResolveElapsedMs: true,
             slaAckTargetMs: true,
             slaResolveTargetMs: true,
+            slaTargetSource: true,
+            slaTargetCapturedAt: true,
             slaPauses: { select: { startedAt: true, endedAt: true } },
             serviceId: true,
             service: {
@@ -313,16 +315,11 @@ export async function generateDailyRollup(
 
           const resolvedTime =
             incident.resolvedAt ?? (incident.status === 'RESOLVED' ? incident.updatedAt : null);
-          const target = resolveSlaTarget({
-            incidentTargets: {
-              ackTargetMs: incident.slaAckTargetMs,
-              resolveTargetMs: incident.slaResolveTargetMs,
-            },
-            priority: incident.priority,
-            serviceTargets: {
-              ackMinutes: incident.service?.targetAckMinutes,
-              resolveMinutes: incident.service?.targetResolveMinutes,
-            },
+          const target = resolveFrozenSlaTarget({
+            ackTargetMs: incident.slaAckTargetMs,
+            resolveTargetMs: incident.slaResolveTargetMs,
+            source: incident.slaTargetSource,
+            capturedAt: incident.slaTargetCapturedAt,
           });
           const elapsedAt = (evaluationAt: Date) =>
             effectiveElapsedMs({
@@ -352,18 +349,18 @@ export async function generateDailyRollup(
               mttaSum += BigInt(mtta);
               mttaCount++;
 
-              const ackMet = mtta <= target.ackTargetMs;
-              if (ackMet) ackSlaMet++;
-              else ackSlaBreached++;
+              const ackMet = target ? mtta <= target.ackTargetMs : null;
+              if (ackMet === true) ackSlaMet++;
+              else if (ackMet === false) ackSlaBreached++;
 
               if (priorityRecord) {
                 priorityRecord.mttaSum += BigInt(mtta);
                 priorityRecord.mttaCount++;
-                if (ackMet) priorityRecord.ackSlaMet++;
-                else priorityRecord.ackSlaBreached++;
+                if (ackMet === true) priorityRecord.ackSlaMet++;
+                else if (ackMet === false) priorityRecord.ackSlaBreached++;
               }
             }
-          } else if (incident.status === 'RESOLVED' && resolvedTime) {
+          } else if (target && incident.status === 'RESOLVED' && resolvedTime) {
             const recoveryElapsed = resolveElapsedAt(resolvedTime);
             const timelySourceRecovery =
               incident.resolutionKind === 'SOURCE_RECOVERY' &&
@@ -386,7 +383,7 @@ export async function generateDailyRollup(
               }
               if (priorityRecord) priorityRecord.ackSlaBreached++;
             }
-          } else if (incident.status !== 'RESOLVED') {
+          } else if (target && incident.status !== 'RESOLVED') {
             const snapshotTime = Math.min(Date.now(), nextDayStart.getTime());
             const elapsed = elapsedAt(new Date(snapshotTime));
             if (elapsed > target.ackTargetMs) {
@@ -402,18 +399,18 @@ export async function generateDailyRollup(
               mttrSum += BigInt(mttr);
               mttrCount++;
 
-              const resolveMet = mttr <= target.resolveTargetMs;
-              if (resolveMet) resolveSlaMet++;
-              else resolveSlaBreached++;
+              const resolveMet = target ? mttr <= target.resolveTargetMs : null;
+              if (resolveMet === true) resolveSlaMet++;
+              else if (resolveMet === false) resolveSlaBreached++;
 
               if (priorityRecord) {
                 priorityRecord.mttrSum += BigInt(mttr);
                 priorityRecord.mttrCount++;
-                if (resolveMet) priorityRecord.resolveSlaMet++;
-                else priorityRecord.resolveSlaBreached++;
+                if (resolveMet === true) priorityRecord.resolveSlaMet++;
+                else if (resolveMet === false) priorityRecord.resolveSlaBreached++;
               }
             }
-          } else if (incident.status !== 'RESOLVED') {
+          } else if (target && incident.status !== 'RESOLVED') {
             const snapshotTime = Math.min(Date.now(), nextDayStart.getTime());
             const elapsed = elapsedAt(new Date(snapshotTime));
             if (elapsed > target.resolveTargetMs) {
@@ -681,7 +678,8 @@ export async function generateDailyRollup(
  * concurrency (default 5) so a tenant with 50+ services doesn't
  * serialize through a single Prisma connection. The global rollup
  * runs first so it's always present even if some per-service
- * rollups fail.
+ * rollups fail. The global row is the completeness marker and is removed after
+ * a partial run so gap detection retries the day instead of reporting it complete.
  *
  * Failure handling: each per-service rollup is wrapped so one
  * service failing doesn't abort the others. Aggregate success/failure
@@ -729,6 +727,17 @@ export async function generateAllDailyRollups(
     workers.push(runWorker());
   }
   await Promise.all(workers);
+
+  if (failures > 0) {
+    await prisma.incidentMetricRollup.deleteMany({
+      where: {
+        date: new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())),
+        granularity: 'daily',
+        serviceId: null,
+        teamId: null,
+      },
+    });
+  }
 
   const durationMs = Date.now() - started;
   logger.info('[MetricRollup] All daily rollups generated', {
@@ -778,34 +787,56 @@ export async function getRollupCoverage(): Promise<{
     )
   );
 
-  const [oldestRow, newestRow, globalCount, totalCount, globalDays] = await Promise.all([
-    prisma.incidentMetricRollup.findFirst({
-      where: { granularity: 'daily' },
-      orderBy: { date: 'asc' },
-      select: { date: true },
-    }),
-    prisma.incidentMetricRollup.findFirst({
-      where: { granularity: 'daily' },
-      orderBy: { date: 'desc' },
-      select: { date: true },
-    }),
-    prisma.incidentMetricRollup.count({
-      where: { granularity: 'daily', serviceId: null, teamId: null },
-    }),
-    prisma.incidentMetricRollup.count({ where: { granularity: 'daily' } }),
-    prisma.incidentMetricRollup.findMany({
-      where: {
-        granularity: 'daily',
-        serviceId: null,
-        teamId: null,
-        date: { gte: oldestNeeded, lte: yesterday },
-      },
-      select: { date: true },
-    }),
-  ]);
+  const [oldestRow, newestRow, globalCount, totalCount, globalDays, services, serviceRollups] =
+    await Promise.all([
+      prisma.incidentMetricRollup.findFirst({
+        where: { granularity: 'daily' },
+        orderBy: { date: 'asc' },
+        select: { date: true },
+      }),
+      prisma.incidentMetricRollup.findFirst({
+        where: { granularity: 'daily' },
+        orderBy: { date: 'desc' },
+        select: { date: true },
+      }),
+      prisma.incidentMetricRollup.count({
+        where: { granularity: 'daily', serviceId: null, teamId: null },
+      }),
+      prisma.incidentMetricRollup.count({ where: { granularity: 'daily' } }),
+      prisma.incidentMetricRollup.findMany({
+        where: {
+          granularity: 'daily',
+          serviceId: null,
+          teamId: null,
+          date: { gte: oldestNeeded, lte: yesterday },
+        },
+        select: { date: true },
+      }),
+      prisma.service.findMany({ select: { id: true, createdAt: true } }),
+      prisma.incidentMetricRollup.findMany({
+        where: {
+          granularity: 'daily',
+          serviceId: { not: null },
+          teamId: null,
+          date: { gte: oldestNeeded, lte: yesterday },
+        },
+        select: { date: true, serviceId: true },
+      }),
+    ]);
 
   const daysExpected = policy.metricsRetentionDays;
-  const daysCovered = globalDays.length;
+  const serviceRollupKeys = new Set(
+    serviceRollups.flatMap(row =>
+      row.serviceId ? [`${row.date.toISOString().split('T')[0]}:${row.serviceId}`] : []
+    )
+  );
+  const daysCovered = globalDays.filter(row => {
+    const dayKey = row.date.toISOString().split('T')[0];
+    const dayEnd = new Date(row.date.getTime() + 86_400_000);
+    return services
+      .filter(service => service.createdAt < dayEnd)
+      .every(service => serviceRollupKeys.has(`${dayKey}:${service.id}`));
+  }).length;
   const coveragePercent = daysExpected > 0 ? (daysCovered / daysExpected) * 100 : 0;
 
   return {

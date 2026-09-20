@@ -15,6 +15,8 @@ describe('service SLA table canonical semantics', () => {
           updatedAt: null,
           slaAckTargetMs: 15 * 60_000,
           slaResolveTargetMs: 120 * 60_000,
+          slaTargetSource: 'SERVICE_DEFAULT',
+          slaTargetCapturedAt: createdAt,
           slaPauses: [
             {
               startedAt: new Date('2026-01-01T00:05:00Z'),
@@ -47,6 +49,8 @@ describe('service SLA table canonical semantics', () => {
           updatedAt: new Date('2026-01-01T00:05:00Z'),
           slaAckTargetMs: 10 * 60_000,
           slaResolveTargetMs: 60 * 60_000,
+          slaTargetSource: 'SERVICE_DEFAULT',
+          slaTargetCapturedAt: new Date('2026-01-01T00:00:00Z'),
         },
         {
           id: 'active-overdue',
@@ -57,6 +61,8 @@ describe('service SLA table canonical semantics', () => {
           updatedAt: null,
           slaAckTargetMs: 10 * 60_000,
           slaResolveTargetMs: 30 * 60_000,
+          slaTargetSource: 'SERVICE_DEFAULT',
+          slaTargetCapturedAt: new Date('2026-01-01T00:00:00Z'),
         },
       ],
       new Map(),

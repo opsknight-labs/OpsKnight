@@ -250,6 +250,7 @@ describe('sla-breach-monitor', () => {
 
       await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
       expect(enqueueCentralNotification).not.toHaveBeenCalled();
+      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
 
     it('does not create an SLA Slack intent when the service Slack checkbox is unchecked', async () => {
@@ -294,6 +295,7 @@ describe('sla-breach-monitor', () => {
 
       await expect(checkSLABreaches()).resolves.toMatchObject({ warningCount: 1 });
       expect(enqueueCentralNotification).not.toHaveBeenCalled();
+      expect(prisma.incidentEvent.create).not.toHaveBeenCalled();
     });
 
     it('does not commit the SLA dedupe marker when intent materialization fails', async () => {
