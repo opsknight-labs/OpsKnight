@@ -12,16 +12,19 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Key, Clock, ArrowRight, Users, Lock } from 'lucide-react';
 import Link from 'next/link';
+import type { ControlCenterRetentionPolicyView } from '@/lib/compliance/control-center/types';
 import { EncryptionMigrationPanel } from '../EncryptionMigrationPanel';
 
 interface OperationsViewProps {
   readonly canManageEncryption?: boolean;
   readonly canReadEncryption?: boolean;
+  readonly retentionPolicy?: ControlCenterRetentionPolicyView;
 }
 
 export function OperationsView({
   canManageEncryption = false,
   canReadEncryption = true,
+  retentionPolicy,
 }: OperationsViewProps) {
   return (
     <div className="space-y-6">
@@ -119,52 +122,71 @@ export function OperationsView({
           <div>
             <h3 className="text-base font-bold text-foreground flex items-center gap-2">
               <Clock className="h-4 w-4 text-emerald-500" />
-              <span>Data Retention &amp; Disposal Policies</span>
+              <span>Data Retention &amp; Disposal Schedules</span>
             </h3>
             <p className="text-xs text-muted-foreground">
-              System retention periods for immutable audit trails, ephemeral sessions, and incident
-              history.
+              Deployment retention periods for audit event history, operational incident records,
+              and telemetry lifecycles.
             </p>
           </div>
+          <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs h-7">
+            <Link href="/settings/retention-policy">
+              <span>Configure Retention</span>
+              <ArrowRight className="h-3 w-3" />
+            </Link>
+          </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-border/80 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground">Security Audit Logs</span>
+              <span className="text-xs font-semibold text-foreground">Audit &amp; Event Logs</span>
               <Badge variant="outline" className="text-[10px] font-mono">
-                365 Days
+                {retentionPolicy?.logRetentionDays ?? 365} Days
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Cryptographic hashes, access events, and privilege transitions retained for mandatory
-              statutory compliance.
+              Audit events, authentication logs, and privilege transitions retained according to the
+              active deployment schedule.
             </p>
           </Card>
 
           <Card className="border-border/80 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground">Active User Sessions</span>
+              <span className="text-xs font-semibold text-foreground">Incident Records</span>
               <Badge variant="outline" className="text-[10px] font-mono">
-                30 Days Max
+                {retentionPolicy?.incidentRetentionDays ?? 730} Days
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              JWT session cookies enforce sliding expiration with token-version revocation upon
-              logout or credential reset.
+              Operational incident histories, response timelines, and postmortem documentation
+              retention window.
             </p>
           </Card>
 
           <Card className="border-border/80 p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-foreground">Ephemeral Run Logs</span>
+              <span className="text-xs font-semibold text-foreground">Alert Telemetry</span>
               <Badge variant="outline" className="text-[10px] font-mono">
-                14 Days
+                {retentionPolicy?.alertRetentionDays ?? 365} Days
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Transient worker execution payloads and intermediate step logs purged automatically
-              after terminal settlement.
+              Raw alert signals, metric rollups, and monitoring telemetry lifecycle retention
+              schedule.
+            </p>
+          </Card>
+
+          <Card className="border-border/80 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground">Privacy DSR Records</span>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {retentionPolicy?.privacyRequestRetentionDays ?? 730} Days
+              </Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Completed data subject erasure and export request lifecycle receipts and fulfillment
+              records.
             </p>
           </Card>
         </div>

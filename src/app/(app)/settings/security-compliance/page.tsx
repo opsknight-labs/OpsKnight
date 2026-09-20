@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { CAPABILITIES } from '@/lib/authorization';
-import { frameworks } from '@/lib/compliance/frameworks';
 import { getUserPermissions } from '@/lib/rbac';
-import { getFrameworkSummaryView } from '@/lib/compliance/framework-mappings';
+import {
+  COMPLIANCE_FRAMEWORK_DEFINITIONS,
+  getFrameworkSummaryView,
+} from '@/lib/compliance/framework-mappings';
 import { getComplianceControlCenterData } from '@/lib/compliance/control-center';
 import { ComplianceControlCenter } from '@/components/settings/compliance/control-center';
 
@@ -30,14 +32,14 @@ export default async function SecurityCompliancePage({
 
   const [controlCenterData] = await Promise.all([getComplianceControlCenterData({ prisma, now })]);
 
-  const frameworkList = frameworks.map(fw => {
+  const frameworkList = COMPLIANCE_FRAMEWORK_DEFINITIONS.map(fw => {
     const summary = getFrameworkSummaryView(fw.id, now);
     return {
       id: fw.id,
       title: fw.title,
-      scope: fw.scope,
-      source: fw.source,
-      version: summary?.framework.version,
+      scope: fw.jurisdiction ?? 'Universal',
+      source: fw.authoritativeSource,
+      version: fw.version,
       summaryView: summary
         ? {
             mappedRequirementsCount: summary.mappedRequirementsCount,

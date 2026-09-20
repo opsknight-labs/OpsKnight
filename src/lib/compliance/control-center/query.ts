@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import defaultPrisma from '@/lib/prisma';
+import { getRetentionPolicy } from '@/lib/retention-policy';
 import { complianceControls } from '../controls';
 import { resolveComplianceRuntimeState } from '../state';
 import {
@@ -16,6 +17,7 @@ import type {
   ComplianceControlCenterOverview,
   ControlCenterEvidenceSummary,
   ControlCenterFrameworkMappingItem,
+  ControlCenterRetentionPolicyView,
   ControlCenterRuntimeStateView,
 } from './types';
 
@@ -28,7 +30,7 @@ export interface GetControlCenterDataOptions {
  * Builds a unified, bulk-loaded Control Center read model.
  *
  * Guarantees:
- * 1. Bulk loading: Executes 2 parallel database queries without N+1 loops.
+ * 1. Bulk loading: Executes bounded parallel database queries without N+1 loops.
  * 2. Strict runtime resolution: Always delegates to resolveComplianceRuntimeState().
  * 3. Factual metrics: Strictly calculates inventory counts, zero compliance scores/percentages.
  * 4. PII-free: Contains zero personally identifiable information or raw secrets.
@@ -39,30 +41,58 @@ export async function getComplianceControlCenterData(
   const prisma = options?.prisma ?? defaultPrisma;
   const now = options?.now ?? new Date();
 
-  // 1. Bulk queries
-  const [rawStates, evidenceRecords] = await Promise.all([
+  // 1. Bulk queries with bounded evidence slice and counts
+  const countPromise =
+    typeof prisma.complianceEvidence?.count === 'function'
+      ? prisma.complianceEvidence.count()
+      : Promise.resolve(0);
+
+  const groupPromise =
+    typeof prisma.complianceEvidence?.groupBy === 'function'
+      ? prisma.complianceEvidence.groupBy({
+          by: ['controlId'],
+          _count: { id: true },
+        })
+      : Promise.resolve([] as Array<{ controlId: string; _count: { id: number } }>);
+
+  const [rawStates, evidenceRecords, totalCount, evidenceGroups, rawRetention] = await Promise.all([
     prisma.complianceControlState.findMany(),
     prisma.complianceEvidence.findMany({
+      take: 100,
       orderBy: { observedAt: 'desc' },
     }),
+    countPromise,
+    groupPromise,
+    getRetentionPolicy(),
   ]);
 
   const rawStateMap = new Map(rawStates.map(s => [s.controlId, s]));
 
-  // 2. Group evidence by controlId and compute integrity
+  const totalEvidenceCount = Math.max(totalCount, evidenceRecords.length);
+  const evidenceCountByControl = new Map<string, number>();
+  for (const g of evidenceGroups) {
+    evidenceCountByControl.set(g.controlId, g._count.id);
+  }
+  if (evidenceCountByControl.size === 0) {
+    for (const ev of evidenceRecords) {
+      evidenceCountByControl.set(ev.controlId, (evidenceCountByControl.get(ev.controlId) ?? 0) + 1);
+    }
+  }
+
+  // 2. Group recent evidence by controlId and compute integrity for the bounded sample
   type RawEvidence = (typeof evidenceRecords)[number];
-  const evidenceByControl = new Map<string, RawEvidence[]>();
+  const sampleByControl = new Map<string, RawEvidence[]>();
   for (const ev of evidenceRecords) {
-    const list = evidenceByControl.get(ev.controlId) ?? [];
+    const list = sampleByControl.get(ev.controlId) ?? [];
     list.push(ev);
-    evidenceByControl.set(ev.controlId, list);
+    sampleByControl.set(ev.controlId, list);
   }
 
   let totalMismatchesCount = 0;
   let totalVerifiedEvidenceCount = 0;
 
   const evidenceSummaryMap = new Map<string, ControlCenterEvidenceSummary>();
-  for (const [controlId, list] of evidenceByControl.entries()) {
+  for (const [controlId, list] of sampleByControl.entries()) {
     let allValid = true;
     for (const ev of list) {
       const isValid = verifyComplianceEvidenceHash({
@@ -89,12 +119,24 @@ export async function getComplianceControlCenterData(
       }
     }
 
+    const count = evidenceCountByControl.get(controlId) ?? list.length;
     evidenceSummaryMap.set(controlId, {
-      count: list.length,
+      count,
       latestObservedAt: list[0]?.observedAt.toISOString() ?? null,
       integrity: allValid && list.length > 0 ? 'VERIFIED' : list.length > 0 ? 'MISMATCH' : 'NONE',
       latestDigest: list[0]?.contentHash,
     });
+  }
+
+  // Ensure controls with historical evidence outside the latest-100 slice retain their total count
+  for (const [controlId, count] of evidenceCountByControl.entries()) {
+    if (!evidenceSummaryMap.has(controlId) && count > 0) {
+      evidenceSummaryMap.set(controlId, {
+        count,
+        latestObservedAt: null,
+        integrity: 'NONE',
+      });
+    }
   }
 
   // 3. Process each control
@@ -269,6 +311,14 @@ export async function getComplianceControlCenterData(
     else if (lifecycle === 'SUPERSEDED') supersededRequirements++;
   }
 
+  const retentionPolicy: ControlCenterRetentionPolicyView = {
+    logRetentionDays: rawRetention.logRetentionDays,
+    incidentRetentionDays: rawRetention.incidentRetentionDays,
+    alertRetentionDays: rawRetention.alertRetentionDays,
+    metricsRetentionDays: rawRetention.metricsRetentionDays,
+    privacyRequestRetentionDays: rawRetention.completedPrivacyRequestRetentionDays,
+  };
+
   return {
     generatedAt: now.toISOString(),
     runtime: {
@@ -279,7 +329,7 @@ export async function getComplianceControlCenterData(
       unverified: runtimeUnverified,
     },
     evidence: {
-      records: evidenceRecords.length,
+      records: totalEvidenceCount,
       verifiedRecords: totalVerifiedEvidenceCount,
       integrityMismatches: totalMismatchesCount,
     },
@@ -291,5 +341,6 @@ export async function getComplianceControlCenterData(
     },
     attention: attentionItems,
     controls,
+    retentionPolicy,
   };
 }

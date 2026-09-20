@@ -22,6 +22,15 @@ interface ControlsViewProps {
   readonly onNavigateToFramework?: (frameworkId: ComplianceFramework) => void;
 }
 
+function getEffectiveControlStatus(
+  ctrl: ComplianceControlCenterControl
+): ComplianceEvaluationStatus {
+  if (ctrl.runtime) return ctrl.runtime.status;
+  if (ctrl.legacyStatus === 'IMPLEMENTED') return 'IMPLEMENTED';
+  if (ctrl.legacyStatus === 'PARTIAL') return 'PARTIAL';
+  return 'ACTION_REQUIRED';
+}
+
 export function ControlsView({
   controls,
   selectedControlId,
@@ -62,7 +71,7 @@ export function ControlsView({
 
       // Status
       if (statusFilter !== 'ALL') {
-        const currentStatus = ctrl.runtime ? ctrl.runtime.status : ctrl.legacyStatus;
+        const currentStatus = getEffectiveControlStatus(ctrl);
         if (currentStatus !== statusFilter) return false;
       }
 
@@ -164,13 +173,7 @@ export function ControlsView({
         <div className="grid grid-cols-1 gap-2.5">
           {filteredControls.map(ctrl => {
             const isRuntime = ctrl.assessmentMode === 'RUNTIME';
-            const status: ComplianceEvaluationStatus = ctrl.runtime
-              ? ctrl.runtime.status
-              : ctrl.legacyStatus === 'IMPLEMENTED'
-                ? 'IMPLEMENTED'
-                : ctrl.legacyStatus === 'PARTIAL'
-                  ? 'PARTIAL'
-                  : 'ACTION_REQUIRED';
+            const status = getEffectiveControlStatus(ctrl);
 
             return (
               <div

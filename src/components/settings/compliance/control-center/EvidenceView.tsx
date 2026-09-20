@@ -12,14 +12,17 @@ import { ComplianceEvidenceViewer } from '../ComplianceEvidenceViewer';
 interface EvidenceViewProps {
   readonly initialControlFilter?: string | null;
   readonly onClearControlFilter?: () => void;
+  readonly canReadEvidence?: boolean;
 }
 
 export function EvidenceView({
   initialControlFilter = null,
   onClearControlFilter,
+  canReadEvidence = true,
 }: EvidenceViewProps) {
   const [evidenceList, setEvidenceList] = useState<ComplianceEvidenceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -36,31 +39,38 @@ export function EvidenceView({
   }, [initialControlFilter]);
 
   const fetchEvidence = useCallback(async () => {
+    if (!canReadEvidence) return;
     setIsLoading(true);
+    setError(null);
     try {
       const url = controlFilter
         ? `/api/compliance/controls/${controlFilter}/evidence?limit=50`
         : '/api/compliance/evidence?limit=50';
       const res = await fetch(url);
       const json = await res.json();
-      if (res.ok && json.data?.evidence) {
+      if (!res.ok) {
+        throw new Error(
+          json.error?.message || `HTTP ${res.status}: Failed to load evidence ledger`
+        );
+      }
+      if (json.data?.evidence) {
         setEvidenceList(json.data.evidence);
         setNextCursor(json.data.nextCursor ?? null);
         setHasMore(Boolean(json.data.hasMore));
       }
-    } catch {
-      // Ignore network errors
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch evidence records');
     } finally {
       setIsLoading(false);
     }
-  }, [controlFilter]);
+  }, [controlFilter, canReadEvidence]);
 
   useEffect(() => {
     fetchEvidence();
   }, [fetchEvidence]);
 
   const loadMore = async () => {
-    if (!nextCursor || isLoadingMore) return;
+    if (!nextCursor || isLoadingMore || !canReadEvidence) return;
     setIsLoadingMore(true);
     try {
       const url = controlFilter
@@ -68,13 +78,16 @@ export function EvidenceView({
         : `/api/compliance/evidence?limit=50&cursor=${encodeURIComponent(nextCursor)}`;
       const res = await fetch(url);
       const json = await res.json();
-      if (res.ok && json.data?.evidence) {
+      if (!res.ok) {
+        throw new Error(json.error?.message || `HTTP ${res.status}: Failed to load more evidence`);
+      }
+      if (json.data?.evidence) {
         setEvidenceList(prev => [...prev, ...json.data.evidence]);
         setNextCursor(json.data.nextCursor ?? null);
         setHasMore(Boolean(json.data.hasMore));
       }
-    } catch {
-      // Ignore network errors
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load more evidence');
     } finally {
       setIsLoadingMore(false);
     }
@@ -108,8 +121,37 @@ export function EvidenceView({
     });
   }, [evidenceList, searchQuery, typeFilter, integrityFilter]);
 
+  if (!canReadEvidence) {
+    return (
+      <Card className="p-8 text-center border-dashed">
+        <p className="text-xs text-muted-foreground">
+          You do not have permission to inspect compliance evidence snapshots. Requires{' '}
+          <code>COMPLIANCE_EVIDENCE_READ</code> or <code>COMPLIANCE_READ</code>.
+        </p>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {/* Error alert banner with retry */}
+      {error && (
+        <div className="flex items-center justify-between p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs text-rose-700 dark:text-rose-400">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchEvidence}
+            className="h-7 text-xs border-rose-500/30 hover:bg-rose-500/20"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Control Filter Alert if set */}
       {controlFilter && (
         <div className="flex items-center justify-between p-3 rounded-lg border border-sky-500/30 bg-sky-500/10 text-xs text-sky-800 dark:text-sky-300">

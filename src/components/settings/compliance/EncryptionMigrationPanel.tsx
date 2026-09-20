@@ -405,6 +405,7 @@ export function EncryptionMigrationPanel({
               variant="destructive"
               size="sm"
               onClick={() => handleCancelRun(activeRun.id)}
+              disabled={!canManageEncryption || isSubmitting}
               className="gap-1.5 h-7 text-xs"
             >
               <StopCircle className="h-3.5 w-3.5" />
@@ -463,12 +464,21 @@ export function EncryptionMigrationPanel({
         </div>
 
         <div className="flex items-center gap-2.5">
+          {!canManageEncryption && (
+            <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/80">
+              Requires ENCRYPTION_MANAGE
+            </Badge>
+          )}
+
           <Button
             variant="outline"
             size="sm"
             onClick={() => handleStartRun('PREVIEW')}
             disabled={
-              isSubmitting || activeRun?.status === 'RUNNING' || activeRun?.status === 'PENDING'
+              !canManageEncryption ||
+              isSubmitting ||
+              activeRun?.status === 'RUNNING' ||
+              activeRun?.status === 'PENDING'
             }
             className="gap-1.5 h-8 text-xs font-medium"
           >
@@ -482,7 +492,10 @@ export function EncryptionMigrationPanel({
             size="sm"
             onClick={() => handleStartRun('VERIFY')}
             disabled={
-              isSubmitting || activeRun?.status === 'RUNNING' || activeRun?.status === 'PENDING'
+              !canManageEncryption ||
+              isSubmitting ||
+              activeRun?.status === 'RUNNING' ||
+              activeRun?.status === 'PENDING'
             }
             className="gap-1.5 h-8 text-xs font-medium"
           >
@@ -496,7 +509,10 @@ export function EncryptionMigrationPanel({
             size="sm"
             onClick={() => setConfirmMigrateModal(true)}
             disabled={
-              isSubmitting || activeRun?.status === 'RUNNING' || activeRun?.status === 'PENDING'
+              !canManageEncryption ||
+              isSubmitting ||
+              activeRun?.status === 'RUNNING' ||
+              activeRun?.status === 'PENDING'
             }
             className="gap-1.5 h-8 text-xs font-medium bg-primary hover:bg-primary/90"
           >

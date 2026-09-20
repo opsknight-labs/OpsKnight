@@ -212,6 +212,7 @@ export function ComplianceControlCenter({
           <EvidenceView
             initialControlFilter={evidenceControlFilter}
             onClearControlFilter={() => setEvidenceControlFilter(null)}
+            canReadEvidence={capabilities.canReadEvidence}
           />
         )}
 
@@ -219,6 +220,7 @@ export function ComplianceControlCenter({
           <OperationsView
             canManageEncryption={capabilities.canManageEncryption}
             canReadEncryption={capabilities.canReadEncryption}
+            retentionPolicy={overviewData.retentionPolicy}
           />
         )}
       </div>

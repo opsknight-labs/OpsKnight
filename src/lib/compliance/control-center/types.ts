@@ -75,6 +75,14 @@ export interface AttentionRequiredItem {
   readonly actionType: 'EVALUATE' | 'VIEW_EVIDENCE' | 'VIEW_OPERATIONS';
 }
 
+export interface ControlCenterRetentionPolicyView {
+  readonly logRetentionDays: number;
+  readonly incidentRetentionDays: number;
+  readonly alertRetentionDays: number;
+  readonly metricsRetentionDays: number;
+  readonly privacyRequestRetentionDays: number;
+}
+
 export interface ComplianceControlCenterOverview {
   readonly generatedAt: string;
   readonly runtime: {
@@ -97,4 +105,5 @@ export interface ComplianceControlCenterOverview {
   };
   readonly attention: readonly AttentionRequiredItem[];
   readonly controls: readonly ComplianceControlCenterControl[];
+  readonly retentionPolicy: ControlCenterRetentionPolicyView;
 }

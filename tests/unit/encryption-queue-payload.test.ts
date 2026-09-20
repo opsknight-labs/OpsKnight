@@ -70,21 +70,10 @@ describe('encryption lifecycle queue payload and settlement', () => {
     });
   });
 
-  it('settles PENDING run to FAILED upon terminal failure', async () => {
+  it('settles PENDING run to FAILED upon terminal failure using conditional predicate', async () => {
     const mockPrisma = {
       encryptionMigrationRun: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'run-pending-1',
-          status: 'PENDING',
-        }),
-        update: vi.fn().mockImplementation(({ data }) =>
-          Promise.resolve({
-            id: 'run-pending-1',
-            status: data.status,
-            errorMessage: data.errorMessage,
-            completedAt: data.completedAt,
-          })
-        ),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
     } as unknown as PrismaClient;
 
@@ -94,11 +83,12 @@ describe('encryption lifecycle queue payload and settlement', () => {
       'Worker execution timed out'
     );
 
-    expect(settled).toBeDefined();
-    expect(settled?.status).toBe('FAILED');
-    expect(settled?.errorMessage).toBe('Worker execution timed out');
-    expect(mockPrisma.encryptionMigrationRun.update).toHaveBeenCalledWith({
-      where: { id: 'run-pending-1' },
+    expect(settled).toBe(true);
+    expect(mockPrisma.encryptionMigrationRun.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'run-pending-1',
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
       data: {
         status: 'FAILED',
         errorMessage: 'Worker execution timed out',
@@ -110,18 +100,7 @@ describe('encryption lifecycle queue payload and settlement', () => {
   it('settles RUNNING run to FAILED upon terminal failure', async () => {
     const mockPrisma = {
       encryptionMigrationRun: {
-        findUnique: vi.fn().mockResolvedValue({
-          id: 'run-running-1',
-          status: 'RUNNING',
-        }),
-        update: vi.fn().mockImplementation(({ data }) =>
-          Promise.resolve({
-            id: 'run-running-1',
-            status: data.status,
-            errorMessage: data.errorMessage,
-            completedAt: data.completedAt,
-          })
-        ),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
     } as unknown as PrismaClient;
 
@@ -131,32 +110,42 @@ describe('encryption lifecycle queue payload and settlement', () => {
       'Database connection lost during CAS batch'
     );
 
-    expect(settled?.status).toBe('FAILED');
-    expect(settled?.errorMessage).toBe('Database connection lost during CAS batch');
+    expect(settled).toBe(true);
+    expect(mockPrisma.encryptionMigrationRun.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'run-running-1',
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+      data: {
+        status: 'FAILED',
+        errorMessage: 'Database connection lost during CAS batch',
+        completedAt: expect.any(Date),
+      },
+    });
   });
 
   it('never overwrites terminal states (COMPLETED, CANCELLED, FAILED)', async () => {
-    const terminalStatuses = ['COMPLETED', 'CANCELLED', 'FAILED'] as const;
+    const mockPrisma = {
+      encryptionMigrationRun: {
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+    } as unknown as PrismaClient;
 
-    for (const status of terminalStatuses) {
-      const mockPrisma = {
-        encryptionMigrationRun: {
-          findUnique: vi.fn().mockResolvedValue({
-            id: `run-${status.toLowerCase()}`,
-            status,
-          }),
-          update: vi.fn(),
-        },
-      } as unknown as PrismaClient;
+    const result = await settleEncryptionLifecycleFailure(
+      mockPrisma,
+      'run-completed-1',
+      'Attempted terminal overwrite'
+    );
 
-      const result = await settleEncryptionLifecycleFailure(
-        mockPrisma,
-        `run-${status.toLowerCase()}`,
-        'Attempted terminal overwrite'
-      );
-
-      expect(result?.status).toBe(status);
-      expect(mockPrisma.encryptionMigrationRun.update).not.toHaveBeenCalled();
-    }
+    expect(result).toBe(false);
+    expect(mockPrisma.encryptionMigrationRun.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'run-completed-1',
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+      data: expect.objectContaining({
+        status: 'FAILED',
+      }),
+    });
   });
 });

@@ -102,6 +102,13 @@ describe('ComplianceControlCenter Component', () => {
         gaps: [],
       },
     ],
+    retentionPolicy: {
+      logRetentionDays: 365,
+      incidentRetentionDays: 730,
+      alertRetentionDays: 365,
+      metricsRetentionDays: 365,
+      privacyRequestRetentionDays: 730,
+    },
   };
 
   const mockFrameworks = [
@@ -213,7 +220,7 @@ describe('ComplianceControlCenter Component', () => {
 
     expect(screen.getByText(/Cryptographic Envelope & Secret Lifecycle/i)).toBeInTheDocument();
     expect(screen.getByText(/Privacy Requests & DSR Processing Portal/i)).toBeInTheDocument();
-    expect(screen.getByText(/Data Retention & Disposal Policies/i)).toBeInTheDocument();
+    expect(screen.getByText(/Data Retention & Disposal/i)).toBeInTheDocument();
   });
 
   it('triggers evaluate controls on button click', async () => {

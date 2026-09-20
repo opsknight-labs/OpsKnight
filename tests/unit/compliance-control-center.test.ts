@@ -9,6 +9,8 @@ const { mockAssertCapability, mockPrisma } = vi.hoisted(() => {
     },
     complianceEvidence: {
       findMany: vi.fn().mockResolvedValue([]),
+      count: vi.fn().mockResolvedValue(0),
+      groupBy: vi.fn().mockResolvedValue([]),
     },
   };
 
@@ -60,6 +62,8 @@ describe('compliance control center read model (unit)', () => {
     ]);
 
     mockPrisma.complianceEvidence.findMany.mockResolvedValue([]);
+    mockPrisma.complianceEvidence.count.mockResolvedValue(0);
+    mockPrisma.complianceEvidence.groupBy.mockResolvedValue([]);
 
     const data = await getComplianceControlCenterData({
       prisma: mockPrisma as never,
@@ -76,6 +80,10 @@ describe('compliance control center read model (unit)', () => {
     expect(data.frameworks.activeRequirements).toBeGreaterThan(0);
     expect(data.frameworks.futureRequirements).toBeGreaterThan(0);
     expect(data.frameworks.supersededRequirements).toBeGreaterThan(0);
+
+    // Retention policy included
+    expect(data.retentionPolicy).toBeDefined();
+    expect(data.retentionPolicy.logRetentionDays).toBeGreaterThan(0);
 
     // Assert lack of synthetic scores or percentages
     const dataObj = data as unknown as Record<string, unknown>;
