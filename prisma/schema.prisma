@@ -129,6 +129,16 @@ enum NotificationStatus {
   DELIVERED
   FAILED
   SKIPPED
+  UNKNOWN
+}
+
+enum NotificationEndpointStatus {
+  HEALTHY
+  UNVERIFIED
+  DEGRADED
+  INVALID
+  BOUNCED
+  OPTED_OUT
 }
 
 enum InboundDeliveryStatus {
@@ -462,6 +472,7 @@ model User {
   incidentNotes               IncidentNote[]
   postmortems                 Postmortem[]
   notifications               Notification[]
+  notificationEndpoints       UserNotificationEndpoint[]
   inAppNotifications          InAppNotification[]
   devices                     UserDevice[]
   incidentWatchers            IncidentWatcher[]
@@ -1572,47 +1583,48 @@ model OnCallShift {
 }
 
 model Notification {
-  id                String                        @id @default(cuid())
-  incidentId        String?
-  userId            String?
-  channel           NotificationChannel
-  status            NotificationStatus            @default(PENDING)
-  message           String?
-  eventType         String                        @default("triggered")
-  category          NotificationCategory          @default(INCIDENT)
-  recipientType     NotificationRecipientType     @default(USER)
-  recipientId       String?
-  recipientDisplay  String?
-  recipientHash     String?
-  templateKey       String?
-  sourceType        String?
-  sourceId          String?
-  deliveryKey       String?                       @unique
-  payloadEncrypted  String?
-  contentId         String?
-  fanoutId          String?
-  trafficClass      NotificationTrafficClass      @default(TRANSACTIONAL)
-  tenantKey         String                        @default("system")
-  priority          Int                           @default(5)
-  scheduledAt       DateTime                      @default(now())
-  nextAttemptAt     DateTime                      @default(now())
-  lastAttemptAt     DateTime?
-  claimToken        String?
-  claimedBy         String?
-  maxAttempts       Int                           @default(3)
-  expiresAt         DateTime?
-  sentAt            DateTime?
-  deliveredAt       DateTime?
-  failedAt          DateTime?
-  errorMsg          String?
-  providerMessageId String?                       @unique
-  attempts          Int                           @default(0)
-  createdAt         DateTime                      @default(now())
-  incident          Incident?                     @relation(fields: [incidentId], references: [id])
-  user              User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
-  deliveryAttempts  NotificationDeliveryAttempt[]
-  content           NotificationContent?          @relation(fields: [contentId], references: [id], onDelete: SetNull)
-  fanout            NotificationFanout?           @relation(fields: [fanoutId], references: [id], onDelete: SetNull)
+  id                     String                        @id @default(cuid())
+  incidentId             String?
+  userId                 String?
+  channel                NotificationChannel
+  status                 NotificationStatus            @default(PENDING)
+  message                String?
+  eventType              String                        @default("triggered")
+  category               NotificationCategory          @default(INCIDENT)
+  recipientType          NotificationRecipientType     @default(USER)
+  recipientId            String?
+  recipientDisplay       String?
+  recipientHash          String?
+  templateKey            String?
+  sourceType             String?
+  sourceId               String?
+  deliveryKey            String?                       @unique
+  payloadEncrypted       String?
+  contentId              String?
+  fanoutId               String?
+  trafficClass           NotificationTrafficClass      @default(TRANSACTIONAL)
+  tenantKey              String                        @default("system")
+  priority               Int                           @default(5)
+  scheduledAt            DateTime                      @default(now())
+  nextAttemptAt          DateTime                      @default(now())
+  lastAttemptAt          DateTime?
+  claimToken             String?
+  claimedBy              String?
+  maxAttempts            Int                           @default(3)
+  expiresAt              DateTime?
+  sentAt                 DateTime?
+  deliveredAt            DateTime?
+  failedAt               DateTime?
+  reconciliationDeadline DateTime?
+  errorMsg               String?
+  providerMessageId      String?                       @unique
+  attempts               Int                           @default(0)
+  createdAt              DateTime                      @default(now())
+  incident               Incident?                     @relation(fields: [incidentId], references: [id])
+  user                   User?                         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  deliveryAttempts       NotificationDeliveryAttempt[]
+  content                NotificationContent?          @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  fanout                 NotificationFanout?           @relation(fields: [fanoutId], references: [id], onDelete: SetNull)
 
   @@index([incidentId])
   @@index([userId])
@@ -1630,6 +1642,25 @@ model Notification {
   @@index([sourceType, sourceId, createdAt], name: "idx_notification_source_created")
   @@index([createdAt, id], name: "idx_notification_created_cursor")
   @@index([fanoutId, status])
+}
+
+model UserNotificationEndpoint {
+  id             String                     @id @default(cuid())
+  userId         String
+  channel        NotificationChannel
+  addressHash    String?
+  status         NotificationEndpointStatus @default(UNVERIFIED)
+  failureCount   Int                        @default(0)
+  lastSuccessAt  DateTime?
+  lastFailureAt  DateTime?
+  lastErrorCode  String?
+  lastVerifiedAt DateTime?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, channel])
+  @@index([status, channel])
 }
 
 model NotificationContent {
@@ -1672,18 +1703,19 @@ model NotificationFanout {
 }
 
 model NotificationDeliveryAttempt {
-  id                String       @id @default(cuid())
-  notificationId    String
-  ordinal           Int
-  outcome           String
-  provider          String?
-  providerMessageId String?
-  errorCode         String?
-  errorMessage      String?
-  startedAt         DateTime     @default(now())
-  finishedAt        DateTime?
-  latencyMs         Int?
-  notification      Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  id                     String       @id @default(cuid())
+  notificationId         String
+  ordinal                Int
+  outcome                String
+  provider               String?
+  providerMessageId      String?
+  errorCode              String?
+  errorMessage           String?
+  startedAt              DateTime     @default(now())
+  finishedAt             DateTime?
+  reconciliationDeadline DateTime?
+  latencyMs              Int?
+  notification           Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
   @@unique([notificationId, ordinal])
   @@index([notificationId, startedAt])

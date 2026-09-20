@@ -23,6 +23,7 @@ import type {
   NotificationEventType,
 } from './notification-delivery';
 import { notificationEventKey } from './notification-identity';
+import { syncUserNotificationEndpoint } from './user-notification-endpoints';
 
 export type IncidentNotificationIntent =
   | 'INCIDENT_UPDATED'
@@ -153,17 +154,31 @@ export async function getUserNotificationChannels(userId: string): Promise<Notif
     import('./notification-providers').then(module => module.getWhatsAppConfig()),
   ]);
 
-  if (user.pushNotificationsEnabled && pushAvailable) channels.push('PUSH');
-  if (user.smsNotificationsEnabled && user.phoneNumber && smsAvailable) channels.push('SMS');
+  const endpointCandidates: Array<{ channel: NotificationChannel; address: string }> = [];
+  if (user.pushNotificationsEnabled && pushAvailable)
+    endpointCandidates.push({ channel: 'PUSH', address: userId });
+  if (user.smsNotificationsEnabled && user.phoneNumber && smsAvailable)
+    endpointCandidates.push({ channel: 'SMS', address: user.phoneNumber });
   if (
     user.whatsappNotificationsEnabled &&
     user.phoneNumber &&
     whatsappConfig.enabled &&
     whatsappConfig.provider === 'twilio'
   ) {
-    channels.push('WHATSAPP');
+    endpointCandidates.push({ channel: 'WHATSAPP', address: user.phoneNumber });
   }
-  if (user.emailNotificationsEnabled && user.email && emailAvailable) channels.push('EMAIL');
+  if (user.emailNotificationsEnabled && user.email && emailAvailable)
+    endpointCandidates.push({ channel: 'EMAIL', address: user.email });
+
+  const endpointHealth = await Promise.all(
+    endpointCandidates.map(async candidate => ({
+      ...candidate,
+      health: await syncUserNotificationEndpoint({ userId, ...candidate }),
+    }))
+  );
+  for (const endpoint of endpointHealth) {
+    if (endpoint.health.available) channels.push(endpoint.channel);
+  }
 
   return channels;
 }

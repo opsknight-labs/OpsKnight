@@ -2,7 +2,6 @@ import type { Incident, Service } from '@prisma/client';
 import prisma from './prisma';
 import { incidentNotificationPriority } from './notification-priority';
 import {
-  dispatchNotificationAttempt,
   NOTIFICATION_CHANNELS,
   NOTIFICATION_RETRY_POLICY,
   type NotificationDeliveryOutcome,
@@ -11,7 +10,6 @@ import {
 import {
   notificationEventInstant,
   notificationEventKey,
-  notificationIntentId,
   type NotificationIdentityIncident,
 } from './notification-identity';
 import { buildNotificationEnvelope, encodeNotificationEnvelope } from './notification-payload';
@@ -22,29 +20,6 @@ type IncidentWithService = Incident & {
   assignee?: { id?: string; name?: string | null; email?: string | null } | null;
   team?: { id?: string; name?: string | null } | null;
 };
-
-/**
- * Controls whether personal incident notifications go through the central
- * control plane (default: ON — opt-out with NOTIFICATION_CONTROL_PLANE_PERSONAL=false).
- *
- * ## Rolling-upgrade safety
- * The central control plane is safe during mixed-version deployments because:
- *   1. `createCentralNotificationIntent` uses ON CONFLICT DO NOTHING, so concurrent
- *      old + new replicas that both attempt to create an intent for the same
- *      eventKey will only produce one row — no duplicate delivery.
- *   2. Old replicas (before this commit) default to the legacy path; new replicas
- *      default to the control-plane path. Overlap window = time to roll all replicas.
- *   3. During the overlap, some notifications may take the legacy direct-dispatch path
- *      instead of the central path — this is intentional and safe.
- *
- * To force legacy-only during a staged rollout, set:
- *   NOTIFICATION_CONTROL_PLANE_PERSONAL=false
- * on replicas you want to hold back, then remove the override once all replicas
- * are on the new version.
- */
-function personalControlPlaneEnabled(): boolean {
-  return process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL !== 'false';
-}
 
 async function sendCentralIncidentNotification(input: {
   incidentId: string;
@@ -137,14 +112,6 @@ export type SendNotificationResult = {
   queued?: boolean;
   deduped?: boolean;
 };
-function isUniqueConstraintError(error: unknown): boolean {
-  return Boolean(
-    error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error as { code?: string }).code === 'P2002'
-  );
-}
 async function loadIdentityIncident(
   incidentId: string,
   incident?: IncidentWithService
@@ -220,181 +187,29 @@ export async function sendNotification(
   const eventAt = notificationEventInstant(identityIncident, eventType);
   const eventKey =
     explicitEventKey ?? notificationEventKey({ incident: identityIncident, eventType, message });
-  const notificationId = notificationIntentId({
-    eventKey,
-    eventType,
-    eventAt,
-    userId,
-    channel,
-    triggerGeneration:
-      eventType === 'triggered' ? (identityIncident.escalationGeneration ?? 0) : undefined,
-  });
   const durableMessage = encodeNotificationEnvelope(
     buildNotificationEnvelope(identityIncident, eventType, eventAt, message)
   );
-  if (personalControlPlaneEnabled()) {
-    const central = await sendCentralIncidentNotification({
-      incidentId,
-      userId,
-      channel,
-      eventType,
-      eventKey,
-      durableMessage,
-      eventAt,
-      escalationGeneration: identityIncident.escalationGeneration,
-      escalationStep: identityIncident.currentEscalationStep,
-      priority: identityIncident.priority,
-      urgency: identityIncident.urgency,
-    });
-    if (central) return central;
-  }
-  let notification: { id: string; attempts: number; status: string; errorMsg?: string | null };
-  try {
-    notification = await prisma.notification.create({
-      data: {
-        id: notificationId,
-        incidentId,
-        userId,
-        channel,
-        message: durableMessage,
-        eventType,
-        status: 'PENDING',
-        attempts: 0,
-      },
-      select: { id: true, attempts: true, status: true, errorMsg: true },
-    });
-  } catch (error) {
-    if (!isUniqueConstraintError(error))
-      return {
-        success: false,
-        outcome: 'RETRYABLE_FAILURE',
-        error: error instanceof Error ? error.message : String(error),
-      };
-    const existing = await prisma.notification.findUnique({
-      where: { id: notificationId },
-      select: { id: true, status: true, attempts: true, errorMsg: true },
-    });
-    if (!existing)
-      return {
-        success: false,
-        outcome: 'RETRYABLE_FAILURE',
-        error: 'Notification intent conflicted but could not be reloaded',
-      };
-    return existingIntentResult(existing);
-  }
-  try {
-    const result = await dispatchNotificationAttempt({
-      notificationId: notification.id,
-      incidentId,
-      userId,
-      channel,
-      eventType,
-      message: durableMessage,
-      incident: identityIncident,
-      trafficClass: incidentNotificationPriority({
-        eventType,
-        priority: identityIncident.priority,
-        urgency: identityIncident.urgency,
-      }).trafficClass,
-    });
-    if (result.outcome === 'DELIVERED') {
-      const committed = await prisma.notification.updateMany({
-        where: { id: notification.id, status: 'PENDING' },
-        data: { status: 'SENT', sentAt: new Date(), providerMessageId: result.providerMessageId },
-      });
-      const recipient = prisma.user?.findUnique
-        ? await prisma.user
-            .findUnique({ where: { id: userId }, select: { name: true, email: true } })
-            .catch(() => null)
-        : null;
-      const recipientName = recipient?.name || recipient?.email || userId;
-      try {
-        if (committed.count > 0 && prisma.incidentEvent?.create)
-          await prisma.incidentEvent.create({
-            data: {
-              incidentId,
-              type: 'STATUS_CHANGE',
-              message: `Notification sent to ${recipientName} via ${channel}`,
-            },
-          });
-      } catch (_) {}
-      return { success: true, outcome: 'DELIVERED', notificationId: notification.id };
-    }
-    if (result.outcome === 'SKIPPED') {
-      await prisma.notification.updateMany({
-        where: { id: notification.id, status: 'PENDING' },
-        data: {
-          status: 'SKIPPED',
-          errorMsg: result.error || 'Delivery skipped by notification policy.',
-        },
-      });
-      return {
-        success: true,
-        outcome: 'SKIPPED',
-        skipped: true,
-        terminal: true,
-        error: result.error,
-        notificationId: notification.id,
-      };
-    }
-    if (result.outcome === 'QUEUED') {
-      await prisma.notification.updateMany({
-        where: { id: notification.id, status: 'PENDING' },
-        data: {
-          status: 'FAILED',
-          failedAt: new Date(),
-          errorMsg: result.error || 'Provider admission deferred',
-          attempts: notification.attempts,
-        },
-      });
-      return {
-        success: true,
-        outcome: 'QUEUED',
-        queued: true,
-        error: result.error,
-        notificationId: notification.id,
-      };
-    }
-    const circuitOpen = result.outcome === 'CIRCUIT_OPEN';
-    const permanentFailure =
-      result.outcome === 'PERMANENT_FAILURE' || result.outcome === 'AMBIGUOUS';
-    await prisma.notification.updateMany({
-      where: { id: notification.id, status: 'PENDING' },
-      data: {
-        status: 'FAILED',
-        failedAt: new Date(),
-        errorMsg: result.error || 'Notification delivery failed',
-        attempts: circuitOpen
-          ? notification.attempts
-          : permanentFailure
-            ? NOTIFICATION_RETRY_POLICY.maxAttempts
-            : (notification.attempts || 0) + 1,
-      },
-    });
-    return {
-      success: result.outcome === 'AMBIGUOUS',
-      outcome: result.outcome,
-      terminal: permanentFailure,
-      error: result.error || 'Notification delivery failed',
-      notificationId: notification.id,
-    };
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    await prisma.notification.updateMany({
-      where: { id: notification.id, status: 'PENDING' },
-      data: {
-        status: 'FAILED',
-        failedAt: new Date(),
-        errorMsg: errorMessage,
-        attempts: (notification.attempts || 0) + 1,
-      },
-    });
-    return {
+  const central = await sendCentralIncidentNotification({
+    incidentId,
+    userId,
+    channel,
+    eventType,
+    eventKey,
+    durableMessage,
+    eventAt,
+    escalationGeneration: identityIncident.escalationGeneration,
+    escalationStep: identityIncident.currentEscalationStep,
+    priority: identityIncident.priority,
+    urgency: identityIncident.urgency,
+  });
+  return (
+    central ?? {
       success: false,
-      outcome: 'RETRYABLE_FAILURE',
-      error: errorMessage,
-      notificationId: notification.id,
-    };
-  }
+      outcome: 'PERMANENT_FAILURE',
+      terminal: true,
+      error: `Channel ${channel} is not supported by the central personal notification plane`,
+    }
+  );
 }
 export { executeEscalation } from './escalation';

@@ -5,6 +5,7 @@ import { getBaseUrl } from '@/lib/env-validation';
 import { getSMSConfig, getWhatsAppConfig } from '@/lib/notification-providers';
 import { readIntegrationBody } from '@/lib/integrations/request-security';
 import { logger } from '@/lib/logger';
+import { recordUserNotificationEndpointOutcome } from '@/lib/user-notification-endpoints';
 
 function validTwilioSignature(
   url: string,
@@ -54,7 +55,14 @@ export async function POST(request: NextRequest) {
           ...(messageSid ? [{ providerMessageId: messageSid }] : []),
         ],
       },
-      select: { id: true, status: true, providerMessageId: true },
+      select: {
+        id: true,
+        status: true,
+        providerMessageId: true,
+        userId: true,
+        channel: true,
+        recipientHash: true,
+      },
     });
     if (!notification) {
       logger.warn('twilio.dlr_notification_not_found', { notificationId, messageSid });
@@ -106,7 +114,7 @@ export async function POST(request: NextRequest) {
         await prisma.notification.updateMany({
           where: {
             id: notification.id,
-            status: { in: ['PENDING', 'SENT', 'FAILED'] },
+            status: { in: ['PENDING', 'SENT', 'FAILED', 'UNKNOWN'] },
             ...providerAttemptFence,
           },
           data: {
@@ -115,6 +123,7 @@ export async function POST(request: NextRequest) {
             deliveredAt: new Date(),
             failedAt: null,
             errorMsg: null,
+            reconciliationDeadline: null,
           },
         });
       }
@@ -124,7 +133,7 @@ export async function POST(request: NextRequest) {
         await prisma.notification.updateMany({
           where: {
             id: notification.id,
-            status: { in: ['PENDING', 'SENT'] },
+            status: { in: ['PENDING', 'SENT', 'UNKNOWN'] },
             ...providerAttemptFence,
           },
           data: {
@@ -133,6 +142,7 @@ export async function POST(request: NextRequest) {
             failedAt: new Date(),
             deliveredAt: null,
             errorMsg: errorText || `Twilio delivery failed (${errorCode || 'unknown'})`,
+            reconciliationDeadline: null,
           },
         });
       }
@@ -140,14 +150,27 @@ export async function POST(request: NextRequest) {
       await prisma.notification.updateMany({
         where: {
           id: notification.id,
-          status: 'PENDING',
+          status: { in: ['PENDING', 'UNKNOWN'] },
           ...providerAttemptFence,
         },
         data: {
           providerMessageId: messageSid || undefined,
           status: 'SENT',
           errorMsg: null,
+          reconciliationDeadline: null,
         },
+      });
+    }
+
+    if (notification.userId && (delivered || failed)) {
+      await recordUserNotificationEndpointOutcome(prisma, {
+        userId: notification.userId,
+        channel: notification.channel,
+        addressHash: notification.recipientHash,
+        delivered,
+        errorCode: failed ? errorCode || messageStatus : undefined,
+        terminalStatus: failed && errorCode === '21211' ? 'INVALID' : undefined,
+        occurredAt: new Date(),
       });
     }
 

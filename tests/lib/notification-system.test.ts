@@ -25,9 +25,18 @@ import { sendIncidentWhatsApp } from '@/lib/whatsapp';
 import { getUserNotificationChannels, sendIncidentNotifications } from '@/lib/user-notifications';
 import * as notificationProviders from '@/lib/notification-providers';
 import * as sms from '@/lib/sms';
-import { enqueueCentralNotification } from '@/lib/notification-control-plane';
+import {
+  createCentralNotificationIntent,
+  enqueueCentralNotification,
+} from '@/lib/notification-control-plane';
 vi.mock('@/lib/notification-control-plane', () => ({
   enqueueCentralNotification: vi.fn(),
+  pinNotificationProviderKeys: vi.fn().mockResolvedValue(new Map()),
+  createCentralNotificationIntent: vi.fn().mockResolvedValue({
+    id: 'notification-central',
+    created: true,
+  }),
+  deliverCentralNotification: vi.fn().mockResolvedValue({ success: true, claimed: true }),
 }));
 vi.mock('@/lib/prisma', () => ({
   __esModule: true,
@@ -662,21 +671,15 @@ describe('Notification System Tests', () => {
       vi.mocked(prisma.incident.updateMany).mockResolvedValue({ count: 1 } as never);
       vi.mocked(prisma.incidentEvent.create).mockResolvedValue({} as never);
       vi.mocked(prisma.incident.update).mockResolvedValue({} as never);
-      vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 1 } as never);
       vi.mocked(prisma.inAppNotification.createMany).mockResolvedValue({ count: 1 } as never);
       vi.spyOn(sms, 'sendIncidentSMS').mockResolvedValue({ success: true });
-      process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL = 'false';
-
       const result = await executeEscalation(incidentId, 0);
 
       expect(result.escalated).toBe(true);
-      const intents = vi.mocked(prisma.notification.createMany).mock.calls[0][0] as never as {
-        data: Array<{ userId: string; channel: string; eventType: string }>;
-      };
-      expect(intents.data).toEqual([
-        expect.objectContaining({ userId, channel: 'SMS', eventType: 'triggered' }),
-      ]);
-      delete process.env.NOTIFICATION_CONTROL_PLANE_PERSONAL;
+      expect(createCentralNotificationIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ userId, channel: 'SMS', templateKey: 'incident-triggered' }),
+        expect.anything()
+      );
       vi.useRealTimers();
     });
   });

@@ -2,16 +2,18 @@ import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { findFirst, updateMany, updateAttemptMany } = vi.hoisted(() => ({
+const { findFirst, updateMany, updateAttemptMany, endpointUpsert } = vi.hoisted(() => ({
   findFirst: vi.fn(),
   updateMany: vi.fn(),
   updateAttemptMany: vi.fn(),
+  endpointUpsert: vi.fn(),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
     notification: { findFirst, updateMany },
     notificationDeliveryAttempt: { updateMany: updateAttemptMany },
+    userNotificationEndpoint: { upsert: endpointUpsert },
   },
 }));
 
@@ -64,7 +66,7 @@ describe('Twilio delivery receipt webhook', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'notif-1',
-          status: { in: ['PENDING', 'SENT', 'FAILED'] },
+          status: { in: ['PENDING', 'SENT', 'FAILED', 'UNKNOWN'] },
           OR: [{ providerMessageId: null }, { providerMessageId: 'SM123' }],
         }),
         data: expect.objectContaining({
@@ -104,7 +106,7 @@ describe('Twilio delivery receipt webhook', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'notif-1',
-          status: { in: ['PENDING', 'SENT'] },
+          status: { in: ['PENDING', 'SENT', 'UNKNOWN'] },
           OR: [{ providerMessageId: null }, { providerMessageId: 'SM123' }],
         }),
         data: expect.objectContaining({
