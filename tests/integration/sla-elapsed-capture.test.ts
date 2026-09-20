@@ -165,6 +165,55 @@ describeIfRealDB('materialized SLA lifecycle elapsed values', { timeout: 30_000 
     expect(stored.slaAckElapsedMs).toBe(BigInt(3 * 60_000));
   });
 
+  it('recomputes elapsed time when durable history predates a retained re-ACK capture', async () => {
+    const service = await createTestService('Legacy re-ACK repair');
+    const createdAt = new Date('2026-09-06T10:00:00Z');
+    const firstAckAt = new Date('2026-09-06T10:05:00Z');
+    const secondAckAt = new Date('2026-09-06T10:20:00Z');
+    const incident = await testPrisma.incident.create({
+      data: {
+        title: 'Legacy reopened and re-acknowledged incident',
+        serviceId: service.id,
+        urgency: 'HIGH',
+        createdAt,
+        acknowledgedAt: secondAckAt,
+        slaFirstAcknowledgedAt: null,
+        slaAckElapsedMs: BigInt(20 * 60_000),
+      },
+    });
+    await testPrisma.incidentEvent.createMany({
+      data: [
+        {
+          incidentId: incident.id,
+          type: 'ACKNOWLEDGED',
+          message: 'Incident acknowledged',
+          createdAt: firstAckAt,
+        },
+        {
+          incidentId: incident.id,
+          type: 'ACKNOWLEDGED',
+          message: 'Incident acknowledged',
+          createdAt: secondAckAt,
+        },
+      ],
+    });
+
+    const migration = readFileSync(
+      'prisma/migrations/20260920000003_incident_first_ack_compatibility/migration.sql',
+      'utf8'
+    );
+    const repair = migration.slice(
+      migration.indexOf('WITH first_ack_events AS'),
+      migration.indexOf('-- END legacy first-ACK repair')
+    );
+    await testPrisma.$executeRawUnsafe(repair);
+
+    const stored = await testPrisma.incident.findUniqueOrThrow({ where: { id: incident.id } });
+    expect(stored.acknowledgedAt).toEqual(secondAckAt);
+    expect(stored.slaFirstAcknowledgedAt).toEqual(firstAckAt);
+    expect(stored.slaAckElapsedMs).toBe(BigInt(5 * 60_000));
+  });
+
   it('subtracts an open pause when resolve commits', async () => {
     const service = await createTestService('SLA capture resolve');
     const now = new Date('2026-09-06T12:00:00Z');

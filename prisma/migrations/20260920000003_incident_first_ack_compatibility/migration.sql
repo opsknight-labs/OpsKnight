@@ -17,12 +17,16 @@ WITH first_ack_events AS (
   SELECT
     i."id",
     i."createdAt",
-    COALESCE(f.acknowledged_at, i."acknowledgedAt") AS evaluation_at
+    COALESCE(i."slaFirstAcknowledgedAt", f.acknowledged_at, i."acknowledgedAt") AS evaluation_at,
+    (
+      i."slaAckElapsedMs" IS NULL
+      OR (i."slaFirstAcknowledgedAt" IS NULL AND f.acknowledged_at IS NOT NULL)
+    ) AS recompute_elapsed
   FROM "Incident" i
   LEFT JOIN first_ack_events f ON f."incidentId" = i."id"
   WHERE (i."slaAckElapsedMs" IS NULL OR i."slaFirstAcknowledgedAt" IS NULL)
-    AND COALESCE(f.acknowledged_at, i."acknowledgedAt") IS NOT NULL
-    AND COALESCE(f.acknowledged_at, i."acknowledgedAt") >= i."createdAt"
+    AND COALESCE(i."slaFirstAcknowledgedAt", f.acknowledged_at, i."acknowledgedAt") IS NOT NULL
+    AND COALESCE(i."slaFirstAcknowledgedAt", f.acknowledged_at, i."acknowledgedAt") >= i."createdAt"
 ), clipped AS (
   SELECT
     t."id",
@@ -58,6 +62,7 @@ WITH first_ack_events AS (
   SELECT
     t."id",
     t.evaluation_at,
+    t.recompute_elapsed,
     GREATEST(
       0,
       (EXTRACT(EPOCH FROM (t.evaluation_at - t."createdAt")) * 1000)::BIGINT
@@ -69,7 +74,10 @@ WITH first_ack_events AS (
 UPDATE "Incident" i
 SET
   "slaFirstAcknowledgedAt" = COALESCE(i."slaFirstAcknowledgedAt", repaired.evaluation_at),
-  "slaAckElapsedMs" = COALESCE(i."slaAckElapsedMs", repaired.elapsed_ms)
+  "slaAckElapsedMs" = CASE
+    WHEN repaired.recompute_elapsed THEN repaired.elapsed_ms
+    ELSE i."slaAckElapsedMs"
+  END
 FROM repaired
 WHERE i."id" = repaired."id";
 -- END legacy first-ACK repair
