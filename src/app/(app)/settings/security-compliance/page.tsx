@@ -38,7 +38,7 @@ export default async function SecurityCompliancePage({
       id: fw.id,
       title: fw.title,
       scope: fw.jurisdiction ?? 'Universal',
-      source: fw.authoritativeSource,
+      source: fw.sourceUrl,
       version: fw.version,
       summaryView: summary
         ? {
@@ -56,9 +56,7 @@ export default async function SecurityCompliancePage({
 
   const capabilities = {
     canEvaluate: permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVALUATE),
-    canReadEvidence:
-      permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVIDENCE_READ) ||
-      permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_READ),
+    canReadEvidence: permissions.capabilities.includes(CAPABILITIES.COMPLIANCE_EVIDENCE_READ),
     canReadEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_READ),
     canManageEncryption: permissions.capabilities.includes(CAPABILITIES.ENCRYPTION_MANAGE),
     canReadPrivacy: permissions.capabilities.includes(CAPABILITIES.PRIVACY_READ),

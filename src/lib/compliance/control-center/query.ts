@@ -88,43 +88,65 @@ export async function getComplianceControlCenterData(
     sampleByControl.set(ev.controlId, list);
   }
 
-  let totalMismatchesCount = 0;
-  let totalVerifiedEvidenceCount = 0;
+  let sampleCheckedCount = 0;
+  let sampleVerifiedCount = 0;
+  let sampleMismatchesCount = 0;
+
+  for (const ev of evidenceRecords) {
+    sampleCheckedCount++;
+    const isValid = verifyComplianceEvidenceHash({
+      evaluationId: ev.evaluationId,
+      controlId: ev.controlId,
+      type: ev.type,
+      collectorId: ev.collectorId,
+      collectorVersion: ev.collectorVersion,
+      title: ev.title,
+      description: ev.description,
+      resourceType: ev.resourceType,
+      resourceId: ev.resourceId,
+      metadata: (ev.metadata ?? {}) as Record<string, unknown>,
+      collectedAt: ev.collectedAt,
+      observedAt: ev.observedAt,
+      contentHash: ev.contentHash,
+    });
+
+    if (isValid) {
+      sampleVerifiedCount++;
+    } else {
+      sampleMismatchesCount++;
+    }
+  }
 
   const evidenceSummaryMap = new Map<string, ControlCenterEvidenceSummary>();
   for (const [controlId, list] of sampleByControl.entries()) {
-    let allValid = true;
-    for (const ev of list) {
-      const isValid = verifyComplianceEvidenceHash({
-        evaluationId: ev.evaluationId,
-        controlId: ev.controlId,
-        type: ev.type,
-        collectorId: ev.collectorId,
-        collectorVersion: ev.collectorVersion,
-        title: ev.title,
-        description: ev.description,
-        resourceType: ev.resourceType,
-        resourceId: ev.resourceId,
-        metadata: (ev.metadata ?? {}) as Record<string, unknown>,
-        collectedAt: ev.collectedAt,
-        observedAt: ev.observedAt,
-        contentHash: ev.contentHash,
+    const latestItem = list[0];
+    let latestIntegrity: 'VERIFIED' | 'MISMATCH' | 'NONE' = 'NONE';
+    if (latestItem) {
+      const isLatestValid = verifyComplianceEvidenceHash({
+        evaluationId: latestItem.evaluationId,
+        controlId: latestItem.controlId,
+        type: latestItem.type,
+        collectorId: latestItem.collectorId,
+        collectorVersion: latestItem.collectorVersion,
+        title: latestItem.title,
+        description: latestItem.description,
+        resourceType: latestItem.resourceType,
+        resourceId: latestItem.resourceId,
+        metadata: (latestItem.metadata ?? {}) as Record<string, unknown>,
+        collectedAt: latestItem.collectedAt,
+        observedAt: latestItem.observedAt,
+        contentHash: latestItem.contentHash,
       });
-
-      if (isValid) {
-        totalVerifiedEvidenceCount++;
-      } else {
-        allValid = false;
-        totalMismatchesCount++;
-      }
+      latestIntegrity = isLatestValid ? 'VERIFIED' : 'MISMATCH';
     }
 
     const count = evidenceCountByControl.get(controlId) ?? list.length;
     evidenceSummaryMap.set(controlId, {
       count,
-      latestObservedAt: list[0]?.observedAt.toISOString() ?? null,
-      integrity: allValid && list.length > 0 ? 'VERIFIED' : list.length > 0 ? 'MISMATCH' : 'NONE',
-      latestDigest: list[0]?.contentHash,
+      latestObservedAt: latestItem?.observedAt.toISOString() ?? null,
+      latestIntegrity,
+      integrity: latestIntegrity,
+      latestDigest: latestItem?.contentHash,
     });
   }
 
@@ -134,6 +156,7 @@ export async function getComplianceControlCenterData(
       evidenceSummaryMap.set(controlId, {
         count,
         latestObservedAt: null,
+        latestIntegrity: 'NONE',
         integrity: 'NONE',
       });
     }
@@ -180,9 +203,10 @@ export async function getComplianceControlCenterData(
       runtimeUnverified++;
     }
 
-    const evidenceSummary = evidenceSummaryMap.get(control.id) ?? {
+    const evidenceSummary: ControlCenterEvidenceSummary = evidenceSummaryMap.get(control.id) ?? {
       count: 0,
       latestObservedAt: null,
+      latestIntegrity: 'NONE',
       integrity: 'NONE',
     };
 
@@ -285,14 +309,14 @@ export async function getComplianceControlCenterData(
       });
     }
 
-    if (evidenceSummary.integrity === 'MISMATCH') {
+    if (evidenceSummary.latestIntegrity === 'MISMATCH') {
       attentionItems.push({
         id: `att-mis-${control.id}`,
         controlId: control.id,
         controlTitle: control.title,
         severity: 'HIGH',
         type: 'INTEGRITY_MISMATCH',
-        reason: 'One or more evidence snapshots failed SHA-256 integrity hash verification.',
+        reason: 'Latest supporting evidence snapshot failed SHA-256 integrity hash verification.',
         actionLabel: 'Inspect Evidence',
         actionType: 'VIEW_EVIDENCE',
       });
@@ -330,8 +354,13 @@ export async function getComplianceControlCenterData(
     },
     evidence: {
       records: totalEvidenceCount,
-      verifiedRecords: totalVerifiedEvidenceCount,
-      integrityMismatches: totalMismatchesCount,
+      verifiedRecords: sampleVerifiedCount,
+      integrityMismatches: sampleMismatchesCount,
+      integritySample: {
+        checkedRecords: sampleCheckedCount,
+        validRecords: sampleVerifiedCount,
+        mismatches: sampleMismatchesCount,
+      },
     },
     frameworks: {
       count: COMPLIANCE_FRAMEWORK_DEFINITIONS.length,

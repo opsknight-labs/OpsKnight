@@ -126,7 +126,7 @@ export function EvidenceView({
       <Card className="p-8 text-center border-dashed">
         <p className="text-xs text-muted-foreground">
           You do not have permission to inspect compliance evidence snapshots. Requires{' '}
-          <code>COMPLIANCE_EVIDENCE_READ</code> or <code>COMPLIANCE_READ</code>.
+          <code>COMPLIANCE_EVIDENCE_READ</code>.
         </p>
       </Card>
     );
@@ -234,7 +234,7 @@ export function EvidenceView({
       {/* Ledger Header */}
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
         <span>Showing {filteredEvidence.length} evidence record(s)</span>
-        <span className="text-[11px]">Cryptographically signed with SHA-256 envelope digests</span>
+        <span className="text-[11px]">Integrity checked using canonical SHA-256 digests</span>
       </div>
 
       {/* Evidence Table / List */}

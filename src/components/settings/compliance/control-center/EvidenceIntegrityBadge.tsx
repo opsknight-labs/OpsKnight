@@ -24,7 +24,10 @@ export function EvidenceIntegrityBadge({
         )}
       >
         <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-        <span>Verified (SHA-256){count !== undefined && count > 0 ? ` (${count})` : ''}</span>
+        <span>
+          Latest SHA-256 Valid
+          {count !== undefined && count > 0 ? ` (${count} record${count === 1 ? '' : 's'})` : ''}
+        </span>
       </Badge>
     );
   }
@@ -39,7 +42,10 @@ export function EvidenceIntegrityBadge({
         )}
       >
         <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-        <span>Integrity Mismatch{count !== undefined && count > 0 ? ` (${count})` : ''}</span>
+        <span>
+          Latest Integrity Mismatch
+          {count !== undefined && count > 0 ? ` (${count} record${count === 1 ? '' : 's'})` : ''}
+        </span>
       </Badge>
     );
   }
@@ -53,7 +59,11 @@ export function EvidenceIntegrityBadge({
       )}
     >
       <CircleDashed className="h-3.5 w-3.5 shrink-0" />
-      <span>No Evidence</span>
+      <span>
+        {count !== undefined && count > 0
+          ? `${count} unverified record${count === 1 ? '' : 's'}`
+          : 'No Evidence'}
+      </span>
     </Badge>
   );
 }

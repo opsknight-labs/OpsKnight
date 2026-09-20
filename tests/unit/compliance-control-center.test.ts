@@ -85,6 +85,11 @@ describe('compliance control center read model (unit)', () => {
     expect(data.retentionPolicy).toBeDefined();
     expect(data.retentionPolicy.logRetentionDays).toBeGreaterThan(0);
 
+    // Evidence integrity sample
+    expect(data.evidence.integritySample).toBeDefined();
+    expect(data.evidence.integritySample.checkedRecords).toBe(0);
+    expect(data.evidence.integritySample.mismatches).toBe(0);
+
     // Assert lack of synthetic scores or percentages
     const dataObj = data as unknown as Record<string, unknown>;
     expect(dataObj.score).toBeUndefined();

@@ -170,7 +170,7 @@ export function ControlDetailDrawer({
               Durable Supporting Evidence
             </span>
             <EvidenceIntegrityBadge
-              integrity={control.evidence.integrity}
+              integrity={control.evidence.latestIntegrity ?? control.evidence.integrity}
               count={control.evidence.count}
             />
           </div>
@@ -183,14 +183,14 @@ export function ControlDetailDrawer({
             </span>
             {control.evidence.latestObservedAt && (
               <span>
-                Observed: {new Date(control.evidence.latestObservedAt).toLocaleTimeString()}
+                Latest: {new Date(control.evidence.latestObservedAt).toLocaleTimeString()}
               </span>
             )}
           </div>
 
           {control.evidence.latestDigest && (
             <div className="text-[11px] font-mono text-muted-foreground bg-muted/40 p-2 rounded border border-border/50 truncate">
-              SHA-256: {control.evidence.latestDigest}
+              Latest SHA-256: {control.evidence.latestDigest}
             </div>
           )}
 

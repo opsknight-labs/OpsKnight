@@ -29,6 +29,11 @@ describe('ComplianceControlCenter Component', () => {
       records: 12,
       verifiedRecords: 12,
       integrityMismatches: 0,
+      integritySample: {
+        checkedRecords: 12,
+        validRecords: 12,
+        mismatches: 0,
+      },
     },
     frameworks: {
       count: 6,
@@ -69,6 +74,7 @@ describe('ComplianceControlCenter Component', () => {
         evidence: {
           count: 2,
           latestObservedAt: new Date().toISOString(),
+          latestIntegrity: 'VERIFIED',
           integrity: 'VERIFIED',
           latestDigest: 'a'.repeat(64),
         },
@@ -96,6 +102,7 @@ describe('ComplianceControlCenter Component', () => {
         evidence: {
           count: 0,
           latestObservedAt: null,
+          latestIntegrity: 'NONE',
           integrity: 'NONE',
         },
         frameworkMappings: [],

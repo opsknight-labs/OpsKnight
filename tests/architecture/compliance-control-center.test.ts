@@ -19,10 +19,11 @@ describe('compliance control center architecture contract', () => {
     });
 
     const overviewRecord = overview as unknown as Record<string, unknown>;
+    const overviewKeys = new Set(Object.keys(overviewRecord));
 
     for (const kw of forbiddenKeywords) {
-      expect(overviewRecord[kw.toLowerCase()]).toBeUndefined();
-      expect(overviewRecord[kw]).toBeUndefined();
+      expect(overviewKeys.has(kw.toLowerCase())).toBe(false);
+      expect(overviewKeys.has(kw)).toBe(false);
     }
 
     expect(overview.runtime).toBeDefined();

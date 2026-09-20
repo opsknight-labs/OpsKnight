@@ -37,6 +37,7 @@ export interface ControlCenterRuntimeStateView {
 export interface ControlCenterEvidenceSummary {
   readonly count: number;
   readonly latestObservedAt: string | null;
+  readonly latestIntegrity: 'VERIFIED' | 'MISMATCH' | 'NONE';
   readonly integrity: 'VERIFIED' | 'MISMATCH' | 'NONE';
   readonly latestDigest?: string;
 }
@@ -96,6 +97,11 @@ export interface ComplianceControlCenterOverview {
     readonly records: number;
     readonly verifiedRecords: number;
     readonly integrityMismatches: number;
+    readonly integritySample: {
+      readonly checkedRecords: number;
+      readonly validRecords: number;
+      readonly mismatches: number;
+    };
   };
   readonly frameworks: {
     readonly count: number;

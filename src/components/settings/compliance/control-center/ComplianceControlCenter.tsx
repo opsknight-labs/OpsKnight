@@ -125,7 +125,7 @@ export function ComplianceControlCenter({
       <DetailHeroBanner
         tag="Security Posture & Compliance Engine"
         title="Compliance Control Center"
-        subtitle="Continuous runtime control telemetry, cryptographically verified evidence, and versioned regulatory mapping."
+        subtitle="Continuous runtime control telemetry, integrity-verified evidence, and versioned regulatory mapping."
         icon={
           <div className="p-3 rounded-2xl bg-primary-foreground/15 text-primary-foreground border border-primary-foreground/20 shadow-inner">
             <ShieldCheck className="h-7 w-7" />

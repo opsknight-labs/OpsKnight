@@ -42,8 +42,8 @@ export function ControlCenterOverview({
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
-            Authoritative runtime control telemetry, cryptographically verified evidence, and
-            versioned framework mappings.
+            Authoritative runtime control telemetry, integrity-verified evidence, and versioned
+            framework mappings.
           </p>
         </div>
 
@@ -140,21 +140,22 @@ export function ControlCenterOverview({
 
             <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">SHA-256 Valid:</span>
+                <span className="text-muted-foreground">Recent Sample:</span>
                 <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
-                  {evidence.verifiedRecords}
+                  {evidence.integritySample?.validRecords ?? evidence.verifiedRecords}/
+                  {evidence.integritySample?.checkedRecords ?? evidence.verifiedRecords} valid
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Mismatches:</span>
                 <span
                   className={`font-mono font-semibold ${
-                    evidence.integrityMismatches > 0
+                    (evidence.integritySample?.mismatches ?? evidence.integrityMismatches) > 0
                       ? 'text-rose-600 dark:text-rose-400'
                       : 'text-zinc-600 dark:text-zinc-400'
                   }`}
                 >
-                  {evidence.integrityMismatches}
+                  {evidence.integritySample?.mismatches ?? evidence.integrityMismatches}
                 </span>
               </div>
             </div>
