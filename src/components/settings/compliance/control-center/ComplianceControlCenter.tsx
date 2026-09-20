@@ -2,7 +2,15 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Activity, SlidersHorizontal, Layers, FileCheck2, Key } from 'lucide-react';
+import {
+  ShieldCheck,
+  Activity,
+  SlidersHorizontal,
+  Layers,
+  FileCheck2,
+  Key,
+  GitCompare,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { notify } from '@/lib/toast';
@@ -13,11 +21,13 @@ import { FrameworksView, type FrameworkCardItem } from './FrameworksView';
 import { EvidenceView } from './EvidenceView';
 import { OperationsView } from './OperationsView';
 import { ExportEvidencePackageModal } from './ExportEvidencePackageModal';
+import { DriftView } from './DriftView';
 
 export interface ComplianceCapabilities {
   readonly canEvaluate: boolean;
   readonly canReadEvidence: boolean;
   readonly canExport?: boolean;
+  readonly canManageDrift?: boolean;
   readonly canReadEncryption: boolean;
   readonly canManageEncryption: boolean;
   readonly canReadPrivacy: boolean;
@@ -28,7 +38,13 @@ interface ComplianceControlCenterProps {
   readonly initialData: ComplianceControlCenterOverview;
   readonly frameworks: readonly FrameworkCardItem[];
   readonly capabilities: ComplianceCapabilities;
-  readonly initialTab?: 'overview' | 'controls' | 'frameworks' | 'evidence' | 'operations';
+  readonly initialTab?:
+    | 'overview'
+    | 'controls'
+    | 'drift'
+    | 'frameworks'
+    | 'evidence'
+    | 'operations';
 }
 
 export function ComplianceControlCenter({
@@ -38,15 +54,27 @@ export function ComplianceControlCenter({
   initialTab = 'overview',
 }: ComplianceControlCenterProps) {
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'controls' | 'frameworks' | 'evidence' | 'operations'
+    'overview' | 'controls' | 'drift' | 'frameworks' | 'evidence' | 'operations'
   >(initialTab);
 
   const [overviewData, setOverviewData] = useState<ComplianceControlCenterOverview>(initialData);
+  const [openDriftCount, setOpenDriftCount] = useState<number>(0);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [selectedControlId, setSelectedControlId] = useState<string | null>(null);
   const [evidenceControlFilter, setEvidenceControlFilter] = useState<string | null>(null);
   const router = useRouter();
+
+  React.useEffect(() => {
+    fetch('/api/compliance/monitoring')
+      .then(res => res.json())
+      .then(json => {
+        if (json.data && typeof json.data.openDriftCount === 'number') {
+          setOpenDriftCount(json.data.openDriftCount);
+        }
+      })
+      .catch(() => {});
+  }, [activeTab]);
 
   const handleEvaluateControls = async () => {
     setIsEvaluating(true);
@@ -102,6 +130,13 @@ export function ComplianceControlCenter({
       label: 'Controls',
       icon: SlidersHorizontal,
       badge: `${overviewData.controls.length}`,
+    },
+    {
+      id: 'drift' as const,
+      label: 'Control Drift',
+      icon: GitCompare,
+      badge: openDriftCount > 0 ? `${openDriftCount}` : undefined,
+      badgeVariant: 'destructive' as const,
     },
     {
       id: 'frameworks' as const,
@@ -207,6 +242,14 @@ export function ComplianceControlCenter({
             controls={overviewData.controls}
             selectedControlId={selectedControlId}
             onSelectControl={setSelectedControlId}
+            onNavigateToEvidence={handleNavigateToEvidence}
+          />
+        )}
+
+        {activeTab === 'drift' && (
+          <DriftView
+            canManageDrift={capabilities.canManageDrift}
+            onSelectControl={handleSelectControl}
             onNavigateToEvidence={handleNavigateToEvidence}
           />
         )}

@@ -51,6 +51,8 @@ enum AuditEntityType {
   DATA_RETENTION_HOLD
   ENCRYPTION_MIGRATION
   COMPLIANCE_EVALUATION
+  COMPLIANCE_DRIFT_EVENT
+  COMPLIANCE_MONITORING_RUN
 }
 
 // Data subject a privacy request concerns. Only USER is operable in Phase 2;
@@ -1887,6 +1889,8 @@ enum JobType {
   MEETING_PROVISION
   MEETING_CLOSE
   ENCRYPTION_LIFECYCLE
+  COMPLIANCE_EVALUATION_SWEEP
+  COMPLIANCE_DRIFT_PROJECT
 }
 
 enum JobStatus {
@@ -2920,6 +2924,7 @@ model ComplianceEvaluation {
 
   evidence         ComplianceEvidence[]
 
+  @@unique([batchId, controlId])
   @@index([controlId, evaluatedAt])
   @@index([status])
   @@index([batchId])
@@ -2966,3 +2971,135 @@ model ComplianceControlState {
 
   @@index([status])
 }
+
+enum ComplianceDriftStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum ComplianceDriftKind {
+  CONTROL_STATUS_REGRESSION
+  CONTROL_UNVERIFIED
+  FINDING_SET_CHANGED
+  EVIDENCE_INTEGRITY_MISMATCH
+  EVALUATOR_VERSION_CHANGED
+  APPLICABILITY_CHANGED
+  FRAMEWORK_LIFECYCLE_CHANGED
+}
+
+enum ComplianceDriftImpact {
+  ACTION_REQUIRED
+  VERIFICATION_GAP
+  INFORMATIONAL
+}
+
+// Projection representing the last evaluation processed by the drift engine for a control.
+model ComplianceDriftBaseline {
+  controlId               String                     @id
+
+  lastEvaluationId        String
+  lastEvaluationCreatedAt DateTime
+  lastEvaluatedAt         DateTime
+
+  resolvedStatus          ComplianceEvaluationStatus
+
+  evaluatorId             String
+  evaluatorVersion        String
+
+  observationFingerprint  String
+  findingFingerprint      String
+  evidenceFingerprint     String?
+
+  establishedAt           DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+}
+
+// Durable drift episodes representing observed technical changes.
+model ComplianceDriftEvent {
+  id                      String                      @id @default(cuid())
+
+  subjectType             String
+  subjectId               String
+
+  controlId               String?
+  framework               String?
+  requirementId           String?
+
+  kind                    ComplianceDriftKind
+  impact                  ComplianceDriftImpact
+  status                  ComplianceDriftStatus
+
+  fingerprint             String
+
+  // Only populated while event is active (OPEN or ACKNOWLEDGED).
+  // Unique prevents duplicate active episodes. Cleared (null) upon recovery.
+  activeDedupeKey         String?                     @unique
+
+  baselineEvaluationId    String?
+  detectedEvaluationId    String?
+  resolutionEvaluationId  String?
+
+  previousStatus          ComplianceEvaluationStatus?
+  currentStatus           ComplianceEvaluationStatus?
+
+  summary                 String
+  details                 Json
+
+  firstDetectedAt         DateTime
+  lastObservedAt          DateTime
+
+  occurrenceCount         Int                         @default(1)
+
+  acknowledgedAt          DateTime?
+  acknowledgedByUserId    String?
+
+  resolvedAt              DateTime?
+
+  notificationGeneration  Int                         @default(0)
+  lastNotifiedAt          DateTime?
+
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+
+  @@index([status, firstDetectedAt])
+  @@index([controlId, status])
+  @@index([kind, status])
+  @@index([framework, requirementId])
+}
+
+enum ComplianceMonitoringRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  PARTIAL_FAILED
+  FAILED
+}
+
+// Observable scheduled compliance monitoring cycle.
+model ComplianceMonitoringRun {
+  id                String                        @id @default(cuid())
+
+  scheduledFor      DateTime
+  status            ComplianceMonitoringRunStatus
+
+  startedAt         DateTime?
+  completedAt       DateTime?
+
+  controlsTargeted  Int                           @default(0)
+  controlsEvaluated Int                           @default(0)
+  controlsFailed    Int                           @default(0)
+
+  driftOpened       Int                           @default(0)
+  driftResolved     Int                           @default(0)
+
+  frameworkChanges  Int                           @default(0)
+
+  errorSummary      Json?
+
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+
+  @@index([status, scheduledFor])
+}
+

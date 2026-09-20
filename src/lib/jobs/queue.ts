@@ -54,7 +54,9 @@ export type JobType =
   | 'WAR_ROOM_PROVIDER_EVENT'
   | 'MEETING_PROVISION'
   | 'MEETING_CLOSE'
-  | 'ENCRYPTION_LIFECYCLE';
+  | 'ENCRYPTION_LIFECYCLE'
+  | 'COMPLIANCE_EVALUATION_SWEEP'
+  | 'COMPLIANCE_DRIFT_PROJECT';
 export type JobStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -150,6 +152,12 @@ function payloadValue(payload: unknown, key: string): unknown {
       return values.projectionVersion;
     case 'runId':
       return values.runId;
+    case 'evaluationId':
+      return values.evaluationId;
+    case 'controlId':
+      return values.controlId;
+    case 'monitorRunId':
+      return values.monitorRunId;
     default:
       return undefined;
   }
@@ -275,6 +283,17 @@ export async function claimPendingJobs(
     await reconcileTerminalEncryptionLifecycleJobs(prisma);
   } catch (reconcileErr) {
     logger.warn('[Queue] Failed to reconcile terminal encryption lifecycle jobs', {
+      error: reconcileErr,
+    });
+  }
+
+  // Reconcile and sweep any zombie/timed-out compliance monitoring sweep jobs atomically
+  try {
+    const { reconcileTerminalComplianceMonitoringJobs } =
+      await import('../compliance/monitoring/reconcile');
+    await reconcileTerminalComplianceMonitoringJobs(prisma);
+  } catch (reconcileErr) {
+    logger.warn('[Queue] Failed to reconcile terminal compliance monitoring jobs', {
       error: reconcileErr,
     });
   }
@@ -577,6 +596,38 @@ export async function markJobFailed(jobId: string, error: string): Promise<void>
           data: {
             status: 'FAILED',
             errorMessage: safeError,
+            completedAt: now,
+          },
+        });
+      }
+    });
+    return;
+  }
+
+  if (!shouldRetry && job.type === 'COMPLIANCE_EVALUATION_SWEEP') {
+    const monitorRunId = payloadValue(job.payload, 'monitorRunId');
+    const safeRunId = typeof monitorRunId === 'string' ? monitorRunId.trim() : null;
+    const safeError = error ? error.slice(0, 1000) : 'Compliance monitoring sweep failed';
+
+    await prisma.$transaction(async tx => {
+      await tx.backgroundJob.updateMany({
+        where: { id: jobId, status: { in: ['PROCESSING', 'PENDING'] } },
+        data: {
+          status: 'FAILED',
+          failedAt: now,
+          error,
+        },
+      });
+
+      if (safeRunId) {
+        await tx.complianceMonitoringRun.updateMany({
+          where: {
+            id: safeRunId,
+            status: { in: ['PENDING', 'RUNNING'] },
+          },
+          data: {
+            status: 'FAILED',
+            errorSummary: { error: safeError },
             completedAt: now,
           },
         });
@@ -1152,6 +1203,28 @@ export async function processJob(jobInput: QueuedJob | string | null): Promise<b
         const runId = requiredPayloadString(job.payload, 'runId');
         const { executeMigrationRun } = await import('../encryption/migration');
         await executeMigrationRun({ runId, prisma });
+        await markJobCompleted(job.id);
+        return true;
+      }
+      case 'COMPLIANCE_DRIFT_PROJECT': {
+        const { projectControlDrift } = await import('../compliance/drift/projector');
+        const controlId = requiredPayloadString(job.payload, 'controlId');
+        const evaluationId = payloadValue(job.payload, 'evaluationId');
+        await projectControlDrift({
+          controlId,
+          evaluationId: typeof evaluationId === 'string' ? evaluationId : undefined,
+          prisma,
+        });
+        await markJobCompleted(job.id);
+        return true;
+      }
+      case 'COMPLIANCE_EVALUATION_SWEEP': {
+        const { runComplianceEvaluationSweep } = await import('../compliance/monitoring/runner');
+        const monitorRunId = requiredPayloadString(job.payload, 'monitorRunId');
+        await runComplianceEvaluationSweep({
+          monitorRunId,
+          prisma,
+        });
         await markJobCompleted(job.id);
         return true;
       }

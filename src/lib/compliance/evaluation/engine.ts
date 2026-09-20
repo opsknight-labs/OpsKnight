@@ -205,6 +205,20 @@ export async function evaluateControl(options: EvaluateControlOptions): Promise<
       stateRecord = existingState;
     }
 
+    // Atomically enqueue drift projection background job
+    if (tx.backgroundJob) {
+      await tx.backgroundJob.create({
+        data: {
+          type: 'COMPLIANCE_DRIFT_PROJECT',
+          scheduledAt: context.now,
+          payload: {
+            evaluationId: evaluationRecord.id,
+            controlId: control.id,
+          },
+        },
+      });
+    }
+
     return { evaluation: evaluationRecord, controlState: stateRecord };
   });
 
