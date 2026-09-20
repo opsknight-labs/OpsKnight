@@ -38,13 +38,10 @@ vi.mock('next/navigation', () => ({
 import { bootstrapAdmin } from '@/app/setup/actions';
 import { hashBootstrapCode } from '@/lib/bootstrap-security';
 
-const bootstrapCode = 'bootstrap-code-that-is-long-enough';
-
-function bootstrapForm(code = bootstrapCode) {
+function bootstrapForm() {
   const form = new FormData();
   form.set('name', 'First Admin');
   form.set('email', 'admin@example.com');
-  form.set('bootstrapCode', code);
   form.set('password', 'a secure admin passphrase');
   form.set('confirmPassword', 'a secure admin passphrase');
   return form;
@@ -59,14 +56,7 @@ describe('bootstrap administrator security', () => {
     delete process.env.NEXTAUTH_URL;
     count.mockResolvedValue(0);
     create.mockResolvedValue({ id: 'admin-1', email: 'admin@example.com' });
-    findUniqueConfig.mockResolvedValue({
-      value: {
-        tokenHash: hashBootstrapCode(bootstrapCode),
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        usedAt: null,
-        generation: 1,
-      },
-    });
+    findUniqueConfig.mockResolvedValue(null);
     updateConfig.mockResolvedValue({});
     findUniqueSettings.mockResolvedValue(null);
     upsertSettings.mockResolvedValue({});
@@ -84,22 +74,20 @@ describe('bootstrap administrator security', () => {
     process.env = { ...originalEnv };
   });
 
-  it('requires and atomically consumes the one-time capability', async () => {
+  it('creates the first administrator atomically when no user exists', async () => {
     const result = await bootstrapAdmin(bootstrapForm());
     expect(result).toEqual({ success: true, email: 'admin@example.com' });
     expect(create).toHaveBeenCalledTimes(1);
-    expect(updateConfig).toHaveBeenCalledWith(
+    expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { key: 'auth.bootstrap.authorization' },
-        data: expect.objectContaining({ updatedBy: 'admin-1' }),
+        data: expect.objectContaining({
+          name: 'First Admin',
+          email: 'admin@example.com',
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        }),
       })
     );
-  });
-
-  it('rejects an invalid capability without creating an admin', async () => {
-    const result = await bootstrapAdmin(bootstrapForm('wrong-code-that-is-long-enough'));
-    expect(result).toEqual({ error: 'Invalid or expired setup authorization code.' });
-    expect(create).not.toHaveBeenCalled();
   });
 
   it('redirects when an existing user is observed inside the serializable transaction', async () => {

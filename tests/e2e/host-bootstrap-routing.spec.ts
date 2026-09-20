@@ -204,17 +204,11 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     expect(authRes?.status()).toBe(404);
   });
 
-  test('4. operator generates bootstrap code, fills setup form, and creates first administrator', async ({
-    page,
-  }) => {
-    const bootstrapCode = issueBootstrapCode();
-
+  test('4. operator fills setup form and creates first administrator', async ({ page }) => {
     await page.goto(`${APP_BASE}/setup`);
-    await expect(page.getByText('Operator authorization ready')).toBeVisible();
 
     await page.getByLabel('Full name').fill('E2E Bootstrap Admin');
     await page.getByLabel('Email address').fill(ADMIN_EMAIL);
-    await page.getByLabel('Setup authorization code').fill(bootstrapCode);
     await page.getByLabel('Administrator password').fill(ADMIN_PASSWORD);
     await page.getByLabel('Confirm password').fill(ADMIN_PASSWORD);
     await page.getByRole('button', { name: 'Create administrator' }).click();
@@ -231,13 +225,6 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     const admin = await prisma.user.findUnique({ where: { email: ADMIN_EMAIL } });
     expect(admin?.role).toBe('ADMIN');
     expect(admin?.status).toBe('ACTIVE');
-
-    // Bootstrap authorization state is marked as used
-    const bootstrapRow = await prisma.systemConfig.findUnique({
-      where: { key: BOOTSTRAP_CONFIG_KEY },
-    });
-    const state = bootstrapRow?.value as { usedAt?: string | null } | null;
-    expect(state?.usedAt).toBeTruthy();
 
     // Audit log records the bootstrap app URL seeding
     const auditEntries = await prisma.auditLog.findMany({
@@ -488,9 +475,7 @@ test.describe.serial('trusted proxy topology lifecycle', () => {
       },
     });
     expect(res.status).toBe(307);
-    expect(res.getHeader('location')).toBe(
-      `https://${APP_HOST}/login?callbackUrl=%2Fsettings`
-    );
+    expect(res.getHeader('location')).toBe(`https://${APP_HOST}/login?callbackUrl=%2Fsettings`);
   });
 
   test('SECURITY REGRESSION: trusted proxy redirect strictly uses X-Forwarded-Host origin, NEVER client-controlled Host', async () => {

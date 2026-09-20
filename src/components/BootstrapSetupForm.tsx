@@ -2,7 +2,7 @@
 
 import { useActionState, useMemo, useState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Mail, User, CheckCircle2, AlertCircle, ShieldCheck, KeyRound, Lock } from 'lucide-react';
+import { Mail, User, CheckCircle2, AlertCircle, ShieldCheck, Lock } from 'lucide-react';
 import { bootstrapAdmin } from '@/app/setup/actions';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
 import Spinner from '@/components/ui/Spinner';
@@ -61,7 +61,7 @@ export default function BootstrapSetupForm() {
             Administrator created
           </h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            Sign in as {state.email}. The bootstrap capability has been permanently consumed.
+            Sign in as {state.email} to access your incident control surface.
           </p>
         </div>
         <a
@@ -120,28 +120,6 @@ export default function BootstrapSetupForm() {
             value={email}
             onChange={event => setEmail(event.target.value)}
             className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <label
-          htmlFor="setup-bootstrap-code"
-          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-        >
-          Setup authorization code
-        </label>
-        <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
-          <KeyRound className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
-          <input
-            id="setup-bootstrap-code"
-            name="bootstrapCode"
-            type="password"
-            autoComplete="off"
-            required
-            maxLength={256}
-            spellCheck={false}
-            className="w-full bg-transparent px-3 py-3 font-mono text-sm text-slate-900 outline-none dark:text-white"
           />
         </div>
       </div>
