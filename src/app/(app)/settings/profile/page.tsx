@@ -104,11 +104,13 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         },
       })
     : null;
-  const chatIdentityLinks = user ? await prisma.chatIdentityLink.findMany({
-    where: { userId: user.id, revokedAt: null },
-    select: { id: true, provider: true, providerTenantId: true, displayName: true },
-    orderBy: { verifiedAt: 'desc' },
-  }) : [];
+  const chatIdentityLinks = user
+    ? await prisma.chatIdentityLink.findMany({
+        where: { userId: user.id, revokedAt: null },
+        select: { id: true, provider: true, providerTenantId: true, displayName: true },
+        orderBy: { verifiedAt: 'desc' },
+      })
+    : [];
 
   const name = user?.name || session?.user?.name || 'User';
   const role = user?.role || (session?.user as any)?.role || 'USER'; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -124,13 +126,14 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
 
   // Centralized SLA Metrics Calculation for Current User (Last 30 Days)
   const actor = user?.id ? await getCurrentAuthorizationActor() : null;
-  const slaMetrics = user?.id && actor
-    ? await calculateActorSLAMetrics(actor, {
-        assigneeId: user.id,
-        userTimeZone: timeZone,
-        windowDays: 30,
-      })
-    : null;
+  const slaMetrics =
+    user?.id && actor
+      ? await calculateActorSLAMetrics(actor, {
+          assigneeId: user.id,
+          userTimeZone: timeZone,
+          windowDays: 30,
+        })
+      : null;
 
   const totalTeams = user?.teamMemberships?.length ?? 0;
   const totalSchedules = user?.layerAssignments?.length ?? 0;
@@ -180,11 +183,16 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
           {
             label: 'SLA',
             value:
-              slaMetrics && totalIncidents > 0
-                ? `${(slaMetrics.resolveCompliance ?? slaMetrics.ackCompliance ?? 100).toFixed(0)}%`
-                : '100%',
+              slaMetrics &&
+              (slaMetrics.resolveCompliance !== null || slaMetrics.ackCompliance !== null)
+                ? `${(slaMetrics.resolveCompliance ?? slaMetrics.ackCompliance)!.toFixed(0)}%`
+                : '—',
             icon: <ShieldCheck className="h-3.5 w-3.5" />,
-            subtext: 'Last 30 days',
+            subtext:
+              slaMetrics &&
+              (slaMetrics.resolveCompliance !== null || slaMetrics.ackCompliance !== null)
+                ? 'Last 30 days'
+                : 'No evaluable SLA data',
             tooltip: 'SLA compliance score for the last 30 days',
           },
         ]}
@@ -200,16 +208,19 @@ export default async function ProfileSettingsPage({ searchParams }: ProfileSetti
         escalationRules={user?.escalationRules ?? []}
         slaMetrics={slaMetrics}
         profileContent={
-          <><ProfileForm
-            name={name}
-            email={email}
-            role={role}
-            memberSince={memberSince}
-            department={user?.department}
-            jobTitle={user?.jobTitle}
-            avatarUrl={user?.avatarUrl}
-            lastOidcSync={lastOidcSync}
-          /><ConnectedChatOpsAccounts links={chatIdentityLinks} /></>
+          <>
+            <ProfileForm
+              name={name}
+              email={email}
+              role={role}
+              memberSince={memberSince}
+              department={user?.department}
+              jobTitle={user?.jobTitle}
+              avatarUrl={user?.avatarUrl}
+              lastOidcSync={lastOidcSync}
+            />
+            <ConnectedChatOpsAccounts links={chatIdentityLinks} />
+          </>
         }
         notificationsContent={
           <NotificationPreferencesForm

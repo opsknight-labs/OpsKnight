@@ -49,8 +49,8 @@ export default function LineChart({
   let maxVal = 0;
   data.forEach(d => {
     lines.forEach(l => {
-      const value = typeof d[l.key] === 'number' ? (d[l.key] as number) : 0;
-      if (value > maxVal) maxVal = value;
+      const value = d[l.key];
+      if (typeof value === 'number' && value > maxVal) maxVal = value;
     });
   });
   // Add 10% headroom
@@ -114,28 +114,55 @@ export default function LineChart({
           {lines.map(line => {
             const points = data.map((d, i) => {
               const x = getX(i);
-              const value = typeof d[line.key] === 'number' ? (d[line.key] as number) : 0;
-              const y = getY(value);
-              return { x, y };
+              const value = d[line.key];
+              return typeof value === 'number' ? { x, y: getY(value) } : null;
             });
-            const path = buildSmoothPath(points);
-            const areaPath = `${path} L ${points[points.length - 1].x},100 L ${points[0].x},100 Z`;
-            const lastPoint = points[points.length - 1];
+            const segments: Array<Array<{ x: number; y: number }>> = [];
+            let currentSegment: Array<{ x: number; y: number }> = [];
+            for (const point of points) {
+              if (point) {
+                currentSegment.push(point);
+              } else if (currentSegment.length > 0) {
+                segments.push(currentSegment);
+                currentSegment = [];
+              }
+            }
+            if (currentSegment.length > 0) segments.push(currentSegment);
+            const populatedSegments = segments;
+            const lastPoint = populatedSegments.at(-1)?.at(-1);
 
             return (
               <g key={line.key}>
-                <path d={areaPath} fill={`url(#${line.key}-gradient)`} />
-                <path
-                  d={path}
-                  fill="none"
-                  stroke={line.color}
-                  strokeWidth="2.4"
-                  vectorEffect="non-scaling-stroke"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <circle cx={lastPoint.x} cy={lastPoint.y} r="2.6" fill={line.color} />
-                <circle cx={lastPoint.x} cy={lastPoint.y} r="5" fill={line.color} opacity="0.2" />
+                {populatedSegments.map((segment, index) => {
+                  const path = buildSmoothPath(segment);
+                  const areaPath = `${path} L ${segment.at(-1)!.x},100 L ${segment[0].x},100 Z`;
+                  return (
+                    <React.Fragment key={`${line.key}-${index}`}>
+                      <path d={areaPath} fill={`url(#${line.key}-gradient)`} />
+                      <path
+                        d={path}
+                        fill="none"
+                        stroke={line.color}
+                        strokeWidth="2.4"
+                        vectorEffect="non-scaling-stroke"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </React.Fragment>
+                  );
+                })}
+                {lastPoint && (
+                  <>
+                    <circle cx={lastPoint.x} cy={lastPoint.y} r="2.6" fill={line.color} />
+                    <circle
+                      cx={lastPoint.x}
+                      cy={lastPoint.y}
+                      r="5"
+                      fill={line.color}
+                      opacity="0.2"
+                    />
+                  </>
+                )}
               </g>
             );
           })}

@@ -71,6 +71,15 @@ export const BUSINESS_HOURS_END = DEFAULT_BUSINESS_HOURS_END;
 // via `getRetentionPolicy().businessHoursTimeZone`.
 export const BUSINESS_HOURS_TIMEZONE = DEFAULT_BUSINESS_HOURS_TIMEZONE;
 
+export function deriveServiceSlaStatus(
+  evaluatedCount: number,
+  breachCount: number
+): 'Unknown' | 'Healthy' | 'Degraded' | 'Critical' {
+  if (evaluatedCount === 0) return 'Unknown';
+  if (breachCount === 0) return 'Healthy';
+  return breachCount < 3 ? 'Degraded' : 'Critical';
+}
+
 /**
  * Validates that an ID is a safe identifier (UUID or CUID format)
  * Used to prevent SQL injection when building dynamic CASE statements
@@ -1951,17 +1960,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       id: s.id,
       name: s.name,
       count: s.count,
-      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : 0,
-      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
+      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : null,
+      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : null,
       slaBreaches: s.ackBreaches + s.resolveBreaches, // FIX: Include both types
-      status:
-        s.slaEvaluatedCount === 0 && s.slaUnknownCount > 0
-          ? 'Unknown'
-          : s.ackBreaches + s.resolveBreaches === 0
-            ? 'Healthy'
-            : s.ackBreaches + s.resolveBreaches < 3
-              ? 'Degraded'
-              : 'Critical',
+      status: deriveServiceSlaStatus(s.slaEvaluatedCount, s.ackBreaches + s.resolveBreaches),
       dynamicStatus: getServiceDynamicStatus({
         activeIncidentCount: s.activeCount,
         hasCritical: s.criticalCount > 0,
@@ -2414,8 +2416,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       key: s.key,
       label: s.label,
       count: s.count,
-      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : 0,
-      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : 0,
+      mtta: s.ackCount ? s.ackSum / s.ackCount / 60000 : null,
+      mttr: s.resolveCount ? s.resolveSum / s.resolveCount / 60000 : null,
       ackRate: s.count ? (s.ackCount / s.count) * 100 : 0,
       resolveRate: s.count ? (s.resolveCount / s.count) * 100 : 0,
       resolveCount: s.resolveCount,
