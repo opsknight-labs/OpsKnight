@@ -2,7 +2,8 @@ import type { PrismaClient, ComplianceEvidence } from '@prisma/client';
 import prismaClient from '../../prisma';
 import { verifyComplianceEvidenceHash } from '../evidence/hash';
 import type { EvidenceSelection, ExportedEvidenceRecord } from './types';
-import { MAX_EVIDENCE_RECORDS } from './validation';
+import { MAX_EVIDENCE_RECORDS, MAX_UNCOMPRESSED_PACKAGE_BYTES } from './validation';
+import { canonicalSerializeJson } from './serializer';
 
 export class EvidenceExportLimitExceededError extends Error {
   constructor(
@@ -39,6 +40,7 @@ export async function collectExportEvidence(
   const records: ExportedEvidenceRecord[] = [];
   const byControl = new Map<string, ExportedEvidenceRecord[]>();
   let mismatchesCount = 0;
+  let collectedBytes = 0;
 
   for (const id of controlIds) {
     byControl.set(id, []);
@@ -83,6 +85,16 @@ export async function collectExportEvidence(
       contentHash: rec.contentHash,
       integrityValid,
     };
+
+    const recordBytes = canonicalSerializeJson(exported).byteLength;
+    collectedBytes += recordBytes;
+    if (collectedBytes > MAX_UNCOMPRESSED_PACKAGE_BYTES) {
+      throw new EvidenceExportLimitExceededError(
+        collectedBytes,
+        MAX_UNCOMPRESSED_PACKAGE_BYTES,
+        'BYTES'
+      );
+    }
 
     const list = byControl.get(rec.controlId);
     if (list) {

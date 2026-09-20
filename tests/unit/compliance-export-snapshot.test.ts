@@ -4,7 +4,11 @@ import { resolveExportScope } from '@/lib/compliance/export/scope';
 import { buildEvidencePackageZip } from '@/lib/compliance/export/zip';
 import { generateFrameworksCsv } from '@/lib/compliance/export/csv';
 import { APP_VERSION } from '@/lib/version';
-import { EvidenceExportLimitExceededError } from '@/lib/compliance/export/evidence';
+import {
+  EvidenceExportLimitExceededError,
+  collectExportEvidence,
+} from '@/lib/compliance/export/evidence';
+import { previewComplianceEvidencePackage } from '@/lib/compliance/export/engine';
 import type { PrismaClient } from '@prisma/client';
 import JSZip from 'jszip';
 
@@ -331,5 +335,191 @@ describe('compliance export snapshot consistency and factual semantics (unit)', 
         userId: 'usr_test',
       })
     ).rejects.toThrow(EvidenceExportLimitExceededError);
+  });
+
+  it('strictly ignores evaluations committed after snapshotAt even if evaluatedAt was earlier (concurrency race)', async () => {
+    const cutoff = new Date('2026-09-20T10:00:00.000Z');
+    const earlierEvaluatedAt = new Date('2026-09-20T09:59:58.000Z');
+    const committedAfterCutoff = new Date('2026-09-20T10:00:01.000Z');
+
+    const mockPrisma = {
+      complianceControlState: {
+        findMany: async () => [
+          {
+            controlId: 'SEC-ENC-001',
+            status: 'IMPLEMENTED',
+            latestEvaluationId: 'eval_race',
+            evaluatorId: 'encryption.at-rest',
+            evaluatorVersion: '1',
+            evaluatedAt: earlierEvaluatedAt, // evaluatedAt <= cutoff
+            updatedAt: committedAfterCutoff, // committed after cutoff!
+            validUntil: new Date('2026-09-21T10:00:00.000Z'),
+            summary: 'Evaluation committed late',
+          },
+        ],
+      },
+      complianceEvaluation: {
+        findMany: async () => [],
+        findFirst: async () => null, // no evaluation committed <= cutoff
+      },
+    } as unknown as PrismaClient;
+
+    const snapshot = await buildAuditSnapshot(scope, cutoff, mockPrisma);
+    const encControl = snapshot.controls.find(c => c.controlId === 'SEC-ENC-001');
+
+    // Because state was committed AFTER cutoff and no historical eval committed <= cutoff, state is UNVERIFIED!
+    expect(encControl?.resolvedCurrentState).toBe('UNVERIFIED');
+    expect(snapshot.evaluations).toHaveLength(0);
+  });
+
+  it('collectExportEvidence enforces byte budget incrementally during record processing', async () => {
+    const hugeBuffer = Buffer.alloc(51 * 1024 * 1024);
+    const rawPayload = {
+      type: 'CONFIGURATION_SNAPSHOT',
+      collectorId: 'encryption.at-rest',
+      collectorVersion: '1.0.0',
+      title: 'Huge config payload',
+      description: null,
+      resourceType: null,
+      resourceId: null,
+      observedAt: '2026-09-20T09:00:00.000Z',
+      metadata: { dump: hugeBuffer.toString('base64') },
+    };
+    const contentHash = 'sha256:dummy';
+
+    const mockPrisma = {
+      complianceControlState: { findMany: async () => [] },
+      complianceEvaluation: { findMany: async () => [], findFirst: async () => null },
+      complianceEvidence: {
+        findMany: async () => [
+          {
+            id: 'ev_huge_1',
+            evaluationId: 'eval_active',
+            controlId: 'SEC-ENC-001',
+            type: 'CONFIGURATION_SNAPSHOT' as const,
+            collectorId: 'encryption.at-rest',
+            collectorVersion: '1.0.0',
+            title: 'Huge config payload',
+            description: null,
+            resourceType: null,
+            resourceId: null,
+            observedAt: new Date('2026-09-20T09:00:00.000Z'),
+            collectedAt: new Date('2026-09-20T09:00:00.000Z'),
+            validUntil: null,
+            metadata: rawPayload.metadata,
+            contentHash,
+          },
+        ],
+      },
+    } as unknown as PrismaClient;
+
+    await expect(
+      collectExportEvidence(
+        ['SEC-ENC-001'],
+        { mode: 'SNAPSHOT' },
+        new Date('2026-09-20T10:00:00.000Z'),
+        mockPrisma,
+        [{ controlId: 'SEC-ENC-001', evaluationId: 'eval_active' }]
+      )
+    ).rejects.toThrow(EvidenceExportLimitExceededError);
+  });
+
+  it('previewComplianceEvidencePackage uses identical snapshot evaluation resolution when live projection is newer than cutoff', async () => {
+    const cutoff = new Date('2026-09-20T10:00:00.000Z');
+    const pastEvalDate = new Date('2026-09-20T09:00:00.000Z');
+    const futureEvalDate = new Date('2026-09-20T11:00:00.000Z');
+
+    const mockPrisma = {
+      complianceControlState: {
+        findMany: async () => [
+          {
+            controlId: 'SEC-ENC-001',
+            status: 'ACTION_REQUIRED',
+            latestEvaluationId: 'eval_future',
+            evaluatorId: 'encryption.at-rest',
+            evaluatorVersion: '1',
+            evaluatedAt: futureEvalDate,
+            updatedAt: futureEvalDate,
+            validUntil: new Date('2026-09-21T10:00:00.000Z'),
+            summary: 'Future state',
+          },
+        ],
+      },
+      complianceEvaluation: {
+        findMany: async () => [],
+        findFirst: async (args?: { where?: { controlId?: string } }) => {
+          if (args?.where?.controlId === 'SEC-ENC-001') {
+            return {
+              id: 'eval_past_valid',
+              controlId: 'SEC-ENC-001',
+              status: 'IMPLEMENTED',
+              evaluatorId: 'encryption.at-rest',
+              evaluatorVersion: '1',
+              evaluatedAt: pastEvalDate,
+              createdAt: pastEvalDate,
+              validUntil: new Date('2026-09-21T10:00:00.000Z'),
+              summary: 'Past state',
+              findings: [],
+            };
+          }
+          return null;
+        },
+      },
+      complianceEvidence: {
+        count: async (args?: { where?: { evaluationId?: { in?: string[] } } }) => {
+          if (args?.where?.evaluationId?.in?.includes('eval_past_valid')) {
+            return 3;
+          }
+          return 0;
+        },
+      },
+    } as unknown as PrismaClient;
+
+    const preview = await previewComplianceEvidencePackage({
+      scope: { type: 'CONTROLS', controlIds: ['SEC-ENC-001'] },
+      evidenceSelection: { mode: 'SNAPSHOT' },
+      now: cutoff,
+      prisma: mockPrisma,
+    });
+
+    // Preview correctly counted evidence for eval_past_valid rather than 0!
+    expect(preview.counts.evidence).toBe(3);
+  });
+
+  it('preserves full mapping metadata (evidenceExpectation, rationale, notes) in per-framework mappings.json', async () => {
+    const dpdpScope = resolveExportScope({ type: 'FRAMEWORK', framework: 'DPDP' });
+    const mockPrisma = {
+      complianceControlState: { findMany: async () => [] },
+      complianceEvaluation: { findMany: async () => [], findFirst: async () => null },
+    } as unknown as PrismaClient;
+
+    const snapshot = await buildAuditSnapshot(dpdpScope, new Date(), mockPrisma);
+    const pkg = await buildEvidencePackageZip({
+      packageId: 'pkg_mapping_meta_test',
+      scope: { type: 'FRAMEWORK', framework: 'DPDP' },
+      evidenceSelection: { mode: 'SNAPSHOT' },
+      snapshot,
+      evidence: {
+        evidenceRecords: [],
+        evidenceByControl: new Map(),
+        totalCount: 0,
+        integrityMismatchesCount: 0,
+      },
+      userId: 'usr_test',
+    });
+
+    const zip = await JSZip.loadAsync(pkg.zipBuffer);
+    const fwMappingsFile = zip.file('frameworks/DPDP/mappings.json');
+    expect(fwMappingsFile).toBeDefined();
+
+    const fwMappings = JSON.parse(await fwMappingsFile!.async('string'));
+    expect(fwMappings.length).toBeGreaterThan(0);
+    const firstMapping = fwMappings[0];
+    expect(firstMapping.requirementId).toBeDefined();
+    expect(firstMapping.controlId).toBeDefined();
+    expect(firstMapping.relationship).toBeDefined();
+    expect(firstMapping.evidenceExpectation).toBeDefined();
+    expect(firstMapping.rationale).toBeDefined();
+    expect(firstMapping.notes).toBeDefined();
   });
 });

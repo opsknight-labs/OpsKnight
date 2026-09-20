@@ -34,7 +34,6 @@ export interface BuiltManifestResult {
   readonly manifestBuffer: Buffer;
   readonly manifestSha256: string;
   readonly manifestSha256Content: string;
-  readonly sha256sumsContent: string;
 }
 
 export function buildEvidencePackageManifest(params: BuildManifestParams): BuiltManifestResult {
@@ -71,13 +70,10 @@ export function buildEvidencePackageManifest(params: BuildManifestParams): Built
   const manifestSha256 = createHash('sha256').update(manifestBuffer).digest('hex');
   const manifestSha256Content = `${manifestSha256}  manifest.json\n`;
 
-  const sha256sumsLines = sortedFiles.map(f => `${f.sha256}  ${f.path}`).join('\n') + '\n';
-
   return {
     manifest,
     manifestBuffer,
     manifestSha256,
     manifestSha256Content,
-    sha256sumsContent: sha256sumsLines,
   };
 }

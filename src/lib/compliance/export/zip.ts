@@ -181,13 +181,20 @@ export async function buildEvidencePackageZip(params: {
       canonicalSerializeJson(fwReqs)
     );
 
-    const fwMappings = fwReqs.flatMap(r =>
-      r.mappedControls.map(m => ({
-        requirementId: r.requirementId,
+    const fwMappings = params.snapshot.mappings
+      .filter(m => m.framework === fw.id)
+      .map(m => ({
+        requirementId: m.requirementId,
         controlId: m.controlId,
         relationship: m.relationship,
+        evidenceExpectation: m.evidenceExpectation,
+        rationale: m.rationale ?? null,
+        notes: m.notes ?? null,
       }))
-    );
+      .sort(
+        (a, b) =>
+          a.requirementId.localeCompare(b.requirementId) || a.controlId.localeCompare(b.controlId)
+      );
     stageFile(
       `frameworks/${fw.id}/mappings.json`,
       'application/json',

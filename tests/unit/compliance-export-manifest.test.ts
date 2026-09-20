@@ -63,15 +63,10 @@ describe('buildEvidencePackageManifest', () => {
     expect(res1.manifestSha256).toBe(hash);
   });
 
-  it('sorts file entries alphabetically in manifest and sha256sums.txt', () => {
+  it('sorts file entries alphabetically in manifest', () => {
     const res = buildEvidencePackageManifest(params);
 
     expect(res.manifest.files[0].path).toBe('README.md');
     expect(res.manifest.files[1].path).toBe('summary/controls.csv');
-
-    const lines = res.sha256sumsContent.trim().split('\n');
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain('README.md');
-    expect(lines[1]).toContain('summary/controls.csv');
   });
 });

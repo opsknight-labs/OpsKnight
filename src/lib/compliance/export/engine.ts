@@ -57,14 +57,8 @@ export async function previewComplianceEvidencePackage(params: {
   let evidenceCount = 0;
 
   if (params.evidenceSelection.mode === 'SNAPSHOT') {
-    const states = await prisma.complianceControlState.findMany({
-      where: {
-        controlId: { in: controlIds },
-        evaluatedAt: { lte: snapshotAt },
-      },
-      select: { latestEvaluationId: true },
-    });
-    const evalIds = states.map(s => s.latestEvaluationId).filter((id): id is string => Boolean(id));
+    const snapshot = await buildAuditSnapshot(resolvedScope, snapshotAt, prisma);
+    const evalIds = snapshot.evaluations.map(e => e.evaluationId);
 
     if (evalIds.length > 0) {
       evidenceCount = await prisma.complianceEvidence.count({
