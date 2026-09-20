@@ -136,15 +136,18 @@ describe('status page middleware serving routes', () => {
     );
   });
 
-  it('allows logo assets, manifests, and service worker scripts through on status domains', async () => {
+  it('allows logo assets and service worker scripts through on status domains, but blocks manifests', async () => {
     const { isStatusStaticAsset } = await import('@/middleware');
 
     expect(isStatusStaticAsset('/logo.svg')).toBe(true);
     expect(isStatusStaticAsset('/logo.png')).toBe(true);
     expect(isStatusStaticAsset('/logo-mark.png')).toBe(true);
     expect(isStatusStaticAsset('/logo-compressed.png')).toBe(true);
-    expect(isStatusStaticAsset('/manifest.json')).toBe(true);
-    expect(isStatusStaticAsset('/manifest.webmanifest')).toBe(true);
+    // manifest files must NOT be served on status hosts: the OpsKnight PWA
+    // manifest has start_url="/m" and scope="/", both of which are blocked on
+    // custom-domain status hosts. Serving it would produce a broken PWA.
+    expect(isStatusStaticAsset('/manifest.json')).toBe(false);
+    expect(isStatusStaticAsset('/manifest.webmanifest')).toBe(false);
     expect(isStatusStaticAsset('/sw.js')).toBe(true);
     expect(isStatusStaticAsset('/custom-sw.js')).toBe(true);
     expect(isStatusStaticAsset('/workbox-55ca3fbd.js')).toBe(true);

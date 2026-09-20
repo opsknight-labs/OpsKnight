@@ -32,6 +32,7 @@ import {
   Activity,
   ShieldAlert,
   ArrowUpDown,
+  Server,
 } from 'lucide-react';
 
 type IncidentsFiltersProps = {
@@ -41,7 +42,9 @@ type IncidentsFiltersProps = {
   currentUrgency?: string;
   currentSearch?: string;
   currentTeamId?: string;
+  currentServiceId?: string;
   teams?: Array<{ id: string; name: string }>;
+  services?: Array<{ id: string; name: string }>;
   canCreateIncident?: boolean;
 };
 
@@ -52,7 +55,9 @@ export default function IncidentsFilters({
   currentUrgency = 'all',
   currentSearch = '',
   currentTeamId = 'all',
+  currentServiceId = 'all',
   teams = [],
+  services = [],
   canCreateIncident = false,
 }: IncidentsFiltersProps) {
   const router = useRouter();
@@ -102,7 +107,8 @@ export default function IncidentsFilters({
     currentUrgency !== 'all' ||
     currentSort !== 'newest' ||
     currentFilter !== 'all' ||
-    currentTeamId !== 'all';
+    currentTeamId !== 'all' ||
+    (currentServiceId !== 'all' && currentServiceId !== '');
 
   return (
     <Card>
@@ -257,7 +263,7 @@ export default function IncidentsFilters({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <div className="space-y-1.5">
             <Label
               htmlFor="incident-search"
@@ -453,6 +459,33 @@ export default function IncidentsFilters({
               </SelectContent>
             </Select>
           </div>
+
+          {services.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-semibold uppercase text-muted-foreground">
+                Service
+              </Label>
+              <Select
+                value={currentServiceId}
+                onValueChange={val => updateParams({ serviceId: val === 'all' ? '' : val })}
+              >
+                <SelectTrigger className="h-9 bg-muted/30 focus:bg-background transition-colors text-sm">
+                  <div className="flex items-center gap-2">
+                    <Server className="h-4 w-4 text-muted-foreground" />
+                    <SelectValue placeholder="All services" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All services</SelectItem>
+                  {services.map(service => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label className="text-[11px] font-semibold uppercase text-muted-foreground">

@@ -4,6 +4,7 @@ import { getCurrentAuthorizationActor, getUserPermissions } from '@/lib/rbac';
 import {
   dashboardUserReadWhere,
   incidentReadWhere,
+  serviceReadWhere,
   teamReadWhere,
 } from '@/lib/authorization-filters';
 import IncidentsListTable from '@/components/incident/IncidentsListTable';
@@ -71,11 +72,18 @@ export default async function IncidentsPage({
 
   const userTeamIds = [...actor.teamIds];
 
-  const allTeams = await prisma.team.findMany({
-    where: teamReadWhere(actor),
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
-  });
+  const [allTeams, allServices] = await Promise.all([
+    prisma.team.findMany({
+      where: teamReadWhere(actor),
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+    prisma.service.findMany({
+      where: serviceReadWhere(actor),
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
+  ]);
 
   const where = buildIncidentWhere({
     filter: currentFilter,
@@ -252,7 +260,9 @@ export default async function IncidentsPage({
           currentUrgency={currentUrgency}
           currentSearch={currentSearch}
           currentTeamId={currentTeamId}
+          currentServiceId={currentServiceId}
           teams={allTeams}
+          services={allServices}
           canCreateIncident={canCreateIncident}
         />
 
