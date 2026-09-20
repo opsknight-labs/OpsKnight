@@ -23,7 +23,12 @@ export async function issueUserInviteToken(
       select: { invitationGeneration: true },
     });
     await tx.userToken.updateMany({
-      where: { userId, type: 'INVITE', usedAt: null, revokedAt: null },
+      where: {
+        OR: [{ userId }, { identifier }],
+        type: { in: ['INVITE', 'PASSWORD_RESET'] },
+        usedAt: null,
+        revokedAt: null,
+      },
       data: { revokedAt: new Date() },
     });
     await tx.userToken.create({

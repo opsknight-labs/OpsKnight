@@ -75,6 +75,17 @@ describe('Invited User Password Activation and Recovery Flow', () => {
         }),
         select: { invitationGeneration: true },
       });
+      expect(mockPrisma.userToken.updateMany).toHaveBeenCalledWith({
+        where: {
+          OR: [{ userId: 'user-1' }, { identifier: 'invited@example.com' }],
+          type: { in: ['INVITE', 'PASSWORD_RESET'] },
+          usedAt: null,
+          revokedAt: null,
+        },
+        data: expect.objectContaining({
+          revokedAt: expect.any(Date),
+        }),
+      });
       expect(mockPrisma.userToken.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           identifier: 'invited@example.com',

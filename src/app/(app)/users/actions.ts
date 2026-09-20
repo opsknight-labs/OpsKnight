@@ -304,7 +304,11 @@ export async function addUser(
       const identifier = email.toLowerCase();
 
       await tx.userToken.deleteMany({
-        where: { identifier, type: 'INVITE', usedAt: null },
+        where: {
+          identifier,
+          type: { in: ['INVITE', 'PASSWORD_RESET'] },
+          usedAt: null,
+        },
       });
 
       await tx.userToken.create({
