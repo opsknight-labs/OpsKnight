@@ -55,11 +55,22 @@ export async function getComplianceControlCenterData(
         })
       : Promise.resolve([] as Array<{ controlId: string; _count: { id: number } }>);
 
-  const [rawStates, evidenceRecords, totalCount, evidenceGroups, rawRetention] = await Promise.all([
+  const [
+    rawStates,
+    evidenceRecords,
+    latestEvidenceRecords,
+    totalCount,
+    evidenceGroups,
+    rawRetention,
+  ] = await Promise.all([
     prisma.complianceControlState.findMany(),
     prisma.complianceEvidence.findMany({
       take: 100,
       orderBy: { observedAt: 'desc' },
+    }),
+    prisma.complianceEvidence.findMany({
+      distinct: ['controlId'],
+      orderBy: [{ controlId: 'asc' }, { observedAt: 'desc' }],
     }),
     countPromise,
     groupPromise,
@@ -118,35 +129,33 @@ export async function getComplianceControlCenterData(
   }
 
   const evidenceSummaryMap = new Map<string, ControlCenterEvidenceSummary>();
-  for (const [controlId, list] of sampleByControl.entries()) {
-    const latestItem = list[0];
+  for (const latestItem of latestEvidenceRecords) {
+    const controlId = latestItem.controlId;
     let latestIntegrity: 'VERIFIED' | 'MISMATCH' | 'NONE' = 'NONE';
-    if (latestItem) {
-      const isLatestValid = verifyComplianceEvidenceHash({
-        evaluationId: latestItem.evaluationId,
-        controlId: latestItem.controlId,
-        type: latestItem.type,
-        collectorId: latestItem.collectorId,
-        collectorVersion: latestItem.collectorVersion,
-        title: latestItem.title,
-        description: latestItem.description,
-        resourceType: latestItem.resourceType,
-        resourceId: latestItem.resourceId,
-        metadata: (latestItem.metadata ?? {}) as Record<string, unknown>,
-        collectedAt: latestItem.collectedAt,
-        observedAt: latestItem.observedAt,
-        contentHash: latestItem.contentHash,
-      });
-      latestIntegrity = isLatestValid ? 'VERIFIED' : 'MISMATCH';
-    }
+    const isLatestValid = verifyComplianceEvidenceHash({
+      evaluationId: latestItem.evaluationId,
+      controlId: latestItem.controlId,
+      type: latestItem.type,
+      collectorId: latestItem.collectorId,
+      collectorVersion: latestItem.collectorVersion,
+      title: latestItem.title,
+      description: latestItem.description,
+      resourceType: latestItem.resourceType,
+      resourceId: latestItem.resourceId,
+      metadata: (latestItem.metadata ?? {}) as Record<string, unknown>,
+      collectedAt: latestItem.collectedAt,
+      observedAt: latestItem.observedAt,
+      contentHash: latestItem.contentHash,
+    });
+    latestIntegrity = isLatestValid ? 'VERIFIED' : 'MISMATCH';
 
-    const count = evidenceCountByControl.get(controlId) ?? list.length;
+    const count = evidenceCountByControl.get(controlId) ?? 1;
     evidenceSummaryMap.set(controlId, {
       count,
-      latestObservedAt: latestItem?.observedAt.toISOString() ?? null,
+      latestObservedAt: latestItem.observedAt.toISOString(),
       latestIntegrity,
       integrity: latestIntegrity,
-      latestDigest: latestItem?.contentHash,
+      latestDigest: latestItem.contentHash,
     });
   }
 

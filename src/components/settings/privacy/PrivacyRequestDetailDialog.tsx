@@ -53,6 +53,10 @@ type RequestDetail = {
   status: string;
   requestedAt: string;
   verifiedAt: string | null;
+  verificationStatus: 'PENDING' | 'VERIFIED';
+  verificationMethod: string | null;
+  verificationReference: string | null;
+  verifiedBy: { id: string; name: string | null; email: string } | null;
   notes: string | null;
   exportArtifacts: ExportArtifact[];
   erasureExecution: {
@@ -121,7 +125,6 @@ export default function PrivacyRequestDetailDialog({
   canExport,
   canErase,
   automated,
-  exportEligible,
   trigger,
 }: {
   requestId: string;
@@ -129,7 +132,6 @@ export default function PrivacyRequestDetailDialog({
   canExport: boolean;
   canErase: boolean;
   automated: boolean;
-  exportEligible: boolean;
   trigger: React.ReactNode;
 }) {
   const { showToast } = useToast();
@@ -142,6 +144,7 @@ export default function PrivacyRequestDetailDialog({
   const [executing, setExecuting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmInput, setConfirmInput] = useState('');
+  const exportEligible = detail?.status === 'PROCESSING' && Boolean(detail.verifiedAt);
 
   async function loadDetail() {
     setLoading(true);
@@ -276,6 +279,13 @@ export default function PrivacyRequestDetailDialog({
                 <span className="text-muted-foreground">Identity verified: </span>
                 {detail.verifiedAt ? new Date(detail.verifiedAt).toLocaleString() : 'Not yet'}
               </div>
+              {detail.verifiedAt && (
+                <div>
+                  <span className="text-muted-foreground">Verification: </span>
+                  {detail.verificationMethod?.replaceAll('_', ' ') ?? 'Legacy'} by{' '}
+                  {detail.verifiedBy?.name ?? detail.verifiedBy?.email ?? 'legacy operator'}
+                </div>
+              )}
             </div>
 
             {canExport && detail.requestType !== 'ERASURE' && (
@@ -526,6 +536,7 @@ export default function PrivacyRequestDetailDialog({
                               <Button size="sm" variant="secondary" asChild>
                                 <a
                                   href={`/api/compliance/privacy-requests/${requestId}/export/${artifact.id}/download`}
+                                  onClick={() => window.setTimeout(() => void loadDetail(), 1000)}
                                 >
                                   <Download className="mr-1.5 h-4 w-4" />
                                   Download

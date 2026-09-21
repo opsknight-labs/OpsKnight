@@ -137,6 +137,7 @@ describe('StatusPageSnapshotView publication parity', () => {
             {
               ...snapshot.incidents[0],
               status: 'RESOLVED',
+              createdAt: new Date().toISOString(),
               postmortem: { id: 'incident-1', available: true, title: 'Post-incident review' },
             },
           ],

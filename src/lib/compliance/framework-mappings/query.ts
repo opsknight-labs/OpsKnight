@@ -35,6 +35,7 @@ export function getFrameworkSummaryView(
 
   const requirements = getFrameworkRequirements(frameworkId);
   const mappedControlIds = new Set<string>();
+  const mappedRequirementIds = new Set<string>();
 
   let runtimeBackedCount = 0;
   let repositoryBackedCount = 0;
@@ -49,6 +50,7 @@ export function getFrameworkSummaryView(
     }
 
     const mappings = getMappingsForRequirement(req.id);
+    if (mappings.length > 0) mappedRequirementIds.add(req.id);
     for (const mapping of mappings) {
       mappedControlIds.add(mapping.controlId);
 
@@ -76,7 +78,9 @@ export function getFrameworkSummaryView(
 
   return {
     framework,
-    mappedRequirementsCount: requirements.length,
+    mappedRequirementsCount: mappedRequirementIds.size,
+    totalRequirementsCount: requirements.length,
+    unmappedRequirementsCount: requirements.length - mappedRequirementIds.size,
     mappedControlsCount: mappedControlIds.size,
     runtimeBackedCount,
     repositoryBackedCount,
