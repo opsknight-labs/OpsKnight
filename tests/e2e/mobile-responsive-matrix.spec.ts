@@ -23,6 +23,7 @@ async function login(page: import('@playwright/test').Page) {
   await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
   await page.locator('form button[type="submit"]').click();
   await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
+  await page.waitForLoadState('domcontentloaded');
   await expect(page.locator('.mobile-nav')).toBeVisible();
 }
 
@@ -149,7 +150,6 @@ test.describe('mobile responsive visual integrity matrix', () => {
       await login(page);
 
       // 1. Dashboard
-      await page.goto('/m');
       await expect(page.locator('.mobile-nav')).toBeVisible();
       await assertResponsiveIntegrity(page);
       await page.screenshot({ path: `screenshots/responsive/dashboard-${vp.width}.png` });
