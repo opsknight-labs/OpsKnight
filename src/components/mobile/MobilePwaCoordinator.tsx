@@ -195,8 +195,10 @@ export default function MobilePwaCoordinator({
       };
     }
 
+    const hadPreviousController = Boolean(navigator.serviceWorker.controller);
     let reloading = false;
     const onControllerChange = () => {
+      if (!hadPreviousController) return;
       if (reloading) return;
       reloading = true;
       window.location.reload();
