@@ -58,6 +58,8 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       DATABASE_URL: databaseUrl,
+      NEXTAUTH_URL: 'http://127.0.0.1:3100',
+      NEXT_PUBLIC_APP_URL: 'http://127.0.0.1:3100',
       NEXTAUTH_SECRET: 'opsknight-e2e-nextauth-secret-change-me',
       ENCRYPTION_KEY: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       NEXTAUTH_COOKIE_SECURE: 'false',

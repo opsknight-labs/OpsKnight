@@ -52,10 +52,11 @@ export default function SetPasswordForm({ token }: { token: string }) {
       // Defense-in-depth: cache cleanup must never prevent signout
     }
     try {
-      await signOut({ callbackUrl: '/login?password=1' });
+      await signOut({ redirect: false });
     } catch {
-      router.push('/login?password=1');
+      // Defense-in-depth: if signOut fails, proceed with client redirect
     }
+    router.push('/login?password=1');
   }, [router]);
 
   useEffect(() => {
