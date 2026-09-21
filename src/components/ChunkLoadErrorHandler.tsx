@@ -22,6 +22,15 @@ function isChunkOrStyleError(message: string): boolean {
 function handleAutoReload(reason: string) {
   if (typeof window === 'undefined') return;
 
+  // In automated test environments (Playwright/WebDriver), never trigger
+  // background hard reloads that collide with active test navigations.
+  if (navigator.webdriver) {
+    logger.warn('[ChunkRecovery] Suppressing auto-reload in automated test environment', {
+      reason,
+    });
+    return;
+  }
+
   try {
     const lastReload = Number.parseInt(sessionStorage.getItem(STORAGE_KEY) || '0', 10);
     const now = Date.now();
@@ -49,8 +58,17 @@ function handleAutoReload(reason: string) {
 
 export default function ChunkLoadErrorHandler() {
   useEffect(() => {
+    let isUnloading = false;
+    const markUnloading = () => {
+      isUnloading = true;
+    };
+    window.addEventListener('beforeunload', markUnloading);
+    window.addEventListener('pagehide', markUnloading);
+
     // 1. Listen for unhandled runtime errors & resource loading failures (capturing phase)
     const handleError = (event: ErrorEvent) => {
+      if (isUnloading) return;
+
       // Check for Error message
       if (event?.message && isChunkOrStyleError(event.message)) {
         handleAutoReload(`Runtime Error: ${event.message}`);
@@ -72,6 +90,7 @@ export default function ChunkLoadErrorHandler() {
             handleAutoReload(`Stylesheet load failure: ${href}`);
           }
         } else if (tagName === 'script') {
+          if (document.visibilityState === 'hidden') return;
           const src = (target as HTMLScriptElement).src || '';
           if (src.includes('/_next/static/')) {
             handleAutoReload(`Script chunk load failure: ${src}`);
@@ -82,6 +101,7 @@ export default function ChunkLoadErrorHandler() {
 
     // 2. Listen for unhandled promise rejections (dynamic imports)
     const handleRejection = (event: PromiseRejectionEvent) => {
+      if (isUnloading) return;
       const reason = event?.reason;
       const message =
         reason instanceof Error
@@ -99,6 +119,8 @@ export default function ChunkLoadErrorHandler() {
     window.addEventListener('unhandledrejection', handleRejection);
 
     return () => {
+      window.removeEventListener('beforeunload', markUnloading);
+      window.removeEventListener('pagehide', markUnloading);
       window.removeEventListener('error', handleError, true);
       window.removeEventListener('unhandledrejection', handleRejection);
     };
