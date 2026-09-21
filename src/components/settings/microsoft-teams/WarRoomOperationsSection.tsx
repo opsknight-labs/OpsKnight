@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
+import { Input } from '@/components/ui/shadcn/input';
+import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 import { notify as toast } from '@/lib/toast';
 import type {
   WarRoomDiagnosticsSnapshot,
@@ -23,6 +25,9 @@ import {
   Layers2,
   UserPlus,
   Trash2,
+  Search,
+  Filter,
+  Lock,
 } from 'lucide-react';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
 
@@ -59,12 +64,19 @@ type Props = {
   fleetSummary?: import('@/lib/war-room/operations/types').IntegrationHealthSummary | null;
 };
 
+const PAGE_SIZE = 15;
+
 export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [diagnostics, setDiagnostics] = useState<Map<string, WarRoomDiagnosticsSnapshot | null>>(
     new Map()
   );
   const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  // Pagination & Filtering state (default 15 items per page)
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [healthFilter, setHealthFilter] = useState<string>('ALL');
 
   // Fleet summary is authoritative for counts; the paginated table is only a view.
   const healthy = fleetSummary
@@ -85,6 +97,37 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
   const cleanupPending = fleetSummary
     ? fleetSummary.externalCleanupPending
     : snapshots.filter(s => s.externalCleanupPending).length;
+
+  // Filter snapshots by health status and search query
+  const filteredSnapshots = useMemo(() => {
+    return snapshots.filter(s => {
+      if (healthFilter === 'CLEANUP_PENDING' && !s.externalCleanupPending) return false;
+      if (
+        healthFilter !== 'ALL' &&
+        healthFilter !== 'CLEANUP_PENDING' &&
+        s.operationalHealth !== healthFilter
+      ) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchInc = s.incidentId.toLowerCase().includes(q);
+        const matchRoom = s.warRoomId.toLowerCase().includes(q);
+        const matchProv = s.provider.toLowerCase().includes(q);
+        if (!matchInc && !matchRoom && !matchProv) return false;
+      }
+      return true;
+    });
+  }, [snapshots, healthFilter, searchQuery]);
+
+  // Paginated window at 15 items per page
+  const totalCount = filteredSnapshots.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedSnapshots = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredSnapshots.slice(start, start + PAGE_SIZE);
+  }, [filteredSnapshots, currentPage]);
 
   const toggle = async (warRoomId: string) => {
     if (expandedId === warRoomId) {
@@ -145,12 +188,12 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
 
   return (
     <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />
           <h3 className="text-sm font-semibold">War-room Operations</h3>
           <Badge variant="outline" className="text-[10px]">
-            {snapshots.length} room(s)
+            {snapshots.length} total
           </Badge>
           {cleanupPending > 0 && (
             <Badge
@@ -162,144 +205,275 @@ export default function WarRoomOperationsSection({ snapshots, fleetSummary }: Pr
             </Badge>
           )}
         </div>
-        <div className="hidden sm:flex items-center gap-1.5 text-[11px]">
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            {healthy} healthy
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
-            {degraded} degraded
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-violet-500" />
-            {drifted} drifted
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-slate-400" />
-            {unavailable} unavailable
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-blue-500" />
-            {unknown} unknown
-          </span>
+
+        {/* Search Bar */}
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search incident or room…"
+            value={searchQuery}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
+            className="h-8 pl-8 text-xs"
+          />
         </div>
       </div>
 
-      {/* Summary chips (mobile) */}
-      <div className="flex sm:hidden flex-wrap gap-1.5 text-[11px]">
-        <Badge variant="outline" className="border-emerald-300 text-emerald-700 text-[10px]">
-          {healthy} HEALTHY
-        </Badge>
-        <Badge variant="outline" className="border-amber-300 text-amber-700 text-[10px]">
-          {degraded} DEGRADED
-        </Badge>
-        <Badge variant="outline" className="border-violet-300 text-violet-700 text-[10px]">
-          {drifted} DRIFTED
-        </Badge>
-        <Badge variant="outline" className="border-slate-300 text-slate-600 text-[10px]">
-          {unavailable} UNAVAILABLE
-        </Badge>
-        <Badge variant="outline" className="border-blue-300 text-blue-700 text-[10px]">
-          {unknown} UNKNOWN
-        </Badge>
+      {/* Filter status pills */}
+      <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+        <span className="text-[11px] text-muted-foreground mr-1 flex items-center gap-1">
+          <Filter className="h-3 w-3" /> Filter:
+        </span>
+        <Button
+          variant={healthFilter === 'ALL' ? 'default' : 'outline'}
+          size="sm"
+          className="h-7 text-[11px] px-2.5"
+          onClick={() => {
+            setHealthFilter('ALL');
+            setPage(1);
+          }}
+        >
+          All ({snapshots.length})
+        </Button>
+        <Button
+          variant={healthFilter === 'HEALTHY' ? 'default' : 'outline'}
+          size="sm"
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'HEALTHY' ? 'border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50' : ''}`}
+          onClick={() => {
+            setHealthFilter('HEALTHY');
+            setPage(1);
+          }}
+        >
+          Healthy ({healthy})
+        </Button>
+        <Button
+          variant={healthFilter === 'DEGRADED' ? 'default' : 'outline'}
+          size="sm"
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DEGRADED' ? 'border-amber-300 text-amber-700 bg-amber-50/50 hover:bg-amber-50' : ''}`}
+          onClick={() => {
+            setHealthFilter('DEGRADED');
+            setPage(1);
+          }}
+        >
+          Degraded ({degraded})
+        </Button>
+        <Button
+          variant={healthFilter === 'DRIFTED' ? 'default' : 'outline'}
+          size="sm"
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'DRIFTED' ? 'border-violet-300 text-violet-700 bg-violet-50/50 hover:bg-violet-50' : ''}`}
+          onClick={() => {
+            setHealthFilter('DRIFTED');
+            setPage(1);
+          }}
+        >
+          Drifted ({drifted})
+        </Button>
+        {cleanupPending > 0 && (
+          <Button
+            variant={healthFilter === 'CLEANUP_PENDING' ? 'default' : 'outline'}
+            size="sm"
+            className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'CLEANUP_PENDING' ? 'border-amber-400 text-amber-800 bg-amber-100/60 hover:bg-amber-100' : ''}`}
+            onClick={() => {
+              setHealthFilter('CLEANUP_PENDING');
+              setPage(1);
+            }}
+          >
+            Cleanup Pending ({cleanupPending})
+          </Button>
+        )}
+        <Button
+          variant={healthFilter === 'UNAVAILABLE' ? 'default' : 'outline'}
+          size="sm"
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNAVAILABLE' ? 'border-slate-300 text-slate-600 bg-slate-50 hover:bg-slate-100' : ''}`}
+          onClick={() => {
+            setHealthFilter('UNAVAILABLE');
+            setPage(1);
+          }}
+        >
+          Unavailable ({unavailable})
+        </Button>
+        <Button
+          variant={healthFilter === 'UNKNOWN' ? 'default' : 'outline'}
+          size="sm"
+          className={`h-7 text-[11px] px-2.5 ${healthFilter !== 'UNKNOWN' ? 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100' : ''}`}
+          onClick={() => {
+            setHealthFilter('UNKNOWN');
+            setPage(1);
+          }}
+        >
+          Unknown ({unknown})
+        </Button>
       </div>
 
-      <div className="overflow-x-auto -mx-1">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-[11px] text-muted-foreground border-b">
-              <th className="text-left font-semibold py-2 px-2 whitespace-nowrap">Incident</th>
-              <th className="text-left font-semibold py-2 px-2">Provider</th>
-              <th className="text-left font-semibold py-2 px-2">State</th>
-              <th className="text-left font-semibold py-2 px-2">Health</th>
-              <th className="text-left font-semibold py-2 px-2 whitespace-nowrap">Projection</th>
-              <th className="text-left font-semibold py-2 px-2 whitespace-nowrap">Members</th>
-              <th className="text-left font-semibold py-2 px-2 whitespace-nowrap">Last sync</th>
-              <th className="text-left font-semibold py-2 px-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {snapshots.map(s => (
-              <tr key={s.warRoomId} className="border-b last:border-0 hover:bg-muted/20">
-                <td className="py-2.5 px-2 max-w-[180px] truncate font-medium" title={s.incidentId}>
-                  {s.incidentId.slice(0, 8)}…
-                  <span className="text-muted-foreground font-normal ml-1">g{s.generation}</span>
-                </td>
-                <td className="py-2.5 px-2">
-                  <Badge variant="outline" className="text-[10px] inline-flex items-center gap-1">
-                    {s.provider === 'MICROSOFT_TEAMS' && (
-                      <MicrosoftTeamsLogo className="h-3 w-3 shrink-0" />
-                    )}
-                    <span>{s.provider === 'MICROSOFT_TEAMS' ? 'Teams' : s.provider}</span>
-                  </Badge>
-                </td>
-                <td className="py-2.5 px-2">
-                  <Badge variant="outline" className={`text-[10px] ${stateBadgeVariant(s.state)}`}>
-                    {s.state}
-                  </Badge>
-                </td>
-                <td className="py-2.5 px-2">
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] ${healthBadgeVariant(s.operationalHealth)}`}
-                  >
-                    {s.operationalHealth}
-                  </Badge>
-                  {s.externalCleanupPending && (
-                    <div className="text-[10px] text-amber-700 mt-1">cleanup pending</div>
-                  )}
-                </td>
-                <td className="py-2.5 px-2 whitespace-nowrap">
-                  <span
-                    className={
-                      s.projectionBehind ? 'text-amber-700 font-semibold' : 'text-muted-foreground'
-                    }
-                  >
-                    {s.lastProjectedVersion}/{s.projectionVersion}
-                  </span>
-                  {s.projectionBehind && (
-                    <span className="ml-1 text-[10px] text-amber-700">lag {s.projectionLag}</span>
-                  )}
-                </td>
-                <td className="py-2.5 px-2 whitespace-nowrap">
-                  <span className="inline-flex items-center gap-1">
-                    <Users className="h-3 w-3 text-muted-foreground" />
-                    {s.participantCounts.present}/{s.participantCounts.desired}
-                  </span>
-                  {s.participantDrift > 0 && (
-                    <span className="ml-1 text-[10px] text-amber-700">
-                      drift {s.participantDrift}
-                    </span>
-                  )}
-                </td>
-                <td className="py-2.5 px-2 whitespace-nowrap text-muted-foreground">
-                  {s.lastReconciledAt
-                    ? new Date(s.lastReconciledAt).toLocaleString()
-                    : s.lastProjectedAt
-                      ? new Date(s.lastProjectedAt).toLocaleString()
-                      : '—'}
-                </td>
-                <td className="py-2.5 px-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-[11px] px-2"
-                    onClick={() => toggle(s.warRoomId)}
-                  >
-                    {expandedId === s.warRoomId ? (
-                      <ChevronDown className="h-3 w-3 mr-1" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3 mr-1" />
-                    )}
-                    Details
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {filteredSnapshots.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center space-y-2">
+          <Layers className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+          <p className="text-sm font-medium">No war rooms match the active filter or search</p>
+          <p className="text-xs text-muted-foreground">
+            Try resetting your search query or switching to &ldquo;All&rdquo;.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs mt-2"
+            onClick={() => {
+              setSearchQuery('');
+              setHealthFilter('ALL');
+              setPage(1);
+            }}
+          >
+            Reset filters
+          </Button>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-[11px] text-muted-foreground border-b bg-muted/30">
+                  <th className="text-left font-semibold py-2.5 px-3 whitespace-nowrap">
+                    Incident
+                  </th>
+                  <th className="text-left font-semibold py-2.5 px-3">Provider</th>
+                  <th className="text-left font-semibold py-2.5 px-3">State & Channel Lock</th>
+                  <th className="text-left font-semibold py-2.5 px-3">Health</th>
+                  <th className="text-left font-semibold py-2.5 px-3 whitespace-nowrap">
+                    Projection
+                  </th>
+                  <th className="text-left font-semibold py-2.5 px-3 whitespace-nowrap">Members</th>
+                  <th className="text-left font-semibold py-2.5 px-3 whitespace-nowrap">
+                    Last sync
+                  </th>
+                  <th className="text-left font-semibold py-2.5 px-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedSnapshots.map(s => {
+                  const isLocked =
+                    s.state === 'CLOSING' || s.state === 'CLOSED' || s.state === 'ARCHIVED';
+                  return (
+                    <tr
+                      key={s.warRoomId}
+                      className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+                    >
+                      <td
+                        className="py-2.5 px-3 max-w-[180px] truncate font-medium"
+                        title={s.incidentId}
+                      >
+                        {s.incidentId.slice(0, 8)}…
+                        <span className="text-muted-foreground font-normal ml-1">
+                          g{s.generation}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] inline-flex items-center gap-1"
+                        >
+                          {s.provider === 'MICROSOFT_TEAMS' && (
+                            <MicrosoftTeamsLogo className="h-3 w-3 shrink-0" />
+                          )}
+                          <span>{s.provider === 'MICROSOFT_TEAMS' ? 'Teams' : s.provider}</span>
+                        </Badge>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge
+                            variant="outline"
+                            className={`text-[10px] ${stateBadgeVariant(s.state)}`}
+                          >
+                            {s.state}
+                          </Badge>
+                          {isLocked && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] border-slate-300 text-slate-600 bg-slate-50 gap-1"
+                            >
+                              <Lock className="h-2.5 w-2.5" /> Locked
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${healthBadgeVariant(s.operationalHealth)}`}
+                        >
+                          {s.operationalHealth}
+                        </Badge>
+                        {s.externalCleanupPending && (
+                          <div className="text-[10px] text-amber-700 mt-0.5">cleanup pending</div>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <span
+                          className={
+                            s.projectionBehind
+                              ? 'text-amber-700 font-semibold'
+                              : 'text-muted-foreground'
+                          }
+                        >
+                          {s.lastProjectedVersion}/{s.projectionVersion}
+                        </span>
+                        {s.projectionBehind && (
+                          <span className="ml-1 text-[10px] text-amber-700">
+                            lag {s.projectionLag}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="h-3 w-3 text-muted-foreground" />
+                          {s.participantCounts.present}/{s.participantCounts.desired}
+                        </span>
+                        {s.participantDrift > 0 && (
+                          <span className="ml-1 text-[10px] text-amber-700">
+                            drift {s.participantDrift}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 whitespace-nowrap text-muted-foreground text-[11px]">
+                        {s.lastReconciledAt
+                          ? new Date(s.lastReconciledAt).toLocaleString()
+                          : s.lastProjectedAt
+                            ? new Date(s.lastProjectedAt).toLocaleString()
+                            : '—'}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[11px] px-2"
+                          onClick={() => toggle(s.warRoomId)}
+                        >
+                          {expandedId === s.warRoomId ? (
+                            <ChevronDown className="h-3 w-3 mr-1" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3 mr-1" />
+                          )}
+                          Details
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 15-Item Pagination Footer */}
+          {totalCount > 0 && (
+            <TablePaginationFooter
+              page={currentPage}
+              pageSize={PAGE_SIZE}
+              totalCount={totalCount}
+              onPageChange={setPage}
+            />
+          )}
+        </div>
+      )}
 
       {expandedId && (
         <div className="rounded-lg border bg-muted/20 p-4 text-xs space-y-3">
