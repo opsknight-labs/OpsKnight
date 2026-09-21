@@ -21,11 +21,11 @@ async function login(page: import('@playwright/test').Page) {
   await page.goto('/login?callbackUrl=%2Fm');
   await page.locator('input[type="email"]').fill(FIXTURE_EMAIL);
   await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
-  await page.locator('form button[type="submit"]').click();
-  await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
-  await page.waitForLoadState('domcontentloaded');
+  await Promise.all([
+    page.waitForURL(url => url.pathname === '/m', { waitUntil: 'load', timeout: 30_000 }),
+    page.locator('form button[type="submit"]').click(),
+  ]);
   await expect(page.locator('.mobile-nav')).toBeVisible();
-  await page.waitForLoadState('load');
 }
 
 // Forces the App Lock card to render (and therefore be measured by the
