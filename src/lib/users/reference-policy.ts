@@ -38,6 +38,7 @@ export const USER_REFERENCE_POLICY = {
   tokens: { deactivate: 'REVOKE', delete: 'SET_NULL' },
   privacyRequestsAssigned: { deactivate: 'KEEP', delete: 'SET_NULL' },
   privacyRequestsRequested: { deactivate: 'KEEP', delete: 'SET_NULL' },
+  privacyRequestsVerified: { deactivate: 'KEEP', delete: 'SET_NULL' },
   createdRetentionHolds: { deactivate: 'KEEP', delete: 'SET_NULL' },
   releasedRetentionHolds: { deactivate: 'KEEP', delete: 'SET_NULL' },
   initiatedEncryptionRuns: { deactivate: 'KEEP', delete: 'SET_NULL' },

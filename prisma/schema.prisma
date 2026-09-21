@@ -906,9 +906,9 @@ model IncidentWarRoom {
   commandConversationId        String?
   commandCreateAttemptedAt     DateTime?
   messageGeneration            Int                    @default(1)
-  projectionVersion            Int                    @default(0)
+  projectionVersion     Int                   @default(0)
   lastProjectedVersion         Int                    @default(0)
-  lastProjectedAt              DateTime?
+  lastProjectedAt       DateTime?
   projectionLeaseToken         String?
   projectionLeaseExpiresAt     DateTime?
   provisioningToken            String?
@@ -928,7 +928,7 @@ model IncidentWarRoom {
   lastError                    String?
   lastErrorCode                String?
   health                       WarRoomHealthState     @default(HEALTHY)
-  lastReconciledAt             DateTime?
+  lastReconciledAt      DateTime?
   // Terminal drift debt: set when reconciliation window expires with
   // unverified external outcome. A low-frequency lane scans these rooms
   // by marker/planned name and archives any orphan channel idempotently
