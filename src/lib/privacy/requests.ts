@@ -44,11 +44,11 @@ export function isAutomatedErasureRequest(request: {
  * request cannot be silently reopened by a stray UI/API call.
  */
 const ALLOWED_TRANSITIONS: Record<PrivacyRequestStatus, readonly PrivacyRequestStatus[]> = {
-  RECEIVED: ['IDENTITY_VERIFICATION', 'IN_REVIEW', 'REJECTED'],
+  RECEIVED: ['IDENTITY_VERIFICATION', 'REJECTED'],
   IDENTITY_VERIFICATION: ['IN_REVIEW', 'BLOCKED', 'REJECTED'],
-  IN_REVIEW: ['PROCESSING', 'BLOCKED', 'REJECTED'],
-  PROCESSING: ['COMPLETED', 'BLOCKED', 'REJECTED'],
-  BLOCKED: ['IN_REVIEW', 'PROCESSING', 'REJECTED'],
+  IN_REVIEW: ['IDENTITY_VERIFICATION', 'PROCESSING', 'BLOCKED', 'REJECTED'],
+  PROCESSING: ['IDENTITY_VERIFICATION', 'COMPLETED', 'BLOCKED', 'REJECTED'],
+  BLOCKED: ['IDENTITY_VERIFICATION', 'IN_REVIEW', 'REJECTED'],
   COMPLETED: [],
   REJECTED: [],
 };
@@ -180,6 +180,13 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
       throw new AppError({
         code: 'PRIVACY_REQUEST_INVALID_TRANSITION',
         details: { from: current.status, to: parsed.toStatus },
+      });
+    }
+
+    if (parsed.toStatus === 'PROCESSING' && !current.verifiedAt) {
+      throw new AppError({
+        code: 'PRIVACY_REQUEST_INVALID_TRANSITION',
+        details: { from: current.status, to: parsed.toStatus, reason: 'IDENTITY_NOT_VERIFIED' },
       });
     }
 

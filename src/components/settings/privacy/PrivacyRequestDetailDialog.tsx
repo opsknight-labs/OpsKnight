@@ -121,7 +121,6 @@ export default function PrivacyRequestDetailDialog({
   canExport,
   canErase,
   automated,
-  exportEligible,
   trigger,
 }: {
   requestId: string;
@@ -129,7 +128,6 @@ export default function PrivacyRequestDetailDialog({
   canExport: boolean;
   canErase: boolean;
   automated: boolean;
-  exportEligible: boolean;
   trigger: React.ReactNode;
 }) {
   const { showToast } = useToast();
@@ -142,6 +140,7 @@ export default function PrivacyRequestDetailDialog({
   const [executing, setExecuting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmInput, setConfirmInput] = useState('');
+  const exportEligible = detail?.status === 'PROCESSING' && Boolean(detail.verifiedAt);
 
   async function loadDetail() {
     setLoading(true);

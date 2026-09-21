@@ -443,7 +443,6 @@ export default function PrivacyRequestsBoard({
                         canExport={canExport}
                         canErase={canErase}
                         automated={automated}
-                        exportEligible={req.status === 'PROCESSING' && Boolean(req.verifiedAt)}
                         trigger={
                           <Button size="sm" variant="outline">
                             <FileArchive className="mr-1.5 h-4 w-4" />
