@@ -437,7 +437,7 @@ export default async function IncidentDetailScreen({
 
       {presentation === 'mobile' ? (
         <details className="group overflow-hidden rounded-xl border border-border bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
             <span>Incident details & assignment</span>
             <ChevronDown
               className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
@@ -495,7 +495,7 @@ export default async function IncidentDetailScreen({
         {presentation === 'mobile' ? (
           <>
             <details className="group overflow-hidden rounded-xl border border-border bg-card lg:hidden">
-              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-xs font-semibold text-foreground select-none [&>*]:pointer-events-none [&::-webkit-details-marker]:hidden">
                 <span>People, fields & links</span>
                 <ChevronDown
                   className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"

@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { assertResponsiveIntegrity, assertSingleLineLabels } from '../lib/assert-responsive-integrity';
+import {
+  assertResponsiveIntegrity,
+  assertSingleLineLabels,
+} from '../lib/assert-responsive-integrity';
 import { VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
 
 const prisma = new PrismaClient();
@@ -15,7 +18,7 @@ async function clearRateLimits() {
 }
 
 async function login(page: import('@playwright/test').Page) {
-  await page.goto('/login?callbackUrl=%2Fm');
+  await page.goto('/m/login?callbackUrl=%2Fm');
   await page.locator('input[type="email"]').fill(FIXTURE_EMAIL);
   await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
   await page.locator('form button[type="submit"]').click();
