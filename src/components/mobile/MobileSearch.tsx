@@ -55,7 +55,10 @@ export default function MobileSearch({
   return (
     <div className="group relative w-full min-w-0">
       <form onSubmit={handleSubmit} className="relative flex w-full min-w-0 items-center">
-        <div className="pointer-events-none absolute left-3 z-10 text-muted-foreground" aria-hidden="true">
+        <div
+          className="pointer-events-none absolute left-3 z-10 text-muted-foreground"
+          aria-hidden="true"
+        >
           {leftIcon || <Search className="h-4 w-4" />}
         </div>
 
@@ -73,7 +76,7 @@ export default function MobileSearch({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="h-11 min-w-0 flex-1 rounded-xl border-input bg-background pl-9 pr-11 text-foreground shadow-sm focus-visible:ring-ring"
+          className="h-11 min-h-[44px] min-w-0 flex-1 rounded-xl border-input bg-background pl-9 pr-11 text-foreground shadow-sm focus-visible:ring-ring"
         />
 
         {value && (
@@ -146,7 +149,9 @@ export function MobileFilterChip({
         <span
           className={cn(
             'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[0.65rem] font-bold tabular-nums',
-            active ? 'bg-primary-foreground/15 text-primary-foreground' : 'bg-muted text-muted-foreground'
+            active
+              ? 'bg-primary-foreground/15 text-primary-foreground'
+              : 'bg-muted text-muted-foreground'
           )}
         >
           {count}
