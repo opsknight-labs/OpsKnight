@@ -42,7 +42,9 @@ describe('ChunkLoadErrorHandler', () => {
 
     const rejectionEvent = new PromiseRejectionEvent('unhandledrejection', {
       promise: Promise.resolve(),
-      reason: new Error('Failed to fetch dynamically imported module: /_next/static/chunks/pages/users.js'),
+      reason: new Error(
+        'Failed to fetch dynamically imported module: /_next/static/chunks/pages/users.js'
+      ),
     });
     window.dispatchEvent(rejectionEvent);
 
@@ -84,5 +86,26 @@ describe('ChunkLoadErrorHandler', () => {
     window.dispatchEvent(errorEvent);
 
     expect(reloadMock).not.toHaveBeenCalled();
+  });
+
+  it('should suppress reload when navigator.webdriver is true', () => {
+    Object.defineProperty(navigator, 'webdriver', {
+      configurable: true,
+      value: true,
+    });
+
+    render(<ChunkLoadErrorHandler />);
+
+    const errorEvent = new ErrorEvent('error', {
+      message: 'ChunkLoadError: Loading chunk 999 failed',
+    });
+    window.dispatchEvent(errorEvent);
+
+    expect(reloadMock).not.toHaveBeenCalled();
+
+    Object.defineProperty(navigator, 'webdriver', {
+      configurable: true,
+      value: false,
+    });
   });
 });
