@@ -1,7 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, FileArchive, Loader2, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  CheckCircle,
+  Download,
+  FileArchive,
+  Loader2,
+  Play,
+  RefreshCw,
+  ShieldAlert,
+  Trash2,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
@@ -134,10 +144,12 @@ export default function PrivacyRequestDetailDialog({
   automated: boolean;
   trigger: React.ReactNode;
 }) {
+  const router = useRouter();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const [detail, setDetail] = useState<RequestDetail | null>(null);
   const [plan, setPlan] = useState<ErasurePlan | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
@@ -233,6 +245,55 @@ export default function PrivacyRequestDetailDialog({
     }
   }
 
+  async function handleMoveToProcessing() {
+    setTransitioning(true);
+    try {
+      const response = await fetch(`/api/compliance/privacy-requests/${requestId}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toStatus: 'PROCESSING' }),
+      });
+      const body = await readJson(response);
+      if (!response.ok) {
+        showToast(body?.error ?? 'Failed to move request to Processing.', 'error');
+        return;
+      }
+      showToast('Request moved to Processing.', 'success');
+      await loadDetail();
+      router.refresh();
+    } catch {
+      showToast('Failed to move request to Processing.', 'error');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
+  async function handleVerifyIdentity() {
+    setTransitioning(true);
+    try {
+      const response = await fetch(`/api/compliance/privacy-requests/${requestId}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toStatus: 'IN_REVIEW',
+          verificationMethod: 'ADMIN_ATTESTATION',
+        }),
+      });
+      const body = await readJson(response);
+      if (!response.ok) {
+        showToast(body?.error ?? 'Failed to verify identity.', 'error');
+        return;
+      }
+      showToast('Identity verified (moved to In Review).', 'success');
+      await loadDetail();
+      router.refresh();
+    } catch {
+      showToast('Failed to verify identity.', 'error');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
   return (
     <Dialog
       open={open}
@@ -289,15 +350,20 @@ export default function PrivacyRequestDetailDialog({
             </div>
 
             {canExport && detail.requestType !== 'ERASURE' && (
-              <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
                 <div className="text-sm">
                   {automated ? (
                     exportEligible ? (
                       <span>Ready to generate a new export for this request.</span>
-                    ) : (
+                    ) : !detail.verifiedAt ? (
                       <span className="text-amber-600 dark:text-amber-400">
                         Complete identity verification and move this request to Processing before
                         generating an export.
+                      </span>
+                    ) : (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        Identity is verified. Move this request to Processing before generating an
+                        export.
                       </span>
                     )
                   ) : (
@@ -308,18 +374,50 @@ export default function PrivacyRequestDetailDialog({
                     </span>
                   )}
                 </div>
-                <Button
-                  size="sm"
-                  onClick={handleGenerate}
-                  disabled={!automated || !exportEligible || generating}
-                >
-                  {generating ? (
-                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  ) : (
-                    <FileArchive className="mr-1.5 h-4 w-4" />
+                <div className="flex items-center gap-2">
+                  {canManage && !detail.verifiedAt && detail.status === 'IDENTITY_VERIFICATION' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void handleVerifyIdentity()}
+                      disabled={transitioning}
+                    >
+                      {transitioning ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Verify identity
+                    </Button>
                   )}
-                  Generate export
-                </Button>
+                  {canManage && Boolean(detail.verifiedAt) && detail.status !== 'PROCESSING' && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void handleMoveToProcessing()}
+                      disabled={transitioning}
+                    >
+                      {transitioning ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Play className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Move to Processing
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={handleGenerate}
+                    disabled={!automated || !exportEligible || generating}
+                  >
+                    {generating ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileArchive className="mr-1.5 h-4 w-4" />
+                    )}
+                    Generate export
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -392,86 +490,124 @@ export default function PrivacyRequestDetailDialog({
                         </TableBody>
                       </Table>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <p className="text-xs text-muted-foreground">
-                        {exportEligible
-                          ? plan.canExecute
-                            ? 'Ready to execute — this cannot be undone.'
-                            : 'Blocking conditions must be resolved before erasure can run.'
-                          : 'Complete identity verification and move this request to Processing before erasure can run.'}
+                        {!detail.verifiedAt
+                          ? 'Complete identity verification and move this request to Processing before erasure can run.'
+                          : detail.status !== 'PROCESSING'
+                            ? 'Identity is verified. Move this request to Processing before erasure can run.'
+                            : plan.canExecute
+                              ? 'Ready to execute — this cannot be undone.'
+                              : 'Blocking conditions must be resolved before erasure can run.'}
                       </p>
-                      <AlertDialog
-                        open={confirmOpen}
-                        onOpenChange={next => {
-                          setConfirmOpen(next);
-                          if (!next) setConfirmInput('');
-                        }}
-                      >
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => setConfirmOpen(true)}
-                          disabled={
-                            !exportEligible ||
-                            !plan.canExecute ||
-                            executing ||
-                            detail.erasureExecution?.status === 'COMPLETED'
-                          }
-                        >
-                          {executing ? (
-                            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="mr-1.5 h-4 w-4" />
-                          )}
-                          Execute erasure
-                        </Button>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-                              <ShieldAlert className="h-4 w-4" />
-                              Permanently erase subject data?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription asChild>
-                              <div className="space-y-2 text-left">
-                                <p>
-                                  This will permanently remove and anonymize data for{' '}
-                                  <span className="font-mono font-medium text-foreground">
-                                    {detail.subjectType}: {detail.subjectId}
-                                  </span>
-                                  . This action cannot be undone.
-                                </p>
-                                <p className="text-xs">
-                                  Type <span className="font-mono font-semibold">ERASE</span> to
-                                  confirm.
-                                </p>
-                              </div>
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <Input
-                            autoFocus
-                            value={confirmInput}
-                            onChange={event => setConfirmInput(event.target.value)}
-                            placeholder="Type ERASE to confirm"
-                            className="font-mono"
-                            aria-label="Type ERASE to confirm erasure"
-                          />
-                          <AlertDialogFooter>
-                            <AlertDialogCancel disabled={executing}>Cancel</AlertDialogCancel>
+                      <div className="flex items-center gap-2">
+                        {canManage &&
+                          !detail.verifiedAt &&
+                          detail.status === 'IDENTITY_VERIFICATION' && (
                             <Button
-                              variant="destructive"
-                              disabled={confirmInput !== 'ERASE' || executing}
-                              onClick={() => void handleExecuteErasure()}
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void handleVerifyIdentity()}
+                              disabled={transitioning}
                             >
-                              {executing ? (
-                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                              {transitioning ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <Trash2 className="mr-1.5 h-4 w-4" />
+                                <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
                               )}
-                              Permanently erase
+                              Verify identity
                             </Button>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                          )}
+                        {canManage &&
+                          Boolean(detail.verifiedAt) &&
+                          detail.status !== 'PROCESSING' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void handleMoveToProcessing()}
+                              disabled={transitioning}
+                            >
+                              {transitioning ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Play className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Move to Processing
+                            </Button>
+                          )}
+                        <AlertDialog
+                          open={confirmOpen}
+                          onOpenChange={next => {
+                            setConfirmOpen(next);
+                            if (!next) setConfirmInput('');
+                          }}
+                        >
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setConfirmOpen(true)}
+                            disabled={
+                              !exportEligible ||
+                              !plan.canExecute ||
+                              executing ||
+                              detail.erasureExecution?.status === 'COMPLETED'
+                            }
+                          >
+                            {executing ? (
+                              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="mr-1.5 h-4 w-4" />
+                            )}
+                            Execute erasure
+                          </Button>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                                <ShieldAlert className="h-4 w-4" />
+                                Permanently erase subject data?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription asChild>
+                                <div className="space-y-2 text-left">
+                                  <p>
+                                    This will permanently remove and anonymize data for{' '}
+                                    <span className="font-mono font-medium text-foreground">
+                                      {detail.subjectType}: {detail.subjectId}
+                                    </span>
+                                    . This action cannot be undone.
+                                  </p>
+                                  <p className="text-xs">
+                                    Type <span className="font-mono font-semibold">ERASE</span> to
+                                    confirm.
+                                  </p>
+                                </div>
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <Input
+                              autoFocus
+                              value={confirmInput}
+                              onChange={event => setConfirmInput(event.target.value)}
+                              placeholder="Type ERASE to confirm"
+                              className="font-mono"
+                              aria-label="Type ERASE to confirm erasure"
+                            />
+                            <AlertDialogFooter>
+                              <AlertDialogCancel disabled={executing}>Cancel</AlertDialogCancel>
+                              <Button
+                                variant="destructive"
+                                disabled={confirmInput !== 'ERASE' || executing}
+                                onClick={() => void handleExecuteErasure()}
+                              >
+                                {executing ? (
+                                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="mr-1.5 h-4 w-4" />
+                                )}
+                                Permanently erase
+                              </Button>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   </>
                 ) : (

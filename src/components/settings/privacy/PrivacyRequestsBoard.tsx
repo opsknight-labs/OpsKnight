@@ -478,6 +478,9 @@ export default function PrivacyRequestsBoard({
                             <div className="flex flex-wrap justify-end gap-1.5">
                               {nextStatuses
                                 .filter(status => status !== 'REJECTED')
+                                .filter(
+                                  status => status !== 'PROCESSING' || Boolean(req.verifiedAt)
+                                )
                                 .map(status => (
                                   <Button
                                     key={status}

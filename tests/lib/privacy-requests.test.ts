@@ -246,6 +246,20 @@ describe('privacy request lifecycle', () => {
       ).resolves.toMatchObject({ status: 'IDENTITY_VERIFICATION' });
     });
 
+    it('allows direct transition from IDENTITY_VERIFICATION to PROCESSING when identity is already verified', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(
+        baseRequest({ status: 'IDENTITY_VERIFICATION', verifiedAt: new Date() })
+      );
+      mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.privacyRequestFindUniqueOrThrow.mockResolvedValue(
+        baseRequest({ status: 'PROCESSING', verifiedAt: new Date() })
+      );
+
+      await expect(
+        transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'PROCESSING' }, ACTOR)
+      ).resolves.toMatchObject({ status: 'PROCESSING' });
+    });
+
     it('never allows leaving a terminal COMPLETED request', async () => {
       mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ status: 'COMPLETED' }));
 
