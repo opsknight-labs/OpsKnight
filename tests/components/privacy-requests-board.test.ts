@@ -32,6 +32,7 @@ describe('privacy request board transitions', () => {
   it('exposes recovery paths without verification bypasses', () => {
     expect(PRIVACY_REQUEST_TRANSITIONS.RECEIVED).not.toContain('IN_REVIEW');
     expect(PRIVACY_REQUEST_TRANSITIONS.BLOCKED).not.toContain('PROCESSING');
+    expect(PRIVACY_REQUEST_TRANSITIONS.IDENTITY_VERIFICATION).toContain('PROCESSING');
     expect(PRIVACY_REQUEST_TRANSITIONS.IN_REVIEW).toContain('IDENTITY_VERIFICATION');
     expect(PRIVACY_REQUEST_TRANSITIONS.PROCESSING).toContain('IDENTITY_VERIFICATION');
     expect(PRIVACY_REQUEST_TRANSITIONS.BLOCKED).toContain('IDENTITY_VERIFICATION');
