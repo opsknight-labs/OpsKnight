@@ -49,12 +49,12 @@ function getVariantConfig(variant: ButtonVariant) {
 function getSizeConfig(size: ButtonSize) {
   switch (size) {
     case 'sm':
-      return { size: 'sm' as const, className: 'min-h-10 rounded-lg' };
+      return { size: 'default' as const, className: 'h-11 min-h-[44px] rounded-lg' };
     case 'lg':
-      return { size: 'lg' as const, className: 'min-h-12 rounded-xl' };
+      return { size: 'lg' as const, className: 'h-12 min-h-12 rounded-xl' };
     case 'md':
     default:
-      return { size: 'default' as const, className: 'min-h-11 rounded-xl' };
+      return { size: 'default' as const, className: 'h-11 min-h-[44px] rounded-xl' };
   }
 }
 

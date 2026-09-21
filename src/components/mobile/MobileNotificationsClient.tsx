@@ -361,7 +361,7 @@ export default function MobileNotificationsClient() {
                 setActiveFilter(filter);
               }}
               className={cn(
-                'min-h-11 rounded-md px-3 text-[11px] font-semibold transition-colors',
+                'h-11 min-h-[44px] rounded-md px-3 text-[11px] font-semibold transition-colors',
                 activeFilter === filter
                   ? 'bg-card text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
@@ -375,8 +375,8 @@ export default function MobileNotificationsClient() {
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="min-h-11 px-2.5 text-[11px]"
+          size="lg"
+          className="h-11 min-h-[44px] px-2.5 text-[11px]"
           onClick={() => void handleMarkAllRead()}
           disabled={unreadCount === 0 || markingAll}
         >
@@ -474,7 +474,7 @@ export default function MobileNotificationsClient() {
                       {notification.unread ? (
                         <button
                           type="button"
-                          className="min-h-11 min-w-11 shrink-0 self-center rounded-lg px-2 text-[10px] font-semibold text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                          className="h-11 min-h-[44px] min-w-11 shrink-0 self-center rounded-lg px-2 text-[10px] font-semibold text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
                           disabled={updatingIds.has(notification.id)}
                           onClick={() => void handleMarkRead(notification.id)}
                           aria-label={`Mark ${notification.title} as read`}

@@ -111,7 +111,7 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
       <div
         className={cn(
           'fixed inset-0 z-[var(--z-critical-overlay,80)] flex flex-col items-center justify-center bg-background/95 px-6 backdrop-blur-xl',
-          !isLocked && 'pointer-events-none opacity-0'
+          !isLocked && 'pointer-events-none invisible opacity-0'
         )}
         role="dialog"
         aria-modal="true"
@@ -148,7 +148,8 @@ export default function MobileBiometricGuard({ children }: { children: React.Rea
 
           <Button
             type="button"
-            className="mt-5 min-h-11 w-full gap-2"
+            size="lg"
+            className="mt-5 h-11 min-h-[44px] w-full gap-2 text-sm"
             onClick={() => void authenticate()}
             disabled={!isSupported || authenticating}
           >

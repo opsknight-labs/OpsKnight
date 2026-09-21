@@ -75,7 +75,12 @@ export default function PwaInstallCard() {
       status="Not installed"
       action={
         deferredPrompt ? (
-          <Button type="button" size="sm" className="min-h-11" onClick={handleInstallClick}>
+          <Button
+            type="button"
+            size="lg"
+            className="h-11 min-h-[44px]"
+            onClick={handleInstallClick}
+          >
             Install
           </Button>
         ) : null

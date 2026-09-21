@@ -174,7 +174,7 @@ export default function SwipeableIncidentCard({
                 acknowledgeAction(incident.id);
               }}
               disabled={isUpdating}
-              className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3 text-[11px] font-bold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+              className="inline-flex h-11 min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-3.5 text-xs font-bold text-white transition-colors hover:bg-amber-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
               aria-label={`Acknowledge incident ${incident.title}`}
             >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
@@ -186,7 +186,7 @@ export default function SwipeableIncidentCard({
               onClick={handleLinkClick}
               draggable={false}
               onDragStart={e => e.preventDefault()}
-              className="inline-flex min-h-9 shrink-0 items-center rounded-lg px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-11 min-h-[44px] shrink-0 items-center rounded-lg px-3 text-xs font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`View details for ${incident.title}`}
             >
               View details
