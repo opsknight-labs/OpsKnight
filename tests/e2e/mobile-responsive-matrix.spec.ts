@@ -91,8 +91,10 @@ test.describe('mobile responsive visual integrity matrix', () => {
     });
   });
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ page }) => {
     await clearRateLimits();
+    await page.route('**/api/realtime/stream', route => route.abort());
+    await page.route('**/api/notifications/stream', route => route.abort());
   });
 
   test.afterAll(async () => {
