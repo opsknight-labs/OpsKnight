@@ -57,7 +57,7 @@ export default function LoginClient({
   callbackUrl,
   defaultCallbackUrl,
   errorCode,
-  passwordSet: _passwordSet,
+  passwordSet,
   ssoError,
   ssoEnabled,
   ssoProviderType,
@@ -82,6 +82,7 @@ export default function LoginClient({
   const [showPassword, setShowPassword] = useState(false);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showPasswordSet, setShowPasswordSet] = useState(() => Boolean(passwordSet));
   const [isShaking, setIsShaking] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
@@ -194,6 +195,34 @@ export default function LoginClient({
           </p>
         </div>
 
+        {/* Password Set Success Alert */}
+        {showPasswordSet && !error && (
+          <div
+            role="status"
+            className="mb-6 p-3 rounded-lg border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xs flex items-start gap-3"
+          >
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 mt-0.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-900 dark:text-white mb-0.5">
+                Password set successfully
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Your account is active. Please sign in with your new password.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPasswordSet(false)}
+              className="shrink-0 p-0.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Dismiss message"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Global Error Alert */}
         {error && (
           <div
@@ -300,7 +329,7 @@ export default function LoginClient({
                     if (error) setError('');
                   }}
                   onBlur={() => setEmailTouched(true)}
-                  className="auth-input w-full h-11 2xl:h-12 pl-12 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+                  className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-12 pr-4 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
                   placeholder="you@company.com"
                   disabled={isSubmitting || isSuccess}
                 />
@@ -337,7 +366,7 @@ export default function LoginClient({
                   onKeyDown={e => {
                     setCapsLockOn(e.getModifierState('CapsLock'));
                   }}
-                  className="auth-input w-full h-11 2xl:h-12 pl-12 pr-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
+                  className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-12 pr-11 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-base sm:text-sm 2xl:text-base shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
                   placeholder="Enter your password"
                   disabled={isSubmitting || isSuccess}
                 />

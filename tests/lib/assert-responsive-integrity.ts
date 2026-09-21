@@ -78,14 +78,15 @@ export async function checkResponsiveIntegrity(
       }
 
       const isVisible = (el: Element): boolean => {
-        const style = window.getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-          return false;
+        let cur: Element | null = el;
+        while (cur && cur !== document.documentElement) {
+          const style = window.getComputedStyle(cur);
+          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+            return false;
+          }
+          if (cur.classList.contains('sr-only')) return false;
+          cur = cur.parentElement;
         }
-        // Screen-reader-only text (Tailwind's `.sr-only`) is intentionally a
-        // 1x1px clipped box with content that overflows it -- that's the whole
-        // point of the pattern, not a rendering bug.
-        if (el.classList.contains('sr-only')) return false;
         const rect = el.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
       };
@@ -198,7 +199,8 @@ export async function checkResponsiveIntegrity(
           // app-chrome nav/header links invisible to this check entirely. Scope
           // the anchor check to those two chrome regions rather than every link
           // on the page, since ordinary inline text links are not touch targets.
-          const isChromeNavLink = el.tagName === 'A' && Boolean(el.closest('.mobile-header, .mobile-nav'));
+          const isChromeNavLink =
+            el.tagName === 'A' && Boolean(el.closest('.mobile-header, .mobile-nav'));
           const isExcluded = opts.exclusions.some(sel => el.matches(sel));
 
           if ((isButton || isInput || isChromeNavLink) && !isExcluded) {
@@ -246,7 +248,14 @@ export async function checkResponsiveIntegrity(
           }
           parent = parent.parentElement;
         }
-        return { top, left, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+        return {
+          top,
+          left,
+          right,
+          bottom,
+          width: Math.max(0, right - left),
+          height: Math.max(0, bottom - top),
+        };
       }
 
       const collisionCandidates = allElements.filter(el => {
@@ -287,7 +296,16 @@ export async function checkResponsiveIntegrity(
             const styleA = window.getComputedStyle(elA);
             const styleB = window.getComputedStyle(elB);
             if (styleA.pointerEvents === 'none' || styleB.pointerEvents === 'none') continue;
-            if (styleA.position === 'fixed' || styleB.position === 'fixed') continue;
+            const isFixedOrSticky = (el: Element): boolean => {
+              let cur: Element | null = el;
+              while (cur && cur !== document.body) {
+                const pos = window.getComputedStyle(cur).position;
+                if (pos === 'fixed' || pos === 'sticky') return true;
+                cur = cur.parentElement;
+              }
+              return false;
+            };
+            if (isFixedOrSticky(elA) || isFixedOrSticky(elB)) continue;
 
             violations.push({
               type: 'COLLISION_OVERLAP',
@@ -298,7 +316,6 @@ export async function checkResponsiveIntegrity(
           }
         }
       });
-
 
       return violations;
     },

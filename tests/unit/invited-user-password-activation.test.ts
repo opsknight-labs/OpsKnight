@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createHash } from 'crypto';
 
 const mockPrisma = vi.hoisted(() => ({
   user: {
@@ -49,8 +48,13 @@ vi.mock('@/lib/session-security-projection', () => ({
   invalidateSessionSecurityProjection: vi.fn(),
 }));
 
+vi.mock('next/headers', () => ({
+  headers: vi.fn().mockResolvedValue(new Headers({ 'x-forwarded-for': '127.0.0.1' })),
+}));
+
 import { completePasswordReset } from '@/lib/password-reset';
-import { issueUserInviteToken, buildInviteUrl } from '@/lib/invitations';
+import { issueUserInviteToken } from '@/lib/invitations';
+import { setPassword } from '@/app/set-password/actions';
 
 describe('Invited User Password Activation and Recovery Flow', () => {
   beforeEach(() => {
@@ -100,7 +104,6 @@ describe('Invited User Password Activation and Recovery Flow', () => {
   describe('completePasswordReset with INVITED user', () => {
     it('activates invited user and updates status to ACTIVE when setting password via recovery link', async () => {
       const rawToken = 'test-recovery-token-for-invited-user-123456';
-      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
 
       mockPrisma.userToken.findFirst.mockResolvedValue({
         id: 'token-rec-1',
@@ -189,6 +192,64 @@ describe('Invited User Password Activation and Recovery Flow', () => {
       const result = await completePasswordReset(rawToken, 'SecurePassphrase123!', '127.0.0.1');
       expect(result.success).toBe(false);
       expect(result.code).toBe('INVALID_TOKEN');
+      expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('setPassword server action', () => {
+    it('activates invited user and returns { success: true, email } without redirect exception', async () => {
+      const rawToken = 'test-action-invite-token-12345678901234567890';
+
+      mockPrisma.userToken.findFirst.mockResolvedValue({
+        id: 'token-action-1',
+        userId: 'invited-action-user-id',
+        identifier: 'invited-action@example.com',
+        generation: 1,
+        type: 'INVITE',
+      });
+
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: 'invited-action-user-id',
+        email: 'invited-action@example.com',
+        name: 'Invited Action User',
+        status: 'INVITED',
+        invitationGeneration: 1,
+      });
+
+      mockPrisma.userToken.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
+
+      const formData = new FormData();
+      formData.append('token', rawToken);
+      formData.append('password', 'SecurePassphrase123!');
+      formData.append('confirmPassword', 'SecurePassphrase123!');
+
+      const result = await setPassword({ error: null }, formData);
+
+      expect(result.success).toBe(true);
+      expect(result.email).toBe('invited-action@example.com');
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'invited-action-user-id',
+          status: 'INVITED',
+          invitationGeneration: 1,
+        },
+        data: expect.objectContaining({
+          status: 'ACTIVE',
+          invitedAt: null,
+          tokenVersion: { increment: 1 },
+        }),
+      });
+    });
+
+    it('returns validation error if passwords do not match', async () => {
+      const formData = new FormData();
+      formData.append('token', 'test-action-invite-token-12345678901234567890');
+      formData.append('password', 'SecurePassphrase123!');
+      formData.append('confirmPassword', 'DifferentPassword123!');
+
+      const result = await setPassword({ error: null }, formData);
+      expect(result.error).toBe('Passwords do not match.');
       expect(mockPrisma.user.updateMany).not.toHaveBeenCalled();
     });
   });

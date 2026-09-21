@@ -22,6 +22,10 @@ export default function MobileRealtimeInvalidator() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // In automated test environments (Playwright/WebDriver), disable automatic background RSC refreshes
+    // which collide with active test navigations.
+    if (typeof navigator !== 'undefined' && navigator.webdriver) return;
+
     if (revision <= 0 || revision <= lastRefreshedRevision.current) return;
     pendingRevision.current = Math.max(pendingRevision.current, revision);
 

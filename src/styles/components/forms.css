@@ -69,6 +69,7 @@ textarea::placeholder {
 }
 
 .auth-input {
+    min-height: 44px;
     color: inherit;
     background-color: transparent;
     caret-color: currentColor;

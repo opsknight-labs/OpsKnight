@@ -153,7 +153,7 @@ export default function MobileIncidentFilters(props: Props) {
             placeholder="Search incidents"
             type="search"
             autoComplete="off"
-            className="h-11 rounded-xl bg-card pl-9 pr-10 text-sm shadow-none"
+            className="h-[44px] min-h-[44px] rounded-xl bg-card pl-9 pr-10 text-sm shadow-none"
           />
           {query && (
             <button
@@ -312,10 +312,16 @@ export default function MobileIncidentFilters(props: Props) {
           </div>
 
           <DialogFooter className="grid grid-cols-2 gap-2 sm:flex">
-            <Button type="button" variant="outline" className="h-11" onClick={reset}>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="h-11 min-h-[44px]"
+              onClick={reset}
+            >
               Reset
             </Button>
-            <Button type="button" className="h-11" onClick={apply}>
+            <Button type="button" size="lg" className="h-11 min-h-[44px]" onClick={apply}>
               Apply filters
             </Button>
           </DialogFooter>

@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { assertResponsiveIntegrity, assertSingleLineLabels } from '../lib/assert-responsive-integrity';
+import {
+  assertResponsiveIntegrity,
+  assertSingleLineLabels,
+} from '../lib/assert-responsive-integrity';
 import { VIEWPORT_MATRIX } from '../lib/responsive-viewport-matrix';
 
 const prisma = new PrismaClient();
@@ -18,8 +21,10 @@ async function login(page: import('@playwright/test').Page) {
   await page.goto('/login?callbackUrl=%2Fm');
   await page.locator('input[type="email"]').fill(FIXTURE_EMAIL);
   await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
-  await page.locator('form button[type="submit"]').click();
-  await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
+  await Promise.all([
+    page.waitForURL(url => url.pathname === '/m', { waitUntil: 'load', timeout: 30_000 }),
+    page.locator('form button[type="submit"]').click(),
+  ]);
   await expect(page.locator('.mobile-nav')).toBeVisible();
 }
 
@@ -86,8 +91,10 @@ test.describe('mobile responsive visual integrity matrix', () => {
     });
   });
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ page }) => {
     await clearRateLimits();
+    await page.route('**/api/realtime/stream', route => route.abort());
+    await page.route('**/api/notifications/stream', route => route.abort());
   });
 
   test.afterAll(async () => {
@@ -146,7 +153,6 @@ test.describe('mobile responsive visual integrity matrix', () => {
       await login(page);
 
       // 1. Dashboard
-      await page.goto('/m');
       await expect(page.locator('.mobile-nav')).toBeVisible();
       await assertResponsiveIntegrity(page);
       await page.screenshot({ path: `screenshots/responsive/dashboard-${vp.width}.png` });

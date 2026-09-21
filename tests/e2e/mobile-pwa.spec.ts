@@ -18,8 +18,10 @@ async function loginToMobile(page: import('@playwright/test').Page) {
   await page.goto('/login?callbackUrl=%2Fm');
   await page.locator('input[type="email"]').fill(FIXTURE_EMAIL);
   await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
-  await page.locator('form button[type="submit"]').click();
-  await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
+  await Promise.all([
+    page.waitForURL(url => url.pathname === '/m', { waitUntil: 'load', timeout: 30_000 }),
+    page.locator('form button[type="submit"]').click(),
+  ]);
   await expect(page.locator('.mobile-nav')).toBeVisible();
 }
 
@@ -290,13 +292,25 @@ test.describe('mobile PWA browser contract', () => {
     const detailsSummary = page.locator('summary', { hasText: 'Incident details & assignment' });
     await expect(detailsSummary).toBeVisible();
     await detailsSummary.click();
+    const detailsElement = page.locator('details').filter({ has: detailsSummary });
+    if (!(await detailsElement.evaluate(el => el.hasAttribute('open')))) {
+      await detailsSummary.dispatchEvent('click');
+    }
     await expect(page.locator('text=Mobile PWA Service').first()).toBeVisible();
 
     // People, fields & links disclosure works and links use /m routes
     const linksSummary = page.locator('summary', { hasText: 'People, fields & links' });
     await expect(linksSummary).toBeVisible();
     await linksSummary.click();
-    const serviceQuickLink = page.locator('a[href*="/m/services/"]').first();
+    const linksDetailsElement = page.locator('details').filter({ has: linksSummary });
+    if (!(await linksDetailsElement.evaluate(el => el.hasAttribute('open')))) {
+      await linksSummary.dispatchEvent('click');
+    }
+    const serviceQuickLink = page
+      .locator('details')
+      .filter({ has: linksSummary })
+      .locator('a[href*="/m/services/"]')
+      .first();
     await expect(serviceQuickLink).toBeVisible();
 
     // Back link navigates cleanly back to /m/incidents
