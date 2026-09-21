@@ -73,6 +73,7 @@ type IncidentLifecycleSnapshot = {
   snoozeReason: string | null;
   slaPausedMs: bigint;
   slaPauseStartedAt: Date | null;
+  slaFirstAcknowledgedAt: Date | null;
   slaAckElapsedMs: bigint | null;
   slaResolveElapsedMs: bigint | null;
   escalationGeneration: number;
@@ -406,14 +407,20 @@ function updateDataForCommand(
     case 'ACKNOWLEDGE':
       if (!incident.acknowledgedAt) {
         data.acknowledgedAt = now;
-        data.slaAckElapsedMs = BigInt(
-          effectiveMaterializedElapsedMs({
-            startedAt: incident.createdAt,
-            evaluationAt: now,
-            pausedMs: incident.slaPausedMs,
-            pauseStartedAt: incident.slaPauseStartedAt,
-          })
-        );
+        // ACK SLA is incident-lifetime truth. REOPEN/UNACKNOWLEDGE reset the
+        // operational state, but a later acknowledgement must not replace the
+        // immutable first-ACK sample.
+        if (incident.slaAckElapsedMs === null) {
+          data.slaFirstAcknowledgedAt = now;
+          data.slaAckElapsedMs = BigInt(
+            effectiveMaterializedElapsedMs({
+              startedAt: incident.createdAt,
+              evaluationAt: now,
+              pausedMs: incident.slaPausedMs,
+              pauseStartedAt: incident.slaPauseStartedAt,
+            })
+          );
+        }
       }
       data.escalationStatus = 'COMPLETED';
       data.nextEscalationAt = null;
@@ -444,7 +451,7 @@ function updateDataForCommand(
       const delayMinutes = escalationDelayMinutes(incident, 0);
       data.acknowledgedAt = null;
       data.resolvedAt = null;
-      data.slaAckElapsedMs = null;
+      // Preserve the first-ACK SLA capture across operational reopen cycles.
       data.slaResolveElapsedMs = null;
       data.resolutionKind = null;
       data.currentEscalationStep = 0;
@@ -459,7 +466,7 @@ function updateDataForCommand(
     case 'UNACKNOWLEDGE': {
       const stepIndex = incident.currentEscalationStep ?? 0;
       data.acknowledgedAt = null;
-      data.slaAckElapsedMs = null;
+      // Unacknowledgement is operational; it cannot erase lifetime ACK truth.
       data.escalationStatus = 'ESCALATING';
       data.nextEscalationAt = atDelay(now, escalationDelayMinutes(incident, stepIndex));
       data.snoozedUntil = null;
@@ -520,6 +527,7 @@ async function loadSnapshot(
       snoozeReason: true,
       slaPausedMs: true,
       slaPauseStartedAt: true,
+      slaFirstAcknowledgedAt: true,
       slaAckElapsedMs: true,
       slaResolveElapsedMs: true,
       escalationGeneration: true,

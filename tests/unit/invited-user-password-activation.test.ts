@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createHash } from 'crypto';
 
 const mockPrisma = vi.hoisted(() => ({
   user: {
@@ -53,7 +54,7 @@ vi.mock('next/headers', () => ({
 }));
 
 import { completePasswordReset } from '@/lib/password-reset';
-import { issueUserInviteToken } from '@/lib/invitations';
+import { issueUserInviteToken, buildInviteUrl } from '@/lib/invitations';
 import { setPassword } from '@/app/set-password/actions';
 
 describe('Invited User Password Activation and Recovery Flow', () => {
@@ -104,6 +105,7 @@ describe('Invited User Password Activation and Recovery Flow', () => {
   describe('completePasswordReset with INVITED user', () => {
     it('activates invited user and updates status to ACTIVE when setting password via recovery link', async () => {
       const rawToken = 'test-recovery-token-for-invited-user-123456';
+      const tokenHash = createHash('sha256').update(rawToken).digest('hex');
 
       mockPrisma.userToken.findFirst.mockResolvedValue({
         id: 'token-rec-1',

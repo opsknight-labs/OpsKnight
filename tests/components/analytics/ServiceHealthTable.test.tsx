@@ -66,4 +66,11 @@ describe('ServiceHealthTable', () => {
     expect(cards.length).toBe(1);
     expect(cards[0]?.querySelector('.service-health-name')?.textContent).toBe('Alpha Payments');
   });
+
+  it('labels evaluated phase checks separately from unknown-contract incidents', () => {
+    render(<ServiceHealthTable services={services} />);
+
+    expect(screen.getAllByText('SLA checks evaluated')).toHaveLength(3);
+    expect(screen.getAllByText('Unknown SLA incidents')).toHaveLength(3);
+  });
 });

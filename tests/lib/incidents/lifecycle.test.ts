@@ -62,6 +62,7 @@ function snapshot(
     createdAt: new Date('2026-08-27T11:40:00.000Z'),
     slaPausedMs: BigInt(0),
     slaPauseStartedAt: null as Date | null,
+    slaFirstAcknowledgedAt: null as Date | null,
     slaAckElapsedMs: null as bigint | null,
     slaResolveElapsedMs: null as bigint | null,
     escalationGeneration: 0,
@@ -162,7 +163,10 @@ describe('incident lifecycle command engine', () => {
 
     expect(tx.incident.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ slaAckElapsedMs: BigInt(15 * 60_000) }),
+        data: expect.objectContaining({
+          slaFirstAcknowledgedAt: NOW,
+          slaAckElapsedMs: BigInt(15 * 60_000),
+        }),
       })
     );
   });
@@ -227,7 +231,14 @@ describe('incident lifecycle command engine', () => {
 
   it('reopens a resolved incident from escalation step zero using the first-step delay', async () => {
     tx.incident.findUnique.mockResolvedValue(
-      snapshot({ status: 'RESOLVED', resolvedAt: NOW, currentEscalationStep: 2 })
+      snapshot({
+        status: 'RESOLVED',
+        acknowledgedAt: new Date('2026-08-27T11:45:00.000Z'),
+        resolvedAt: NOW,
+        slaAckElapsedMs: BigInt(5 * 60_000),
+        slaResolveElapsedMs: BigInt(30 * 60_000),
+        currentEscalationStep: 2,
+      })
     );
 
     await applyIncidentLifecycleCommand(asTransactionClient(tx), {
@@ -244,7 +255,6 @@ describe('incident lifecycle command engine', () => {
           status: 'OPEN',
           acknowledgedAt: null,
           resolvedAt: null,
-          slaAckElapsedMs: null,
           slaResolveElapsedMs: null,
           currentEscalationStep: 0,
           escalationStatus: 'ESCALATING',
@@ -253,6 +263,7 @@ describe('incident lifecycle command engine', () => {
         }),
       })
     );
+    expect(tx.incident.update.mock.calls[0][0].data).not.toHaveProperty('slaAckElapsedMs');
     expect(mocks.enqueueLifecycleSideEffects).toHaveBeenCalledWith(
       asTransactionClient(tx),
       expect.objectContaining({
@@ -266,9 +277,32 @@ describe('incident lifecycle command engine', () => {
     );
   });
 
+  it('re-acknowledges operationally without replacing the lifetime first-ACK capture', async () => {
+    tx.incident.findUnique.mockResolvedValue(
+      snapshot({ status: 'OPEN', slaAckElapsedMs: BigInt(5 * 60_000) })
+    );
+
+    await applyIncidentLifecycleCommand(asTransactionClient(tx), {
+      incidentId: 'inc-reack',
+      command: 'ACKNOWLEDGE',
+      source: 'WEB',
+      now: NOW,
+    });
+
+    const data = tx.incident.update.mock.calls[0][0].data;
+    expect(data.acknowledgedAt).toEqual(NOW);
+    expect(data).not.toHaveProperty('slaFirstAcknowledgedAt');
+    expect(data).not.toHaveProperty('slaAckElapsedMs');
+  });
+
   it('unacknowledges by resuming the current escalation step', async () => {
     tx.incident.findUnique.mockResolvedValue(
-      snapshot({ status: 'ACKNOWLEDGED', currentEscalationStep: 2, acknowledgedAt: NOW })
+      snapshot({
+        status: 'ACKNOWLEDGED',
+        currentEscalationStep: 2,
+        acknowledgedAt: NOW,
+        slaAckElapsedMs: BigInt(5 * 60_000),
+      })
     );
 
     await applyIncidentLifecycleCommand(asTransactionClient(tx), {
@@ -283,13 +317,13 @@ describe('incident lifecycle command engine', () => {
         data: expect.objectContaining({
           status: 'OPEN',
           acknowledgedAt: null,
-          slaAckElapsedMs: null,
           escalationStatus: 'ESCALATING',
           escalationGeneration: { increment: 1 },
           nextEscalationAt: new Date('2026-08-27T12:20:00.000Z'),
         }),
       })
     );
+    expect(tx.incident.update.mock.calls[0][0].data).not.toHaveProperty('slaAckElapsedMs');
   });
 
   it('unsnoozes by resuming the current escalation step and clearing snooze metadata', async () => {

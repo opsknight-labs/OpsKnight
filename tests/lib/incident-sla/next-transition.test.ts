@@ -84,6 +84,16 @@ describe('next incident SLA transition', () => {
     ).resolves.toBeNull();
   });
 
+  it('does not schedule a new ACK generation after reopen when first ACK is captured', () => {
+    const now = new Date(createdAt.getTime() + 10 * minute);
+    const transition = deriveNextSlaTransition(
+      incident({ slaAckElapsedMs: BigInt(5 * minute) }),
+      now
+    );
+
+    expect(transition).toMatchObject({ kind: 'RESOLVE_WARNING' });
+  });
+
   it('uses the notification-enabled service predicate for scheduler work', async () => {
     findMany.mockResolvedValue([]);
     await getNextIncidentSlaTransitionAt();

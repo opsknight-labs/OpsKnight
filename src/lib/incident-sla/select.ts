@@ -5,6 +5,7 @@ export const incidentSlaSelect = {
   status: true,
   createdAt: true,
   acknowledgedAt: true,
+  slaFirstAcknowledgedAt: true,
   resolvedAt: true,
   slaAckTargetMs: true,
   slaResolveTargetMs: true,

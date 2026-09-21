@@ -85,8 +85,9 @@ export const INCIDENT_METRIC_DEFINITIONS = {
   },
   ackRate: {
     label: 'Acknowledgment rate',
-    description: 'Share of selected-period incidents that have been acknowledged.',
-    formula: 'Incidents with acknowledgedAt ÷ eligible selected-period incidents × 100',
+    description: 'Share of selected-period incidents with a recorded first acknowledgement.',
+    formula:
+      'Incidents with durable first-ACK capture (acknowledgedAt as legacy fallback) ÷ eligible selected-period incidents × 100',
     scope: 'selected_period',
     direction: 'higher_is_better',
   },
@@ -113,9 +114,9 @@ export const INCIDENT_METRIC_DEFINITIONS = {
   },
   mtta: {
     label: 'MTTA',
-    description: 'Mean SLA-active time from incident creation to acknowledgment.',
+    description: 'Mean SLA-active time from incident creation to first acknowledgement.',
     formula:
-      'Average creation-to-acknowledgment elapsed time excluding canonical SLA pause intervals',
+      'Average creation-to-first-acknowledgement elapsed time excluding canonical SLA pause intervals',
     scope: 'selected_period',
     direction: 'lower_is_better',
   },

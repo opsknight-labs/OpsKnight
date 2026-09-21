@@ -13,7 +13,6 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
-  MessageSquare,
   Radio,
   XCircle,
   SlidersHorizontal,
@@ -67,7 +66,7 @@ const CHANNELS = [
   'WEBHOOK',
   'WHATSAPP',
 ] as const;
-const STATUSES = ['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED'] as const;
+const STATUSES = ['PENDING', 'SENT', 'DELIVERED', 'FAILED', 'SKIPPED', 'UNKNOWN'] as const;
 const CATEGORIES = [
   'INCIDENT',
   'SECURITY',
@@ -235,13 +234,15 @@ export default function NotificationOperations({ canRetry }: Props) {
   };
 
   const total = Object.values(stats).reduce((sum, value) => sum + value, 0);
-  const delivered = (stats.SENT || 0) + (stats.DELIVERED || 0);
+  const accepted = stats.SENT || 0;
+  const delivered = stats.DELIVERED || 0;
   const pending = stats.PENDING || 0;
   const failed = stats.FAILED || 0;
   const skipped = stats.SKIPPED || 0;
+  const unknown = stats.UNKNOWN || 0;
 
   const handleStatusFilterClick = (targetStatus: string) => {
-    if (status === targetStatus || (targetStatus === 'SENT' && status === 'DELIVERED')) {
+    if (status === targetStatus) {
       setStatus('all');
     } else {
       setStatus(targetStatus);
@@ -387,7 +388,7 @@ export default function NotificationOperations({ canRetry }: Props) {
       </div>
 
       {/* 2. Interactive Queue Status Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-3">
         <button
           type="button"
           onClick={() => setStatus('all')}
@@ -407,9 +408,9 @@ export default function NotificationOperations({ canRetry }: Props) {
 
         <button
           type="button"
-          onClick={() => handleStatusFilterClick('SENT')}
+          onClick={() => handleStatusFilterClick('DELIVERED')}
           className={`text-left p-4 rounded-xl border transition-all ${
-            status === 'DELIVERED' || status === 'SENT'
+            status === 'DELIVERED'
               ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/40 shadow-xs'
               : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
           }`}
@@ -432,6 +433,25 @@ export default function NotificationOperations({ canRetry }: Props) {
 
         <button
           type="button"
+          onClick={() => handleStatusFilterClick('SENT')}
+          className={`text-left p-4 rounded-xl border transition-all ${
+            status === 'SENT'
+              ? 'bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/40 shadow-xs'
+              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center justify-between pb-1.5">
+            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Accepted</span>
+            <CheckCircle2 className="h-4 w-4 text-blue-500" />
+          </div>
+          <div className="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight">
+            {accepted}
+          </div>
+          <span className="text-[10px] text-muted-foreground">Provider accepted</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => handleStatusFilterClick('PENDING')}
           className={`text-left p-4 rounded-xl border transition-all ${
             status === 'PENDING'
@@ -449,6 +469,25 @@ export default function NotificationOperations({ canRetry }: Props) {
             {pending}
           </div>
           <span className="text-[10px] text-muted-foreground">Queued or retry backoff</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleStatusFilterClick('UNKNOWN')}
+          className={`text-left p-4 rounded-xl border transition-all ${
+            status === 'UNKNOWN'
+              ? 'bg-violet-500/10 border-violet-500/40 ring-1 ring-violet-500/40 shadow-xs'
+              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
+          }`}
+        >
+          <div className="flex items-center justify-between pb-1.5">
+            <span className="text-xs font-semibold text-violet-600 dark:text-violet-400">Unknown</span>
+            <AlertTriangle className="h-4 w-4 text-violet-500" />
+          </div>
+          <div className="text-2xl font-black text-violet-600 dark:text-violet-400 tracking-tight">
+            {unknown}
+          </div>
+          <span className="text-[10px] text-muted-foreground">Awaiting reconciliation</span>
         </button>
 
         <button
@@ -759,7 +798,8 @@ export default function NotificationOperations({ canRetry }: Props) {
                   </TableRow>
                 ) : (
                   sortedRows.map(row => {
-                    const isDelivered = row.status === 'SENT' || row.status === 'DELIVERED';
+                    const isDelivered = row.status === 'DELIVERED';
+                    const isAccepted = row.status === 'SENT';
                     const isPending = row.status === 'PENDING';
                     const isFailed = row.status === 'FAILED';
 
@@ -776,6 +816,13 @@ export default function NotificationOperations({ canRetry }: Props) {
                             >
                               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                               {row.status}
+                            </Badge>
+                          ) : isAccepted ? (
+                            <Badge
+                              variant="outline"
+                              className="border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400 font-semibold"
+                            >
+                              Accepted
                             </Badge>
                           ) : isPending ? (
                             <Badge

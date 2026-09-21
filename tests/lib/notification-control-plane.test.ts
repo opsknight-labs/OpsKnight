@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCentralNotificationIntent,
+  createCentralNotificationIntentsBatch,
   deliverCentralNotification,
   getNextCentralNotificationAt,
   maskedNotificationRecipient,
   processCentralNotificationQueue,
+  reconcileUnknownNotifications,
   resolveNotificationExpiry,
 } from '@/lib/notification-control-plane';
 import prisma from '@/lib/prisma';
 import { CircuitBreakerError } from '@/lib/circuit-breaker';
 import { acquireProviderAdmission, acquireProviderConcurrency } from '@/lib/provider-admission';
+import { notificationEndpointAddressHash } from '@/lib/user-notification-endpoints';
 
 const mocks = vi.hoisted(() => ({
   sendEmail: vi.fn(),
@@ -17,12 +20,15 @@ const mocks = vi.hoisted(() => ({
   sendSlackMessageToChannel: vi.fn(),
   encrypt: vi.fn(async (value: string) => `encrypted:${value}`),
   decrypt: vi.fn(async (value: string) => value.replace(/^encrypted:/, '')),
+  isBulkPaused: vi.fn().mockResolvedValue(false),
 }));
 
 vi.mock('@/lib/prisma', () => ({
   default: {
     notification: {
       create: vi.fn(),
+      createMany: vi.fn(),
+      count: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
       findUnique: vi.fn(),
@@ -32,6 +38,7 @@ vi.mock('@/lib/prisma', () => ({
     service: { findUnique: vi.fn() },
     systemConfig: { findUnique: vi.fn() },
     notificationDeliveryAttempt: { create: vi.fn(), count: vi.fn() },
+    userNotificationEndpoint: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     $queryRaw: vi.fn(),
     $transaction: vi.fn(async (operation: unknown) =>
       Array.isArray(operation)
@@ -77,6 +84,9 @@ vi.mock('@/lib/circuit-breaker', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/lib/notification-capacity-control', () => ({
+  isBulkNotificationDeliveryPaused: mocks.isBulkPaused,
+}));
 
 const input = {
   category: 'SECURITY' as const,
@@ -106,9 +116,13 @@ describe('central notification control plane', () => {
     });
     vi.mocked(prisma.notification.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.notification.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.notification.count).mockResolvedValue(0);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValue({ count: 1 } as never);
+    vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.notificationDeliveryAttempt.count).mockResolvedValue(0);
     vi.mocked(prisma.systemConfig.findUnique).mockResolvedValue(null);
     vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
+    mocks.isBulkPaused.mockResolvedValue(false);
   });
 
   it('stores only encrypted payloads and masked recipients', async () => {
@@ -127,6 +141,59 @@ describe('central notification control plane', () => {
         }),
       })
     );
+  });
+
+  it.each(['BOUNCED', 'INVALID', 'OPTED_OUT'] as const)(
+    'persists a durable SKIPPED intent for a %s user endpoint',
+    async status => {
+      vi.mocked(prisma.userNotificationEndpoint.findUnique).mockResolvedValue({
+        id: 'endpoint-1',
+        addressHash: notificationEndpointAddressHash('EMAIL', input.recipientAddress),
+        status,
+      } as never);
+      vi.mocked(prisma.notification.create).mockResolvedValue({
+        id: 'notification-skipped',
+      } as never);
+
+      await expect(
+        createCentralNotificationIntent({ ...input, recipientType: 'USER', userId: 'user-1' })
+      ).resolves.toMatchObject({ created: true, skipped: true });
+
+      expect(prisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'SKIPPED',
+            errorMsg: `Notification endpoint is unavailable: ${status}`,
+          }),
+        })
+      );
+    }
+  );
+
+  it('includes recently persisted intents when applying batch noise limits', async () => {
+    vi.mocked(prisma.notification.findMany).mockResolvedValue(
+      Array.from({ length: 15 }, () => ({
+        recipientId: 'person-1',
+        sourceType: 'USER',
+        sourceId: 'user-1',
+        eventType: 'password-reset',
+      })) as never
+    );
+    vi.mocked(prisma.notification.createMany).mockResolvedValue({ count: 1 });
+
+    await createCentralNotificationIntentsBatch([
+      { ...input, recipientId: 'person-1', category: 'STATUS_PAGE', trafficClass: 'BULK' },
+    ]);
+
+    expect(prisma.notification.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          message: expect.stringContaining('Grouped notification'),
+          status: 'PENDING',
+        }),
+      ],
+      skipDuplicates: true,
+    });
   });
 
   it('enforces the traffic-class aging floor when persisting a caller priority', async () => {
@@ -348,6 +415,24 @@ describe('central notification control plane', () => {
     expect(sql).toContain('nextEligibleAt');
   });
 
+  it('excludes paused bulk traffic from scheduler wakeups', async () => {
+    mocks.isBulkPaused.mockResolvedValue(true);
+    const transactionalAt = new Date(Date.now() + 3 * 60_000);
+    vi.mocked(prisma.$queryRaw).mockResolvedValue([{ nextEligibleAt: transactionalAt }] as never);
+
+    await expect(getNextCentralNotificationAt()).resolves.toEqual(transactionalAt);
+    expect(prisma.notification.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          trafficClass: { in: ['CRITICAL', 'TRANSACTIONAL'] },
+        }),
+      })
+    );
+    const query = vi.mocked(prisma.$queryRaw).mock.calls[0]?.[0] as { values?: unknown[] };
+    expect(query.values).toEqual(expect.arrayContaining(['CRITICAL', 'TRANSACTIONAL']));
+    expect(query.values).not.toEqual(expect.arrayContaining(['BULK', 'PUBLIC_INCIDENT']));
+  });
+
   it('keeps admission deferrals pending without consuming delivery attempts', async () => {
     const due = new Date(Date.now() - 60_000);
     vi.mocked(prisma.notification.findUnique).mockResolvedValue({
@@ -471,6 +556,58 @@ describe('central notification control plane', () => {
     });
     expect(prisma.notification.updateMany).not.toHaveBeenCalled();
     expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('reconciles an ambiguous idempotent push exactly once without consuming retry budget', async () => {
+    const due = new Date('2026-09-20T00:00:00.000Z');
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        id: 'notification_unknown_push',
+        channel: 'PUSH',
+        attempts: 1,
+        providerMessageId: null,
+        deliveryAttempts: [{ provider: 'web-push' }],
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    await expect(reconcileUnknownNotifications(due)).resolves.toEqual({
+      retried: 1,
+      awaitingCallback: 0,
+      unsupported: 0,
+    });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'notification_unknown_push', status: 'UNKNOWN' }),
+        data: expect.objectContaining({ status: 'PENDING', attempts: 0, nextAttemptAt: due }),
+      })
+    );
+  });
+
+  it('hands an expired callback wait to operator reconciliation instead of rescheduling forever', async () => {
+    const due = new Date('2026-09-20T00:20:00.000Z');
+    vi.mocked(prisma.notification.findMany).mockResolvedValue([
+      {
+        id: 'notification_unknown_sms',
+        createdAt: new Date('2026-09-20T00:00:00.000Z'),
+        channel: 'SMS',
+        attempts: 1,
+        providerMessageId: 'SM123',
+        deliveryAttempts: [{ provider: 'twilio' }],
+      },
+    ] as never);
+    vi.mocked(prisma.notification.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    await expect(reconcileUnknownNotifications(due)).resolves.toEqual({
+      retried: 0,
+      awaitingCallback: 0,
+      unsupported: 1,
+    });
+    expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ reconciliationDeadline: null }),
+      })
+    );
   });
 
   it('does not report provider acceptance as failure when attempt-ledger persistence aborts', async () => {

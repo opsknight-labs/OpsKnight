@@ -329,8 +329,9 @@ describe('calculateSLAMetrics trend series', () => {
         urgency: 'LOW',
         assigneeId: null,
         serviceId: 'service-1',
-        acknowledgedAt: new Date('2026-01-01T05:30:00Z'),
+        acknowledgedAt: null,
         resolvedAt: null,
+        slaAckElapsedMs: BigInt(5 * 60_000),
         slaAckTargetMs: 15 * 60_000,
         slaResolveTargetMs: 120 * 60_000,
         slaTargetSource: 'SERVICE_DEFAULT',
@@ -378,7 +379,7 @@ describe('calculateSLAMetrics trend series', () => {
     expect(hourFive?.count).toBe(1);
     expect(hourFive?.ackRate).toBe(100);
     expect(hourFive?.resolveRate).toBe(0);
-    expect(hourFive?.ackCompliance).toBe(0);
+    expect(hourFive?.ackCompliance).toBe(100);
     expect(hourFive?.escalationRate).toBe(100);
   });
 
@@ -465,8 +466,11 @@ describe('calculateSLAMetrics trend series', () => {
     expect(hour?.ackCompliance).toBeNull();
     expect(metrics.serviceMetrics.find(service => service.id === 'service-1')).toMatchObject({
       status: 'Critical',
-      slaEvaluatedCount: 3,
+      slaEvaluatedCount: 6,
       slaUnknownCount: 1,
+      // The unknown-contract incident still has a valid 5-minute ACK and
+      // therefore remains an MTTA sample (three 30-minute ACKs + one 5-minute ACK).
+      mtta: 23.75,
     });
     expect(metrics.serviceMetrics.find(service => service.id === 'service-unknown')).toMatchObject({
       status: 'Unknown',
