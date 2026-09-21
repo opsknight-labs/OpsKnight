@@ -422,17 +422,19 @@ describe('executeErasure', () => {
       { requestId: REQUEST_ID, toStatus: 'COMPLETED' },
       ACTOR
     );
-    // Structured recipient PII on Notification is nulled alongside userId
+    // Structured recipient PII on Notification is scrubbed to satisfy Notification_target_check
     expect(mocks.tx.notification.updateMany).toHaveBeenCalledWith({
-      where: { userId: SUBJECT_ID },
-      data: { userId: null, recipientDisplay: null, recipientHash: null },
+      where: { OR: [{ userId: SUBJECT_ID }, { recipientId: SUBJECT_ID }] },
+      data: {
+        userId: null,
+        recipientId: 'erased',
+        recipientDisplay: null,
+        recipientHash: '0000000000000000000000000000000000000000000000000000000000000000',
+      },
     });
     const actions = mocks.emitAuditEvent.mock.calls.map(call => call[0].action);
     expect(actions).toEqual(
-      expect.arrayContaining([
-        'privacy.erasure.started',
-        'privacy.erasure.completed',
-      ])
+      expect.arrayContaining(['privacy.erasure.started', 'privacy.erasure.completed'])
     );
   });
 
@@ -555,9 +557,7 @@ describe('executeErasure', () => {
     await expect(executeErasure(REQUEST_ID, ACTOR)).rejects.toMatchObject({
       code: 'PRIVACY_ERASURE_BLOCKED',
       details: expect.objectContaining({
-        blockingConditions: expect.arrayContaining([
-          expect.stringContaining('last admin'),
-        ]),
+        blockingConditions: expect.arrayContaining([expect.stringContaining('last admin')]),
       }),
     } as unknown as Record<string, unknown>);
 
