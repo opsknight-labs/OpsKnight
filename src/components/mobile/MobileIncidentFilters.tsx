@@ -153,7 +153,7 @@ export default function MobileIncidentFilters(props: Props) {
             placeholder="Search incidents"
             type="search"
             autoComplete="off"
-            className="h-11 rounded-xl bg-card pl-9 pr-10 text-sm shadow-none"
+            className="h-[44px] min-h-[44px] rounded-xl bg-card pl-9 pr-10 text-sm shadow-none"
           />
           {query && (
             <button

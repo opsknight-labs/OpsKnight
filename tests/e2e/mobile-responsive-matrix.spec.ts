@@ -18,11 +18,12 @@ async function clearRateLimits() {
 }
 
 async function login(page: import('@playwright/test').Page) {
-  await page.goto('/m/login?callbackUrl=%2Fm');
+  await page.goto('/login?callbackUrl=%2Fm');
   await page.locator('input[type="email"]').fill(FIXTURE_EMAIL);
   await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
   await page.locator('form button[type="submit"]').click();
   await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
+  await page.waitForLoadState('networkidle');
   await expect(page.locator('.mobile-nav')).toBeVisible();
 }
 
