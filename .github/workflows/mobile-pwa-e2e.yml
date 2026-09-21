@@ -71,6 +71,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/opsknight_e2e?schema=public
       HUSKY: '0'
+      PLAYWRIGHT_PRODUCTION_SERVER: 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -92,6 +93,9 @@ jobs:
 
       - name: Install mobile browser engines
         run: npx playwright install --with-deps chromium webkit
+
+      - name: Build mobile browser application
+        run: npm run build
 
       - name: Run Android and iPhone browser contracts + responsive matrix
         run: >-
