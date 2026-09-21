@@ -1,5 +1,5 @@
-import { effectiveElapsedMs } from './metrics/domain/sla-clock';
-import { resolveFrozenSlaTarget } from './metrics/domain/sla-target';
+import { projectIncidentSlaState } from './incident-sla/state';
+import type { IncidentSlaProjectionInput } from './incident-sla/types';
 
 export type StatusAgeEntry = { status: string; avgMs: number | null };
 
@@ -19,8 +19,8 @@ export type OnCallLoadEntry = {
 export type ServiceSlaEntry = {
   id: string;
   name: string;
-  ackRate: number;
-  resolveRate: number;
+  ackRate: number | null;
+  resolveRate: number | null;
   total: number;
 };
 
@@ -181,9 +181,14 @@ export function buildServiceSlaTable(
     slaResolveTargetMs?: number | null;
     slaTargetSource?: string | null;
     slaTargetCapturedAt?: Date | null;
-    slaPauses?: Array<{ startedAt: Date; endedAt: Date | null }>;
+    slaPausedMs?: bigint | number;
+    slaPauseStartedAt?: Date | null;
+    slaAckElapsedMs?: bigint | number | null;
+    slaFirstAcknowledgedAt?: Date | null;
+    slaResolveElapsedMs?: bigint | number | null;
+    resolutionKind?: IncidentSlaProjectionInput['resolutionKind'];
   }>,
-  ackMap: Map<string, Date>,
+  _ackMap: Map<string, Date>,
   _serviceTargets: Map<string, { ackMinutes: number; resolveMinutes: number }>,
   serviceNameMap: Map<string, string>,
   _defaultAckMinutes: number = 15,
@@ -197,46 +202,41 @@ export function buildServiceSlaTable(
   >();
 
   for (const incident of incidents) {
-    const target = resolveFrozenSlaTarget({
-      ackTargetMs: incident.slaAckTargetMs,
-      resolveTargetMs: incident.slaResolveTargetMs,
-      source: incident.slaTargetSource,
-      capturedAt: incident.slaTargetCapturedAt,
-    });
-    if (!target) continue;
     const current = serviceSlaStats.get(incident.serviceId) || {
       ackMet: 0,
       ackTotal: 0,
       resolveMet: 0,
       resolveTotal: 0,
     };
-    const elapsedAt = (evaluationAt: Date) =>
-      effectiveElapsedMs({
-        startedAt: incident.createdAt,
-        evaluationAt,
-        pauses: incident.slaPauses ?? [],
-      });
+    const sla = projectIncidentSlaState(
+      {
+        status: incident.status as IncidentSlaProjectionInput['status'],
+        createdAt: incident.createdAt,
+        acknowledgedAt: _ackMap.get(incident.id) ?? null,
+        slaFirstAcknowledgedAt: incident.slaFirstAcknowledgedAt ?? null,
+        resolvedAt: incident.resolvedAt,
+        resolutionKind: incident.resolutionKind ?? null,
+        slaAckTargetMs: incident.slaAckTargetMs ?? null,
+        slaResolveTargetMs: incident.slaResolveTargetMs ?? null,
+        slaTargetSource: incident.slaTargetSource ?? null,
+        slaTargetCapturedAt: incident.slaTargetCapturedAt ?? null,
+        slaPausedMs: incident.slaPausedMs ?? 0,
+        slaPauseStartedAt: incident.slaPauseStartedAt ?? null,
+        slaAckElapsedMs: incident.slaAckElapsedMs ?? null,
+        slaResolveElapsedMs: incident.slaResolveElapsedMs ?? null,
+      },
+      { now }
+    );
+    if (!sla.valid) continue;
 
-    const ackedAt = ackMap.get(incident.id);
-    if (ackedAt) {
+    if (sla.ack.applicability === 'REQUIRED' && sla.ack.status !== 'PENDING') {
       current.ackTotal += 1;
-      if (elapsedAt(ackedAt) <= target.ackTargetMs) current.ackMet += 1;
-    } else if (incident.status === 'RESOLVED') {
-      // Resolution is not acknowledgement. A resolved incident with no ACK event
-      // is an evaluated ACK miss rather than disappearing from the denominator.
-      current.ackTotal += 1;
-    } else if (elapsedAt(now) > target.ackTargetMs) {
-      current.ackTotal += 1;
+      if (sla.ack.status === 'MET') current.ackMet += 1;
     }
 
-    if (incident.status === 'RESOLVED') {
-      const resolvedAt = incident.resolvedAt || incident.updatedAt;
-      if (resolvedAt) {
-        current.resolveTotal += 1;
-        if (elapsedAt(resolvedAt) <= target.resolveTargetMs) current.resolveMet += 1;
-      }
-    } else if (elapsedAt(now) > target.resolveTargetMs) {
+    if (sla.resolve.applicability === 'REQUIRED' && sla.resolve.status !== 'PENDING') {
       current.resolveTotal += 1;
+      if (sla.resolve.status === 'MET') current.resolveMet += 1;
     }
 
     serviceSlaStats.set(incident.serviceId, current);
@@ -246,8 +246,8 @@ export function buildServiceSlaTable(
     .map(([serviceId, stats]) => ({
       id: serviceId,
       name: serviceNameMap.get(serviceId) || 'Deleted service',
-      ackRate: stats.ackTotal ? (stats.ackMet / stats.ackTotal) * 100 : 0,
-      resolveRate: stats.resolveTotal ? (stats.resolveMet / stats.resolveTotal) * 100 : 0,
+      ackRate: stats.ackTotal ? (stats.ackMet / stats.ackTotal) * 100 : null,
+      resolveRate: stats.resolveTotal ? (stats.resolveMet / stats.resolveTotal) * 100 : null,
       total: Math.max(stats.ackTotal, stats.resolveTotal),
     }))
     .sort((a, b) => b.total - a.total)

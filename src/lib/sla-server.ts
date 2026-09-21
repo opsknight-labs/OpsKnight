@@ -1780,6 +1780,8 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       ackCount: 0,
       ackSlaMet: 0,
       ackSlaEvaluated: 0,
+      resolveSlaMet: 0,
+      resolveSlaEvaluated: 0,
       resolveSum: 0,
       resolveCount: 0,
       escalationCount: 0,
@@ -1808,16 +1810,6 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         });
         trendEntry.ackSum += ackElapsed;
         trendEntry.ackCount += 1;
-        const target = resolveFrozenSlaTarget({
-          ackTargetMs: incident.slaAckTargetMs,
-          resolveTargetMs: incident.slaResolveTargetMs,
-          source: incident.slaTargetSource,
-          capturedAt: incident.slaTargetCapturedAt,
-        });
-        if (target) {
-          trendEntry.ackSlaEvaluated += 1;
-          if (ackElapsed <= target.ackTargetMs) trendEntry.ackSlaMet += 1;
-        }
       }
       if (incident.status === 'RESOLVED' && incident.resolvedAt) {
         trendEntry.resolveSum += capturedOrEffectiveElapsedMs({
@@ -1827,6 +1819,35 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
           pauses: incident.slaPauses,
         });
         trendEntry.resolveCount += 1;
+      }
+      const sla = projectIncidentSlaState(
+        {
+          status: incident.status,
+          createdAt: incident.createdAt,
+          acknowledgedAt: incident.acknowledgedAt,
+          slaFirstAcknowledgedAt: incident.slaFirstAcknowledgedAt,
+          resolvedAt: incident.resolvedAt,
+          resolutionKind: incident.resolutionKind,
+          slaAckTargetMs: incident.slaAckTargetMs,
+          slaResolveTargetMs: incident.slaResolveTargetMs,
+          slaTargetSource: incident.slaTargetSource,
+          slaTargetCapturedAt: incident.slaTargetCapturedAt,
+          slaPausedMs: incident.slaPausedMs ?? 0,
+          slaPauseStartedAt: incident.slaPauseStartedAt ?? null,
+          slaAckElapsedMs: incident.slaAckElapsedMs ?? null,
+          slaResolveElapsedMs: incident.slaResolveElapsedMs ?? null,
+        },
+        { now }
+      );
+      if (sla.valid) {
+        if (sla.ack.applicability === 'REQUIRED' && sla.ack.status !== 'PENDING') {
+          trendEntry.ackSlaEvaluated += 1;
+          if (sla.ack.status === 'MET') trendEntry.ackSlaMet += 1;
+        }
+        if (sla.resolve.applicability === 'REQUIRED' && sla.resolve.status !== 'PENDING') {
+          trendEntry.resolveSlaEvaluated += 1;
+          if (sla.resolve.status === 'MET') trendEntry.resolveSlaMet += 1;
+        }
       }
     }
   }
@@ -1919,46 +1940,59 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     }
 
     s.count++;
-    const target = resolveFrozenSlaTarget({
-      ackTargetMs: incident.slaAckTargetMs,
-      resolveTargetMs: incident.slaResolveTargetMs,
-      source: incident.slaTargetSource,
-      capturedAt: incident.slaTargetCapturedAt,
-    });
-    if (target) s.slaEvaluatedCount++;
-    else s.slaUnknownCount++;
-    const elapsedAt = (evaluationAt: Date) =>
-      effectiveElapsedMs({
+    // Latency is independent of SLA-contract validity. Keep valid timing
+    // samples from legacy incidents even when their compliance contract is
+    // unknown or corrupt; only SLA compliance is gated by the projector.
+    const ackAt = ackMap.get(incident.id);
+    if (ackAt || incident.slaAckElapsedMs !== null) {
+      s.ackSum += capturedOrEffectiveElapsedMs({
+        capturedElapsedMs: incident.slaAckElapsedMs,
         startedAt: incident.createdAt,
-        evaluationAt,
+        evaluationAt: ackAt ?? incident.createdAt,
         pauses: incident.slaPauses,
       });
-
-    const ackAt = ackMap.get(incident.id);
-    if (ackAt) {
-      s.ackSum += elapsedAt(ackAt);
       s.ackCount++;
-      if (target && elapsedAt(ackAt) > target.ackTargetMs) {
-        s.ackBreaches++;
-      }
-    } else if (incident.status !== 'RESOLVED') {
-      // Check for overdue unacked
-      if (target && elapsedAt(now) > target.ackTargetMs) {
-        s.ackBreaches++;
-      }
     }
-
-    if (incident.status === 'RESOLVED' && incident.resolvedAt) {
-      s.resolveSum += elapsedAt(incident.resolvedAt);
+    const resolvedAt = incident.resolvedAt ?? incident.updatedAt;
+    if (incident.status === 'RESOLVED' && resolvedAt) {
+      s.resolveSum += capturedOrEffectiveElapsedMs({
+        capturedElapsedMs: incident.slaResolveElapsedMs,
+        startedAt: incident.createdAt,
+        evaluationAt: resolvedAt,
+        pauses: incident.slaPauses,
+      });
       s.resolveCount++;
-      if (target && elapsedAt(incident.resolvedAt) > target.resolveTargetMs) {
-        s.resolveBreaches++;
-      }
-    } else if (incident.status !== 'RESOLVED') {
-      // Check for overdue unresolved
-      if (target && elapsedAt(now) > target.resolveTargetMs) {
-        s.resolveBreaches++;
-      }
+    }
+    const sla = projectIncidentSlaState(
+      {
+        status: incident.status,
+        createdAt: incident.createdAt,
+        acknowledgedAt: incident.acknowledgedAt,
+        slaFirstAcknowledgedAt: incident.slaFirstAcknowledgedAt,
+        resolvedAt: incident.resolvedAt,
+        resolutionKind: incident.resolutionKind,
+        slaAckTargetMs: incident.slaAckTargetMs,
+        slaResolveTargetMs: incident.slaResolveTargetMs,
+        slaTargetSource: incident.slaTargetSource,
+        slaTargetCapturedAt: incident.slaTargetCapturedAt,
+        slaPausedMs: incident.slaPausedMs ?? 0,
+        slaPauseStartedAt: incident.slaPauseStartedAt ?? null,
+        slaAckElapsedMs: incident.slaAckElapsedMs ?? null,
+        slaResolveElapsedMs: incident.slaResolveElapsedMs ?? null,
+      },
+      { now }
+    );
+    if (!sla.valid) {
+      s.slaUnknownCount++;
+      continue;
+    }
+    if (sla.ack.applicability === 'REQUIRED' && sla.ack.status !== 'PENDING') {
+      s.slaEvaluatedCount++;
+      if (sla.ack.status === 'BREACHED') s.ackBreaches++;
+    }
+    if (sla.resolve.applicability === 'REQUIRED' && sla.resolve.status !== 'PENDING') {
+      s.slaEvaluatedCount++;
+      if (sla.resolve.status === 'BREACHED') s.resolveBreaches++;
     }
   }
 
@@ -2431,6 +2465,9 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
       resolveRate: s.count ? (s.resolveCount / s.count) * 100 : 0,
       resolveCount: s.resolveCount,
       ackCompliance: s.ackSlaEvaluated ? (s.ackSlaMet / s.ackSlaEvaluated) * 100 : null,
+      resolveCompliance: s.resolveSlaEvaluated
+        ? (s.resolveSlaMet / s.resolveSlaEvaluated) * 100
+        : null,
       escalationRate: s.count ? (s.escalationCount / s.count) * 100 : 0,
     })),
     statusMix,

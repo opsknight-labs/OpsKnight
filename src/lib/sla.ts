@@ -121,6 +121,7 @@ export type SLAMetrics = {
     ackRate: number;
     resolveRate: number;
     ackCompliance: number | null;
+    resolveCompliance?: number | null;
     resolveCount: number;
     escalationRate: number;
   }>;
@@ -133,8 +134,8 @@ export type SLAMetrics = {
   serviceSlaTable: Array<{
     id: string;
     name: string;
-    ackRate: number;
-    resolveRate: number;
+    ackRate: number | null;
+    resolveRate: number | null;
     total: number;
   }>;
 

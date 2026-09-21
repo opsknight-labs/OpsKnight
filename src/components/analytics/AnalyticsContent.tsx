@@ -281,6 +281,8 @@ export default async function AnalyticsContent({
   const mttrSparkline = mttrSeries;
   const ackComplianceSeries = metrics.trendSeries.map(entry => entry.ackCompliance);
   const ackComplianceSparkline = ackComplianceSeries;
+  const resolveComplianceSeries = metrics.trendSeries.map(entry => entry.resolveCompliance ?? null);
+  const resolveComplianceSparkline = resolveComplianceSeries;
   const resolveRateSeries = smoothSeries(
     metrics.trendSeries.map(entry => entry.resolveRate),
     smoothingWindow
@@ -519,9 +521,12 @@ export default async function AnalyticsContent({
             >
               <path
                 className="analytics-sparkline-area"
-                d={buildSparklineAreaPath(mttrSparkline)}
+                d={buildSparklineAreaPath(resolveComplianceSparkline)}
               />
-              <path className="analytics-sparkline-line" d={buildSparklinePath(mttrSparkline)} />
+              <path
+                className="analytics-sparkline-line"
+                d={buildSparklinePath(resolveComplianceSparkline)}
+              />
             </svg>
           </div>
         </MetricCard>
@@ -1432,7 +1437,7 @@ export default async function AnalyticsContent({
                         <strong>{formatPercent(entry.ackRate)}</strong>
                       </div>
                       <div className="sla-service-row-bar">
-                        <span style={{ width: `${entry.ackRate.toFixed(1)}%` }} />
+                        <span style={{ width: `${entry.ackRate ?? 0}%` }} />
                       </div>
                     </div>
                     <div className="sla-service-row-metric is-resolve">
@@ -1441,7 +1446,7 @@ export default async function AnalyticsContent({
                         <strong>{formatPercent(entry.resolveRate)}</strong>
                       </div>
                       <div className="sla-service-row-bar">
-                        <span style={{ width: `${entry.resolveRate.toFixed(1)}%` }} />
+                        <span style={{ width: `${entry.resolveRate ?? 0}%` }} />
                       </div>
                     </div>
                   </div>
