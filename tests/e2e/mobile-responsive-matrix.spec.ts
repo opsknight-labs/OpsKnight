@@ -25,6 +25,7 @@ async function login(page: import('@playwright/test').Page) {
   await expect(page).toHaveURL(/\/m(?:$|\?)/, { timeout: 30_000 });
   await page.waitForLoadState('domcontentloaded');
   await expect(page.locator('.mobile-nav')).toBeVisible();
+  await page.waitForLoadState('load');
 }
 
 // Forces the App Lock card to render (and therefore be measured by the
