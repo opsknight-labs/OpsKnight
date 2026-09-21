@@ -4,7 +4,6 @@ import { createHash, timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { logAudit } from '@/lib/audit';
 import { getClientIp } from '@/lib/client-ip';
@@ -17,6 +16,8 @@ import { invalidateSessionSecurityProjection } from '@/lib/session-security-proj
 
 export type SetPasswordState = {
   error?: string | null;
+  success?: boolean;
+  email?: string | null;
 };
 
 const schema = z
@@ -224,14 +225,22 @@ export async function setPassword(
 
   invalidateSessionSecurityProjection(user.id);
 
-  await logAudit({
-    action: 'user.active',
-    entityType: 'USER',
-    entityId: user.id,
-    actorId: user.id,
-    source: 'AUTH',
-    details: { method: 'invite' },
-  });
+  try {
+    await logAudit({
+      action: 'user.active',
+      entityType: 'USER',
+      entityId: user.id,
+      actorId: user.id,
+      source: 'AUTH',
+      details: { method: 'invite' },
+    });
+  } catch (error) {
+    logger.warn('auth.invite.activation_audit_failed', {
+      component: 'set-password',
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
-  redirect('/login?password=1');
+  return { success: true, email: user.email };
 }
