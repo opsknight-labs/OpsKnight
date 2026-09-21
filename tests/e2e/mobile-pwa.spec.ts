@@ -15,7 +15,7 @@ async function assertNoHorizontalOverflow(page: import('@playwright/test').Page)
 }
 
 async function loginToMobile(page: import('@playwright/test').Page) {
-  await page.goto('/login?callbackUrl=%2Fm');
+  await page.goto('/m/login?callbackUrl=%2Fm');
   await page.locator('input[type="email"]').fill(FIXTURE_EMAIL);
   await page.locator('input[type="password"]').fill(FIXTURE_PASSWORD);
   await page.locator('form button[type="submit"]').click();
