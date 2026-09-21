@@ -16,20 +16,28 @@ export default async function PrivacyRequestsPage() {
   const canExport = permissions.capabilities.includes(CAPABILITIES.PRIVACY_EXPORT);
   const canErase = permissions.capabilities.includes(CAPABILITIES.PRIVACY_ERASURE);
 
-  const [{ requests, nextCursor }, operatorCandidates, subjectUsers] = await Promise.all([
-    listPrivacyRequests(),
-    prisma.user.findMany({
-      where: { role: { in: ['ADMIN', 'AUDITOR'] }, status: 'ACTIVE' },
-      select: { id: true, name: true, email: true, role: true },
-      orderBy: { name: 'asc' },
-    }),
-    prisma.user.findMany({
-      where: { status: 'ACTIVE' },
-      select: { id: true, name: true, email: true },
-      orderBy: { name: 'asc' },
-      take: 500,
-    }),
-  ]);
+  const [{ requests, nextCursor }, operatorCandidates, subjectUsers, requestCounts] =
+    await Promise.all([
+      listPrivacyRequests(),
+      prisma.user.findMany({
+        where: { role: { in: ['ADMIN', 'AUDITOR'] }, status: 'ACTIVE' },
+        select: { id: true, name: true, email: true, role: true },
+        orderBy: { name: 'asc' },
+      }),
+      prisma.user.findMany({
+        where: { status: 'ACTIVE' },
+        select: { id: true, name: true, email: true },
+        orderBy: { name: 'asc' },
+        take: 500,
+      }),
+      Promise.all([
+        prisma.privacyRequest.count(),
+        prisma.privacyRequest.count({
+          where: { status: { notIn: ['COMPLETED', 'REJECTED'] } },
+        }),
+        prisma.privacyRequest.count({ where: { status: 'COMPLETED' } }),
+      ]),
+    ]);
   // Assignment is restricted server-side too; only show eligible operators here.
   const assignableUsers = operatorCandidates.filter(user =>
     hasCapability(user.role as AppRole, CAPABILITIES.PRIVACY_REQUESTS_MANAGE)
@@ -48,16 +56,14 @@ export default async function PrivacyRequestsPage() {
           </div>
         }
         stats={[
-          { label: 'Total requests', value: String(requests.length) },
+          { label: 'Total requests', value: String(requestCounts[0]) },
           {
             label: 'Open',
-            value: String(
-              requests.filter(r => r.status !== 'COMPLETED' && r.status !== 'REJECTED').length
-            ),
+            value: String(requestCounts[1]),
           },
           {
             label: 'Completed',
-            value: String(requests.filter(r => r.status === 'COMPLETED').length),
+            value: String(requestCounts[2]),
           },
         ]}
       />

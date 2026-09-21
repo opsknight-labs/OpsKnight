@@ -53,6 +53,8 @@ export interface FrameworkControlMapping {
 export interface FrameworkSummaryView {
   readonly framework: ComplianceFrameworkDefinition;
   readonly mappedRequirementsCount: number;
+  readonly totalRequirementsCount?: number;
+  readonly unmappedRequirementsCount?: number;
   readonly mappedControlsCount: number;
   readonly runtimeBackedCount: number;
   readonly repositoryBackedCount: number;

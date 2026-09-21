@@ -51,8 +51,7 @@ export function ControlCenterOverview({
   }, [fetchMonitoringStatus]);
 
   const handleSweepTriggered = () => {
-    fetchMonitoringStatus();
-    onEvaluate();
+    void fetchMonitoringStatus();
   };
 
   return (
@@ -127,6 +126,12 @@ export function ControlCenterOverview({
                 </span>
                 <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
                   {runtime.implemented}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Superseded:</span>
+                <span className="font-mono font-semibold text-zinc-600 dark:text-zinc-400">
+                  {frameworks.supersededRequirements}
                 </span>
               </div>
               <div className="flex items-center justify-between">
