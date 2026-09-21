@@ -68,7 +68,7 @@ describe('SetPasswordForm', () => {
     expect(submitButton).toBeEnabled();
   });
 
-  it('purges auth caches and signs out existing session to /login?password=1 upon success', async () => {
+  it('purges auth caches and signs out existing session then navigates to /login?password=1 upon success', async () => {
     mockActionState = {
       error: null,
       success: true,
@@ -81,11 +81,12 @@ describe('SetPasswordForm', () => {
 
     await waitFor(() => {
       expect(mockPurgeBrowserAuthCaches).toHaveBeenCalled();
-      expect(mockSignOut).toHaveBeenCalledWith({ callbackUrl: '/login?password=1' });
+      expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
+      expect(mockPush).toHaveBeenCalledWith('/login?password=1');
     });
   });
 
-  it('signs out to /login?password=1 when user clicks continue to sign in button', async () => {
+  it('signs out and navigates to /login?password=1 when user clicks continue to sign in button', async () => {
     mockActionState = {
       error: null,
       success: true,
@@ -98,7 +99,8 @@ describe('SetPasswordForm', () => {
 
     await waitFor(() => {
       expect(mockPurgeBrowserAuthCaches).toHaveBeenCalled();
-      expect(mockSignOut).toHaveBeenCalledWith({ callbackUrl: '/login?password=1' });
+      expect(mockSignOut).toHaveBeenCalledWith({ redirect: false });
+      expect(mockPush).toHaveBeenCalledWith('/login?password=1');
     });
   });
 });
