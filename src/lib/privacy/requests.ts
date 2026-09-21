@@ -10,6 +10,7 @@ import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
 import { AppError } from '@/lib/errors/app-error';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
+import { PRIVACY_REQUEST_TRANSITIONS } from './state-machine';
 
 /**
  * Request types that Phase 2 can actually fulfil end to end. Every other type
@@ -43,16 +44,6 @@ export function isAutomatedErasureRequest(request: {
  * Centralized state machine. COMPLETED and REJECTED are terminal: a finished
  * request cannot be silently reopened by a stray UI/API call.
  */
-const ALLOWED_TRANSITIONS: Record<PrivacyRequestStatus, readonly PrivacyRequestStatus[]> = {
-  RECEIVED: ['IDENTITY_VERIFICATION', 'REJECTED'],
-  IDENTITY_VERIFICATION: ['IN_REVIEW', 'BLOCKED', 'REJECTED'],
-  IN_REVIEW: ['IDENTITY_VERIFICATION', 'PROCESSING', 'BLOCKED', 'REJECTED'],
-  PROCESSING: ['IDENTITY_VERIFICATION', 'COMPLETED', 'BLOCKED', 'REJECTED'],
-  BLOCKED: ['IDENTITY_VERIFICATION', 'IN_REVIEW', 'REJECTED'],
-  COMPLETED: [],
-  REJECTED: [],
-};
-
 const createPrivacyRequestSchema = z.object({
   subjectType: z.enum(['USER', 'STATUS_SUBSCRIBER']).default('USER'),
   subjectId: z.string().trim().min(1).max(191),
@@ -179,7 +170,7 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
       return current;
     }
 
-    const allowed = ALLOWED_TRANSITIONS[current.status] ?? [];
+    const allowed = PRIVACY_REQUEST_TRANSITIONS[current.status] ?? [];
     if (!allowed.includes(parsed.toStatus)) {
       throw new AppError({
         code: 'PRIVACY_REQUEST_INVALID_TRANSITION',

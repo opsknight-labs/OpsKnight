@@ -6,6 +6,7 @@ import { FileArchive, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import ResponderCombobox from '@/components/ResponderCombobox';
 import PrivacyRequestDetailDialog from './PrivacyRequestDetailDialog';
+import { PRIVACY_REQUEST_TRANSITIONS } from '@/lib/privacy/state-machine';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
@@ -78,16 +79,6 @@ export function isAutomatedRequest(
 ): boolean {
   return request.subjectType === 'USER' && AUTOMATED_TYPES.includes(request.requestType);
 }
-
-const ALLOWED_TRANSITIONS: Record<PrivacyRequestStatus, readonly PrivacyRequestStatus[]> = {
-  RECEIVED: ['IDENTITY_VERIFICATION', 'IN_REVIEW', 'REJECTED'],
-  IDENTITY_VERIFICATION: ['IN_REVIEW', 'BLOCKED', 'REJECTED'],
-  IN_REVIEW: ['PROCESSING', 'BLOCKED', 'REJECTED'],
-  PROCESSING: ['COMPLETED', 'BLOCKED', 'REJECTED'],
-  BLOCKED: ['IN_REVIEW', 'PROCESSING', 'REJECTED'],
-  COMPLETED: [],
-  REJECTED: [],
-};
 
 const STATUS_BADGE_CLASS: Record<PrivacyRequestStatus, string> = {
   RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
@@ -387,7 +378,7 @@ export default function PrivacyRequestsBoard({
                 </TableRow>
               )}
               {requests.map(req => {
-                const nextStatuses = ALLOWED_TRANSITIONS[req.status];
+                const nextStatuses = PRIVACY_REQUEST_TRANSITIONS[req.status];
                 const isTerminal = nextStatuses.length === 0;
                 const automated = isAutomatedRequest(req);
                 return (
