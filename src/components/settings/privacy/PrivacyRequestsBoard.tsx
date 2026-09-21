@@ -2,7 +2,19 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileArchive, Loader2, Plus } from 'lucide-react';
+import {
+  CheckCircle2,
+  Download,
+  FileArchive,
+  Loader2,
+  Play,
+  Plus,
+  Search,
+  ShieldAlert,
+  Trash2,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import PrivacyRequestDetailDialog from './PrivacyRequestDetailDialog';
 import { PRIVACY_REQUEST_TRANSITIONS } from '@/lib/privacy/state-machine';
@@ -127,7 +139,24 @@ export default function PrivacyRequestsBoard({
   const [subjectMatches, setSubjectMatches] = useState(subjectUsers);
   const [requestType, setRequestType] = useState<PrivacyRequestType>('ACCESS');
   const [notes, setNotes] = useState('');
-  const [rejectDrafts, setRejectDrafts] = useState<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | PrivacyRequestStatus>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | PrivacyRequestType>('ALL');
+  const [rejectModalReq, setRejectModalReq] = useState<{ id: string; subject: string } | null>(
+    null
+  );
+  const [rejectReason, setRejectReason] = useState('');
+
+  const subjectUserMap = useMemo(() => {
+    const map = new Map<string, RequestUser>();
+    for (const u of subjectUsers) {
+      map.set(u.id, u);
+    }
+    for (const u of subjectMatches) {
+      map.set(u.id, u);
+    }
+    return map;
+  }, [subjectUsers, subjectMatches]);
 
   useEffect(() => {
     setRequests(initialRequests);
@@ -154,6 +183,32 @@ export default function PrivacyRequestsBoard({
     () => requests.filter(r => r.status !== 'COMPLETED' && r.status !== 'REJECTED').length,
     [requests]
   );
+
+  const filteredRequests = useMemo(() => {
+    return requests.filter(req => {
+      if (statusFilter === 'OPEN') {
+        if (req.status === 'COMPLETED' || req.status === 'REJECTED') return false;
+      } else if (statusFilter !== 'ALL') {
+        if (req.status !== statusFilter) return false;
+      }
+      if (typeFilter !== 'ALL') {
+        if (req.requestType !== typeFilter) return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const user = subjectUserMap.get(req.subjectId);
+        const matchesId = req.subjectId.toLowerCase().includes(q);
+        const matchesType = req.requestType.toLowerCase().includes(q);
+        const matchesStatus = req.status.toLowerCase().includes(q);
+        const matchesName = user?.name?.toLowerCase().includes(q);
+        const matchesEmail = user?.email?.toLowerCase().includes(q);
+        if (!matchesId && !matchesType && !matchesStatus && !matchesName && !matchesEmail) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [requests, statusFilter, typeFilter, searchQuery, subjectUserMap]);
 
   function loadMore() {
     if (!nextCursor || isLoadingMore) return;
@@ -380,6 +435,80 @@ export default function PrivacyRequestsBoard({
           )}
         </div>
 
+        {/* Search & Filters Toolbar */}
+        <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search name, email, or ID…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="h-9 pl-9 pr-8 text-xs"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={v => setStatusFilter(v as typeof statusFilter)}
+            >
+              <SelectTrigger className="h-9 w-40 text-xs">
+                <SelectValue placeholder="Status: All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="OPEN">Open only ({openCount})</SelectItem>
+                <SelectItem value="RECEIVED">Received</SelectItem>
+                <SelectItem value="IDENTITY_VERIFICATION">Identity Verification</SelectItem>
+                <SelectItem value="IN_REVIEW">In Review</SelectItem>
+                <SelectItem value="PROCESSING">Processing</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="REJECTED">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={v => setTypeFilter(v as typeof typeFilter)}>
+              <SelectTrigger className="h-9 w-36 text-xs">
+                <SelectValue placeholder="Type: All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All types</SelectItem>
+                <SelectItem value="ERASURE">Erasure</SelectItem>
+                <SelectItem value="ACCESS">Access</SelectItem>
+                <SelectItem value="PORTABILITY">Portability</SelectItem>
+                <SelectItem value="RECTIFICATION">Rectification</SelectItem>
+                <SelectItem value="RESTRICTION">Restriction</SelectItem>
+                <SelectItem value="OBJECTION">Objection</SelectItem>
+              </SelectContent>
+            </Select>
+            {(searchQuery || statusFilter !== 'ALL' || typeFilter !== 'ALL') && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 text-xs"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('ALL');
+                  setTypeFilter('ALL');
+                }}
+              >
+                Reset filters
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Showing {filteredRequests.length} of {requests.length} request
+            {requests.length === 1 ? '' : 's'}
+          </p>
+        </div>
+
         <div className="overflow-x-auto rounded-lg border">
           <Table>
             <TableHeader>
@@ -389,44 +518,96 @@ export default function PrivacyRequestsBoard({
                 <TableHead>Status</TableHead>
                 <TableHead>Assigned to</TableHead>
                 <TableHead>Requested</TableHead>
-                <TableHead>Export</TableHead>
+                <TableHead>Details & Plan</TableHead>
                 {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {requests.length === 0 && (
+              {filteredRequests.length === 0 && (
                 <TableRow>
                   <TableCell
                     colSpan={canManage ? 7 : 6}
                     className="py-8 text-center text-muted-foreground"
                   >
-                    No privacy requests yet.
+                    {requests.length === 0
+                      ? 'No privacy requests yet.'
+                      : 'No privacy requests matching current filters.'}
                   </TableCell>
                 </TableRow>
               )}
-              {requests.map(req => {
+              {filteredRequests.map(req => {
                 const nextStatuses = PRIVACY_REQUEST_TRANSITIONS[req.status];
                 const isTerminal = nextStatuses.length === 0;
                 const automated = isAutomatedRequest(req);
+                const subjectUser =
+                  req.subjectType === 'USER' ? subjectUserMap.get(req.subjectId) : null;
                 return (
                   <TableRow key={req.id}>
-                    <TableCell className="font-mono text-xs">
-                      {req.subjectType}: {req.subjectId}
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        {subjectUser ? (
+                          <>
+                            <span className="text-sm font-medium text-foreground">
+                              {subjectUser.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {subjectUser.email}
+                            </span>
+                            <span className="font-mono text-[10px] text-muted-foreground/70">
+                              ID: {req.subjectId}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="font-mono text-xs font-medium">
+                            {req.subjectType}: {req.subjectId}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <span>{req.requestType}</span>
+                        <div className="flex items-center gap-1.5 text-xs font-medium">
+                          {req.requestType === 'ERASURE' && (
+                            <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                          )}
+                          {req.requestType === 'ACCESS' && (
+                            <FileArchive className="h-3.5 w-3.5 text-blue-500" />
+                          )}
+                          {req.requestType === 'PORTABILITY' && (
+                            <Download className="h-3.5 w-3.5 text-indigo-500" />
+                          )}
+                          <span>{req.requestType}</span>
+                        </div>
                         {!automated && (
-                          <Badge variant="outline" className="w-fit text-[10px]">
+                          <Badge
+                            variant="outline"
+                            className="w-fit border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-300"
+                          >
                             Requires manual review
                           </Badge>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={STATUS_BADGE_CLASS[req.status]}>
+                      <Badge
+                        variant="outline"
+                        className={`${STATUS_BADGE_CLASS[req.status]} flex w-fit items-center gap-1 font-medium`}
+                      >
+                        {req.status === 'COMPLETED' && <CheckCircle2 className="h-3 w-3" />}
+                        {req.status === 'PROCESSING' && (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
+                        {req.status === 'IDENTITY_VERIFICATION' && (
+                          <ShieldAlert className="h-3 w-3" />
+                        )}
+                        {req.status === 'REJECTED' && <XCircle className="h-3 w-3" />}
                         {req.status.replaceAll('_', ' ')}
                       </Badge>
+                      {req.verifiedAt && req.status !== 'COMPLETED' && (
+                        <span className="mt-0.5 block text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                          ✓ Identity verified
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {canManage ? (
@@ -435,7 +616,7 @@ export default function PrivacyRequestsBoard({
                           onValueChange={v => assign(req.id, v === 'unassigned' ? null : v)}
                           disabled={isPending}
                         >
-                          <SelectTrigger className="h-8 w-44">
+                          <SelectTrigger className="h-8 w-40 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -461,9 +642,14 @@ export default function PrivacyRequestsBoard({
                         canExport={canExport}
                         canErase={canErase}
                         automated={automated}
+                        subjectUser={subjectUser ?? undefined}
                         trigger={
-                          <Button size="sm" variant="outline">
-                            <FileArchive className="mr-1.5 h-4 w-4" />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1.5 text-xs font-medium"
+                          >
+                            <FileArchive className="h-3.5 w-3.5" />
                             Manage
                           </Button>
                         }
@@ -472,48 +658,43 @@ export default function PrivacyRequestsBoard({
                     {canManage && (
                       <TableCell className="text-right">
                         {isTerminal ? (
-                          <span className="text-xs text-muted-foreground">No further action</span>
+                          <span className="text-xs text-muted-foreground">Terminal</span>
                         ) : (
-                          <div className="flex flex-col items-end gap-2">
-                            <div className="flex flex-wrap justify-end gap-1.5">
-                              {nextStatuses
-                                .filter(status => status !== 'REJECTED')
-                                .filter(
-                                  status => status !== 'PROCESSING' || Boolean(req.verifiedAt)
-                                )
-                                .map(status => (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {nextStatuses
+                              .filter(status => status !== 'REJECTED')
+                              .filter(status => status !== 'PROCESSING' || Boolean(req.verifiedAt))
+                              .map(status => {
+                                const isProcessing = status === 'PROCESSING';
+                                return (
                                   <Button
                                     key={status}
                                     size="sm"
-                                    variant="secondary"
+                                    variant={isProcessing ? 'default' : 'secondary'}
+                                    className="h-8 text-xs font-normal"
                                     disabled={isPending}
                                     onClick={() => transition(req.id, status)}
                                   >
+                                    {isProcessing && <Play className="mr-1 h-3 w-3" />}
                                     {status.replaceAll('_', ' ')}
                                   </Button>
-                                ))}
-                            </div>
+                                );
+                              })}
                             {nextStatuses.includes('REJECTED') && (
-                              <div className="flex items-center gap-1.5">
-                                <Input
-                                  placeholder="Rejection reason"
-                                  className="h-8 w-40 text-xs"
-                                  value={rejectDrafts[req.id] ?? ''}
-                                  onChange={e =>
-                                    setRejectDrafts(prev => ({ ...prev, [req.id]: e.target.value }))
-                                  }
-                                />
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  disabled={isPending || !rejectDrafts[req.id]?.trim()}
-                                  onClick={() =>
-                                    transition(req.id, 'REJECTED', rejectDrafts[req.id]?.trim())
-                                  }
-                                >
-                                  Reject
-                                </Button>
-                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 text-xs text-rose-600 hover:bg-rose-50 hover:text-rose-700 dark:hover:bg-rose-950/30"
+                                disabled={isPending}
+                                onClick={() =>
+                                  setRejectModalReq({
+                                    id: req.id,
+                                    subject: `${req.subjectType}: ${req.subjectId}`,
+                                  })
+                                }
+                              >
+                                Reject…
+                              </Button>
                             )}
                           </div>
                         )}
@@ -535,6 +716,65 @@ export default function PrivacyRequestsBoard({
           </div>
         )}
       </CardContent>
+
+      {/* Dedicated Rejection Dialog */}
+      <Dialog
+        open={Boolean(rejectModalReq)}
+        onOpenChange={open => {
+          if (!open) {
+            setRejectModalReq(null);
+            setRejectReason('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Reject privacy request</DialogTitle>
+            <DialogDescription>
+              Please provide a clear reason for rejecting this privacy request for{' '}
+              <span className="font-mono font-medium text-foreground">
+                {rejectModalReq?.subject}
+              </span>
+              . This reason will be recorded on the request record.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="reject-modal-reason">Rejection reason</Label>
+            <Textarea
+              id="reject-modal-reason"
+              placeholder="e.g. Identity could not be verified within statutory timeline..."
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectModalReq(null);
+                setRejectReason('');
+              }}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isPending || !rejectReason.trim()}
+              onClick={() => {
+                if (!rejectModalReq || !rejectReason.trim()) return;
+                transition(rejectModalReq.id, 'REJECTED', rejectReason.trim());
+                setRejectModalReq(null);
+                setRejectReason('');
+              }}
+            >
+              {isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Confirm rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  AlertTriangle,
   CheckCircle,
+  CheckCircle2,
+  Clock,
   Download,
   FileArchive,
   Loader2,
@@ -11,6 +14,8 @@ import {
   RefreshCw,
   ShieldAlert,
   Trash2,
+  User,
+  XCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -67,6 +72,8 @@ type RequestDetail = {
   verificationMethod: string | null;
   verificationReference: string | null;
   verifiedBy: { id: string; name: string | null; email: string } | null;
+  assignedTo?: { id: string; name: string | null; email: string } | null;
+  requestedBy?: { id: string; name: string | null; email: string } | null;
   notes: string | null;
   exportArtifacts: ExportArtifact[];
   erasureExecution: {
@@ -109,6 +116,16 @@ const ARTIFACT_BADGE_CLASS: Record<ExportArtifactStatus, string> = {
   FAILED: 'border-rose-600/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
 };
 
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  IDENTITY_VERIFICATION: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
+  IN_REVIEW: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  PROCESSING: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300',
+  BLOCKED: 'border-orange-600/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+  COMPLETED: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  REJECTED: 'border-rose-600/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
+};
+
 function formatBytes(bytes: number | null): string {
   if (!bytes) return '—';
   const units = ['B', 'KB', 'MB', 'GB'];
@@ -136,6 +153,7 @@ export default function PrivacyRequestDetailDialog({
   canErase,
   automated,
   trigger,
+  subjectUser,
 }: {
   requestId: string;
   canManage: boolean;
@@ -143,6 +161,7 @@ export default function PrivacyRequestDetailDialog({
   canErase: boolean;
   automated: boolean;
   trigger: React.ReactNode;
+  subjectUser?: { id: string; name: string | null; email: string };
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -157,6 +176,62 @@ export default function PrivacyRequestDetailDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmInput, setConfirmInput] = useState('');
   const exportEligible = detail?.status === 'PROCESSING' && Boolean(detail.verifiedAt);
+
+  const isRejected = detail?.status === 'REJECTED';
+  const isBlocked = detail?.status === 'BLOCKED';
+  const isCompleted = detail?.status === 'COMPLETED';
+  const isProcessing = detail?.status === 'PROCESSING';
+
+  const lifecycleSteps = detail
+    ? [
+        {
+          id: 'received',
+          label: 'Received',
+          status: 'complete' as const,
+          caption: new Date(detail.requestedAt).toLocaleDateString(),
+        },
+        {
+          id: 'verified',
+          label: 'Identity Verification',
+          status: (detail.verifiedAt
+            ? 'complete'
+            : detail.status === 'IDENTITY_VERIFICATION'
+              ? 'current'
+              : 'upcoming') as 'complete' | 'current' | 'upcoming' | 'error',
+          caption: detail.verifiedAt ? 'Verified' : 'Required',
+        },
+        {
+          id: 'processing',
+          label: 'Processing',
+          status: (isCompleted
+            ? 'complete'
+            : isProcessing
+              ? 'current'
+              : isBlocked
+                ? 'error'
+                : isRejected
+                  ? 'upcoming'
+                  : 'upcoming') as 'complete' | 'current' | 'upcoming' | 'error',
+          caption: isProcessing
+            ? 'In progress'
+            : isBlocked
+              ? 'Blocked'
+              : isCompleted
+                ? 'Completed'
+                : 'Pending',
+        },
+        {
+          id: 'resolution',
+          label: isRejected ? 'Rejected' : 'Completed',
+          status: (isCompleted ? 'complete' : isRejected ? 'error' : 'upcoming') as
+            | 'complete'
+            | 'current'
+            | 'upcoming'
+            | 'error',
+          caption: isCompleted ? 'Completed' : isRejected ? 'Rejected' : 'Terminal',
+        },
+      ]
+    : [];
 
   async function loadDetail() {
     setLoading(true);
@@ -307,7 +382,7 @@ export default function PrivacyRequestDetailDialog({
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {detail?.requestType === 'ERASURE' ? 'Subject erasure' : 'Subject access export'}
@@ -325,29 +400,227 @@ export default function PrivacyRequestDetailDialog({
           </div>
         ) : detail ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Subject: </span>
-                <span className="font-mono text-xs">
-                  {detail.subjectType}: {detail.subjectId}
-                </span>
+            {/* Visual Lifecycle Stepper */}
+            <div className="rounded-xl border bg-muted/40 p-3">
+              <div className="flex items-center justify-between">
+                {lifecycleSteps.map((step, idx) => {
+                  const isLast = idx === lifecycleSteps.length - 1;
+                  return (
+                    <div key={step.id} className="flex flex-1 items-center">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors ${
+                            step.status === 'complete'
+                              ? 'border-emerald-600 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-950/50 dark:text-emerald-300'
+                              : step.status === 'current'
+                                ? 'border-primary bg-primary text-primary-foreground shadow-xs ring-2 ring-primary/20'
+                                : step.status === 'error'
+                                  ? 'border-rose-600 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-950/50 dark:text-rose-300'
+                                  : 'border-muted-foreground/30 bg-muted/80 text-muted-foreground'
+                          }`}
+                        >
+                          {step.status === 'complete' ? (
+                            <CheckCircle2 className="h-4 w-4" />
+                          ) : step.status === 'error' ? (
+                            <XCircle className="h-4 w-4" />
+                          ) : (
+                            <span>{idx + 1}</span>
+                          )}
+                        </div>
+                        <div className="hidden sm:block">
+                          <p className="text-xs font-medium leading-none">{step.label}</p>
+                          {step.caption && (
+                            <p className="mt-0.5 text-[10px] text-muted-foreground">
+                              {step.caption}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {!isLast && (
+                        <div
+                          className={`mx-2 h-[2px] flex-1 transition-colors ${
+                            step.status === 'complete'
+                              ? 'bg-emerald-500/60 dark:bg-emerald-500/40'
+                              : 'bg-muted-foreground/20'
+                          }`}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <span className="text-muted-foreground">Status: </span>
-                {detail.status.replaceAll('_', ' ')}
-              </div>
-              <div>
-                <span className="text-muted-foreground">Identity verified: </span>
-                {detail.verifiedAt ? new Date(detail.verifiedAt).toLocaleString() : 'Not yet'}
-              </div>
-              {detail.verifiedAt && (
-                <div>
-                  <span className="text-muted-foreground">Verification: </span>
-                  {detail.verificationMethod?.replaceAll('_', ' ') ?? 'Legacy'} by{' '}
-                  {detail.verifiedBy?.name ?? detail.verifiedBy?.email ?? 'legacy operator'}
-                </div>
-              )}
             </div>
+
+            {/* Subject & Request Details Card */}
+            <div className="space-y-3 rounded-lg border bg-card p-3.5 text-sm shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">
+                        {subjectUser?.name ??
+                          (detail.subjectType === 'USER' ? 'Registered User' : 'Status Subscriber')}
+                      </span>
+                      {subjectUser?.email && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({subjectUser.email})
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs font-mono text-muted-foreground">
+                      <span className="font-sans text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                        Subject:
+                      </span>
+                      <span>
+                        {detail.subjectType}: {detail.subjectId}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className={STATUS_BADGE_CLASS[detail.status]}>
+                    {detail.status.replaceAll('_', ' ')}
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs font-medium">
+                    {detail.requestType.replaceAll('_', ' ')}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Requested:{' '}
+                    <strong className="font-medium text-foreground">
+                      {new Date(detail.requestedAt).toLocaleString()}
+                    </strong>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <User className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Assigned to:{' '}
+                    <strong className="font-medium text-foreground">
+                      {detail.assignedTo?.name ?? detail.assignedTo?.email ?? 'Unassigned'}
+                    </strong>
+                  </span>
+                </div>
+                <div className="col-span-full flex flex-wrap items-center gap-2 border-t pt-2">
+                  <span className="text-muted-foreground">Identity verification:</span>
+                  {detail.verifiedAt ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>
+                        Verified on {new Date(detail.verifiedAt).toLocaleDateString()}
+                        {detail.verificationMethod &&
+                          ` via ${detail.verificationMethod.replaceAll('_', ' ').toLowerCase()}`}
+                        {detail.verifiedBy &&
+                          ` by ${detail.verifiedBy.name ?? detail.verifiedBy.email}`}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>Pending verification</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Transition Callout when in IDENTITY_VERIFICATION */}
+            {detail.status === 'IDENTITY_VERIFICATION' && (
+              <div
+                className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border p-3 text-xs ${
+                  detail.verifiedAt
+                    ? 'border-indigo-200 bg-indigo-50/60 dark:border-indigo-900/40 dark:bg-indigo-950/20'
+                    : 'border-amber-200 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/20'
+                }`}
+              >
+                <div className="space-y-0.5">
+                  <p
+                    className={`font-semibold ${
+                      detail.verifiedAt
+                        ? 'text-indigo-950 dark:text-indigo-200'
+                        : 'text-amber-950 dark:text-amber-200'
+                    }`}
+                  >
+                    {detail.verifiedAt
+                      ? 'Identity verified & ready for processing'
+                      : 'Identity verification required'}
+                  </p>
+                  <p
+                    className={
+                      detail.verifiedAt
+                        ? 'text-indigo-700 dark:text-indigo-400'
+                        : 'text-amber-700 dark:text-amber-400'
+                    }
+                  >
+                    {detail.verifiedAt
+                      ? `Advance this request to Processing to execute ${
+                          detail.requestType === 'ERASURE' ? 'erasure' : 'export'
+                        }.`
+                      : "Verify the subject's identity before advancing this request to Processing."}
+                  </p>
+                </div>
+                {canManage && (
+                  <div className="shrink-0">
+                    {detail.verifiedAt ? (
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1.5 bg-indigo-600 text-xs text-white hover:bg-indigo-700 dark:bg-indigo-500"
+                        onClick={() => void handleMoveToProcessing()}
+                        disabled={transitioning}
+                      >
+                        {transitioning ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Play className="h-3.5 w-3.5" />
+                        )}
+                        Move to Processing
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1.5 border-amber-300 bg-white text-xs text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                        onClick={() => void handleVerifyIdentity()}
+                        disabled={transitioning}
+                      >
+                        {transitioning ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        )}
+                        Verify identity
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Blocked or Rejected Notifications */}
+            {detail.status === 'BLOCKED' && (
+              <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-3 text-xs text-orange-800 dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-200">
+                <p className="font-semibold">Request is currently blocked</p>
+                <p className="mt-0.5">
+                  {detail.notes ?? 'Resolve blocking conditions or legal holds before proceeding.'}
+                </p>
+              </div>
+            )}
+            {detail.status === 'REJECTED' && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3 text-xs text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200">
+                <p className="font-semibold">Request was rejected</p>
+                <p className="mt-0.5">
+                  {detail.notes ? `Reason: ${detail.notes}` : 'No specific reason recorded.'}
+                </p>
+              </div>
+            )}
 
             {canExport && detail.requestType !== 'ERASURE' && (
               <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
