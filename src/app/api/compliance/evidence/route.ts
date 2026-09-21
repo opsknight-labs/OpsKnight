@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const typeParam = searchParams.get('type');
     const limitParam = searchParams.get('limit');
     const cursor = searchParams.get('cursor') ?? undefined;
+    const search = searchParams.get('search')?.trim().slice(0, 200) || undefined;
 
     let type: ComplianceEvidenceType | undefined;
     if (typeParam) {
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
       type,
       limit,
       cursor,
+      search,
     });
 
     return jsonOk({

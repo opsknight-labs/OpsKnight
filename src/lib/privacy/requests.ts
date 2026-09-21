@@ -10,6 +10,7 @@ import prisma from '@/lib/prisma';
 import { emitAuditEvent } from '@/lib/audit';
 import { AppError } from '@/lib/errors/app-error';
 import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
+import { PRIVACY_REQUEST_TRANSITIONS } from './state-machine';
 
 /**
  * Request types that Phase 2 can actually fulfil end to end. Every other type
@@ -43,16 +44,6 @@ export function isAutomatedErasureRequest(request: {
  * Centralized state machine. COMPLETED and REJECTED are terminal: a finished
  * request cannot be silently reopened by a stray UI/API call.
  */
-const ALLOWED_TRANSITIONS: Record<PrivacyRequestStatus, readonly PrivacyRequestStatus[]> = {
-  RECEIVED: ['IDENTITY_VERIFICATION', 'IN_REVIEW', 'REJECTED'],
-  IDENTITY_VERIFICATION: ['IN_REVIEW', 'BLOCKED', 'REJECTED'],
-  IN_REVIEW: ['PROCESSING', 'BLOCKED', 'REJECTED'],
-  PROCESSING: ['COMPLETED', 'BLOCKED', 'REJECTED'],
-  BLOCKED: ['IN_REVIEW', 'PROCESSING', 'REJECTED'],
-  COMPLETED: [],
-  REJECTED: [],
-};
-
 const createPrivacyRequestSchema = z.object({
   subjectType: z.enum(['USER', 'STATUS_SUBSCRIBER']).default('USER'),
   subjectId: z.string().trim().min(1).max(191),
@@ -82,6 +73,10 @@ const transitionPrivacyRequestSchema = z.object({
   ]),
   rejectionReason: z.string().trim().max(4000).optional(),
   notes: z.string().trim().max(4000).optional(),
+  verificationMethod: z
+    .enum(['OIDC_SESSION', 'EMAIL_CHALLENGE', 'MANUAL_ID_DOCUMENT', 'ADMIN_ATTESTATION'])
+    .optional(),
+  verificationReference: z.string().trim().max(500).optional(),
 });
 
 export type TransitionPrivacyRequestInput = z.infer<typeof transitionPrivacyRequestSchema>;
@@ -175,11 +170,18 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
       return current;
     }
 
-    const allowed = ALLOWED_TRANSITIONS[current.status] ?? [];
+    const allowed = PRIVACY_REQUEST_TRANSITIONS[current.status] ?? [];
     if (!allowed.includes(parsed.toStatus)) {
       throw new AppError({
         code: 'PRIVACY_REQUEST_INVALID_TRANSITION',
         details: { from: current.status, to: parsed.toStatus },
+      });
+    }
+
+    if (parsed.toStatus === 'PROCESSING' && !current.verifiedAt) {
+      throw new AppError({
+        code: 'PRIVACY_REQUEST_INVALID_TRANSITION',
+        details: { from: current.status, to: parsed.toStatus, reason: 'IDENTITY_NOT_VERIFIED' },
       });
     }
 
@@ -191,6 +193,12 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
     // verifiedAt — export gating relies on this being a true verification signal.
     if (current.status === 'IDENTITY_VERIFICATION' && parsed.toStatus === 'IN_REVIEW') {
       data.verifiedAt = current.verifiedAt ?? now;
+      data.verificationStatus = 'VERIFIED';
+      data.verificationMethod = parsed.verificationMethod ?? 'ADMIN_ATTESTATION';
+      data.verifiedById = actor.id;
+      if (parsed.verificationReference !== undefined) {
+        data.verificationReference = parsed.verificationReference;
+      }
     }
     if (parsed.toStatus === 'COMPLETED') data.completedAt = now;
     if (parsed.toStatus === 'REJECTED') data.rejectionReason = parsed.rejectionReason;
@@ -292,6 +300,7 @@ export async function getPrivacyRequest(requestId: string) {
     include: {
       requestedBy: { select: { id: true, name: true, email: true } },
       assignedTo: { select: { id: true, name: true, email: true } },
+      verifiedBy: { select: { id: true, name: true, email: true } },
       exportArtifacts: {
         orderBy: { createdAt: 'desc' },
         select: {

@@ -43,9 +43,10 @@ export function EvidenceView({
     setIsLoading(true);
     setError(null);
     try {
+      const search = searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : '';
       const url = controlFilter
         ? `/api/compliance/controls/${controlFilter}/evidence?limit=50`
-        : '/api/compliance/evidence?limit=50';
+        : `/api/compliance/evidence?limit=50${search}`;
       const res = await fetch(url);
       const json = await res.json();
       if (!res.ok) {
@@ -63,7 +64,7 @@ export function EvidenceView({
     } finally {
       setIsLoading(false);
     }
-  }, [controlFilter, canReadEvidence]);
+  }, [controlFilter, canReadEvidence, searchQuery]);
 
   useEffect(() => {
     fetchEvidence();
@@ -75,7 +76,9 @@ export function EvidenceView({
     try {
       const url = controlFilter
         ? `/api/compliance/controls/${controlFilter}/evidence?limit=50&cursor=${encodeURIComponent(nextCursor)}`
-        : `/api/compliance/evidence?limit=50&cursor=${encodeURIComponent(nextCursor)}`;
+        : `/api/compliance/evidence?limit=50&cursor=${encodeURIComponent(nextCursor)}${
+            searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : ''
+          }`;
       const res = await fetch(url);
       const json = await res.json();
       if (!res.ok) {

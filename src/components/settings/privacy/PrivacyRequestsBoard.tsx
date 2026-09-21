@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileArchive, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
-import ResponderCombobox from '@/components/ResponderCombobox';
 import PrivacyRequestDetailDialog from './PrivacyRequestDetailDialog';
+import { PRIVACY_REQUEST_TRANSITIONS } from '@/lib/privacy/state-machine';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Button } from '@/components/ui/shadcn/button';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
@@ -79,16 +79,6 @@ export function isAutomatedRequest(
   return request.subjectType === 'USER' && AUTOMATED_TYPES.includes(request.requestType);
 }
 
-const ALLOWED_TRANSITIONS: Record<PrivacyRequestStatus, readonly PrivacyRequestStatus[]> = {
-  RECEIVED: ['IDENTITY_VERIFICATION', 'IN_REVIEW', 'REJECTED'],
-  IDENTITY_VERIFICATION: ['IN_REVIEW', 'BLOCKED', 'REJECTED'],
-  IN_REVIEW: ['PROCESSING', 'BLOCKED', 'REJECTED'],
-  PROCESSING: ['COMPLETED', 'BLOCKED', 'REJECTED'],
-  BLOCKED: ['IN_REVIEW', 'PROCESSING', 'REJECTED'],
-  COMPLETED: [],
-  REJECTED: [],
-};
-
 const STATUS_BADGE_CLASS: Record<PrivacyRequestStatus, string> = {
   RECEIVED: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
   IDENTITY_VERIFICATION: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
@@ -133,6 +123,8 @@ export default function PrivacyRequestsBoard({
   const [createOpen, setCreateOpen] = useState(false);
   const [subjectType, setSubjectType] = useState<'USER' | 'STATUS_SUBSCRIBER'>('USER');
   const [subjectId, setSubjectId] = useState('');
+  const [subjectQuery, setSubjectQuery] = useState('');
+  const [subjectMatches, setSubjectMatches] = useState(subjectUsers);
   const [requestType, setRequestType] = useState<PrivacyRequestType>('ACCESS');
   const [notes, setNotes] = useState('');
   const [rejectDrafts, setRejectDrafts] = useState<Record<string, string>>({});
@@ -141,6 +133,22 @@ export default function PrivacyRequestsBoard({
     setRequests(initialRequests);
     setNextCursor(initialNextCursor);
   }, [initialRequests, initialNextCursor]);
+
+  useEffect(() => {
+    if (subjectType !== 'USER' || subjectQuery.trim().length < 2) {
+      setSubjectMatches(subjectUsers);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void fetch(
+        `/api/compliance/privacy-requests/subjects?search=${encodeURIComponent(subjectQuery.trim())}`,
+        { cache: 'no-store' }
+      )
+        .then(readJson)
+        .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [subjectQuery, subjectType, subjectUsers]);
 
   const openCount = useMemo(
     () => requests.filter(r => r.status !== 'COMPLETED' && r.status !== 'REJECTED').length,
@@ -281,16 +289,26 @@ export default function PrivacyRequestsBoard({
                   <div className="space-y-2">
                     <Label htmlFor="subjectId">Subject</Label>
                     {subjectType === 'USER' ? (
-                      <ResponderCombobox
-                        users={subjectUsers}
-                        selectedUserId={subjectId || undefined}
-                        onSelect={setSubjectId}
-                        label="Select subject"
-                        placeholder="Search by name or email…"
-                        emptyMessage="No matching users."
-                        className="w-full justify-between"
-                        ariaLabel="Select privacy request subject"
-                      />
+                      <div className="space-y-2">
+                        <Input
+                          value={subjectQuery}
+                          onChange={event => setSubjectQuery(event.target.value)}
+                          placeholder="Search all active users by name or email…"
+                          aria-label="Search privacy request subjects"
+                        />
+                        <Select value={subjectId} onValueChange={setSubjectId}>
+                          <SelectTrigger aria-label="Select privacy request subject">
+                            <SelectValue placeholder="Select subject" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subjectMatches.map(user => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.name || user.email} · {user.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     ) : (
                       <Input
                         id="subjectId"
@@ -387,7 +405,7 @@ export default function PrivacyRequestsBoard({
                 </TableRow>
               )}
               {requests.map(req => {
-                const nextStatuses = ALLOWED_TRANSITIONS[req.status];
+                const nextStatuses = PRIVACY_REQUEST_TRANSITIONS[req.status];
                 const isTerminal = nextStatuses.length === 0;
                 const automated = isAutomatedRequest(req);
                 return (
@@ -443,7 +461,6 @@ export default function PrivacyRequestsBoard({
                         canExport={canExport}
                         canErase={canErase}
                         automated={automated}
-                        exportEligible={req.status === 'PROCESSING' && Boolean(req.verifiedAt)}
                         trigger={
                           <Button size="sm" variant="outline">
                             <FileArchive className="mr-1.5 h-4 w-4" />

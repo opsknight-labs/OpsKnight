@@ -22,6 +22,8 @@ export interface FrameworkCardItem {
   readonly version?: string;
   readonly summaryView?: {
     readonly mappedRequirementsCount: number;
+    readonly totalRequirementsCount?: number;
+    readonly unmappedRequirementsCount?: number;
     readonly mappedControlsCount: number;
     readonly runtimeBackedCount: number;
     readonly repositoryBackedCount: number;
@@ -106,7 +108,8 @@ export function FrameworksView({
                     <div className="flex items-center justify-between p-2 rounded bg-muted/30">
                       <span className="text-muted-foreground">Mapped Reqs:</span>
                       <span className="font-mono font-bold text-foreground">
-                        {summary.mappedRequirementsCount}
+                        {summary.mappedRequirementsCount} /{' '}
+                        {summary.totalRequirementsCount ?? summary.mappedRequirementsCount}
                       </span>
                     </div>
 

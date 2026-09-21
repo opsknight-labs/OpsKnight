@@ -145,7 +145,7 @@ describe('privacy request lifecycle', () => {
 
   describe('transitionPrivacyRequest', () => {
     it('allows a valid transition and records old/new status in the audit event', async () => {
-      const current = baseRequest({ status: 'RECEIVED' });
+      const current = baseRequest({ status: 'IDENTITY_VERIFICATION' });
       const updated = baseRequest({ status: 'IN_REVIEW' });
       mocks.privacyRequestFindUnique.mockResolvedValue(current);
       mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
@@ -158,7 +158,7 @@ describe('privacy request lifecycle', () => {
 
       expect(result.status).toBe('IN_REVIEW');
       expect(mocks.privacyRequestUpdateMany).toHaveBeenCalledWith({
-        where: { id: 'creq00000001', status: 'RECEIVED' },
+        where: { id: 'creq00000001', status: 'IDENTITY_VERIFICATION' },
         data: expect.objectContaining({ status: 'IN_REVIEW' }),
       });
       expect(mocks.auditCreate).toHaveBeenCalledWith(
@@ -166,7 +166,7 @@ describe('privacy request lifecycle', () => {
           data: expect.objectContaining({
             action: 'privacy.request.status_changed',
             details: expect.objectContaining({
-              oldValue: { status: 'RECEIVED' },
+              oldValue: { status: 'IDENTITY_VERIFICATION' },
               newValue: { status: 'IN_REVIEW' },
             }),
           }),
@@ -224,6 +224,26 @@ describe('privacy request lifecycle', () => {
         transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'COMPLETED' }, ACTOR)
       ).rejects.toMatchObject({ code: 'PRIVACY_REQUEST_INVALID_TRANSITION' });
       expect(mocks.privacyRequestUpdateMany).not.toHaveBeenCalled();
+    });
+
+    it('requires verification before processing and permits recovery to verification', async () => {
+      mocks.privacyRequestFindUnique.mockResolvedValue(
+        baseRequest({ status: 'IN_REVIEW', verifiedAt: null })
+      );
+      await expect(
+        transitionPrivacyRequest({ requestId: 'creq00000001', toStatus: 'PROCESSING' }, ACTOR)
+      ).rejects.toMatchObject({ code: 'PRIVACY_REQUEST_INVALID_TRANSITION' });
+
+      mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
+      mocks.privacyRequestFindUniqueOrThrow.mockResolvedValue(
+        baseRequest({ status: 'IDENTITY_VERIFICATION', verifiedAt: null })
+      );
+      await expect(
+        transitionPrivacyRequest(
+          { requestId: 'creq00000001', toStatus: 'IDENTITY_VERIFICATION' },
+          ACTOR
+        )
+      ).resolves.toMatchObject({ status: 'IDENTITY_VERIFICATION' });
     });
 
     it('never allows leaving a terminal COMPLETED request', async () => {
@@ -318,7 +338,9 @@ describe('privacy request lifecycle', () => {
     });
 
     it('raises a state conflict when another writer already changed the status (race safety)', async () => {
-      mocks.privacyRequestFindUnique.mockResolvedValue(baseRequest({ status: 'RECEIVED' }));
+      mocks.privacyRequestFindUnique.mockResolvedValue(
+        baseRequest({ status: 'IDENTITY_VERIFICATION' })
+      );
       // Someone else moved it first: the optimistic-lock updateMany matches 0 rows.
       mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 0 });
 
@@ -336,7 +358,7 @@ describe('privacy request lifecycle', () => {
     });
 
     it('never accepts a payload that changes the request subject', async () => {
-      const current = baseRequest({ status: 'RECEIVED', subjectId: 'user-1' });
+      const current = baseRequest({ status: 'IDENTITY_VERIFICATION', subjectId: 'user-1' });
       mocks.privacyRequestFindUnique.mockResolvedValue(current);
       mocks.privacyRequestUpdateMany.mockResolvedValue({ count: 1 });
       mocks.privacyRequestFindUniqueOrThrow.mockResolvedValue(baseRequest({ status: 'IN_REVIEW' }));

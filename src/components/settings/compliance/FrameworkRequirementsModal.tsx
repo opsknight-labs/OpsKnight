@@ -231,7 +231,8 @@ export function FrameworkRequirementsModal({
         {data && !isLoading && !error && (
           <div className="space-y-4 mt-2">
             <div className="text-xs text-muted-foreground font-mono">
-              Showing {data.requirements.length} mapped requirements
+              Showing {data.requirements.length} catalog requirements; requirements without control
+              mappings are identified in their detail.
             </div>
 
             <div className="space-y-3">

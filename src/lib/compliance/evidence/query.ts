@@ -26,6 +26,7 @@ export interface GetAllEvidenceOptions {
   type?: ComplianceEvidenceType;
   limit?: number;
   cursor?: string;
+  search?: string;
 }
 
 function mapToRecord(row: {
@@ -132,6 +133,17 @@ export async function getAllEvidence(
   const where: Prisma.ComplianceEvidenceWhereInput = {
     ...(options.controlId ? { controlId: options.controlId } : {}),
     ...(options.type ? { type: options.type } : {}),
+    ...(options.search
+      ? {
+          OR: [
+            { title: { contains: options.search, mode: 'insensitive' } },
+            { description: { contains: options.search, mode: 'insensitive' } },
+            { collectorId: { contains: options.search, mode: 'insensitive' } },
+            { controlId: { contains: options.search, mode: 'insensitive' } },
+            { contentHash: { contains: options.search, mode: 'insensitive' } },
+          ],
+        }
+      : {}),
   };
 
   const rows = await prisma.complianceEvidence.findMany({
