@@ -489,12 +489,9 @@ export default async function AnalyticsContent({
             <svg className="analytics-sparkline analytics-sparkline-emerald" viewBox="0 0 72 24">
               <path
                 className="analytics-sparkline-area"
-                d={buildSparklineAreaPath(resolveComplianceSparkline)}
+                d={buildSparklineAreaPath(mttrSparkline)}
               />
-              <path
-                className="analytics-sparkline-line"
-                d={buildSparklinePath(resolveComplianceSparkline)}
-              />
+              <path className="analytics-sparkline-line" d={buildSparklinePath(mttrSparkline)} />
             </svg>
           </div>
         </MetricCard>
@@ -524,9 +521,12 @@ export default async function AnalyticsContent({
             >
               <path
                 className="analytics-sparkline-area"
-                d={buildSparklineAreaPath(mttrSparkline)}
+                d={buildSparklineAreaPath(resolveComplianceSparkline)}
               />
-              <path className="analytics-sparkline-line" d={buildSparklinePath(mttrSparkline)} />
+              <path
+                className="analytics-sparkline-line"
+                d={buildSparklinePath(resolveComplianceSparkline)}
+              />
             </svg>
           </div>
         </MetricCard>

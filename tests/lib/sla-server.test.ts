@@ -468,6 +468,9 @@ describe('calculateSLAMetrics trend series', () => {
       status: 'Critical',
       slaEvaluatedCount: 6,
       slaUnknownCount: 1,
+      // The unknown-contract incident still has a valid 5-minute ACK and
+      // therefore remains an MTTA sample (three 30-minute ACKs + one 5-minute ACK).
+      mtta: 23.75,
     });
     expect(metrics.serviceMetrics.find(service => service.id === 'service-unknown')).toMatchObject({
       status: 'Unknown',

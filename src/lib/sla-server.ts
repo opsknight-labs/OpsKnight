@@ -1940,6 +1940,29 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     }
 
     s.count++;
+    // Latency is independent of SLA-contract validity. Keep valid timing
+    // samples from legacy incidents even when their compliance contract is
+    // unknown or corrupt; only SLA compliance is gated by the projector.
+    const ackAt = ackMap.get(incident.id);
+    if (ackAt || incident.slaAckElapsedMs !== null) {
+      s.ackSum += capturedOrEffectiveElapsedMs({
+        capturedElapsedMs: incident.slaAckElapsedMs,
+        startedAt: incident.createdAt,
+        evaluationAt: ackAt ?? incident.createdAt,
+        pauses: incident.slaPauses,
+      });
+      s.ackCount++;
+    }
+    const resolvedAt = incident.resolvedAt ?? incident.updatedAt;
+    if (incident.status === 'RESOLVED' && resolvedAt) {
+      s.resolveSum += capturedOrEffectiveElapsedMs({
+        capturedElapsedMs: incident.slaResolveElapsedMs,
+        startedAt: incident.createdAt,
+        evaluationAt: resolvedAt,
+        pauses: incident.slaPauses,
+      });
+      s.resolveCount++;
+    }
     const sla = projectIncidentSlaState(
       {
         status: incident.status,
@@ -1970,15 +1993,6 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
     if (sla.resolve.applicability === 'REQUIRED' && sla.resolve.status !== 'PENDING') {
       s.slaEvaluatedCount++;
       if (sla.resolve.status === 'BREACHED') s.resolveBreaches++;
-    }
-
-    if (sla.ack.completedAt !== null) {
-      s.ackSum += sla.ack.elapsedMs;
-      s.ackCount++;
-    }
-    if (sla.resolve.completedAt !== null) {
-      s.resolveSum += sla.resolve.elapsedMs;
-      s.resolveCount++;
     }
   }
 
