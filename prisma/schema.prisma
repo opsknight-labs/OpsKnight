@@ -81,6 +81,18 @@ enum PrivacyRequestStatus {
   REJECTED
 }
 
+enum PrivacyVerificationStatus {
+  PENDING
+  VERIFIED
+}
+
+enum PrivacyVerificationMethod {
+  OIDC_SESSION
+  EMAIL_CHALLENGE
+  MANUAL_ID_DOCUMENT
+  ADMIN_ATTESTATION
+}
+
 enum PrivacyExportArtifactStatus {
   PENDING
   READY
@@ -503,6 +515,7 @@ model User {
   tokens                      UserToken[]
   privacyRequestsAssigned     PrivacyRequest[]             @relation("PrivacyRequestAssignedTo")
   privacyRequestsRequested    PrivacyRequest[]             @relation("PrivacyRequestRequestedBy")
+  privacyRequestsVerified     PrivacyRequest[]             @relation("PrivacyRequestVerifiedBy")
   createdRetentionHolds       DataRetentionHold[]          @relation("RetentionHoldCreatedBy")
   releasedRetentionHolds      DataRetentionHold[]          @relation("RetentionHoldReleasedBy")
   initiatedEncryptionRuns     EncryptionMigrationRun[]     @relation("EncryptionRunInitiator")
@@ -893,9 +906,9 @@ model IncidentWarRoom {
   commandConversationId        String?
   commandCreateAttemptedAt     DateTime?
   messageGeneration            Int                    @default(1)
-  projectionVersion     Int                   @default(0)
+  projectionVersion            Int                    @default(0)
   lastProjectedVersion         Int                    @default(0)
-  lastProjectedAt       DateTime?
+  lastProjectedAt              DateTime?
   projectionLeaseToken         String?
   projectionLeaseExpiresAt     DateTime?
   provisioningToken            String?
@@ -915,7 +928,7 @@ model IncidentWarRoom {
   lastError                    String?
   lastErrorCode                String?
   health                       WarRoomHealthState     @default(HEALTHY)
-  lastReconciledAt      DateTime?
+  lastReconciledAt             DateTime?
   // Terminal drift debt: set when reconciliation window expires with
   // unverified external outcome. A low-frequency lane scans these rooms
   // by marker/planned name and archives any orphan channel idempotently
@@ -2624,20 +2637,20 @@ model SLAPerformanceLog {
 }
 
 model CronSchedulerState {
-  id                  String    @id @default("singleton")
-  lastRunAt           DateTime?
-  lastSuccessAt       DateTime?
-  lastError           String?
-  nextRunAt           DateTime?
-  lastRollupDate      String?
-  lastRollupRefreshAt DateTime?
+  id                              String    @id @default("singleton")
+  lastRunAt                       DateTime?
+  lastSuccessAt                   DateTime?
+  lastError                       String?
+  nextRunAt                       DateTime?
+  lastRollupDate                  String?
+  lastRollupRefreshAt             DateTime?
   lastObjectiveSnapshotAt         DateTime?
   lastObjectiveSnapshotSuccessAt  DateTime?
   lastObjectiveSnapshotDurationMs Int?
-  lastObjectiveSnapshotFailed     Int      @default(0)
-  lockedBy            String?
-  lockedAt            DateTime?
-  updatedAt           DateTime  @updatedAt
+  lastObjectiveSnapshotFailed     Int       @default(0)
+  lockedBy                        String?
+  lockedAt                        DateTime?
+  updatedAt                       DateTime  @updatedAt
 
   @@map("cron_scheduler_state")
 }
@@ -2722,30 +2735,36 @@ model ChatOpsConfig {
 // All lifecycle transitions must go through transitionPrivacyRequest() —
 // no route or UI action should write status/timestamps directly.
 model PrivacyRequest {
-  id              String                    @id @default(cuid())
-  subjectType     PrivacyRequestSubjectType @default(USER)
-  subjectId       String
-  requestType     PrivacyRequestType
-  status          PrivacyRequestStatus      @default(RECEIVED)
-  requestedAt     DateTime                  @default(now())
-  verifiedAt      DateTime?
-  completedAt     DateTime?
-  requestedById   String?
-  assignedToId    String?
-  notes           String?
-  rejectionReason String?
-  metadata        Json?
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
+  id                    String                     @id @default(cuid())
+  subjectType           PrivacyRequestSubjectType  @default(USER)
+  subjectId             String
+  requestType           PrivacyRequestType
+  status                PrivacyRequestStatus       @default(RECEIVED)
+  requestedAt           DateTime                   @default(now())
+  verifiedAt            DateTime?
+  verificationStatus    PrivacyVerificationStatus  @default(PENDING)
+  verificationMethod    PrivacyVerificationMethod?
+  verifiedById          String?
+  verificationReference String?
+  completedAt           DateTime?
+  requestedById         String?
+  assignedToId          String?
+  notes                 String?
+  rejectionReason       String?
+  metadata              Json?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
 
   requestedBy      User?                    @relation("PrivacyRequestRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
   assignedTo       User?                    @relation("PrivacyRequestAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  verifiedBy       User?                    @relation("PrivacyRequestVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
   exportArtifacts  PrivacyExportArtifact[]
   erasureExecution PrivacyErasureExecution?
 
   @@index([subjectType, subjectId])
   @@index([status, requestType])
   @@index([assignedToId])
+  @@index([verifiedById])
   @@index([createdAt])
 }
 
@@ -2855,28 +2874,28 @@ enum EncryptionMigrationStatus {
 
 // Represents an execution of the encryption migration and verification lifecycle.
 model EncryptionMigrationRun {
-  id                           String                          @id @default(cuid())
-  mode                         EncryptionMigrationMode         @default(PREVIEW)
-  status                       EncryptionMigrationStatus       @default(PENDING)
+  id                           String                    @id @default(cuid())
+  mode                         EncryptionMigrationMode   @default(PREVIEW)
+  status                       EncryptionMigrationStatus @default(PENDING)
   registryFingerprint          String
   activeKeyId                  String?
-  totalRecords                 Int                             @default(0)
-  processedRecords             Int                             @default(0)
-  migratedRecords              Int                             @default(0)
-  errorRecords                 Int                             @default(0)
-  skippedRecords               Int                             @default(0)
-  conflictRecords              Int                             @default(0)
-  safeForDatabaseKeyRetirement Json?                           @default("[]")
+  totalRecords                 Int                       @default(0)
+  processedRecords             Int                       @default(0)
+  migratedRecords              Int                       @default(0)
+  errorRecords                 Int                       @default(0)
+  skippedRecords               Int                       @default(0)
+  conflictRecords              Int                       @default(0)
+  safeForDatabaseKeyRetirement Json?                     @default("[]")
   errorMessage                 String?
   startedAt                    DateTime?
   completedAt                  DateTime?
   initiatedById                String?
-  createdAt                    DateTime                        @default(now())
-  updatedAt                    DateTime                        @updatedAt
+  createdAt                    DateTime                  @default(now())
+  updatedAt                    DateTime                  @updatedAt
 
-  initiatedBy                  User?                           @relation("EncryptionRunInitiator", fields: [initiatedById], references: [id], onDelete: SetNull)
-  targetStates                 EncryptionMigrationTargetState[]
-  issues                       EncryptionMigrationIssue[]
+  initiatedBy  User?                            @relation("EncryptionRunInitiator", fields: [initiatedById], references: [id], onDelete: SetNull)
+  targetStates EncryptionMigrationTargetState[]
+  issues       EncryptionMigrationIssue[]
 
   @@index([status, mode])
   @@index([createdAt])
@@ -2885,22 +2904,22 @@ model EncryptionMigrationRun {
 
 // Checkpoint state per encryption target in a run.
 model EncryptionMigrationTargetState {
-  id             String                    @id @default(cuid())
-  runId          String
-  targetId       String
-  status         EncryptionMigrationStatus @default(PENDING)
-  cursor         String?
-  totalCount     Int                       @default(0)
-  processedCount Int                       @default(0)
-  migratedCount  Int                       @default(0)
-  errorCount     Int                       @default(0)
-  conflictCount  Int                       @default(0)
-  keysDetected   Json?                     @default("{}")
-  inspectionStats Json?                    @default("{}")
-  createdAt      DateTime                  @default(now())
-  updatedAt      DateTime                  @updatedAt
+  id              String                    @id @default(cuid())
+  runId           String
+  targetId        String
+  status          EncryptionMigrationStatus @default(PENDING)
+  cursor          String?
+  totalCount      Int                       @default(0)
+  processedCount  Int                       @default(0)
+  migratedCount   Int                       @default(0)
+  errorCount      Int                       @default(0)
+  conflictCount   Int                       @default(0)
+  keysDetected    Json?                     @default("{}")
+  inspectionStats Json?                     @default("{}")
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
 
-  run            EncryptionMigrationRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  run EncryptionMigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@unique([runId, targetId])
   @@index([runId, status])
@@ -2908,20 +2927,21 @@ model EncryptionMigrationTargetState {
 
 // Audit record for issues encountered during encryption migration (strictly no plaintext or ciphertext).
 model EncryptionMigrationIssue {
-  id             String                 @id @default(cuid())
+  id             String   @id @default(cuid())
   runId          String
   targetId       String
   recordId       String
   fieldPath      String
   classification String
   errorMessage   String?
-  createdAt      DateTime               @default(now())
+  createdAt      DateTime @default(now())
 
-  run            EncryptionMigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  run EncryptionMigrationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@index([runId, targetId])
   @@index([runId, classification])
 }
+
 enum ComplianceEvaluationStatus {
   IMPLEMENTED
   PARTIAL
@@ -2962,7 +2982,7 @@ model ComplianceEvaluation {
   validUntil       DateTime?
   createdAt        DateTime                    @default(now())
 
-  evidence         ComplianceEvidence[]
+  evidence ComplianceEvidence[]
 
   @@unique([batchId, controlId])
   @@index([controlId, evaluatedAt])
@@ -2988,7 +3008,7 @@ model ComplianceEvidence {
   contentHash      String
   metadata         Json
 
-  evaluation       ComplianceEvaluation   @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
+  evaluation ComplianceEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Restrict)
 
   @@index([controlId, observedAt])
   @@index([evaluationId])
@@ -3036,71 +3056,71 @@ enum ComplianceDriftImpact {
 
 // Projection representing the last evaluation processed by the drift engine for a control.
 model ComplianceDriftBaseline {
-  controlId               String                     @id
+  controlId String @id
 
   lastEvaluationId        String
   lastEvaluationCreatedAt DateTime
   lastEvaluatedAt         DateTime
 
-  resolvedStatus          ComplianceEvaluationStatus
+  resolvedStatus ComplianceEvaluationStatus
 
-  evaluatorId             String
-  evaluatorVersion        String
+  evaluatorId      String
+  evaluatorVersion String
 
-  observationFingerprint  String
-  findingFingerprint      String
-  evidenceFingerprint     String?
+  observationFingerprint String
+  findingFingerprint     String
+  evidenceFingerprint    String?
 
-  establishedAt           DateTime                   @default(now())
-  updatedAt               DateTime                   @updatedAt
+  establishedAt DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 // Durable drift episodes representing observed technical changes.
 model ComplianceDriftEvent {
-  id                      String                      @id @default(cuid())
+  id String @id @default(cuid())
 
-  subjectType             String
-  subjectId               String
+  subjectType String
+  subjectId   String
 
-  controlId               String?
-  framework               String?
-  requirementId           String?
+  controlId     String?
+  framework     String?
+  requirementId String?
 
-  kind                    ComplianceDriftKind
-  impact                  ComplianceDriftImpact
-  status                  ComplianceDriftStatus
+  kind   ComplianceDriftKind
+  impact ComplianceDriftImpact
+  status ComplianceDriftStatus
 
-  fingerprint             String
+  fingerprint String
 
   // Only populated while event is active (OPEN or ACKNOWLEDGED).
   // Unique prevents duplicate active episodes. Cleared (null) upon recovery.
-  activeDedupeKey         String?                     @unique
+  activeDedupeKey String? @unique
 
-  baselineEvaluationId    String?
-  detectedEvaluationId    String?
-  resolutionEvaluationId  String?
+  baselineEvaluationId   String?
+  detectedEvaluationId   String?
+  resolutionEvaluationId String?
 
-  previousStatus          ComplianceEvaluationStatus?
-  currentStatus           ComplianceEvaluationStatus?
+  previousStatus ComplianceEvaluationStatus?
+  currentStatus  ComplianceEvaluationStatus?
 
-  summary                 String
-  details                 Json
+  summary String
+  details Json
 
-  firstDetectedAt         DateTime
-  lastObservedAt          DateTime
+  firstDetectedAt DateTime
+  lastObservedAt  DateTime
 
-  occurrenceCount         Int                         @default(1)
+  occurrenceCount Int @default(1)
 
-  acknowledgedAt          DateTime?
-  acknowledgedByUserId    String?
+  acknowledgedAt       DateTime?
+  acknowledgedByUserId String?
 
-  resolvedAt              DateTime?
+  resolvedAt DateTime?
 
-  notificationGeneration  Int                         @default(0)
-  lastNotifiedAt          DateTime?
+  notificationGeneration Int       @default(0)
+  lastNotifiedAt         DateTime?
 
-  createdAt               DateTime                    @default(now())
-  updatedAt               DateTime                    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, firstDetectedAt])
   @@index([controlId, status])
@@ -3118,28 +3138,27 @@ enum ComplianceMonitoringRunStatus {
 
 // Observable scheduled compliance monitoring cycle.
 model ComplianceMonitoringRun {
-  id                String                        @id @default(cuid())
+  id String @id @default(cuid())
 
-  scheduledFor      DateTime
-  status            ComplianceMonitoringRunStatus
+  scheduledFor DateTime
+  status       ComplianceMonitoringRunStatus
 
-  startedAt         DateTime?
-  completedAt       DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
 
-  controlsTargeted  Int                           @default(0)
-  controlsEvaluated Int                           @default(0)
-  controlsFailed    Int                           @default(0)
+  controlsTargeted  Int @default(0)
+  controlsEvaluated Int @default(0)
+  controlsFailed    Int @default(0)
 
-  driftOpened       Int                           @default(0)
-  driftResolved     Int                           @default(0)
+  driftOpened   Int @default(0)
+  driftResolved Int @default(0)
 
-  frameworkChanges  Int                           @default(0)
+  frameworkChanges Int @default(0)
 
-  errorSummary      Json?
+  errorSummary Json?
 
-  createdAt         DateTime                      @default(now())
-  updatedAt         DateTime                      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, scheduledFor])
 }
-

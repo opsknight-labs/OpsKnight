@@ -82,6 +82,10 @@ const transitionPrivacyRequestSchema = z.object({
   ]),
   rejectionReason: z.string().trim().max(4000).optional(),
   notes: z.string().trim().max(4000).optional(),
+  verificationMethod: z
+    .enum(['OIDC_SESSION', 'EMAIL_CHALLENGE', 'MANUAL_ID_DOCUMENT', 'ADMIN_ATTESTATION'])
+    .optional(),
+  verificationReference: z.string().trim().max(500).optional(),
 });
 
 export type TransitionPrivacyRequestInput = z.infer<typeof transitionPrivacyRequestSchema>;
@@ -198,6 +202,12 @@ export async function transitionPrivacyRequest(input: unknown, actor: PrivacyReq
     // verifiedAt — export gating relies on this being a true verification signal.
     if (current.status === 'IDENTITY_VERIFICATION' && parsed.toStatus === 'IN_REVIEW') {
       data.verifiedAt = current.verifiedAt ?? now;
+      data.verificationStatus = 'VERIFIED';
+      data.verificationMethod = parsed.verificationMethod ?? 'ADMIN_ATTESTATION';
+      data.verifiedById = actor.id;
+      if (parsed.verificationReference !== undefined) {
+        data.verificationReference = parsed.verificationReference;
+      }
     }
     if (parsed.toStatus === 'COMPLETED') data.completedAt = now;
     if (parsed.toStatus === 'REJECTED') data.rejectionReason = parsed.rejectionReason;
@@ -299,6 +309,7 @@ export async function getPrivacyRequest(requestId: string) {
     include: {
       requestedBy: { select: { id: true, name: true, email: true } },
       assignedTo: { select: { id: true, name: true, email: true } },
+      verifiedBy: { select: { id: true, name: true, email: true } },
       exportArtifacts: {
         orderBy: { createdAt: 'desc' },
         select: {
