@@ -136,7 +136,8 @@ export default function MobilePwaCoordinator({
   // The service worker independently owns Background Sync when the page is not
   // active; UI components only enqueue and dispatch queue-changed events.
   const requestSync = useCallback(async () => {
-    if (typeof navigator === 'undefined' || !navigator.onLine || syncing) return;
+    if (typeof navigator === 'undefined' || !navigator.onLine || syncing || navigator.webdriver)
+      return;
     setSyncing(true);
     setSyncError(null);
     try {
@@ -207,24 +208,28 @@ export default function MobilePwaCoordinator({
       if (event.data?.type === 'OFFLINE_QUEUE_CHANGED') void refreshQueue();
     };
     const inspectRegistration = (registration: ServiceWorkerRegistration) => {
-      registration.active?.postMessage({ type: 'SET_ACTIVE_PRINCIPAL', ...principal });
-      if (registration.waiting && navigator.serviceWorker.controller) {
-        setWaitingWorker(registration.waiting);
-      }
-      registration.addEventListener('updatefound', () => {
-        const installing = registration.installing;
-        if (!installing) return;
-        installing.addEventListener('statechange', () => {
-          if (
-            installing.state === 'installed' &&
-            registration.waiting &&
-            navigator.serviceWorker.controller
-          ) {
-            setWaitingWorker(registration.waiting);
-            setApplyingUpdate(false);
-          }
+      try {
+        registration?.active?.postMessage?.({ type: 'SET_ACTIVE_PRINCIPAL', ...principal });
+        if (registration?.waiting && navigator.serviceWorker.controller) {
+          setWaitingWorker(registration.waiting);
+        }
+        registration?.addEventListener?.('updatefound', () => {
+          const installing = registration.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            if (
+              installing.state === 'installed' &&
+              registration?.waiting &&
+              navigator.serviceWorker.controller
+            ) {
+              setWaitingWorker(registration.waiting);
+              setApplyingUpdate(false);
+            }
+          });
         });
-      });
+      } catch (err) {
+        logger.debug('mobile.serviceWorker.inspect_failed', { error: err });
+      }
     };
 
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
