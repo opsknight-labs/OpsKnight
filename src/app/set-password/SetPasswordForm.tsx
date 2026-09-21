@@ -1,7 +1,9 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useCallback, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { AlertCircle, Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { setPassword, type SetPasswordState } from './actions';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
@@ -31,6 +33,7 @@ function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
 }
 
 export default function SetPasswordForm({ token }: { token: string }) {
+  const router = useRouter();
   const [password, setPasswordValue] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -42,13 +45,24 @@ export default function SetPasswordForm({ token }: { token: string }) {
   const passwordsMatch = Object.is(password, confirmPassword);
   const canSubmit = isPasswordStrong(password) && passwordsMatch;
 
+  const handleProceedToLogin = useCallback(async () => {
+    try {
+      await purgeBrowserAuthCaches();
+    } catch {
+      // Defense-in-depth: cache cleanup must never prevent signout
+    }
+    try {
+      await signOut({ callbackUrl: '/login?password=1' });
+    } catch {
+      router.push('/login?password=1');
+    }
+  }, [router]);
+
   useEffect(() => {
     if (state.success) {
-      purgeBrowserAuthCaches();
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.assign('/login?password=1');
+      void handleProceedToLogin();
     }
-  }, [state.success]);
+  }, [state.success, handleProceedToLogin]);
 
   if (state.success) {
     return (
@@ -62,12 +76,13 @@ export default function SetPasswordForm({ token }: { token: string }) {
             Your password has been set. Redirecting to sign in…
           </p>
         </div>
-        <a
-          href="/login?password=1"
+        <button
+          type="button"
+          onClick={() => void handleProceedToLogin()}
           className="flex w-full items-center justify-center rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
         >
           Continue to sign in
-        </a>
+        </button>
       </div>
     );
   }
