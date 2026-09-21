@@ -5,16 +5,13 @@ import {
   Activity,
   AlertTriangle,
   ArrowUpDown,
-  CheckCircle2,
   Clock3,
   Download,
   Loader2,
   RefreshCw,
   RotateCcw,
   Search,
-  ShieldCheck,
   Radio,
-  XCircle,
   SlidersHorizontal,
   ExternalLink,
 } from 'lucide-react';
@@ -44,7 +41,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/shadcn/table';
-import { Switch } from '@/components/ui/shadcn/switch';
 import { logger } from '@/lib/logger';
 import Link from 'next/link';
 import {
@@ -54,8 +50,17 @@ import {
   SmtpLogo,
 } from '@/components/settings/ProviderBrandLogos';
 import { SlackLogo, MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import TablePaginationFooter from '@/components/ui/TablePaginationFooter';
 
-type Props = { canRetry: boolean };
+type Props = {
+  canRetry: boolean;
+  /** Controlled from the parent (NotificationOperationsPage). */
+  autoRefresh?: boolean;
+  /** Pre-select a status filter — driven by Overview tab card clicks. */
+  initialStatus?: string;
+  /** Callback: parent receives latest stats so Overview cards reflect live data. */
+  onStatsChange?: (stats: Record<string, number>) => void;
+};
 
 const CHANNELS = [
   'EMAIL',
@@ -75,6 +80,8 @@ const CATEGORIES = [
   'ADMINISTRATION',
   'SYSTEM',
 ] as const;
+
+const PAGE_SIZE = 20;
 
 type Operation = {
   id: string;
@@ -133,9 +140,13 @@ function formatTimestamp(value: string | null) {
   }).format(new Date(value));
 }
 
-export default function NotificationOperations({ canRetry }: Props) {
+export default function NotificationOperations({
+  canRetry,
+  autoRefresh = false,
+  initialStatus = 'all',
+  onStatsChange,
+}: Props) {
   const [rows, setRows] = useState<Operation[]>([]);
-  const [stats, setStats] = useState<Record<string, number>>({});
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -143,17 +154,23 @@ export default function NotificationOperations({ canRetry }: Props) {
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [channel, setChannel] = useState('all');
-  const [status, setStatus] = useState('all');
+  const [status, setStatus] = useState(initialStatus);
   const [category, setCategory] = useState('all');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [autoRefresh, setAutoRefresh] = useState(false);
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [bulkRetrying, setBulkRetrying] = useState(false);
+  const [page, setPage] = useState(1);
   const requestSequence = useRef(0);
+
+  // Sync status from parent (Overview card click)
+  useEffect(() => {
+    setStatus(initialStatus);
+    setPage(1);
+  }, [initialStatus]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 350);
@@ -166,7 +183,7 @@ export default function NotificationOperations({ canRetry }: Props) {
       if (nextCursor) setLoadingMore(true);
       else setLoading(true);
       setError('');
-      const params = new URLSearchParams({ limit: '50' });
+      const params = new URLSearchParams({ limit: '200' }); // fetch a large batch, page client-side
       if (channel !== 'all') params.set('channel', channel);
       if (status !== 'all') params.set('status', status);
       if (category !== 'all') params.set('category', category);
@@ -183,7 +200,7 @@ export default function NotificationOperations({ canRetry }: Props) {
         if (!response.ok) throw new Error(body.error || 'Unable to load delivery operations');
         if (sequence !== requestSequence.current) return;
         setRows(current => (nextCursor ? [...current, ...body.notifications] : body.notifications));
-        setStats(body.stats.byStatus || {});
+        onStatsChange?.(body.stats.byStatus || {});
         setCursor(body.pagination.nextCursor);
         setHasMore(body.pagination.hasMore);
       } catch (caught) {
@@ -199,14 +216,19 @@ export default function NotificationOperations({ canRetry }: Props) {
         }
       }
     },
-    [category, channel, debouncedQuery, from, status, to]
+    [category, channel, debouncedQuery, from, onStatsChange, status, to]
   );
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [channel, status, category, debouncedQuery, from, to]);
 
   useEffect(() => {
     void fetchOperations();
   }, [fetchOperations]);
 
-  // Optional auto-refresh polling
+  // External auto-refresh polling — driven by parent's toggle
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = window.setInterval(() => {
@@ -230,22 +252,6 @@ export default function NotificationOperations({ canRetry }: Props) {
       setError(caught instanceof Error ? caught.message : 'Unable to requeue notification');
     } finally {
       setRetryingId(null);
-    }
-  };
-
-  const total = Object.values(stats).reduce((sum, value) => sum + value, 0);
-  const accepted = stats.SENT || 0;
-  const delivered = stats.DELIVERED || 0;
-  const pending = stats.PENDING || 0;
-  const failed = stats.FAILED || 0;
-  const skipped = stats.SKIPPED || 0;
-  const unknown = stats.UNKNOWN || 0;
-
-  const handleStatusFilterClick = (targetStatus: string) => {
-    if (status === targetStatus) {
-      setStatus('all');
-    } else {
-      setStatus(targetStatus);
     }
   };
 
@@ -291,6 +297,11 @@ export default function NotificationOperations({ canRetry }: Props) {
     if (av > bv) return sortDir === 'asc' ? 1 : -1;
     return 0;
   });
+
+  // Paginate the sorted rows
+  const totalCount = sortedRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const pagedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const bulkRetry = async () => {
     const failedRows = rows.filter(r => r.status === 'FAILED');
@@ -363,182 +374,27 @@ export default function NotificationOperations({ canRetry }: Props) {
       setSortBy(col);
       setSortDir('desc');
     }
+    setPage(1);
+  };
+
+  // Load next batch from API if we've paged to the end of the current batch
+  const handlePageChange = (nextPage: number) => {
+    setPage(nextPage);
+    if (nextPage === totalPages && hasMore && cursor) {
+      void fetchOperations(cursor);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. Privacy & Security Assurance Banner */}
-      <div className="flex items-center justify-between rounded-xl bg-muted/40 border border-border/80 px-4 py-3 text-xs">
-        <div className="flex items-center gap-2.5 text-muted-foreground">
-          <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
-          <span>
-            <strong className="text-foreground font-semibold">
-              {canRetry ? 'Administrator Control Plane:' : 'Auditor Telemetry View:'}
-            </strong>{' '}
-            Delivery metadata is tracked with recipient masking and redacted error payloads. Secrets
-            are never exposed.
-          </span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] text-muted-foreground hidden sm:inline">
-            Auto-refresh (15s)
-          </span>
-          <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
-        </div>
-      </div>
-
-      {/* 2. Interactive Queue Status Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-3">
-        <button
-          type="button"
-          onClick={() => setStatus('all')}
-          className={`text-left p-4 rounded-xl border transition-all ${
-            status === 'all'
-              ? 'bg-primary/5 border-primary/40 ring-1 ring-primary/40 shadow-xs'
-              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">Total Dispatched</span>
-            <Activity className="h-4 w-4 text-primary" />
-          </div>
-          <div className="text-2xl font-black text-foreground tracking-tight">{total}</div>
-          <span className="text-[10px] text-muted-foreground">All logged operations</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleStatusFilterClick('DELIVERED')}
-          className={`text-left p-4 rounded-xl border transition-all ${
-            status === 'DELIVERED'
-              ? 'bg-emerald-500/10 border-emerald-500/40 ring-1 ring-emerald-500/40 shadow-xs'
-              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              Delivered
-            </span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-          </div>
-          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
-            {delivered}
-          </div>
-          <span className="text-[10px] text-muted-foreground">
-            {total > 0
-              ? `${Math.round((delivered / total) * 100)}% delivery rate`
-              : 'Confirmed delivered'}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleStatusFilterClick('SENT')}
-          className={`text-left p-4 rounded-xl border transition-all ${
-            status === 'SENT'
-              ? 'bg-blue-500/10 border-blue-500/40 ring-1 ring-blue-500/40 shadow-xs'
-              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Accepted</span>
-            <CheckCircle2 className="h-4 w-4 text-blue-500" />
-          </div>
-          <div className="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight">
-            {accepted}
-          </div>
-          <span className="text-[10px] text-muted-foreground">Provider accepted</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleStatusFilterClick('PENDING')}
-          className={`text-left p-4 rounded-xl border transition-all ${
-            status === 'PENDING'
-              ? 'bg-amber-500/10 border-amber-500/40 ring-1 ring-amber-500/40 shadow-xs'
-              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-              Pending Queue
-            </span>
-            <Clock3 className="h-4 w-4 text-amber-500" />
-          </div>
-          <div className="text-2xl font-black text-amber-600 dark:text-amber-400 tracking-tight">
-            {pending}
-          </div>
-          <span className="text-[10px] text-muted-foreground">Queued or retry backoff</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleStatusFilterClick('UNKNOWN')}
-          className={`text-left p-4 rounded-xl border transition-all ${
-            status === 'UNKNOWN'
-              ? 'bg-violet-500/10 border-violet-500/40 ring-1 ring-violet-500/40 shadow-xs'
-              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-xs font-semibold text-violet-600 dark:text-violet-400">Unknown</span>
-            <AlertTriangle className="h-4 w-4 text-violet-500" />
-          </div>
-          <div className="text-2xl font-black text-violet-600 dark:text-violet-400 tracking-tight">
-            {unknown}
-          </div>
-          <span className="text-[10px] text-muted-foreground">Awaiting reconciliation</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleStatusFilterClick('FAILED')}
-          className={`text-left p-4 rounded-xl border transition-all ${
-            status === 'FAILED'
-              ? 'bg-rose-500/10 border-rose-500/40 ring-1 ring-rose-500/40 shadow-xs'
-              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-              Failed / Dead Letter
-            </span>
-            <AlertTriangle className="h-4 w-4 text-rose-500" />
-          </div>
-          <div className="text-2xl font-black text-rose-600 dark:text-rose-400 tracking-tight">
-            {failed}
-          </div>
-          <span className="text-[10px] text-muted-foreground">Permanent error or max retries</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleStatusFilterClick('SKIPPED')}
-          className={`text-left p-4 rounded-xl border transition-all col-span-2 sm:col-span-1 ${
-            status === 'SKIPPED'
-              ? 'bg-muted border-foreground/30 ring-1 ring-foreground/20 shadow-xs'
-              : 'bg-card border-border/80 hover:border-border hover:bg-muted/30 shadow-xs'
-          }`}
-        >
-          <div className="flex items-center justify-between pb-1.5">
-            <span className="text-xs font-semibold text-muted-foreground">
-              Suppressed / Skipped
-            </span>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <div className="text-2xl font-black text-foreground tracking-tight">{skipped}</div>
-          <span className="text-[10px] text-muted-foreground">Quiet hours or rate limits</span>
-        </button>
-      </div>
-
-      {/* 3. Filters & Operations Table Card */}
+    <div className="space-y-0">
+      {/* Filters & Operations Table Card */}
       <Card className="border-border/80 shadow-xs bg-card overflow-hidden">
         <CardHeader className="p-4 sm:p-5 pb-3 border-b border-border/60">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div>
               <CardTitle className="text-sm font-bold flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 text-primary" />
-                Delivery Telemetry & Queue Log
+                Delivery Telemetry &amp; Queue Log
               </CardTitle>
               <CardDescription className="text-xs">
                 Real-time queue tracking across all outbound notification integrations.
@@ -617,7 +473,13 @@ export default function NotificationOperations({ canRetry }: Props) {
               </SelectContent>
             </Select>
 
-            <Select value={status} onValueChange={setStatus}>
+            <Select
+              value={status}
+              onValueChange={v => {
+                setStatus(v);
+                setPage(1);
+              }}
+            >
               <SelectTrigger
                 aria-label="Filter by status"
                 className="text-xs h-8 bg-background border-border/80"
@@ -736,7 +598,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                       onClick={() => toggleSort('channel')}
                       className="inline-flex items-center gap-1 hover:text-primary transition-colors"
                     >
-                      Channel & Category <ArrowUpDown className="h-3 w-3" />
+                      Channel &amp; Category <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </TableHead>
                   <TableHead className="text-xs font-bold text-foreground py-3">
@@ -751,7 +613,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                       onClick={() => toggleSort('attempts')}
                       className="inline-flex items-center gap-1 hover:text-primary transition-colors"
                     >
-                      Attempts & Latency <ArrowUpDown className="h-3 w-3" />
+                      Attempts &amp; Latency <ArrowUpDown className="h-3 w-3" />
                     </button>
                   </TableHead>
                   <TableHead className="text-xs font-bold text-foreground py-3">
@@ -782,7 +644,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : rows.length === 0 ? (
+                ) : pagedRows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={canRetry ? 7 : 6} className="h-36 text-center">
                       <div className="flex flex-col items-center justify-center gap-1 text-muted-foreground">
@@ -797,7 +659,7 @@ export default function NotificationOperations({ canRetry }: Props) {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedRows.map(row => {
+                  pagedRows.map(row => {
                     const isDelivered = row.status === 'DELIVERED';
                     const isAccepted = row.status === 'SENT';
                     const isPending = row.status === 'PENDING';
@@ -945,23 +807,34 @@ export default function NotificationOperations({ canRetry }: Props) {
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination footer */}
+          {!loading && totalCount > 0 && (
+            <TablePaginationFooter
+              page={page}
+              pageSize={PAGE_SIZE}
+              totalCount={totalCount}
+              onPageChange={handlePageChange}
+            />
+          )}
+
+          {/* Load more from API if there are additional cursor pages */}
+          {hasMore && cursor && !loading && page === totalPages && (
+            <div className="flex justify-center border-t border-border/60 py-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadingMore}
+                onClick={() => void fetchOperations(cursor)}
+                className="text-xs font-semibold gap-1.5 border-border/80"
+              >
+                {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Load More from Server
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
-
-      {hasMore && cursor && (
-        <div className="flex justify-center pt-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={loadingMore}
-            onClick={() => void fetchOperations(cursor)}
-            className="text-xs font-semibold gap-1.5 border-border/80"
-          >
-            {loadingMore && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            Load More Deliveries
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
