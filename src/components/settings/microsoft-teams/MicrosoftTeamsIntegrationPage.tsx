@@ -3,11 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import DetailTabs, { DetailTabContent } from '@/components/ui/DetailTabs';
 import { Button } from '@/components/ui/shadcn/button';
 import { Input } from '@/components/ui/shadcn/input';
-import { Label } from '@/components/ui/shadcn/label';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,21 +19,26 @@ import {
 } from '@/components/ui/shadcn/alert-dialog';
 import { notify as toast } from '@/lib/toast';
 import { MicrosoftTeamsLogo } from '@/components/common/BrandLogos';
+import MicrosoftTeamsSetupWizard from './MicrosoftTeamsSetupWizard';
+import WarRoomOperationsSection from './WarRoomOperationsSection';
+import type {
+  WarRoomOperationalSnapshot,
+  IntegrationHealthSummary,
+  OperationalHealth,
+} from '@/lib/war-room/operations/types';
 import {
-  Copy,
-  Check,
   AlertTriangle,
   Hash,
-  ExternalLink,
   Activity,
   Clock3,
   Download,
   Trash2,
-  Settings2,
-  FileCode2,
   Shield,
-  Bot,
   ArrowUpRight,
+  Sparkles,
+  Layers,
+  ShieldCheck,
+  Search,
 } from 'lucide-react';
 
 type DestinationRow = {
@@ -79,15 +83,7 @@ type InstallationPermissionState = {
   error?: string;
 };
 
-export default function MicrosoftTeamsIntegrationPage({
-  config,
-  destinations,
-  appManifestJson,
-  isAdmin,
-  health,
-  installationCount,
-  installationPermissions,
-}: {
+export type MicrosoftTeamsIntegrationPageProps = {
   config: {
     id: string;
     clientId: string;
@@ -104,40 +100,46 @@ export default function MicrosoftTeamsIntegrationPage({
   health?: TeamsHealth;
   installationCount: number;
   installationPermissions: InstallationPermissionState[];
-}) {
+  warRoomSnapshots?: WarRoomOperationalSnapshot[] | null;
+  fleetSummary?: IntegrationHealthSummary | null;
+  integrationReadiness?: OperationalHealth;
+  operationalFleetHealth?: OperationalHealth;
+  totalWarRooms?: number;
+  warRoomCleanupPending?: number;
+  rscState?: {
+    unknown: boolean;
+    missing: string[];
+    error?: string | null;
+  } | null;
+  warRoomDiagnosticsError?: string | null;
+};
+
+export default function MicrosoftTeamsIntegrationPage({
+  config,
+  destinations,
+  appManifestJson,
+  isAdmin,
+  health,
+  installationCount,
+  installationPermissions,
+  warRoomSnapshots = [],
+  fleetSummary = null,
+  integrationReadiness = 'HEALTHY',
+  operationalFleetHealth = 'HEALTHY',
+  totalWarRooms = 0,
+  warRoomCleanupPending = 0,
+  rscState,
+  warRoomDiagnosticsError,
+}: MicrosoftTeamsIntegrationPageProps) {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [showManifest, setShowManifest] = useState(false);
+  const [destinationSearch, setDestinationSearch] = useState('');
 
   const isConfigured = Boolean(config?.clientId && config?.enabled);
   const isInstalled = installationCount > 0;
   const isReady = isInstalled && destinations.some(destination => destination.enabled);
-
-  const onSave = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!isAdmin) return;
-    const form = new FormData(e.currentTarget);
-    setSaving(true);
-    try {
-      const { saveMicrosoftTeamsConfig } =
-        await import('@/app/(app)/settings/integrations/microsoft-teams/actions');
-      const result = await saveMicrosoftTeamsConfig(form);
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success('Microsoft Teams configuration saved.');
-        router.refresh();
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save configuration');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const onTest = async (destinationId: string) => {
     setTesting(destinationId);
@@ -211,21 +213,83 @@ export default function MicrosoftTeamsIntegrationPage({
     }
   };
 
-  const copy = async (text: string, key: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(key);
-    toast.success('Copied to clipboard');
-    setTimeout(() => setCopied(null), 1500);
-  };
+  const filteredDestinations = destinations.filter(d => {
+    if (!destinationSearch.trim()) return true;
+    const q = destinationSearch.toLowerCase().trim();
+    return (
+      (d.service?.name?.toLowerCase().includes(q) ?? false) ||
+      (d.teamName?.toLowerCase().includes(q) ?? false) ||
+      (d.channelName?.toLowerCase().includes(q) ?? false) ||
+      d.channelId.toLowerCase().includes(q)
+    );
+  });
 
-  const botEndpoint =
-    typeof window !== 'undefined'
-      ? `${window.location.origin}/api/microsoft-teams/messages`
-      : '/api/microsoft-teams/messages';
+  const tabItems = [
+    {
+      id: 'setup',
+      label: 'Setup & Credentials',
+      icon: <Sparkles className="h-3.5 w-3.5" />,
+      badge: isConfigured ? (
+        <Badge
+          variant="outline"
+          className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px]"
+        >
+          Configured
+        </Badge>
+      ) : (
+        <Badge
+          variant="outline"
+          className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px]"
+        >
+          Required
+        </Badge>
+      ),
+    },
+    {
+      id: 'destinations',
+      label: 'Channel Routing',
+      icon: <Hash className="h-3.5 w-3.5" />,
+      count: destinations.length,
+    },
+    {
+      id: 'war-rooms',
+      label: 'War Room Operations',
+      icon: <Layers className="h-3.5 w-3.5" />,
+      count: totalWarRooms > 0 ? totalWarRooms : undefined,
+      badge:
+        warRoomCleanupPending > 0 ? (
+          <Badge
+            variant="outline"
+            className="border-amber-300 text-amber-700 bg-amber-50 text-[10px]"
+          >
+            {warRoomCleanupPending} pending
+          </Badge>
+        ) : undefined,
+    },
+    {
+      id: 'health',
+      label: 'Health & Permissions',
+      icon: <Activity className="h-3.5 w-3.5" />,
+      badge: (
+        <Badge
+          variant="outline"
+          className={`text-[10px] ${
+            integrationReadiness === 'HEALTHY'
+              ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+              : integrationReadiness === 'UNKNOWN'
+                ? 'border-blue-300 text-blue-700 bg-blue-50'
+                : 'border-amber-300 text-amber-700 bg-amber-50'
+          }`}
+        >
+          {integrationReadiness}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Overview Status Card */}
+      {/* Top Level Summary Card */}
       <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
@@ -260,10 +324,10 @@ export default function MicrosoftTeamsIntegrationPage({
                 {isReady
                   ? `${destinations.length} channel destination(s) active · Bot Connector ready`
                   : isInstalled
-                    ? 'Bot installed to Teams · Link a channel destination below to begin routing'
+                    ? 'Bot installed in Teams · Link a channel destination in Channel Routing to begin routing'
                     : isConfigured
-                      ? 'Credentials saved · Install the bot package into target Teams'
-                      : 'Configure your Azure AD App credentials to enable Teams notifications & war rooms'}
+                      ? 'Credentials saved · Download and install the bot package in Teams'
+                      : 'Configure your Azure AD App credentials in the Setup tab below'}
               </p>
             </div>
           </div>
@@ -328,31 +392,24 @@ export default function MicrosoftTeamsIntegrationPage({
         </div>
       </div>
 
-      {/* Tabs navigation */}
-      <Tabs defaultValue="destinations" className="space-y-4">
-        <TabsList className="bg-muted/60 p-1">
-          <TabsTrigger value="destinations" className="text-xs">
-            <Hash className="h-3.5 w-3.5 mr-1.5" />
-            Channel Routing ({destinations.length})
-          </TabsTrigger>
-          <TabsTrigger value="credentials" className="text-xs">
-            <Settings2 className="h-3.5 w-3.5 mr-1.5" />
-            Azure Credentials
-          </TabsTrigger>
-          <TabsTrigger value="manifest" className="text-xs">
-            <Bot className="h-3.5 w-3.5 mr-1.5" />
-            Bot & Manifest
-          </TabsTrigger>
-          <TabsTrigger value="health" className="text-xs">
-            <Activity className="h-3.5 w-3.5 mr-1.5" />
-            Health & Readiness
-          </TabsTrigger>
-        </TabsList>
+      {/* DetailTabs: Sub-page style top tabs */}
+      <DetailTabs tabs={tabItems} defaultTab="setup" layout="grid">
+        {/* SUB-PAGE 1: Setup & Guided Onboarding */}
+        <DetailTabContent value="setup" className="space-y-6">
+          <MicrosoftTeamsSetupWizard
+            config={config}
+            isAdmin={isAdmin}
+            appManifestJson={appManifestJson}
+            installationCount={installationCount}
+            installationPermissions={installationPermissions}
+            destinations={destinations}
+          />
+        </DetailTabContent>
 
-        {/* TAB 1: Channel Routing & Destinations */}
-        <TabsContent value="destinations" className="space-y-4">
+        {/* SUB-PAGE 2: Channel Routing & Destinations */}
+        <DetailTabContent value="destinations" className="space-y-4">
           <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold">Service Destinations</h3>
                 <p className="text-xs text-muted-foreground">
@@ -360,9 +417,20 @@ export default function MicrosoftTeamsIntegrationPage({
                   channels.
                 </p>
               </div>
-              <Badge variant="outline" className="text-[10px]">
-                {destinations.length} mapped
-              </Badge>
+              <div className="flex items-center gap-2">
+                <div className="relative w-full sm:w-56">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Filter destinations…"
+                    value={destinationSearch}
+                    onChange={e => setDestinationSearch(e.target.value)}
+                    className="h-8 pl-8 text-xs"
+                  />
+                </div>
+                <Badge variant="outline" className="text-[10px] shrink-0">
+                  {destinations.length} mapped
+                </Badge>
+              </div>
             </div>
 
             {destinations.length === 0 ? (
@@ -380,9 +448,13 @@ export default function MicrosoftTeamsIntegrationPage({
                   </p>
                 </div>
               </div>
+            ) : filteredDestinations.length === 0 ? (
+              <div className="text-center py-6 text-xs text-muted-foreground">
+                No destinations match &ldquo;{destinationSearch}&rdquo;.
+              </div>
             ) : (
               <div className="space-y-3">
-                {destinations.map(d => (
+                {filteredDestinations.map(d => (
                   <div
                     key={d.id}
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border p-3.5 bg-muted/20 hover:bg-muted/30 transition-colors"
@@ -447,7 +519,7 @@ export default function MicrosoftTeamsIntegrationPage({
 
             <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
               <span>
-                💡 Want to link more services? Manage destinations directly in{' '}
+                Want to link more services? Configure notification destinations directly in{' '}
                 <strong>Service → Notifications</strong>.
               </span>
               <Link
@@ -458,253 +530,73 @@ export default function MicrosoftTeamsIntegrationPage({
               </Link>
             </div>
           </div>
-        </TabsContent>
+        </DetailTabContent>
 
-        {/* TAB 2: Azure AD Credentials */}
-        <TabsContent value="credentials" className="space-y-4">
-          <form
-            onSubmit={onSave}
-            className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5"
-          >
-            <div>
-              <h3 className="text-sm font-semibold">Azure AD App Registration</h3>
-              <p className="text-xs text-muted-foreground">
-                Credentials from your Entra ID App Registration used for Microsoft Graph and Bot
-                Connector authentication.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="mt-clientId" className="text-xs">
-                  Application (Client) ID
-                </Label>
-                <Input
-                  id="mt-clientId"
-                  name="clientId"
-                  placeholder="00000000-0000-0000-0000-000000000000"
-                  defaultValue={config?.clientId ?? ''}
-                  disabled={!isAdmin}
-                  className="font-mono text-xs"
-                  required
-                />
+        {/* SUB-PAGE 3: War Room Operations (with 15-item pagination) */}
+        <DetailTabContent value="war-rooms" className="space-y-4">
+          {warRoomDiagnosticsError ? (
+            <div
+              className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+              role="alert"
+            >
+              <div className="font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" /> War-room diagnostics unavailable
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mt-clientSecret" className="text-xs">
-                  Client Secret
-                </Label>
-                <Input
-                  id="mt-clientSecret"
-                  name="clientSecret"
-                  type="password"
-                  placeholder={config ? '•••••••• (leave blank to keep current)' : 'Client Secret'}
-                  disabled={!isAdmin}
-                  className="font-mono text-xs"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Encrypted at rest using AES-256-GCM. Never logged or exposed.
-                </p>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mt-tenantId" className="text-xs">
-                  Directory (Tenant) ID
-                </Label>
-                <Input
-                  id="mt-tenantId"
-                  name="tenantId"
-                  placeholder="Entra tenant GUID"
-                  defaultValue={config?.tenantId ?? ''}
-                  disabled={!isAdmin}
-                  className="font-mono text-xs"
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="mt-tenantMode" className="text-xs">
-                  Tenant Mode
-                </Label>
-                <select
-                  id="mt-tenantMode"
-                  name="tenantMode"
-                  defaultValue="SINGLE"
-                  disabled={!isAdmin}
-                  className="h-9 w-full rounded-md border bg-background px-3 text-xs"
-                >
-                  <option value="SINGLE">SINGLE (Your Organization Only)</option>
-                </select>
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="mt-defaultMeetingOrganizerUpn" className="text-xs">
-                  Default Online Meeting Organizer (Email / UPN)
-                </Label>
-                <Input
-                  id="mt-defaultMeetingOrganizerUpn"
-                  name="defaultMeetingOrganizerUpn"
-                  placeholder="incident-organizer@yourdomain.com"
-                  defaultValue={config?.defaultMeetingOrganizerUpn ?? ''}
-                  disabled={!isAdmin}
-                  className="text-xs"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Used as the meeting organizer for automated Video Bridge war rooms when an
-                  incident assignee does not have a linked Microsoft identity.
-                </p>
+              <div className="mt-1 text-xs text-amber-800">
+                Operational evidence could not be loaded — health is reported as UNKNOWN.{' '}
+                {warRoomDiagnosticsError}
               </div>
             </div>
+          ) : (
+            <WarRoomOperationsSection
+              snapshots={warRoomSnapshots ?? []}
+              fleetSummary={fleetSummary}
+            />
+          )}
+        </DetailTabContent>
 
-            <div className="space-y-3 pt-2 border-t">
-              <label className="flex items-start gap-3 rounded-lg border p-3.5 text-xs hover:bg-muted/20 transition-colors cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="interactiveEnabled"
-                  defaultChecked={config?.interactiveEnabled ?? false}
-                  disabled={!isAdmin}
-                  className="mt-0.5 rounded border-muted"
-                />
-                <div>
-                  <span className="font-semibold text-foreground block">
-                    Enable Interactive ChatOps Actions
-                  </span>
-                  <span className="text-muted-foreground block mt-0.5">
-                    Allows responders to Acknowledge, Resolve, Add Notes, and Snooze directly from
-                    Teams incident Adaptive Cards.
-                  </span>
-                </div>
-              </label>
-
-              <label className="flex items-start gap-3 rounded-lg border p-3.5 text-xs hover:bg-muted/20 transition-colors cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="warRoomsEnabled"
-                  defaultChecked={config?.warRoomsEnabled ?? false}
-                  disabled={!isAdmin}
-                  className="mt-0.5 rounded border-muted"
-                />
-                <div>
-                  <span className="font-semibold text-foreground block">
-                    Enable Incident War Rooms
-                  </span>
-                  <span className="text-muted-foreground block mt-0.5">
-                    Enables provisioning dedicated collaboration channels and Teams Video Bridges
-                    for incidents.
-                  </span>
-                </div>
-              </label>
-            </div>
-
-            {isAdmin && (
-              <div className="flex justify-end pt-2">
-                <Button type="submit" disabled={saving} className="h-9 text-xs font-semibold px-5">
-                  {saving ? 'Saving…' : 'Save Configuration'}
-                </Button>
-              </div>
-            )}
-          </form>
-        </TabsContent>
-
-        {/* TAB 3: Bot Sideloading & Manifest */}
-        <TabsContent value="manifest" className="space-y-4">
-          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-5">
-            <div>
-              <h3 className="text-sm font-semibold">Teams Bot & App Package</h3>
-              <p className="text-xs text-muted-foreground">
-                Install the OpsKnight app into your Microsoft Teams organization to enable
-                bi-directional bot activities.
-              </p>
-            </div>
-
-            {/* Messaging Endpoint Box */}
-            <div className="rounded-lg border bg-muted/20 p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold">Bot Messaging Endpoint</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => copy(botEndpoint, 'endpoint')}
-                >
-                  {copied === 'endpoint' ? (
-                    <Check className="h-3.5 w-3.5 mr-1" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5 mr-1" />
-                  )}
-                  Copy Endpoint
-                </Button>
-              </div>
-              <div className="font-mono text-xs p-2 rounded bg-background border truncate">
-                {botEndpoint}
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                Enter this URL in Azure Portal under{' '}
-                <span className="font-semibold">
-                  Azure Bot → Configuration → Messaging Endpoint
-                </span>
-                .
-              </p>
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-wrap items-center gap-3">
-              {isConfigured && (
-                <Button asChild variant="default" size="sm" className="h-8 text-xs">
-                  <a href="/api/microsoft-teams/package">
-                    <Download className="h-3.5 w-3.5 mr-1.5" />
-                    Download Teams App (.zip)
-                  </a>
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => copy(appManifestJson, 'manifest')}
-              >
-                {copied === 'manifest' ? (
-                  <Check className="h-3.5 w-3.5 mr-1.5" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5 mr-1.5" />
-                )}
-                Copy manifest.json
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => setShowManifest(!showManifest)}
-              >
-                <FileCode2 className="h-3.5 w-3.5 mr-1.5" />
-                {showManifest ? 'Hide Manifest' : 'View Manifest JSON'}
-              </Button>
-              <a
-                href="https://dev.teams.microsoft.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground ml-auto"
-              >
-                Teams Developer Portal <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-
-            {showManifest && (
-              <pre className="max-h-80 overflow-auto rounded-lg border bg-muted/40 p-3.5 text-[11px] font-mono leading-relaxed">
-                {appManifestJson}
-              </pre>
-            )}
-          </div>
-        </TabsContent>
-
-        {/* TAB 4: Health & Readiness */}
-        <TabsContent value="health" className="space-y-4">
+        {/* SUB-PAGE 4: Health & Permissions */}
+        <DetailTabContent value="health" className="space-y-4">
+          {/* Integration Health Card */}
           <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Delivery Health & Permissions</h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-primary" /> Integration Health Overview
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground font-medium">Readiness:</span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-semibold ${
+                    integrationReadiness === 'HEALTHY'
+                      ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+                      : integrationReadiness === 'UNKNOWN'
+                        ? 'border-blue-300 text-blue-700 bg-blue-50'
+                        : 'border-amber-300 text-amber-700 bg-amber-50'
+                  }`}
+                >
+                  {integrationReadiness}
+                </Badge>
+                <span className="text-[11px] text-muted-foreground font-medium">Fleet:</span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-semibold ${
+                    operationalFleetHealth === 'HEALTHY'
+                      ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+                      : operationalFleetHealth === 'DRIFTED'
+                        ? 'border-violet-300 text-violet-700 bg-violet-50'
+                        : 'border-amber-300 text-amber-700 bg-amber-50'
+                  }`}
+                >
+                  {operationalFleetHealth}
+                </Badge>
+              </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 gap-3 text-xs">
-              <div className="rounded-lg border p-3 bg-muted/20 space-y-1">
-                <span className="text-muted-foreground block text-[11px]">Bot Connector</span>
-                <span className="font-semibold text-foreground flex items-center gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
+                <span className="text-[11px] text-muted-foreground">Bot Connector</span>
+                <div className="font-semibold flex items-center gap-1.5">
                   <span
                     className={`h-2 w-2 rounded-full ${health?.botHealthy ? 'bg-emerald-500' : 'bg-amber-500'}`}
                   />
@@ -712,21 +604,34 @@ export default function MicrosoftTeamsIntegrationPage({
                     ? 'Status Unknown'
                     : health.botHealthy
                       ? 'Healthy & Connected'
-                      : 'Not Installed / Degraded'}
-                </span>
+                      : 'Degraded / Missing'}
+                </div>
               </div>
-              <div className="rounded-lg border p-3 bg-muted/20 space-y-1">
-                <span className="text-muted-foreground block text-[11px]">Graph Permissions</span>
-                <span className="font-semibold text-foreground flex items-center gap-1.5">
-                  <span
-                    className={`h-2 w-2 rounded-full ${health?.permissionsHealthy ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                  />
-                  {health?.permissionsHealthy == null
-                    ? 'Permissions Unknown'
-                    : health.permissionsHealthy
-                      ? 'Consented & Verified'
-                      : 'Missing Consent'}
-                </span>
+
+              <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
+                <span className="text-[11px] text-muted-foreground">Installations</span>
+                <div className="font-semibold text-foreground">
+                  {installationCount} Active Team(s)
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
+                <span className="text-[11px] text-muted-foreground">War Rooms</span>
+                <div className="font-semibold text-foreground">
+                  {totalWarRooms} Total
+                  {warRoomCleanupPending > 0 ? ` (${warRoomCleanupPending} cleanup)` : ''}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
+                <span className="text-[11px] text-muted-foreground">RSC Permissions</span>
+                <div className="font-semibold text-foreground">
+                  {rscState?.unknown
+                    ? 'Unknown'
+                    : rscState?.missing.length === 0
+                      ? 'All Granted'
+                      : `${rscState?.missing.length} Missing`}
+                </div>
               </div>
             </div>
 
@@ -752,35 +657,102 @@ export default function MicrosoftTeamsIntegrationPage({
                 </div>
               </div>
             )}
+          </div>
 
-            {installationPermissions.length > 0 && (
-              <div className="space-y-2 pt-3 border-t">
-                <h4 className="text-xs font-semibold">Installed Teams</h4>
-                {installationPermissions.map(inst => (
-                  <div
-                    key={inst.teamId}
-                    className="flex items-center justify-between p-2.5 rounded-lg border text-xs"
-                  >
-                    <div>
-                      <span className="font-medium block">{inst.teamName ?? 'Team'}</span>
-                      <span className="font-mono text-[10px] text-muted-foreground">
-                        {inst.teamId}
-                      </span>
+          {/* Installations & Permissions List */}
+          <div className="rounded-xl border bg-card p-5 sm:p-6 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Installed Teams & Graph RSC Permissions</h3>
+              <Badge variant="outline" className="text-[10px]">
+                {installationPermissions.length} team(s)
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Per-installation correlation is preserved from Microsoft Graph. Each row shows
+              destination count and last delivery status.
+            </p>
+
+            {installationPermissions.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-2">
+                No active installations yet — complete Step 3 in the Setup tab to deploy the bot to
+                your Team.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {installationPermissions.map(row => {
+                  const delivery = health?.installations.find(i => i.teamId === row.teamId);
+                  const healthyInst = !row.unknown && row.missing.length === 0;
+                  return (
+                    <div
+                      key={row.teamId}
+                      className="flex items-start justify-between gap-3 rounded-lg border p-3 bg-muted/10 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold">{row.teamName ?? row.teamId}</div>
+                        <div className="truncate text-[11px] text-muted-foreground font-mono">
+                          {row.teamId}
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          {row.unknown
+                            ? (row.error ?? 'Permission state unavailable')
+                            : row.missing.length === 0
+                              ? 'All RSC permissions granted'
+                              : `Missing consent for: ${row.missing.join(', ')}`}
+                        </div>
+                        {delivery && (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            {delivery.enabled
+                              ? `${delivery.destinationCount} destination(s)`
+                              : 'Bot removed'}{' '}
+                            {delivery.lastDeliveryAt
+                              ? `· last ${delivery.lastDeliveryStatus} ${new Date(delivery.lastDeliveryAt).toLocaleString()}`
+                              : '· no delivery history'}
+                          </div>
+                        )}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={
+                          healthyInst
+                            ? 'border-emerald-300 text-emerald-700 bg-emerald-50 text-[10px]'
+                            : 'border-amber-300 text-amber-700 bg-amber-50 text-[10px]'
+                        }
+                      >
+                        {healthyInst ? 'Healthy' : row.unknown ? 'Unknown' : 'Consent required'}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="text-[10px]">
-                      {inst.unknown
-                        ? 'Unknown'
-                        : inst.missing.length === 0
-                          ? 'Verified'
-                          : 'Missing Consent'}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
-        </TabsContent>
-      </Tabs>
+
+          {/* Raw Diagnostics Drill-Down (No secrets) */}
+          <details className="rounded-xl border bg-card p-4 shadow-sm text-xs">
+            <summary className="cursor-pointer font-medium text-muted-foreground hover:text-foreground">
+              Drill down — raw diagnostic state (tokens redacted)
+            </summary>
+            <div className="mt-3 space-y-1.5 font-mono text-[11px] bg-muted/40 p-3 rounded-lg break-all">
+              <div>
+                clientId: {config?.clientId ? `${config.clientId.slice(0, 12)}…` : '—'} · tenantId:{' '}
+                {config?.tenantId ?? '—'} · enabled: {String(config?.enabled ?? false)} ·
+                warRoomsEnabled: {String(config?.warRoomsEnabled ?? false)}
+              </div>
+              <div>
+                rscState:{' '}
+                {rscState?.unknown
+                  ? `unknown (${rscState?.error ?? 'pending install'})`
+                  : `missing=[${rscState?.missing?.join(', ') ?? ''}]`}
+              </div>
+              <div>
+                health: botHealthy={String(health?.botHealthy ?? 'unknown')} permissionsHealthy=
+                {String(health?.permissionsHealthy ?? 'unknown')} lastSuccess=
+                {health?.lastSuccessAt ?? '—'} lastError={health?.lastErrorCode ?? '—'}
+              </div>
+            </div>
+          </details>
+        </DetailTabContent>
+      </DetailTabs>
 
       {/* Disconnect Confirmation Alert Dialog */}
       <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
