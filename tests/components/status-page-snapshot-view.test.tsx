@@ -64,7 +64,7 @@ const snapshot: StatusPageSnapshot = {
       description: 'Card payments are delayed.',
       status: 'OPEN',
       urgency: 'HIGH',
-      createdAt: '2026-09-07T09:00:00.000Z',
+      createdAt: new Date().toISOString(),
       service: { name: 'Payments', regions: ['eu-west-1'] },
     },
   ],
