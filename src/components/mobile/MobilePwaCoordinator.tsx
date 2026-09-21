@@ -96,6 +96,7 @@ export default function MobilePwaCoordinator({
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [applyingUpdate, setApplyingUpdate] = useState(false);
+  const applyingUpdateRef = useRef(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const lastSessionHeartbeatAt = useRef(0);
 
@@ -195,10 +196,9 @@ export default function MobilePwaCoordinator({
       };
     }
 
-    const hadPreviousController = Boolean(navigator.serviceWorker.controller);
     let reloading = false;
     const onControllerChange = () => {
-      if (!hadPreviousController) return;
+      if (!applyingUpdateRef.current) return;
       if (reloading) return;
       reloading = true;
       window.location.reload();
@@ -262,15 +262,18 @@ export default function MobilePwaCoordinator({
     if (!waitingWorker || applyingUpdate) return;
     setUpdateError(null);
     try {
+      applyingUpdateRef.current = true;
       waitingWorker.postMessage({ type: 'SKIP_WAITING' });
       void activateWaitingWorker;
       setApplyingUpdate(true);
       setTimeout(() => {
+        applyingUpdateRef.current = false;
         setApplyingUpdate(false);
         setUpdateError('Update activation timed out. Tap Reload to retry.');
       }, 8_000);
     } catch (error) {
       logger.warn('mobile.serviceWorker.activate_failed', { error });
+      applyingUpdateRef.current = false;
       setApplyingUpdate(false);
       setUpdateError('Failed to activate update. Tap Reload to retry.');
     }
