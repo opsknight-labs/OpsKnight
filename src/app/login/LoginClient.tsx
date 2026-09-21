@@ -57,7 +57,7 @@ export default function LoginClient({
   callbackUrl,
   defaultCallbackUrl,
   errorCode,
-  passwordSet: _passwordSet,
+  passwordSet,
   ssoError,
   ssoEnabled,
   ssoProviderType,
@@ -82,6 +82,7 @@ export default function LoginClient({
   const [showPassword, setShowPassword] = useState(false);
   const [isSSOLoading, setIsSSOLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showPasswordSet, setShowPasswordSet] = useState(() => Boolean(passwordSet));
   const [isShaking, setIsShaking] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
@@ -193,6 +194,34 @@ export default function LoginClient({
               : 'The watch never ends. Take your post.'}
           </p>
         </div>
+
+        {/* Password Set Success Alert */}
+        {showPasswordSet && !error && (
+          <div
+            role="status"
+            className="mb-6 p-3 rounded-lg border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/30 dark:bg-emerald-950/20 shadow-xs flex items-start gap-3"
+          >
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 mt-0.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-slate-900 dark:text-white mb-0.5">
+                Password set successfully
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                Your account is active. Please sign in with your new password.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPasswordSet(false)}
+              className="shrink-0 p-0.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Dismiss message"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Global Error Alert */}
         {error && (

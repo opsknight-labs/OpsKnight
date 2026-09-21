@@ -1,12 +1,13 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { AlertCircle, Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { setPassword, type SetPasswordState } from './actions';
 import PasswordStrengthMeter, { isPasswordStrong } from '@/components/auth/PasswordStrengthMeter';
 import Spinner from '@/components/ui/Spinner';
 import { PASSWORD_TRANSPORT_MAX_CODE_UNITS } from '@/lib/passwords';
+import { purgeBrowserAuthCaches } from '@/lib/auth-cache-purge';
 
 function SubmitButton({ canSubmit }: { canSubmit: boolean }) {
   const { pending } = useFormStatus();
@@ -36,9 +37,40 @@ export default function SetPasswordForm({ token }: { token: string }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [state, formAction] = useActionState<SetPasswordState, FormData>(setPassword, {
     error: null,
+    success: false,
   });
   const passwordsMatch = Object.is(password, confirmPassword);
   const canSubmit = isPasswordStrong(password) && passwordsMatch;
+
+  useEffect(() => {
+    if (state.success) {
+      purgeBrowserAuthCaches();
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.assign('/login?password=1');
+    }
+  }, [state.success]);
+
+  if (state.success) {
+    return (
+      <div className="space-y-4" role="status" aria-live="polite">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-center dark:border-emerald-500/20 dark:bg-emerald-500/10">
+          <ShieldCheck className="mx-auto h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+          <h3 className="mt-3 font-['Space_Grotesk',sans-serif] font-semibold text-emerald-800 dark:text-emerald-300">
+            Account activated
+          </h3>
+          <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-200/80">
+            Your password has been set. Redirecting to sign in…
+          </p>
+        </div>
+        <a
+          href="/login?password=1"
+          className="flex w-full items-center justify-center rounded-xl bg-slate-950 py-3 text-sm font-semibold text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white focus-visible:ring-offset-2"
+        >
+          Continue to sign in
+        </a>
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-5">
@@ -56,7 +88,10 @@ export default function SetPasswordForm({ token }: { token: string }) {
       )}
 
       <div className="space-y-1.5">
-        <label htmlFor="invite-password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <label
+          htmlFor="invite-password"
+          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+        >
           New password
         </label>
         <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
@@ -83,11 +118,16 @@ export default function SetPasswordForm({ token }: { token: string }) {
           </button>
         </div>
         <PasswordStrengthMeter password={password} />
-        <p className="text-[11px] text-slate-400">Account-specific password checks are enforced on activation.</p>
+        <p className="text-[11px] text-slate-400">
+          Account-specific password checks are enforced on activation.
+        </p>
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="invite-confirm-password" className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        <label
+          htmlFor="invite-confirm-password"
+          className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+        >
           Confirm password
         </label>
         <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
@@ -106,7 +146,9 @@ export default function SetPasswordForm({ token }: { token: string }) {
           <button
             type="button"
             onClick={() => setShowConfirmPassword(value => !value)}
-            aria-label={showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'}
+            aria-label={
+              showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'
+            }
             className="mr-3 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:hover:text-slate-300 dark:focus-visible:ring-white"
           >
             {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
