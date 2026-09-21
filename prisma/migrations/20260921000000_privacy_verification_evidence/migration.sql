@@ -14,10 +14,12 @@ SET "verificationStatus" = 'VERIFIED',
 WHERE "verifiedAt" IS NOT NULL;
 
 -- Stranded requests must be explicitly verified; never infer verification from status.
+-- BEGIN stranded privacy request repair
 UPDATE "PrivacyRequest"
 SET "status" = 'IDENTITY_VERIFICATION'
 WHERE "status" IN ('IN_REVIEW', 'PROCESSING')
   AND "verifiedAt" IS NULL;
+-- END stranded privacy request repair
 
 ALTER TABLE "PrivacyRequest"
   ADD CONSTRAINT "PrivacyRequest_verifiedById_fkey"

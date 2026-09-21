@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileArchive, Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
-import ResponderCombobox from '@/components/ResponderCombobox';
 import PrivacyRequestDetailDialog from './PrivacyRequestDetailDialog';
 import { PRIVACY_REQUEST_TRANSITIONS } from '@/lib/privacy/state-machine';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -124,6 +123,8 @@ export default function PrivacyRequestsBoard({
   const [createOpen, setCreateOpen] = useState(false);
   const [subjectType, setSubjectType] = useState<'USER' | 'STATUS_SUBSCRIBER'>('USER');
   const [subjectId, setSubjectId] = useState('');
+  const [subjectQuery, setSubjectQuery] = useState('');
+  const [subjectMatches, setSubjectMatches] = useState(subjectUsers);
   const [requestType, setRequestType] = useState<PrivacyRequestType>('ACCESS');
   const [notes, setNotes] = useState('');
   const [rejectDrafts, setRejectDrafts] = useState<Record<string, string>>({});
@@ -132,6 +133,22 @@ export default function PrivacyRequestsBoard({
     setRequests(initialRequests);
     setNextCursor(initialNextCursor);
   }, [initialRequests, initialNextCursor]);
+
+  useEffect(() => {
+    if (subjectType !== 'USER' || subjectQuery.trim().length < 2) {
+      setSubjectMatches(subjectUsers);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void fetch(
+        `/api/compliance/privacy-requests/subjects?search=${encodeURIComponent(subjectQuery.trim())}`,
+        { cache: 'no-store' }
+      )
+        .then(readJson)
+        .then(body => setSubjectMatches((body?.data?.users as RequestUser[]) ?? []));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [subjectQuery, subjectType, subjectUsers]);
 
   const openCount = useMemo(
     () => requests.filter(r => r.status !== 'COMPLETED' && r.status !== 'REJECTED').length,
@@ -272,16 +289,26 @@ export default function PrivacyRequestsBoard({
                   <div className="space-y-2">
                     <Label htmlFor="subjectId">Subject</Label>
                     {subjectType === 'USER' ? (
-                      <ResponderCombobox
-                        users={subjectUsers}
-                        selectedUserId={subjectId || undefined}
-                        onSelect={setSubjectId}
-                        label="Select subject"
-                        placeholder="Search by name or email…"
-                        emptyMessage="No matching users."
-                        className="w-full justify-between"
-                        ariaLabel="Select privacy request subject"
-                      />
+                      <div className="space-y-2">
+                        <Input
+                          value={subjectQuery}
+                          onChange={event => setSubjectQuery(event.target.value)}
+                          placeholder="Search all active users by name or email…"
+                          aria-label="Search privacy request subjects"
+                        />
+                        <Select value={subjectId} onValueChange={setSubjectId}>
+                          <SelectTrigger aria-label="Select privacy request subject">
+                            <SelectValue placeholder="Select subject" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subjectMatches.map(user => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.name || user.email} · {user.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     ) : (
                       <Input
                         id="subjectId"
