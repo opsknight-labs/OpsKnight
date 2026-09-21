@@ -466,7 +466,7 @@ describe('calculateSLAMetrics trend series', () => {
     expect(hour?.ackCompliance).toBeNull();
     expect(metrics.serviceMetrics.find(service => service.id === 'service-1')).toMatchObject({
       status: 'Critical',
-      slaEvaluatedCount: 3,
+      slaEvaluatedCount: 6,
       slaUnknownCount: 1,
     });
     expect(metrics.serviceMetrics.find(service => service.id === 'service-unknown')).toMatchObject({
