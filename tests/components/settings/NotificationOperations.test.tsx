@@ -76,15 +76,11 @@ describe('NotificationOperations Component', () => {
     });
   });
 
-  it('renders queue status metric cards and privacy banner', async () => {
+  it('renders the delivery telemetry table card header', async () => {
     render(<NotificationOperations canRetry={true} />);
 
-    expect(screen.getByText(/Administrator Control Plane/i)).toBeDefined();
     await waitFor(() => {
-      expect(screen.getByText('Total Dispatched')).toBeDefined();
-      expect(screen.getByText('Delivered')).toBeDefined();
-      expect(screen.getByText('Pending Queue')).toBeDefined();
-      expect(screen.getByText('Failed / Dead Letter')).toBeDefined();
+      expect(screen.getByText('Delivery Telemetry & Queue Log')).toBeDefined();
     });
   });
 

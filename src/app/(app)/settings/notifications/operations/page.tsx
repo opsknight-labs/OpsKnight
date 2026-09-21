@@ -1,19 +1,17 @@
 import { redirect } from 'next/navigation';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import NotificationOperations from '@/components/settings/NotificationOperations';
 import { getCurrentUser } from '@/lib/rbac';
 import { Activity, BellRing, Radio } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import NotificationCapacityOverview from '@/components/settings/NotificationCapacityOverview';
-import ProviderCapacitySettings from '@/components/settings/ProviderCapacitySettings';
 import prisma from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { getEffectiveCapacity, getEffectiveWatermarks } from '@/lib/notification-capacity/resolver';
 import { getBulkQueueHealth } from '@/lib/notification-fanout';
+import NotificationOperationsPage from '@/components/settings/notifications/NotificationOperationsPage';
 
-export default async function NotificationOperationsPage() {
+export default async function NotificationOperationsRoute() {
   let user: Awaited<ReturnType<typeof getCurrentUser>>;
   try {
     user = await getCurrentUser();
@@ -24,6 +22,7 @@ export default async function NotificationOperationsPage() {
   if (user.role !== 'ADMIN' && user.role !== 'AUDITOR') {
     redirect('/settings');
   }
+
   const channels = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH', 'SLACK', 'WEBHOOK'] as const;
   const [
     leases,
@@ -62,10 +61,8 @@ export default async function NotificationOperationsPage() {
     }),
     prisma.notificationProvider.findMany({ select: { provider: true, enabled: true } }),
   ]);
+
   // Union inventory: configured providers + stored rows + synthetic channel defaults.
-  // Never hide channels. Stored rows authoritative; actual enabled providers (e.g. ses without
-  // DB row + ENV override) must still appear as EMAIL:ses, not collapsed to EMAIL:default.
-  // WEBHOOK:default / SLACK:default are logical profiles governing per-origin buckets.
   const providerToChannel: Record<string, (typeof channels)[number]> = {
     resend: 'EMAIL',
     sendgrid: 'EMAIL',
@@ -82,7 +79,6 @@ export default async function NotificationOperationsPage() {
       provider: r.provider,
     })),
   ];
-  // Expand from actually configured providers
   for (const rec of configuredProviders) {
     if (!rec.enabled) continue;
     const ch = providerToChannel[rec.provider];
@@ -110,7 +106,6 @@ export default async function NotificationOperationsPage() {
       }
     }
   }
-  // Ensure logical defaults exist even when channel already has a specific provider
   for (const ch of ['SLACK', 'WEBHOOK'] as const) {
     const key = `${ch}:default`;
     if (!seen.has(key)) {
@@ -118,6 +113,7 @@ export default async function NotificationOperationsPage() {
       inventory.push({ channel: ch, provider: 'default' });
     }
   }
+
   const [effectiveCapacities, watermarks, queueHealth] = await Promise.all([
     Promise.all(
       inventory.map(({ channel, provider }) =>
@@ -127,14 +123,30 @@ export default async function NotificationOperationsPage() {
     getEffectiveWatermarks(),
     getBulkQueueHealth(),
   ]);
+
   const controlValue =
     control?.value && typeof control.value === 'object' && !Array.isArray(control.value)
       ? (control.value as Record<string, unknown>)
       : {};
 
+  const capacities = effectiveCapacities.map(c => ({
+    provider: c.provider,
+    channel: c.channel,
+    configuredRatePerSecond: c.configuredRatePerSecond,
+    effectiveRatePerSecond: c.effectiveRatePerSecond,
+    bulkRatePerSecond: c.bulkRatePerSecond,
+    maxInFlight: c.maxInFlight,
+    bulkMaxInFlight: c.bulkMaxInFlight,
+    adaptiveBackpressure: c.adaptiveBackpressure,
+    bulkShare: c.bulkShare,
+    mode: c.mode,
+    source: c.source,
+    revision: c.revision,
+  }));
+
   return (
     <div className="space-y-6">
-      {/* 1. Simple Grey Shaded Hero Banner */}
+      {/* Hero banner — server-rendered, always visible */}
       <DetailHeroBanner
         tag="Delivery Control Plane"
         title="Notification Operations"
@@ -190,21 +202,9 @@ export default async function NotificationOperationsPage() {
         }
       />
 
-      <NotificationCapacityOverview
-        capacities={effectiveCapacities.map(c => ({
-          provider: c.provider,
-          channel: c.channel,
-          configuredRatePerSecond: c.configuredRatePerSecond,
-          effectiveRatePerSecond: c.effectiveRatePerSecond,
-          bulkRatePerSecond: c.bulkRatePerSecond,
-          maxInFlight: c.maxInFlight,
-          bulkMaxInFlight: c.bulkMaxInFlight,
-          adaptiveBackpressure: c.adaptiveBackpressure,
-          bulkShare: c.bulkShare,
-          mode: c.mode,
-          source: c.source,
-          revision: c.revision,
-        }))}
+      {/* Client tab host — all interactive content below */}
+      <NotificationOperationsPage
+        capacities={capacities}
         workerCount={leases}
         campaigns={campaigns}
         initialPaused={controlValue.bulkPaused === true}
@@ -223,43 +223,10 @@ export default async function NotificationOperationsPage() {
               }
             : null
         }
+        subscriptionStates={subscriptionStates}
+        feedbackTypes={feedbackTypes}
+        userRole={user.role as 'ADMIN' | 'AUDITOR'}
       />
-      {user.role === 'ADMIN' ? (
-        <section aria-labelledby="channel-capacity-heading" className="space-y-3">
-          <h2 id="channel-capacity-heading" className="text-sm font-bold tracking-tight">
-            Channel capacity &mdash; Slack &amp; Webhook
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Logical profiles governing per-origin buckets. No credential card required.
-          </p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <ProviderCapacitySettings providerKey="slack" />
-            <ProviderCapacitySettings providerKey="webhook" />
-          </div>
-        </section>
-      ) : null}
-      <section aria-labelledby="deliverability-heading" className="grid gap-3 md:grid-cols-3">
-        <h2 id="deliverability-heading" className="sr-only">
-          Subscriber deliverability
-        </h2>
-        {subscriptionStates.map(item => (
-          <div key={item.state} className="rounded-xl border bg-card p-4">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">
-              {item.state.toLowerCase()}
-            </p>
-            <p className="text-2xl font-bold">{item._count._all}</p>
-          </div>
-        ))}
-        {feedbackTypes.map(item => (
-          <div key={item.eventType} className="rounded-xl border bg-card p-4">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">
-              24h {item.eventType.toLowerCase()}
-            </p>
-            <p className="text-2xl font-bold">{item.count}</p>
-          </div>
-        ))}
-      </section>
-      <NotificationOperations canRetry={user.role === 'ADMIN'} />
     </div>
   );
 }
