@@ -140,6 +140,8 @@ export default function SwipeableIncidentCard({
         <Link
           href={`/m/incidents/${incident.id}`}
           onClick={handleLinkClick}
+          draggable={false}
+          onDragStart={e => e.preventDefault()}
           aria-disabled={isUpdating}
           className="block w-full min-w-0 px-3.5 pb-2.5 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           aria-label={`Incident: ${incident.title}`}
@@ -182,6 +184,8 @@ export default function SwipeableIncidentCard({
             <Link
               href={`/m/incidents/${incident.id}`}
               onClick={handleLinkClick}
+              draggable={false}
+              onDragStart={e => e.preventDefault()}
               className="inline-flex min-h-9 shrink-0 items-center rounded-lg px-2.5 text-[11px] font-semibold text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`View details for ${incident.title}`}
             >

@@ -312,6 +312,8 @@
   width: 100%;
   max-width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: clamp(0.56rem, 2.2vw, 0.65rem);
   line-height: 1.05;
   font-weight: 650;
