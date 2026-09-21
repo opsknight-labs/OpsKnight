@@ -237,7 +237,7 @@ export default async function MobileIncidentsPage(props: {
           }
           size="sm"
           action={
-            <Button asChild size="sm">
+            <Button asChild size="lg" className="h-11 min-h-[44px] rounded-xl px-5">
               <Link href="/m/incidents/create">
                 <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
                 New incident
@@ -246,7 +246,12 @@ export default async function MobileIncidentsPage(props: {
           }
           secondaryAction={
             hasFilters ? (
-              <Button asChild size="sm" variant="outline">
+              <Button
+                asChild
+                size="lg"
+                variant="outline"
+                className="h-11 min-h-[44px] rounded-xl px-4"
+              >
                 <Link href="/m/incidents">Clear filters</Link>
               </Button>
             ) : undefined
@@ -262,12 +267,12 @@ export default async function MobileIncidentsPage(props: {
           className="flex items-center justify-center gap-2 pt-1"
         >
           {page > 1 && (
-            <Button asChild variant="outline" size="sm" className="h-10 rounded-xl">
+            <Button asChild variant="outline" size="lg" className="h-11 min-h-[44px] rounded-xl">
               <Link href={buildPageUrl(page - 1)}>Newer</Link>
             </Button>
           )}
           {page < totalPages && (
-            <Button asChild size="sm" className="h-10 rounded-xl px-5">
+            <Button asChild size="lg" className="h-11 min-h-[44px] rounded-xl px-5">
               <Link href={buildPageUrl(page + 1)}>Load older incidents</Link>
             </Button>
           )}

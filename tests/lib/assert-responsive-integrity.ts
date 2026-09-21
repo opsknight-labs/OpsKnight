@@ -78,14 +78,15 @@ export async function checkResponsiveIntegrity(
       }
 
       const isVisible = (el: Element): boolean => {
-        const style = window.getComputedStyle(el);
-        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
-          return false;
+        let cur: Element | null = el;
+        while (cur && cur !== document.documentElement) {
+          const style = window.getComputedStyle(cur);
+          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+            return false;
+          }
+          if (cur.classList.contains('sr-only')) return false;
+          cur = cur.parentElement;
         }
-        // Screen-reader-only text (Tailwind's `.sr-only`) is intentionally a
-        // 1x1px clipped box with content that overflows it -- that's the whole
-        // point of the pattern, not a rendering bug.
-        if (el.classList.contains('sr-only')) return false;
         const rect = el.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0;
       };

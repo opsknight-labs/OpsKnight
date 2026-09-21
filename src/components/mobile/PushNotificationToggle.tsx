@@ -501,7 +501,7 @@ export default function PushNotificationToggle() {
         // line above; the action slot only needs a control when there is
         // one to take.
         pushState === 'INSTALL_REQUIRED' || pushState === 'PERMISSION_DENIED' ? null : pushState ===
-            'AUTH_REQUIRED' ? (
+          'AUTH_REQUIRED' ? (
           <Button
             type="button"
             size="sm"
@@ -556,8 +556,8 @@ export default function PushNotificationToggle() {
         <Button
           type="button"
           variant="secondary"
-          size="sm"
-          className="min-h-11 w-full gap-2"
+          size="lg"
+          className="h-11 min-h-[44px] w-full gap-2"
           onClick={() => void sendTestPush()}
           disabled={pushState !== 'REGISTERED' || isTesting || loading}
         >
