@@ -22,6 +22,7 @@ export const OPERATIONS_STATUSES = [
   'DELIVERED',
   'FAILED',
   'SKIPPED',
+  'UNKNOWN',
 ] as const satisfies readonly NotificationStatus[];
 export const OPERATIONS_CATEGORIES = [
   'INCIDENT',
@@ -87,12 +88,7 @@ export async function getNotificationOperations(
   const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const cursor = decodeCursor(filters.cursor);
   const query = filters.query?.trim().slice(0, 120);
-  const statusCondition =
-    filters.status === 'SENT' || filters.status === 'DELIVERED'
-      ? { in: ['SENT', 'DELIVERED'] as NotificationStatus[] }
-      : filters.status
-        ? filters.status
-        : undefined;
+  const statusCondition = filters.status;
 
   const baseFilters: Prisma.NotificationWhereInput = {
     ...(filters.channel ? { channel: filters.channel } : {}),
