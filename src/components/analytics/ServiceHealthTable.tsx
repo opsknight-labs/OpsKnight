@@ -159,11 +159,11 @@ export default function ServiceHealthTable({
                 <strong>{service.slaBreaches.toLocaleString()}</strong>
               </div>
               <div>
-                <span>SLA evaluated</span>
+                <span>SLA checks evaluated</span>
                 <strong>{service.slaEvaluatedCount.toLocaleString()}</strong>
               </div>
               <div>
-                <span>SLA unknown</span>
+                <span>Unknown SLA incidents</span>
                 <strong>{service.slaUnknownCount.toLocaleString()}</strong>
               </div>
             </div>
