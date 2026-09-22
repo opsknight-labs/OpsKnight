@@ -110,6 +110,11 @@ export type SLAMetricsFilter = IncidentMetricFilter & {
   includeIncidents?: boolean;
   incidentLimit?: number;
   includeActiveIncidents?: boolean;
+  /**
+   * Ordering for active incident summaries. Defaults to the existing
+   * priority-first ordering. Use `newest` for real-time responder feeds.
+   */
+  activeIncidentOrder?: 'priority' | 'newest';
   // Pagination support for large datasets
   page?: number;
   pageSize?: number;
@@ -1062,7 +1067,10 @@ export async function calculateSLAMetrics(filters: SLAMetricsFilter = {}): Promi
         slaResolveElapsedMs: true,
         slaPauses: { select: { startedAt: true, endedAt: true } },
       },
-      orderBy: [{ urgency: 'desc' }, { createdAt: 'asc' }],
+      orderBy:
+        filters.activeIncidentOrder === 'newest'
+          ? [{ createdAt: 'desc' }, { id: 'desc' }]
+          : [{ urgency: 'desc' }, { createdAt: 'asc' }],
       take: Math.min(filters.incidentLimit || DEFAULT_INCIDENT_DISPLAY_LIMIT, DEFAULT_PAGE_SIZE),
     }),
     prisma.incident.groupBy({
