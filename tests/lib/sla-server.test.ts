@@ -191,6 +191,14 @@ const setupBaseMocks = ({
   if (!prismaMock.sLADefinition) {
     prismaMock.sLADefinition = { findMany: vi.fn() };
   }
+
+  // Some metric queries are conditional on recentIncidents.length. A test with
+  // no recent incidents will not consume queued one-shot responses, so reset
+  // these mocks before seeding the next scenario to prevent cross-test leakage.
+  prismaMock.incidentEvent.findMany.mockReset();
+  prismaMock.incidentNote.groupBy.mockReset();
+  prismaMock.alert.groupBy?.mockReset();
+
   // systemSettings is now in the global mock - just call mockResolvedValue
   prismaMock.systemSettings.findUnique.mockResolvedValue({
     incidentRetentionDays: 30,
