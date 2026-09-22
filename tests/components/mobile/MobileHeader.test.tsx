@@ -15,7 +15,7 @@ vi.mock('next/navigation', () => ({
 describe('MobileHeader action geometry', () => {
   it('renders create and search actions with identical 44x44 button geometry', () => {
     mockPathname = '/m/incidents';
-    render(<MobileHeader systemStatus="ok" />);
+    render(<MobileHeader systemStatus="ok" canCreateIncident />);
 
     const create = screen.getByRole('link', { name: 'Create incident' });
     const search = screen.getByRole('button', { name: 'Search OpsKnight' });
@@ -29,6 +29,14 @@ describe('MobileHeader action geometry', () => {
       expect(action.className).not.toContain('shadow');
       expect(action.className).not.toContain('bg-card');
     }
+  });
+
+  it('hides incident creation from read-only users', () => {
+    mockPathname = '/m/incidents';
+    render(<MobileHeader systemStatus="neutral" canCreateIncident={false} />);
+
+    expect(screen.queryByRole('link', { name: 'Create incident' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /No operational scope/i })).toBeInTheDocument();
   });
 
   it('renders the back action with the same shared geometry on detail routes', () => {

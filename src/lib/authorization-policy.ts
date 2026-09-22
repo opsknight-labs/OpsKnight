@@ -92,7 +92,6 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
     {
       global: CAPABILITIES.INCIDENT_CREATE_ALL,
-      scoped: CAPABILITIES.INCIDENT_CREATE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -107,7 +106,6 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE,
     {
       global: CAPABILITIES.OPERATIONS_MANAGE,
-      scoped: CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -115,7 +113,6 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_ESCALATE,
     {
       global: CAPABILITIES.OPERATIONS_MANAGE,
-      scoped: CAPABILITIES.INCIDENT_ESCALATE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],
@@ -123,7 +120,6 @@ const ACTION_POLICIES = new Map<AuthorizationAction, ActionPolicy>([
     AUTHORIZATION_ACTIONS.INCIDENT_NOTE,
     {
       global: CAPABILITIES.OPERATIONS_MANAGE,
-      scoped: CAPABILITIES.INCIDENT_NOTE_SCOPED,
       apiScope: API_SCOPES.INCIDENTS_WRITE,
     },
   ],

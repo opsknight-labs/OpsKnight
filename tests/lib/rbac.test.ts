@@ -229,11 +229,12 @@ describe('RBAC Functions', () => {
     it('should allow ADMIN to modify incident', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockAdmin.email } });
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockAdmin as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      vi.mocked(prisma.incident.findUnique).mockResolvedValue({ id: incidentId } as never);
 
       expect(await assertCanModifyIncident(incidentId)).toEqual(mockAdmin);
     });
 
-    it('should allow assignee to modify incident', async () => {
+    it('should not allow a USER assignee to modify incident', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockUser.email } });
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
@@ -242,10 +243,11 @@ describe('RBAC Functions', () => {
         service: { team: { members: [] } },
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      expect(await assertCanModifyIncident(incidentId)).toEqual(mockUser);
+      await expect(assertCanModifyIncident(incidentId)).rejects.toThrow('Unauthorized');
+      expect(prisma.incident.findUnique).not.toHaveBeenCalled();
     });
 
-    it('should allow team member to modify incident', async () => {
+    it('should not allow a USER team member to modify incident', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockUser.email } });
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
@@ -254,7 +256,8 @@ describe('RBAC Functions', () => {
         service: { team: { members: [{ userId: mockUser.id }] } },
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      expect(await assertCanModifyIncident(incidentId)).toEqual(mockUser);
+      await expect(assertCanModifyIncident(incidentId)).rejects.toThrow('Unauthorized');
+      expect(prisma.incident.findUnique).not.toHaveBeenCalled();
     });
 
     it('should throw if user has no access to incident', async () => {
@@ -322,7 +325,7 @@ describe('RBAC Functions', () => {
       expect(await assertCanCreateIncidentForService(serviceId)).toEqual(mockResponder);
     });
 
-    it('should allow USER to create incident for their team service', async () => {
+    it('should deny USER creating an incident for their team service', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockUser.email } });
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       vi.mocked(prisma.service.findUnique).mockResolvedValue({
@@ -330,7 +333,10 @@ describe('RBAC Functions', () => {
         teamId: 'team-1',
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      expect(await assertCanCreateIncidentForService(serviceId)).toEqual(mockUser);
+      await expect(assertCanCreateIncidentForService(serviceId)).rejects.toThrow(
+        'Unauthorized. Incident creation requires Responder or Admin access.'
+      );
+      expect(prisma.service.findUnique).not.toHaveBeenCalled();
     });
 
     it('should reject USER from creating incident for non-team service', async () => {
@@ -342,7 +348,7 @@ describe('RBAC Functions', () => {
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       await expect(assertCanCreateIncidentForService(serviceId)).rejects.toThrow(
-        'Unauthorized. You can only create incidents for your team services.'
+        'Unauthorized. Incident creation requires Responder or Admin access.'
       );
     });
 
@@ -355,11 +361,11 @@ describe('RBAC Functions', () => {
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       await expect(assertCanCreateIncidentForService(serviceId)).rejects.toThrow(
-        'Unauthorized. Incident creation access required.'
+        'Unauthorized. Incident creation requires Responder or Admin access.'
       );
     });
 
-    it('should allow USER to acknowledge a visible team incident', async () => {
+    it('should deny USER acknowledging a visible team incident', async () => {
       vi.mocked(getServerSession).mockResolvedValue({ user: { email: mockUser.email } });
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser as any); // eslint-disable-line @typescript-eslint/no-explicit-any
       vi.mocked(prisma.incident.findUnique).mockResolvedValue({
@@ -371,7 +377,10 @@ describe('RBAC Functions', () => {
         service: { teamId: 'team-1' },
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      expect(await assertCanAcknowledgeIncident(incidentId)).toEqual(mockUser);
+      await expect(assertCanAcknowledgeIncident(incidentId)).rejects.toThrow(
+        'Unauthorized. Only Responders and Admins may acknowledge incidents.'
+      );
+      expect(prisma.incident.findUnique).not.toHaveBeenCalled();
     });
 
     it('should reject AUDITOR from adding notes', async () => {
@@ -379,7 +388,7 @@ describe('RBAC Functions', () => {
       vi.mocked(prisma.user.findUnique).mockResolvedValue(mockAuditor as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       await expect(assertCanAddIncidentNote(incidentId)).rejects.toThrow(
-        'Unauthorized. Incident note access required.'
+        'Unauthorized. Only Responders and Admins may add notes to incidents.'
       );
     });
   });

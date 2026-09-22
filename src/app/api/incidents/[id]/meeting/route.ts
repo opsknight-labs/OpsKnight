@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
-import { assertCanViewIncident, assertCanModifyIncident } from '@/lib/rbac';
+import { assertCanViewIncident, assertCanManageIncidentMeeting } from '@/lib/rbac';
 import {
   getIncidentMeeting,
   requestMeetingProvision,
@@ -37,7 +37,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: incidentId } = await context.params;
-    await assertCanModifyIncident(incidentId);
+    await assertCanManageIncidentMeeting(incidentId);
 
     const incident = await prisma.incident.findUnique({
       where: { id: incidentId },

@@ -65,7 +65,10 @@ export default async function MobileLayout({ children }: { children: React.React
                     hidden
                     aria-hidden="true"
                   />
-                  <MobileHeader systemStatus={shell.systemStatus} />
+                  <MobileHeader
+                    systemStatus={shell.systemStatus}
+                    canCreateIncident={shell.accessContext.canOperate}
+                  />
                   <main id="main-content" className="mobile-content">
                     <MobileNetworkBanner />
                     <MobileSwipeNavigator>

@@ -1,14 +1,21 @@
 'use client';
 
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/shadcn/hover-card';
-import { AlertTriangle, ShieldCheck, ArrowRight, AlertCircle, Info } from 'lucide-react';
+import {
+  AlertTriangle,
+  ShieldCheck,
+  ArrowRight,
+  AlertCircle,
+  Info,
+  MinusCircle,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { useOptionalRealtime } from '@/hooks/useRealtime';
 
 type Props = {
   // Optional props for fallback or override
-  tone?: 'ok' | 'danger' | 'warning';
+  tone?: 'neutral' | 'ok' | 'danger' | 'warning';
   label?: string;
   detail?: string;
   criticalCount?: number;
@@ -27,7 +34,7 @@ export default function OperationalStatus({
   const realtime = useOptionalRealtime();
   const realtimeMetrics = realtime?.metrics ?? null;
 
-  const hasLiveStats = realtimeMetrics !== null;
+  const hasLiveStats = realtimeMetrics !== null && initialTone !== 'neutral';
 
   // Use live realtime metrics once available; otherwise use server-rendered initial props
   const critical = realtimeMetrics
@@ -88,7 +95,17 @@ export default function OperationalStatus({
   }
 
   // Dynamic Theme Configuration
-  const theme: Record<'danger' | 'warning' | 'ok', ThemeConfig> = {
+  const theme: Record<'neutral' | 'danger' | 'warning' | 'ok', ThemeConfig> = {
+    neutral: {
+      bg: 'bg-slate-500/10 hover:bg-slate-500/15',
+      border: 'border-slate-500/30',
+      text: 'text-slate-400',
+      dot: 'bg-slate-500',
+      dotBg: 'bg-slate-500',
+      icon: <MinusCircle className="h-4 w-4 text-slate-400" />,
+      title: 'No operational scope',
+      desc: 'Operational health is unavailable until resources are in your scope.',
+    },
     danger: {
       bg: 'bg-rose-500/10 dark:bg-rose-950/40 hover:bg-rose-500/15 dark:hover:bg-rose-950/60',
       border: 'border-rose-500/30 dark:border-rose-500/40',
@@ -130,7 +147,13 @@ export default function OperationalStatus({
     : initialTone || (isDanger ? 'danger' : isWarning ? 'warning' : 'ok');
 
   const currentTheme =
-    currentTone === 'danger' ? theme.danger : currentTone === 'warning' ? theme.warning : theme.ok;
+    currentTone === 'neutral'
+      ? theme.neutral
+      : currentTone === 'danger'
+        ? theme.danger
+        : currentTone === 'warning'
+          ? theme.warning
+          : theme.ok;
 
   const hasInitialProps =
     typeof criticalCountOverride === 'number' ||

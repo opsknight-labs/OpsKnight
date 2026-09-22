@@ -64,7 +64,7 @@ export async function authorizeIncidentEscalation(input: {
   // An actor that cannot be resolved, or is not ACTIVE, is refused by the
   // policy engine below; both are reported the same way.
   if (!actor || !incident) {
-    throw new AuthorizationError(denied, CAPABILITIES.INCIDENT_ESCALATE_SCOPED);
+    throw new AuthorizationError(denied, CAPABILITIES.OPERATIONS_MANAGE);
   }
 
   const decision = authorize({
@@ -130,11 +130,18 @@ export async function requestIncidentEscalation(input: {
 
   // No generation is passed: a person is asking for the incident's *current*
   // escalation to advance, not for a specific historical run to resume.
-  const execution = await executeEscalation(input.incidentId, planned.stepIndex, { generation: planned.generation });
+  const execution = await executeEscalation(input.incidentId, planned.stepIndex, {
+    generation: planned.generation,
+  });
   if (planned.recordId) {
     await prisma.backgroundJob.updateMany({
       where: { id: planned.recordId },
-      data: { payload: { ...planned.payload, result: JSON.parse(JSON.stringify(execution)) } as Prisma.InputJsonObject },
+      data: {
+        payload: {
+          ...planned.payload,
+          result: JSON.parse(JSON.stringify(execution)),
+        } as Prisma.InputJsonObject,
+      },
     });
   }
 
@@ -158,8 +165,13 @@ type ManualEscalationPlan = {
 };
 
 async function planManualEscalation(
-  input: { incidentId: string; actor: ManualEscalationActor; source: ManualEscalationSource; idempotency?: IdempotencyContext },
-  cursor: { generation: number; stepIndex: number },
+  input: {
+    incidentId: string;
+    actor: ManualEscalationActor;
+    source: ManualEscalationSource;
+    idempotency?: IdempotencyContext;
+  },
+  cursor: { generation: number; stepIndex: number }
 ): Promise<ManualEscalationPlan> {
   if (!input.idempotency) {
     return { recordId: null, created: true, ...cursor, payload: {}, result: null };
@@ -170,28 +182,50 @@ async function planManualEscalation(
   const digest = createHash('sha256').update(`${principalId}:${key}`).digest('hex');
   const recordId = `idem:manual-escalation:${digest}`;
   const payload = {
-    task: 'MANUAL_ESCALATION_IDEMPOTENCY', incidentId: input.incidentId,
-    actorId: input.actor.userId, source: input.source, requestId: key, principalId,
-    generation: cursor.generation, stepIndex: cursor.stepIndex,
+    task: 'MANUAL_ESCALATION_IDEMPOTENCY',
+    incidentId: input.incidentId,
+    actorId: input.actor.userId,
+    source: input.source,
+    requestId: key,
+    principalId,
+    generation: cursor.generation,
+    stepIndex: cursor.stepIndex,
   };
   try {
     await prisma.backgroundJob.create({
       data: {
-        id: recordId, type: 'SCHEDULED_TASK', status: 'COMPLETED', scheduledAt: new Date(),
-        completedAt: new Date(), maxAttempts: 1, payload,
+        id: recordId,
+        type: 'SCHEDULED_TASK',
+        status: 'COMPLETED',
+        scheduledAt: new Date(),
+        completedAt: new Date(),
+        maxAttempts: 1,
+        payload,
       },
     });
     return { recordId, created: true, ...cursor, payload, result: null };
   } catch (error) {
-    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
-    const existing = await prisma.backgroundJob.findUnique({ where: { id: recordId }, select: { payload: true } });
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002')
+      throw error;
+    const existing = await prisma.backgroundJob.findUnique({
+      where: { id: recordId },
+      select: { payload: true },
+    });
     const saved = existing?.payload as Record<string, unknown> | null | undefined;
-    if (!saved || saved.incidentId !== input.incidentId || saved.actorId !== input.actor.userId || saved.source !== input.source) {
+    if (
+      !saved ||
+      saved.incidentId !== input.incidentId ||
+      saved.actorId !== input.actor.userId ||
+      saved.source !== input.source
+    ) {
       throw new Error('Escalation idempotency key conflict');
     }
     return {
-      recordId, created: false,
-      generation: Number(saved.generation), stepIndex: Number(saved.stepIndex), payload: saved,
+      recordId,
+      created: false,
+      generation: Number(saved.generation),
+      stepIndex: Number(saved.stepIndex),
+      payload: saved,
       result: (saved.result as EscalationExecutionResult | undefined) ?? null,
     };
   }

@@ -251,58 +251,47 @@ export async function assertCanReadServiceMetrics(opts: {
 }
 
 export async function assertCanCreateIncidentForService(serviceId: string) {
-  const user = await getCurrentUser();
-  const [actor, service] = await Promise.all([
-    resolveUserActor(user.id),
-    prisma.service.findUnique({ where: { id: serviceId }, select: { id: true, teamId: true } }),
-  ]);
-  if (!service) throw appError('SERVICE_NOT_FOUND', 'Service not found', { serviceId });
-  if (!actor) {
-    throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Incident creation access required.', {
-      userId: user.id,
-    });
-  }
-  const decision = authorize({
-    actor,
-    action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
-    resource: { type: 'service', teamId: service.teamId },
+  const user = await assertCapability(
+    CAPABILITIES.INCIDENT_CREATE_ALL,
+    'Unauthorized. Incident creation requires Responder or Admin access.'
+  );
+  const service = await prisma.service.findUnique({
+    where: { id: serviceId },
+    select: { id: true },
   });
-  if (!decision.allowed && decision.reason === 'MISSING_CAPABILITY') {
-    throw appError('AUTHORIZATION_DENIED', 'Unauthorized. Incident creation access required.', {
-      userId: user.id,
-    });
-  }
-  if (!decision.allowed) {
-    throw appError(
-      'INCIDENT_CREATE_SERVICE_ACCESS_DENIED',
-      'Unauthorized. You can only create incidents for your team services.',
-      { serviceId, userId: user.id }
-    );
-  }
+  if (!service) throw appError('SERVICE_NOT_FOUND', 'Service not found', { serviceId });
   return user;
 }
 
 export async function assertCanAcknowledgeIncident(incidentId: string) {
-  const user = await getCurrentUser();
-  return assertIncidentPolicy(
-    user,
-    incidentId,
-    AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE,
-    CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
-    'Unauthorized. Incident acknowledgement access required.'
-  );
+  return assertIncidentOperator(incidentId, 'acknowledge');
 }
 
 export async function assertCanAddIncidentNote(incidentId: string) {
-  const user = await getCurrentUser();
-  return assertIncidentPolicy(
-    user,
-    incidentId,
-    AUTHORIZATION_ACTIONS.INCIDENT_NOTE,
-    CAPABILITIES.INCIDENT_NOTE_SCOPED,
-    'Unauthorized. Incident note access required.'
-  );
+  return assertIncidentOperator(incidentId, 'add notes to');
 }
+
+async function assertIncidentOperator(incidentId: string, operation: string) {
+  const user = await assertCapability(
+    CAPABILITIES.OPERATIONS_MANAGE,
+    `Unauthorized. Only Responders and Admins may ${operation} incidents.`
+  );
+  const incident = await prisma.incident.findUnique({
+    where: { id: incidentId },
+    select: { id: true },
+  });
+  if (!incident) throw appError('INCIDENT_NOT_FOUND', 'Incident not found', { incidentId });
+  return user;
+}
+
+export const assertCanEscalateIncident = (incidentId: string) =>
+  assertIncidentOperator(incidentId, 'escalate');
+export const assertCanResolveIncident = (incidentId: string) =>
+  assertIncidentOperator(incidentId, 'resolve');
+export const assertCanManageIncidentMeeting = (incidentId: string) =>
+  assertIncidentOperator(incidentId, 'manage meetings for');
+export const assertCanManageWarRoom = (incidentId: string) =>
+  assertIncidentOperator(incidentId, 'manage war rooms for');
 
 export async function getUserPermissions() {
   try {
@@ -334,32 +323,7 @@ export async function getUserPermissions() {
 }
 
 export async function assertCanModifyIncident(incidentId: string) {
-  const user = await getCurrentUser();
-  if (hasCapability(user.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE)) return user;
-
-  const incident = await prisma.incident.findUnique({
-    where: { id: incidentId },
-    include: {
-      assignee: true,
-      service: {
-        include: {
-          team: { include: { members: { where: { userId: user.id } } } },
-        },
-      },
-    },
-  });
-
-  if (!incident) {
-    throw appError('INCIDENT_NOT_FOUND', 'Incident not found', { incidentId });
-  }
-  if (incident.assigneeId === user.id) return user;
-  if (incident.service.team && incident.service.team.members.length > 0) return user;
-
-  throw appError(
-    'INCIDENT_MODIFY_DENIED',
-    'Unauthorized. You do not have permission to modify this incident.',
-    { incidentId, userId: user.id }
-  );
+  return assertIncidentOperator(incidentId, 'modify');
 }
 
 export async function assertCanViewIncident(incidentId: string) {

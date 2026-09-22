@@ -14,11 +14,11 @@ import ServicesListTable from '@/components/service/ServicesListTable';
 import ServicesFilters from '@/components/service/ServicesFilters';
 import CreateServiceForm from '@/components/service/CreateServiceForm';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
-import EmptyState from '@/components/ui/EmptyState';
 import { Card, CardContent } from '@/components/ui/shadcn/card';
-import { Server, AlertTriangle, XCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { Server, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/shadcn/alert';
 import { activeIncidentStatuses } from '@/lib/incident-status';
+import { resolveAccessContext } from '@/lib/access-context';
 
 export const revalidate = 0;
 
@@ -104,6 +104,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const serviceAccess = serviceReadWhere(actor);
   const incidentAccess = incidentReadWhere(actor);
   const canCreateService = permissions.isAdminOrResponder;
+  const accessContext = await resolveAccessContext(actor);
 
   const [teams, policies] = await Promise.all([
     prisma.team.findMany({ where: teamReadWhere(actor), orderBy: { name: 'asc' } }),
@@ -152,7 +153,9 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     }
   }
   const selectedWhere: Prisma.ServiceWhereInput =
-    statusConditions.length > 0 ? { AND: [selectedNonStatusWhere, ...statusConditions] } : selectedNonStatusWhere;
+    statusConditions.length > 0
+      ? { AND: [selectedNonStatusWhere, ...statusConditions] }
+      : selectedNonStatusWhere;
   const where: Prisma.ServiceWhereInput = { AND: [serviceAccess, selectedWhere] };
 
   // Build orderBy clause
@@ -202,14 +205,21 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
   const orderedCountSortIds = isIncidentCountSort
     ? countSortServices
         .sort((left, right) => {
-          const difference = (countByServiceId.get(left.id) ?? 0) - (countByServiceId.get(right.id) ?? 0);
-          return (sortBy === 'incidents_desc' ? -difference : difference) || left.name.localeCompare(right.name);
+          const difference =
+            (countByServiceId.get(left.id) ?? 0) - (countByServiceId.get(right.id) ?? 0);
+          return (
+            (sortBy === 'incidents_desc' ? -difference : difference) ||
+            left.name.localeCompare(right.name)
+          );
         })
         .map(service => service.id)
     : [];
   const pageServiceIds = orderedCountSortIds.slice(startIdx, startIdx + ITEMS_PER_PAGE);
   const services = isIncidentCountSort
-    ? await prisma.service.findMany({ where: { id: { in: pageServiceIds } }, select: serviceSelect })
+    ? await prisma.service.findMany({
+        where: { id: { in: pageServiceIds } },
+        select: serviceSelect,
+      })
     : await prisma.service.findMany({
         where,
         skip: startIdx,
@@ -364,6 +374,20 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
         <ServicesListTable
           services={paginatedServices}
           canManageServices={canCreateService}
+          emptyState={
+            accessContext.mode === 'NONE'
+              ? {
+                  title: 'No services are available to your account',
+                  description:
+                    'Your account currently has no team assignment. Ask an administrator for service access.',
+                }
+              : accessContext.mode === 'SCOPED'
+                ? {
+                    title: 'No services in your accessible scope',
+                    description: 'No services match your team scope and active filters.',
+                  }
+                : undefined
+          }
           pagination={{
             currentPage,
             totalPages,

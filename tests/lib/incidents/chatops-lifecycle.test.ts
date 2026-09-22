@@ -74,7 +74,7 @@ describe('ChatOps lifecycle adapter', () => {
     expect(result.changed).toBe(true);
   });
 
-  it('allows scoped USER acknowledgement when the incident is assigned to the actor', async () => {
+  it('denies USER acknowledgement even when the incident is assigned to the actor', async () => {
     mocks.tx.user.findUnique.mockResolvedValue({
       id: 'user-1',
       role: 'USER',
@@ -95,9 +95,9 @@ describe('ChatOps lifecycle adapter', () => {
         command: 'ACKNOWLEDGE',
         actor: { id: 'user-1', name: 'Alice' },
       })
-    ).resolves.toBeDefined();
+    ).rejects.toMatchObject({ status: 403 });
 
-    expect(applyIncidentLifecycleCommand).toHaveBeenCalledTimes(1);
+    expect(applyIncidentLifecycleCommand).not.toHaveBeenCalled();
   });
 
   it('requires manage permission for resolve even when the USER can access the incident', async () => {

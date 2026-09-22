@@ -113,20 +113,11 @@ const AUDITOR_CAPABILITIES = new Set<Capability>([
   CAPABILITIES.COMPLIANCE_EXPORT,
 ]);
 const USER_CAPABILITIES = new Set<Capability>([
-  CAPABILITIES.INCIDENT_CREATE_SCOPED,
-  CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED,
-  // Escalating an incident you are responsible for is the same tier of
-  // authority as acknowledging it: it pages other responders, it does not
-  // change the incident's lifecycle state.
-  CAPABILITIES.INCIDENT_ESCALATE_SCOPED,
-  CAPABILITIES.INCIDENT_NOTE_SCOPED,
   CAPABILITIES.INCIDENT_READ_SCOPED,
   CAPABILITIES.SERVICE_READ_SCOPED,
   CAPABILITIES.METRICS_READ_SCOPED,
   CAPABILITIES.SCHEDULE_READ_SCOPED,
   CAPABILITIES.REPORT_READ,
-  CAPABILITIES.USER_READ_ALL,
-  CAPABILITIES.POLICY_READ_ALL,
 ]);
 
 const ROLE_CAPABILITIES = new Map<AppRole, ReadonlySet<Capability>>([
@@ -162,7 +153,10 @@ export const ROLE_DESCRIPTIONS = new Map<AppRole, string>([
     'AUDITOR',
     'Read-only organization-wide access to incidents, metrics, reports, schedules, and audit evidence.',
   ],
-  ['USER', 'Team-scoped access to assigned operational information.'],
+  [
+    'USER',
+    'Read-only access to incidents and services in your teams, plus incidents assigned to or watched by you.',
+  ],
 ]);
 
 export class AuthorizationError extends AppError {

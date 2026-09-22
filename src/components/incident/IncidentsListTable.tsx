@@ -77,6 +77,7 @@ type IncidentsListTableProps = {
   title?: string;
   showExport?: boolean;
   readOnly?: boolean;
+  emptyState?: { title: string; description: string };
   realtimeFilter?: {
     filter?: string;
     actorId?: string;
@@ -340,6 +341,7 @@ export default function IncidentsListTable({
   title,
   showExport = true,
   readOnly = false,
+  emptyState,
   realtimeFilter = {},
 }: IncidentsListTableProps) {
   const isManageable = !readOnly && canManageIncidents;
@@ -1171,8 +1173,11 @@ export default function IncidentsListTable({
         {displayedIncidents.length === 0 ? (
           <EmptyState
             icon={<AlertTriangle className="h-6 w-6" />}
-            title="No incidents found"
-            description="There are no incidents matching your active filter criteria. Try adjusting or clearing filters to see more results."
+            title={emptyState?.title ?? 'No incidents found'}
+            description={
+              emptyState?.description ??
+              'There are no incidents matching your active filter criteria. Try adjusting or clearing filters to see more results.'
+            }
             action={
               <Button asChild variant="outline" size="sm">
                 <Link href="/incidents">Clear all filters</Link>

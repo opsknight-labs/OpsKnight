@@ -828,6 +828,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             });
             return false;
           }
+          logger.info('[Auth] OIDC role mapping evaluated', {
+            component: 'auth:signIn',
+            event: roleEvaluation.matched
+              ? 'OIDC_ROLE_MAPPING_MATCHED'
+              : 'OIDC_ROLE_MAPPING_DEFAULTED',
+            mappedRole: roleEvaluation.role,
+            reason: roleEvaluation.matched ? 'mapping_match' : 'no_mapping_match',
+          });
 
           let resolution;
           try {

@@ -8,7 +8,7 @@ import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { createIncidentWarRoom, archiveWarRoomChannel } from '@/lib/chatops/war-room';
-import { getUserPermissions, assertCanModifyIncident } from '@/lib/rbac';
+import { getUserPermissions, assertCanManageWarRoom } from '@/lib/rbac';
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     // Authenticated is not sufficient — creating or archiving a war-room is an
     // incident mutation, so require modify rights on this specific incident.
     try {
-      await assertCanModifyIncident(incidentId);
+      await assertCanManageWarRoom(incidentId);
     } catch (error) {
       if (isAppError(error)) return jsonError(error);
       throw error;
