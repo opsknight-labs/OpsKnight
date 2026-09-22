@@ -303,6 +303,33 @@ describe('calculateSLAMetrics trend series', () => {
     expect(deriveServiceSlaStatus(100, 3)).toBe('Critical');
   });
 
+  it('orders active incident summaries newest-first when requested', async () => {
+    setupBaseMocks({
+      activeIncidents: [],
+      recentIncidents: [],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+    prismaMock.incident.findMany.mockClear();
+
+    await calculateSLAMetrics({
+      windowDays: 1,
+      userTimeZone: 'UTC',
+      includeActiveIncidents: true,
+      activeIncidentOrder: 'newest',
+      incidentLimit: 5,
+    });
+
+    expect(prismaMock.incident.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 5,
+      })
+    );
+  });
+
   it('builds hourly trend series for a 1-day window with rate metrics', async () => {
     const recentIncidents = [
       {
