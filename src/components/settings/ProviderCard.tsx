@@ -286,8 +286,22 @@ export default function ProviderCard({
     try {
       const { testNotificationProvider } = await import('@/app/(app)/settings/system/actions');
       const result = await testNotificationProvider(providerConfig.key);
-      setTestStatus('success');
-      toast.success(result.message || `Test message sent via ${providerConfig.name}`);
+      if (result.status === 'DELIVERED') {
+        setTestStatus('success');
+        toast.success(result.message || `Test message sent via ${providerConfig.name}`);
+      } else if (result.status === 'QUEUED') {
+        setTestStatus('idle');
+        toast.info(result.message || `Test message queued via ${providerConfig.name}`);
+      } else if (result.status === 'DEFERRED') {
+        setTestStatus('idle');
+        toast.warning(result.message || `Test delivery deferred by provider`);
+      } else if (result.status === 'UNKNOWN') {
+        setTestStatus('error');
+        toast.warning(result.message || `Test delivery status unconfirmed`);
+      } else {
+        setTestStatus('error');
+        toast.error(result.message || `Test delivery failed for ${providerConfig.name}`);
+      }
     } catch (err) {
       setTestStatus('error');
       toast.error(err instanceof Error ? err.message : 'Test delivery failed');
