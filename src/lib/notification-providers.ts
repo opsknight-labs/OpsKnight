@@ -1,6 +1,13 @@
 import prisma from './prisma';
 import { logger } from './logger';
-import { decryptProviderConfig } from './encrypted-provider-config';
+import {
+  decryptProviderConfig,
+  ProviderDecryptionError,
+  PROVIDER_ERROR_CODES,
+  type ProviderErrorCode,
+} from './encrypted-provider-config';
+
+export { ProviderDecryptionError, PROVIDER_ERROR_CODES, type ProviderErrorCode };
 
 async function getProviderRecords() {
   return new Map(
@@ -21,7 +28,8 @@ function isProviderConfig(config: unknown): config is Record<string, unknown> {
 }
 
 /**
- * Helper to get and decrypt provider config
+ * Helper to get and decrypt provider config.
+ * Fails closed by throwing ProviderDecryptionError on corrupted or un-decryptable credentials.
  */
 async function getDecryptedConfig(
   provider: string,
@@ -33,12 +41,18 @@ async function getDecryptedConfig(
   try {
     return await decryptProviderConfig(provider, rawConfig);
   } catch (error) {
-    logger.error('Failed to decrypt provider config', {
+    logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
       component: 'notification-providers',
       provider,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
-    return rawConfig;
+    if (error instanceof ProviderDecryptionError) {
+      throw error;
+    }
+    throw new ProviderDecryptionError(
+      `PROVIDER_SECRET_DECRYPTION_FAILED: Decryption failed for provider '${provider}'.`,
+      PROVIDER_ERROR_CODES.DECRYPTION_FAILED
+    );
   }
 }
 
@@ -112,14 +126,22 @@ export async function getAllConfiguredEmailProviders(): Promise<EmailConfig[]> {
     // 1. Resend
     const resendProvider = records.get('resend');
     if (resendProvider && resendProvider.enabled && resendProvider.config) {
-      const config = await getDecryptedConfig('resend', resendProvider.config);
-      if (config.apiKey) {
-        providers.push({
-          enabled: true,
+      try {
+        const config = await getDecryptedConfig('resend', resendProvider.config);
+        if (config.apiKey && !String(config.apiKey).startsWith('enc:')) {
+          providers.push({
+            enabled: true,
+            provider: 'resend',
+            apiKey: config.apiKey as string,
+            fromEmail: (config.fromEmail as string) || defaultFromEmail,
+            source: 'resend',
+          });
+        }
+      } catch (error) {
+        logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
+          component: 'notification-providers',
           provider: 'resend',
-          apiKey: config.apiKey as string,
-          fromEmail: (config.fromEmail as string) || defaultFromEmail,
-          source: 'resend',
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -127,14 +149,22 @@ export async function getAllConfiguredEmailProviders(): Promise<EmailConfig[]> {
     // 2. SendGrid
     const sendgridProvider = records.get('sendgrid');
     if (sendgridProvider && sendgridProvider.enabled && sendgridProvider.config) {
-      const config = await getDecryptedConfig('sendgrid', sendgridProvider.config);
-      if (config.apiKey) {
-        providers.push({
-          enabled: true,
+      try {
+        const config = await getDecryptedConfig('sendgrid', sendgridProvider.config);
+        if (config.apiKey && !String(config.apiKey).startsWith('enc:')) {
+          providers.push({
+            enabled: true,
+            provider: 'sendgrid',
+            apiKey: config.apiKey as string,
+            fromEmail: (config.fromEmail as string) || defaultFromEmail,
+            source: 'sendgrid',
+          });
+        }
+      } catch (error) {
+        logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
+          component: 'notification-providers',
           provider: 'sendgrid',
-          apiKey: config.apiKey as string,
-          fromEmail: (config.fromEmail as string) || defaultFromEmail,
-          source: 'sendgrid',
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -142,16 +172,29 @@ export async function getAllConfiguredEmailProviders(): Promise<EmailConfig[]> {
     // 3. Amazon SES
     const sesProvider = records.get('ses');
     if (sesProvider && sesProvider.enabled && sesProvider.config) {
-      const config = await getDecryptedConfig('ses', sesProvider.config);
-      if (config.accessKeyId && config.secretAccessKey) {
-        providers.push({
-          enabled: true,
+      try {
+        const config = await getDecryptedConfig('ses', sesProvider.config);
+        if (
+          config.accessKeyId &&
+          config.secretAccessKey &&
+          !String(config.accessKeyId).startsWith('enc:') &&
+          !String(config.secretAccessKey).startsWith('enc:')
+        ) {
+          providers.push({
+            enabled: true,
+            provider: 'ses',
+            apiKey: config.secretAccessKey as string,
+            accessKeyId: config.accessKeyId as string,
+            fromEmail: (config.fromEmail as string) || defaultFromEmail,
+            source: 'ses',
+            host: (config.region as string) || 'us-east-1',
+          });
+        }
+      } catch (error) {
+        logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
+          component: 'notification-providers',
           provider: 'ses',
-          apiKey: config.secretAccessKey as string,
-          accessKeyId: config.accessKeyId as string,
-          fromEmail: (config.fromEmail as string) || defaultFromEmail,
-          source: 'ses',
-          host: (config.region as string) || 'us-east-1',
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -159,19 +202,32 @@ export async function getAllConfiguredEmailProviders(): Promise<EmailConfig[]> {
     // 4. SMTP
     const smtpProvider = records.get('smtp');
     if (smtpProvider && smtpProvider.enabled && smtpProvider.config) {
-      const config = await getDecryptedConfig('smtp', smtpProvider.config);
-      if (config.host && config.user && config.password) {
-        providers.push({
-          enabled: true,
+      try {
+        const config = await getDecryptedConfig('smtp', smtpProvider.config);
+        if (
+          config.host &&
+          config.user &&
+          config.password &&
+          !String(config.password).startsWith('enc:')
+        ) {
+          providers.push({
+            enabled: true,
+            provider: 'smtp',
+            apiKey: config.password as string,
+            password: config.password as string,
+            fromEmail: (config.fromEmail as string) || defaultFromEmail,
+            source: 'smtp',
+            host: config.host as string,
+            user: config.user as string,
+            port: config.port as string | number,
+            secure: config.secure === true,
+          });
+        }
+      } catch (error) {
+        logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
+          component: 'notification-providers',
           provider: 'smtp',
-          apiKey: config.password as string,
-          password: config.password as string,
-          fromEmail: (config.fromEmail as string) || defaultFromEmail,
-          source: 'smtp',
-          host: config.host as string,
-          user: config.user as string,
-          port: config.port as string | number,
-          secure: config.secure === true,
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -311,7 +367,14 @@ export async function getWhatsAppConfig(): Promise<SMSConfig> {
         config.whatsappEnabled !== undefined
           ? Boolean(config.whatsappEnabled)
           : Boolean(config.whatsappNumber);
-      if (whatsappEnabled && accountSid && authToken && config.whatsappNumber) {
+      if (
+        whatsappEnabled &&
+        accountSid &&
+        authToken &&
+        !String(accountSid).startsWith('enc:') &&
+        !String(authToken).startsWith('enc:') &&
+        config.whatsappNumber
+      ) {
         return {
           enabled: true,
           provider: 'twilio',
@@ -326,7 +389,7 @@ export async function getWhatsAppConfig(): Promise<SMSConfig> {
   } catch (error) {
     logger.error('Failed to load WhatsApp config from database', {
       component: 'notification-providers',
-      error,
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 
@@ -346,17 +409,29 @@ export async function getSMSConfig(): Promise<SMSConfig> {
     });
 
     if (twilioProvider && twilioProvider.enabled && twilioProvider.config) {
-      const config = await getDecryptedConfig('twilio', twilioProvider.config);
-      if (config.accountSid && config.authToken) {
-        return {
-          enabled: true,
-          provider: 'twilio',
-          accountSid: config.accountSid as string,
-          authToken: config.authToken as string,
-          fromNumber: config.fromNumber as string | undefined,
-          whatsappNumber: config.whatsappNumber as string | undefined,
-          whatsappContentSid: config.whatsappContentSid as string | undefined,
-        };
+      try {
+        const config = await getDecryptedConfig('twilio', twilioProvider.config);
+        if (
+          config.accountSid &&
+          config.authToken &&
+          !String(config.accountSid).startsWith('enc:') &&
+          !String(config.authToken).startsWith('enc:')
+        ) {
+          return {
+            enabled: true,
+            provider: 'twilio',
+            accountSid: config.accountSid as string,
+            authToken: config.authToken as string,
+            fromNumber: config.fromNumber as string | undefined,
+            whatsappNumber: config.whatsappNumber as string | undefined,
+            whatsappContentSid: config.whatsappContentSid as string | undefined,
+          };
+        }
+      } catch (error) {
+        logger.error('Failed to load Twilio SMS config due to decryption failure', {
+          component: 'notification-providers',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     }
 
@@ -365,15 +440,27 @@ export async function getSMSConfig(): Promise<SMSConfig> {
     });
 
     if (awsProvider && awsProvider.enabled && awsProvider.config) {
-      const config = await getDecryptedConfig('aws-sns', awsProvider.config);
-      if (config.accessKeyId && config.secretAccessKey) {
-        return {
-          enabled: true,
-          provider: 'aws-sns',
-          region: (config.region as string) || 'us-east-1',
-          accessKeyId: config.accessKeyId as string,
-          secretAccessKey: config.secretAccessKey as string,
-        };
+      try {
+        const config = await getDecryptedConfig('aws-sns', awsProvider.config);
+        if (
+          config.accessKeyId &&
+          config.secretAccessKey &&
+          !String(config.accessKeyId).startsWith('enc:') &&
+          !String(config.secretAccessKey).startsWith('enc:')
+        ) {
+          return {
+            enabled: true,
+            provider: 'aws-sns',
+            region: (config.region as string) || 'us-east-1',
+            accessKeyId: config.accessKeyId as string,
+            secretAccessKey: config.secretAccessKey as string,
+          };
+        }
+      } catch (error) {
+        logger.error('Failed to load AWS SNS SMS config due to decryption failure', {
+          component: 'notification-providers',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     }
   } catch (error) {
@@ -399,18 +486,29 @@ export async function getPushConfig(): Promise<PushConfig> {
     });
 
     if (webPushProvider && webPushProvider.enabled && webPushProvider.config) {
-      const config = await getDecryptedConfig('web-push', webPushProvider.config);
-      if (config.vapidPublicKey && config.vapidPrivateKey) {
-        return {
-          enabled: true,
-          provider: 'web-push',
-          vapidPublicKey: config.vapidPublicKey as string,
-          vapidPrivateKey: config.vapidPrivateKey as string,
-          vapidSubject: config.vapidSubject as string | undefined,
-          vapidKeyHistory: Array.isArray(config.vapidKeyHistory)
-            ? (config.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
-            : [],
-        };
+      try {
+        const config = await getDecryptedConfig('web-push', webPushProvider.config);
+        if (
+          config.vapidPublicKey &&
+          config.vapidPrivateKey &&
+          !String(config.vapidPrivateKey).startsWith('enc:')
+        ) {
+          return {
+            enabled: true,
+            provider: 'web-push',
+            vapidPublicKey: config.vapidPublicKey as string,
+            vapidPrivateKey: config.vapidPrivateKey as string,
+            vapidSubject: config.vapidSubject as string | undefined,
+            vapidKeyHistory: Array.isArray(config.vapidKeyHistory)
+              ? (config.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
+              : [],
+          };
+        }
+      } catch (error) {
+        logger.error('Failed to load Web Push config due to decryption failure', {
+          component: 'notification-providers',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
     }
   } catch (error) {
