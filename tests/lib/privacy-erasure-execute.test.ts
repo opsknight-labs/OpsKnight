@@ -393,7 +393,9 @@ describe('executeErasure', () => {
     await executeErasure(REQUEST_ID, ACTOR);
 
     expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
-      where: { actorId: SUBJECT_ID },
+      where: {
+        OR: [{ actorId: SUBJECT_ID }, { actorEmail: 'alice@example.com' }],
+      },
       data: { actorEmail: null, actorName: null },
     });
     expect(mocks.tx.auditLog.updateMany).toHaveBeenCalledWith({
