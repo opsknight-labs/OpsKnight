@@ -314,6 +314,7 @@ async function sendWithSingleProvider(
         message?: string;
         command?: string;
         response?: string;
+        responseCode?: number;
       };
       if (value.code === 'MODULE_NOT_FOUND' || value.code === 'ERR_MODULE_NOT_FOUND')
         return { success: false, error: 'Nodemailer package not installed' };
@@ -322,6 +323,9 @@ async function sendWithSingleProvider(
         error: [value.message || 'SMTP send error', value.code, value.command, value.response]
           .filter(Boolean)
           .join(' | '),
+        statusCode: value.responseCode,
+        errorCode: value.code,
+        retryAfterMs: value.responseCode === 429 ? 60_000 : undefined,
       };
     }
   }
@@ -491,10 +495,12 @@ export async function sendEmail(
       }
     }
 
-    return {
-      ...lastResult,
-      error: `All configured email providers failed. Last error: ${lastResult.error}`,
-    };
+    return activeConfigs.length > 1
+      ? {
+          ...lastResult,
+          error: `All configured email providers failed. Last error: ${lastResult.error}`,
+        }
+      : lastResult;
   } catch (error: unknown) {
     logger.error('Email send error', { component: 'email', error });
     return { success: false, error: error instanceof Error ? error.message : 'Email send error' };

@@ -237,19 +237,9 @@ export async function sendSMS(options: SMSOptions): Promise<{
         let SNSClient: AwsSnsModule['SNSClient'];
         let PublishCommand: AwsSnsModule['PublishCommand'];
         try {
-          const loadAwsSns = () => {
-            try {
-              return require('@aws-sdk/client-sns'); // eslint-disable-line @typescript-eslint/no-require-imports
-            } catch {
-              return null;
-            }
-          };
-          const awsSns = loadAwsSns();
-          if (!awsSns) {
-            throw new Error('AWS SDK not installed');
-          }
-          SNSClient = awsSns.SNSClient;
-          PublishCommand = awsSns.PublishCommand;
+          const awsSns = await import('@aws-sdk/client-sns');
+          SNSClient = awsSns.SNSClient as unknown as AwsSnsModule['SNSClient'];
+          PublishCommand = awsSns.PublishCommand as unknown as AwsSnsModule['PublishCommand'];
         } catch {
           logger.warn('AWS SDK package not installed', {
             component: 'sms',
