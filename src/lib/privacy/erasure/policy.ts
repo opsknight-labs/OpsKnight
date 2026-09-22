@@ -264,7 +264,7 @@ export const ERASURE_DOMAIN_POLICY: readonly ErasureDomain[] = [
     blocking: false,
     manualReviewRequired: true,
     notes:
-      'userId, recipientDisplay and recipientHash are nulled explicitly. Free-text message bodies, encrypted payloads and any provider-side copies of the notification are not covered.',
+      'userId and recipientDisplay are nulled; recipientId and recipientHash are scrubbed to non-identifying tombstone values to satisfy database target check constraints. Free-text message bodies, encrypted payloads and any provider-side copies of the notification are not covered.',
   },
   {
     id: 'inAppNotifications',

@@ -365,9 +365,21 @@ export async function executeErasure(
         // Structured recipient fields, not just the userId reference — the
         // message body/payload/external provider copy remain out of scope
         // for automated cleanup (see the `notifications` manual-review domain).
+        //
+        // NOTE: Notification_target_check requires:
+        //   ("userId" IS NOT NULL OR ("recipientId" IS NOT NULL AND "recipientHash" IS NOT NULL))
+        // Setting userId=null with recipientHash=null triggers Postgres error 23514 (check_violation).
+        // To safely detach and scrub all PII while satisfying the DB target check constraint,
+        // we null userId & recipientDisplay, and scrub recipientId & recipientHash to
+        // non-identifying tombstone values.
         await tx.notification.updateMany({
-          where: { userId: subjectId },
-          data: { userId: null, recipientDisplay: null, recipientHash: null },
+          where: { OR: [{ userId: subjectId }, { recipientId: subjectId }] },
+          data: {
+            userId: null,
+            recipientId: 'erased',
+            recipientDisplay: null,
+            recipientHash: '0000000000000000000000000000000000000000000000000000000000000000',
+          },
         });
 
         // --- ANONYMIZE: incidents keep every timestamp/SLA field untouched;
