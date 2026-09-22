@@ -191,6 +191,14 @@ const setupBaseMocks = ({
   if (!prismaMock.sLADefinition) {
     prismaMock.sLADefinition = { findMany: vi.fn() };
   }
+
+  // Some metric queries are conditional on recentIncidents.length. A test with
+  // no recent incidents will not consume queued one-shot responses, so reset
+  // these mocks before seeding the next scenario to prevent cross-test leakage.
+  prismaMock.incidentEvent.findMany.mockReset();
+  prismaMock.incidentNote.groupBy.mockReset();
+  prismaMock.alert.groupBy?.mockReset();
+
   // systemSettings is now in the global mock - just call mockResolvedValue
   prismaMock.systemSettings.findUnique.mockResolvedValue({
     incidentRetentionDays: 30,
@@ -301,6 +309,33 @@ describe('calculateSLAMetrics trend series', () => {
     expect(deriveServiceSlaStatus(0, 3)).toBe('Unknown');
     expect(deriveServiceSlaStatus(1, 0)).toBe('Healthy');
     expect(deriveServiceSlaStatus(100, 3)).toBe('Critical');
+  });
+
+  it('orders active incident summaries newest-first when requested', async () => {
+    setupBaseMocks({
+      activeIncidents: [],
+      recentIncidents: [],
+      previousIncidents: [],
+      heatmapIncidents: [],
+      escalationEvents: [],
+    });
+    prismaMock.incident.findMany.mockClear();
+
+    await calculateSLAMetrics({
+      windowDays: 1,
+      userTimeZone: 'UTC',
+      includeActiveIncidents: true,
+      activeIncidentOrder: 'newest',
+      incidentLimit: 5,
+    });
+
+    expect(prismaMock.incident.findMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 5,
+      })
+    );
   });
 
   it('builds hourly trend series for a 1-day window with rate metrics', async () => {
