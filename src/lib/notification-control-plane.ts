@@ -746,12 +746,7 @@ export async function enqueueCentralNotification(
               module.getStatusPageEmailConfig(emailPayload.providerScope!.statusPageId)
             )
             .then(config => config.provider || undefined)
-        : await import('./notification-providers')
-            .then(module => module.getAllConfiguredEmailProviders())
-            .then(
-              configs =>
-                configs.find(config => config.enabled && config.provider)?.provider || undefined
-            );
+        : undefined;
     if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
   } else if (
     (input.payload.kind === 'SMS' || input.payload.kind === 'INCIDENT_SMS') &&
@@ -1975,7 +1970,7 @@ export async function deliverCentralNotification(
               notificationId: candidate.id,
               ordinal,
               outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED',
-              provider: identity.providerKey,
+              provider: (result as { selectedProvider?: string }).selectedProvider || identity.providerKey,
               providerMessageId: result.providerMessageId,
               startedAt,
               finishedAt,
@@ -2031,7 +2026,7 @@ export async function deliverCentralNotification(
         ordinal,
         outcome: 'DEFERRED_NOT_DUE',
         startedAt,
-        provider: identity.providerKey,
+        provider: (result as { selectedProvider?: string }).selectedProvider || identity.providerKey,
         errorCode: result.errorCode,
         errorMessage,
       });
@@ -2065,7 +2060,7 @@ export async function deliverCentralNotification(
         ordinal,
         outcome: 'RATE_LIMITED',
         startedAt,
-        provider: admissionIdentity.providerKey,
+        provider: (result as { selectedProvider?: string }).selectedProvider || admissionIdentity.providerKey,
         errorCode: result.errorCode ?? (result.statusCode ? String(result.statusCode) : undefined),
         errorMessage,
       });
@@ -2093,7 +2088,7 @@ export async function deliverCentralNotification(
       ordinal,
       outcome: permanent || exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
       startedAt,
-      provider: identity.providerKey,
+      provider: (result as { selectedProvider?: string }).selectedProvider || identity.providerKey,
       errorMessage,
       errorCode: result.errorCode,
     });
