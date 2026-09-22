@@ -8,7 +8,9 @@ import {
   assertResponderOrAbove,
   assertCanCreateIncidentForService,
   assertCanAddIncidentNote,
+  assertCanViewIncident,
 } from '@/lib/rbac';
+import { CAPABILITIES, hasCapability, type AppRole } from '@/lib/authorization';
 import { AppError } from '@/lib/errors';
 import { requireOperationalUser } from '@/lib/users/operational-eligibility';
 import {
@@ -379,8 +381,21 @@ export async function reassignIncident(incidentId: string, assigneeId: string, t
 }
 
 export async function addWatcher(incidentId: string, userId: string, role: string) {
-  await assertResponderOrAbove();
   if (!userId) return;
+  const currentUser = await getCurrentUser();
+  const canManage = hasCapability(currentUser.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
+  const watcherRole = role || 'FOLLOWER';
+
+  if (!canManage) {
+    await assertCanViewIncident(incidentId);
+    if (userId !== currentUser.id || watcherRole !== 'FOLLOWER') {
+      throw new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'You may only subscribe yourself as a follower.',
+        details: { incidentId, requestedUserId: userId, requestedRole: watcherRole },
+      });
+    }
+  }
 
   await prisma.$transaction(async tx => {
     await tx.incidentWatcher.upsert({
@@ -391,12 +406,12 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
         },
       },
       update: {
-        role: role || 'FOLLOWER',
+        role: watcherRole,
       },
       create: {
         incidentId,
         userId,
-        role: role || 'FOLLOWER',
+        role: watcherRole,
       },
     });
 
@@ -404,7 +419,7 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
       data: {
         incidentId,
         type: 'LEGACY_OTHER',
-        message: `Watcher added (${role || 'FOLLOWER'})`,
+        message: `Watcher added (${watcherRole})`,
       },
     });
   });
@@ -413,10 +428,36 @@ export async function addWatcher(incidentId: string, userId: string, role: strin
 }
 
 export async function removeWatcher(incidentId: string, watcherId: string) {
-  await assertResponderOrAbove();
+  const currentUser = await getCurrentUser();
+  const canManage = hasCapability(currentUser.role as AppRole, CAPABILITIES.OPERATIONS_MANAGE);
+  if (!canManage) await assertCanViewIncident(incidentId);
+
   await prisma.$transaction(async tx => {
-    const removed = await tx.incidentWatcher.deleteMany({
+    const watcher = await tx.incidentWatcher.findFirst({
       where: { id: watcherId, incidentId },
+      select: { userId: true },
+    });
+    if (!watcher) {
+      throw new AppError({
+        code: 'RESOURCE_NOT_FOUND',
+        userMessage: LEGACY_NOT_FOUND_MESSAGE,
+        details: { resource: 'incidentWatcher', incidentId, watcherId },
+      });
+    }
+    if (!canManage && watcher.userId !== currentUser.id) {
+      throw new AppError({
+        code: 'AUTHORIZATION_DENIED',
+        userMessage: 'You may only unsubscribe yourself.',
+        details: { incidentId, watcherId },
+      });
+    }
+
+    const removed = await tx.incidentWatcher.deleteMany({
+      where: {
+        id: watcherId,
+        incidentId,
+        ...(!canManage ? { userId: currentUser.id } : {}),
+      },
     });
     if (removed.count !== 1) {
       throw new AppError({
