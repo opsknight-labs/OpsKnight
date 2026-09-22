@@ -239,7 +239,13 @@ export async function discoverSubjectErasureData(
     prisma.inAppNotification.count({ where: { userId: subjectId } }),
     user.email
       ? prisma.auditLog.count({
-          where: { OR: [{ actorId: subjectId }, { targetEmail: user.email.toLowerCase() }] },
+          where: {
+            OR: [
+              { actorId: subjectId },
+              { actorEmail: user.email.toLowerCase() },
+              { targetEmail: user.email.toLowerCase() },
+            ],
+          },
         })
       : prisma.auditLog.count({ where: { actorId: subjectId } }),
     prisma.oidcConfig.count({ where: { updatedBy: subjectId } }),
