@@ -290,10 +290,13 @@ export async function executeErasure(
 
         // --- ANONYMIZE: scrub the immutable audit-log PII snapshot in place.
         // actorId itself is left alone here; it is SetNull automatically when
-        // the User row is deleted below. This must run before that delete so
-        // the actorId = subjectId predicate below still matches.
+        // the User row is deleted below. We match by both actorId and actorEmail
+        // because auth and session events (LOGIN_SUCCESS, SESSION_HEARTBEAT, etc.)
+        // record actorEmail while actorId is null.
         await tx.auditLog.updateMany({
-          where: { actorId: subjectId },
+          where: {
+            OR: [{ actorId: subjectId }, ...(subjectEmail ? [{ actorEmail: subjectEmail }] : [])],
+          },
           data: { actorEmail: null, actorName: null },
         });
         if (subjectEmail) {
