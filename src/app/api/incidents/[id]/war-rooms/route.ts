@@ -3,7 +3,7 @@ import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { AppError, isAppError } from '@/lib/errors';
-import { assertCanViewIncident, assertCanModifyIncident } from '@/lib/rbac';
+import { assertCanViewIncident, assertCanManageWarRoom } from '@/lib/rbac';
 import { requestSlackWarRoom } from '@/lib/war-room/providers/slack/provision';
 import { requestMicrosoftTeamsWarRoom } from '@/lib/war-room/providers/microsoft-teams/provision';
 import {
@@ -65,7 +65,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const { id: incidentId } = await context.params;
-    await assertCanModifyIncident(incidentId);
+    await assertCanManageWarRoom(incidentId);
 
     let body: Record<string, unknown> | null = null;
     try {

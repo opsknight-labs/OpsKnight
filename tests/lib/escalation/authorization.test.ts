@@ -76,17 +76,17 @@ describe('authorizeIncidentEscalation', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('allows the incident’s assignee', async () => {
+  it('does not grant escalation authority to the incident assignee', async () => {
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(
       incidentResource({ assigneeId: 'user-1' }) as never
     );
 
     await expect(
       authorizeIncidentEscalation({ actorId: 'user-1', incidentId: 'inc-1' })
-    ).resolves.toBeUndefined();
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
-  it('allows a member of the service’s team', async () => {
+  it('does not grant escalation authority to a service team member', async () => {
     mocks.resolveUserActor.mockResolvedValue(actor({ teamIds: ['team-1'] }));
     vi.mocked(prisma.incident.findUnique).mockResolvedValue(
       incidentResource({ service: { teamId: 'team-1' } }) as never
@@ -94,7 +94,7 @@ describe('authorizeIncidentEscalation', () => {
 
     await expect(
       authorizeIncidentEscalation({ actorId: 'user-1', incidentId: 'inc-1' })
-    ).resolves.toBeUndefined();
+    ).rejects.toBeInstanceOf(AuthorizationError);
   });
 
   it('refuses an unrelated user', async () => {
@@ -184,18 +184,35 @@ describe('requestIncidentEscalation', () => {
     mocks.resolveUserActor.mockResolvedValue(actor({ role: 'RESPONDER' }));
     vi.mocked(prisma.incident.findUnique)
       .mockResolvedValueOnce(incidentResource() as never)
-      .mockResolvedValueOnce({ status: 'OPEN', escalationGeneration: 4, currentEscalationStep: 2 } as never)
+      .mockResolvedValueOnce({
+        status: 'OPEN',
+        escalationGeneration: 4,
+        currentEscalationStep: 2,
+      } as never)
       .mockResolvedValueOnce(incidentResource() as never)
-      .mockResolvedValueOnce({ status: 'OPEN', escalationGeneration: 4, currentEscalationStep: 3 } as never);
+      .mockResolvedValueOnce({
+        status: 'OPEN',
+        escalationGeneration: 4,
+        currentEscalationStep: 3,
+      } as never);
     const { Prisma } = await import('@prisma/client');
-    const duplicate = new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: '5.22.0' });
+    const duplicate = new Prisma.PrismaClientKnownRequestError('duplicate', {
+      code: 'P2002',
+      clientVersion: '5.22.0',
+    });
     vi.mocked(prisma.backgroundJob.create)
       .mockResolvedValueOnce({} as never)
       .mockRejectedValueOnce(duplicate);
     vi.mocked(prisma.backgroundJob.findUnique).mockResolvedValueOnce({
       payload: {
-        task: 'MANUAL_ESCALATION_IDEMPOTENCY', incidentId: 'inc-1', actorId: 'user-1', source: 'SLACK',
-        requestId: 'intent-1', principalId: 'chatops:user-1', generation: 4, stepIndex: 2,
+        task: 'MANUAL_ESCALATION_IDEMPOTENCY',
+        incidentId: 'inc-1',
+        actorId: 'user-1',
+        source: 'SLACK',
+        requestId: 'intent-1',
+        principalId: 'chatops:user-1',
+        generation: 4,
+        stepIndex: 2,
       },
     } as never);
     const input = { ...request, idempotency: { key: 'intent-1', principalId: 'chatops:user-1' } };

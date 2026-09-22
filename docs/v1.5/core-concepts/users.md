@@ -10,12 +10,12 @@ User accounts identify responders, administrators, observers, schedule participa
 
 ## Application roles
 
-| Role | Intended access |
-| --- | --- |
-| **User** | Standard signed-in access to permitted dashboards and operational records. Some server-side resource checks also allow assigned users or owning-team members, but incident management controls are reserved for appropriate responder/admin roles. |
-| **Auditor** | Read-only organization-wide access to incidents, services, schedules, reports, metrics, and audit evidence. Cannot change operational resources or workspace settings. |
-| **Responder** | Create and manage incidents, services, teams, schedules, integrations, and other response workflows. Cannot perform Admin-only workspace governance. |
-| **Admin** | Full workspace administration, including users, policy administration, providers, security configuration, and destructive account/service operations. |
+| Role          | Intended access                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **User**      | Scoped read-only access to incidents, services, metrics, and schedules granted through team membership, direct assignment, or watching. Cannot change operational resources. |
+| **Auditor**   | Read-only organization-wide access to incidents, services, schedules, reports, metrics, and audit evidence. Cannot change operational resources or workspace settings.       |
+| **Responder** | Create and manage incidents, services, teams, schedules, integrations, and other response workflows. Cannot perform Admin-only workspace governance.                         |
+| **Admin**     | Full workspace administration, including users, policy administration, providers, security configuration, and destructive account/service operations.                        |
 
 Team **Owner**, **Admin**, and **Member** are separate team-scoped roles. See [Teams](teams.md).
 
@@ -25,10 +25,10 @@ OpsKnight v1.5 also tracks the source of an application role so manually managed
 
 ## Account statuses
 
-| Status | Meaning |
-| --- | --- |
-| **Invited** | The account exists and needs invitation/password setup or a supported external-identity activation flow. |
-| **Active** | The account can authenticate through its permitted credential or linked identity. |
+| Status       | Meaning                                                                                                                |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| **Invited**  | The account exists and needs invitation/password setup or a supported external-identity activation flow.               |
+| **Active**   | The account can authenticate through its permitted credential or linked identity.                                      |
 | **Disabled** | Sign-in and response participation are unavailable until the account is reactivated through an allowed lifecycle path. |
 
 An Admin can reactivate a disabled user or generate a fresh invite. OIDC can create/link users according to the configured provider policy, and SCIM can provision/deprovision lifecycle-managed users. Review [Authentication](../administration/authentication.md) and [SCIM Provisioning](../security/scim-provisioning.md) before enabling automatic identity management.

@@ -8,6 +8,7 @@ import {
   getRequestActorContext,
   type AuthenticatedRequestActorContext,
 } from '@/lib/request-actor-context';
+import { resolveAccessContext, type AccessContext } from '@/lib/access-context';
 
 export type AppShellContext = {
   user: {
@@ -33,7 +34,8 @@ export type AppShellContext = {
     isDefault: boolean;
   }>;
   isStatusPageAdmin: boolean;
-  systemStatus: 'ok' | 'warning' | 'danger';
+  accessContext: AccessContext;
+  systemStatus: 'neutral' | 'ok' | 'warning' | 'danger';
   statusLabel: string;
   statusDetail: string;
 };
@@ -45,7 +47,7 @@ export async function getAppShellContext(
   const context = requestContext ?? (await getRequestActorContext());
   if (!context) return null;
 
-  const [urgencyCounts, statusPages] = await Promise.all([
+  const [urgencyCounts, statusPages, accessContext] = await Promise.all([
     prisma.incident.groupBy({
       by: ['urgency'],
       where: {
@@ -58,6 +60,7 @@ export async function getAppShellContext(
       select: { id: true, name: true, slug: true, isDefault: true },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     }),
+    resolveAccessContext(context.actor),
   ]);
 
   let high = 0;
@@ -74,15 +77,24 @@ export async function getAppShellContext(
   let statusLabel = 'Green Corridor';
   let statusDetail = 'All systems fully operational';
 
-  if (high > 0) {
+  if (accessContext.mode === 'NONE') {
+    systemStatus = 'neutral';
+    statusLabel = 'No operational scope';
+    statusDetail = 'Join a team or receive an incident assignment to see operational status';
+  } else if (accessContext.mode === 'SCOPED') {
+    statusLabel = 'Your scope is clear';
+    statusDetail = 'No active incidents in your operational scope';
+  }
+
+  if (accessContext.mode !== 'NONE' && high > 0) {
     systemStatus = 'danger';
     statusLabel = 'Red Alert';
     statusDetail = `${high} critical incident${high === 1 ? '' : 's'} active`;
-  } else if (medium > 0) {
+  } else if (accessContext.mode !== 'NONE' && medium > 0) {
     systemStatus = 'warning';
     statusLabel = 'Yellow Alert';
     statusDetail = `${medium} warning sign${medium === 1 ? '' : 's'} detected`;
-  } else if (low > 0) {
+  } else if (accessContext.mode !== 'NONE' && low > 0) {
     statusLabel = 'Systems Normal';
     statusDetail = `${low} low urgency item${low === 1 ? '' : 's'}`;
   }
@@ -101,6 +113,7 @@ export async function getAppShellContext(
     incidentCounts: { high, medium, low, active },
     statusPages,
     isStatusPageAdmin: hasCapability(context.actor.role, CAPABILITIES.ADMIN_MANAGE),
+    accessContext,
     systemStatus,
     statusLabel,
     statusDetail,

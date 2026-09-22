@@ -82,15 +82,15 @@ describe('authorization policy matrix', () => {
   it.each([
     ['acknowledge', AUTHORIZATION_ACTIONS.INCIDENT_ACKNOWLEDGE],
     ['add a note to', AUTHORIZATION_ACTIONS.INCIDENT_NOTE],
-  ])(
-    'allows a scoped User to %s a visible incident but keeps Auditor read-only',
-    (_name, action) => {
-      expect(authorize({ actor: actor(), action, resource: incident() }).allowed).toBe(true);
-      expect(
-        authorize({ actor: actor({ role: 'AUDITOR' }), action, resource: incident() })
-      ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
-    }
-  );
+  ])('keeps User and Auditor read-only when attempting to %s an incident', (_name, action) => {
+    expect(authorize({ actor: actor(), action, resource: incident() })).toMatchObject({
+      allowed: false,
+      reason: 'MISSING_CAPABILITY',
+    });
+    expect(
+      authorize({ actor: actor({ role: 'AUDITOR' }), action, resource: incident() })
+    ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
+  });
 
   it('requires API scope and user permission together', () => {
     const apiActor = actor({
@@ -130,15 +130,15 @@ describe('authorization policy matrix', () => {
     ).toMatchObject({ allowed: false, reason: 'ACTOR_INACTIVE' });
   });
 
-  it('allows scoped creation only for an owned service team', () => {
+  it('denies scoped incident creation even for an owned service team', () => {
     const apiActor = actor({ apiKey: { id: 'key-1', scopes: ['incidents:write'] } });
     expect(
       authorize({
         actor: apiActor,
         action: AUTHORIZATION_ACTIONS.INCIDENT_CREATE,
         resource: { type: 'service', teamId: 'team-1' },
-      }).allowed
-    ).toBe(true);
+      })
+    ).toMatchObject({ allowed: false, reason: 'MISSING_CAPABILITY' });
     expect(
       authorize({
         actor: apiActor,

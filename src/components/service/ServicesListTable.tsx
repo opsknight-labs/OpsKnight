@@ -10,7 +10,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/shadcn/dropdown-menu';
 import {
@@ -43,11 +42,10 @@ export type ServiceListItem = {
   _count?: { incidents: number };
 };
 
-import Pagination from './Pagination';
-
 type ServicesListTableProps = {
   services: ServiceListItem[];
   canManageServices: boolean;
+  emptyState?: { title: string; description: string };
   pagination?: {
     currentPage: number;
     totalPages: number;
@@ -99,9 +97,10 @@ export default function ServicesListTable({
   services,
   canManageServices,
   pagination,
+  emptyState,
 }: ServicesListTableProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [navigatingId, setNavigatingId] = useState<string | null>(null);
 
   const totalItems = pagination?.totalItems ?? services.length;
@@ -150,8 +149,11 @@ export default function ServicesListTable({
         {services.length === 0 ? (
           <EmptyState
             icon={<Server className="h-6 w-6 text-muted-foreground" />}
-            title="No services found"
-            description="Try adjusting your search query or filters to find services."
+            title={emptyState?.title ?? 'No services found'}
+            description={
+              emptyState?.description ??
+              'Try adjusting your search query or filters to find services.'
+            }
             size="md"
           />
         ) : (

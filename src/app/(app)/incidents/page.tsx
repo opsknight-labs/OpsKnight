@@ -20,6 +20,7 @@ import {
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import { AlertTriangle, User, AlertCircle, CheckCircle2, Clock, ShieldOff } from 'lucide-react';
 import { RealtimeProvider } from '@/hooks/useRealtime';
+import { resolveAccessContext } from '@/lib/access-context';
 
 export const revalidate = 0;
 
@@ -71,6 +72,7 @@ export default async function IncidentsPage({
   );
 
   const userTeamIds = [...actor.teamIds];
+  const accessContext = await resolveAccessContext(actor);
 
   const [allTeams, allServices] = await Promise.all([
     prisma.team.findMany({
@@ -272,6 +274,21 @@ export default async function IncidentsPage({
             incidents={incidents}
             users={users}
             canManageIncidents={permissions.isResponderOrAbove}
+            emptyState={
+              accessContext.mode === 'NONE'
+                ? {
+                    title: 'No operational access assigned',
+                    description:
+                      'You are not currently assigned to a team, incident, or service scope. Ask an administrator for access.',
+                  }
+                : accessContext.mode === 'SCOPED'
+                  ? {
+                      title: 'No incidents in your accessible scope',
+                      description:
+                        'There are no incidents matching your teams, assignments, watches, and active filters.',
+                    }
+                  : undefined
+            }
             pagination={{
               currentPage,
               totalPages,

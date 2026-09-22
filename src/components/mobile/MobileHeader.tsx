@@ -2,7 +2,14 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, CircleAlert, CircleCheck, Plus, TriangleAlert } from 'lucide-react';
+import {
+  ArrowLeft,
+  CircleAlert,
+  CircleCheck,
+  MinusCircle,
+  Plus,
+  TriangleAlert,
+} from 'lucide-react';
 import MobileHeaderAction from '@/components/mobile/MobileHeaderAction';
 import MobileQuickSwitcher from '@/components/mobile/MobileQuickSwitcher';
 
@@ -46,7 +53,8 @@ const DETAIL_ROUTES = [
 ] as const;
 
 type MobileHeaderProps = {
-  systemStatus?: 'ok' | 'warning' | 'danger';
+  systemStatus?: 'neutral' | 'ok' | 'warning' | 'danger';
+  canCreateIncident?: boolean;
 };
 
 function routeContext(pathname: string) {
@@ -59,15 +67,20 @@ function routeContext(pathname: string) {
   return { home: false, title: getListTitle(pathname) } as const;
 }
 
-export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps) {
+export default function MobileHeader({
+  systemStatus = 'neutral',
+  canCreateIncident = false,
+}: MobileHeaderProps) {
   const pathname = usePathname() || '/m';
   const route = routeContext(pathname);
   const status =
-    systemStatus === 'danger'
-      ? { label: 'Critical issues', Icon: CircleAlert }
-      : systemStatus === 'warning'
-        ? { label: 'Degraded performance', Icon: TriangleAlert }
-        : { label: 'All systems operational', Icon: CircleCheck };
+    systemStatus === 'neutral'
+      ? { label: 'No operational scope', Icon: MinusCircle }
+      : systemStatus === 'danger'
+        ? { label: 'Critical issues', Icon: CircleAlert }
+        : systemStatus === 'warning'
+          ? { label: 'Degraded performance', Icon: TriangleAlert }
+          : { label: 'All systems operational', Icon: CircleCheck };
   const StatusIcon = status.Icon;
 
   return (
@@ -93,7 +106,7 @@ export default function MobileHeader({ systemStatus = 'ok' }: MobileHeaderProps)
       </div>
 
       <div className="mobile-header-actions">
-        {pathname === '/m/incidents' && (
+        {pathname === '/m/incidents' && canCreateIncident && (
           <MobileHeaderAction
             href="/m/incidents/create"
             icon={<Plus className="h-5 w-5" aria-hidden="true" />}

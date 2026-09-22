@@ -18,6 +18,8 @@ import {
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import AnalyticsRefreshButton from '@/components/analytics/AnalyticsRefreshButton';
 import { BarChart3, Download } from 'lucide-react';
+import { resolveAccessContext } from '@/lib/access-context';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 
 import './analytics-v2.css';
 
@@ -53,6 +55,7 @@ export default async function AnalyticsV2Page({
     ? await prisma.user.findUnique({ where: { email }, select: { timeZone: true } })
     : null;
   const userTimeZone = getUserTimeZone(user ?? undefined);
+  const accessContext = await resolveAccessContext(actor);
 
   const params = await searchParams;
   const teamId =
@@ -158,16 +161,33 @@ export default async function AnalyticsV2Page({
 
             <AnalyticsRefreshButton />
 
-            <a
-              href={exportUrl}
-              className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white shadow-xs transition-all text-xs font-semibold"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export
-            </a>
+            {hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT) && (
+              <a
+                href={exportUrl}
+                className="inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-slate-700/80 text-slate-200 hover:text-white shadow-xs transition-all text-xs font-semibold"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export
+              </a>
+            )}
           </div>
         }
       />
+
+      {accessContext.mode !== 'GLOBAL' && (
+        <div className="rounded-lg border border-slate-700/80 bg-slate-900/70 px-4 py-3 text-sm text-slate-300">
+          <strong className="text-white">
+            {accessContext.mode === 'NONE'
+              ? 'No data in your access scope'
+              : 'Analytics — Your Scope'}
+          </strong>
+          <span className="ml-2">
+            {accessContext.mode === 'NONE'
+              ? 'Ask an administrator to assign a team or operational resource.'
+              : `Based on ${accessContext.serviceCount} accessible service${accessContext.serviceCount === 1 ? '' : 's'}.`}
+          </span>
+        </div>
+      )}
 
       {/* Filter bar — fast queries, renders before heavy metrics */}
       <AnalyticsFilters

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { forwardRef, type ReactNode, type Ref } from 'react';
 import { cn } from '@/lib/utils';
 
-type MobileHeaderActionTone = 'default' | 'ok' | 'warning' | 'danger';
+type MobileHeaderActionTone = 'default' | 'neutral' | 'ok' | 'warning' | 'danger';
 
 type MobileHeaderActionProps = {
   icon: ReactNode;

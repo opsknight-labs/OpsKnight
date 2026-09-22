@@ -51,17 +51,20 @@ describe('API Route - Sidebar Stats', () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'admin@example.com' } });
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'admin-1',
+      email: 'admin@example.com',
+      name: 'Admin',
       role: 'ADMIN',
+      status: 'ACTIVE',
       teamMemberships: [],
-    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    } as never);
 
     vi.mocked(prisma.incident.groupBy).mockResolvedValue([
       { urgency: 'HIGH', _count: { _all: 3 } },
-    ] as any);
+    ] as never);
 
     vi.mocked(prisma.statusPage.findMany).mockResolvedValue([
       { id: 'sp-1', name: 'OpsKnight Status', slug: null, isDefault: true },
-    ] as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    ] as never);
 
     const res = await GET();
     const { status, data } = await parseResponse(res);
@@ -75,7 +78,11 @@ describe('API Route - Sidebar Stats', () => {
     expect(data.isStatusPageAdmin).toBe(true);
     expect(prisma.incident.groupBy).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ status: { in: ['OPEN', 'ACKNOWLEDGED'] } }),
+        where: expect.objectContaining({
+          AND: expect.arrayContaining([
+            expect.objectContaining({ status: { in: ['OPEN', 'ACKNOWLEDGED'] } }),
+          ]),
+        }),
       })
     );
   });
@@ -84,13 +91,16 @@ describe('API Route - Sidebar Stats', () => {
     vi.mocked(getServerSession).mockResolvedValue({ user: { email: 'user@example.com' } });
     vi.mocked(prisma.user.findUnique).mockResolvedValue({
       id: 'user-1',
+      email: 'user@example.com',
+      name: 'User',
       role: 'USER',
+      status: 'ACTIVE',
       teamMemberships: [{ teamId: 'team-1' }, { teamId: 'team-2' }],
-    } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+    } as never);
 
     vi.mocked(prisma.incident.groupBy).mockResolvedValue([
       { urgency: 'LOW', _count: { _all: 1 } },
-    ] as any);
+    ] as never);
 
     const res = await GET();
     const { status, data } = await parseResponse(res);
@@ -102,4 +112,3 @@ describe('API Route - Sidebar Stats', () => {
     expect(prisma.incident.groupBy).toHaveBeenCalled();
   });
 });
-

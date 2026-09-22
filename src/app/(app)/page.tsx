@@ -19,23 +19,15 @@ import { IncidentListItem } from '@/types/incident-list';
 import { WidgetProvider } from '@/components/dashboard/WidgetProvider';
 import SLABreachAlertsWidget from '@/components/dashboard/widgets/SLABreachAlertsWidget';
 import { Badge } from '@/components/ui/shadcn/badge';
-import {
-  Activity,
-  AlertTriangle,
-  List,
-  Siren,
-  UserRound,
-  CheckCircle2,
-} from 'lucide-react';
+import { Activity, AlertTriangle, List, Siren, UserRound, CheckCircle2 } from 'lucide-react';
 import { IncidentStatus, IncidentUrgency } from '@prisma/client';
 import { buildIncidentListHref } from '@/lib/incident-links';
-import {
-  dashboardUserReadWhere,
-  serviceReadWhere,
-} from '@/lib/authorization-filters';
+import { dashboardUserReadWhere, serviceReadWhere } from '@/lib/authorization-filters';
 import type { AuthorizationActor } from '@/lib/authorization-policy';
 import { getDashboardOperationalSnapshot } from '@/lib/dashboard/dashboard-operational-snapshot';
 import { DashboardAnalyticsProvider } from '@/components/dashboard/DashboardAnalyticsProvider';
+import { resolveAccessContext } from '@/lib/access-context';
+import { CAPABILITIES, hasCapability } from '@/lib/authorization';
 import {
   DashboardAnalyticsHeatmap,
   DashboardPerformanceAnalytics,
@@ -136,7 +128,7 @@ export default async function Dashboard({
   };
 
   const assigneeFilter = assignee !== undefined ? (assignee === '' ? null : assignee) : undefined;
-  const [operational, services, users] = await Promise.all([
+  const [operational, services, users, accessContext] = await Promise.all([
     getDashboardOperationalSnapshot(actor, filterParams, sortBy, sortOrder),
     prisma.service.findMany({
       where: serviceAccess,
@@ -159,6 +151,7 @@ export default async function Dashboard({
       },
       orderBy: { name: 'asc' },
     }),
+    resolveAccessContext(actor),
   ]);
   const metricDataState = operational.asOf ? ('available' as const) : ('unavailable' as const);
   const metricsAsOf = operational.asOf;
@@ -170,8 +163,20 @@ export default async function Dashboard({
   const widgetData = {
     activeIncidents: operational.slaBreachAlerts,
     slaBreachAlerts: operational.slaBreachAlerts,
-    userOnCall: { isOnCall: false, shiftStart: null, shiftEnd: null, assignedIncidents: myQueueCount },
-    slaMetrics: { mtta: null, mttr: null, ackCompliance: null, resolveCompliance: null, trendMtta: 'stable' as const, trendMttr: 'stable' as const },
+    userOnCall: {
+      isOnCall: false,
+      shiftStart: null,
+      shiftEnd: null,
+      assignedIncidents: myQueueCount,
+    },
+    slaMetrics: {
+      mtta: null,
+      mttr: null,
+      ackCompliance: null,
+      resolveCompliance: null,
+      trendMtta: 'stable' as const,
+      trendMttr: 'stable' as const,
+    },
     serviceHealth: [],
     recentActivity: [],
     teamWorkload: [],
@@ -248,20 +253,27 @@ export default async function Dashboard({
     : undefined;
 
   const allActiveIncidentsCount = operational.active;
-  const currentCriticalActive = Math.max(
-    operational.critical,
-    criticalFocusIncidents.length
-  );
+  const currentCriticalActive = Math.max(operational.critical, criticalFocusIncidents.length);
 
   // Calculate system status
   const systemStatus =
-    metricDataState === 'unavailable'
-      ? { label: 'DATA UNAVAILABLE', color: 'var(--color-warning)', bg: 'rgba(245, 158, 11, 0.1)' }
-      : currentCriticalActive > 0
-        ? { label: 'CRITICAL', color: 'var(--color-danger)', bg: 'rgba(239, 68, 68, 0.1)' }
-        : allActiveIncidentsCount > 0
-          ? { label: 'DEGRADED', color: 'var(--color-warning)', bg: 'rgba(245, 158, 11, 0.1)' }
-          : { label: 'OPERATIONAL', color: 'var(--color-success)', bg: 'rgba(34, 197, 94, 0.1)' };
+    accessContext.mode === 'NONE'
+      ? {
+          label: 'NO OPERATIONAL SCOPE',
+          color: 'var(--color-muted)',
+          bg: 'rgba(100, 116, 139, 0.1)',
+        }
+      : metricDataState === 'unavailable'
+        ? {
+            label: 'DATA UNAVAILABLE',
+            color: 'var(--color-warning)',
+            bg: 'rgba(245, 158, 11, 0.1)',
+          }
+        : currentCriticalActive > 0
+          ? { label: 'CRITICAL', color: 'var(--color-danger)', bg: 'rgba(239, 68, 68, 0.1)' }
+          : allActiveIncidentsCount > 0
+            ? { label: 'DEGRADED', color: 'var(--color-warning)', bg: 'rgba(245, 158, 11, 0.1)' }
+            : { label: 'OPERATIONAL', color: 'var(--color-success)', bg: 'rgba(34, 197, 94, 0.1)' };
 
   // Get hour in user's timezone
   const formatter = new Intl.DateTimeFormat('en-US', {
@@ -313,396 +325,398 @@ export default async function Dashboard({
           status,
         }}
       >
-      <div
-        className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 min-h-screen space-y-4 sm:space-y-6"
-        style={{ zoom: 0.95 }}
-      >
-        <DashboardCommandCenter
-          systemStatus={systemStatus}
-          allActiveIncidentsCount={allActiveIncidentsCount}
-          totalInRange={totalInRange}
-          currentActiveCount={currentActiveCount}
-          currentTriggeredCount={currentTriggeredCount}
-          currentMutedCount={currentMutedCount}
-          currentSnoozedCount={currentSnoozedCount}
-          currentSuppressedCount={currentSuppressedCount}
-          metricsResolvedCount={metricsResolvedCount}
-          unassignedCount={unassignedCount}
-          rangeLabel={getRangeLabel(range)}
-          incidents={incidents}
-          filters={{
-            status: status || undefined,
-            service: service || undefined,
-            assignee: assignee !== undefined ? assignee : undefined,
-            urgency: urgency || undefined,
-            search: search || undefined,
-            range,
-            startDate: customStart,
-            endDate: customEnd,
-          }}
-          currentAcknowledgedCount={currentAcknowledgedCount}
-          userTimeZone={userTimeZone}
-          isClipped={operational.isClipped}
-          retentionDays={operational.retentionDays}
-          metricDataState={metricDataState}
-          metricsAsOf={metricsAsOf}
-          totalHref={totalHref}
-          activeHref={activeHref}
-          mutedHref={mutedHref}
-          resolvedHref={resolvedHref}
-          unassignedHref={unassignedHref}
-        />
-
-        {/* Smart Insights Banner - Auto-generated alerts */}
-        {metricDataState === 'available' ? (
-          <SmartInsightsBanner
-            totalIncidents={totalInRange}
-            activeIncidents={allActiveIncidentsCount}
-            criticalIncidents={currentCriticalActive}
-            unassignedIncidents={unassignedCount}
-            topServiceName={topServiceByVolume?.name}
-            topServiceId={topServiceByVolume?.id}
-            topServiceCount={topServiceByVolume?.count}
+        <div
+          className="w-full px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 min-h-screen space-y-4 sm:space-y-6"
+          style={{ zoom: 0.95 }}
+        >
+          <DashboardCommandCenter
+            systemStatus={systemStatus}
+            visibilityScope={accessContext.mode}
+            canExport={hasCapability(actor.role, CAPABILITIES.REPORT_EXPORT)}
+            allActiveIncidentsCount={allActiveIncidentsCount}
+            totalInRange={totalInRange}
+            currentActiveCount={currentActiveCount}
+            currentTriggeredCount={currentTriggeredCount}
+            currentMutedCount={currentMutedCount}
+            currentSnoozedCount={currentSnoozedCount}
+            currentSuppressedCount={currentSuppressedCount}
+            metricsResolvedCount={metricsResolvedCount}
+            unassignedCount={unassignedCount}
+            rangeLabel={getRangeLabel(range)}
+            incidents={incidents}
+            filters={{
+              status: status || undefined,
+              service: service || undefined,
+              assignee: assignee !== undefined ? assignee : undefined,
+              urgency: urgency || undefined,
+              search: search || undefined,
+              range,
+              startDate: customStart,
+              endDate: customEnd,
+            }}
+            currentAcknowledgedCount={currentAcknowledgedCount}
+            userTimeZone={userTimeZone}
+            isClipped={operational.isClipped}
+            retentionDays={operational.retentionDays}
+            metricDataState={metricDataState}
+            metricsAsOf={metricsAsOf}
+            totalHref={totalHref}
+            activeHref={activeHref}
+            mutedHref={mutedHref}
+            resolvedHref={resolvedHref}
+            unassignedHref={unassignedHref}
           />
-        ) : (
-          <div
-            className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-900 dark:text-amber-100 mb-6 shadow-xs border-l-4 border-l-amber-500"
-            role="alert"
-          >
-            Incident metrics could not be calculated. Counts and automated insights are hidden to
-            avoid presenting database errors as healthy zero values. Incident workflows remain
-            available.
-          </div>
-        )}
 
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-          <div className="xl:col-span-8 space-y-6">
-            <DashboardIncidentFilters
-              services={services}
-              users={users}
-              currentStatus={status ?? 'all'}
-              currentUrgency={urgency ?? 'all'}
-              currentService={service ?? 'all'}
-              currentAssignee={
-                assignee === undefined ? 'all' : assignee === '' ? 'unassigned' : assignee
-              }
-              currentSearch={search}
-              currentSort={currentSort}
-              currentRange={range}
-              currentCustomStart={customStart}
-              currentCustomEnd={customEnd}
-              userId={user?.id ?? null}
+          {/* Smart Insights Banner - Auto-generated alerts */}
+          {metricDataState === 'available' ? (
+            <SmartInsightsBanner
+              totalIncidents={totalInRange}
+              activeIncidents={allActiveIncidentsCount}
+              criticalIncidents={currentCriticalActive}
+              unassignedIncidents={unassignedCount}
+              topServiceName={topServiceByVolume?.name}
+              topServiceId={topServiceByVolume?.id}
+              topServiceCount={topServiceByVolume?.count}
             />
+          ) : (
+            <div
+              className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-900 dark:text-amber-100 mb-6 shadow-xs border-l-4 border-l-amber-500"
+              role="alert"
+            >
+              Incident metrics could not be calculated. Counts and automated insights are hidden to
+              avoid presenting database errors as healthy zero values. Incident workflows remain
+              available.
+            </div>
+          )}
 
-            {/* Ops Pulse Panel - Unified Container */}
-            <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
-              {/* Header */}
-              <div className="p-4 pb-3 border-b border-border">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Activity className="w-5 h-5 text-primary" />
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            <div className="xl:col-span-8 space-y-6">
+              <DashboardIncidentFilters
+                services={services}
+                users={users}
+                currentStatus={status ?? 'all'}
+                currentUrgency={urgency ?? 'all'}
+                currentService={service ?? 'all'}
+                currentAssignee={
+                  assignee === undefined ? 'all' : assignee === '' ? 'unassigned' : assignee
+                }
+                currentSearch={search}
+                currentSort={currentSort}
+                currentRange={range}
+                currentCustomStart={customStart}
+                currentCustomEnd={customEnd}
+                userId={user?.id ?? null}
+              />
+
+              {/* Ops Pulse Panel - Unified Container */}
+              <div className="rounded-2xl border border-border bg-card shadow-xs overflow-hidden">
+                {/* Header */}
+                <div className="p-4 pb-3 border-b border-border">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                          <Activity className="w-5 h-5 text-primary" />
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-foreground">Ops Pulse</h3>
+                        <p className="text-[10px] text-muted-foreground font-medium">
+                          Signals that need attention right now
+                        </p>
                       </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-foreground">Ops Pulse</h3>
-                      <p className="text-[10px] text-muted-foreground font-medium">
-                        Signals that need attention right now
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" size="xs">
+                        {rangeBadgeLabel}
+                      </Badge>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" size="xs">
-                      {rangeBadgeLabel}
-                    </Badge>
+                </div>
+
+                {/* Content Grid */}
+                <div className="p-4">
+                  <div className="grid gap-5 md:grid-cols-3">
+                    {/* My Queue Card */}
+                    <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
+                      {/* Header */}
+                      <div className="p-4 pb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
+                              <UserRound className="w-4 h-4" />
+                            </div>
+                            {myQueueCount > 0 && (
+                              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
+                                {myQueueCount}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-foreground">My Queue</h4>
+                            <p className="text-[10px] text-muted-foreground font-medium">
+                              Assigned to you
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="px-4 pb-4 flex-1 flex flex-col">
+                        {metricDataState === 'unavailable' ? (
+                          <div className="py-6 text-center">
+                            <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                            <p className="text-xs text-muted-foreground font-medium">
+                              Queue metrics unavailable
+                            </p>
+                          </div>
+                        ) : myQueueItems.length === 0 ? (
+                          <div className="py-6 text-center">
+                            <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
+                            <p className="text-xs text-muted-foreground font-medium">
+                              Queue is clear!
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {myQueueItems.slice(0, 3).map(item => (
+                              <Link
+                                key={item.id}
+                                href={`/incidents/${item.id}`}
+                                className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
+                                  <p className="text-xs font-semibold text-foreground truncate">
+                                    {item.title}
+                                  </p>
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                        <Link
+                          href={
+                            user
+                              ? buildIncidentListHref({
+                                  filter: 'all_open',
+                                  assignee: user.id,
+                                  ...(service ? { serviceId: service } : {}),
+                                })
+                              : buildIncidentListHref({ filter: 'all_open' })
+                          }
+                          className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
+                        >
+                          View my queue &rarr;
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* Critical Focus Card */}
+                    <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
+                      {/* Header */}
+                      <div className="p-4 pb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-200/50 flex items-center justify-center text-rose-600">
+                              <Siren className="w-4 h-4" />
+                            </div>
+                            {currentCriticalActive > 0 && (
+                              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm animate-pulse">
+                                {currentCriticalActive}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-foreground">Critical Focus</h4>
+                            <p className="text-[10px] text-muted-foreground font-medium">
+                              Immediate attention
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="px-4 pb-4 flex-1 flex flex-col">
+                        {metricDataState === 'unavailable' ? (
+                          <div className="py-6 text-center">
+                            <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                            <p className="text-xs text-muted-foreground font-medium">
+                              Critical metrics unavailable
+                            </p>
+                          </div>
+                        ) : criticalFocus.length === 0 ? (
+                          <div className="py-6 text-center">
+                            {currentCriticalActive > 0 ? (
+                              <>
+                                <Siren className="w-6 h-6 mx-auto text-rose-500 mb-2 animate-pulse" />
+                                <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                                  {currentCriticalActive} active critical incident
+                                  {currentCriticalActive === 1 ? '' : 's'}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  All systems stable
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {criticalFocus.map(incident => (
+                              <Link
+                                key={incident.id}
+                                href={`/incidents/${incident.id}`}
+                                className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0 shadow-sm animate-pulse" />
+                                  <p className="text-xs font-semibold text-foreground truncate flex-1">
+                                    {incident.title}
+                                  </p>
+                                  {incident.priority && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
+                                      {incident.priority}
+                                    </span>
+                                  )}
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                        <Link
+                          href={buildIncidentListHref({
+                            filter: 'all_open',
+                            urgency: 'HIGH',
+                            ...(service ? { serviceId: service } : {}),
+                          })}
+                          className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
+                        >
+                          View critical &rarr;
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* Services at Risk Card */}
+                    <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
+                      {/* Header */}
+                      <div className="p-4 pb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
+                              <AlertTriangle className="w-4 h-4" />
+                            </div>
+                            {servicesAtRisk.length > 0 && (
+                              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
+                                {servicesAtRisk.length}
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-foreground">Services at Risk</h4>
+                            <p className="text-[10px] text-muted-foreground font-medium">
+                              Active by service
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="px-4 pb-4 flex-1 flex flex-col">
+                        {metricDataState === 'unavailable' ? (
+                          <div className="py-6 text-center">
+                            <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
+                            <p className="text-xs text-muted-foreground font-medium">
+                              Service risk unavailable
+                            </p>
+                          </div>
+                        ) : servicesAtRisk.length === 0 ? (
+                          <div className="py-6 text-center">
+                            <List className="w-6 h-6 mx-auto text-muted-foreground mb-2" />
+                            <p className="text-xs text-muted-foreground font-medium">
+                              All services healthy
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {servicesAtRisk.slice(0, 4).map(serviceItem => (
+                              <Link
+                                key={serviceItem.id}
+                                href={`/services/${serviceItem.id}`}
+                                className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                  <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
+                                  <p className="text-xs font-semibold text-foreground truncate">
+                                    {serviceItem.name}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/60">
+                                    {serviceItem.activeCount}
+                                  </span>
+                                  {serviceItem.criticalCount > 0 && (
+                                    <span className="text-[10px] font-bold text-white bg-rose-500 px-1.5 py-0.5 rounded animate-pulse">
+                                      {serviceItem.criticalCount}!
+                                    </span>
+                                  )}
+                                </div>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                        <Link
+                          href="/services"
+                          className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
+                        >
+                          View services &rarr;
+                        </Link>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Content Grid */}
-              <div className="p-4">
-                <div className="grid gap-5 md:grid-cols-3">
-                  {/* My Queue Card */}
-                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
-                    {/* Header */}
-                    <div className="p-4 pb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
-                            <UserRound className="w-4 h-4" />
-                          </div>
-                          {myQueueCount > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
-                              {myQueueCount}
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-foreground">My Queue</h4>
-                          <p className="text-[10px] text-muted-foreground font-medium">
-                            Assigned to you
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+              {/* Incident Heatmap (Heartmap - User Requested) */}
+              <DashboardAnalyticsHeatmap />
 
-                    {/* Content */}
-                    <div className="px-4 pb-4 flex-1 flex flex-col">
-                      {metricDataState === 'unavailable' ? (
-                        <div className="py-6 text-center">
-                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Queue metrics unavailable
-                          </p>
-                        </div>
-                      ) : myQueueItems.length === 0 ? (
-                        <div className="py-6 text-center">
-                          <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Queue is clear!
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {myQueueItems.slice(0, 3).map(item => (
-                            <Link
-                              key={item.id}
-                              href={`/incidents/${item.id}`}
-                              className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
-                                <p className="text-xs font-semibold text-foreground truncate">
-                                  {item.title}
-                                </p>
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                      <Link
-                        href={
-                          user
-                            ? buildIncidentListHref({
-                                filter: 'all_open',
-                                assignee: user.id,
-                                ...(service ? { serviceId: service } : {}),
-                              })
-                            : buildIncidentListHref({ filter: 'all_open' })
-                        }
-                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
-                      >
-                        View my queue &rarr;
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Critical Focus Card */}
-                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
-                    {/* Header */}
-                    <div className="p-4 pb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-200/50 flex items-center justify-center text-rose-600">
-                            <Siren className="w-4 h-4" />
-                          </div>
-                          {currentCriticalActive > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm animate-pulse">
-                              {currentCriticalActive}
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-foreground">Critical Focus</h4>
-                          <p className="text-[10px] text-muted-foreground font-medium">
-                            Immediate attention
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="px-4 pb-4 flex-1 flex flex-col">
-                      {metricDataState === 'unavailable' ? (
-                        <div className="py-6 text-center">
-                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Critical metrics unavailable
-                          </p>
-                        </div>
-                      ) : criticalFocus.length === 0 ? (
-                        <div className="py-6 text-center">
-                          {currentCriticalActive > 0 ? (
-                            <>
-                              <Siren className="w-6 h-6 mx-auto text-rose-500 mb-2 animate-pulse" />
-                              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium">
-                                {currentCriticalActive} active critical incident
-                                {currentCriticalActive === 1 ? '' : 's'}
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-500 mb-2" />
-                              <p className="text-xs text-muted-foreground font-medium">
-                                All systems stable
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {criticalFocus.map(incident => (
-                            <Link
-                              key={incident.id}
-                              href={`/incidents/${incident.id}`}
-                              className="block p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-2 h-2 rounded-full bg-rose-500 shrink-0 shadow-sm animate-pulse" />
-                                <p className="text-xs font-semibold text-foreground truncate flex-1">
-                                  {incident.title}
-                                </p>
-                                {incident.priority && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 shrink-0">
-                                    {incident.priority}
-                                  </span>
-                                )}
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                      <Link
-                        href={buildIncidentListHref({
-                          filter: 'all_open',
-                          urgency: 'HIGH',
-                          ...(service ? { serviceId: service } : {}),
-                        })}
-                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
-                      >
-                        View critical &rarr;
-                      </Link>
-                    </div>
-                  </div>
-
-                  {/* Services at Risk Card */}
-                  <div className="relative rounded-2xl border border-border bg-card shadow-xs hover:shadow-sm transition-all duration-200 overflow-hidden flex flex-col">
-                    {/* Header */}
-                    <div className="p-4 pb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-border/80 flex items-center justify-center text-primary">
-                            <AlertTriangle className="w-4 h-4" />
-                          </div>
-                          {servicesAtRisk.length > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-card shadow-sm">
-                              {servicesAtRisk.length}
-                            </span>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-sm font-bold text-foreground">Services at Risk</h4>
-                          <p className="text-[10px] text-muted-foreground font-medium">
-                            Active by service
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="px-4 pb-4 flex-1 flex flex-col">
-                      {metricDataState === 'unavailable' ? (
-                        <div className="py-6 text-center">
-                          <AlertTriangle className="w-6 h-6 mx-auto text-amber-500 mb-2" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            Service risk unavailable
-                          </p>
-                        </div>
-                      ) : servicesAtRisk.length === 0 ? (
-                        <div className="py-6 text-center">
-                          <List className="w-6 h-6 mx-auto text-muted-foreground mb-2" />
-                          <p className="text-xs text-muted-foreground font-medium">
-                            All services healthy
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {servicesAtRisk.slice(0, 4).map(serviceItem => (
-                            <Link
-                              key={serviceItem.id}
-                              href={`/services/${serviceItem.id}`}
-                              className="flex items-center justify-between p-2.5 rounded-xl bg-muted/40 border border-border/70 hover:border-border hover:bg-muted/70 hover:shadow-2xs transition-all duration-150"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <div className="w-2 h-2 rounded-full bg-primary shrink-0 shadow-sm" />
-                                <p className="text-xs font-semibold text-foreground truncate">
-                                  {serviceItem.name}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/60">
-                                  {serviceItem.activeCount}
-                                </span>
-                                {serviceItem.criticalCount > 0 && (
-                                  <span className="text-[10px] font-bold text-white bg-rose-500 px-1.5 py-0.5 rounded animate-pulse">
-                                    {serviceItem.criticalCount}!
-                                  </span>
-                                )}
-                              </div>
-                            </Link>
-                          ))}
-                        </div>
-                      )}
-                      <Link
-                        href="/services"
-                        className="flex items-center justify-center gap-1.5 mt-auto py-2 text-[11px] font-semibold text-foreground hover:text-primary bg-muted/50 hover:bg-muted rounded-lg border border-border/60 transition-colors"
-                      >
-                        View services &rarr;
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <IncidentsListTable
+                incidents={recentIncidentListItems}
+                users={users}
+                canManageIncidents={false}
+                readOnly={true}
+                title="Latest incidents"
+                showExport={false}
+                realtimeFilter={{
+                  status,
+                  serviceId: service,
+                  assignee: assignee === '' ? 'unassigned' : assignee,
+                  urgency,
+                  search,
+                  createdAfter: operational.effectiveStart.toISOString(),
+                  createdBefore: operational.effectiveEnd.toISOString(),
+                  sort: 'newest',
+                }}
+              />
             </div>
 
-            {/* Incident Heatmap (Heartmap - User Requested) */}
-            <DashboardAnalyticsHeatmap />
+            <aside className="xl:col-span-4 space-y-6">
+              <QuickActionsPanel greeting={greeting} userName={userName} />
+              {widgetData && (
+                <WidgetProvider initialData={widgetData}>
+                  <SLABreachAlertsWidget />
+                </WidgetProvider>
+              )}
 
-            <IncidentsListTable
-              incidents={recentIncidentListItems}
-              users={users}
-              canManageIncidents={false}
-              readOnly={true}
-              title="Latest incidents"
-              showExport={false}
-              realtimeFilter={{
-                status,
-                serviceId: service,
-                assignee: assignee === '' ? 'unassigned' : assignee,
-                urgency,
-                search,
-                createdAfter: operational.effectiveStart.toISOString(),
-                createdBefore: operational.effectiveEnd.toISOString(),
-                sort: 'newest',
-              }}
-            />
+              <OnCallWidget activeShifts={activeShifts} />
+              <DashboardPerformanceAnalytics />
+              <DashboardTeamLoadAnalytics />
+            </aside>
           </div>
-
-          <aside className="xl:col-span-4 space-y-6">
-            <QuickActionsPanel greeting={greeting} userName={userName} />
-            {widgetData && (
-              <WidgetProvider initialData={widgetData}>
-                <SLABreachAlertsWidget />
-              </WidgetProvider>
-            )}
-
-            <OnCallWidget activeShifts={activeShifts} />
-            <DashboardPerformanceAnalytics />
-            <DashboardTeamLoadAnalytics />
-          </aside>
         </div>
-      </div>
       </DashboardAnalyticsProvider>
     </DashboardRealtimeWrapper>
   );

@@ -10,12 +10,12 @@ OpsKnight has workspace-wide application roles and independent team-scoped roles
 
 ## Workspace roles
 
-| Role        | Operational boundary                                                                                                            |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `USER`      | Standard signed-in user. Resource checks may allow incidents, services, schedules, or metrics related to their assignment/team. |
-| `AUDITOR`   | Read-only organization-wide incidents, services, schedules, reports, metrics, and audit evidence. No operational mutations.     |
-| `RESPONDER` | Global response operations, including broad incident and operational-resource management, but not Admin-only governance.        |
-| `ADMIN`     | Workspace governance, users, providers, system/security settings, and destructive administrative operations.                    |
+| Role        | Operational boundary                                                                                                        |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `USER`      | Scoped read-only access to incidents, services, schedules, and metrics related to their assignment, watch, or team scope.   |
+| `AUDITOR`   | Read-only organization-wide incidents, services, schedules, reports, metrics, and audit evidence. No operational mutations. |
+| `RESPONDER` | Global response operations, including broad incident and operational-resource management, but not Admin-only governance.    |
+| `ADMIN`     | Workspace governance, users, providers, system/security settings, and destructive administrative operations.                |
 
 The implementation uses a central capability registry in `src/lib/authorization.ts`. Server guards enforce capabilities and then apply resource scope where required. UI checks are usability hints only; server enforcement remains authoritative.
 
@@ -23,13 +23,13 @@ The implementation uses a central capability registry in `src/lib/authorization.
 
 `src/lib/authorization-policy.ts` is the shared decision contract. Callers provide a normalized actor, an action, and—when required—a resource. It returns an allow/deny decision with global or resource scope and a stable denial reason.
 
-Browser sessions and API keys use the same role capabilities and resource rules for reading, creating, acknowledging, annotating, escalating, and managing incidents. `authorization-actors.ts` resolves the user's current database role, status, and team memberships; API-key actors additionally carry key scopes. A key is allowed only when both its scope and its owner's current permission allow the action. Disabled, invited, missing, or downgraded owners fail closed.
+Browser sessions and API keys use the same role capabilities and resource rules. `authorization-actors.ts` resolves the user's current database role, status, and team memberships; API-key actors additionally carry key scopes. A key is allowed only when both its scope and its owner's current permission allow the action. Disabled, invited, missing, or downgraded owners fail closed. Assignment, watching, and team membership grant visibility only; they never grant mutation authority.
 
 Collection endpoints use filters generated from the same policy contract. Incident filters include assignee, watcher, public service-team, and public assigned-team access while preventing team membership alone from exposing private incidents. Avoid introducing route-local role comparisons or independent Prisma authorization filters.
 
 ## Resource checks for a User
 
-The central v1.5 checks allow a regular `USER` to:
+The central v1.5 checks allow a regular `USER` to read:
 
 - create incidents for services owned by teams they belong to;
 - acknowledge and add notes to incidents available through their assignment or team scope;
@@ -43,7 +43,7 @@ Responders and Admins bypass those central resource checks for global operationa
 
 ### Manual escalation
 
-Manual escalation is its own capability (`incident.escalate.scoped`) rather than a side effect of being signed in, because it pages other responders. It is checked against the specific incident using the same resource rules as acknowledgement: assignee, assigned team, the service's owning team, watcher, and visibility. Responders and Admins hold it globally through `operations.manage`.
+Manual escalation, acknowledgement, notes, lifecycle changes, meetings, and war-room management require `operations.manage`. Only Responders and Admins receive that capability.
 
 v1.5 ships no UI control that invokes it. The only caller is the `escalate` action on the Slack interactions endpoint, which the product never renders — so in practice this capability governs a Slack app shortcut an administrator wired up by hand. Treat it as an enforced boundary on that endpoint rather than a feature to grant for.
 
@@ -70,7 +70,7 @@ Application Admins and Responders can create/edit teams and add Members. Only ap
 | View System Logs                                              | Application Admin                                            |
 | View audit evidence organization-wide                         | Auditor or Application Admin                                 |
 | Create/manage incidents globally                              | Responder or Admin                                           |
-| Manually escalate an incident                                 | Assignment, team, or watch relationship; or Responder/Admin  |
+| Manually escalate an incident                                 | Responder or Admin                                           |
 | Create/edit services, schedules, policies, and teams globally | Responder or Admin                                           |
 | Delete a team or perform protected destructive governance     | Application Admin                                            |
 | Assign elevated team roles                                    | Application Admin or that team's Owner                       |

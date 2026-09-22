@@ -42,11 +42,12 @@ describe('central authorization contract', () => {
     expect(hasCapability('AUDITOR', CAPABILITIES.ADMIN_MANAGE)).toBe(false);
   });
 
-  it('keeps User access scoped', () => {
-    expect(hasCapability('USER', CAPABILITIES.INCIDENT_CREATE_SCOPED)).toBe(true);
+  it('keeps User access scoped and read-only', () => {
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_CREATE_SCOPED)).toBe(false);
     expect(hasCapability('USER', CAPABILITIES.INCIDENT_CREATE_ALL)).toBe(false);
-    expect(hasCapability('USER', CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)).toBe(true);
-    expect(hasCapability('USER', CAPABILITIES.INCIDENT_NOTE_SCOPED)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_ACKNOWLEDGE_SCOPED)).toBe(false);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_ESCALATE_SCOPED)).toBe(false);
+    expect(hasCapability('USER', CAPABILITIES.INCIDENT_NOTE_SCOPED)).toBe(false);
     expect(hasCapability('AUDITOR', CAPABILITIES.INCIDENT_NOTE_SCOPED)).toBe(false);
     expect(hasCapability('USER', CAPABILITIES.INCIDENT_READ_SCOPED)).toBe(true);
     expect(hasCapability('USER', CAPABILITIES.SERVICE_READ_SCOPED)).toBe(true);
@@ -54,16 +55,16 @@ describe('central authorization contract', () => {
     expect(hasCapability('USER', CAPABILITIES.METRICS_READ_ALL)).toBe(false);
   });
 
-  it('allows all roles to view user directory, profiles, and escalation policies', () => {
+  it('does not expose global user and policy directories to scoped Users', () => {
     expect(hasCapability('ADMIN', CAPABILITIES.USER_READ_ALL)).toBe(true);
     expect(hasCapability('RESPONDER', CAPABILITIES.USER_READ_ALL)).toBe(true);
     expect(hasCapability('AUDITOR', CAPABILITIES.USER_READ_ALL)).toBe(true);
-    expect(hasCapability('USER', CAPABILITIES.USER_READ_ALL)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.USER_READ_ALL)).toBe(false);
 
     expect(hasCapability('ADMIN', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
     expect(hasCapability('RESPONDER', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
     expect(hasCapability('AUDITOR', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
-    expect(hasCapability('USER', CAPABILITIES.POLICY_READ_ALL)).toBe(true);
+    expect(hasCapability('USER', CAPABILITIES.POLICY_READ_ALL)).toBe(false);
   });
 
   it('returns immutable copies of role grants', () => {

@@ -24,6 +24,8 @@ type SystemStatus = {
 
 type DashboardCommandCenterProps = {
   systemStatus: SystemStatus;
+  visibilityScope?: 'GLOBAL' | 'SCOPED' | 'NONE';
+  canExport?: boolean;
   allActiveIncidentsCount: number;
   totalInRange: number;
   currentActiveCount: number;
@@ -52,6 +54,8 @@ type DashboardCommandCenterProps = {
 
 export default function DashboardCommandCenter({
   systemStatus,
+  visibilityScope = 'GLOBAL',
+  canExport = true,
   allActiveIncidentsCount,
   totalInRange,
   currentActiveCount,
@@ -116,19 +120,19 @@ export default function DashboardCommandCenter({
   currentSuppressedCount = applicableLiveMetrics?.suppressed ?? currentSuppressedCount;
   currentMutedCount = currentSnoozedCount + currentSuppressedCount;
   unassignedCount = applicableLiveMetrics?.unassigned ?? unassignedCount;
-  if ((applicableLiveMetrics?.highUrgency ?? 0) > 0) {
+  if (visibilityScope !== 'NONE' && (applicableLiveMetrics?.highUrgency ?? 0) > 0) {
     systemStatus = {
       label: 'CRITICAL',
       color: 'var(--color-danger)',
       bg: 'rgba(239, 68, 68, 0.1)',
     };
-  } else if (applicableLiveMetrics && currentActiveCount > 0) {
+  } else if (visibilityScope !== 'NONE' && applicableLiveMetrics && currentActiveCount > 0) {
     systemStatus = {
       label: 'DEGRADED',
       color: 'var(--color-warning)',
       bg: 'rgba(245, 158, 11, 0.1)',
     };
-  } else if (applicableLiveMetrics) {
+  } else if (visibilityScope !== 'NONE' && applicableLiveMetrics) {
     systemStatus = {
       label: 'OPERATIONAL',
       color: 'var(--color-success)',
@@ -168,7 +172,9 @@ export default function DashboardCommandCenter({
 
           {/* System Status */}
           <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
-            <span className="font-medium">System Status:</span>
+            <span className="font-medium">
+              {visibilityScope === 'GLOBAL' ? 'System Status:' : 'Your Operational Scope:'}
+            </span>
             <Badge
               variant={statusVariant}
               size="xs"
@@ -221,21 +227,23 @@ export default function DashboardCommandCenter({
         {/* Actions */}
         <div className="flex gap-2">
           <DashboardRefresh />
-          <DashboardExport
-            incidents={incidents}
-            filters={filters}
-            metrics={{
-              totalActive: currentActiveCount,
-              totalTriggered: currentTriggeredCount,
-              totalMuted: currentMutedCount,
-              totalSnoozed: currentSnoozedCount,
-              totalSuppressed: currentSuppressedCount,
-              totalResolved: metricsResolvedCount,
-              totalAcknowledged: currentAcknowledgedCount,
-              unassigned: unassignedCount,
-              dataState: metricDataState,
-            }}
-          />
+          {canExport && (
+            <DashboardExport
+              incidents={incidents}
+              filters={filters}
+              metrics={{
+                totalActive: currentActiveCount,
+                totalTriggered: currentTriggeredCount,
+                totalMuted: currentMutedCount,
+                totalSnoozed: currentSnoozedCount,
+                totalSuppressed: currentSuppressedCount,
+                totalResolved: metricsResolvedCount,
+                totalAcknowledged: currentAcknowledgedCount,
+                unassigned: unassignedCount,
+                dataState: metricDataState,
+              }}
+            />
+          )}
         </div>
       </div>
 

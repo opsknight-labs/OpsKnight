@@ -4,9 +4,10 @@ import { getAuthOptions } from '@/lib/auth';
 import { jsonError, jsonOk } from '@/lib/api-response';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
-import type { Prisma } from '@prisma/client';
 import { activeIncidentStatuses } from '@/lib/incident-status';
 import { CAPABILITIES, hasCapability } from '@/lib/authorization';
+import { getCurrentAuthorizationActor } from '@/lib/rbac';
+import { incidentReadWhere } from '@/lib/authorization-filters';
 
 const RATE_LIMIT_MAX = 30; // 30 requests per minute
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
@@ -26,35 +27,10 @@ export async function GET() {
       return jsonError('Rate limit exceeded', 429, { retryAfter });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: {
-        id: true,
-        role: true,
-        teamMemberships: { select: { teamId: true } },
-      },
-    });
-
-    if (!user) {
-      return jsonError('Unauthorized', 401);
-    }
-
-    // Build efficient Where clause for Active Incidents
-    const where: Prisma.IncidentWhereInput = {
-      status: { in: activeIncidentStatuses() },
+    const actor = await getCurrentAuthorizationActor();
+    const where = {
+      AND: [incidentReadWhere(actor), { status: { in: activeIncidentStatuses() } }],
     };
-
-    // Apply Scope Permissions
-    if (!hasCapability(user.role, CAPABILITIES.INCIDENT_READ_ALL)) {
-      const teamIds = user.teamMemberships.map(membership => membership.teamId);
-
-      // Use OR scope: Assigned to user OR Assigned to user's teams OR Service owned by user's teams
-      where.OR = [
-        { assigneeId: user.id },
-        { teamId: { in: teamIds } },
-        { service: { teamId: { in: teamIds } } },
-      ];
-    }
 
     // Group by Urgency to get breakdown
     const [urgencyCounts, enabledStatusPages] = await Promise.all([
@@ -76,7 +52,7 @@ export async function GET() {
     const criticalIncidentsCount = urgencyCounts.find(u => u.urgency === 'HIGH')?._count._all || 0;
     const mediumIncidentsCount = urgencyCounts.find(u => u.urgency === 'MEDIUM')?._count._all || 0;
     const lowIncidentsCount = urgencyCounts.find(u => u.urgency === 'LOW')?._count._all || 0;
-    const isStatusPageAdmin = hasCapability(user.role, CAPABILITIES.ADMIN_MANAGE);
+    const isStatusPageAdmin = hasCapability(actor.role, CAPABILITIES.ADMIN_MANAGE);
 
     return jsonOk(
       {
