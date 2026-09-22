@@ -28,7 +28,15 @@ export async function sendIncidentWhatsApp(
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
   notificationId?: string,
   durableMessage?: string
-): Promise<{ success: boolean; error?: string; messageSid?: string }> {
+): Promise<{
+  success: boolean;
+  error?: string;
+  messageSid?: string;
+  statusCode?: number;
+  errorCode?: string;
+  retryAfterMs?: number;
+  retryable?: boolean;
+}> {
   try {
     // Get user and incident
     const [user, incident] = await Promise.all([
@@ -43,23 +51,27 @@ export async function sendIncidentWhatsApp(
     ]);
 
     if (!user || !incident) {
-      return { success: false, error: 'User or incident not found' };
+      return { success: false, error: 'User or incident not found', retryable: false };
     }
 
     if (!user.phoneNumber) {
-      return { success: false, error: 'User has no phone number configured' };
+      return { success: false, error: 'User has no phone number configured', retryable: false };
     }
 
     // Get WhatsApp config (independent of Twilio SMS)
     const whatsappConfig = await getWhatsAppConfig();
     if (!whatsappConfig.enabled || whatsappConfig.provider !== 'twilio') {
-      return { success: false, error: 'WhatsApp not configured or enabled' };
+      return { success: false, error: 'WhatsApp not configured or enabled', retryable: false };
     }
 
     // Format phone number for WhatsApp (must be E.164 format)
     const phoneNumber = formatToE164(user.phoneNumber);
     if (!phoneNumber) {
-      return { success: false, error: 'Phone number must include an international country code' };
+      return {
+        success: false,
+        error: 'Phone number must include an international country code',
+        retryable: false,
+      };
     }
     const whatsappNumber = `whatsapp:${phoneNumber}`;
     // Get WhatsApp from number from database config
@@ -70,7 +82,7 @@ export async function sendIncidentWhatsApp(
     const fromNumber = normalizedFromNumber ? `whatsapp:${normalizedFromNumber}` : null;
 
     if (!fromNumber) {
-      return { success: false, error: 'Twilio WhatsApp number not configured' };
+      return { success: false, error: 'Twilio WhatsApp number not configured', retryable: false };
     }
 
     const envelope = decodeNotificationEnvelope(durableMessage);
@@ -187,8 +199,9 @@ export async function sendIncidentWhatsApp(
 
       return { success: true, messageSid: messageResult.sid };
     } catch (twilioError: unknown) {
-      const err = twilioError as { message?: string; code?: string | number };
-      const isWindowExpired = err.code === 63016 || err.code === '63016';
+      const err = twilioError as { message?: string; code?: string | number; status?: number };
+      const isWindowExpired = err.code === 63016 || String(err.code) === '63016';
+      const isRateLimit = err.status === 429 || String(err.code) === '20429';
       const errorMessage = isWindowExpired
         ? 'WhatsApp 24-hour session window expired (Twilio Error 63016). Ensure an approved Content Template SID is configured.'
         : err.message || 'WhatsApp send failed';
@@ -198,10 +211,21 @@ export async function sendIncidentWhatsApp(
         incidentId,
         error: err.message,
         code: err.code,
+        status: err.status,
         isWindowExpired,
       });
 
-      return { success: false, error: errorMessage };
+      const statusCode = isRateLimit ? 429 : err.status;
+      const retryable = isRateLimit || (typeof statusCode === 'number' && statusCode >= 500);
+
+      return {
+        success: false,
+        error: errorMessage,
+        statusCode,
+        errorCode: err.code == null ? undefined : String(err.code),
+        retryAfterMs: isRateLimit ? 60_000 : undefined,
+        retryable,
+      };
     }
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
@@ -210,7 +234,7 @@ export async function sendIncidentWhatsApp(
       incidentId,
       error: err.message,
     });
-    return { success: false, error: err.message };
+    return { success: false, error: err.message, retryable: false };
   }
 }
 
@@ -229,17 +253,22 @@ export async function sendWhatsApp(
   statusCode?: number;
   errorCode?: string;
   retryAfterMs?: number;
+  retryable?: boolean;
 }> {
   try {
     const whatsappConfig = await getWhatsAppConfig();
     if (!whatsappConfig.enabled || whatsappConfig.provider !== 'twilio') {
-      return { success: false, error: 'WhatsApp not configured or enabled' };
+      return { success: false, error: 'WhatsApp not configured or enabled', retryable: false };
     }
 
     // Format phone numbers
     const toNumber = formatToE164(to);
     if (!toNumber) {
-      return { success: false, error: 'Phone number must include an international country code' };
+      return {
+        success: false,
+        error: 'Phone number must include an international country code',
+        retryable: false,
+      };
     }
     const whatsappTo = `whatsapp:${toNumber}`;
     // Get WhatsApp from number from database config
@@ -252,7 +281,7 @@ export async function sendWhatsApp(
     const whatsappFrom = normalizedFrom ? `whatsapp:${normalizedFrom}` : null;
 
     if (!whatsappFrom) {
-      return { success: false, error: 'WhatsApp from number not configured' };
+      return { success: false, error: 'WhatsApp from number not configured', retryable: false };
     }
 
     // Send via Twilio WhatsApp API
@@ -290,12 +319,15 @@ export async function sendWhatsApp(
       error: err.message,
     });
     const rateLimited = err.status === 429 || String(err.code) === '20429';
+    const statusCode = rateLimited ? 429 : err.status;
+    const retryable = rateLimited || (typeof statusCode === 'number' && statusCode >= 500);
     return {
       success: false,
       error: err.message,
-      statusCode: rateLimited ? 429 : err.status,
+      statusCode,
       errorCode: err.code == null ? undefined : String(err.code),
       retryAfterMs: rateLimited ? 60_000 : undefined,
+      retryable,
     };
   }
 }

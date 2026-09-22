@@ -325,7 +325,7 @@ export async function testNotificationProvider(
         kind: 'WHATSAPP',
         to: targetPhone,
         message: `[OpsKnight] WhatsApp provider test successful! Dispatched: ${new Date().toLocaleTimeString()}`,
-        providerKey: 'whatsapp',
+        providerKey: 'twilio',
       },
     });
 
