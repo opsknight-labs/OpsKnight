@@ -307,14 +307,11 @@ export async function getWhatsAppConfig(): Promise<SMSConfig> {
       const authToken = (config.whatsappAuthToken || config.authToken) as string | undefined;
 
       // Check if WhatsApp is enabled (independent of Twilio SMS)
-      const whatsappEnabled = config.whatsappEnabled !== undefined ? config.whatsappEnabled : true;
-      if (
-        whatsappEnabled &&
-        accountSid &&
-        authToken &&
-        config.whatsappNumber &&
-        config.whatsappContentSid
-      ) {
+      const whatsappEnabled =
+        config.whatsappEnabled !== undefined
+          ? Boolean(config.whatsappEnabled)
+          : Boolean(config.whatsappNumber);
+      if (whatsappEnabled && accountSid && authToken && config.whatsappNumber) {
         return {
           enabled: true,
           provider: 'twilio',
@@ -322,7 +319,7 @@ export async function getWhatsAppConfig(): Promise<SMSConfig> {
           authToken,
           fromNumber: config.fromNumber as string | undefined,
           whatsappNumber: config.whatsappNumber as string,
-          whatsappContentSid: config.whatsappContentSid as string,
+          whatsappContentSid: (config.whatsappContentSid as string) || undefined,
         };
       }
     }

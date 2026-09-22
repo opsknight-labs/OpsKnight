@@ -369,6 +369,29 @@ export default function PrivacyRequestDetailDialog({
     }
   }
 
+  async function handleCompleteRequest() {
+    setTransitioning(true);
+    try {
+      const response = await fetch(`/api/compliance/privacy-requests/${requestId}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toStatus: 'COMPLETED' }),
+      });
+      const body = await readJson(response);
+      if (!response.ok) {
+        showToast(body?.error ?? 'Failed to mark request as completed.', 'error');
+        return;
+      }
+      showToast('Privacy request marked as Completed.', 'success');
+      await loadDetail();
+      router.refresh();
+    } catch {
+      showToast('Failed to mark request as completed.', 'error');
+    } finally {
+      setTransitioning(false);
+    }
+  }
+
   return (
     <Dialog
       open={open}
@@ -604,6 +627,38 @@ export default function PrivacyRequestDetailDialog({
               </div>
             )}
 
+            {/* Quick Transition Callout when erasure execution has succeeded in PROCESSING */}
+            {detail.status === 'PROCESSING' && detail.erasureExecution?.status === 'COMPLETED' && (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-xs dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                <div className="space-y-0.5">
+                  <p className="font-semibold text-emerald-950 dark:text-emerald-200">
+                    Erasure execution completed
+                  </p>
+                  <p className="text-emerald-700 dark:text-emerald-400">
+                    Subject data has been permanently erased and anonymized. Mark this request as
+                    Completed to close the ticket.
+                  </p>
+                </div>
+                {canManage && (
+                  <div className="shrink-0">
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5 bg-emerald-600 text-xs text-white hover:bg-emerald-700 dark:bg-emerald-500"
+                      onClick={() => void handleCompleteRequest()}
+                      disabled={transitioning}
+                    >
+                      {transitioning ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                      Mark as Completed
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Blocked or Rejected Notifications */}
             {detail.status === 'BLOCKED' && (
               <div className="rounded-lg border border-orange-200 bg-orange-50/60 p-3 text-xs text-orange-800 dark:border-orange-900/40 dark:bg-orange-950/20 dark:text-orange-200">
@@ -808,85 +863,122 @@ export default function PrivacyRequestDetailDialog({
                               Move to Processing
                             </Button>
                           )}
-                        <AlertDialog
-                          open={confirmOpen}
-                          onOpenChange={next => {
-                            setConfirmOpen(next);
-                            if (!next) setConfirmInput('');
-                          }}
-                        >
+                        {canManage &&
+                        detail.erasureExecution?.status === 'COMPLETED' &&
+                        detail.status === 'PROCESSING' ? (
                           <Button
                             size="sm"
-                            variant="destructive"
-                            onClick={() => setConfirmOpen(true)}
-                            disabled={
-                              !exportEligible ||
-                              !plan.canExecute ||
-                              executing ||
-                              detail.erasureExecution?.status === 'COMPLETED'
-                            }
+                            className="bg-emerald-600 text-xs text-white hover:bg-emerald-700 dark:bg-emerald-500"
+                            onClick={() => void handleCompleteRequest()}
+                            disabled={transitioning}
                           >
-                            {executing ? (
-                              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                            {transitioning ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <Trash2 className="mr-1.5 h-4 w-4" />
+                              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
                             )}
-                            Execute erasure
+                            Mark as Completed
                           </Button>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-                                <ShieldAlert className="h-4 w-4" />
-                                Permanently erase subject data?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription asChild>
-                                <div className="space-y-2 text-left">
-                                  <p>
-                                    This will permanently remove and anonymize data for{' '}
-                                    <span className="font-mono font-medium text-foreground">
-                                      {detail.subjectType}: {detail.subjectId}
-                                    </span>
-                                    . This action cannot be undone.
-                                  </p>
-                                  <p className="text-xs">
-                                    Type <span className="font-mono font-semibold">ERASE</span> to
-                                    confirm.
-                                  </p>
-                                </div>
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <Input
-                              autoFocus
-                              value={confirmInput}
-                              onChange={event => setConfirmInput(event.target.value)}
-                              placeholder="Type ERASE to confirm"
-                              className="font-mono"
-                              aria-label="Type ERASE to confirm erasure"
-                            />
-                            <AlertDialogFooter>
-                              <AlertDialogCancel disabled={executing}>Cancel</AlertDialogCancel>
-                              <Button
-                                variant="destructive"
-                                disabled={confirmInput !== 'ERASE' || executing}
-                                onClick={() => void handleExecuteErasure()}
-                              >
-                                {executing ? (
-                                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Trash2 className="mr-1.5 h-4 w-4" />
-                                )}
-                                Permanently erase
-                              </Button>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        ) : (
+                          <AlertDialog
+                            open={confirmOpen}
+                            onOpenChange={next => {
+                              setConfirmOpen(next);
+                              if (!next) setConfirmInput('');
+                            }}
+                          >
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setConfirmOpen(true)}
+                              disabled={
+                                !exportEligible ||
+                                !plan.canExecute ||
+                                executing ||
+                                detail.erasureExecution?.status === 'COMPLETED'
+                              }
+                            >
+                              {executing ? (
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-1.5 h-4 w-4" />
+                              )}
+                              Execute erasure
+                            </Button>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                                  <ShieldAlert className="h-4 w-4" />
+                                  Permanently erase subject data?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription asChild>
+                                  <div className="space-y-2 text-left">
+                                    <p>
+                                      This will permanently remove and anonymize data for{' '}
+                                      <span className="font-mono font-medium text-foreground">
+                                        {detail.subjectType}: {detail.subjectId}
+                                      </span>
+                                      . This action cannot be undone.
+                                    </p>
+                                    <p className="text-xs">
+                                      Type <span className="font-mono font-semibold">ERASE</span> to
+                                      confirm.
+                                    </p>
+                                  </div>
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <Input
+                                autoFocus
+                                value={confirmInput}
+                                onChange={event => setConfirmInput(event.target.value)}
+                                placeholder="Type ERASE to confirm"
+                                className="font-mono"
+                                aria-label="Type ERASE to confirm erasure"
+                              />
+                              <AlertDialogFooter>
+                                <AlertDialogCancel disabled={executing}>Cancel</AlertDialogCancel>
+                                <Button
+                                  variant="destructive"
+                                  disabled={confirmInput !== 'ERASE' || executing}
+                                  onClick={() => void handleExecuteErasure()}
+                                >
+                                  {executing ? (
+                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="mr-1.5 h-4 w-4" />
+                                  )}
+                                  Permanently erase
+                                </Button>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
                       </div>
                     </div>
                   </>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={() => void loadPlan()}>
-                    Load erasure plan
-                  </Button>
+                  <div className="flex items-center justify-between gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void loadPlan()}>
+                      Load erasure plan
+                    </Button>
+                    {canManage &&
+                      detail.erasureExecution?.status === 'COMPLETED' &&
+                      detail.status === 'PROCESSING' && (
+                        <Button
+                          size="sm"
+                          className="bg-emerald-600 text-xs text-white hover:bg-emerald-700 dark:bg-emerald-500"
+                          onClick={() => void handleCompleteRequest()}
+                          disabled={transitioning}
+                        >
+                          {transitioning ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Mark as Completed
+                        </Button>
+                      )}
+                  </div>
                 )}
               </div>
             )}

@@ -969,10 +969,11 @@ async function dispatchPayload(
     case 'INCIDENT_WHATSAPP': {
       const { sendIncidentWhatsApp } = await import('./whatsapp');
       if (payload.providerKey) {
+        const normalizedKey = payload.providerKey === 'whatsapp' ? 'twilio' : payload.providerKey;
         const current = await import('./notification-providers').then(module =>
           module.getWhatsAppConfig()
         );
-        if (current.provider !== payload.providerKey)
+        if (current.provider !== normalizedKey)
           return {
             success: false,
             statusCode: 409,
@@ -1059,10 +1060,11 @@ async function dispatchPayload(
     case 'WHATSAPP': {
       const { sendWhatsApp } = await import('./whatsapp');
       if (payload.providerKey) {
+        const normalizedKey = payload.providerKey === 'whatsapp' ? 'twilio' : payload.providerKey;
         const current = await import('./notification-providers').then(module =>
           module.getWhatsAppConfig()
         );
-        if (current.provider !== payload.providerKey)
+        if (current.provider !== normalizedKey)
           return {
             success: false,
             statusCode: 409,
