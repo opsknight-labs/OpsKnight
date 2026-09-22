@@ -121,6 +121,7 @@ async function calculate(
         windowDays: 90,
         includeAllTime: false,
         includeActiveIncidents: true,
+        activeIncidentOrder: 'newest',
         incidentLimit: 25,
         includeDescription: false,
       }),
