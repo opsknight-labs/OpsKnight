@@ -445,6 +445,24 @@ function getConfiguredApplicationOrigin(statusConfig?: StatusDomainConfig | null
     return null;
   }
 }
+
+function applyResolvedProxyHeaders(
+  headers: Headers,
+  requestHost: string,
+  statusConfig?: StatusDomainConfig | null
+): void {
+  headers.set('host', requestHost);
+  headers.set('x-forwarded-host', requestHost);
+
+  // Only the application plane gets its scheme from the configured Application
+  // URL. Status hosts keep their existing transport metadata.
+  if (isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
+    const configuredOrigin = getConfiguredApplicationOrigin(statusConfig);
+    if (configuredOrigin) {
+      headers.set('x-forwarded-proto', new URL(configuredOrigin).protocol.replace(':', ''));
+    }
+  }
+}
 type CachedDomainConfig = {
   value: StatusDomainConfig | null;
   expiresAt: number;
@@ -758,11 +776,18 @@ export default async function middleware(req: NextRequest) {
   const forwardedHeaders = new Headers(req.headers);
   forwardedHeaders.set('x-request-id', requestId);
 
-  const response = NextResponse.next({ request: { headers: forwardedHeaders } });
+  let response = NextResponse.next({ request: { headers: forwardedHeaders } });
   response.headers.set('x-request-id', requestId);
   const securityHeaders = getSecurityHeaders();
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
+
+  const rebuildBaseResponse = () => {
+    response = NextResponse.next({ request: { headers: forwardedHeaders } });
+    response.headers.set('x-request-id', requestId);
+    Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
+    applySensitiveAuthHeaders(response, pathname);
+  };
 
   const rawRequestHost = getRawRequestHost(req);
   let requestHost = getAuthoritativeRequestHost(req);
@@ -791,6 +816,8 @@ export default async function middleware(req: NextRequest) {
         requestHost = forwardedHost;
         publishedPage = forwardedPage;
         usedConfiguredForwardedHost = true;
+        applyResolvedProxyHeaders(forwardedHeaders, requestHost, statusConfig);
+        rebuildBaseResponse();
       }
     }
   }
@@ -806,6 +833,8 @@ export default async function middleware(req: NextRequest) {
     if (configuredProxyHost !== requestHost) {
       requestHost = configuredProxyHost;
       usedConfiguredForwardedHost = true;
+      applyResolvedProxyHeaders(forwardedHeaders, requestHost, statusConfig);
+      rebuildBaseResponse();
     }
   }
 
@@ -883,6 +912,8 @@ export default async function middleware(req: NextRequest) {
     if (refreshedProxyHost !== requestHost) {
       requestHost = refreshedProxyHost;
       usedConfiguredForwardedHost = true;
+      applyResolvedProxyHeaders(forwardedHeaders, requestHost, statusConfig);
+      rebuildBaseResponse();
     }
 
     if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
@@ -1045,7 +1076,9 @@ export default async function middleware(req: NextRequest) {
         defaultDest
       );
       const authoritativeOrigin =
-        getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
+        (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
+        getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
+        req.nextUrl.origin;
       const redirectResponse = NextResponse.redirect(new URL(redirectUrl, authoritativeOrigin));
       Object.entries(securityHeaders).forEach(([key, value]) =>
         redirectResponse.headers.set(key, value)
@@ -1058,7 +1091,9 @@ export default async function middleware(req: NextRequest) {
   if (isPublicPath(pathname)) return response;
 
   const authoritativeOrigin =
-    getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
+    (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
+    getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
+    req.nextUrl.origin;
   const loginPath =
     pathname.startsWith('/m') || (isMobile && !preferDesktop) ? '/m/login' : '/login';
   const url = new URL(loginPath, authoritativeOrigin);
