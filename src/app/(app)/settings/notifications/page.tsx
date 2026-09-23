@@ -3,7 +3,15 @@ import { redirect } from 'next/navigation';
 import DetailHeroBanner from '@/components/ui/DetailHeroBanner';
 import SystemNotificationSettings from '@/components/settings/SystemNotificationSettings';
 import { getNotificationProviders } from '@/app/(app)/settings/system/actions';
-import { ShieldCheck, Activity, Radio, RadioTower, Mail, BellRing, AlertOctagon } from 'lucide-react';
+import {
+  ShieldCheck,
+  Activity,
+  Radio,
+  RadioTower,
+  Mail,
+  BellRing,
+  AlertOctagon,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
@@ -27,7 +35,9 @@ export default async function NotificationProviderSettingsPage() {
     !String(twilioConfig.accountSid).startsWith('enc:') &&
     !String(twilioConfig.authToken).startsWith('enc:')
   );
-  const isTwilioActive = Boolean(twilio?.enabled && isTwilioValid);
+  const isTwilioActive = Boolean(
+    twilio?.enabled && (twilio.configurationState ?? 'VALID') === 'VALID' && isTwilioValid
+  );
 
   const awsSns = providers.find(p => p.provider === 'aws-sns');
   const awsSnsConfig = (awsSns?.config as Record<string, unknown>) || {};
@@ -37,14 +47,20 @@ export default async function NotificationProviderSettingsPage() {
     !String(awsSnsConfig.accessKeyId).startsWith('enc:') &&
     !String(awsSnsConfig.secretAccessKey).startsWith('enc:')
   );
-  const isAwsSnsActive = Boolean(awsSns?.enabled && isAwsSnsValid);
+  const isAwsSnsActive = Boolean(
+    awsSns?.enabled && (awsSns.configurationState ?? 'VALID') === 'VALID' && isAwsSnsValid
+  );
 
   const isSmsActive = isTwilioActive || isAwsSnsActive;
-  const activeSmsName = isTwilioActive ? 'Twilio' : (isAwsSnsActive ? 'Amazon SNS' : 'None');
+  const activeSmsName = isTwilioActive ? 'Twilio' : isAwsSnsActive ? 'Amazon SNS' : 'None';
 
   // 2. WhatsApp Check
-  const whatsappAccountSid = (twilioConfig.whatsappAccountSid || twilioConfig.accountSid) as string | undefined;
-  const whatsappAuthToken = (twilioConfig.whatsappAuthToken || twilioConfig.authToken) as string | undefined;
+  const whatsappAccountSid = (twilioConfig.whatsappAccountSid || twilioConfig.accountSid) as
+    | string
+    | undefined;
+  const whatsappAuthToken = (twilioConfig.whatsappAuthToken || twilioConfig.authToken) as
+    | string
+    | undefined;
   const isWhatsappValid = Boolean(
     twilioConfig.whatsappNumber &&
     whatsappAccountSid &&
@@ -63,18 +79,25 @@ export default async function NotificationProviderSettingsPage() {
     webPushConfig.vapidPrivateKey &&
     !String(webPushConfig.vapidPrivateKey).startsWith('enc:')
   );
-  const isWebPushActive = Boolean(webPush?.enabled && isWebPushValid);
+  const isWebPushActive = Boolean(
+    webPush?.enabled && (webPush.configurationState ?? 'VALID') === 'VALID' && isWebPushValid
+  );
   const activeWebPushName = isWebPushActive ? 'Enabled' : 'Disabled';
 
   // 4. Email Check & Route
   const emailProviderKeys = ['resend', 'sendgrid', 'ses', 'smtp'];
   const formatEmailLabel = (k: string) => {
     switch (k.toLowerCase()) {
-      case 'resend': return 'Resend';
-      case 'sendgrid': return 'SendGrid';
-      case 'ses': return 'SES';
-      case 'smtp': return 'SMTP';
-      default: return k.toUpperCase();
+      case 'resend':
+        return 'Resend';
+      case 'sendgrid':
+        return 'SendGrid';
+      case 'ses':
+        return 'SES';
+      case 'smtp':
+        return 'SMTP';
+      default:
+        return k.toUpperCase();
     }
   };
   const isEmailValid = (key: string) => {
@@ -105,13 +128,17 @@ export default async function NotificationProviderSettingsPage() {
     return false;
   };
 
-  const activeEmailProviders = emailProviderKeys.filter(
-    key => (providers.find(p => p.provider === key)?.enabled ?? false) && isEmailValid(key)
-  );
+  const activeEmailProviders = emailProviderKeys.filter(key => {
+    const provider = providers.find(p => p.provider === key);
+    return Boolean(
+      provider?.enabled && (provider.configurationState ?? 'VALID') === 'VALID' && isEmailValid(key)
+    );
+  });
   const isEmailActive = activeEmailProviders.length > 0;
-  const emailRouteSummary = activeEmailProviders.length > 0
-    ? activeEmailProviders.map(formatEmailLabel).join(' → ')
-    : 'None';
+  const emailRouteSummary =
+    activeEmailProviders.length > 0
+      ? activeEmailProviders.map(formatEmailLabel).join(' → ')
+      : 'None';
 
   // Total Channels Active
   const activeChannelsCount =
@@ -137,13 +164,30 @@ export default async function NotificationProviderSettingsPage() {
     activeEmailProviders.length;
 
   // Configuration Issues Count
-  const isTwilioErr = Boolean(twilio?.enabled && !isTwilioValid);
-  const isAwsSnsErr = Boolean(awsSns?.enabled && !isAwsSnsValid);
-  const isWhatsappErr = Boolean(twilioConfig.whatsappEnabled && !isWhatsappValid);
-  const isWebPushErr = Boolean(webPush?.enabled && !isWebPushValid);
-  const emailErrors = emailProviderKeys.filter(
-    key => (providers.find(p => p.provider === key)?.enabled ?? false) && !isEmailValid(key)
-  ).length;
+  const isTwilioErr = Boolean(
+    twilio?.enabled &&
+    ((twilio.configurationState && twilio.configurationState !== 'VALID') || !isTwilioValid)
+  );
+  const isAwsSnsErr = Boolean(
+    awsSns?.enabled &&
+    ((awsSns.configurationState && awsSns.configurationState !== 'VALID') || !isAwsSnsValid)
+  );
+  const isWhatsappErr = Boolean(
+    twilioConfig.whatsappEnabled &&
+    ((twilio?.configurationState && twilio.configurationState !== 'VALID') || !isWhatsappValid)
+  );
+  const isWebPushErr = Boolean(
+    webPush?.enabled &&
+    ((webPush.configurationState && webPush.configurationState !== 'VALID') || !isWebPushValid)
+  );
+  const emailErrors = emailProviderKeys.filter(key => {
+    const provider = providers.find(p => p.provider === key);
+    return Boolean(
+      provider?.enabled &&
+      ((provider.configurationState && provider.configurationState !== 'VALID') ||
+        !isEmailValid(key))
+    );
+  }).length;
 
   const configurationIssues =
     (isTwilioErr ? 1 : 0) +
@@ -218,7 +262,10 @@ export default async function NotificationProviderSettingsPage() {
             label: 'Channels Available',
             value: `${activeChannelsCount} / 4`,
             icon: <BellRing className="h-3.5 w-3.5" />,
-            subtext: activeChannelsCount === 4 ? 'All channels covered' : `${4 - activeChannelsCount} inactive`,
+            subtext:
+              activeChannelsCount === 4
+                ? 'All channels covered'
+                : `${4 - activeChannelsCount} inactive`,
           },
           {
             label: 'Enabled Providers',
@@ -230,17 +277,29 @@ export default async function NotificationProviderSettingsPage() {
             label: 'Email Route',
             value: emailRouteSummary,
             icon: <Mail className="h-3.5 w-3.5" />,
-            subtext: activeEmailProviders.length > 1
-              ? `${activeEmailProviders.length} gateways with failover`
-              : activeEmailProviders.length === 1
-                ? 'Single provider (no failover)'
-                : 'Email dispatch offline',
+            subtext:
+              activeEmailProviders.length > 1
+                ? `${activeEmailProviders.length} gateways with failover`
+                : activeEmailProviders.length === 1
+                  ? 'Single provider (no failover)'
+                  : 'Email dispatch offline',
           },
           {
             label: 'Configuration Health',
-            value: configurationIssues === 0 ? 'Optimal' : `${configurationIssues} Issue${configurationIssues > 1 ? 's' : ''}`,
-            icon: configurationIssues === 0 ? <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> : <AlertOctagon className="h-3.5 w-3.5 text-amber-400" />,
-            subtext: configurationIssues === 0 ? 'All enabled gateways valid' : 'Missing credentials detected',
+            value:
+              configurationIssues === 0
+                ? 'Optimal'
+                : `${configurationIssues} Issue${configurationIssues > 1 ? 's' : ''}`,
+            icon:
+              configurationIssues === 0 ? (
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+              ) : (
+                <AlertOctagon className="h-3.5 w-3.5 text-amber-400" />
+              ),
+            subtext:
+              configurationIssues === 0
+                ? 'All enabled gateways valid'
+                : 'Missing credentials detected',
           },
         ]}
       />
@@ -248,25 +307,36 @@ export default async function NotificationProviderSettingsPage() {
       {/* 2. Runtime Overview Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl border border-border/80 bg-card shadow-xs text-xs">
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">Email Route</span>
-          <span className="font-semibold text-foreground truncate block mt-0.5" title={emailRouteSummary}>
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            Email Route
+          </span>
+          <span
+            className="font-semibold text-foreground truncate block mt-0.5"
+            title={emailRouteSummary}
+          >
             {emailRouteSummary}
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">SMS Provider</span>
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            SMS Provider
+          </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
             {activeSmsName}
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">WhatsApp</span>
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            WhatsApp
+          </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
             {activeWhatsappName}
           </span>
         </div>
         <div>
-          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">Web Push</span>
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            Web Push
+          </span>
           <span className="font-semibold text-foreground truncate block mt-0.5">
             {activeWebPushName}
           </span>

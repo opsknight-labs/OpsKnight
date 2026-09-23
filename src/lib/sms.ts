@@ -277,7 +277,7 @@ export async function sendSMS(options: SMSOptions): Promise<{
           to: toNumber,
           messageId: result.MessageId,
         });
-        return { success: true };
+        return { success: true, messageSid: result.MessageId };
       } catch (error: unknown) {
         const errorInfo =
           error && typeof error === 'object'

@@ -70,7 +70,7 @@ vi.mock('@/lib/encryption', () => ({
   getEncryptionKey: vi.fn(() => '11'.repeat(32)),
 }));
 
-vi.mock('@/lib/email', async (importOriginal) => {
+vi.mock('@/lib/email', async importOriginal => {
   const actual = await importOriginal<typeof import('@/lib/email')>();
   return {
     ...actual,
@@ -135,7 +135,13 @@ describe('Control Plane Email Provider Failover', () => {
 
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
         { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
-        { provider: 'ses', enabled: true, apiKey: 'ses_key', host: 'us-east-1', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_key',
+          host: 'us-east-1',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
       // Resend encounters ETIMEDOUT (ambiguous outcome)
@@ -210,7 +216,13 @@ describe('Control Plane Email Provider Failover', () => {
 
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
         { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
-        { provider: 'ses', enabled: true, apiKey: 'ses_key', host: 'us-east-1', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_key',
+          host: 'us-east-1',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
       // Attempt 1: Resend returns 429
@@ -244,7 +256,11 @@ describe('Control Plane Email Provider Failover', () => {
       vi.spyOn(providerAdmission, 'acquireProviderAdmission').mockImplementation(
         async (scope, providerKey) => {
           if (providerKey === 'resend') {
-            return { allowed: false, retryAt: new Date(Date.now() + 50000), reason: 'RATE_LIMITED' };
+            return {
+              allowed: false,
+              retryAt: new Date(Date.now() + 50000),
+              reason: 'RATE_LIMITED',
+            };
           }
           return { allowed: true };
         }
@@ -300,9 +316,11 @@ describe('Control Plane Email Provider Failover', () => {
       // Force Resend's circuit breaker to OPEN
       const resendBreaker = CircuitBreakers.email('resend');
       for (let i = 0; i < 6; i++) {
-        await resendBreaker.execute(async () => {
-          throw new Error('connect ECONNREFUSED 127.0.0.1:443');
-        }).catch(() => undefined);
+        await resendBreaker
+          .execute(async () => {
+            throw new Error('connect ECONNREFUSED 127.0.0.1:443');
+          })
+          .catch(() => undefined);
       }
       expect(resendBreaker.getState()).toBe('OPEN');
 
@@ -336,7 +354,13 @@ describe('Control Plane Email Provider Failover', () => {
 
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
         { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
-        { provider: 'ses', enabled: true, apiKey: 'ses_key', host: 'us-east-1', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_key',
+          host: 'us-east-1',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
       mocks.sendEmail.mockResolvedValueOnce({
@@ -395,14 +419,20 @@ describe('Control Plane Email Provider Failover', () => {
 
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
         { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
-        { provider: 'ses', enabled: true, apiKey: 'ses_key', host: 'us-east-1', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_key',
+          host: 'us-east-1',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
-      // Attempt 1: Resend fails with 500
+      // Attempt 1: Resend is explicitly rate-limited, so cross-provider fallback is safe.
       mocks.sendEmail.mockResolvedValueOnce({
         success: false,
-        error: 'Internal Server Error',
-        statusCode: 500,
+        error: 'Rate limit exceeded',
+        statusCode: 429,
       });
 
       // Attempt 2: SES succeeds
@@ -420,9 +450,9 @@ describe('Control Plane Email Provider Failover', () => {
         data: expect.objectContaining({
           notificationId: 'notif-ledger-1',
           ordinal: 1,
-          outcome: 'RETRYABLE_FAILURE',
+          outcome: 'RATE_LIMITED',
           provider: 'resend',
-          errorMessage: 'Internal Server Error',
+          errorMessage: 'Rate limit exceeded',
         }),
       });
 
@@ -444,7 +474,13 @@ describe('Control Plane Email Provider Failover', () => {
       // At enqueue time: Resend and SES are enabled
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValueOnce([
         { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
-        { provider: 'ses', enabled: true, apiKey: 'ses_key', host: 'us-east-1', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_key',
+          host: 'us-east-1',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
       const input: CentralNotificationInput = {
@@ -466,7 +502,9 @@ describe('Control Plane Email Provider Failover', () => {
       };
 
       let storedPayloadEncrypted = '';
-      vi.mocked(prisma.notification.create).mockImplementationOnce((async (args: { data: Record<string, unknown> }) => {
+      vi.mocked(prisma.notification.create).mockImplementationOnce((async (args: {
+        data: Record<string, unknown>;
+      }) => {
         storedPayloadEncrypted = args.data.payloadEncrypted as string;
         return {
           id: 'notif-queued-frozen',
@@ -487,7 +525,15 @@ describe('Control Plane Email Provider Failover', () => {
 
       // Now: admin reconfigures providers! Resend is deleted, only SMTP is enabled
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
-        { provider: 'smtp', enabled: true, host: 'smtp.example.com', port: 587, user: 'u', password: 'p', fromEmail: 'smtp@example.com' },
+        {
+          provider: 'smtp',
+          enabled: true,
+          host: 'smtp.example.com',
+          port: 587,
+          user: 'u',
+          password: 'p',
+          fromEmail: 'smtp@example.com',
+        },
       ]);
 
       // Claim and deliver the notification
@@ -514,7 +560,13 @@ describe('Control Plane Email Provider Failover', () => {
       // Provider configs when delivering - Resend exists
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
         { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
-        { provider: 'ses', enabled: true, apiKey: 'ses_key', host: 'us-east-1', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_key',
+          host: 'us-east-1',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
       mocks.sendEmail.mockResolvedValueOnce({
@@ -576,7 +628,13 @@ describe('Control Plane Email Provider Failover', () => {
 
       // Only SES is configured in database
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
-        { provider: 'ses', enabled: true, apiKey: 'ses_sec', accessKeyId: 'ses_key', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_sec',
+          accessKeyId: 'ses_key',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
       mocks.sendIncidentEmail.mockResolvedValueOnce({
@@ -637,15 +695,29 @@ describe('Control Plane Email Provider Failover', () => {
       vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
         { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
         { provider: 'sendgrid', enabled: true, apiKey: 'sg_key', fromEmail: 'ops@example.com' },
-        { provider: 'ses', enabled: true, apiKey: 'ses_sec', accessKeyId: 'ses_key', fromEmail: 'ops@example.com' },
-        { provider: 'smtp', enabled: true, host: 'smtp.example.com', port: 587, user: 'u', password: 'p', fromEmail: 'ops@example.com' },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'ses_sec',
+          accessKeyId: 'ses_key',
+          fromEmail: 'ops@example.com',
+        },
+        {
+          provider: 'smtp',
+          enabled: true,
+          host: 'smtp.example.com',
+          port: 587,
+          user: 'u',
+          password: 'p',
+          fromEmail: 'ops@example.com',
+        },
       ]);
 
-      // All 3 dispatches fail with safe 500 errors
+      // All 3 dispatches are explicitly rate-limited, which is safe to fail over.
       mocks.sendEmail
-        .mockResolvedValueOnce({ success: false, statusCode: 500, error: 'Resend 500 error' })
-        .mockResolvedValueOnce({ success: false, statusCode: 500, error: 'SendGrid 500 error' })
-        .mockResolvedValueOnce({ success: false, statusCode: 500, error: 'SES 500 error' })
+        .mockResolvedValueOnce({ success: false, statusCode: 429, error: 'Resend rate limited' })
+        .mockResolvedValueOnce({ success: false, statusCode: 429, error: 'SendGrid rate limited' })
+        .mockResolvedValueOnce({ success: false, statusCode: 429, error: 'SES rate limited' })
         .mockResolvedValueOnce({ success: true, providerMessageId: 'smtp-should-not-be-called' });
 
       const attemptLedger: Array<{ ordinal: number; outcome: string; provider: string }> = [];
@@ -666,16 +738,28 @@ describe('Control Plane Email Provider Failover', () => {
       // Only 3 attempts must be executed, SMTP (4th) must NOT be executed!
       expect(mocks.sendEmail).toHaveBeenCalledTimes(3);
       expect(attemptLedger).toHaveLength(3);
-      expect(attemptLedger[0]).toMatchObject({ ordinal: 1, outcome: 'RETRYABLE_FAILURE', provider: 'resend' });
-      expect(attemptLedger[1]).toMatchObject({ ordinal: 2, outcome: 'RETRYABLE_FAILURE', provider: 'sendgrid' });
-      expect(attemptLedger[2]).toMatchObject({ ordinal: 3, outcome: 'PERMANENT_FAILURE', provider: 'ses' });
+      expect(attemptLedger[0]).toMatchObject({
+        ordinal: 1,
+        outcome: 'RATE_LIMITED',
+        provider: 'resend',
+      });
+      expect(attemptLedger[1]).toMatchObject({
+        ordinal: 2,
+        outcome: 'RATE_LIMITED',
+        provider: 'sendgrid',
+      });
+      expect(attemptLedger[2]).toMatchObject({
+        ordinal: 3,
+        outcome: 'RATE_LIMITED',
+        provider: 'ses',
+      });
 
-      // Notification marked FAILED with attempts = 3
+      // The exhausted rate-limited notification remains pending until the provider retry window.
       expect(prisma.notification.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ id: 'notif-max-attempts-route' }),
           data: expect.objectContaining({
-            status: 'FAILED',
+            status: 'PENDING',
             attempts: 3,
           }),
         })

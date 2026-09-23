@@ -68,6 +68,7 @@ describe('AWS SNS SMS Provider Transport Contract', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(result.messageSid).toBe('sns-msg-id-555');
     expect(mockSnsSend).toHaveBeenCalled();
   });
 

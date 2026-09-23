@@ -955,7 +955,7 @@ async function dispatchPayload(
           };
         }
       }
-      return executeProvider(CircuitBreakers.sms(), async () => {
+      return executeProvider(CircuitBreakers.sms(payload.providerKey), async () => {
         const result = await sendIncidentSMS(
           payload.userId,
           payload.incidentId,
@@ -1067,7 +1067,7 @@ async function dispatchPayload(
       const { sendSMS } = await import('./sms');
       if (payload.providerKey) {
         const current = await import('./notification-providers').then(module =>
-          module.getSMSConfig()
+          module.getSMSConfig(payload.providerKey as 'twilio' | 'aws-sns')
         );
         if (current.provider !== payload.providerKey)
           return {
@@ -1077,11 +1077,12 @@ async function dispatchPayload(
             error: `Pinned SMS provider ${payload.providerKey} is unavailable`,
           };
       }
-      return executeProvider(CircuitBreakers.sms(), async () => {
+      return executeProvider(CircuitBreakers.sms(payload.providerKey), async () => {
         const result = await sendSMS({
           to: payload.to,
           message: payload.message,
           notificationId,
+          providerKey: payload.providerKey as 'twilio' | 'aws-sns' | undefined,
         });
         return { ...result, providerMessageId: result.messageSid };
       });
@@ -1135,10 +1136,12 @@ async function dispatchPayload(
           deliveryKey: notificationId,
           targetDeviceId: payload.targetDeviceId,
         });
-        return {
-          ...result,
-          errorCode: result.reason ?? result.code,
-        };
+        return result.code === 'NO_DEVICE_TOKENS' || result.code === 'NO_WEB_SUBSCRIPTIONS'
+          ? { ...result, success: true, skipped: true }
+          : {
+              ...result,
+              errorCode: result.reason ?? result.code,
+            };
       });
     }
     case 'SLACK_CHANNEL': {
@@ -2283,6 +2286,9 @@ export async function deliverCentralNotification(
     // Ambiguous outcome (timeout, ECONNRESET, socket hangup) -> UNKNOWN and NEVER FAILOVER
     const isAmbiguous =
       circuitTimeout ||
+      // A provider HTTP 5xx can occur after accepting a message. Without a
+      // provider receipt, retrying it (even on the same provider) risks a duplicate.
+      (isEmail && typeof result.statusCode === 'number' && result.statusCode >= 500) ||
       result.errorCode === 'UNKNOWN' ||
       result.errorCode === 'ETIMEDOUT' ||
       result.errorCode === 'ECONNRESET' ||

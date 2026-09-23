@@ -79,7 +79,10 @@ export class CircuitBreaker {
   /**
    * Execute a function with circuit breaker protection
    */
-  async execute<T>(fn: (signal: AbortSignal) => Promise<T>, options: CircuitExecutionOptions<T> = {}): Promise<T> {
+  async execute<T>(
+    fn: (signal: AbortSignal) => Promise<T>,
+    options: CircuitExecutionOptions<T> = {}
+  ): Promise<T> {
     if (this.state.state === 'OPEN') {
       const now = Date.now();
       if (now - this.state.lastFailureTime >= this.config.resetTimeout) {
@@ -327,8 +330,8 @@ export const CircuitBreakers = {
       timeout: 15000, // 15 seconds for email
     }),
 
-  sms: () =>
-    getCircuitBreaker('sms', {
+  sms: (providerKey?: string) =>
+    getCircuitBreaker(providerKey && providerKey !== 'default' ? `sms:${providerKey}` : 'sms', {
       failureThreshold: 3,
       resetTimeout: 30000, // 30 seconds
       timeout: 10000, // 10 seconds for SMS
