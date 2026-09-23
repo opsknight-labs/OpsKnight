@@ -21,7 +21,7 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   ses: ['accessKeyId', 'secretAccessKey'],
 };
 
-function getSensitiveFields(provider: string): string[] {
+export function getProviderSensitiveFields(provider: string): string[] {
   return Object.entries(SENSITIVE_FIELDS).find(([name]) => name === provider)?.[1] ?? [];
 }
 
@@ -71,7 +71,7 @@ export async function encryptProviderConfig(
   provider: string,
   config: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
 
   // Check if encryption is available
   const key = await getEncryptionKey();
@@ -158,7 +158,7 @@ export async function decryptProviderConfig(
   provider: string,
   config: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
 
   // Check if encryption is available
   const key = await getEncryptionKey();
@@ -240,7 +240,7 @@ export async function decryptProviderConfig(
  * Check if a config has any encrypted fields
  */
 export function hasEncryptedFields(provider: string, config: Record<string, unknown>): boolean {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
   if (
     Object.entries(config).some(
       ([field, value]) =>
@@ -270,7 +270,7 @@ export function maskSensitiveFields(
   provider: string,
   config: Record<string, unknown>
 ): Record<string, unknown> {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
   const maskedConfig = Object.fromEntries(
     Object.entries(config).flatMap(([field, value]) => {
       if (!sensitiveFields.includes(field) || typeof value !== 'string' || !value) {
@@ -303,7 +303,7 @@ export function mergeSensitiveProviderFields(
   incoming: Record<string, unknown>,
   existing: Record<string, unknown>
 ): Record<string, unknown> {
-  const sensitiveFields = new Set(getSensitiveFields(provider));
+  const sensitiveFields = new Set(getProviderSensitiveFields(provider));
   const existingFields = new Map(Object.entries(existing));
   const merged = Object.fromEntries(
     Object.entries(incoming).map(([field, value]) => {

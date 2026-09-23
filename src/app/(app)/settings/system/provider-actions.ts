@@ -8,7 +8,9 @@ import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import {
   decryptProviderConfig,
   encryptProviderConfig,
+  getProviderSensitiveFields,
   mergeSensitiveProviderFields,
+  SECRET_MASK,
 } from '@/lib/encrypted-provider-config';
 
 const SUPPORTED_PROVIDERS = new Set([
@@ -45,6 +47,43 @@ async function getCommittedUpdatedAt(id: string): Promise<string> {
     select: { updatedAt: true },
   });
   return committed.updatedAt.toISOString();
+}
+
+function isSecretPlaceholder(value: unknown): boolean {
+  return (
+    value === SECRET_MASK ||
+    value === '********' ||
+    value === '' ||
+    value === undefined ||
+    value === null
+  );
+}
+
+async function recoverableExistingConfig(provider: string, config: Record<string, unknown> | null) {
+  if (!config) return { config: {}, recoveredFromDecryptionError: false };
+  try {
+    return {
+      config: await decryptProviderConfig(provider, config),
+      recoveredFromDecryptionError: false,
+    };
+  } catch {
+    // Never reuse unreadable ciphertext as though it were plaintext. An administrator
+    // may disable the provider or replace every secret with a new value.
+    return { config: {}, recoveredFromDecryptionError: true };
+  }
+}
+
+function assertRecoveryHasReplacementSecrets(provider: string, config: Record<string, unknown>) {
+  // WhatsApp override credentials are optional; Twilio's SMS credentials are
+  // the recoverable baseline for that provider.
+  const requiredFields =
+    provider === 'twilio' ? ['accountSid', 'authToken'] : getProviderSensitiveFields(provider);
+  const missing = requiredFields.filter(field => isSecretPlaceholder(config[field]));
+  if (missing.length > 0) {
+    throw new Error(
+      'This provider has unreadable credentials. Enter replacement values for all secret fields before enabling it.'
+    );
+  }
 }
 
 /**
@@ -88,13 +127,14 @@ export async function updateNotificationProvider(
     throw new SettingsChangedError();
   }
 
-  const existingConfig = existingProvider?.config
-    ? await decryptProviderConfig(
-        normalizedProvider,
-        existingProvider.config as Record<string, unknown>
-      )
-    : {};
-  const mergedConfig = mergeSensitiveProviderFields(normalizedProvider, config, existingConfig);
+  const recovered = await recoverableExistingConfig(
+    normalizedProvider,
+    (existingProvider?.config as Record<string, unknown> | undefined) ?? null
+  );
+  if (enabled && recovered.recoveredFromDecryptionError) {
+    assertRecoveryHasReplacementSecrets(normalizedProvider, config);
+  }
+  const mergedConfig = mergeSensitiveProviderFields(normalizedProvider, config, recovered.config);
   const encryptedConfig = await encryptProviderConfig(normalizedProvider, mergedConfig);
 
   const providerRecordId = await prisma.$transaction(async tx => {
@@ -141,7 +181,10 @@ export async function updateNotificationProvider(
           ? { provider: normalizedProvider, enabled: existingProvider.enabled }
           : null,
         newValue: { provider: normalizedProvider, enabled },
-        details: { provider: normalizedProvider },
+        details: {
+          provider: normalizedProvider,
+          recoveredFromDecryptionError: recovered.recoveredFromDecryptionError,
+        },
       },
       tx
     );
@@ -180,9 +223,11 @@ export async function generateVapidKeys(options?: {
     throw new SettingsChangedError();
   }
 
-  const existingConfig = existing?.config
-    ? await decryptProviderConfig('web-push', existing.config as Record<string, unknown>)
-    : {};
+  const recovered = await recoverableExistingConfig(
+    'web-push',
+    (existing?.config as Record<string, unknown> | undefined) ?? null
+  );
+  const existingConfig = recovered.config;
   const previousKeys = Array.isArray(existingConfig.vapidKeyHistory)
     ? (existingConfig.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
     : [];
@@ -248,7 +293,11 @@ export async function generateVapidKeys(options?: {
         entityType: 'SYSTEM_CONFIG',
         entityId: id,
         actorId: user.id,
-        details: { subject, rotated: shouldRotate },
+        details: {
+          subject,
+          rotated: shouldRotate,
+          recoveredFromDecryptionError: recovered.recoveredFromDecryptionError,
+        },
       },
       tx
     );

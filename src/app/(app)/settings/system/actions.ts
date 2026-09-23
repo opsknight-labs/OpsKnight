@@ -8,9 +8,38 @@ import { Prisma } from '@prisma/client';
 import {
   decryptProviderConfig,
   encryptProviderConfig,
+  getProviderSensitiveFields,
   maskSensitiveFields,
   mergeSensitiveProviderFields,
+  SECRET_MASK,
 } from '@/lib/encrypted-provider-config';
+
+async function recoverableProviderConfig(provider: string, config: Record<string, unknown> | null) {
+  if (!config) return { config: {}, recoveredFromDecryptionError: false };
+  try {
+    return {
+      config: await decryptProviderConfig(provider, config),
+      recoveredFromDecryptionError: false,
+    };
+  } catch {
+    return { config: {}, recoveredFromDecryptionError: true };
+  }
+}
+
+function hasReplacementSecrets(provider: string, config: Record<string, unknown>) {
+  const requiredFields =
+    provider === 'twilio' ? ['accountSid', 'authToken'] : getProviderSensitiveFields(provider);
+  return requiredFields.every(field => {
+    const value = config[field];
+    return (
+      value !== SECRET_MASK &&
+      value !== '********' &&
+      value !== '' &&
+      value !== undefined &&
+      value !== null
+    );
+  });
+}
 
 /**
  * Get all notification provider configurations
@@ -74,10 +103,20 @@ export async function updateNotificationProvider(
   const existingProvider = providerId
     ? await prisma.notificationProvider.findUnique({ where: { id: providerId } })
     : await prisma.notificationProvider.findUnique({ where: { provider } });
-  const existingConfig = existingProvider?.config
-    ? await decryptProviderConfig(provider, existingProvider.config as Record<string, unknown>)
-    : {};
-  const mergedConfig = mergeSensitiveProviderFields(provider, config, existingConfig);
+  const recovered = await recoverableProviderConfig(
+    provider,
+    (existingProvider?.config as Record<string, unknown> | undefined) ?? null
+  );
+  if (
+    enabled &&
+    recovered.recoveredFromDecryptionError &&
+    !hasReplacementSecrets(provider, config)
+  ) {
+    throw new Error(
+      'This provider has unreadable credentials. Enter replacement values for all secret fields before enabling it.'
+    );
+  }
+  const mergedConfig = mergeSensitiveProviderFields(provider, config, recovered.config);
   const encryptedConfig = await encryptProviderConfig(provider, mergedConfig);
 
   if (providerId) {
@@ -144,9 +183,11 @@ export async function generateVapidKeys(options?: {
   const existing = await prisma.notificationProvider.findUnique({
     where: { provider: 'web-push' },
   });
-  const existingConfig = existing?.config
-    ? await decryptProviderConfig('web-push', existing.config as Record<string, unknown>)
-    : {};
+  const recovered = await recoverableProviderConfig(
+    'web-push',
+    (existing?.config as Record<string, unknown> | undefined) ?? null
+  );
+  const existingConfig = recovered.config;
   const previousKeys = Array.isArray(existingConfig.vapidKeyHistory)
     ? (existingConfig.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
     : [];
