@@ -210,20 +210,45 @@ describe('Safe Email Provider Failover', () => {
       ).toBe(true);
     });
 
-    it('returns true for network, socket, timeout, and missing package errors', () => {
+    it('returns false for in-flight/ambiguous network and timeout errors (ECONNRESET, ETIMEDOUT, socket hang up)', () => {
       expect(
         isSafeEmailFailoverCondition({
           success: false,
           error: 'connect ECONNRESET 127.0.0.1:465',
           errorCode: 'ECONNRESET',
         })
-      ).toBe(true);
+      ).toBe(false);
 
       expect(
         isSafeEmailFailoverCondition({
           success: false,
           error: 'Connection timeout after 30000ms',
           errorCode: 'ETIMEDOUT',
+        })
+      ).toBe(false);
+
+      expect(
+        isSafeEmailFailoverCondition({
+          success: false,
+          error: 'socket hang up',
+        })
+      ).toBe(false);
+    });
+
+    it('returns true for demonstrably pre-submission errors (ENOTFOUND, ECONNREFUSED, missing package)', () => {
+      expect(
+        isSafeEmailFailoverCondition({
+          success: false,
+          error: 'getaddrinfo ENOTFOUND api.resend.com',
+          errorCode: 'ENOTFOUND',
+        })
+      ).toBe(true);
+
+      expect(
+        isSafeEmailFailoverCondition({
+          success: false,
+          error: 'connect ECONNREFUSED 127.0.0.1:587',
+          errorCode: 'ECONNREFUSED',
         })
       ).toBe(true);
 
@@ -470,7 +495,7 @@ describe('Safe Email Provider Failover', () => {
       expect(result.providerMessageId).toBe('sg-msg-rate-limit-fallback');
     });
 
-    it('fails over to SES when Resend encounters network timeout', async () => {
+    it('does NOT fail over to SES when Resend encounters network ETIMEDOUT (ambiguous outcome)', async () => {
       vi.spyOn(notificationProviders, 'getAllConfiguredEmailProviders').mockResolvedValue([
         {
           provider: 'resend',
@@ -489,8 +514,39 @@ describe('Safe Email Provider Failover', () => {
 
       mockResendSend.mockRejectedValueOnce(new Error('connect ETIMEDOUT 127.0.0.1:443'));
 
+      const result = await sendEmail({
+        to: 'user@example.com',
+        subject: 'Incident Alert',
+        html: '<p>System Down</p>',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.selectedProvider).toBe('resend');
+      expect(result.providerAttemptCount).toBe(1);
+      expect(mockSesSend).not.toHaveBeenCalled();
+    });
+
+    it('fails over to SES when Resend encounters pre-submission ECONNREFUSED error', async () => {
+      vi.spyOn(notificationProviders, 'getAllConfiguredEmailProviders').mockResolvedValue([
+        {
+          provider: 'resend',
+          enabled: true,
+          apiKey: 're_test_123',
+          fromEmail: 'alerts@example.com',
+        },
+        {
+          provider: 'ses',
+          enabled: true,
+          apiKey: 'aws_secret',
+          host: 'us-east-1',
+          fromEmail: 'alerts@example.com',
+        },
+      ]);
+
+      mockResendSend.mockRejectedValueOnce(new Error('connect ECONNREFUSED 127.0.0.1:443'));
+
       mockSesSend.mockResolvedValueOnce({
-        MessageId: 'ses-msg-timeout-fallback',
+        MessageId: 'ses-msg-refused-fallback',
       });
 
       const result = await sendEmail({
@@ -502,7 +558,7 @@ describe('Safe Email Provider Failover', () => {
       expect(result.success).toBe(true);
       expect(result.selectedProvider).toBe('ses');
       expect(result.providerAttemptCount).toBe(2);
-      expect(result.providerMessageId).toBe('ses-msg-timeout-fallback');
+      expect(result.providerMessageId).toBe('ses-msg-refused-fallback');
     });
 
     it('honors explicitly providedConfig without querying provider list or failing over', async () => {

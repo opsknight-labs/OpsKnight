@@ -320,8 +320,8 @@ export function getCircuitBreaker(
  * Pre-configured circuit breakers for common services
  */
 export const CircuitBreakers = {
-  email: () =>
-    getCircuitBreaker('email', {
+  email: (providerKey?: string) =>
+    getCircuitBreaker(providerKey && providerKey !== 'default' ? `email:${providerKey}` : 'email', {
       failureThreshold: 5,
       resetTimeout: 60000, // 1 minute
       timeout: 15000, // 15 seconds for email

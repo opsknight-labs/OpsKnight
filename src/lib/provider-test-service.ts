@@ -9,7 +9,13 @@ import {
 } from '@/lib/notification-control-plane';
 import { logAudit } from '@/lib/audit';
 
-export type ProviderTestStatus = 'DELIVERED' | 'QUEUED' | 'DEFERRED' | 'FAILED' | 'UNKNOWN';
+export type ProviderTestStatus =
+  | 'ACCEPTED'
+  | 'DELIVERED'
+  | 'QUEUED'
+  | 'DEFERRED'
+  | 'FAILED'
+  | 'UNKNOWN';
 
 export type ProviderTestResult = {
   success: boolean;
@@ -66,7 +72,7 @@ export async function resolveTestNotificationOutcome(
   const errorCode = latestAttempt?.errorCode || undefined;
   const errorMessage = latestAttempt?.errorMessage || notification?.errorMsg || undefined;
 
-  if (notification?.status === 'SENT') {
+  if (notification?.status === 'DELIVERED') {
     return {
       success: true,
       status: 'DELIVERED',
@@ -75,6 +81,18 @@ export async function resolveTestNotificationOutcome(
       notificationId,
       providerMessageId,
       message: `Test notification delivered successfully via ${providerKey.toUpperCase()}`,
+    };
+  }
+
+  if (notification?.status === 'SENT') {
+    return {
+      success: true,
+      status: 'ACCEPTED',
+      provider: latestAttempt?.provider || providerKey,
+      channel,
+      notificationId,
+      providerMessageId,
+      message: `Test notification accepted by provider ${providerKey.toUpperCase()}`,
     };
   }
 

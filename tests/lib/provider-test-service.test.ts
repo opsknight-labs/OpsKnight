@@ -36,10 +36,41 @@ describe('Provider Test Service', () => {
   });
 
   describe('Outcome State Machine Resolution', () => {
-    it('resolves SENT notification status as DELIVERED with green success: true', async () => {
+    it('resolves SENT notification status as ACCEPTED with green success: true', async () => {
       vi.mocked(prisma.notification.findUnique).mockResolvedValue({
         id: 'notif-1',
         status: 'SENT',
+        providerMessageId: 'msg-accepted-123',
+        errorMsg: null,
+        nextAttemptAt: null,
+        deliveryAttempts: [
+          {
+            outcome: 'ACCEPTED',
+            provider: 'resend',
+            providerMessageId: 'msg-accepted-123',
+            errorCode: null,
+            errorMessage: null,
+          },
+        ],
+      } as never);
+
+      const result = await resolveTestNotificationOutcome('notif-1', 'resend', 'EMAIL');
+
+      expect(result).toMatchObject({
+        status: 'ACCEPTED',
+        success: true,
+        provider: 'resend',
+        channel: 'EMAIL',
+        notificationId: 'notif-1',
+        providerMessageId: 'msg-accepted-123',
+      });
+      expect(result.message).toContain('accepted by provider');
+    });
+
+    it('resolves DELIVERED notification status as DELIVERED with green success: true', async () => {
+      vi.mocked(prisma.notification.findUnique).mockResolvedValue({
+        id: 'notif-deliv-1',
+        status: 'DELIVERED',
         providerMessageId: 'msg-delivered-123',
         errorMsg: null,
         nextAttemptAt: null,
@@ -54,14 +85,14 @@ describe('Provider Test Service', () => {
         ],
       } as never);
 
-      const result = await resolveTestNotificationOutcome('notif-1', 'resend', 'EMAIL');
+      const result = await resolveTestNotificationOutcome('notif-deliv-1', 'resend', 'EMAIL');
 
       expect(result).toMatchObject({
         status: 'DELIVERED',
         success: true,
         provider: 'resend',
         channel: 'EMAIL',
-        notificationId: 'notif-1',
+        notificationId: 'notif-deliv-1',
         providerMessageId: 'msg-delivered-123',
       });
       expect(result.message).toContain('delivered successfully');
@@ -231,7 +262,7 @@ describe('Provider Test Service', () => {
       expect(result.message).toContain("disabled");
     });
 
-    it('dispatches email test and returns structured DELIVERED result', async () => {
+    it('dispatches email test and returns structured ACCEPTED result', async () => {
       vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
         id: 'prov-resend',
         provider: 'resend',
@@ -265,7 +296,7 @@ describe('Provider Test Service', () => {
       const result = await executeProviderTest('resend', adminUser);
 
       expect(result).toMatchObject({
-        status: 'DELIVERED',
+        status: 'ACCEPTED',
         success: true,
         provider: 'resend',
         channel: 'EMAIL',
@@ -282,7 +313,7 @@ describe('Provider Test Service', () => {
       );
     });
 
-    it('dispatches Twilio WhatsApp test using canonical twilio providerKey and returns DELIVERED', async () => {
+    it('dispatches Twilio WhatsApp test using canonical twilio providerKey and returns ACCEPTED', async () => {
       vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
         id: 'prov-twilio',
         provider: 'twilio',
@@ -321,7 +352,7 @@ describe('Provider Test Service', () => {
       const result = await executeProviderTest('whatsapp', adminUser);
 
       expect(result).toMatchObject({
-        status: 'DELIVERED',
+        status: 'ACCEPTED',
         success: true,
         provider: 'twilio',
         channel: 'WHATSAPP',

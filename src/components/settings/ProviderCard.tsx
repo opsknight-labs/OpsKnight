@@ -286,7 +286,7 @@ export default function ProviderCard({
     try {
       const { testNotificationProvider } = await import('@/app/(app)/settings/system/actions');
       const result = await testNotificationProvider(providerConfig.key);
-      if (result.status === 'DELIVERED') {
+      if (result.status === 'DELIVERED' || result.status === 'ACCEPTED') {
         setTestStatus('success');
         toast.success(result.message || `Test message sent via ${providerConfig.name}`);
       } else if (result.status === 'QUEUED') {

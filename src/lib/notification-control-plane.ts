@@ -101,6 +101,7 @@ export type CentralNotificationPayload =
       escalationStep?: number;
       durableMessage: string;
       providerKey?: string;
+      emailRoute?: string[];
     }
   | {
       kind: 'EMAIL';
@@ -122,6 +123,7 @@ export type CentralNotificationPayload =
         escalationGeneration?: number | null;
       };
       providerKey?: string;
+      emailRoute?: string[];
     }
   | { kind: 'SMS'; to: string; message: string; providerKey?: string }
   | { kind: 'WHATSAPP'; to: string; message: string; from?: string; providerKey?: string }
@@ -734,20 +736,48 @@ export async function enqueueCentralNotification(
   error?: string;
 }> {
   let pinnedInput = input;
-  if (
-    (input.payload.kind === 'EMAIL' || input.payload.kind === 'INCIDENT_EMAIL') &&
-    !input.payload.providerKey
-  ) {
+  if (input.payload.kind === 'EMAIL' || input.payload.kind === 'INCIDENT_EMAIL') {
     const emailPayload = input.payload;
-    const providerKey =
-      emailPayload.kind === 'EMAIL' && emailPayload.providerScope?.statusPageId
-        ? await import('./notification-providers')
-            .then(module =>
-              module.getStatusPageEmailConfig(emailPayload.providerScope!.statusPageId)
-            )
-            .then(config => config.provider || undefined)
-        : undefined;
-    if (providerKey) pinnedInput = { ...input, payload: { ...input.payload, providerKey } };
+    let emailRoute = emailPayload.emailRoute;
+    let providerKey = emailPayload.providerKey;
+
+    if (!emailRoute || emailRoute.length === 0) {
+      if (emailPayload.kind === 'EMAIL' && emailPayload.providerScope?.statusPageId) {
+        const spConfig = await import('./notification-providers')
+          .then(module => module.getStatusPageEmailConfig(emailPayload.providerScope!.statusPageId))
+          .catch(() => null);
+        const spProvider = spConfig?.provider || undefined;
+        if (spProvider) {
+          providerKey = providerKey || spProvider;
+          emailRoute = [spProvider];
+        }
+      } else if (providerKey) {
+        emailRoute = [providerKey];
+      } else {
+        const emailConfigs = await import('./notification-providers')
+          .then(module => module.getAllConfiguredEmailProviders())
+          .catch(() => []);
+        emailRoute = emailConfigs
+          .filter(item => item.enabled && item.provider)
+          .map(item => item.provider as string);
+        if (emailRoute.length > 0) {
+          providerKey = emailRoute[0];
+        }
+      }
+    } else if (!providerKey && emailRoute.length > 0) {
+      providerKey = emailRoute[0];
+    }
+
+    if (emailRoute && emailRoute.length > 0) {
+      pinnedInput = {
+        ...input,
+        payload: {
+          ...input.payload,
+          providerKey,
+          emailRoute,
+        },
+      };
+    }
   } else if (
     (input.payload.kind === 'SMS' || input.payload.kind === 'INCIDENT_SMS') &&
     !input.payload.providerKey
@@ -814,7 +844,7 @@ async function payloadProviderKeyAsync(payload: CentralNotificationPayload): Pro
   return payloadProviderKey(payload);
 }
 
-async function providerAdmission(
+async function _providerAdmission(
   payload: CentralNotificationPayload,
   trafficClass: NotificationTrafficClass
 ) {
@@ -823,14 +853,14 @@ async function providerAdmission(
   return acquireProviderAdmission(channel as ProviderAdmissionScope, key, new Date(), trafficClass);
 }
 
-function providerAdmissionIdentity(payload: CentralNotificationPayload) {
+function _providerAdmissionIdentity(payload: CentralNotificationPayload) {
   return {
     scope: channelForPayload(payload) as ProviderAdmissionScope,
     providerKey: payloadProviderKey(payload),
   };
 }
 
-async function providerAdmissionIdentityAsync(payload: CentralNotificationPayload) {
+async function _providerAdmissionIdentityAsync(payload: CentralNotificationPayload) {
   return {
     scope: channelForPayload(payload) as ProviderAdmissionScope,
     providerKey: await payloadProviderKeyAsync(payload),
@@ -886,19 +916,20 @@ async function dispatchPayload(
   switch (payload.kind) {
     case 'INCIDENT_EMAIL': {
       const { sendIncidentEmail } = await import('./email');
-      const config = payload.providerKey
+      const isPinned = Boolean(payload.providerKey && payload.providerKey !== 'default');
+      const config = isPinned
         ? await import('./notification-providers')
             .then(module => module.getAllConfiguredEmailProviders())
             .then(configs => configs.find(item => item.provider === payload.providerKey))
         : undefined;
-      if (payload.providerKey && !config)
+      if (isPinned && !config)
         return {
           success: false,
           statusCode: 409,
           errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
           error: `Pinned Email provider ${payload.providerKey} is unavailable`,
         };
-      return executeProvider(CircuitBreakers.email(), () =>
+      return executeProvider(CircuitBreakers.email(payload.providerKey), () =>
         sendIncidentEmail(
           payload.userId,
           payload.incidentId,
@@ -911,17 +942,18 @@ async function dispatchPayload(
     }
     case 'INCIDENT_SMS': {
       const { sendIncidentSMS } = await import('./sms');
-      if (payload.providerKey) {
+      if (payload.providerKey && payload.providerKey !== 'default') {
         const current = await import('./notification-providers').then(module =>
           module.getSMSConfig()
         );
-        if (current.provider !== payload.providerKey)
+        if (current.provider !== payload.providerKey) {
           return {
             success: false,
             statusCode: 409,
             errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
             error: `Pinned SMS provider ${payload.providerKey} is unavailable`,
           };
+        }
       }
       return executeProvider(CircuitBreakers.sms(), async () => {
         const result = await sendIncidentSMS(
@@ -1004,19 +1036,20 @@ async function dispatchPayload(
           .replaceAll('{{posted_at_section}}', payload.postedAtSection ?? '');
       }
       if (!html) return { success: false, statusCode: 422, error: 'Email content is missing' };
-      const config = payload.providerKey
+      const isPinned = Boolean(payload.providerKey && payload.providerKey !== 'default');
+      const config = isPinned
         ? await import('./notification-providers')
             .then(module => module.getAllConfiguredEmailProviders())
             .then(configs => configs.find(item => item.provider === payload.providerKey))
         : undefined;
-      if (payload.providerKey && (!config || config.provider !== payload.providerKey))
+      if (isPinned && (!config || config.provider !== payload.providerKey))
         return {
           success: false,
           statusCode: 409,
           errorCode: 'PINNED_PROVIDER_UNAVAILABLE',
           error: `Pinned Email provider ${payload.providerKey} is unavailable`,
         };
-      return executeProvider(CircuitBreakers.email(), () =>
+      return executeProvider(CircuitBreakers.email(payload.providerKey), () =>
         sendEmail(
           {
             to: payload.to,
@@ -1241,6 +1274,65 @@ async function cleanupExpiredNotifications(now: Date): Promise<number> {
     },
   });
   return result.count;
+}
+
+function isAmbiguousDeliveryError(errorText: string): boolean {
+  if (!errorText) return false;
+  const normalized = errorText.toLowerCase();
+  return (
+    normalized.includes('ambiguous') ||
+    normalized.includes('unconfirmed') ||
+    normalized.includes('unknown') ||
+    normalized.includes('etimedout') ||
+    normalized.includes('timeout') ||
+    normalized.includes('timed out') ||
+    normalized.includes('esockettimedout') ||
+    normalized.includes('econnreset') ||
+    normalized.includes('socket hang up') ||
+    normalized.includes('epipe') ||
+    normalized.includes('und_err_socket') ||
+    normalized.includes('und_err_connect_timeout') ||
+    (normalized.includes('network') && !normalized.includes('enotfound')) ||
+    (normalized.includes('connection') && !normalized.includes('econnrefused'))
+  );
+}
+
+function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
+  if (result.success) return false;
+  const errorText = `${result.error || ''} ${result.errorCode || ''}`.toLowerCase();
+  if (isAmbiguousDeliveryError(errorText)) return false;
+  if (
+    errorText.includes('invalid recipient') ||
+    errorText.includes('invalid email') ||
+    errorText.includes('does not exist') ||
+    errorText.includes('mailbox unavailable') ||
+    errorText.includes('recipient rejected') ||
+    errorText.includes('bad request') ||
+    errorText.includes('malformed')
+  ) {
+    return false;
+  }
+  if (
+    typeof result.statusCode === 'number' &&
+    result.statusCode >= 400 &&
+    result.statusCode < 500 &&
+    result.statusCode !== 429
+  ) {
+    return false;
+  }
+  if (typeof result.statusCode === 'number' && result.statusCode >= 500) return true;
+  if (result.statusCode === 429) return true;
+  if (
+    errorText.includes('enotfound') ||
+    errorText.includes('econnrefused') ||
+    errorText.includes('not installed') ||
+    errorText.includes('not configured') ||
+    errorText.includes('configuration incomplete') ||
+    errorText.includes('no enabled email provider')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function isPermanentProviderError(message: string): boolean {
@@ -1804,150 +1896,249 @@ export async function deliverCentralNotification(
     return { success: true, claimed: true };
   }
 
-  const identity = await providerAdmissionIdentityAsync(payload);
-  let concurrency;
-  try {
-    concurrency = await acquireProviderConcurrency(
-      identity.scope,
-      identity.providerKey,
-      now,
-      candidate.trafficClass
+  const emailPayload =
+    payload.kind === 'EMAIL' || payload.kind === 'INCIDENT_EMAIL' ? payload : undefined;
+  const isEmail = Boolean(emailPayload);
+  let emailRoute: string[] | undefined = emailPayload?.emailRoute;
+  if (emailPayload && (!emailRoute || emailRoute.length === 0)) {
+    if (emailPayload.providerKey) {
+      emailRoute = [emailPayload.providerKey];
+    } else {
+      const emailConfigs = await import('./notification-providers')
+        .then(m => m.getAllConfiguredEmailProviders())
+        .catch(() => []);
+      const active = emailConfigs
+        .filter(c => c.enabled && c.provider)
+        .map(c => c.provider as string);
+      emailRoute = active.length > 0 ? active : [await payloadProviderKeyAsync(payload)];
+    }
+  }
+
+  const defaultKey = await payloadProviderKeyAsync(payload);
+  const route: string[] = isEmail && emailRoute && emailRoute.length > 0
+    ? emailRoute
+    : [defaultKey];
+
+  const channelScope = (channelForPayload(payload)) as ProviderAdmissionScope;
+  let lastFailureResult: { error: string; statusCode?: number; errorCode?: string } = {
+    error: 'All configured providers failed',
+  };
+  let anyAttemptDispatched = false;
+
+  for (let routeIndex = 0; routeIndex < route.length; routeIndex++) {
+    const currentProvider = route[routeIndex];
+    const isLastProviderInRoute = routeIndex === route.length - 1;
+
+    // 1. Circuit Breaker check
+    const breaker = isEmail ? CircuitBreakers.email(currentProvider) : undefined;
+    const isCircuitOpen = Boolean(
+      breaker &&
+      typeof breaker.getState === 'function' &&
+      (breaker.getState() === 'OPEN' || (typeof breaker.isAvailable === 'function' && !breaker.isAvailable()))
     );
-  } catch (error) {
-    const errorMessage = safeError(error);
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'PENDING',
-        lastAttemptAt: null,
-        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
-        errorMsg: `Provider concurrency admission unavailable: ${errorMessage}`,
-      },
-    });
-    return { success: false, claimed: true, error: errorMessage };
-  }
-  if (!concurrency.allowed) {
-    const isControlPlane = concurrency.reason === 'CONTROL_PLANE_UNAVAILABLE';
-    const deferMsg = isControlPlane
-      ? `Control-plane DB unavailable (${(concurrency as { cause: string }).cause}); notification deferred until ${concurrency.retryAt.toISOString()}`
-      : `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`;
-    if (isControlPlane) {
-      logger.warn('notification.control_plane_deferral', {
+    if (isCircuitOpen) {
+      logger.warn('notification.provider_circuit_open_skipping', {
         notificationId: candidate.id,
-        channel: payload.kind,
-        trafficClass: candidate.trafficClass,
-        retryAt: concurrency.retryAt.toISOString(),
-        cause: (concurrency as { cause: string }).cause,
+        provider: currentProvider,
+        routeIndex,
       });
+      if (!isLastProviderInRoute) {
+        continue;
+      }
+      if (!anyAttemptDispatched) {
+        const retryAt = new Date(Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1)));
+        await prisma.notification.updateMany({
+          where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+          data: {
+            status: 'PENDING',
+            attempts: candidate.attempts,
+            failedAt: null,
+            lastAttemptAt: null,
+            nextAttemptAt: retryAt,
+            errorMsg: `Circuit breaker is OPEN for email:${currentProvider}`,
+          },
+        });
+        return { success: false, claimed: true, error: `Circuit breaker is OPEN for email:${currentProvider}` };
+      }
+      break;
     }
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'PENDING',
-        lastAttemptAt: null,
-        nextAttemptAt: concurrency.retryAt,
-        errorMsg: deferMsg,
-      },
-    });
-    return { success: false, claimed: true };
-  }
 
-  let admission;
-  try {
-    admission = await providerAdmission(payload, candidate.trafficClass);
-  } catch (error) {
-    const errorMessage = safeError(error);
-    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'PENDING',
-        failedAt: null,
-        lastAttemptAt: null,
-        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
-        errorMsg: `Provider admission unavailable: ${errorMessage}`,
-      },
-    });
-    return { success: false, claimed: true, error: errorMessage };
-  }
-  if (!admission.allowed) {
-    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
-    const isControlPlane = admission.reason === 'CONTROL_PLANE_UNAVAILABLE';
-    const deferMsg = isControlPlane
-      ? `Control-plane DB unavailable (${(admission as { cause?: string }).cause || 'rate admission'}); notification deferred until ${admission.retryAt.toISOString()}`
-      : `Provider admission deferred until ${admission.retryAt.toISOString()}`;
-    if (isControlPlane) {
-      logger.warn('notification.control_plane_admission_deferral', {
-        notificationId: candidate.id,
-        channel: payload.kind,
-        trafficClass: candidate.trafficClass,
-        retryAt: admission.retryAt.toISOString(),
-        cause: (admission as { cause?: string }).cause,
+    // 2. Concurrency
+    let concurrency;
+    try {
+      concurrency = await acquireProviderConcurrency(
+        channelScope,
+        currentProvider,
+        now,
+        candidate.trafficClass
+      );
+    } catch (error) {
+      const errorMessage = safeError(error);
+      if (!isLastProviderInRoute) {
+        continue;
+      }
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'PENDING',
+          lastAttemptAt: null,
+          nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+          errorMsg: `Provider concurrency admission unavailable: ${errorMessage}`,
+        },
       });
+      return { success: false, claimed: true, error: errorMessage };
     }
+
+    if (!concurrency.allowed) {
+      if (!isLastProviderInRoute) {
+        continue;
+      }
+      const isControlPlane = concurrency.reason === 'CONTROL_PLANE_UNAVAILABLE';
+      const deferMsg = isControlPlane
+        ? `Control-plane DB unavailable (${(concurrency as { cause: string }).cause}); notification deferred until ${concurrency.retryAt.toISOString()}`
+        : `Provider concurrency deferred until ${concurrency.retryAt.toISOString()}`;
+      if (isControlPlane) {
+        logger.warn('notification.control_plane_deferral', {
+          notificationId: candidate.id,
+          channel: payload.kind,
+          trafficClass: candidate.trafficClass,
+          retryAt: concurrency.retryAt.toISOString(),
+          cause: (concurrency as { cause: string }).cause,
+        });
+      }
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'PENDING',
+          lastAttemptAt: null,
+          nextAttemptAt: concurrency.retryAt,
+          errorMsg: deferMsg,
+        },
+      });
+      return { success: false, claimed: true };
+    }
+
+    // 3. Rate admission
+    let admission;
+    try {
+      admission = await acquireProviderAdmission(
+        channelScope,
+        currentProvider,
+        now,
+        candidate.trafficClass
+      );
+    } catch (error) {
+      const errorMessage = safeError(error);
+      await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+      if (!isLastProviderInRoute) {
+        continue;
+      }
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'PENDING',
+          failedAt: null,
+          lastAttemptAt: null,
+          nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+          errorMsg: `Provider admission unavailable: ${errorMessage}`,
+        },
+      });
+      return { success: false, claimed: true, error: errorMessage };
+    }
+
+    if (!admission.allowed) {
+      await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+      if (!isLastProviderInRoute) {
+        continue;
+      }
+      const isControlPlane = admission.reason === 'CONTROL_PLANE_UNAVAILABLE';
+      const deferMsg = isControlPlane
+        ? `Control-plane DB unavailable (${(admission as { cause?: string }).cause || 'rate admission'}); notification deferred until ${admission.retryAt.toISOString()}`
+        : `Provider admission deferred until ${admission.retryAt.toISOString()}`;
+      if (isControlPlane) {
+        logger.warn('notification.control_plane_admission_deferral', {
+          notificationId: candidate.id,
+          channel: payload.kind,
+          trafficClass: candidate.trafficClass,
+          retryAt: admission.retryAt.toISOString(),
+          cause: (admission as { cause?: string }).cause,
+        });
+      }
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'PENDING',
+          failedAt: null,
+          lastAttemptAt: null,
+          nextAttemptAt: admission.retryAt,
+          errorMsg: deferMsg,
+        },
+      });
+      return { success: false, claimed: true };
+    }
+
+    // 4. Claim attempt & increment attempts
+    let ordinal: number;
+    try {
+      ordinal =
+        (await prisma.notificationDeliveryAttempt.count({
+          where: { notificationId: candidate.id },
+        })) + 1;
+    } catch (error) {
+      await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
+      const errorMessage = safeError(error);
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          lastAttemptAt: null,
+          nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
+          errorMsg: `Attempt history unavailable: ${errorMessage}`,
+        },
+      });
+      return { success: false, claimed: true, error: errorMessage };
+    }
+
     await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
+      where: {
+        id: candidate.id,
         status: 'PENDING',
-        failedAt: null,
-        lastAttemptAt: null,
-        nextAttemptAt: admission.retryAt,
-        errorMsg: deferMsg,
+        lastAttemptAt: now,
       },
+      data: { attempts: { increment: 1 } },
     });
-    return { success: false, claimed: true };
-  }
 
-  const deliveryAttempt = candidate.attempts + 1;
-  let ordinal: number;
-  try {
-    ordinal =
-      (await prisma.notificationDeliveryAttempt.count({
-        where: { notificationId: candidate.id },
-      })) + 1;
-  } catch (error) {
-    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
-    const errorMessage = safeError(error);
-    await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        lastAttemptAt: null,
-        nextAttemptAt: new Date(Date.now() + notificationRetryDelayMs(1)),
-        errorMsg: `Attempt history unavailable: ${errorMessage}`,
-      },
-    });
-    return { success: false, claimed: true, error: errorMessage };
-  }
-  const attemptClaim = await prisma.notification.updateMany({
-    where: {
-      id: candidate.id,
-      status: 'PENDING',
-      lastAttemptAt: now,
-      attempts: candidate.attempts,
-    },
-    data: { attempts: { increment: 1 } },
-  });
-  if (attemptClaim.count === 0) {
-    await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
-    return { success: false, claimed: false };
-  }
-  const startedAt = new Date();
+    anyAttemptDispatched = true;
+    const startedAt = new Date();
+    const currentDeliveryAttempt = candidate.attempts + routeIndex + 1;
 
-  try {
     let result: DeliveryResult;
     let releaseConcurrencyLease = true;
+    let circuitTimeout = false;
+    let circuitOpen = false;
+
     try {
-      result = await dispatchPayload(payload, candidate.id);
+      const payloadForProvider = currentProvider && currentProvider !== 'default'
+        ? { ...payload, providerKey: currentProvider }
+        : { ...payload, providerKey: undefined };
+      result = await dispatchPayload(payloadForProvider as CentralNotificationPayload, candidate.id);
     } catch (dispatchError) {
       if (dispatchError instanceof CircuitBreakerTimeoutError) {
+        circuitTimeout = true;
         releaseConcurrencyLease = false;
+      } else if (dispatchError instanceof CircuitBreakerError) {
+        circuitOpen = true;
       }
-      throw dispatchError;
+      result = {
+        success: false,
+        error: safeError(dispatchError),
+        errorCode: circuitTimeout ? 'TIMEOUT' : (circuitOpen ? 'CIRCUIT_OPEN' : 'DISPATCH_ERROR'),
+      };
     } finally {
       if (releaseConcurrencyLease) {
         await releaseProviderConcurrency(concurrency.leaseKey).catch(() => undefined);
       }
     }
+
     if (result.success) {
       const finishedAt = new Date();
       const acceptedState = {
@@ -1970,7 +2161,7 @@ export async function deliverCentralNotification(
               notificationId: candidate.id,
               ordinal,
               outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED',
-              provider: (result as { selectedProvider?: string }).selectedProvider || identity.providerKey,
+              provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
               providerMessageId: result.providerMessageId,
               startedAt,
               finishedAt,
@@ -1995,12 +2186,38 @@ export async function deliverCentralNotification(
     }
 
     const errorMessage = safeError(result.error || 'Provider delivery failed');
+    lastFailureResult = {
+      error: errorMessage,
+      statusCode: result.statusCode,
+      errorCode: result.errorCode,
+    };
 
-    // A current announcement generation can be valid but claimed slightly before
-    // its canonical send instant (for example from DB/app clock skew). This is a
-    // notification-local scheduling condition, not provider throttling or a
-    // delivery failure. Restore the pre-attempt budget and defer precisely to
-    // retryAfterMs without touching provider admission/circuit state.
+    // Circuit breaker is open during dispatch
+    if (circuitOpen) {
+      if (!isLastProviderInRoute) {
+        logger.warn('notification.email_failover_on_circuit_open', {
+          notificationId: candidate.id,
+          provider: currentProvider,
+          nextProvider: route[routeIndex + 1],
+        });
+        continue;
+      }
+      const retryAt = new Date(Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1)));
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'PENDING',
+          attempts: candidate.attempts,
+          failedAt: null,
+          errorMsg: errorMessage,
+          nextAttemptAt: retryAt,
+          lastAttemptAt: null,
+        },
+      });
+      return { success: false, claimed: true, error: errorMessage };
+    }
+
+    // Announcement delivery deferred (not due yet)
     if (
       result.errorCode === 'ANNOUNCEMENT_NOT_DUE' &&
       typeof result.retryAfterMs === 'number' &&
@@ -2026,82 +2243,22 @@ export async function deliverCentralNotification(
         ordinal,
         outcome: 'DEFERRED_NOT_DUE',
         startedAt,
-        provider: (result as { selectedProvider?: string }).selectedProvider || identity.providerKey,
+        provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
         errorCode: result.errorCode,
         errorMessage,
       });
       return { success: false, claimed: true, error: errorMessage };
     }
 
-    const providerRateLimited = result.statusCode === 429;
-    const providerRetryAt = providerRateLimited
-      ? new Date(Date.now() + Math.max(result.retryAfterMs ?? 60_000, 1_000))
-      : null;
-    if (providerRetryAt) {
-      const admissionIdentity = providerAdmissionIdentity(payload);
-      await deferProviderAdmission(
-        admissionIdentity.scope,
-        admissionIdentity.providerKey,
-        providerRetryAt
-      );
-      await prisma.notification.updateMany({
-        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-        data: {
-          status: 'PENDING',
-          attempts: candidate.attempts,
-          failedAt: null,
-          lastAttemptAt: null,
-          nextAttemptAt: providerRetryAt,
-          errorMsg: `Provider rate-limited delivery until ${providerRetryAt.toISOString()}`,
-        },
-      });
-      await finishAttempt({
-        notificationId: candidate.id,
-        ordinal,
-        outcome: 'RATE_LIMITED',
-        startedAt,
-        provider: (result as { selectedProvider?: string }).selectedProvider || admissionIdentity.providerKey,
-        errorCode: result.errorCode ?? (result.statusCode ? String(result.statusCode) : undefined),
-        errorMessage,
-      });
-      return { success: false, claimed: true, error: errorMessage };
-    }
-    const permanent = isPermanentProviderError(errorMessage);
-    const exhausted = deliveryAttempt >= candidate.maxAttempts;
-    const failedUpdate = await prisma.notification.updateMany({
-      where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
-      data: {
-        status: 'FAILED',
-        failedAt: new Date(),
-        errorMsg: errorMessage,
-        nextAttemptAt:
-          permanent || exhausted
-            ? candidate.nextAttemptAt
-            : new Date(Date.now() + notificationRetryDelayMs(deliveryAttempt)),
-        attempts: permanent ? candidate.maxAttempts : deliveryAttempt,
-        lastAttemptAt: null,
-        ...(permanent || exhausted ? terminalPayload(candidate.category) : {}),
-      },
-    });
-    await finishAttempt({
-      notificationId: candidate.id,
-      ordinal,
-      outcome: permanent || exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
-      startedAt,
-      provider: (result as { selectedProvider?: string }).selectedProvider || identity.providerKey,
-      errorMessage,
-      errorCode: result.errorCode,
-    });
-    if (failedUpdate.count > 0 && (permanent || exhausted)) {
-      await recordFanoutTerminal(candidate.fanoutId, 'failed');
-    }
-    return { success: false, claimed: true, error: errorMessage };
-  } catch (error) {
-    const circuitOpen = error instanceof CircuitBreakerError;
-    const ambiguous = error instanceof CircuitBreakerTimeoutError;
-    const errorMessage = safeError(error);
-    const exhausted = deliveryAttempt >= candidate.maxAttempts;
-    if (ambiguous) {
+    // Ambiguous outcome (timeout, ECONNRESET, socket hangup) -> UNKNOWN and NEVER FAILOVER
+    const isAmbiguous =
+      circuitTimeout ||
+      result.errorCode === 'UNKNOWN' ||
+      result.errorCode === 'ETIMEDOUT' ||
+      result.errorCode === 'ECONNRESET' ||
+      isAmbiguousDeliveryError(`${errorMessage} ${result.errorCode || ''}`);
+
+    if (isAmbiguous) {
       const reconciliationDeadline = new Date(Date.now() + UNKNOWN_RECONCILIATION_DELAY_MS);
       const ambiguousState = {
         status: 'UNKNOWN' as const,
@@ -2121,7 +2278,7 @@ export async function deliverCentralNotification(
               notificationId: candidate.id,
               ordinal,
               outcome: 'AMBIGUOUS',
-              provider: identity.providerKey,
+              provider: currentProvider,
               errorMessage,
               startedAt,
               finishedAt: new Date(),
@@ -2141,22 +2298,92 @@ export async function deliverCentralNotification(
       }
       return { success: true, claimed: true, error: errorMessage };
     }
-    if (circuitOpen) {
-      const retryAt = new Date(Date.now() + notificationRetryDelayMs(Math.max(1, deliveryAttempt)));
+
+    // Rate limited 429
+    const providerRateLimited = result.statusCode === 429;
+    const providerRetryAt = providerRateLimited
+      ? new Date(Date.now() + Math.max(result.retryAfterMs ?? 60_000, 1_000))
+      : null;
+
+    if (providerRetryAt) {
+      await deferProviderAdmission(channelScope, currentProvider, providerRetryAt);
+      await finishAttempt({
+        notificationId: candidate.id,
+        ordinal,
+        outcome: 'RATE_LIMITED',
+        startedAt,
+        provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
+        errorCode: result.errorCode ?? (result.statusCode ? String(result.statusCode) : undefined),
+        errorMessage,
+      });
+
+      if (!isLastProviderInRoute) {
+        logger.warn('notification.email_failover_on_rate_limit', {
+          notificationId: candidate.id,
+          provider: currentProvider,
+          nextProvider: route[routeIndex + 1],
+        });
+        continue;
+      }
+
       await prisma.notification.updateMany({
         where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
         data: {
           status: 'PENDING',
-          attempts: candidate.attempts,
+          attempts: currentDeliveryAttempt,
           failedAt: null,
-          errorMsg: errorMessage,
-          nextAttemptAt: retryAt,
           lastAttemptAt: null,
+          nextAttemptAt: providerRetryAt,
+          errorMsg: `Provider rate-limited delivery until ${providerRetryAt.toISOString()}`,
         },
       });
       return { success: false, claimed: true, error: errorMessage };
     }
-    await prisma.notification.updateMany({
+
+    // Permanent failure
+    const permanent = isPermanentProviderError(errorMessage);
+    const exhausted = currentDeliveryAttempt >= candidate.maxAttempts;
+
+    await finishAttempt({
+      notificationId: candidate.id,
+      ordinal,
+      outcome: permanent || exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
+      startedAt,
+      provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
+      errorMessage,
+      errorCode: result.errorCode,
+    });
+
+    if (permanent) {
+      await prisma.notification.updateMany({
+        where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+        data: {
+          status: 'FAILED',
+          failedAt: new Date(),
+          errorMsg: errorMessage,
+          attempts: candidate.maxAttempts,
+          lastAttemptAt: null,
+          ...terminalPayload(candidate.category),
+        },
+      });
+      await recordFanoutTerminal(candidate.fanoutId, 'failed');
+      return { success: false, claimed: true, error: errorMessage };
+    }
+
+    // Check safe failover for Email
+    const safeFailover = isEmail && isSafeEmailFailoverCondition(result);
+    if (safeFailover && !isLastProviderInRoute) {
+      logger.warn('notification.email_failover_on_safe_error', {
+        notificationId: candidate.id,
+        provider: currentProvider,
+        nextProvider: route[routeIndex + 1],
+        error: errorMessage,
+      });
+      continue;
+    }
+
+    // Otherwise halt on failure
+    const failedUpdate = await prisma.notification.updateMany({
       where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
       data: {
         status: 'FAILED',
@@ -2164,22 +2391,36 @@ export async function deliverCentralNotification(
         errorMsg: errorMessage,
         nextAttemptAt: exhausted
           ? candidate.nextAttemptAt
-          : new Date(Date.now() + notificationRetryDelayMs(deliveryAttempt)),
-        attempts: deliveryAttempt,
+          : new Date(Date.now() + notificationRetryDelayMs(currentDeliveryAttempt)),
+        attempts: currentDeliveryAttempt,
         lastAttemptAt: null,
         ...(exhausted ? terminalPayload(candidate.category) : {}),
       },
     });
-    await finishAttempt({
-      notificationId: candidate.id,
-      ordinal,
-      outcome: exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
-      startedAt,
-      provider: identity.providerKey,
-      errorMessage,
-    });
+    if (failedUpdate.count > 0 && exhausted) {
+      await recordFanoutTerminal(candidate.fanoutId, 'failed');
+    }
     return { success: false, claimed: true, error: errorMessage };
   }
+
+  // Fallback if loop ended without return
+  const finalAttempts = candidate.attempts + 1;
+  const isExhausted = finalAttempts >= candidate.maxAttempts;
+  await prisma.notification.updateMany({
+    where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
+    data: {
+      status: 'FAILED',
+      failedAt: new Date(),
+      errorMsg: lastFailureResult.error,
+      nextAttemptAt: isExhausted
+        ? candidate.nextAttemptAt
+        : new Date(Date.now() + notificationRetryDelayMs(finalAttempts)),
+      attempts: finalAttempts,
+      lastAttemptAt: null,
+      ...(isExhausted ? terminalPayload(candidate.category) : {}),
+    },
+  });
+  return { success: false, claimed: true, error: lastFailureResult.error };
 }
 
 /**

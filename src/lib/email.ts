@@ -178,10 +178,14 @@ async function sendWithSingleProvider(
       logger.info('Email sent via Resend', { id: result.data?.id });
       return { success: true, providerMessageId: result.data?.id };
     } catch (error: unknown) {
-      const value = error as { code?: string; message?: string };
+      const value = error as { code?: string; message?: string; name?: string };
       if (value.code === 'MODULE_NOT_FOUND' || value.code === 'ERR_MODULE_NOT_FOUND')
         return { success: false, error: 'Resend package not installed. Run: npm install resend' };
-      return { success: false, error: value.message || 'Resend send error' };
+      return {
+        success: false,
+        error: value.message || 'Resend send error',
+        errorCode: value.code || value.name,
+      };
     }
   }
   if (emailConfig.provider === 'sendgrid') {
@@ -333,25 +337,49 @@ async function sendWithSingleProvider(
 }
 
 /**
+ * Detects whether an error represents an in-flight, unconfirmed, or post-submission hazard
+ * (e.g. socket drops, timeouts, connection resets).
+ * CRITICAL: Ambiguous errors must NEVER trigger failover or second send to avoid duplicate emails.
+ */
+export function isAmbiguousDeliveryError(errorText: string): boolean {
+  if (!errorText) return false;
+  const normalized = errorText.toLowerCase();
+  return (
+    normalized.includes('ambiguous') ||
+    normalized.includes('unconfirmed') ||
+    normalized.includes('unknown') ||
+    normalized.includes('etimedout') ||
+    normalized.includes('timeout') ||
+    normalized.includes('timed out') ||
+    normalized.includes('esockettimedout') ||
+    normalized.includes('econnreset') ||
+    normalized.includes('socket hang up') ||
+    normalized.includes('epipe') ||
+    normalized.includes('und_err_socket') ||
+    normalized.includes('und_err_connect_timeout') ||
+    (normalized.includes('network') && !normalized.includes('enotfound')) ||
+    (normalized.includes('connection') && !normalized.includes('econnrefused'))
+  );
+}
+
+/**
  * Determines whether an email delivery failure condition is safe to failover to a subsequent provider.
  * CRITICAL INVARIANT: UNKNOWN, ambiguous outcomes, and invalid recipients must NEVER trigger failover
  * to avoid duplicate emails.
+ * Only demonstrably pre-submission errors (ENOTFOUND, ECONNREFUSED, missing SDK package, unconfigured provider,
+ * explicit 429, or explicit 5xx) are safe to fail over.
  */
 export function isSafeEmailFailoverCondition(result: EmailDeliveryResult): boolean {
   if (result.success) return false;
 
   const errorText = `${result.error || ''} ${result.errorCode || ''}`.toLowerCase();
 
-  // Halts on UNKNOWN or ambiguous outcomes where message might have been accepted
-  if (
-    errorText.includes('ambiguous') ||
-    errorText.includes('unconfirmed') ||
-    errorText.includes('unknown')
-  ) {
+  // 1. Halts on UNKNOWN or ambiguous outcomes where message might have been accepted by provider
+  if (isAmbiguousDeliveryError(errorText)) {
     return false;
   }
 
-  // Halts on permanent invalid recipient / malformed payload / permanent rejections
+  // 2. Halts on permanent invalid recipient / malformed payload / permanent rejections
   if (
     errorText.includes('invalid recipient') ||
     errorText.includes('invalid email') ||
@@ -364,7 +392,7 @@ export function isSafeEmailFailoverCondition(result: EmailDeliveryResult): boole
     return false;
   }
 
-  // 4xx client errors (except 429 rate limit) should NOT failover: bad API key, unverified domain
+  // 3. 4xx client errors (except 429 rate limit) should NOT failover: bad API key, unverified domain
   if (
     typeof result.statusCode === 'number' &&
     result.statusCode >= 400 &&
@@ -385,18 +413,17 @@ export function isSafeEmailFailoverCondition(result: EmailDeliveryResult): boole
     return true;
   }
 
-  // 3. Network, socket, connection, or missing SDK package errors
+  // 3. Demonstrably pre-submission errors:
+  // - ENOTFOUND: DNS resolution failed before TCP connect
+  // - ECONNREFUSED: port unreachable before TLS/HTTP connect
+  // - Missing SDK package or provider unconfigured
   if (
-    errorText.includes('econnreset') ||
-    errorText.includes('econnrefused') ||
-    errorText.includes('etimedout') ||
     errorText.includes('enotfound') ||
-    errorText.includes('socket hang up') ||
-    errorText.includes('network') ||
-    errorText.includes('timeout') ||
+    errorText.includes('econnrefused') ||
     errorText.includes('not installed') ||
     errorText.includes('not configured') ||
-    errorText.includes('connection')
+    errorText.includes('configuration incomplete') ||
+    errorText.includes('no enabled email provider')
   ) {
     return true;
   }
