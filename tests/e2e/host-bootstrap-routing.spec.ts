@@ -338,6 +338,37 @@ test.describe.serial('host bootstrap routing lifecycle', () => {
     expect(attack2.status).toBe(421);
   });
 
+  test('10b. configured Application URL works behind an internal reverse-proxy Host without global proxy trust', async () => {
+    const loginRes = await rawHttpRequest('/login', {
+      headers: {
+        host: `internal-app:${PORT}`,
+        'x-forwarded-host': APP_HOST,
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(loginRes.status).toBe(200);
+
+    const protectedRes = await rawHttpRequest('/settings', {
+      headers: {
+        host: `internal-app:${PORT}`,
+        'x-forwarded-host': APP_HOST,
+        'x-forwarded-proto': 'https',
+      },
+    });
+    expect(protectedRes.status).toBe(307);
+    expect(protectedRes.getHeader('location')).toBe(
+      `http://${APP_HOST}:${PORT}/login?callbackUrl=%2Fsettings`
+    );
+
+    const statusRes = await rawHttpRequest('/users', {
+      headers: {
+        host: `internal-app:${PORT}`,
+        'x-forwarded-host': STATUS_HOST,
+      },
+    });
+    expect(statusRes.status).toBe(404);
+  });
+
   test('11. settings domain change via /api/settings/app-url dynamically updates recognized host immediately', async ({
     page,
   }) => {
