@@ -816,7 +816,7 @@ export default async function middleware(req: NextRequest) {
         requestHost = forwardedHost;
         publishedPage = forwardedPage;
         usedConfiguredForwardedHost = true;
-        applyResolvedProxyHeaders(forwardedHeaders, requestHost, statusConfig);
+        applyResolvedProxyHeaders(forwardedHeaders, requestHost, null);
         rebuildBaseResponse();
       }
     }
