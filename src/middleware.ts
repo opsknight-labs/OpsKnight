@@ -451,17 +451,21 @@ function applyResolvedProxyHeaders(
   requestHost: string,
   statusConfig?: StatusDomainConfig | null
 ): void {
-  headers.set('host', requestHost);
-  headers.set('x-forwarded-host', requestHost);
+  let downstreamHost = requestHost;
 
-  // Only the application plane gets its scheme from the configured Application
-  // URL. Status hosts keep their existing transport metadata.
+  // Only the application plane gets host/port/scheme from the configured
+  // Application URL. Status hosts keep their existing transport metadata.
   if (isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
     const configuredOrigin = getConfiguredApplicationOrigin(statusConfig);
     if (configuredOrigin) {
-      headers.set('x-forwarded-proto', new URL(configuredOrigin).protocol.replace(':', ''));
+      const parsedOrigin = new URL(configuredOrigin);
+      downstreamHost = parsedOrigin.host;
+      headers.set('x-forwarded-proto', parsedOrigin.protocol.replace(':', ''));
     }
   }
+
+  headers.set('host', downstreamHost);
+  headers.set('x-forwarded-host', downstreamHost);
 }
 type CachedDomainConfig = {
   value: StatusDomainConfig | null;
