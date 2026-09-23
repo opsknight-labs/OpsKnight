@@ -41,12 +41,23 @@ import { notify as toast } from '@/lib/toast';
 import { getProviderBrandLogo } from '@/components/settings/ProviderBrandLogos';
 import ProviderCapacitySettings from '@/components/settings/ProviderCapacitySettings';
 
+export type ProviderStatusRole =
+  | 'primary'
+  | 'fallback_1'
+  | 'fallback_2'
+  | 'fallback_3'
+  | 'active'
+  | 'standby'
+  | 'configuration_error'
+  | 'not_configured';
+
 interface ProviderCardProps {
   providerConfig: ProviderConfigSchema;
   existing?: ProviderRecord;
   isExpanded: boolean;
   onToggle: () => void;
   twilioProvider?: ProviderRecord;
+  statusRole?: ProviderStatusRole;
 }
 
 export default function ProviderCard({
@@ -55,6 +66,7 @@ export default function ProviderCard({
   isExpanded,
   onToggle,
   twilioProvider,
+  statusRole,
 }: ProviderCardProps) {
   const router = useRouter();
   const { userTimeZone } = useTimezone();
@@ -86,15 +98,43 @@ export default function ProviderCard({
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [testResult, setTestResult] = useState<{
+    status: 'ACCEPTED' | 'DELIVERED' | 'QUEUED' | 'DEFERRED' | 'FAILED' | 'UNKNOWN';
+    message?: string;
+    provider?: string;
+    providerMessageId?: string;
+    notificationId?: string;
+    testedAt: Date;
+    errorCode?: string;
+  } | null>(null);
 
-  const hasRequiredConfig =
-    Object.keys(config).length > 0 &&
-    providerConfig.fields
-      .filter(f => f.required)
-      .every(f => {
-        const value = config[f.name];
-        return value && String(value).trim() !== '';
-      });
+  const hasRequiredConfig = (() => {
+    if (providerConfig.key === 'whatsapp') {
+      const accountSid =
+        (config.whatsappAccountSid as string) ||
+        ((twilioProvider?.config as Record<string, unknown>)?.accountSid as string);
+      const authToken =
+        (config.whatsappAuthToken as string) ||
+        ((twilioProvider?.config as Record<string, unknown>)?.authToken as string);
+      return Boolean(
+        config.whatsappNumber &&
+        String(config.whatsappNumber).trim() !== '' &&
+        accountSid &&
+        String(accountSid).trim() !== '' &&
+        authToken &&
+        String(authToken).trim() !== ''
+      );
+    }
+    return (
+      Object.keys(config).length > 0 &&
+      providerConfig.fields
+        .filter(f => f.required)
+        .every(f => {
+          const value = config[f.name];
+          return value && String(value).trim() !== '';
+        })
+    );
+  })();
   const isDirty =
     enabled !== savedEnabled || JSON.stringify(config) !== JSON.stringify(savedConfig);
 
@@ -271,10 +311,6 @@ export default function ProviderCard({
 
   const isConfigured = hasRequiredConfig;
 
-  const credentialAgeDays = savedRevision
-    ? Math.floor((Date.now() - new Date(savedRevision).getTime()) / (1000 * 60 * 60 * 24))
-    : null;
-
   const handleTest = async () => {
     if (isDirty) {
       toast.error('Save changes before testing this provider.');
@@ -286,9 +322,19 @@ export default function ProviderCard({
     try {
       const { testNotificationProvider } = await import('@/app/(app)/settings/system/actions');
       const result = await testNotificationProvider(providerConfig.key);
+      setTestResult({
+        status: result.status,
+        message: result.message,
+        provider: result.provider || providerConfig.name,
+        providerMessageId: result.providerMessageId,
+        notificationId: result.notificationId,
+        testedAt: new Date(),
+        errorCode: (result as { errorCode?: string }).errorCode,
+      });
+
       if (result.status === 'DELIVERED' || result.status === 'ACCEPTED') {
         setTestStatus('success');
-        toast.success(result.message || `Test message sent via ${providerConfig.name}`);
+        toast.success(result.message || `Test message accepted by ${providerConfig.name}`);
       } else if (result.status === 'QUEUED') {
         setTestStatus('idle');
         toast.info(result.message || `Test message queued via ${providerConfig.name}`);
@@ -304,10 +350,16 @@ export default function ProviderCard({
       }
     } catch (err) {
       setTestStatus('error');
+      setTestResult({
+        status: 'FAILED',
+        message: err instanceof Error ? err.message : 'Test delivery failed',
+        provider: providerConfig.name,
+        testedAt: new Date(),
+      });
       toast.error(err instanceof Error ? err.message : 'Test delivery failed');
     } finally {
       setIsTesting(false);
-      setTimeout(() => setTestStatus('idle'), 4000);
+      setTimeout(() => setTestStatus('idle'), 6000);
     }
   };
 
@@ -316,6 +368,103 @@ export default function ProviderCard({
     if (!key) return;
     await navigator.clipboard.writeText(key);
     toast.success('VAPID public key copied to clipboard');
+  };
+
+  const renderStatusBadge = () => {
+    if (isDirty) {
+      return (
+        <Badge
+          variant="outline"
+          className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+        >
+          {enabled ? 'Will be Enabled' : 'Will be Disabled'}
+        </Badge>
+      );
+    }
+
+    const effectiveRole = statusRole || (enabled ? 'active' : isConfigured ? 'standby' : 'not_configured');
+
+    switch (effectiveRole) {
+      case 'primary':
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Primary (Active)
+          </Badge>
+        );
+      case 'fallback_1':
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+            Fallback #1
+          </Badge>
+        );
+      case 'fallback_2':
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+            Fallback #2
+          </Badge>
+        );
+      case 'fallback_3':
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 inline-flex items-center gap-1.5"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+            Fallback #3
+          </Badge>
+        );
+      case 'active':
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Active &amp; Routing
+          </Badge>
+        );
+      case 'configuration_error':
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 inline-flex items-center gap-1"
+          >
+            <AlertOctagon className="h-3 w-3" />
+            Configuration Error
+          </Badge>
+        );
+      case 'standby':
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
+          >
+            Configured (Standby)
+          </Badge>
+        );
+      case 'not_configured':
+      default:
+        return (
+          <Badge
+            variant="outline"
+            className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+          >
+            Setup Required
+          </Badge>
+        );
+    }
   };
 
   return (
@@ -331,43 +480,13 @@ export default function ProviderCard({
                 <CardTitle className="text-base font-bold text-foreground">
                   {providerConfig.name}
                 </CardTitle>
-                {isDirty && (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                  >
-                    Unsaved
-                  </Badge>
-                )}
-                {enabled ? (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 inline-flex items-center gap-1.5"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {isDirty ? 'Will be Active' : 'Active & Routing'}
-                  </Badge>
-                ) : isConfigured ? (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground border-border/80"
-                  >
-                    {isDirty ? 'Will be Disabled' : 'Configured (Standby)'}
-                  </Badge>
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="text-[10px] font-bold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                  >
-                    Setup Required
-                  </Badge>
-                )}
+                {renderStatusBadge()}
               </div>
               <CardDescription className="text-xs">{providerConfig.description}</CardDescription>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 self-end sm:self-auto">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end sm:justify-start self-end sm:self-auto">
             <div className="flex items-center gap-2 bg-muted/30 px-2.5 py-1 rounded-lg border border-border/50">
               <span className="text-xs font-medium text-muted-foreground">
                 {enabled ? 'Active' : 'Disabled'}
@@ -376,6 +495,7 @@ export default function ProviderCard({
                 checked={enabled}
                 onCheckedChange={handleToggleEnabled}
                 disabled={isSaving || (!enabled && !hasRequiredConfig)}
+                aria-label={`Toggle ${providerConfig.name} provider`}
               />
             </div>
             <Button
@@ -383,6 +503,7 @@ export default function ProviderCard({
               size="sm"
               onClick={onToggle}
               className="text-xs font-semibold h-8 gap-1.5 border-border/80 hover:bg-accent"
+              aria-label={isExpanded ? `Collapse ${providerConfig.name} configuration` : `Configure ${providerConfig.name}`}
             >
               {isExpanded ? (
                 <>
@@ -404,6 +525,7 @@ export default function ProviderCard({
                 onClick={() => void handleTest()}
                 disabled={isTesting || isDirty}
                 title={isDirty ? 'Save changes before testing' : undefined}
+                aria-label={`Send test notification via ${providerConfig.name}`}
                 className={`text-xs font-semibold h-8 gap-1.5 ${
                   testStatus === 'success'
                     ? 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
@@ -426,7 +548,7 @@ export default function ProviderCard({
                   : isTesting
                     ? 'Testing...'
                     : testStatus === 'success'
-                      ? 'Sent!'
+                      ? (testResult?.status === 'DELIVERED' ? 'Delivered' : 'Accepted')
                       : testStatus === 'error'
                         ? 'Failed'
                         : 'Send Test'}
@@ -434,24 +556,64 @@ export default function ProviderCard({
             )}
           </div>
         </div>
+
+        {testResult && (
+          <div
+            role="status"
+            className={`mt-3 p-3 rounded-xl border text-xs space-y-1.5 transition-all ${
+              testResult.status === 'DELIVERED' || testResult.status === 'ACCEPTED'
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
+                : testResult.status === 'DEFERRED' || testResult.status === 'UNKNOWN'
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-100'
+                  : testResult.status === 'QUEUED'
+                    ? 'bg-zinc-500/10 border-zinc-500/30 text-zinc-950 dark:text-zinc-100'
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-950 dark:text-rose-100'
+            }`}
+          >
+            <div className="flex items-center justify-between font-semibold">
+              <span className="flex items-center gap-1.5">
+                {testResult.status === 'DELIVERED' || testResult.status === 'ACCEPTED' ? (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                ) : testResult.status === 'DEFERRED' || testResult.status === 'UNKNOWN' ? (
+                  <AlertOctagon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                ) : testResult.status === 'QUEUED' ? (
+                  <FlaskConical className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+                )}
+                {testResult.status === 'ACCEPTED' && 'Provider Accepted Test'}
+                {testResult.status === 'DELIVERED' && 'Delivered to Recipient'}
+                {testResult.status === 'DEFERRED' && 'Delivery Deferred (Rate Limited)'}
+                {testResult.status === 'QUEUED' && 'Test Notification Queued'}
+                {testResult.status === 'UNKNOWN' && 'Delivery Status Unconfirmed'}
+                {testResult.status === 'FAILED' && 'Test Delivery Failed'}
+              </span>
+              <span className="text-[11px] opacity-75">
+                {formatDateTime(testResult.testedAt.toISOString(), userTimeZone, { format: 'time' })}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] opacity-90 pt-1">
+              <div>Provider: <span className="font-mono font-medium">{testResult.provider}</span></div>
+              {testResult.providerMessageId && (
+                <div className="truncate">Message ID: <span className="font-mono">{testResult.providerMessageId}</span></div>
+              )}
+              {testResult.notificationId && (
+                <div className="truncate">Notification: <span className="font-mono">{testResult.notificationId}</span></div>
+              )}
+              {testResult.errorCode && (
+                <div>Error code: <span className="font-mono">{testResult.errorCode}</span></div>
+              )}
+            </div>
+            {testResult.message && (
+              <p className="text-[11px] pt-1 border-t border-current/10 opacity-90">{testResult.message}</p>
+            )}
+          </div>
+        )}
       </CardHeader>
 
       {isExpanded && (
         <CardContent className="p-4 sm:p-5 pt-0 sm:pt-0 border-t border-border/60 mt-2">
           <form onSubmit={handleSave} className="space-y-5 pt-4">
-            <div className="flex items-center space-x-2 bg-muted/20 p-3 rounded-xl border border-border/50">
-              <Checkbox
-                checked={enabled}
-                onCheckedChange={checked => setEnabled(!!checked)}
-                id={`enable-${providerConfig.key}`}
-              />
-              <Label
-                htmlFor={`enable-${providerConfig.key}`}
-                className="text-xs font-semibold cursor-pointer text-foreground"
-              >
-                Enable {providerConfig.name} for outbound alert dispatch
-              </Label>
-            </div>
 
             {isWebPush && (
               <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
@@ -557,6 +719,7 @@ export default function ProviderCard({
                             onClick={() =>
                               setShowSecrets(prev => ({ ...prev, [field.name]: !prev[field.name] }))
                             }
+                            aria-label={isVisible ? `Hide ${field.label}` : `Show ${field.label}`}
                             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                           >
                             {isVisible ? (
@@ -632,7 +795,7 @@ export default function ProviderCard({
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="h-3 w-3 text-emerald-500" />
-                Encrypted credentials stored securely
+                Sensitive credentials are masked
               </span>
               <span>
                 Last modified:{' '}
@@ -641,16 +804,11 @@ export default function ProviderCard({
                 })}
               </span>
             </div>
-            {credentialAgeDays !== null && credentialAgeDays > 90 && (
-              <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1">
-                <AlertOctagon className="h-3 w-3 shrink-0" />
-                Credentials are {credentialAgeDays} days old — consider rotating for security.
-              </div>
-            )}
             {isWebPush && typeof config.vapidPublicKey === 'string' && config.vapidPublicKey && (
               <button
                 type="button"
                 onClick={() => void copyVapid()}
+                aria-label="Copy VAPID public key"
                 className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors mt-0.5 w-fit"
               >
                 <Copy className="h-3 w-3" />

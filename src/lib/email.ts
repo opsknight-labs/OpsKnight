@@ -392,6 +392,16 @@ export function isSafeEmailFailoverCondition(result: EmailDeliveryResult): boole
     return false;
   }
 
+  // Pre-submission pinned provider unavailable (e.g. secret unreadable or provider disabled)
+  // Even though it uses statusCode: 409, no request was dispatched to provider, so failover is safe.
+  if (
+    result.errorCode === 'PINNED_PROVIDER_UNAVAILABLE' ||
+    errorText.includes('pinned_provider_unavailable') ||
+    errorText.includes('pinned email provider')
+  ) {
+    return true;
+  }
+
   // 3. 4xx client errors (except 429 rate limit) should NOT failover: bad API key, unverified domain
   if (
     typeof result.statusCode === 'number' &&

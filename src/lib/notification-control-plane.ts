@@ -1312,6 +1312,16 @@ function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
   ) {
     return false;
   }
+  // Pre-submission pinned provider unavailable (e.g. secret unreadable or provider disabled)
+  // Even though it uses statusCode: 409, no request was dispatched to provider, so failover is safe.
+  if (
+    result.errorCode === 'PINNED_PROVIDER_UNAVAILABLE' ||
+    errorText.includes('pinned_provider_unavailable') ||
+    errorText.includes('pinned email provider')
+  ) {
+    return true;
+  }
+
   if (
     typeof result.statusCode === 'number' &&
     result.statusCode >= 400 &&
@@ -1915,8 +1925,12 @@ export async function deliverCentralNotification(
   }
 
   const defaultKey = await payloadProviderKeyAsync(payload);
-  const route: string[] = isEmail && emailRoute && emailRoute.length > 0
-    ? emailRoute
+  const VALID_EMAIL_PROVIDERS = new Set(['resend', 'sendgrid', 'ses', 'smtp']);
+  const sanitizedEmailRoute = (emailRoute || []).filter(
+    (item): item is string => typeof item === 'string' && VALID_EMAIL_PROVIDERS.has(item.toLowerCase())
+  );
+  const route: string[] = isEmail && sanitizedEmailRoute.length > 0
+    ? sanitizedEmailRoute
     : [defaultKey];
 
   const channelScope = (channelForPayload(payload)) as ProviderAdmissionScope;
@@ -1925,9 +1939,9 @@ export async function deliverCentralNotification(
   };
   let anyAttemptDispatched = false;
 
-  for (let routeIndex = 0; routeIndex < route.length; routeIndex++) {
-    const currentProvider = route[routeIndex];
+  for (const [routeIndex, currentProvider] of route.entries()) {
     const isLastProviderInRoute = routeIndex === route.length - 1;
+    const nextProvider = !isLastProviderInRoute ? route[routeIndex + 1] : undefined;
 
     // 1. Circuit Breaker check
     const breaker = isEmail ? CircuitBreakers.email(currentProvider) : undefined;
@@ -2317,11 +2331,12 @@ export async function deliverCentralNotification(
         errorMessage,
       });
 
-      if (!isLastProviderInRoute) {
+      const exhausted = currentDeliveryAttempt >= candidate.maxAttempts;
+      if (!isLastProviderInRoute && !exhausted) {
         logger.warn('notification.email_failover_on_rate_limit', {
           notificationId: candidate.id,
           provider: currentProvider,
-          nextProvider: route[routeIndex + 1],
+          nextProvider: nextProvider,
         });
         continue;
       }
@@ -2343,11 +2358,13 @@ export async function deliverCentralNotification(
     // Permanent failure
     const permanent = isPermanentProviderError(errorMessage);
     const exhausted = currentDeliveryAttempt >= candidate.maxAttempts;
+    const safeFailover = isEmail && isSafeEmailFailoverCondition(result);
+    const canFailover = safeFailover && !isLastProviderInRoute && !exhausted;
 
     await finishAttempt({
       notificationId: candidate.id,
       ordinal,
-      outcome: permanent || exhausted ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
+      outcome: permanent || (exhausted && !canFailover) ? 'PERMANENT_FAILURE' : 'RETRYABLE_FAILURE',
       startedAt,
       provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
       errorMessage,
@@ -2370,13 +2387,11 @@ export async function deliverCentralNotification(
       return { success: false, claimed: true, error: errorMessage };
     }
 
-    // Check safe failover for Email
-    const safeFailover = isEmail && isSafeEmailFailoverCondition(result);
-    if (safeFailover && !isLastProviderInRoute) {
+    if (canFailover) {
       logger.warn('notification.email_failover_on_safe_error', {
         notificationId: candidate.id,
         provider: currentProvider,
-        nextProvider: route[routeIndex + 1],
+        nextProvider: nextProvider,
         error: errorMessage,
       });
       continue;

@@ -531,5 +531,155 @@ describe('Control Plane Email Provider Failover', () => {
         expect.objectContaining({ provider: 'resend' })
       );
     });
+
+    it('PINNED_PROVIDER_UNAVAILABLE safely fails over to subsequent provider', async () => {
+      // Setup: route has Resend and SES, but Resend config is unavailable at delivery time
+      const due = new Date(Date.now() - 5000);
+      const payload = {
+        kind: 'INCIDENT_EMAIL' as const,
+        userId: 'user-1',
+        incidentId: 'incident-1',
+        eventType: 'triggered' as const,
+        eventAt: due.toISOString(),
+        durableMessage: 'Alert message',
+        emailRoute: ['resend', 'ses'],
+      };
+
+      vi.mocked(prisma.notification.findUnique).mockResolvedValueOnce({
+        id: 'notif-pinned-unavail',
+        status: 'PENDING',
+        category: 'INCIDENT',
+        trafficClass: 'CRITICAL',
+        attempts: 0,
+        maxAttempts: 3,
+        scheduledAt: due,
+        nextAttemptAt: due,
+        expiresAt: new Date(Date.now() + 60000),
+        createdAt: new Date(),
+        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+        sourceType: 'incident',
+        sourceId: 'incident-1',
+        recipientId: 'user-1',
+        templateKey: 'incident-alert',
+        claimToken: null,
+        fanoutId: null,
+      } as never);
+
+      vi.mocked(prisma.incident.findUnique).mockResolvedValueOnce({
+        status: 'OPEN',
+        updatedAt: due,
+        acknowledgedAt: null,
+        resolvedAt: null,
+        currentEscalationStep: 0,
+        escalationGeneration: null,
+      } as never);
+
+      // Only SES is configured in database
+      vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
+        { provider: 'ses', enabled: true, apiKey: 'ses_sec', accessKeyId: 'ses_key', fromEmail: 'ops@example.com' },
+      ]);
+
+      mocks.sendIncidentEmail.mockResolvedValueOnce({
+        success: true,
+        providerMessageId: 'ses-msg-pinned-fallback',
+      });
+
+      const result = await deliverCentralNotification('notif-pinned-unavail');
+
+      expect(result.success).toBe(true);
+      expect(mocks.sendIncidentEmail).toHaveBeenCalledTimes(1);
+      expect(mocks.sendIncidentEmail).toHaveBeenCalledWith(
+        'user-1',
+        'incident-1',
+        'triggered',
+        'notif-pinned-unavail',
+        'Alert message',
+        expect.objectContaining({ provider: 'ses' })
+      );
+    });
+
+    it('enforces attempt budget and stops multi-provider fallback when maxAttempts is reached', async () => {
+      // Setup: 4-provider route, but maxAttempts = 3
+      const due = new Date(Date.now() - 5000);
+      const payload = {
+        kind: 'EMAIL' as const,
+        to: 'user@example.com',
+        subject: 'Multi-failover test',
+        html: '<p>Test</p>',
+        emailRoute: ['resend', 'sendgrid', 'ses', 'smtp'],
+      };
+
+      vi.mocked(prisma.notification.findUnique).mockResolvedValueOnce({
+        id: 'notif-max-attempts-route',
+        status: 'PENDING',
+        category: 'INCIDENT',
+        trafficClass: 'CRITICAL',
+        attempts: 0,
+        maxAttempts: 3,
+        scheduledAt: due,
+        nextAttemptAt: due,
+        expiresAt: new Date(Date.now() + 60000),
+        createdAt: new Date(),
+        payloadEncrypted: `encrypted:${JSON.stringify(payload)}`,
+        sourceType: 'incident',
+        sourceId: 'inc-budget',
+        recipientId: 'user-1',
+        templateKey: 'incident-alert',
+        claimToken: null,
+        fanoutId: null,
+      } as never);
+
+      prismaMocks.attemptCount
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(2);
+
+      vi.mocked(notificationProviders.getAllConfiguredEmailProviders).mockResolvedValue([
+        { provider: 'resend', enabled: true, apiKey: 're_key', fromEmail: 'ops@example.com' },
+        { provider: 'sendgrid', enabled: true, apiKey: 'sg_key', fromEmail: 'ops@example.com' },
+        { provider: 'ses', enabled: true, apiKey: 'ses_sec', accessKeyId: 'ses_key', fromEmail: 'ops@example.com' },
+        { provider: 'smtp', enabled: true, host: 'smtp.example.com', port: 587, user: 'u', password: 'p', fromEmail: 'ops@example.com' },
+      ]);
+
+      // All 3 dispatches fail with safe 500 errors
+      mocks.sendEmail
+        .mockResolvedValueOnce({ success: false, statusCode: 500, error: 'Resend 500 error' })
+        .mockResolvedValueOnce({ success: false, statusCode: 500, error: 'SendGrid 500 error' })
+        .mockResolvedValueOnce({ success: false, statusCode: 500, error: 'SES 500 error' })
+        .mockResolvedValueOnce({ success: true, providerMessageId: 'smtp-should-not-be-called' });
+
+      const attemptLedger: Array<{ ordinal: number; outcome: string; provider: string }> = [];
+      vi.mocked(prisma.notificationDeliveryAttempt.create).mockImplementation(((args: {
+        data: { ordinal: number; outcome: string; provider: string };
+      }) => {
+        attemptLedger.push({
+          ordinal: args.data.ordinal,
+          outcome: args.data.outcome,
+          provider: args.data.provider,
+        });
+        return Promise.resolve({} as never);
+      }) as never);
+
+      const result = await deliverCentralNotification('notif-max-attempts-route');
+
+      expect(result.success).toBe(false);
+      // Only 3 attempts must be executed, SMTP (4th) must NOT be executed!
+      expect(mocks.sendEmail).toHaveBeenCalledTimes(3);
+      expect(attemptLedger).toHaveLength(3);
+      expect(attemptLedger[0]).toMatchObject({ ordinal: 1, outcome: 'RETRYABLE_FAILURE', provider: 'resend' });
+      expect(attemptLedger[1]).toMatchObject({ ordinal: 2, outcome: 'RETRYABLE_FAILURE', provider: 'sendgrid' });
+      expect(attemptLedger[2]).toMatchObject({ ordinal: 3, outcome: 'PERMANENT_FAILURE', provider: 'ses' });
+
+      // Notification marked FAILED with attempts = 3
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'notif-max-attempts-route' }),
+          data: expect.objectContaining({
+            status: 'FAILED',
+            attempts: 3,
+          }),
+        })
+      );
+    });
   });
 });
