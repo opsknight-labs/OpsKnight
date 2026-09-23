@@ -11,6 +11,13 @@ const password = process.env.E2E_ADMIN_PASSWORD || DEFAULT_PASSWORD;
 
 async function ensureTestUser() {
   const passwordHash = await bcrypt.hash(password, 12);
+  await prisma.rateLimit.deleteMany({
+    where: {
+      key: {
+        contains: email,
+      },
+    },
+  });
   await prisma.user.upsert({
     where: { email },
     update: {
@@ -35,9 +42,16 @@ function sidebarLink(page: Page, name: string) {
 async function login(page: Page) {
   await ensureTestUser();
   await page.goto('/login');
-  await page.locator('input[type="email"]').fill(email);
-  await page.locator('input[type="password"]').fill(password);
-  await page.locator('form button[type="submit"]').click();
+  if (new URL(page.url()).pathname !== '/login') {
+    await expect(sidebarLink(page, 'Dashboard')).toBeVisible({ timeout: 30_000 });
+    return;
+  }
+  const emailInput = page.locator('input[type="email"]');
+  if (await emailInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await emailInput.fill(email);
+    await page.locator('input[type="password"]').fill(password);
+    await page.locator('form button[type="submit"]').click();
+  }
   await expect(page).not.toHaveURL(/\/login/, { timeout: 30_000 });
   await expect(sidebarLink(page, 'Dashboard')).toBeVisible({ timeout: 30_000 });
 }
@@ -64,6 +78,10 @@ test.describe.serial('authenticated navigation fast path', () => {
     await login(page);
   });
 
+  test.afterEach(async ({ page }) => {
+    await page.clock.resume().catch(() => {});
+  });
+
   test('first sidebar click performs one navigation and no shell bookkeeping requests', async ({
     page,
   }) => {
@@ -78,16 +96,20 @@ test.describe.serial('authenticated navigation fast path', () => {
 
   test('activity heartbeat remains separate from the following click', async ({ page }) => {
     await page.clock.install();
-    await page.keyboard.press('Shift');
-    await page.clock.fastForward(2 * 60 * 1000 + 1);
-    await page.waitForTimeout(0);
+    try {
+      await page.keyboard.press('Shift');
+      await page.clock.fastForward(2 * 60 * 1000 + 1);
+      await page.clock.resume();
 
-    const requests = await navigationRequests(page);
-    await sidebarLink(page, 'Services').click();
-    await expect(page).toHaveURL(/\/services/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Services' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).not.toBeVisible();
-    expect(requests.filter(path => path === '/api/auth/session')).toHaveLength(0);
+      const requests = await navigationRequests(page);
+      await sidebarLink(page, 'Services').click();
+      await expect(page).toHaveURL(/\/services/);
+      await expect(page.getByRole('heading', { level: 1, name: 'Services' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 1, name: 'Incidents' })).not.toBeVisible();
+      expect(requests.filter(path => path === '/api/auth/session')).toHaveLength(0);
+    } finally {
+      await page.clock.resume().catch(() => {});
+    }
   });
 
   test('returning to the tab does not couple focus validation to navigation', async ({ page }) => {
