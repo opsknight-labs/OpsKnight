@@ -234,13 +234,79 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
   });
 
   describe('Untrusted Proxy Headers (default — TRUST_PROXY_HEADERS not set)', () => {
-    it('ignores X-Forwarded-Host when TRUST_PROXY_HEADERS is not set', async () => {
+    it('accepts configured app host from X-Forwarded-Host when raw Host is internal', async () => {
       setupStatusServingMocks();
       const { default: middleware } = await import('@/middleware');
 
       const req = new NextRequest('http://internal-app:3000/login', {
         headers: {
           host: 'internal-app:3000',
+          'x-forwarded-host': 'www.opsnite.com',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(200);
+    });
+
+    it('uses configured public origin for auth redirects after safe proxy fallback', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://internal-app:3000/settings', {
+        headers: {
+          host: 'internal-app:3000',
+          'x-forwarded-host': 'www.opsnite.com',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe(
+        'https://www.opsnite.com/login?callbackUrl=%2Fsettings'
+      );
+    });
+
+    it('routes configured status host from an internal upstream Host without global proxy trust', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://internal-app:3000/users', {
+        headers: {
+          host: 'internal-app:3000',
+          'x-forwarded-host': 'status.customer.com',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(404);
+    });
+
+    it('rejects unknown forwarded host even when raw Host is internal', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://internal-app:3000/login', {
+        headers: {
+          host: 'internal-app:3000',
+          'x-forwarded-host': 'attacker.example',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(421);
+    });
+
+    it('rejects configured forwarded app host when raw Host is an unrelated public hostname', async () => {
+      setupStatusServingMocks();
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('https://evil.attacker.test/login', {
+        headers: {
+          host: 'evil.attacker.test',
           'x-forwarded-host': 'www.opsnite.com',
         },
       });
@@ -443,6 +509,40 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
   });
 
   describe('External Serving Store & Database Canonical App Host Precedence', () => {
+    it('accepts DB-configured Application URL through an internal reverse-proxy Host', async () => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://old-env.opsnite.test');
+      vi.stubEnv('NEXTAUTH_URL', 'https://old-env.opsnite.test');
+
+      const fetchMock = vi.fn().mockImplementation((url: string | URL) => {
+        const urlStr = String(url);
+        if (urlStr.includes('/api/status-page/domains')) {
+          return Promise.resolve(
+            Response.json({
+              enabled: false,
+              appHost: 'opsknight-devtest.corporateroot.net',
+              appUrl: 'https://opsknight-devtest.corporateroot.net',
+              pages: [],
+            })
+          );
+        }
+        return Promise.resolve(new Response(null, { status: 404 }));
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { default: middleware } = await import('@/middleware');
+
+      const req = new NextRequest('http://internal-app:3000/login', {
+        headers: {
+          host: 'internal-app:3000',
+          'x-forwarded-host': 'opsknight-devtest.corporateroot.net',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      const res = await middleware(req);
+
+      expect(res.status).toBe(200);
+    });
+
     it('recognizes DB SystemSettings.appUrl when external serving store is enabled', async () => {
       vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://old-env.opsnite.test');
       vi.stubEnv('NEXTAUTH_URL', 'https://old-env.opsnite.test');
@@ -504,6 +604,19 @@ describe('App Host Classification, Proxy Routing, and Canonical Aliases', () => 
   });
 
   describe('Shared Request Origin and Bootstrap Method Restrictions', () => {
+    it('classifies only private/internal upstream hosts as infrastructure hosts', async () => {
+      const { isInternalInfrastructureHost } = await import('@/lib/request-host');
+
+      expect(isInternalInfrastructureHost('internal-app')).toBe(true);
+      expect(isInternalInfrastructureHost('opsknight.default.svc.cluster.local')).toBe(true);
+      expect(isInternalInfrastructureHost('10.0.1.7')).toBe(true);
+      expect(isInternalInfrastructureHost('172.20.0.4')).toBe(true);
+      expect(isInternalInfrastructureHost('192.168.1.10')).toBe(true);
+      expect(isInternalInfrastructureHost('status.customer.com')).toBe(false);
+      expect(isInternalInfrastructureHost('www.opsnite.com')).toBe(false);
+      expect(isInternalInfrastructureHost('evil.attacker.test')).toBe(false);
+    });
+
     it('getAuthoritativeRequestOrigin resolves scheme, host, and non-standard port', async () => {
       const { getAuthoritativeRequestOrigin } = await import('@/lib/request-host');
 

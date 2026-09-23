@@ -45,6 +45,104 @@ export function parseHostname(value?: string | null): string {
 }
 
 /**
+ * Return the raw Host header seen by the application server.
+ *
+ * This deliberately does not consult forwarded headers. It is used as the
+ * trust anchor when deciding whether a reverse proxy has replaced the public
+ * host with an internal upstream hostname.
+ */
+export function getRawRequestHost(req: Request): string {
+  const rawHost = normalizeHostname(req.headers.get('host'));
+  if (rawHost) return rawHost;
+
+  try {
+    return normalizeHostname(new URL(req.url).host);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Return the right-most X-Forwarded-Host value, normalized to a bare hostname.
+ *
+ * Reading this value does not make it trusted. Callers must separately prove
+ * that it is safe to use (for example by matching it to configured OpsKnight
+ * application/status hosts and requiring an internal upstream Host).
+ */
+export function getForwardedRequestHost(req: Request): string {
+  const forwarded = req.headers.get('x-forwarded-host');
+  if (!forwarded) return '';
+
+  const candidate = forwarded
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+    .at(-1);
+
+  return normalizeHostname(candidate);
+}
+
+/**
+ * True only for hostnames that are normally used on a private application
+ * network between a reverse proxy and OpsKnight.
+ *
+ * This intentionally excludes ordinary public FQDNs. It lets OpsKnight use a
+ * configured public X-Forwarded-Host as a narrow fallback without turning on
+ * global forwarded-header trust.
+ */
+export function isInternalInfrastructureHost(value?: string | null): boolean {
+  const host = normalizeHostname(value);
+  if (!host) return false;
+
+  if (
+    host === 'localhost' ||
+    host === '::1' ||
+    host.endsWith('.localhost') ||
+    host === '0.0.0.0'
+  ) {
+    return true;
+  }
+
+  // Docker/Compose and many service meshes use single-label upstream names.
+  if (!host.includes('.') && !host.includes(':')) return true;
+
+  const ipv4 = host.split('.');
+  if (
+    ipv4.length === 4 &&
+    ipv4.every(part => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+  ) {
+    const [a, b] = ipv4.map(Number);
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+
+  const lower = host.toLowerCase();
+  if (
+    lower.startsWith('fc') ||
+    lower.startsWith('fd') ||
+    /^fe[89ab]/.test(lower)
+  ) {
+    return lower.includes(':');
+  }
+
+  return [
+    '.internal',
+    '.local',
+    '.lan',
+    '.docker',
+    '.svc',
+    '.cluster.local',
+    '.home.arpa',
+  ].some(suffix => lower.endsWith(suffix));
+}
+
+/**
  * Resolve the authoritative hostname for a request, respecting the
  * `TRUST_PROXY_HEADERS` environment variable.
  *
