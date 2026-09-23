@@ -13,9 +13,11 @@ export async function linkMicrosoftTeamsAccount(formData: FormData) {
   const user = await getCurrentUser();
   const link = await consumeMicrosoftTeamsIdentityChallenge(parsed.token, user.id);
   await emitAuditEvent({
-    action: 'chatops.identity.linked', source: 'UI',
-    target: { type: 'USER', id: user.id }, actor: { type: 'USER', id: user.id },
+    action: 'chatops.identity.linked',
+    source: 'UI',
+    target: { type: 'USER', id: user.id },
+    actor: { type: 'USER', id: user.id },
     metadata: { provider: 'MICROSOFT_TEAMS', providerTenantId: link.providerTenantId },
   }).catch(() => undefined);
-  redirect('/settings?chatopsLinked=1');
+  redirect('/settings/profile?tab=profile&chatopsLinked=1');
 }
