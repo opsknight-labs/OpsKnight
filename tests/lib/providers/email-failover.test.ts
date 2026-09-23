@@ -173,14 +173,14 @@ describe('Safe Email Provider Failover', () => {
       ).toBe(false);
     });
 
-    it('returns true for 5xx server/provider errors', () => {
+    it('returns false for 5xx server/provider errors because delivery may be ambiguous', () => {
       expect(
         isSafeEmailFailoverCondition({
           success: false,
           error: 'Internal server error',
           statusCode: 500,
         })
-      ).toBe(true);
+      ).toBe(false);
 
       expect(
         isSafeEmailFailoverCondition({
@@ -188,7 +188,7 @@ describe('Safe Email Provider Failover', () => {
           error: 'Bad gateway',
           statusCode: 502,
         })
-      ).toBe(true);
+      ).toBe(false);
 
       expect(
         isSafeEmailFailoverCondition({
@@ -196,7 +196,7 @@ describe('Safe Email Provider Failover', () => {
           error: 'Service unavailable',
           statusCode: 503,
         })
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('returns true for 429 rate limit errors', () => {
@@ -262,7 +262,7 @@ describe('Safe Email Provider Failover', () => {
   });
 
   describe('Sequential Provider Failover Execution', () => {
-    it('fails over to SendGrid when Resend returns 500 server error', async () => {
+    it('does not fail over when Resend returns a 500 server error', async () => {
       vi.spyOn(notificationProviders, 'getAllConfiguredEmailProviders').mockResolvedValue([
         {
           provider: 'resend',
@@ -286,26 +286,17 @@ describe('Safe Email Provider Failover', () => {
         },
       });
 
-      mockSendgridSend.mockResolvedValueOnce([
-        {
-          statusCode: 202,
-          headers: { 'x-message-id': 'sg-msg-123' },
-        },
-      ]);
-
       const result = await sendEmail({
         to: 'user@example.com',
         subject: 'Incident Alert',
         html: '<p>System Down</p>',
       });
 
-      expect(result.success).toBe(true);
-      expect(result.selectedProvider).toBe('sendgrid');
-      expect(result.providerAttemptCount).toBe(2);
-      expect(result.fallbackReason).toContain('Fallback from earlier provider(s)');
-      expect(result.providerMessageId).toBe('sg-msg-123');
+      expect(result.success).toBe(false);
+      expect(result.selectedProvider).toBe('resend');
+      expect(result.providerAttemptCount).toBe(1);
       expect(mockResendSend).toHaveBeenCalledTimes(1);
-      expect(mockSendgridSend).toHaveBeenCalledTimes(1);
+      expect(mockSendgridSend).not.toHaveBeenCalled();
     });
 
     it('halts and does NOT failover if primary provider fails with UNKNOWN delivery', async () => {
@@ -397,15 +388,17 @@ describe('Safe Email Provider Failover', () => {
 
       mockResendSend.mockResolvedValueOnce({
         error: {
-          message: 'Resend 500 error',
-          statusCode: 500,
+          message: 'Resend rate limited',
+          statusCode: 429,
         },
       });
 
-      mockSendgridSend.mockRejectedValueOnce({
-        message: 'SendGrid 503 unavailable',
-        response: { statusCode: 503 },
-      });
+      mockSendgridSend.mockResolvedValueOnce([
+        {
+          statusCode: 429,
+          body: { errors: [{ message: 'SendGrid rate limited' }] },
+        },
+      ]);
 
       const result = await sendEmail({
         to: 'user@example.com',

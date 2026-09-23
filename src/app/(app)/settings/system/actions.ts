@@ -22,13 +22,34 @@ export async function getNotificationProviders() {
     orderBy: { provider: 'asc' },
   });
 
-  return providers.map(p => ({
-    id: p.id,
-    provider: p.provider,
-    enabled: p.enabled,
-    config: maskSensitiveFields(p.provider, (p.config as Record<string, unknown>) || {}),
-    updatedAt: p.updatedAt.toISOString(),
-  }));
+  return Promise.all(
+    providers.map(async p => {
+      let configurationState: 'VALID' | 'INCOMPLETE' | 'DECRYPTION_ERROR' | 'DISABLED' = p.enabled
+        ? 'VALID'
+        : 'DISABLED';
+      if (p.enabled) {
+        try {
+          const decrypted = await decryptProviderConfig(
+            p.provider,
+            (p.config as Record<string, unknown>) || {}
+          );
+          if (Object.keys(decrypted).length === 0) {
+            configurationState = 'INCOMPLETE';
+          }
+        } catch {
+          configurationState = 'DECRYPTION_ERROR';
+        }
+      }
+      return {
+        id: p.id,
+        provider: p.provider,
+        enabled: p.enabled,
+        config: maskSensitiveFields(p.provider, (p.config as Record<string, unknown>) || {}),
+        updatedAt: p.updatedAt.toISOString(),
+        configurationState,
+      };
+    })
+  );
 }
 
 /**

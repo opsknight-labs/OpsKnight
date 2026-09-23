@@ -259,7 +259,11 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
           id: 'prov-ses',
           provider: 'ses',
           enabled: true,
-          config: { accessKeyId: 'ses_key', secretAccessKey: 'ses_sec', fromEmail: 'ops@example.com' },
+          config: {
+            accessKeyId: 'ses_key',
+            secretAccessKey: 'ses_sec',
+            fromEmail: 'ops@example.com',
+          },
           updatedAt: new Date().toISOString(),
         },
         {
@@ -480,7 +484,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
         />
       );
 
-      const apiKeyInput = container.querySelector('input#apiKey')!;
+      const apiKeyInput = container.querySelector('input#resend-apiKey')!;
       expect(apiKeyInput).toBeDefined();
       fireEvent.change(apiKeyInput, { target: { value: 're_different_key' } });
 

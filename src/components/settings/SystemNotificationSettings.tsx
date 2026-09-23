@@ -279,8 +279,12 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
   );
 
   const whatsappConfig = twilioProvider?.config as Record<string, unknown> | undefined;
-  const whatsappAccountSid = (whatsappConfig?.whatsappAccountSid || twilioConfig?.accountSid) as string | undefined;
-  const whatsappAuthToken = (whatsappConfig?.whatsappAuthToken || twilioConfig?.authToken) as string | undefined;
+  const whatsappAccountSid = (whatsappConfig?.whatsappAccountSid || twilioConfig?.accountSid) as
+    | string
+    | undefined;
+  const whatsappAuthToken = (whatsappConfig?.whatsappAuthToken || twilioConfig?.authToken) as
+    | string
+    | undefined;
   const isWhatsappConfigured = Boolean(
     whatsappConfig?.whatsappNumber &&
     whatsappAccountSid &&
@@ -288,7 +292,9 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
     !String(whatsappAccountSid).startsWith('enc:') &&
     !String(whatsappAuthToken).startsWith('enc:')
   );
-  const whatsappEnabled = Boolean(whatsappConfig?.whatsappEnabled && whatsappConfig?.whatsappNumber);
+  const whatsappEnabled = Boolean(
+    whatsappConfig?.whatsappEnabled && whatsappConfig?.whatsappNumber
+  );
 
   const pushProvider = providerMap.get('web-push');
   const pushConfig = (pushProvider?.config as Record<string, unknown>) || {};
@@ -338,7 +344,8 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
       const isEnabled = p?.enabled ?? false;
       const isCfg = isEmailConfigured(key);
       if (isEnabled) {
-        if (!isCfg) return 'configuration_error' as const;
+        if (p?.configurationState === 'DECRYPTION_ERROR' || !isCfg)
+          return 'configuration_error' as const;
         const rank = activeEmailKeys.indexOf(key);
         if (rank === 0) return 'primary' as const;
         if (rank === 1) return 'fallback_1' as const;
@@ -351,7 +358,9 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
     if (key === 'twilio') {
       const isEnabled = twilioProvider?.enabled ?? false;
       if (isEnabled) {
-        return isTwilioConfigured ? ('active' as const) : ('configuration_error' as const);
+        return twilioProvider?.configurationState === 'DECRYPTION_ERROR' || !isTwilioConfigured
+          ? ('configuration_error' as const)
+          : ('active' as const);
       }
       return isTwilioConfigured ? ('standby' as const) : ('not_configured' as const);
     }
@@ -359,7 +368,8 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
     if (key === 'aws-sns') {
       const isEnabled = awsSnsProvider?.enabled ?? false;
       if (isEnabled) {
-        if (!isAwsSnsConfigured) return 'configuration_error' as const;
+        if (awsSnsProvider?.configurationState === 'DECRYPTION_ERROR' || !isAwsSnsConfigured)
+          return 'configuration_error' as const;
         const isTwilioActive = (twilioProvider?.enabled ?? false) && isTwilioConfigured;
         return isTwilioActive ? ('standby' as const) : ('active' as const);
       }
@@ -368,7 +378,9 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
 
     if (key === 'whatsapp') {
       if (whatsappEnabled) {
-        return isWhatsappConfigured ? ('active' as const) : ('configuration_error' as const);
+        return twilioProvider?.configurationState === 'DECRYPTION_ERROR' || !isWhatsappConfigured
+          ? ('configuration_error' as const)
+          : ('active' as const);
       }
       return isWhatsappConfigured ? ('standby' as const) : ('not_configured' as const);
     }
@@ -376,7 +388,9 @@ export default function SystemNotificationSettings({ providers }: SystemNotifica
     if (key === 'web-push') {
       const isEnabled = pushProvider?.enabled ?? false;
       if (isEnabled) {
-        return isPushConfigured ? ('active' as const) : ('configuration_error' as const);
+        return pushProvider?.configurationState === 'DECRYPTION_ERROR' || !isPushConfigured
+          ? ('configuration_error' as const)
+          : ('active' as const);
       }
       return isPushConfigured ? ('standby' as const) : ('not_configured' as const);
     }

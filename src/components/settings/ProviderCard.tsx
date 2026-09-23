@@ -238,6 +238,8 @@ export default function ProviderCard({
       setSavedEnabled(enabled);
       setSavedConfig(config);
       setSavedRevision(result.updatedAt);
+      setTestResult(null);
+      setTestStatus('idle');
       toast.success(`${providerConfig.name} configuration saved`, {
         id: `settings:provider:${providerConfig.key}:save`,
       });
@@ -321,7 +323,11 @@ export default function ProviderCard({
     }
   };
 
-  const isConfigured = hasRequiredConfig;
+  const hasConfigurationError =
+    existing?.configurationState === 'DECRYPTION_ERROR' ||
+    (providerConfig.key === 'whatsapp' &&
+      twilioProvider?.configurationState === 'DECRYPTION_ERROR');
+  const isConfigured = hasRequiredConfig && !hasConfigurationError;
 
   const handleTest = async () => {
     if (isDirty) {
@@ -584,7 +590,9 @@ export default function ProviderCard({
           <div
             role="status"
             className={`mt-3 p-3 rounded-xl border text-xs space-y-1.5 transition-all ${
-              testResult.status === 'DELIVERED' || testResult.status === 'ACCEPTED'
+              testResult.status === 'DELIVERED' ||
+              testResult.status === 'ACCEPTED' ||
+              testResult.status === 'CONFIGURED_NO_DEVICE'
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
                 : testResult.status === 'DEFERRED' || testResult.status === 'UNKNOWN'
                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-950 dark:text-amber-100'
@@ -595,7 +603,9 @@ export default function ProviderCard({
           >
             <div className="flex items-center justify-between font-semibold">
               <span className="flex items-center gap-1.5">
-                {testResult.status === 'DELIVERED' || testResult.status === 'ACCEPTED' ? (
+                {testResult.status === 'DELIVERED' ||
+                testResult.status === 'ACCEPTED' ||
+                testResult.status === 'CONFIGURED_NO_DEVICE' ? (
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 ) : testResult.status === 'DEFERRED' || testResult.status === 'UNKNOWN' ? (
                   <AlertOctagon className="h-4 w-4 text-amber-600 dark:text-amber-400" />

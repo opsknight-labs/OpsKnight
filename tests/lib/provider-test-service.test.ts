@@ -19,7 +19,9 @@ vi.mock('@/lib/prisma', () => ({
 }));
 
 vi.mock('@/lib/encrypted-provider-config', () => ({
-  decryptProviderConfig: vi.fn((_provider: string, config: Record<string, unknown>) => Promise.resolve(config)),
+  decryptProviderConfig: vi.fn((_provider: string, config: Record<string, unknown>) =>
+    Promise.resolve(config)
+  ),
 }));
 
 vi.mock('@/lib/notification-control-plane', () => ({
@@ -241,7 +243,7 @@ describe('Provider Test Service', () => {
         success: false,
         provider: 'ses',
       });
-      expect(result.message).toContain("not configured");
+      expect(result.message).toContain('not configured');
     });
 
     it('fails immediately when provider is disabled in database', async () => {
@@ -259,7 +261,7 @@ describe('Provider Test Service', () => {
         success: false,
         provider: 'sendgrid',
       });
-      expect(result.message).toContain("disabled");
+      expect(result.message).toContain('disabled');
     });
 
     it('dispatches email test and returns structured ACCEPTED result', async () => {
@@ -392,6 +394,32 @@ describe('Provider Test Service', () => {
         channel: 'SMS',
       });
       expect(result.message).toContain('unavailable');
+    });
+
+    it('reports configured Web Push with no recipient device without treating it as a delivery failure', async () => {
+      vi.mocked(prisma.notificationProvider.findUnique).mockResolvedValue({
+        id: 'prov-web-push',
+        provider: 'web-push',
+        enabled: true,
+        config: { vapidPublicKey: 'public', vapidPrivateKey: 'private' },
+      } as never);
+
+      vi.mocked(enqueueCentralNotification).mockResolvedValue({
+        id: 'notif-push-no-device',
+        created: true,
+        skipped: true,
+        error: 'No web subscription is registered for the recipient device.',
+      } as never);
+
+      const result = await executeProviderTest('web-push', adminUser);
+
+      expect(result).toMatchObject({
+        status: 'CONFIGURED_NO_DEVICE',
+        success: true,
+        provider: 'web-push',
+        channel: 'PUSH',
+        notificationId: 'notif-push-no-device',
+      });
     });
   });
 });

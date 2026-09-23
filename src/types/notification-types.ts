@@ -93,6 +93,7 @@ export interface ProviderRecord {
   enabled: boolean;
   config: Record<string, unknown>;
   updatedAt: string;
+  configurationState?: 'VALID' | 'INCOMPLETE' | 'DECRYPTION_ERROR' | 'DISABLED';
 }
 
 // Form Field Configuration

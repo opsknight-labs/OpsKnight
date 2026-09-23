@@ -417,6 +417,20 @@ export async function executeProviderTest(
     const enqueueResult = await enqueueCentralNotification(input, { dispatchImmediately: true });
 
     if (enqueueResult.skipped) {
+      if (
+        input.channel === 'PUSH' &&
+        /no (?:device tokens|web subscription|recipient device)/i.test(enqueueResult.error || '')
+      ) {
+        return {
+          success: true,
+          status: 'CONFIGURED_NO_DEVICE',
+          provider: normalizedKey,
+          channel: input.channel,
+          notificationId: enqueueResult.id,
+          message:
+            'Web Push is configured, but this account has no registered browser subscription.',
+        };
+      }
       return {
         success: false,
         status: 'FAILED',
