@@ -12,7 +12,11 @@ export function teamsActionCard(card: Record<string, unknown>): TeamsInvokeRespo
   return { statusCode: 200, type: 'application/vnd.microsoft.card.adaptive', value: card };
 }
 
-export function teamsActionError(statusCode: number, code: string, message: string): TeamsInvokeResponse {
+export function teamsActionError(
+  statusCode: number,
+  code: string,
+  message: string
+): TeamsInvokeResponse {
   return {
     statusCode,
     type: 'application/vnd.microsoft.error',
@@ -24,20 +28,10 @@ export function teamsActionLoginRequest(
   url: string,
   text = 'Link your OpsKnight account, then retry this action.'
 ): TeamsInvokeResponse {
+  const message = text.includes(url) ? text : `${text.replace(/:?\s*$/, '')}: ${url}`;
   return {
-    statusCode: 401,
-    type: 'application/vnd.microsoft.activity.loginRequest',
-    value: {
-      text,
-      buttons: [
-        {
-          type: 'signin',
-          title: 'Link OpsKnight Account',
-          text: 'Link OpsKnight Account',
-          value: url,
-        },
-      ],
-    },
+    statusCode: 200,
+    type: 'application/vnd.microsoft.activity.message',
+    value: message,
   };
 }
-
