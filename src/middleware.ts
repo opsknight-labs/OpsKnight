@@ -19,6 +19,9 @@ import {
   parseHostname,
   getAuthoritativeRequestHost,
   getAuthoritativeRequestOrigin,
+  getRawRequestHost,
+  getForwardedRequestHost,
+  isInternalInfrastructureHost,
 } from '@/lib/request-host';
 import { parse as parseDomain } from 'tldts';
 
@@ -194,7 +197,14 @@ export function isAllowedStatusApi(pathname: string, method: string): boolean {
 }
 
 // Re-export shared host utilities for external consumers
-export { normalizeHostname, parseHostname, getAuthoritativeRequestHost } from '@/lib/request-host';
+export {
+  normalizeHostname,
+  parseHostname,
+  getAuthoritativeRequestHost,
+  getRawRequestHost,
+  getForwardedRequestHost,
+  isInternalInfrastructureHost,
+} from '@/lib/request-host';
 
 /**
  * Returns true when the request targets the one-time bootstrap setup page
@@ -370,6 +380,71 @@ type StatusDomainConfig = {
   appHost?: string | null;
   appUrl?: string | null;
 };
+
+function matchesConfiguredStatusHost(
+  hostname: string,
+  statusConfig?: StatusDomainConfig | null
+): boolean {
+  if (!hostname || !statusConfig?.enabled) return false;
+  return Boolean(
+    statusConfig.pages?.some(page =>
+      matchesStatusPageDomain(page, hostname, statusConfig.appHost)
+    )
+  );
+}
+
+/**
+ * Narrow reverse-proxy fallback used when the proxy replaces Host with an
+ * internal upstream hostname.
+ *
+ * Security properties:
+ * - explicit TRUST_PROXY_HEADERS=true keeps its existing behavior;
+ * - ordinary public Host headers remain authoritative;
+ * - the fallback is considered only when raw Host is recognizably internal;
+ * - X-Forwarded-Host must exactly match an already configured app/status host.
+ *
+ * This means saving Settings -> Application URL is sufficient for common
+ * nginx/Traefik/Kubernetes/Docker proxy layouts without globally trusting
+ * arbitrary forwarded headers.
+ */
+function resolveConfiguredProxyHost(
+  req: NextRequest,
+  currentHost: string,
+  statusConfig?: StatusDomainConfig | null
+): string {
+  if (process.env.TRUST_PROXY_HEADERS === 'true') return currentHost;
+
+  const rawHost = getRawRequestHost(req);
+  if (!rawHost || currentHost !== rawHost || !isInternalInfrastructureHost(rawHost)) {
+    return currentHost;
+  }
+
+  const forwardedHost = getForwardedRequestHost(req);
+  if (!forwardedHost || forwardedHost === rawHost) return currentHost;
+
+  if (
+    isAllowedApplicationHost(forwardedHost, statusConfig?.appHost) ||
+    matchesConfiguredStatusHost(forwardedHost, statusConfig)
+  ) {
+    return forwardedHost;
+  }
+
+  return currentHost;
+}
+
+function getConfiguredApplicationOrigin(statusConfig?: StatusDomainConfig | null): string | null {
+  const candidate =
+    statusConfig?.appUrl || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
+  if (!candidate) return null;
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
 type CachedDomainConfig = {
   value: StatusDomainConfig | null;
   expiresAt: number;
@@ -689,19 +764,49 @@ export default async function middleware(req: NextRequest) {
   Object.entries(securityHeaders).forEach(([key, value]) => response.headers.set(key, value));
   applySensitiveAuthHeaders(response, pathname);
 
-  const requestHost = getAuthoritativeRequestHost(req);
+  const rawRequestHost = getRawRequestHost(req);
+  let requestHost = getAuthoritativeRequestHost(req);
+  let usedConfiguredForwardedHost = false;
 
   // Internal status-domain configuration provider: bypass to avoid recursive middleware deadlock
   if (pathname === '/api/status-page/domains' && isAllowedApplicationHost(requestHost)) {
     return response;
   }
 
-  // 1. Resolve status route strictly using the authoritative request host
-  const publishedPage = requestHost ? await fetchPublishedStatusDomain(requestHost) : null;
+  // 1. Resolve status route strictly using the authoritative request host.
+  // When global proxy trust is disabled, a confirmed external-store route may
+  // still validate a forwarded host if the proxy replaced Host with an
+  // internal upstream name. Unknown forwarded hosts remain untrusted.
+  let publishedPage = requestHost ? await fetchPublishedStatusDomain(requestHost) : null;
+  if (
+    !publishedPage &&
+    usesExternalStatusServingStore() &&
+    process.env.TRUST_PROXY_HEADERS !== 'true' &&
+    isInternalInfrastructureHost(rawRequestHost)
+  ) {
+    const forwardedHost = getForwardedRequestHost(req);
+    if (forwardedHost && forwardedHost !== rawRequestHost) {
+      const forwardedPage = await fetchPublishedStatusDomain(forwardedHost);
+      if (forwardedPage) {
+        requestHost = forwardedHost;
+        publishedPage = forwardedPage;
+        usedConfiguredForwardedHost = true;
+      }
+    }
+  }
 
   let statusConfig: StatusDomainConfig | null = null;
-  if (!publishedPage && !usesExternalStatusServingStore()) {
+  if (!publishedPage) {
+    // App-plane requests need the DB-backed canonical host even when status
+    // pages use an external serving store. This is what makes the Application
+    // URL setting authoritative for normal routing.
     statusConfig = await fetchStatusDomainConfig();
+
+    const configuredProxyHost = resolveConfiguredProxyHost(req, requestHost, statusConfig);
+    if (configuredProxyHost !== requestHost) {
+      requestHost = configuredProxyHost;
+      usedConfiguredForwardedHost = true;
+    }
   }
 
   let matchedPage: StatusDomainPage | null = null;
@@ -773,7 +878,23 @@ export default async function middleware(req: NextRequest) {
     // 1) First login immediately after /setup (cache previously had appHost = null)
     // 2) Domain changes from Settings -> Application URL
     statusConfig = await fetchStatusDomainConfig(true);
+
+    const refreshedProxyHost = resolveConfiguredProxyHost(req, requestHost, statusConfig);
+    if (refreshedProxyHost !== requestHost) {
+      requestHost = refreshedProxyHost;
+      usedConfiguredForwardedHost = true;
+    }
+
     if (!isAllowedApplicationHost(requestHost, statusConfig?.appHost)) {
+      logger.warn('Rejected request for unrecognized application host', {
+        component: 'host-routing',
+        requestId,
+        requestHost,
+        rawHost: rawRequestHost || null,
+        forwardedHost: getForwardedRequestHost(req) || null,
+        configuredAppHost: statusConfig?.appHost || null,
+        trustProxyHeaders: process.env.TRUST_PROXY_HEADERS === 'true',
+      });
       return new NextResponse('Misdirected Request', { status: 421, headers: securityHeaders });
     }
   }
@@ -782,7 +903,9 @@ export default async function middleware(req: NextRequest) {
   const canonicalHost = getCanonicalApplicationHost(statusConfig?.appHost);
   if (shouldRedirectToCanonicalAppHost(requestHost, canonicalHost, pathname, req.method)) {
     const authoritativeOrigin =
-      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
+      (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
+      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
+      req.nextUrl.origin;
     const originUrl = new URL(authoritativeOrigin);
     const targetHost = canonicalHost.includes(':')
       ? canonicalHost
@@ -804,7 +927,9 @@ export default async function middleware(req: NextRequest) {
   // Old mobile reset links remain valid but converge on the single responsive page.
   if (pathname === '/m/reset-password') {
     const authoritativeOrigin =
-      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
+      (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
+      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
+      req.nextUrl.origin;
     const resetUrl = new URL('/reset-password', authoritativeOrigin);
     resetUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(resetUrl);
@@ -839,7 +964,9 @@ export default async function middleware(req: NextRequest) {
 
   if (shouldRedirectToMobile && mobileDestination) {
     const authoritativeOrigin =
-      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) || req.nextUrl.origin;
+      (usedConfiguredForwardedHost ? getConfiguredApplicationOrigin(statusConfig) : null) ||
+      getAuthoritativeRequestOrigin(req, statusConfig?.appUrl) ||
+      req.nextUrl.origin;
     const mobileUrl = new URL(mobileDestination, authoritativeOrigin);
     mobileUrl.search = req.nextUrl.search;
     const redirectResponse = NextResponse.redirect(mobileUrl);
