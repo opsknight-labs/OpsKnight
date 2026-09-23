@@ -142,14 +142,23 @@ async function sendWithSingleProvider(
   if (emailConfig.provider === 'resend') {
     try {
       const resendModule = await import('resend');
-      const ResendClass = (resendModule.Resend || resendModule.default?.Resend || resendModule.default) as unknown as new (
-        key: string
-      ) => {
+      const ResendClass = (resendModule.Resend ||
+        resendModule.default?.Resend ||
+        resendModule.default) as unknown as new (key: string) => {
         emails: {
           send: (
             payload: Record<string, unknown>,
             options?: { idempotencyKey?: string }
-          ) => Promise<{ error?: { message?: string; statusCode?: number; status?: number; name?: string; code?: string }; data?: { id?: string } }>;
+          ) => Promise<{
+            error?: {
+              message?: string;
+              statusCode?: number;
+              status?: number;
+              name?: string;
+              code?: string;
+            };
+            data?: { id?: string };
+          }>;
         };
       };
       const resend = new ResendClass(emailConfig.apiKey || '');
@@ -193,7 +202,11 @@ async function sendWithSingleProvider(
       const sgMailModule = await import('@sendgrid/mail');
       const sgMail = (sgMailModule.default || sgMailModule) as {
         setApiKey: (key: string) => void;
-        send: (msg: unknown) => Promise<Array<{ statusCode: number; headers?: Record<string, string>; body?: unknown }>>;
+        send: (
+          msg: unknown
+        ) => Promise<
+          Array<{ statusCode: number; headers?: Record<string, string>; body?: unknown }>
+        >;
       };
       if (!emailConfig.apiKey?.trim())
         return { success: false, error: 'SendGrid API key is not configured' };
@@ -367,7 +380,8 @@ export function isAmbiguousDeliveryError(errorText: string): boolean {
  * CRITICAL INVARIANT: UNKNOWN, ambiguous outcomes, and invalid recipients must NEVER trigger failover
  * to avoid duplicate emails.
  * Only demonstrably pre-submission errors (ENOTFOUND, ECONNREFUSED, missing SDK package, unconfigured provider,
- * explicit 429, or explicit 5xx) are safe to fail over.
+ * explicit 429) are safe to fail over. An HTTP 5xx can be returned after a
+ * provider accepted a message, so cross-provider failover would risk duplicates.
  */
 export function isSafeEmailFailoverCondition(result: EmailDeliveryResult): boolean {
   if (result.success) return false;
@@ -412,10 +426,10 @@ export function isSafeEmailFailoverCondition(result: EmailDeliveryResult): boole
     return false;
   }
 
-  // Safe failover conditions:
-  // 1. 5xx Server / Provider errors
+  // A 5xx is ambiguous: the provider may have accepted the message before
+  // returning its error. Never duplicate a notification across providers.
   if (typeof result.statusCode === 'number' && result.statusCode >= 500) {
-    return true;
+    return false;
   }
 
   // 2. 429 Rate limited
@@ -522,12 +536,15 @@ export async function sendEmail(
       // Check if this failure condition is safe to failover to the next configured provider
       const canFailover = isSafeEmailFailoverCondition(result);
       if (!canFailover) {
-        logger.warn('[Email] Non-retryable or unsafe failure encountered; halting provider failover', {
-          provider: config.provider,
-          reason: result.error,
-          statusCode: result.statusCode,
-          errorCode: result.errorCode,
-        });
+        logger.warn(
+          '[Email] Non-retryable or unsafe failure encountered; halting provider failover',
+          {
+            provider: config.provider,
+            reason: result.error,
+            statusCode: result.statusCode,
+            errorCode: result.errorCode,
+          }
+        );
         return lastResult;
       }
     }

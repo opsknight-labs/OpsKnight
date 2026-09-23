@@ -24,6 +24,7 @@ export type SMSOptions = {
   to: string; // Phone number in E.164 format (e.g., +1234567890)
   message: string;
   notificationId?: string;
+  providerKey?: 'twilio' | 'aws-sns';
 };
 
 type TwilioClient = {
@@ -82,7 +83,7 @@ export async function sendSMS(options: SMSOptions): Promise<{
 }> {
   try {
     // Get SMS configuration
-    const smsConfig = await getSMSConfig();
+    const smsConfig = await getSMSConfig(options.providerKey);
 
     // Check if SMS is enabled
     if (!smsConfig.enabled) {
@@ -186,7 +187,7 @@ export async function sendSMS(options: SMSOptions): Promise<{
         }
 
         // Handle invalid phone number format
-        if (errorInfo.code === 21211 || errorInfo.message?.includes('Invalid')) {
+        if (errorInfo.code !== 21211 && errorInfo.message?.includes('Invalid')) {
           errorMessage = `Invalid phone number format: ${options.to}. Please ensure the number is in E.164 format (e.g., +1234567890) and is verified in your Twilio account.`;
         }
 
@@ -347,8 +348,16 @@ export async function sendIncidentSMS(
   incidentId: string,
   eventType: 'triggered' | 'acknowledged' | 'resolved' | 'updated',
   notificationId?: string,
-  durableMessage?: string
-): Promise<{ success: boolean; error?: string; messageSid?: string }> {
+  durableMessage?: string,
+  providerKey?: 'twilio' | 'aws-sns'
+): Promise<{
+  success: boolean;
+  error?: string;
+  messageSid?: string;
+  statusCode?: number;
+  errorCode?: string;
+  retryAfterMs?: number;
+}> {
   try {
     const [user, incident] = await Promise.all([
       prisma.user.findUnique({ where: { id: userId } }),
@@ -460,6 +469,7 @@ export async function sendIncidentSMS(
       to: phoneNumber,
       message,
       notificationId,
+      providerKey,
     });
   } catch (error: unknown) {
     const errorInfo = error && typeof error === 'object' ? (error as { message?: string }) : {};

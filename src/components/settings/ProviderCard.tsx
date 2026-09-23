@@ -99,7 +99,14 @@ export default function ProviderCard({
   const [isTesting, setIsTesting] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [testResult, setTestResult] = useState<{
-    status: 'ACCEPTED' | 'DELIVERED' | 'QUEUED' | 'DEFERRED' | 'FAILED' | 'UNKNOWN';
+    status:
+      | 'ACCEPTED'
+      | 'DELIVERED'
+      | 'QUEUED'
+      | 'DEFERRED'
+      | 'CONFIGURED_NO_DEVICE'
+      | 'FAILED'
+      | 'UNKNOWN';
     message?: string;
     provider?: string;
     providerMessageId?: string;
@@ -137,6 +144,11 @@ export default function ProviderCard({
   })();
   const isDirty =
     enabled !== savedEnabled || JSON.stringify(config) !== JSON.stringify(savedConfig);
+  const updateConfig = (field: string, value: unknown) => {
+    setConfig(previous => ({ ...previous, [field]: value }));
+    setTestResult(null);
+    setTestStatus('idle');
+  };
 
   const resetLocalChanges = () => {
     setEnabled(savedEnabled);
@@ -192,8 +204,8 @@ export default function ProviderCard({
               (config.whatsappNumber as string) || (twilioConfig.whatsappNumber as string) || '',
             whatsappEnabled: enabled,
             whatsappContentSid:
-              (config.whatsappContentSid as string) ||
-              (twilioConfig.whatsappContentSid as string) ||
+              ((config.whatsappContentSid as string | undefined) ??
+                (twilioConfig.whatsappContentSid as string)) ||
               '',
             whatsappAccountSid:
               (config.whatsappAccountSid as string) ||
@@ -332,7 +344,11 @@ export default function ProviderCard({
         errorCode: (result as { errorCode?: string }).errorCode,
       });
 
-      if (result.status === 'DELIVERED' || result.status === 'ACCEPTED') {
+      if (
+        result.status === 'DELIVERED' ||
+        result.status === 'ACCEPTED' ||
+        result.status === 'CONFIGURED_NO_DEVICE'
+      ) {
         setTestStatus('success');
         toast.success(result.message || `Test message accepted by ${providerConfig.name}`);
       } else if (result.status === 'QUEUED') {
@@ -382,7 +398,8 @@ export default function ProviderCard({
       );
     }
 
-    const effectiveRole = statusRole || (enabled ? 'active' : isConfigured ? 'standby' : 'not_configured');
+    const effectiveRole =
+      statusRole || (enabled ? 'active' : isConfigured ? 'standby' : 'not_configured');
 
     switch (effectiveRole) {
       case 'primary':
@@ -503,7 +520,11 @@ export default function ProviderCard({
               size="sm"
               onClick={onToggle}
               className="text-xs font-semibold h-8 gap-1.5 border-border/80 hover:bg-accent"
-              aria-label={isExpanded ? `Collapse ${providerConfig.name} configuration` : `Configure ${providerConfig.name}`}
+              aria-label={
+                isExpanded
+                  ? `Collapse ${providerConfig.name} configuration`
+                  : `Configure ${providerConfig.name}`
+              }
             >
               {isExpanded ? (
                 <>
@@ -548,7 +569,9 @@ export default function ProviderCard({
                   : isTesting
                     ? 'Testing...'
                     : testStatus === 'success'
-                      ? (testResult?.status === 'DELIVERED' ? 'Delivered' : 'Accepted')
+                      ? testResult?.status === 'DELIVERED'
+                        ? 'Delivered'
+                        : 'Accepted'
                       : testStatus === 'error'
                         ? 'Failed'
                         : 'Send Test'}
@@ -585,27 +608,40 @@ export default function ProviderCard({
                 {testResult.status === 'DELIVERED' && 'Delivered to Recipient'}
                 {testResult.status === 'DEFERRED' && 'Delivery Deferred (Rate Limited)'}
                 {testResult.status === 'QUEUED' && 'Test Notification Queued'}
+                {testResult.status === 'CONFIGURED_NO_DEVICE' && 'Configured · No Recipient Device'}
                 {testResult.status === 'UNKNOWN' && 'Delivery Status Unconfirmed'}
                 {testResult.status === 'FAILED' && 'Test Delivery Failed'}
               </span>
               <span className="text-[11px] opacity-75">
-                {formatDateTime(testResult.testedAt.toISOString(), userTimeZone, { format: 'time' })}
+                {formatDateTime(testResult.testedAt.toISOString(), userTimeZone, {
+                  format: 'time',
+                })}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] opacity-90 pt-1">
-              <div>Provider: <span className="font-mono font-medium">{testResult.provider}</span></div>
+              <div>
+                Provider: <span className="font-mono font-medium">{testResult.provider}</span>
+              </div>
               {testResult.providerMessageId && (
-                <div className="truncate">Message ID: <span className="font-mono">{testResult.providerMessageId}</span></div>
+                <div className="truncate">
+                  Message ID: <span className="font-mono">{testResult.providerMessageId}</span>
+                </div>
               )}
               {testResult.notificationId && (
-                <div className="truncate">Notification: <span className="font-mono">{testResult.notificationId}</span></div>
+                <div className="truncate">
+                  Notification: <span className="font-mono">{testResult.notificationId}</span>
+                </div>
               )}
               {testResult.errorCode && (
-                <div>Error code: <span className="font-mono">{testResult.errorCode}</span></div>
+                <div>
+                  Error code: <span className="font-mono">{testResult.errorCode}</span>
+                </div>
               )}
             </div>
             {testResult.message && (
-              <p className="text-[11px] pt-1 border-t border-current/10 opacity-90">{testResult.message}</p>
+              <p className="text-[11px] pt-1 border-t border-current/10 opacity-90">
+                {testResult.message}
+              </p>
             )}
           </div>
         )}
@@ -614,7 +650,6 @@ export default function ProviderCard({
       {isExpanded && (
         <CardContent className="p-4 sm:p-5 pt-0 sm:pt-0 border-t border-border/60 mt-2">
           <form onSubmit={handleSave} className="space-y-5 pt-4">
-
             {isWebPush && (
               <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -669,18 +704,19 @@ export default function ProviderCard({
               {providerConfig.fields.map(field => {
                 const isPasswordField = field.type === 'password';
                 const isVisible = showSecrets[field.name];
+                const fieldId = `${providerConfig.key}-${field.name}`;
 
                 return (
                   <div key={field.name} className="space-y-1.5">
-                    <Label htmlFor={field.name} className="text-xs font-semibold text-foreground">
+                    <Label htmlFor={fieldId} className="text-xs font-semibold text-foreground">
                       {field.label}
                       {field.required && <span className="text-destructive ml-1">*</span>}
                     </Label>
                     {field.type === 'textarea' ? (
                       <Textarea
-                        id={field.name}
+                        id={fieldId}
                         value={(config[field.name] as string) || ''}
-                        onChange={e => setConfig({ ...config, [field.name]: e.target.value })}
+                        onChange={e => updateConfig(field.name, e.target.value)}
                         placeholder={field.placeholder}
                         required={field.required && enabled}
                         rows={3}
@@ -689,14 +725,12 @@ export default function ProviderCard({
                     ) : field.type === 'checkbox' ? (
                       <div className="flex items-center space-x-2 pt-1">
                         <Checkbox
-                          id={field.name}
+                          id={fieldId}
                           checked={(config[field.name] as boolean) || false}
-                          onCheckedChange={checked =>
-                            setConfig({ ...config, [field.name]: !!checked })
-                          }
+                          onCheckedChange={checked => updateConfig(field.name, !!checked)}
                         />
                         <Label
-                          htmlFor={field.name}
+                          htmlFor={fieldId}
                           className="text-xs font-normal cursor-pointer text-muted-foreground"
                         >
                           {field.label}
@@ -705,10 +739,10 @@ export default function ProviderCard({
                     ) : (
                       <div className="relative">
                         <Input
-                          id={field.name}
+                          id={fieldId}
                           type={isPasswordField && isVisible ? 'text' : field.type}
                           value={(config[field.name] as string) || ''}
-                          onChange={e => setConfig({ ...config, [field.name]: e.target.value })}
+                          onChange={e => updateConfig(field.name, e.target.value)}
                           placeholder={field.placeholder}
                           required={field.required && enabled}
                           className={`text-xs ${isPasswordField ? 'font-mono pr-9' : ''}`}

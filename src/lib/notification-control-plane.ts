@@ -944,7 +944,7 @@ async function dispatchPayload(
       const { sendIncidentSMS } = await import('./sms');
       if (payload.providerKey && payload.providerKey !== 'default') {
         const current = await import('./notification-providers').then(module =>
-          module.getSMSConfig()
+          module.getSMSConfig(payload.providerKey as 'twilio' | 'aws-sns')
         );
         if (current.provider !== payload.providerKey) {
           return {
@@ -961,7 +961,8 @@ async function dispatchPayload(
           payload.incidentId,
           payload.eventType,
           notificationId,
-          payload.durableMessage
+          payload.durableMessage,
+          payload.providerKey as 'twilio' | 'aws-sns' | undefined
         );
         return { ...result, providerMessageId: result.messageSid };
       });
@@ -1330,7 +1331,8 @@ function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
   ) {
     return false;
   }
-  if (typeof result.statusCode === 'number' && result.statusCode >= 500) return true;
+  // A 5xx can be emitted after provider acceptance; never fail over blindly.
+  if (typeof result.statusCode === 'number' && result.statusCode >= 500) return false;
   if (result.statusCode === 429) return true;
   if (
     errorText.includes('enotfound') ||
@@ -1346,7 +1348,7 @@ function isSafeEmailFailoverCondition(result: DeliveryResult): boolean {
 }
 
 function isPermanentProviderError(message: string): boolean {
-  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded/i.test(
+  return /not configured|no (?:enabled email|SMS) provider configured|no Slack webhook URL configured|notifications? (?:are )?(?:disabled|not enabled)|package not installed|configuration incomplete|unsupported provider|unknown provider|invalid phone number format|phone number .* not verified|phone number must include an international country code|no (?:phone number|device|web subscription)|authentication failed|invalid (?:api )?(?:key|credentials)|unauthorized|official Slack host|webhook URL is required|invalid or restricted Webhook URL|message_limit_exceeded/i.test(
     message
   );
 }
@@ -1927,13 +1929,13 @@ export async function deliverCentralNotification(
   const defaultKey = await payloadProviderKeyAsync(payload);
   const VALID_EMAIL_PROVIDERS = new Set(['resend', 'sendgrid', 'ses', 'smtp']);
   const sanitizedEmailRoute = (emailRoute || []).filter(
-    (item): item is string => typeof item === 'string' && VALID_EMAIL_PROVIDERS.has(item.toLowerCase())
+    (item): item is string =>
+      typeof item === 'string' && VALID_EMAIL_PROVIDERS.has(item.toLowerCase())
   );
-  const route: string[] = isEmail && sanitizedEmailRoute.length > 0
-    ? sanitizedEmailRoute
-    : [defaultKey];
+  const route: string[] =
+    isEmail && sanitizedEmailRoute.length > 0 ? sanitizedEmailRoute : [defaultKey];
 
-  const channelScope = (channelForPayload(payload)) as ProviderAdmissionScope;
+  const channelScope = channelForPayload(payload) as ProviderAdmissionScope;
   let lastFailureResult: { error: string; statusCode?: number; errorCode?: string } = {
     error: 'All configured providers failed',
   };
@@ -1948,7 +1950,8 @@ export async function deliverCentralNotification(
     const isCircuitOpen = Boolean(
       breaker &&
       typeof breaker.getState === 'function' &&
-      (breaker.getState() === 'OPEN' || (typeof breaker.isAvailable === 'function' && !breaker.isAvailable()))
+      (breaker.getState() === 'OPEN' ||
+        (typeof breaker.isAvailable === 'function' && !breaker.isAvailable()))
     );
     if (isCircuitOpen) {
       logger.warn('notification.provider_circuit_open_skipping', {
@@ -1960,7 +1963,9 @@ export async function deliverCentralNotification(
         continue;
       }
       if (!anyAttemptDispatched) {
-        const retryAt = new Date(Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1)));
+        const retryAt = new Date(
+          Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1))
+        );
         await prisma.notification.updateMany({
           where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
           data: {
@@ -1972,7 +1977,11 @@ export async function deliverCentralNotification(
             errorMsg: `Circuit breaker is OPEN for email:${currentProvider}`,
           },
         });
-        return { success: false, claimed: true, error: `Circuit breaker is OPEN for email:${currentProvider}` };
+        return {
+          success: false,
+          claimed: true,
+          error: `Circuit breaker is OPEN for email:${currentProvider}`,
+        };
       }
       break;
     }
@@ -2131,10 +2140,14 @@ export async function deliverCentralNotification(
     let circuitOpen = false;
 
     try {
-      const payloadForProvider = currentProvider && currentProvider !== 'default'
-        ? { ...payload, providerKey: currentProvider }
-        : { ...payload, providerKey: undefined };
-      result = await dispatchPayload(payloadForProvider as CentralNotificationPayload, candidate.id);
+      const payloadForProvider =
+        currentProvider && currentProvider !== 'default'
+          ? { ...payload, providerKey: currentProvider }
+          : { ...payload, providerKey: undefined };
+      result = await dispatchPayload(
+        payloadForProvider as CentralNotificationPayload,
+        candidate.id
+      );
     } catch (dispatchError) {
       if (dispatchError instanceof CircuitBreakerTimeoutError) {
         circuitTimeout = true;
@@ -2145,7 +2158,7 @@ export async function deliverCentralNotification(
       result = {
         success: false,
         error: safeError(dispatchError),
-        errorCode: circuitTimeout ? 'TIMEOUT' : (circuitOpen ? 'CIRCUIT_OPEN' : 'DISPATCH_ERROR'),
+        errorCode: circuitTimeout ? 'TIMEOUT' : circuitOpen ? 'CIRCUIT_OPEN' : 'DISPATCH_ERROR',
       };
     } finally {
       if (releaseConcurrencyLease) {
@@ -2175,7 +2188,8 @@ export async function deliverCentralNotification(
               notificationId: candidate.id,
               ordinal,
               outcome: result.skipped ? 'SKIPPED' : 'ACCEPTED',
-              provider: (result as { selectedProvider?: string }).selectedProvider || currentProvider,
+              provider:
+                (result as { selectedProvider?: string }).selectedProvider || currentProvider,
               providerMessageId: result.providerMessageId,
               startedAt,
               finishedAt,
@@ -2216,7 +2230,9 @@ export async function deliverCentralNotification(
         });
         continue;
       }
-      const retryAt = new Date(Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1)));
+      const retryAt = new Date(
+        Date.now() + notificationRetryDelayMs(Math.max(1, candidate.attempts + 1))
+      );
       await prisma.notification.updateMany({
         where: { id: candidate.id, status: 'PENDING', lastAttemptAt: now },
         data: {

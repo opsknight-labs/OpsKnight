@@ -14,6 +14,7 @@ export type ProviderTestStatus =
   | 'DELIVERED'
   | 'QUEUED'
   | 'DEFERRED'
+  | 'CONFIGURED_NO_DEVICE'
   | 'FAILED'
   | 'UNKNOWN';
 
@@ -71,6 +72,21 @@ export async function resolveTestNotificationOutcome(
     notification?.providerMessageId || latestAttempt?.providerMessageId || undefined;
   const errorCode = latestAttempt?.errorCode || undefined;
   const errorMessage = latestAttempt?.errorMessage || notification?.errorMsg || undefined;
+
+  if (
+    channel === 'PUSH' &&
+    /no (?:device tokens|web subscription|recipient device)/i.test(errorMessage || '')
+  ) {
+    return {
+      success: true,
+      status: 'CONFIGURED_NO_DEVICE',
+      provider: latestAttempt?.provider || providerKey,
+      channel,
+      notificationId,
+      errorCode,
+      message: 'Web Push is configured, but this account has no registered browser subscription.',
+    };
+  }
 
   if (notification?.status === 'DELIVERED') {
     return {
@@ -407,7 +423,8 @@ export async function executeProviderTest(
         provider: normalizedKey === 'whatsapp' ? 'twilio' : normalizedKey,
         channel: input.channel,
         notificationId: enqueueResult.id,
-        message: enqueueResult.error || 'Recipient endpoint is unavailable or notification was skipped.',
+        message:
+          enqueueResult.error || 'Recipient endpoint is unavailable or notification was skipped.',
       };
     }
 

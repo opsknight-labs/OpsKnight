@@ -275,7 +275,17 @@ export async function getStatusPageEmailConfig(statusPageId?: string): Promise<E
       const provider = (await getProviderRecords()).get(preferredProvider);
 
       if (provider && provider.enabled && provider.config) {
-        const config = await getDecryptedConfig(preferredProvider, provider.config);
+        let config: Record<string, unknown>;
+        try {
+          config = await getDecryptedConfig(preferredProvider, provider.config);
+        } catch (error) {
+          logger.error('STATUS_PAGE_PREFERRED_PROVIDER_UNAVAILABLE', {
+            component: 'notification-providers',
+            provider: preferredProvider,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+          return getEmailConfig();
+        }
         if (preferredProvider === 'resend' && config.apiKey) {
           return {
             enabled: true,
@@ -402,13 +412,20 @@ export async function getWhatsAppConfig(): Promise<SMSConfig> {
 /**
  * Get SMS configuration from database only
  */
-export async function getSMSConfig(): Promise<SMSConfig> {
+export async function getSMSConfig(
+  preferredProvider?: Exclude<SMSProvider, null>
+): Promise<SMSConfig> {
   try {
     const twilioProvider = await prisma.notificationProvider.findUnique({
       where: { provider: 'twilio' },
     });
 
-    if (twilioProvider && twilioProvider.enabled && twilioProvider.config) {
+    if (
+      (!preferredProvider || preferredProvider === 'twilio') &&
+      twilioProvider &&
+      twilioProvider.enabled &&
+      twilioProvider.config
+    ) {
       try {
         const config = await getDecryptedConfig('twilio', twilioProvider.config);
         if (
@@ -439,7 +456,12 @@ export async function getSMSConfig(): Promise<SMSConfig> {
       where: { provider: 'aws-sns' },
     });
 
-    if (awsProvider && awsProvider.enabled && awsProvider.config) {
+    if (
+      (!preferredProvider || preferredProvider === 'aws-sns') &&
+      awsProvider &&
+      awsProvider.enabled &&
+      awsProvider.config
+    ) {
       try {
         const config = await getDecryptedConfig('aws-sns', awsProvider.config);
         if (
