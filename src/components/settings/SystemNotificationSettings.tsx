@@ -56,7 +56,7 @@ const providerConfigs: ProviderConfigSchema[] = [
         label: 'Access Key ID',
         type: 'text',
         required: true,
-        placeholder: 'AKIAXXXXXXXXXXXXXXXX',
+        placeholder: 'AWS access key ID',
       },
       {
         name: 'secretAccessKey',
@@ -198,7 +198,7 @@ const providerConfigs: ProviderConfigSchema[] = [
         label: 'Access Key ID',
         type: 'text',
         required: true,
-        placeholder: 'AKIAXXXXXXXXXXXXXXXX',
+        placeholder: 'AWS access key ID',
       },
       {
         name: 'secretAccessKey',

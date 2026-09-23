@@ -88,7 +88,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
           enabled: false,
           config: {
             region: 'us-east-1',
-            accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+            accessKeyId: 'test-aws-access-key-id',
             secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
           },
           updatedAt: new Date().toISOString(),
@@ -122,7 +122,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
           enabled: true,
           config: {
             region: 'us-east-1',
-            accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+            accessKeyId: 'test-aws-access-key-id',
             secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
           },
           updatedAt: new Date().toISOString(),
@@ -298,7 +298,7 @@ describe('Notification Provider Settings UI & Hero Hardening', () => {
           id: 'prov-sns',
           provider: 'aws-sns',
           enabled: true,
-          config: { accessKeyId: 'AKIA123', secretAccessKey: 'sec123' },
+          config: { accessKeyId: 'test-aws-access-key-id', secretAccessKey: 'sec123' },
           updatedAt: new Date().toISOString(),
         },
       ];

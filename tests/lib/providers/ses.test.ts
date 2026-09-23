@@ -49,7 +49,7 @@ describe('Amazon SES Provider Transport Contract', () => {
     provider: 'ses',
     enabled: true,
     apiKey: 'aws_secret_key_abc',
-    accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+    accessKeyId: 'test-aws-access-key-id',
     host: 'us-east-1',
     fromEmail: 'ses-alerts@example.com',
   };

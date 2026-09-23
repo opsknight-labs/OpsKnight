@@ -53,7 +53,7 @@ describe('AWS SNS SMS Provider Transport Contract', () => {
     vi.spyOn(notificationProviders, 'getSMSConfig').mockResolvedValue({
       provider: 'aws-sns',
       enabled: true,
-      accessKeyId: 'AKIAIOSFODNN7SNS',
+      accessKeyId: 'test-aws-access-key-id',
       secretAccessKey: 'aws_secret_key_sns',
       region: 'us-east-1',
     });
