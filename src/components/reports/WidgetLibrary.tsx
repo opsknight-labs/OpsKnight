@@ -137,8 +137,14 @@ const WidgetLibrary = memo(function WidgetLibrary({
             <h2 className="text-lg font-semibold">Widget Library</h2>
             <p className="text-sm text-muted-foreground">Choose widgets to add to your dashboard</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
-            <X className="h-5 w-5" />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close widget library"
+            title="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-100 dark:border-slate-700"
+          >
+            <X className="h-4 w-4 stroke-[2.25]" />
           </button>
         </div>
 

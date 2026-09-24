@@ -89,15 +89,15 @@ export default function AuditDetailModal({
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden bg-white">
         {/* Header */}
-        <DialogHeader className="p-5 border-b border-slate-100 bg-slate-50/50">
-          <div className="flex items-center justify-between gap-3 pr-6">
+        <DialogHeader className="p-5 pr-14 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center justify-between gap-3 pr-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
               <DialogTitle className="text-base font-semibold">Audit Record Details</DialogTitle>
             </div>
             <AuditActionBadge action={log.action} />
           </div>
-          <DialogDescription className="text-xs text-muted-foreground mt-1">
+          <DialogDescription className="text-xs text-muted-foreground mt-1 break-all">
             Recorded at {formatDateTime(log.createdAt, userTimeZone, { format: 'datetime' })} • ID:{' '}
             {log.id}
           </DialogDescription>
@@ -108,12 +108,12 @@ export default function AuditDetailModal({
           {/* Metadata Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Actor Card */}
-            <div className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/40 space-y-1.5">
+            <div className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/40 space-y-1.5 min-w-0 overflow-hidden">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5" />
+                <User className="h-3.5 w-3.5 shrink-0" />
                 Actor
               </div>
-              <div className="flex items-center gap-2.5 pt-0.5">
+              <div className="flex items-center gap-2.5 pt-0.5 min-w-0">
                 {log.actor ? (
                   <DirectUserAvatar
                     avatarUrl={
@@ -124,11 +124,11 @@ export default function AuditDetailModal({
                     size="sm"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[0.65rem] font-semibold text-gray-600">
+                  <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[0.65rem] font-semibold text-gray-600 shrink-0">
                     SYS
                   </div>
                 )}
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="font-semibold text-xs text-foreground truncate">
                     {log.actor?.id ? (
                       <Link
@@ -149,31 +149,35 @@ export default function AuditDetailModal({
             </div>
 
             {/* Target Entity Card */}
-            <div className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/40 space-y-1.5">
+            <div className="p-3 rounded-lg border border-slate-200/80 bg-slate-50/40 space-y-1.5 min-w-0 overflow-hidden">
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5" />
+                <Layers className="h-3.5 w-3.5 shrink-0" />
                 Target Entity
               </div>
-              <div className="pt-0.5">
-                <div className="font-semibold text-xs text-foreground flex items-center gap-1.5">
-                  <span className="bg-slate-200/70 px-1.5 py-0.5 rounded text-[11px] font-mono">
+              <div className="pt-0.5 min-w-0">
+                <div className="font-semibold text-xs text-foreground flex items-center gap-1.5 min-w-0">
+                  <span className="bg-slate-200/70 px-1.5 py-0.5 rounded text-[11px] font-mono shrink-0">
                     {log.entityType}
                   </span>
                   {entityHref ? (
                     <Link
                       href={entityHref}
-                      className="inline-flex items-center gap-1 text-primary hover:underline text-xs font-mono"
+                      title={log.entityId || ''}
+                      className="inline-flex items-center gap-1 text-primary hover:underline text-xs font-mono min-w-0 truncate"
                     >
-                      <span>{log.entityId}</span>
-                      <ExternalLink className="h-3 w-3" />
+                      <span className="truncate">{log.entityId}</span>
+                      <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
                     </Link>
                   ) : (
-                    <span className="font-mono text-xs text-muted-foreground">
+                    <span
+                      className="font-mono text-xs text-muted-foreground truncate"
+                      title={log.entityId || 'N/A'}
+                    >
                       {log.entityId || 'N/A'}
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-muted-foreground mt-1">
+                <div className="text-[11px] text-muted-foreground mt-1 truncate">
                   Scope: {log.entityType.replace(/_/g, ' ').toLowerCase()}
                 </div>
               </div>
