@@ -21,7 +21,7 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   ses: ['accessKeyId', 'secretAccessKey'],
 };
 
-function getSensitiveFields(provider: string): string[] {
+export function getProviderSensitiveFields(provider: string): string[] {
   return Object.entries(SENSITIVE_FIELDS).find(([name]) => name === provider)?.[1] ?? [];
 }
 
@@ -71,7 +71,7 @@ export async function encryptProviderConfig(
   provider: string,
   config: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
 
   // Check if encryption is available
   const key = await getEncryptionKey();
@@ -129,6 +129,24 @@ export async function encryptProviderConfig(
   return encryptedConfig;
 }
 
+export const PROVIDER_ERROR_CODES = {
+  DECRYPTION_FAILED: 'PROVIDER_SECRET_DECRYPTION_FAILED',
+  NOT_CONFIGURED: 'PROVIDER_NOT_CONFIGURED',
+  DISABLED: 'PROVIDER_DISABLED',
+} as const;
+
+export type ProviderErrorCode = (typeof PROVIDER_ERROR_CODES)[keyof typeof PROVIDER_ERROR_CODES];
+
+export class ProviderDecryptionError extends Error {
+  readonly code: ProviderErrorCode;
+
+  constructor(message: string, code: ProviderErrorCode = PROVIDER_ERROR_CODES.DECRYPTION_FAILED) {
+    super(message);
+    this.name = 'ProviderDecryptionError';
+    this.code = code;
+  }
+}
+
 /**
  * Decrypt sensitive fields in a provider config after retrieving from database
  *
@@ -140,12 +158,25 @@ export async function decryptProviderConfig(
   provider: string,
   config: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
 
   // Check if encryption is available
   const key = await getEncryptionKey();
   if (!key) {
-    // No encryption key - config might be plaintext (legacy) or we can't decrypt
+    // If any sensitive field is encrypted (enc:...), fail closed!
+    const hasEncrypted = hasEncryptedFields(provider, config);
+    if (hasEncrypted) {
+      logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
+        component: 'encrypted-provider-config',
+        provider,
+        reason: 'Encryption key unavailable to decrypt credentials',
+      });
+      throw new ProviderDecryptionError(
+        `PROVIDER_SECRET_DECRYPTION_FAILED: Encryption key unavailable for provider '${provider}'.`,
+        PROVIDER_ERROR_CODES.DECRYPTION_FAILED
+      );
+    }
+    // No encryption key - config might be plaintext (legacy)
     return config;
   }
 
@@ -158,13 +189,16 @@ export async function decryptProviderConfig(
         try {
           return [field, await decryptValue(value)];
         } catch (error) {
-          logger.error('Failed to decrypt provider config field', {
+          logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
             component: 'encrypted-provider-config',
             provider,
             field,
-            error: error instanceof Error ? error.message : 'Unknown error',
+            error: error instanceof Error ? error.message : 'Unknown decryption error',
           });
-          return [field, ''];
+          throw new ProviderDecryptionError(
+            `PROVIDER_SECRET_DECRYPTION_FAILED: Failed to decrypt credential field '${field}' for provider '${provider}'.`,
+            PROVIDER_ERROR_CODES.DECRYPTION_FAILED
+          );
         }
       })
     )
@@ -175,12 +209,26 @@ export async function decryptProviderConfig(
       config.vapidKeyHistory.map(async entry => {
         if (!entry || typeof entry !== 'object') return entry;
         const keyEntry = entry as Record<string, unknown>;
-        return {
-          ...keyEntry,
-          ...(typeof keyEntry.privateKey === 'string' && isEncrypted(keyEntry.privateKey)
-            ? { privateKey: await decryptValue(keyEntry.privateKey) }
-            : {}),
-        };
+        if (typeof keyEntry.privateKey === 'string' && isEncrypted(keyEntry.privateKey)) {
+          try {
+            return {
+              ...keyEntry,
+              privateKey: await decryptValue(keyEntry.privateKey),
+            };
+          } catch (error) {
+            logger.error('PROVIDER_SECRET_DECRYPTION_FAILED', {
+              component: 'encrypted-provider-config',
+              provider,
+              field: 'vapidKeyHistory.privateKey',
+              error: error instanceof Error ? error.message : 'Unknown decryption error',
+            });
+            throw new ProviderDecryptionError(
+              `PROVIDER_SECRET_DECRYPTION_FAILED: Failed to decrypt VAPID history private key for provider '${provider}'.`,
+              PROVIDER_ERROR_CODES.DECRYPTION_FAILED
+            );
+          }
+        }
+        return { ...keyEntry };
       })
     );
   }
@@ -192,7 +240,7 @@ export async function decryptProviderConfig(
  * Check if a config has any encrypted fields
  */
 export function hasEncryptedFields(provider: string, config: Record<string, unknown>): boolean {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
   if (
     Object.entries(config).some(
       ([field, value]) =>
@@ -222,7 +270,7 @@ export function maskSensitiveFields(
   provider: string,
   config: Record<string, unknown>
 ): Record<string, unknown> {
-  const sensitiveFields = getSensitiveFields(provider);
+  const sensitiveFields = getProviderSensitiveFields(provider);
   const maskedConfig = Object.fromEntries(
     Object.entries(config).flatMap(([field, value]) => {
       if (!sensitiveFields.includes(field) || typeof value !== 'string' || !value) {
@@ -255,7 +303,7 @@ export function mergeSensitiveProviderFields(
   incoming: Record<string, unknown>,
   existing: Record<string, unknown>
 ): Record<string, unknown> {
-  const sensitiveFields = new Set(getSensitiveFields(provider));
+  const sensitiveFields = new Set(getProviderSensitiveFields(provider));
   const existingFields = new Map(Object.entries(existing));
   const merged = Object.fromEntries(
     Object.entries(incoming).map(([field, value]) => {

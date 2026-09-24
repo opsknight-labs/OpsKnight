@@ -1,6 +1,5 @@
 /** Email providers and canonical incident-email rendering. */
 
-import { createRequire } from 'module';
 import prisma from './prisma';
 import { getBaseUrl } from './env-validation';
 import { getUserTimeZone, formatDateTime } from './timezone';
@@ -35,6 +34,9 @@ export type EmailDeliveryResult = {
   statusCode?: number;
   errorCode?: string;
   retryAfterMs?: number;
+  selectedProvider?: string;
+  fallbackReason?: string;
+  providerAttemptCount?: number;
 };
 
 function retryAfterMs(value: unknown): number | undefined {
@@ -85,7 +87,7 @@ export function htmlToPlainText(html: string): string {
     .trim();
 }
 
-function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
+async function getSmtpTransport(emailConfig: EmailConfig): Promise<SmtpTransporter> {
   const config = {
     host: emailConfig.host,
     port: emailConfig.port,
@@ -103,8 +105,13 @@ function getSmtpTransport(emailConfig: EmailConfig): SmtpTransporter {
   )
     return cachedSmtpTransport.transporter;
   cachedSmtpTransport?.transporter.close?.();
-  const require = createRequire(import.meta.url);
-  const nodemailer = require('nodemailer');
+  // @ts-expect-error nodemailer lacks bundled type declarations in this project
+  const nodemailerModule = await import('nodemailer');
+  const nodemailer = (nodemailerModule.default || nodemailerModule) as unknown as {
+    createTransport: (options: Record<string, unknown>) => SmtpTransporter & {
+      on?: (event: string, handler: (err: unknown) => void) => void;
+    };
+  };
   const transporter = nodemailer.createTransport({
     host: emailConfig.host,
     port: parseInt(String(emailConfig.port), 10),
@@ -134,9 +141,27 @@ async function sendWithSingleProvider(
   const textContent = options.text || htmlToPlainText(options.html);
   if (emailConfig.provider === 'resend') {
     try {
-      const require = createRequire(import.meta.url);
-      const { Resend } = require('resend');
-      const resend = new Resend(emailConfig.apiKey || '');
+      const resendModule = await import('resend');
+      const ResendClass = (resendModule.Resend ||
+        resendModule.default?.Resend ||
+        resendModule.default) as unknown as new (key: string) => {
+        emails: {
+          send: (
+            payload: Record<string, unknown>,
+            options?: { idempotencyKey?: string }
+          ) => Promise<{
+            error?: {
+              message?: string;
+              statusCode?: number;
+              status?: number;
+              name?: string;
+              code?: string;
+            };
+            data?: { id?: string };
+          }>;
+        };
+      };
+      const resend = new ResendClass(emailConfig.apiKey || '');
       const payload = {
         from: emailConfig.fromEmail,
         to: options.to,
@@ -162,16 +187,27 @@ async function sendWithSingleProvider(
       logger.info('Email sent via Resend', { id: result.data?.id });
       return { success: true, providerMessageId: result.data?.id };
     } catch (error: unknown) {
-      const value = error as { code?: string; message?: string };
-      if (value.code === 'MODULE_NOT_FOUND')
+      const value = error as { code?: string; message?: string; name?: string };
+      if (value.code === 'MODULE_NOT_FOUND' || value.code === 'ERR_MODULE_NOT_FOUND')
         return { success: false, error: 'Resend package not installed. Run: npm install resend' };
-      return { success: false, error: value.message || 'Resend send error' };
+      return {
+        success: false,
+        error: value.message || 'Resend send error',
+        errorCode: value.code || value.name,
+      };
     }
   }
   if (emailConfig.provider === 'sendgrid') {
     try {
-      const require = createRequire(import.meta.url);
-      const sgMail = require('@sendgrid/mail');
+      const sgMailModule = await import('@sendgrid/mail');
+      const sgMail = (sgMailModule.default || sgMailModule) as {
+        setApiKey: (key: string) => void;
+        send: (
+          msg: unknown
+        ) => Promise<
+          Array<{ statusCode: number; headers?: Record<string, string>; body?: unknown }>
+        >;
+      };
       if (!emailConfig.apiKey?.trim())
         return { success: false, error: 'SendGrid API key is not configured' };
       if (!emailConfig.fromEmail?.trim())
@@ -210,7 +246,7 @@ async function sendWithSingleProvider(
         message?: string;
         response?: { body?: unknown; statusCode?: number; headers?: Record<string, string> };
       };
-      if (value.code === 'MODULE_NOT_FOUND')
+      if (value.code === 'MODULE_NOT_FOUND' || value.code === 'ERR_MODULE_NOT_FOUND')
         return { success: false, error: 'SendGrid package not installed' };
       return {
         success: false,
@@ -228,8 +264,8 @@ async function sendWithSingleProvider(
   }
   if (emailConfig.provider === 'ses') {
     try {
-      const require = createRequire(import.meta.url);
-      const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+      const sesModule = await import('@aws-sdk/client-ses');
+      const { SESClient, SendEmailCommand } = sesModule;
       if (!emailConfig.apiKey || !emailConfig.host || !emailConfig.fromEmail)
         return { success: false, error: 'Amazon SES configuration incomplete' };
       const client = new SESClient({
@@ -261,7 +297,7 @@ async function sendWithSingleProvider(
         message?: string;
         $metadata?: { httpStatusCode?: number };
       };
-      if (value.code === 'MODULE_NOT_FOUND')
+      if (value.code === 'MODULE_NOT_FOUND' || value.code === 'ERR_MODULE_NOT_FOUND')
         return { success: false, error: 'AWS SES SDK package not installed' };
       const statusCode = value.$metadata?.httpStatusCode;
       const throttled = statusCode === 429 || /throttl/i.test(value.name || value.code || '');
@@ -278,7 +314,8 @@ async function sendWithSingleProvider(
     try {
       if (!emailConfig.host || !emailConfig.port || !emailConfig.user || !emailConfig.password)
         return { success: false, error: 'SMTP configuration incomplete' };
-      const info = await getSmtpTransport(emailConfig).sendMail({
+      const transporter = await getSmtpTransport(emailConfig);
+      const info = await transporter.sendMail({
         from: emailConfig.fromEmail,
         to: options.to,
         subject: options.subject,
@@ -288,23 +325,134 @@ async function sendWithSingleProvider(
       logger.info('Email sent via SMTP', { messageId: info.messageId });
       return { success: true, providerMessageId: info.messageId };
     } catch (error: unknown) {
+      cachedSmtpTransport = null;
       const value = error as {
         code?: string;
         message?: string;
         command?: string;
         response?: string;
+        responseCode?: number;
       };
-      if (value.code === 'MODULE_NOT_FOUND')
+      if (value.code === 'MODULE_NOT_FOUND' || value.code === 'ERR_MODULE_NOT_FOUND')
         return { success: false, error: 'Nodemailer package not installed' };
       return {
         success: false,
         error: [value.message || 'SMTP send error', value.code, value.command, value.response]
           .filter(Boolean)
           .join(' | '),
+        statusCode: value.responseCode,
+        errorCode: value.code,
+        retryAfterMs: value.responseCode === 429 ? 60_000 : undefined,
       };
     }
   }
   return { success: false, error: 'Unknown email provider' };
+}
+
+/**
+ * Detects whether an error represents an in-flight, unconfirmed, or post-submission hazard
+ * (e.g. socket drops, timeouts, connection resets).
+ * CRITICAL: Ambiguous errors must NEVER trigger failover or second send to avoid duplicate emails.
+ */
+export function isAmbiguousDeliveryError(errorText: string): boolean {
+  if (!errorText) return false;
+  const normalized = errorText.toLowerCase();
+  return (
+    normalized.includes('ambiguous') ||
+    normalized.includes('unconfirmed') ||
+    normalized.includes('unknown') ||
+    normalized.includes('etimedout') ||
+    normalized.includes('timeout') ||
+    normalized.includes('timed out') ||
+    normalized.includes('esockettimedout') ||
+    normalized.includes('econnreset') ||
+    normalized.includes('socket hang up') ||
+    normalized.includes('epipe') ||
+    normalized.includes('und_err_socket') ||
+    normalized.includes('und_err_connect_timeout') ||
+    (normalized.includes('network') && !normalized.includes('enotfound')) ||
+    (normalized.includes('connection') && !normalized.includes('econnrefused'))
+  );
+}
+
+/**
+ * Determines whether an email delivery failure condition is safe to failover to a subsequent provider.
+ * CRITICAL INVARIANT: UNKNOWN, ambiguous outcomes, and invalid recipients must NEVER trigger failover
+ * to avoid duplicate emails.
+ * Only demonstrably pre-submission errors (ENOTFOUND, ECONNREFUSED, missing SDK package, unconfigured provider,
+ * explicit 429) are safe to fail over. An HTTP 5xx can be returned after a
+ * provider accepted a message, so cross-provider failover would risk duplicates.
+ */
+export function isSafeEmailFailoverCondition(result: EmailDeliveryResult): boolean {
+  if (result.success) return false;
+
+  const errorText = `${result.error || ''} ${result.errorCode || ''}`.toLowerCase();
+
+  // 1. Halts on UNKNOWN or ambiguous outcomes where message might have been accepted by provider
+  if (isAmbiguousDeliveryError(errorText)) {
+    return false;
+  }
+
+  // 2. Halts on permanent invalid recipient / malformed payload / permanent rejections
+  if (
+    errorText.includes('invalid recipient') ||
+    errorText.includes('invalid email') ||
+    errorText.includes('does not exist') ||
+    errorText.includes('mailbox unavailable') ||
+    errorText.includes('recipient rejected') ||
+    errorText.includes('bad request') ||
+    errorText.includes('malformed')
+  ) {
+    return false;
+  }
+
+  // Pre-submission pinned provider unavailable (e.g. secret unreadable or provider disabled)
+  // Even though it uses statusCode: 409, no request was dispatched to provider, so failover is safe.
+  if (
+    result.errorCode === 'PINNED_PROVIDER_UNAVAILABLE' ||
+    errorText.includes('pinned_provider_unavailable') ||
+    errorText.includes('pinned email provider')
+  ) {
+    return true;
+  }
+
+  // 3. 4xx client errors (except 429 rate limit) should NOT failover: bad API key, unverified domain
+  if (
+    typeof result.statusCode === 'number' &&
+    result.statusCode >= 400 &&
+    result.statusCode < 500 &&
+    result.statusCode !== 429
+  ) {
+    return false;
+  }
+
+  // A 5xx is ambiguous: the provider may have accepted the message before
+  // returning its error. Never duplicate a notification across providers.
+  if (typeof result.statusCode === 'number' && result.statusCode >= 500) {
+    return false;
+  }
+
+  // 2. 429 Rate limited
+  if (result.statusCode === 429) {
+    return true;
+  }
+
+  // 3. Demonstrably pre-submission errors:
+  // - ENOTFOUND: DNS resolution failed before TCP connect
+  // - ECONNREFUSED: port unreachable before TLS/HTTP connect
+  // - Missing SDK package or provider unconfigured
+  if (
+    errorText.includes('enotfound') ||
+    errorText.includes('econnrefused') ||
+    errorText.includes('not installed') ||
+    errorText.includes('not configured') ||
+    errorText.includes('configuration incomplete') ||
+    errorText.includes('no enabled email provider')
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export async function sendEmail(
@@ -340,17 +488,73 @@ export async function sendEmail(
       : await import('./notification-providers').then(module =>
           module.getAllConfiguredEmailProviders()
         );
-    if (configsToTry.length === 0)
+
+    const activeConfigs = configsToTry.filter(item => item.enabled && item.provider);
+    if (activeConfigs.length === 0) {
       return { success: false, error: 'No enabled email provider configured' };
-    const config = configsToTry.find(item => item.enabled && item.provider);
-    if (!config) return { success: false, error: 'No enabled email provider configured' };
-    const result = await sendWithSingleProvider(options, config);
-    if (!result.success)
+    }
+
+    let lastResult: EmailDeliveryResult = {
+      success: false,
+      error: 'No email providers attempted',
+    };
+    let attemptCount = 0;
+
+    for (const config of activeConfigs) {
+      attemptCount++;
+      const result = await sendWithSingleProvider(options, config);
+
+      if (result.success) {
+        if (attemptCount > 1) {
+          logger.info('[Email] Delivered via fallback provider', {
+            provider: config.provider,
+            attempts: attemptCount,
+          });
+        }
+        return {
+          ...result,
+          selectedProvider: config.provider || undefined,
+          providerAttemptCount: attemptCount,
+          fallbackReason: attemptCount > 1 ? `Fallback from earlier provider(s)` : undefined,
+        };
+      }
+
       logger.warn('[Email] Provider delivery failed', {
         provider: config.provider,
+        attempt: attemptCount,
         error: result.error,
+        statusCode: result.statusCode,
+        errorCode: result.errorCode,
       });
-    return result;
+
+      lastResult = {
+        ...result,
+        selectedProvider: config.provider || undefined,
+        providerAttemptCount: attemptCount,
+      };
+
+      // Check if this failure condition is safe to failover to the next configured provider
+      const canFailover = isSafeEmailFailoverCondition(result);
+      if (!canFailover) {
+        logger.warn(
+          '[Email] Non-retryable or unsafe failure encountered; halting provider failover',
+          {
+            provider: config.provider,
+            reason: result.error,
+            statusCode: result.statusCode,
+            errorCode: result.errorCode,
+          }
+        );
+        return lastResult;
+      }
+    }
+
+    return activeConfigs.length > 1
+      ? {
+          ...lastResult,
+          error: `All configured email providers failed. Last error: ${lastResult.error}`,
+        }
+      : lastResult;
   } catch (error: unknown) {
     logger.error('Email send error', { component: 'email', error });
     return { success: false, error: error instanceof Error ? error.message : 'Email send error' };

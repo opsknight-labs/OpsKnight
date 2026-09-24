@@ -10,7 +10,53 @@ import {
   encryptProviderConfig,
   maskSensitiveFields,
   mergeSensitiveProviderFields,
+  SECRET_MASK,
 } from '@/lib/encrypted-provider-config';
+
+async function recoverableProviderConfig(provider: string, config: Record<string, unknown> | null) {
+  if (!config) return { config: {}, recoveredFromDecryptionError: false };
+  try {
+    return {
+      config: await decryptProviderConfig(provider, config),
+      recoveredFromDecryptionError: false,
+    };
+  } catch {
+    return { config: {}, recoveredFromDecryptionError: true };
+  }
+}
+
+function recoverySecretFields(provider: string): readonly string[] {
+  switch (provider) {
+    case 'twilio':
+      return ['accountSid', 'authToken'];
+    case 'aws-sns':
+    case 'ses':
+      return ['accessKeyId', 'secretAccessKey'];
+    case 'resend':
+    case 'sendgrid':
+      return ['apiKey'];
+    case 'smtp':
+      return ['password'];
+    case 'web-push':
+      return ['vapidPrivateKey'];
+    default:
+      return [];
+  }
+}
+
+function hasReplacementSecrets(provider: string, config: Record<string, unknown>) {
+  const suppliedValues = new Map(Object.entries(config));
+  return recoverySecretFields(provider).every(field => {
+    const value = suppliedValues.get(field);
+    return (
+      value !== SECRET_MASK &&
+      value !== '********' &&
+      value !== '' &&
+      value !== undefined &&
+      value !== null
+    );
+  });
+}
 
 /**
  * Get all notification provider configurations
@@ -22,13 +68,34 @@ export async function getNotificationProviders() {
     orderBy: { provider: 'asc' },
   });
 
-  return providers.map(p => ({
-    id: p.id,
-    provider: p.provider,
-    enabled: p.enabled,
-    config: maskSensitiveFields(p.provider, (p.config as Record<string, unknown>) || {}),
-    updatedAt: p.updatedAt.toISOString(),
-  }));
+  return Promise.all(
+    providers.map(async p => {
+      let configurationState: 'VALID' | 'INCOMPLETE' | 'DECRYPTION_ERROR' | 'DISABLED' = p.enabled
+        ? 'VALID'
+        : 'DISABLED';
+      if (p.enabled) {
+        try {
+          const decrypted = await decryptProviderConfig(
+            p.provider,
+            (p.config as Record<string, unknown>) || {}
+          );
+          if (Object.keys(decrypted).length === 0) {
+            configurationState = 'INCOMPLETE';
+          }
+        } catch {
+          configurationState = 'DECRYPTION_ERROR';
+        }
+      }
+      return {
+        id: p.id,
+        provider: p.provider,
+        enabled: p.enabled,
+        config: maskSensitiveFields(p.provider, (p.config as Record<string, unknown>) || {}),
+        updatedAt: p.updatedAt.toISOString(),
+        configurationState,
+      };
+    })
+  );
 }
 
 /**
@@ -53,10 +120,20 @@ export async function updateNotificationProvider(
   const existingProvider = providerId
     ? await prisma.notificationProvider.findUnique({ where: { id: providerId } })
     : await prisma.notificationProvider.findUnique({ where: { provider } });
-  const existingConfig = existingProvider?.config
-    ? await decryptProviderConfig(provider, existingProvider.config as Record<string, unknown>)
-    : {};
-  const mergedConfig = mergeSensitiveProviderFields(provider, config, existingConfig);
+  const recovered = await recoverableProviderConfig(
+    provider,
+    (existingProvider?.config as Record<string, unknown> | undefined) ?? null
+  );
+  if (
+    enabled &&
+    recovered.recoveredFromDecryptionError &&
+    !hasReplacementSecrets(provider, config)
+  ) {
+    throw new Error(
+      'This provider has unreadable credentials. Enter replacement values for all secret fields before enabling it.'
+    );
+  }
+  const mergedConfig = mergeSensitiveProviderFields(provider, config, recovered.config);
   const encryptedConfig = await encryptProviderConfig(provider, mergedConfig);
 
   if (providerId) {
@@ -123,9 +200,11 @@ export async function generateVapidKeys(options?: {
   const existing = await prisma.notificationProvider.findUnique({
     where: { provider: 'web-push' },
   });
-  const existingConfig = existing?.config
-    ? await decryptProviderConfig('web-push', existing.config as Record<string, unknown>)
-    : {};
+  const recovered = await recoverableProviderConfig(
+    'web-push',
+    (existing?.config as Record<string, unknown> | undefined) ?? null
+  );
+  const existingConfig = recovered.config;
   const previousKeys = Array.isArray(existingConfig.vapidKeyHistory)
     ? (existingConfig.vapidKeyHistory as Array<{ publicKey: string; privateKey: string }>)
     : [];
@@ -190,7 +269,7 @@ export async function generateVapidKeys(options?: {
  */
 export async function testNotificationProvider(
   providerKey: string
-): Promise<{ success: boolean; message: string }> {
+): Promise<import('@/lib/provider-test-service').ProviderTestResult> {
   try {
     await assertAdmin();
   } catch (error) {
@@ -200,195 +279,8 @@ export async function testNotificationProvider(
   }
 
   const user = await getCurrentUser();
-  const normalizedKey = providerKey.toLowerCase();
-  const lookupKey = normalizedKey === 'whatsapp' ? 'twilio' : normalizedKey;
-
-  const providerRecord = await prisma.notificationProvider.findUnique({
-    where: { provider: lookupKey },
-  });
-
-  if (!providerRecord || !providerRecord.enabled) {
-    throw new Error(`Provider '${providerKey}' is not configured or enabled.`);
-  }
-
-  const decryptedConfig = await decryptProviderConfig(
-    lookupKey,
-    (providerRecord.config as Record<string, unknown>) || {}
-  );
-
-  const { enqueueCentralNotification } = await import('@/lib/notification-control-plane');
-  const crypto = await import('crypto');
-  const eventKey = `test-provider:${normalizedKey}:${crypto.randomUUID()}`;
-
-  if (['resend', 'sendgrid', 'ses', 'smtp'].includes(normalizedKey)) {
-    if (!user.email) {
-      throw new Error('Current user has no email address configured to receive the test message.');
-    }
-
-    const result = await enqueueCentralNotification({
-      category: 'SYSTEM',
-      channel: 'EMAIL',
-      recipientType: 'USER',
-      recipientId: user.id,
-      recipientAddress: user.email,
-      userId: user.id,
-      templateKey: 'provider-test',
-      sourceType: 'USER',
-      sourceId: user.id,
-      eventKey,
-      displayMessage: `Provider test via ${normalizedKey.toUpperCase()}`,
-      priority: 2,
-      expiresAt: new Date(Date.now() + 10 * 60_000),
-      payload: {
-        kind: 'EMAIL',
-        to: user.email,
-        subject: `[OpsKnight Test] Outbound Alert via ${normalizedKey.toUpperCase()}`,
-        html: `
-          <div style="font-family: sans-serif; padding: 20px; color: #111;">
-            <h2 style="color: #059669; margin-bottom: 8px;">✅ Provider Test Successful</h2>
-            <p>This is an automated test notification dispatched from your OpsKnight instance via <strong>${normalizedKey.toUpperCase()}</strong>.</p>
-            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-            <p style="font-size: 12px; color: #6b7280;">Dispatched by: ${user.name || user.email} (${user.role})</p>
-            <p style="font-size: 12px; color: #6b7280;">Timestamp: ${new Date().toISOString()}</p>
-          </div>
-        `,
-        text: `[OpsKnight Test] Provider Test Successful. Outbound alert dispatched via ${normalizedKey.toUpperCase()}.`,
-        providerKey: normalizedKey,
-      },
-    });
-
-    if (!result.delivered && result.error) {
-      throw new Error(result.error);
-    }
-  } else if (normalizedKey === 'twilio') {
-    const targetPhone =
-      user.phoneNumber ||
-      (decryptedConfig?.fromNumber as string) ||
-      (decryptedConfig?.phoneNumber as string);
-    if (!targetPhone) {
-      throw new Error(
-        'No recipient phone number available. Add a phone number to your profile or configure a test number.'
-      );
-    }
-
-    const result = await enqueueCentralNotification({
-      category: 'SYSTEM',
-      channel: 'SMS',
-      recipientType: 'USER',
-      recipientId: user.id,
-      recipientAddress: targetPhone,
-      userId: user.id,
-      templateKey: 'provider-test',
-      sourceType: 'USER',
-      sourceId: user.id,
-      eventKey,
-      displayMessage: `Provider test via Twilio SMS`,
-      priority: 2,
-      expiresAt: new Date(Date.now() + 10 * 60_000),
-      payload: {
-        kind: 'SMS',
-        to: targetPhone,
-        message: `[OpsKnight] Provider test successful! Twilio SMS is operational. Dispatched: ${new Date().toLocaleTimeString()}`,
-        providerKey: 'twilio',
-      },
-    });
-
-    if (!result.delivered && result.error) {
-      throw new Error(result.error);
-    }
-  } else if (normalizedKey === 'whatsapp') {
-    const whatsappEnabled = Boolean(decryptedConfig?.whatsappEnabled);
-    if (!whatsappEnabled) {
-      throw new Error('WhatsApp messaging is not enabled in the Twilio configuration.');
-    }
-
-    const targetPhone = user.phoneNumber || (decryptedConfig?.whatsappNumber as string);
-    if (!targetPhone) {
-      throw new Error('No WhatsApp phone number configured.');
-    }
-
-    const result = await enqueueCentralNotification({
-      category: 'SYSTEM',
-      channel: 'WHATSAPP',
-      recipientType: 'USER',
-      recipientId: user.id,
-      recipientAddress: targetPhone,
-      userId: user.id,
-      templateKey: 'provider-test',
-      sourceType: 'USER',
-      sourceId: user.id,
-      eventKey,
-      displayMessage: `Provider test via WhatsApp`,
-      priority: 2,
-      expiresAt: new Date(Date.now() + 10 * 60_000),
-      payload: {
-        kind: 'WHATSAPP',
-        to: targetPhone,
-        message: `[OpsKnight] WhatsApp provider test successful! Dispatched: ${new Date().toLocaleTimeString()}`,
-        providerKey: 'twilio',
-      },
-    });
-
-    if (!result.delivered && result.error) {
-      throw new Error(result.error);
-    }
-  } else if (normalizedKey === 'web-push') {
-    const deviceCount = await prisma.userDevice.count({
-      where: { userId: user.id, platform: 'web' },
-    });
-
-    if (deviceCount > 0) {
-      const result = await enqueueCentralNotification({
-        category: 'SYSTEM',
-        channel: 'PUSH',
-        recipientType: 'USER',
-        recipientId: user.id,
-        recipientAddress: user.id,
-        userId: user.id,
-        templateKey: 'provider-test',
-        sourceType: 'USER',
-        sourceId: user.id,
-        eventKey,
-        displayMessage: `Provider test via Web Push`,
-        priority: 2,
-        expiresAt: new Date(Date.now() + 10 * 60_000),
-        payload: {
-          kind: 'PUSH',
-          userId: user.id,
-          title: '🔔 OpsKnight Provider Test',
-          body: 'Web Push (VAPID) provider is active and verified.',
-          data: { url: '/settings/notifications', type: 'test' },
-          providerKey: 'web-push',
-        },
-      });
-
-      if (!result.delivered && result.error) {
-        throw new Error(result.error);
-      }
-    } else {
-      if (!decryptedConfig.vapidPublicKey || !decryptedConfig.vapidPrivateKey) {
-        throw new Error('VAPID cryptographic keys are not generated yet.');
-      }
-      return {
-        success: true,
-        message:
-          'VAPID keys verified! Enable push notifications in your profile or mobile browser to receive live alerts.',
-      };
-    }
-  }
-
-  await logAudit({
-    action: 'notification_provider.tested',
-    entityType: 'USER',
-    entityId: user.id,
-    actorId: user.id,
-    details: { provider: normalizedKey },
-  });
-
-  return {
-    success: true,
-    message: `Test notification sent successfully via ${providerKey.toUpperCase()}`,
-  };
+  const { executeProviderTest } = await import('@/lib/provider-test-service');
+  return executeProviderTest(providerKey, user);
 }
 
 /**

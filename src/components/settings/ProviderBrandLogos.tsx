@@ -130,6 +130,32 @@ export function AmazonSesLogo({ className = '', size = 20 }: LogoProps) {
 }
 
 /**
+ * Official Amazon SNS Logo Mark (AWS Navy + Amazon Orange topic broadcast arcs)
+ */
+export function AwsSnsLogo({ className = '', size = 20 }: LogoProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-label="Amazon SNS"
+    >
+      <rect width="24" height="24" rx="5" fill="#232F3E" />
+      <circle cx="12" cy="12" r="3" fill="#FF9900" />
+      <path
+        d="M7 12C7 9.23858 9.23858 7 12 7M17 12C17 14.7614 14.7614 17 12 17M12 4.5C7.85786 4.5 4.5 7.85786 4.5 12M12 19.5C16.1421 19.5 19.5 16.1421 19.5 12"
+        stroke="#FF9900"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/**
  * Custom SMTP Logo Mark (Indigo Enterprise Mail Server)
  */
 export function SmtpLogo({ className = '', size = 20 }: LogoProps) {
@@ -197,6 +223,10 @@ export function getProviderBrandLogo(key: string, size = 24) {
       return <SlackLogo className={sizeClass} />;
     case 'twilio':
       return <TwilioLogo size={size} />;
+    case 'aws-sns':
+    case 'sns':
+    case 'amazon-sns':
+      return <AwsSnsLogo size={size} />;
     case 'whatsapp':
       return <WhatsAppLogo size={size} />;
     case 'resend':
