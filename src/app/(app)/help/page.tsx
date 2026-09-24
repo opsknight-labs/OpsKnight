@@ -345,40 +345,52 @@ export default function HelpPage() {
             </div>
           </div>
 
-          {/* Quick Diagnostics Snapshot Card */}
+          {/* Quick Diagnostics & Status Card */}
           <div className="w-full md:w-72 shrink-0 rounded-xl border border-border/80 bg-card p-4 shadow-xs">
             <div className="flex items-center justify-between pb-3 border-b border-border/60">
               <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                System Health
+                System & Diagnostics
               </span>
-              <div className="flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                  Operational
-                </span>
-              </div>
+              <Badge variant="outline" className="text-2xs font-mono text-muted-foreground">
+                v{APP_VERSION}
+              </Badge>
             </div>
 
             <div className="space-y-2.5 pt-3 text-xs">
               <div className="flex items-center justify-between text-muted-foreground">
-                <span>Core Engine</span>
-                <span className="font-medium text-foreground">Online</span>
+                <span>Public Status</span>
+                <Link
+                  href="/status"
+                  className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                >
+                  Status Page
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
               </div>
               <div className="flex items-center justify-between text-muted-foreground">
-                <span>Webhook Ingestion</span>
-                <span className="font-medium text-foreground">Healthy</span>
+                <span>Instance Health</span>
+                <Link
+                  href="/settings/system/health"
+                  className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                >
+                  Health Checks
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
               </div>
               <div className="flex items-center justify-between text-muted-foreground">
-                <span>App Version</span>
-                <span className="font-mono font-medium text-foreground">{APP_VERSION}</span>
+                <span>Platform Logs</span>
+                <Link
+                  href="/system-logs"
+                  className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1"
+                >
+                  System Logs
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
               </div>
             </div>
 
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               asChild
               className="w-full mt-3 justify-center text-xs h-8"
