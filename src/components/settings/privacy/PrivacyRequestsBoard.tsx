@@ -9,7 +9,6 @@ import {
   Loader2,
   Play,
   Plus,
-  Search,
   ShieldAlert,
   Trash2,
   X,
@@ -439,12 +438,11 @@ export default function PrivacyRequestsBoard({
         <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-64">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search name, email, or ID…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="h-9 pl-9 pr-8 text-xs"
+                className="h-9 px-3 pr-8 text-xs"
               />
               {searchQuery && (
                 <button

@@ -55,12 +55,14 @@ export default function MobileSearch({
   return (
     <div className="group relative w-full min-w-0">
       <form onSubmit={handleSubmit} className="relative flex w-full min-w-0 items-center">
-        <div
-          className="pointer-events-none absolute left-3 z-10 text-muted-foreground"
-          aria-hidden="true"
-        >
-          {leftIcon || <Search className="h-4 w-4" />}
-        </div>
+        {leftIcon && (
+          <div
+            className="pointer-events-none absolute left-3 z-10 text-muted-foreground"
+            aria-hidden="true"
+          >
+            {leftIcon}
+          </div>
+        )}
 
         <Input
           ref={inputRef}
@@ -76,7 +78,10 @@ export default function MobileSearch({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="h-11 min-h-[44px] min-w-0 flex-1 rounded-xl border-input bg-background pl-9 pr-11 text-foreground shadow-sm focus-visible:ring-ring"
+          className={cn(
+            'h-11 min-h-[44px] min-w-0 flex-1 rounded-xl border-input bg-background pr-11 text-foreground shadow-sm focus-visible:ring-ring',
+            leftIcon ? 'pl-9' : 'px-4'
+          )}
         />
 
         {value && (

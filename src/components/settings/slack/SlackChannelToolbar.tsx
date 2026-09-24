@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/shadcn/tabs';
 import { Skeleton } from '@/components/ui/shadcn/skeleton';
-import { Search, RefreshCw, Zap, Loader2 } from 'lucide-react';
+import { RefreshCw, Zap, Loader2 } from 'lucide-react';
 
 export type ChannelFilter = 'all' | 'connected' | 'invite' | 'auto';
 
@@ -93,14 +93,12 @@ export function SlackChannelToolbar({
       {/* Search and Filter Row */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search channels..."
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
-            className="h-9 pl-10 text-xs sm:text-sm bg-background"
-            style={{ paddingLeft: '2.5rem' }}
+            className="h-9 text-xs sm:text-sm bg-background"
           />
         </div>
 

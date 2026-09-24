@@ -36,7 +36,6 @@ import {
   Flame,
   AlertCircle,
   MinusCircle,
-  Search,
   Briefcase,
   Activity,
   ShieldAlert,
@@ -84,6 +83,7 @@ export default function IncidentsFilters({
       params.delete('page');
       Object.entries(updates).forEach(([key, value]) => {
         if (key === 'filter') {
+          params.delete('status');
           if (value === '' || value === 'all') {
             params.delete(key);
           } else {
@@ -174,6 +174,23 @@ export default function IncidentsFilters({
             )}
           >
             All incidents
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              updateParams({
+                filter: currentFilter === 'all_open' ? 'all' : 'all_open',
+                teamId: 'all',
+              })
+            }
+            className={cn(
+              'h-7 px-3 text-xs font-medium rounded-full border transition-all cursor-pointer shadow-2xs',
+              currentFilter === 'all_open'
+                ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-300/80 dark:border-rose-700/60 font-semibold shadow-xs'
+                : 'bg-card border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/50 hover:border-border'
+            )}
+          >
+            Active
           </button>
           <button
             type="button"
@@ -284,12 +301,10 @@ export default function IncidentsFilters({
               Search
             </Label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 id="incident-search"
                 placeholder="Title, description, or ID"
-                className="h-9 pl-10 text-sm bg-muted/30 focus:bg-background transition-colors"
-                style={{ paddingLeft: '2.5rem' }}
+                className="h-9 text-sm bg-muted/30 focus:bg-background transition-colors"
                 value={currentSearch}
                 onChange={e => updateParams({ search: e.target.value.trim() })}
               />

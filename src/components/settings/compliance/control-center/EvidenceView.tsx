@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/shadcn/card';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
 import { Badge } from '@/components/ui/shadcn/badge';
-import { Search, ShieldCheck, ShieldAlert, RefreshCw, Filter, Loader2, X } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, RefreshCw, Filter, Loader2, X } from 'lucide-react';
 import type { ComplianceEvidenceRecord } from '@/lib/compliance/evidence/types';
 import { ComplianceEvidenceViewer } from '../ComplianceEvidenceViewer';
 
@@ -182,12 +182,11 @@ export function EvidenceView({
       {/* Filter Bar */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3.5 rounded-xl border bg-card/60">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by title, control ID, collector, or SHA-256 hash..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-9 text-xs h-9 bg-background/80"
+            className="text-xs h-9 bg-background/80"
           />
         </div>
 

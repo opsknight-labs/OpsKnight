@@ -11,6 +11,7 @@ type IncidentListHrefOptions = {
   teamId?: string;
   createdAfter?: string;
   createdBefore?: string;
+  search?: string;
 };
 
 export function buildIncidentListHref({
@@ -23,6 +24,7 @@ export function buildIncidentListHref({
   teamId,
   createdAfter,
   createdBefore,
+  search,
 }: IncidentListHrefOptions = {}): string {
   const params = new URLSearchParams();
   if (filter && filter !== 'all') params.set('filter', filter);
@@ -33,6 +35,7 @@ export function buildIncidentListHref({
   if (teamId) params.set('teamId', teamId);
   if (createdAfter) params.set('createdAfter', createdAfter);
   if (createdBefore) params.set('createdBefore', createdBefore);
+  if (search) params.set('search', search);
 
   const query = params.toString();
   return query ? `${basePath}?${query}` : basePath;

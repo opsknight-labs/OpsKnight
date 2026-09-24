@@ -25,8 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/shadcn/alert-dialog';
+import { Trash2, Bell, BellOff, Crown, Loader2, X, ChevronDown, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-product-notification';
-import { Search, Trash2, Bell, BellOff, Crown, Loader2, X, ChevronDown, Users } from 'lucide-react';
 import EmptyState from '@/components/ui/EmptyState';
 
 type TeamMember = {
@@ -207,12 +207,11 @@ export default function TeamMemberRosterTable({
     <div className="space-y-3">
       {/* Search Bar */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
         <Input
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Filter members by name, email, or role..."
-          className="pl-8 pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
+          className="pr-8 h-8.5 text-xs placeholder:text-muted-foreground/60"
         />
         {searchQuery && (
           <button

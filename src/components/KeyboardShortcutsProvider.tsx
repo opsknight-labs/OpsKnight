@@ -29,6 +29,13 @@ export const KEYBOARD_SHORTCUTS = [
   { keys: ['g', 'u'], description: 'Go to Users', category: 'Navigation' },
   { keys: ['g', 't'], description: 'Go to Teams', category: 'Navigation' },
 
+  // Incident Triage
+  { keys: ['J'], description: 'Next incident in list', category: 'Incident Triage' },
+  { keys: ['K'], description: 'Previous incident in list', category: 'Incident Triage' },
+  { keys: ['X'], description: 'Select / deselect incident', category: 'Incident Triage' },
+  { keys: ['A'], description: 'Acknowledge focused incident', category: 'Incident Triage' },
+  { keys: ['R'], description: 'Resolve focused incident', category: 'Incident Triage' },
+
   // Settings shortcuts
   { keys: ['g', 'p'], description: 'Go to Profile', category: 'Settings' },
   { keys: ['g', 'e'], description: 'Go to Security', category: 'Settings' },

@@ -21,12 +21,11 @@ describe('SlackChannelToolbar', () => {
     scopeHealthy: true,
   };
 
-  it('renders search input with proper padding style to prevent icon overlap', () => {
+  it('renders search input', () => {
     render(<SlackChannelToolbar {...defaultProps} />);
 
     const searchInput = screen.getByPlaceholderText('Search channels...');
     expect(searchInput).toBeInTheDocument();
-    expect(searchInput).toHaveStyle({ paddingLeft: '2.5rem' });
   });
 
   it('calls onSearchChange when user types in search input', () => {

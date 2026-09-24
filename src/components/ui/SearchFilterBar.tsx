@@ -4,7 +4,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/shadcn/input';
 import { Button } from '@/components/ui/shadcn/button';
-import { Search, X, RotateCcw } from 'lucide-react';
+import { X, RotateCcw } from 'lucide-react';
 
 export type SearchFilterBarProps = {
   searchValue?: string;
@@ -70,14 +70,13 @@ export default function SearchFilterBar({
       <div className="flex flex-1 flex-col gap-2.5 sm:flex-row sm:items-center">
         {onSearchChange && (
           <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
               placeholder={searchPlaceholder}
               value={draftSearch}
               onChange={e => handleSearchChange(e.target.value)}
-              className="h-9 pl-10 pr-8 text-xs sm:text-sm bg-slate-50/60 focus:bg-white transition-colors"
-              style={{ paddingLeft: '2.5rem', paddingRight: '2rem' }}
+              className="h-9 pr-8 text-xs sm:text-sm bg-slate-50/60 focus:bg-white transition-colors"
+              style={{ paddingRight: '2rem' }}
             />
             {draftSearch && (
               <button
