@@ -1,10 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { logger } from '@/lib/logger';
+import { RefreshCw, AlertTriangle, X } from 'lucide-react';
+import { Button } from '@/components/ui/shadcn/button';
 
-const RELOAD_THROTTLE_MS = 15000;
-const STORAGE_KEY = 'opsknight_chunk_reload_timestamp';
+export const MAX_AUTO_RELOADS = 2;
+export const RELOAD_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+export const CHUNK_RECOVERY_STORAGE_KEY = 'opsknight_chunk_recovery';
+
+interface ChunkRecoveryBudget {
+  count: number;
+  firstAttemptAt: number;
+  lastAttemptAt: number;
+}
 
 function isChunkOrStyleError(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -19,8 +28,24 @@ function isChunkOrStyleError(message: string): boolean {
   );
 }
 
-function handleAutoReload(reason: string) {
-  if (typeof window === 'undefined') return;
+function isValidBudget(val: unknown): val is ChunkRecoveryBudget {
+  if (!val || typeof val !== 'object') return false;
+  const b = val as Record<string, unknown>;
+  return (
+    typeof b.count === 'number' &&
+    Number.isInteger(b.count) &&
+    b.count >= 0 &&
+    typeof b.firstAttemptAt === 'number' &&
+    Number.isFinite(b.firstAttemptAt) &&
+    b.firstAttemptAt > 0 &&
+    typeof b.lastAttemptAt === 'number' &&
+    Number.isFinite(b.lastAttemptAt) &&
+    b.lastAttemptAt > 0
+  );
+}
+
+export function tryConsumeRecoveryBudget(reason: string): boolean {
+  if (typeof window === 'undefined') return false;
 
   // In automated test environments (Playwright/WebDriver), never trigger
   // background hard reloads that collide with active test navigations.
@@ -28,35 +53,93 @@ function handleAutoReload(reason: string) {
     logger.warn('[ChunkRecovery] Suppressing auto-reload in automated test environment', {
       reason,
     });
-    return;
+    return false;
   }
 
   try {
-    const lastReload = Number.parseInt(sessionStorage.getItem(STORAGE_KEY) || '0', 10);
+    const raw = sessionStorage.getItem(CHUNK_RECOVERY_STORAGE_KEY);
     const now = Date.now();
+    let budget: ChunkRecoveryBudget;
 
-    if (Number.isFinite(lastReload) && now - lastReload < RELOAD_THROTTLE_MS) {
-      logger.warn('[ChunkRecovery] Throttling chunk reload to prevent infinite loop', {
-        reason,
-        timeSinceLastReload: now - lastReload,
-      });
-      return;
+    if (raw) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        logger.error(
+          '[ChunkRecovery] Malformed JSON in storage budget; failing safe to recovery UI',
+          { reason }
+        );
+        return false;
+      }
+
+      if (!isValidBudget(parsed)) {
+        logger.error(
+          '[ChunkRecovery] Invalid budget schema in storage; failing safe to recovery UI',
+          { reason, parsed }
+        );
+        return false;
+      }
+
+      if (now - parsed.firstAttemptAt > RELOAD_WINDOW_MS) {
+        budget = { count: 0, firstAttemptAt: now, lastAttemptAt: now };
+      } else {
+        budget = parsed;
+      }
+    } else {
+      budget = { count: 0, firstAttemptAt: now, lastAttemptAt: now };
     }
 
-    sessionStorage.setItem(STORAGE_KEY, String(now));
-    logger.warn('[ChunkRecovery] Detected chunk/stylesheet mismatch. Reloading application...', {
-      reason,
-    });
+    if (budget.count >= MAX_AUTO_RELOADS) {
+      logger.warn('[ChunkRecovery] Automatic reload budget exhausted; prompting manual recovery', {
+        reason,
+        attempts: budget.count,
+        max: MAX_AUTO_RELOADS,
+        windowMs: RELOAD_WINDOW_MS,
+      });
+      return false;
+    }
 
-    // Hard reload from server to fetch latest build HTML and chunks
-    window.location.reload();
+    budget.count += 1;
+    budget.lastAttemptAt = now;
+    sessionStorage.setItem(CHUNK_RECOVERY_STORAGE_KEY, JSON.stringify(budget));
+    logger.warn(
+      '[ChunkRecovery] Detected chunk/stylesheet error. Performing automatic recovery reload...',
+      {
+        reason,
+        attempt: budget.count,
+        max: MAX_AUTO_RELOADS,
+      }
+    );
+
+    return true;
   } catch (err) {
-    logger.error('[ChunkRecovery] Failed to execute auto-reload', { error: err });
-    window.location.reload();
+    // Fail-safe: NEVER reload automatically if storage is corrupt or inaccessible.
+    // Present manual recovery UI instead of risking an infinite reload loop.
+    logger.error(
+      '[ChunkRecovery] Failed to read/write storage budget; failing safe to recovery UI',
+      {
+        reason,
+        error: err,
+      }
+    );
+    return false;
+  }
+}
+
+export function clearRecoveryBudget(): void {
+  try {
+    sessionStorage.removeItem(CHUNK_RECOVERY_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors on clear
   }
 }
 
 export default function ChunkLoadErrorHandler() {
+  const [recoveryRequired, setRecoveryRequired] = useState<{
+    reason: string;
+  } | null>(null);
+
   useEffect(() => {
     let isUnloading = false;
     const markUnloading = () => {
@@ -65,18 +148,28 @@ export default function ChunkLoadErrorHandler() {
     window.addEventListener('beforeunload', markUnloading);
     window.addEventListener('pagehide', markUnloading);
 
+    const triggerRecovery = (reason: string) => {
+      if (isUnloading) return;
+
+      const allowed = tryConsumeRecoveryBudget(reason);
+      if (allowed) {
+        window.location.reload();
+      } else if (!navigator.webdriver) {
+        setRecoveryRequired({ reason });
+      }
+    };
+
     // 1. Listen for unhandled runtime errors & resource loading failures (capturing phase)
     const handleError = (event: ErrorEvent) => {
       if (isUnloading) return;
 
-      // Check for Error message
       if (event?.message && isChunkOrStyleError(event.message)) {
-        handleAutoReload(`Runtime Error: ${event.message}`);
+        triggerRecovery(`Runtime Error: ${event.message}`);
         return;
       }
 
       if (event?.error?.message && isChunkOrStyleError(event.error.message)) {
-        handleAutoReload(`Runtime Error: ${event.error.message}`);
+        triggerRecovery(`Runtime Error: ${event.error.message}`);
         return;
       }
 
@@ -87,13 +180,13 @@ export default function ChunkLoadErrorHandler() {
         if (tagName === 'link' && (target as HTMLLinkElement).rel === 'stylesheet') {
           const href = (target as HTMLLinkElement).href || '';
           if (href.includes('/_next/static/')) {
-            handleAutoReload(`Stylesheet load failure: ${href}`);
+            triggerRecovery(`Stylesheet load failure: ${href}`);
           }
         } else if (tagName === 'script') {
           if (document.visibilityState === 'hidden') return;
           const src = (target as HTMLScriptElement).src || '';
           if (src.includes('/_next/static/')) {
-            handleAutoReload(`Script chunk load failure: ${src}`);
+            triggerRecovery(`Script chunk load failure: ${src}`);
           }
         }
       }
@@ -111,7 +204,7 @@ export default function ChunkLoadErrorHandler() {
             : reason?.message || '';
 
       if (message && isChunkOrStyleError(message)) {
-        handleAutoReload(`Promise Rejection: ${message}`);
+        triggerRecovery(`Promise Rejection: ${message}`);
       }
     };
 
@@ -126,5 +219,60 @@ export default function ChunkLoadErrorHandler() {
     };
   }, []);
 
-  return null;
+  if (!recoveryRequired) return null;
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className="fixed bottom-4 right-4 z-50 max-w-md p-4 rounded-xl shadow-2xl bg-zinc-900 border border-zinc-700 text-white animate-in fade-in slide-in-from-bottom-2 duration-200"
+    >
+      <div className="flex items-start gap-3">
+        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+          <AlertTriangle className="h-5 w-5" />
+        </div>
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold tracking-tight text-zinc-100">
+              Application Update Required
+            </h4>
+            <button
+              type="button"
+              onClick={() => setRecoveryRequired(null)}
+              aria-label="Dismiss"
+              className="text-zinc-400 hover:text-white p-1 rounded transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            A new version of OpsKnight is available or an asset failed to load. Please reload the
+            application to ensure stability.
+          </p>
+          <div className="pt-2 flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="default"
+              className="h-7 text-xs gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-medium cursor-pointer"
+              onClick={() => {
+                clearRecoveryBudget();
+                window.location.reload();
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Reload Page
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-zinc-400 hover:text-white cursor-pointer"
+              onClick={() => setRecoveryRequired(null)}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -11,6 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { logger } from '@/lib/logger';
+import {
+  notifySessionExpired,
+  verifyClientSession,
+  isTerminalSessionError,
+} from '@/lib/client-auth-recovery';
 
 export type RealtimeEvent =
   | { type: 'connected'; timestamp: string }
@@ -154,6 +159,7 @@ function useRealtimeConnection() {
                 eventSourceRef.current = null;
                 setIsConnected(false);
                 setError('Real-time authorization was revoked. Sign in again to reconnect.');
+                notifySessionExpired();
                 break;
             }
           } catch (err) {
@@ -168,12 +174,22 @@ function useRealtimeConnection() {
           if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
           if (document.visibilityState === 'hidden' || !navigator.onLine) return;
 
-          const baseDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30_000);
-          const delay = Math.min(30_000, Math.round(baseDelay * (0.5 + Math.random())));
-          reconnectAttempts.current += 1;
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (mounted) connect();
-          }, delay);
+          void verifyClientSession().then(result => {
+            if (!mounted || authorizationRevoked.current) return;
+            if (isTerminalSessionError(result)) {
+              authorizationRevoked.current = true;
+              setError('Real-time authorization was revoked. Sign in again to reconnect.');
+              notifySessionExpired();
+              return;
+            }
+
+            const baseDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30_000);
+            const delay = Math.min(30_000, Math.round(baseDelay * (0.5 + Math.random())));
+            reconnectAttempts.current += 1;
+            reconnectTimeoutRef.current = setTimeout(() => {
+              if (mounted) connect();
+            }, delay);
+          });
         };
       } catch (err) {
         logger.error('Failed to create EventSource', { component: 'useRealtime', error: err });

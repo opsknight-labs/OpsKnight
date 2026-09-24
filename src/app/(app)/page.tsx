@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import prisma from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
-import { getAuthOptions } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { getRequestActorContext } from '@/lib/request-actor-context';
 import DashboardRealtimeWrapper from '@/components/DashboardRealtimeWrapper';
 import DashboardCommandCenter from '@/components/dashboard/DashboardCommandCenter';
 import DashboardIncidentFilters from '@/components/dashboard/DashboardIncidentFilters';
@@ -41,7 +41,6 @@ export default async function Dashboard({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const session = await getServerSession(await getAuthOptions());
   const awaitedSearchParams = await searchParams;
 
   // Extract search params
@@ -86,32 +85,15 @@ export default async function Dashboard({
             ? 'title'
             : 'newest';
 
-  // Get user name for greeting
-  const email = session?.user?.email ?? null;
-  const user = email
-    ? await prisma.user.findUnique({
-        where: { email },
-        select: {
-          id: true,
-          name: true,
-          timeZone: true,
-          role: true,
-          status: true,
-          teamMemberships: { select: { teamId: true } },
-        },
-      })
-    : null;
-  const userName = user?.name || 'there';
-  const userTimeZone = user?.timeZone || 'UTC';
-  if (!user || user.status !== 'ACTIVE') {
-    throw new Error('Authenticated dashboard user is unavailable.');
+  const requestContext = await getRequestActorContext();
+  if (!requestContext) {
+    redirect('/login?error=SessionExpired');
   }
-  const actor: AuthorizationActor = {
-    id: user.id,
-    role: user.role,
-    status: user.status,
-    teamIds: user.teamMemberships.map(membership => membership.teamId),
-  };
+
+  const actor = requestContext.actor;
+  const user = requestContext.user;
+  const userName = user.name || 'there';
+  const userTimeZone = user.timeZone || 'UTC';
   const serviceAccess = serviceReadWhere(actor);
   const userAccess = dashboardUserReadWhere(actor);
 
