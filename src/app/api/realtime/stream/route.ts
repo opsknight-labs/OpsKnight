@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getCurrentUser } from '@/lib/rbac';
+import { isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCachedDashboardMetrics, getCachedRecentIncidents } from '@/lib/realtime-cache';
 import {
@@ -226,6 +227,14 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
+    if (isAppError(error)) {
+      if (error.code === 'AUTHENTICATION_REQUIRED' || error.code === 'SESSION_REVOKED') {
+        return new Response(error.userMessage, { status: 401 });
+      }
+      if (error.code === 'USER_DISABLED') {
+        return new Response(error.userMessage, { status: 403 });
+      }
+    }
     logger.error('SSE stream error', { component: 'api-realtime-stream', error });
     return new Response('Internal Server Error', { status: 500 });
   }

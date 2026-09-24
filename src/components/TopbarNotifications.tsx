@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useModalState } from '@/hooks/useModalState';
+import { useNotificationStream } from '@/hooks/useNotificationStream';
 import { logger } from '@/lib/logger';
 import {
   Sheet,
@@ -209,10 +210,10 @@ export default function TopbarNotifications() {
   const pathname = usePathname();
   const [open, setOpen] = useModalState('notifications');
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isLive, setIsLive] = useState(false);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [pollingRequired, setPollingRequired] = useState(false);
+  const hasLoadedRef = useRef(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -221,7 +222,10 @@ export default function TopbarNotifications() {
       if (response.ok) {
         const data = await response.json();
         setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
+        if (typeof data.unreadCount === 'number') {
+          setUnreadCount(data.unreadCount);
+        }
+        hasLoadedRef.current = true;
       } else {
         logger.error('Failed to fetch notifications', {
           component: 'TopbarNotifications',
@@ -235,69 +239,87 @@ export default function TopbarNotifications() {
     }
   }, []);
 
+  const fetchUnreadCount = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    try {
+      const response = await fetch('/api/notifications?limit=1', { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (typeof data.unreadCount === 'number') {
+        setUnreadCount(data.unreadCount);
+      }
+    } catch {
+      // Badge freshness must not disrupt UI
+    }
+  }, []);
+
+  const handleIncomingNotifications = useCallback((incoming: Notification[]) => {
+    setNotifications(prev => {
+      const existingIds = new Set(prev.map(n => n.id));
+      const newNotifications = incoming.filter(n => !existingIds.has(n.id));
+      return [...newNotifications, ...prev].slice(0, 50);
+    });
+  }, []);
+
+  const { isConnected: isLive } = useNotificationStream<Notification>({
+    onNotifications: handleIncomingNotifications,
+    onUnreadCount: count => setUnreadCount(count),
+    onError: error => {
+      // Poll only on platforms that genuinely have no EventSource implementation
+      if (/not supported/i.test(error.message)) {
+        setPollingRequired(true);
+      }
+    },
+  });
+
+  // Demand-driven loading: only fetch 50 notifications when the user actually opens the drawer
   useEffect(() => {
-    fetchNotifications();
+    if (open) {
+      void fetchNotifications();
+    }
+  }, [open, fetchNotifications]);
 
-    // Set up SSE connection for real-time updates
-    const eventSource = new EventSource('/api/notifications/stream');
+  // Controlled fallback polling ONLY if EventSource is unsupported
+  useEffect(() => {
+    if (!pollingRequired) return;
 
-    eventSource.onopen = () => {
-      setIsLive(true);
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
+    // Initialize badge count immediately when EventSource is unsupported
+    void fetchUnreadCount();
 
-    eventSource.onmessage = event => {
-      try {
-        setIsLive(true);
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'notifications' && data.notifications) {
-          setNotifications(prev => {
-            const existingIds = new Set(prev.map(n => n.id));
-            const newNotifications = data.notifications.filter(
-              (n: Notification) => !existingIds.has(n.id)
-            );
-            return [...newNotifications, ...prev].slice(0, 50);
-          });
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (interval || (typeof document !== 'undefined' && document.hidden)) return;
+      interval = setInterval(() => {
+        if (open) {
+          void fetchNotifications();
+        } else {
+          void fetchUnreadCount();
         }
-
-        if (data.type === 'unread_count') {
-          setUnreadCount(data.count || 0);
+      }, 30_000);
+    };
+    const stop = () => {
+      if (!interval) return;
+      clearInterval(interval);
+      interval = null;
+    };
+    start();
+    const handleVisibility = () => {
+      if (document.hidden) stop();
+      else {
+        if (open) {
+          void fetchNotifications();
+        } else {
+          void fetchUnreadCount();
         }
-      } catch (error) {
-        logger.error('Error parsing SSE message', { component: 'TopbarNotifications', error });
+        start();
       }
     };
-
-    eventSource.onerror = () => {
-      // EventSource emits `error` for ordinary network/proxy disconnects and
-      // reconnect attempts; browsers intentionally do not expose a useful
-      // Error object here. Treat this as a recoverable transport state rather
-      // than an application error, and keep the polling fallback alive.
-      logger.warn('SSE notification transport interrupted; using polling fallback', {
-        component: 'TopbarNotifications',
-        readyState: eventSource.readyState,
-        online: typeof navigator === 'undefined' ? undefined : navigator.onLine,
-        visibilityState: typeof document === 'undefined' ? undefined : document.visibilityState,
-      });
-      setIsLive(false);
-      if (!pollIntervalRef.current) {
-        pollIntervalRef.current = setInterval(fetchNotifications, 30000);
-      }
-      eventSource.close();
-    };
-
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      eventSource.close();
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
+      stop();
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [fetchNotifications]);
+  }, [pollingRequired, open, fetchNotifications, fetchUnreadCount]);
 
   const markAllRead = useCallback(async () => {
     if (unreadCount === 0) return;

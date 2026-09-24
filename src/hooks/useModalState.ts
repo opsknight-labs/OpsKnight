@@ -70,3 +70,10 @@ export function useModalState(modalName: ModalName) {
 
   return [isOpen, setIsOpen] as const;
 }
+
+export function resetModalState(): void {
+  Object.keys(globalModalState).forEach(key => {
+    globalModalState[key as ModalName] = false;
+  });
+  listeners.clear();
+}

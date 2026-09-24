@@ -749,6 +749,9 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           if ((token as AugmentedJWT)?.error || !token.sub) {
             (session as unknown as { user: unknown }).user = undefined;
+            if ((token as AugmentedJWT)?.error) {
+              session.error = (token as AugmentedJWT).error;
+            }
             logger.warn('[Auth-Debug] Session CLEARED due to error/missing sub', {
               component: 'auth:session',
             });

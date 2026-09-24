@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { RealtimeProvider, useRealtime, useOptionalRealtime } from '@/hooks/useRealtime';
+import { resetSessionRecoveryState, onSessionExpired } from '@/lib/client-auth-recovery';
 import { createElement, type ReactNode } from 'react';
 
 type MockEventSource = {
@@ -36,8 +37,27 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 describe('useRealtime', () => {
+  const originalLocation = window.location;
+  const assignMock = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
+    resetSessionRecoveryState();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        assign: assignMock,
+        pathname: '/',
+      },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    });
   });
 
   it('should initialize with disconnected state', () => {
@@ -155,6 +175,119 @@ describe('useRealtime', () => {
     unmount();
 
     expect(eventSourceInstance.close).toHaveBeenCalled();
+  });
+
+  it('should handle authorization_revoked by closing stream and emitting session expired', async () => {
+    const expiredListener = vi.fn();
+    const unsubscribe = onSessionExpired(expiredListener);
+
+    const { result } = renderHook(() => useRealtime(), { wrapper });
+    const eventSourceInstance = getMockEventSourceInstance();
+
+    act(() => {
+      eventSourceInstance.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'authorization_revoked' }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(false);
+      expect(result.current.error).toBe(
+        'Real-time authorization was revoked. Sign in again to reconnect.'
+      );
+    });
+
+    expect(eventSourceInstance.close).toHaveBeenCalled();
+    expect(expiredListener).toHaveBeenCalledWith('/login?error=SessionExpired', 'desktop');
+    unsubscribe();
+  });
+
+  it('should emit session expired if session validation fails after connection error', async () => {
+    const expiredListener = vi.fn();
+    const unsubscribe = onSessionExpired(expiredListener);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+      })
+    );
+
+    const { result } = renderHook(() => useRealtime(), { wrapper });
+    const eventSourceInstance = getMockEventSourceInstance();
+
+    act(() => {
+      eventSourceInstance.onerror?.(new Event('error'));
+    });
+
+    await waitFor(() => {
+      expect(expiredListener).toHaveBeenCalledWith('/login?error=SessionExpired', 'desktop');
+      expect(result.current.error).toBe(
+        'Real-time authorization was revoked. Sign in again to reconnect.'
+      );
+    });
+
+    unsubscribe();
+  });
+
+  it('should schedule retry when session validation succeeds after connection error', async () => {
+    const expiredListener = vi.fn();
+    const unsubscribe = onSessionExpired(expiredListener);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: { id: 'user-1', email: 'test@example.com' } }),
+      })
+    );
+
+    const { result } = renderHook(() => useRealtime(), { wrapper });
+    const eventSourceInstance = getMockEventSourceInstance();
+
+    act(() => {
+      eventSourceInstance.onerror?.(new Event('error'));
+    });
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(false);
+    });
+
+    expect(expiredListener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('should schedule retry when DB security lookup is temporarily unavailable (SECURITY_LOOKUP_UNAVAILABLE)', async () => {
+    const expiredListener = vi.fn();
+    const unsubscribe = onSessionExpired(expiredListener);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ error: 'SECURITY_LOOKUP_UNAVAILABLE' }),
+      })
+    );
+
+    const { result } = renderHook(() => useRealtime(), { wrapper });
+    const eventSourceInstance = getMockEventSourceInstance();
+
+    act(() => {
+      eventSourceInstance.onerror?.(new Event('error'));
+    });
+
+    await waitFor(() => {
+      expect(result.current.isConnected).toBe(false);
+    });
+
+    // Temporary database glitch must NOT trigger logout
+    expect(expiredListener).not.toHaveBeenCalled();
+    unsubscribe();
   });
 
   describe('useOptionalRealtime', () => {
