@@ -54,6 +54,8 @@ type AugmentedJWT = JWT & {
   sessionExpiresAt?: number;
   /** Trust-version of the provider configuration that issued this session. */
   oidcConfigVersion?: number;
+  /** Authentication provider that established this session. */
+  authProvider?: 'oidc' | 'credentials';
 };
 
 type AugmentedUser = User & {
@@ -118,6 +120,7 @@ function clearSessionToken(token: AugmentedJWT, reason: string) {
   delete token.lastActivityAt;
   delete token.oidcAuthenticatedAt;
   delete token.oidcConfigVersion;
+  delete token.authProvider;
   delete token.sessionExpiresAt;
   delete token.absoluteExpiresAt;
   return token;
@@ -461,6 +464,8 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
 
           if (user && account) {
             delete (token as AugmentedJWT).error;
+            (token as AugmentedJWT).authProvider =
+              account.provider === 'oidc' ? 'oidc' : 'credentials';
             logger.debug('[Auth-Debug] Initial Sign In', {
               component: 'auth:jwt',
               userId: user.id,
@@ -836,6 +841,13 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             mappedRole: roleEvaluation.role,
             reason: roleEvaluation.matched ? 'mapping_match' : 'no_mapping_match',
           });
+          if (roleEvaluation.groupsOverage) {
+            logger.warn('[Auth] OIDC group overage denied mapped elevation; continuing sign-in', {
+              component: 'auth:signIn',
+              reasonCode: 'OIDC_GROUPS_OVERAGE',
+              providerType: activeConfig.providerType,
+            });
+          }
 
           let resolution;
           try {
@@ -916,7 +928,20 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             });
           }
 
-          if (targetUser.roleSource === 'OIDC') {
+          if (roleEvaluation.matched) {
+            const desiredRole = roleEvaluation.role;
+            if (targetUser.role !== desiredRole || targetUser.roleSource !== 'OIDC') {
+              updateData.role = desiredRole;
+              updateData.roleSource = 'OIDC';
+              logger.info('[Auth] OIDC role changed from mapping evaluation', {
+                component: 'auth:signIn',
+                userId: targetUser.id,
+                previousRole: targetUser.role,
+                newRole: desiredRole,
+                event: 'OIDC_ROLE_CHANGED',
+              });
+            }
+          } else if (targetUser.roleSource === 'OIDC') {
             const desiredRole = roleEvaluation.role;
             if (targetUser.role !== desiredRole) {
               updateData.role = desiredRole;
@@ -980,8 +1005,14 @@ export async function getAuthOptions(): Promise<NextAuthOptions> {
             if (updateData.role && updateData.role !== targetUser.role) {
               const { updateUserSecurityState } = await import('@/lib/users/admin-invariants');
               const mappedRole = updateData.role as 'ADMIN' | 'RESPONDER' | 'AUDITOR' | 'USER';
+              const mappedRoleSource = updateData.roleSource as 'OIDC' | undefined;
               delete updateData.role;
-              await updateUserSecurityState(targetUser.id, { role: mappedRole }, updateData);
+              delete updateData.roleSource;
+              await updateUserSecurityState(
+                targetUser.id,
+                { role: mappedRole, ...(mappedRoleSource ? { roleSource: mappedRoleSource } : {}) },
+                updateData
+              );
             } else {
               await prisma.user.update({
                 where: { id: targetUser.id },

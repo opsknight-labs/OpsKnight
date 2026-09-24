@@ -1,7 +1,11 @@
 import crypto from 'node:crypto';
 import { logger } from '@/lib/logger';
 import { assertSafeOutboundUrl, safeOutboundFetch } from '@/lib/network-security';
-import { getMicrosoftEntraTenantAuthority, isMicrosoftEntraGenericAuthority, isMicrosoftEntraHost } from '@/lib/oidc-provider';
+import {
+  getMicrosoftEntraTenantAuthority,
+  isMicrosoftEntraGenericAuthority,
+  isMicrosoftEntraHost,
+} from '@/lib/oidc-provider';
 import { getOidcProviderPolicy } from '@/lib/oidc/provider-policy';
 import { getOidcConfig, getOidcPublicConfig } from '@/lib/oidc-config';
 
@@ -16,6 +20,7 @@ export type OidcRuntimeMetadata = {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   jwksUri: string;
+  endSessionEndpoint?: string;
   tokenEndpointAuthMethodsSupported?: string[];
 };
 
@@ -28,6 +33,7 @@ type OidcDiscoveryMetadata = {
   token_endpoint_auth_methods_supported?: unknown;
   response_types_supported?: unknown;
   code_challenge_methods_supported?: unknown;
+  end_session_endpoint?: unknown;
 };
 
 export type ValidateOidcConnectionOptions = {
@@ -346,6 +352,22 @@ export async function validateOidcConnection(
       }
     }
 
+    let endSessionEndpoint: string | undefined;
+    if (typeof config.end_session_endpoint === 'string' && config.end_session_endpoint) {
+      try {
+        await assertSafeOutboundUrl(config.end_session_endpoint, { requireHttps: true });
+        endSessionEndpoint = config.end_session_endpoint;
+      } catch {
+        logger.warn('[OIDC Validation] Ignoring unsafe optional logout endpoint', {
+          component: 'oidc-validation',
+        });
+      }
+    } else if (config.end_session_endpoint !== undefined) {
+      logger.warn('[OIDC Validation] Ignoring malformed optional logout endpoint', {
+        component: 'oidc-validation',
+      });
+    }
+
     // Permit asymmetric enterprise-safe algorithms only when the provider
     // advertises the metadata. Providers that omit the optional advertisement
     // remain compatible; token verification still enforces the provider's OIDC
@@ -444,8 +466,7 @@ export async function validateOidcConnection(
         if (!supportsS256) {
           return {
             isValid: false,
-            error:
-              'Identity Provider must support the "S256" code challenge method for PKCE.',
+            error: 'Identity Provider must support the "S256" code challenge method for PKCE.',
           };
         }
       }
@@ -505,6 +526,7 @@ export async function validateOidcConnection(
         authorizationEndpoint: config.authorization_endpoint as string,
         tokenEndpoint: config.token_endpoint as string,
         jwksUri,
+        ...(endSessionEndpoint ? { endSessionEndpoint } : {}),
         tokenEndpointAuthMethodsSupported: effectiveMethods,
       },
     };
@@ -568,10 +590,7 @@ export async function getValidatedOidcRuntimeMetadata(
   const now = Date.now();
 
   // 1. Fresh cache hit (< 5 min)
-  if (
-    runtimeMetadataCache?.key === cacheKey &&
-    runtimeMetadataCache.expiresAt > now
-  ) {
+  if (runtimeMetadataCache?.key === cacheKey && runtimeMetadataCache.expiresAt > now) {
     return runtimeMetadataCache.result;
   }
 
@@ -601,16 +620,22 @@ export async function getValidatedOidcRuntimeMetadata(
             return freshResult;
           } else {
             currentCache.nextRetryAt = Date.now() + SWR_BACKOFF_MS;
-            logger.warn('[OIDC] Background revalidation failed; backing off and continuing with stale metadata', {
-              error: freshResult.error,
-            });
+            logger.warn(
+              '[OIDC] Background revalidation failed; backing off and continuing with stale metadata',
+              {
+                error: freshResult.error,
+              }
+            );
             return staleResult;
           }
         } catch (error) {
           currentCache.nextRetryAt = Date.now() + SWR_BACKOFF_MS;
-          logger.warn('[OIDC] Background revalidation threw; backing off and continuing with stale metadata', {
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
+          logger.warn(
+            '[OIDC] Background revalidation threw; backing off and continuing with stale metadata',
+            {
+              error: error instanceof Error ? error.message : 'Unknown error',
+            }
+          );
           return staleResult;
         } finally {
           revalidationInFlight = undefined;
@@ -622,10 +647,7 @@ export async function getValidatedOidcRuntimeMetadata(
   }
 
   // 3. Negative cache hit (< 30s)
-  if (
-    negativeMetadataCache?.key === cacheKey &&
-    negativeMetadataCache.expiresAt > now
-  ) {
+  if (negativeMetadataCache?.key === cacheKey && negativeMetadataCache.expiresAt > now) {
     return negativeMetadataCache.result;
   }
 
@@ -693,10 +715,7 @@ export type OidcRuntimeCapability = {
  * only when NextAuth runtime metadata validation has actually succeeded.
  */
 export async function getOidcRuntimeCapability(): Promise<OidcRuntimeCapability> {
-  const [config, publicConfig] = await Promise.all([
-    getOidcConfig(),
-    getOidcPublicConfig(),
-  ]);
+  const [config, publicConfig] = await Promise.all([getOidcConfig(), getOidcPublicConfig()]);
 
   if (!publicConfig?.enabled) {
     return {

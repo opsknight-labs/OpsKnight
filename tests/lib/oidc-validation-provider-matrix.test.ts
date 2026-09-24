@@ -184,6 +184,23 @@ describe('OIDC discovery provider matrix', () => {
     expect(result.error).toMatch(/unsafe|non-HTTPS/i);
   });
 
+  it('ignores an unsafe optional logout endpoint without disabling OIDC login', async () => {
+    setupValidFetch(
+      200,
+      makeMetadata('https://identity.example.com', {
+        end_session_endpoint: 'http://127.0.0.1/logout',
+      })
+    );
+    assertSafeOutboundUrlMock.mockImplementation(async (url: string) => {
+      if (url.includes('127.0.0.1')) throw new Error('restricted');
+    });
+
+    const result = await validateOidcConnection('https://identity.example.com');
+
+    expect(result).toEqual(expect.objectContaining({ isValid: true }));
+    expect(result.metadata).not.toHaveProperty('endSessionEndpoint');
+  });
+
   it('rejects providers without an approved asymmetric ID-token algorithm', async () => {
     setupValidFetch(
       200,
@@ -393,7 +410,6 @@ describe('OIDC discovery provider matrix', () => {
     expect(result.isValid).toBe(false);
     expect(result.error).toContain('multiple signing keys without distinct "kid" identifiers');
   });
-
 
   it('validates generic provider authorization code and PKCE capabilities', async () => {
     // Completely missing response_types_supported

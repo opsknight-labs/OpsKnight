@@ -206,4 +206,22 @@ describe('saveOidcConfig session policy validation & persistence', () => {
       })
     );
   });
+
+  it('rejects groups as an Entra OAuth scope at the server boundary', async () => {
+    const formData = new FormData();
+    formData.set(
+      'issuer',
+      'https://login.microsoftonline.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/v2.0'
+    );
+    formData.set('clientId', 'entra-client');
+    formData.set('providerType', 'azure');
+    formData.set('customScopes', 'groups');
+
+    const result = await saveOidcConfig(initialState, formData);
+
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('VALIDATION_ERROR');
+    expect(result.error).toContain('not valid OAuth scopes for Microsoft Entra ID');
+    expect(mocks.prismaUpdateMany).not.toHaveBeenCalled();
+  });
 });
