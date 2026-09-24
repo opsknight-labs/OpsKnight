@@ -73,13 +73,13 @@ export default function RoleMappingEditor({ initialMappings, onChange }: Props) 
       ) : (
         <div className="space-y-2.5">
           {/* Header titles for desktop */}
-          <div className="hidden sm:grid sm:grid-cols-[1fr_auto_1fr_auto_140px_36px] gap-2 px-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <div className="hidden sm:grid sm:grid-cols-[1fr_24px_1fr_24px_175px_36px] items-center gap-2.5 px-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             <span>IdP Claim Key</span>
-            <span className="w-5 text-center">Match</span>
+            <span className="w-6" aria-hidden="true" />
             <span>Expected Value</span>
-            <span className="w-5 text-center">Action</span>
+            <span className="w-6" aria-hidden="true" />
             <span>Assigned Role</span>
-            <span className="w-9" />
+            <span className="w-9" aria-hidden="true" />
           </div>
 
           {/* Rule rows */}
@@ -87,7 +87,7 @@ export default function RoleMappingEditor({ initialMappings, onChange }: Props) 
             {mappings.map((rule, index) => (
               <div
                 key={index}
-                className="rounded-xl border border-border/80 bg-card p-3 sm:p-2.5 shadow-sm transition-all hover:border-border flex flex-col sm:grid sm:grid-cols-[1fr_auto_1fr_auto_140px_36px] items-stretch sm:items-center gap-2.5"
+                className="rounded-xl border border-border/80 bg-card p-3 sm:p-2.5 shadow-sm transition-all hover:border-border flex flex-col sm:grid sm:grid-cols-[1fr_24px_1fr_24px_175px_36px] items-stretch sm:items-center gap-2.5"
               >
                 {/* Field 1: Claim Key */}
                 <div className="space-y-1 sm:space-y-0 min-w-0">
@@ -105,7 +105,10 @@ export default function RoleMappingEditor({ initialMappings, onChange }: Props) 
                 </div>
 
                 {/* Operator = */}
-                <div className="hidden sm:flex items-center justify-center w-5 text-muted-foreground font-mono text-xs font-bold">
+                <div
+                  className="hidden sm:flex items-center justify-center w-6 text-muted-foreground font-mono text-xs font-bold select-none"
+                  aria-hidden="true"
+                >
                   =
                 </div>
 
@@ -125,12 +128,15 @@ export default function RoleMappingEditor({ initialMappings, onChange }: Props) 
                 </div>
 
                 {/* Operator -> */}
-                <div className="hidden sm:flex items-center justify-center w-5 text-muted-foreground">
+                <div
+                  className="hidden sm:flex items-center justify-center w-6 text-muted-foreground select-none"
+                  aria-hidden="true"
+                >
                   <ArrowRight className="h-3.5 w-3.5" />
                 </div>
 
                 {/* Field 3: Role Selector */}
-                <div className="space-y-1 sm:space-y-0">
+                <div className="space-y-1 sm:space-y-0 min-w-0">
                   <span className="sm:hidden text-[10px] font-semibold uppercase text-muted-foreground">
                     Assigned Role
                   </span>
@@ -155,7 +161,7 @@ export default function RoleMappingEditor({ initialMappings, onChange }: Props) 
                     variant="ghost"
                     size="sm"
                     onClick={() => removeRule(index)}
-                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                     aria-label={`Remove rule ${index + 1}`}
                     title="Remove rule"
                   >
