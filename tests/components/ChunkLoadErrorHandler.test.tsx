@@ -175,4 +175,26 @@ describe('ChunkLoadErrorHandler', () => {
       value: false,
     });
   });
+
+  it('should not reload and show recovery UI if stored budget is malformed (schema fail-safe)', async () => {
+    sessionStorage.setItem(
+      CHUNK_RECOVERY_STORAGE_KEY,
+      JSON.stringify({
+        count: 'corrupted_value',
+        firstAttemptAt: Date.now(),
+      })
+    );
+
+    render(<ChunkLoadErrorHandler />);
+
+    const errorEvent = new ErrorEvent('error', {
+      message: 'ChunkLoadError: Loading chunk 789 failed',
+    });
+    act(() => {
+      window.dispatchEvent(errorEvent);
+    });
+
+    expect(reloadMock).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
 });

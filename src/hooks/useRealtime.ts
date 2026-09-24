@@ -11,7 +11,11 @@ import {
   type ReactNode,
 } from 'react';
 import { logger } from '@/lib/logger';
-import { redirectToSessionExpired, verifyClientSession } from '@/lib/client-auth-recovery';
+import {
+  notifySessionExpired,
+  verifyClientSession,
+  isTerminalSessionError,
+} from '@/lib/client-auth-recovery';
 
 export type RealtimeEvent =
   | { type: 'connected'; timestamp: string }
@@ -155,7 +159,7 @@ function useRealtimeConnection() {
                 eventSourceRef.current = null;
                 setIsConnected(false);
                 setError('Real-time authorization was revoked. Sign in again to reconnect.');
-                redirectToSessionExpired();
+                notifySessionExpired();
                 break;
             }
           } catch (err) {
@@ -170,12 +174,12 @@ function useRealtimeConnection() {
           if (eventSourceRef.current === eventSource) eventSourceRef.current = null;
           if (document.visibilityState === 'hidden' || !navigator.onLine) return;
 
-          void verifyClientSession().then(isValid => {
+          void verifyClientSession().then(result => {
             if (!mounted || authorizationRevoked.current) return;
-            if (!isValid) {
+            if (isTerminalSessionError(result)) {
               authorizationRevoked.current = true;
               setError('Real-time authorization was revoked. Sign in again to reconnect.');
-              redirectToSessionExpired();
+              notifySessionExpired();
               return;
             }
 

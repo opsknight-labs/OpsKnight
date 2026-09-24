@@ -36,6 +36,29 @@ export async function GET(req: NextRequest) {
       return new Response('Unauthorized', { status: 401 });
     }
 
+    const searchParams = req.nextUrl.searchParams;
+    let initialAfterCreatedAt = searchParams.get('afterCreatedAt');
+    let initialAfterId = searchParams.get('afterId') || '';
+
+    const lastEventIdHeader = req.headers.get('last-event-id');
+    if (!initialAfterCreatedAt && lastEventIdHeader) {
+      const parts = lastEventIdHeader.split('_');
+      if (parts.length >= 2) {
+        initialAfterCreatedAt = parts[0];
+        initialAfterId = parts.slice(1).join('_');
+      } else {
+        initialAfterId = lastEventIdHeader;
+      }
+    }
+
+    let initialCursorDate: Date | null = null;
+    if (initialAfterCreatedAt) {
+      const d = new Date(initialAfterCreatedAt);
+      if (!Number.isNaN(d.getTime())) {
+        initialCursorDate = d;
+      }
+    }
+
     const userTimeZone = getUserTimeZone(user ?? undefined);
 
     let cleanup: () => void = () => {};
@@ -63,10 +86,11 @@ export async function GET(req: NextRequest) {
         };
 
         // Send initial connection message
-        const send = (data: string) => {
+        const send = (data: string, eventId?: string) => {
           if (!isClosed) {
             try {
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              const idPrefix = eventId ? `id: ${eventId}\n` : '';
+              controller.enqueue(encoder.encode(`${idPrefix}data: ${data}\n\n`));
             } catch (error) {
               logger.error('Error sending SSE data', {
                 component: 'api-notifications-stream',
@@ -95,9 +119,83 @@ export async function GET(req: NextRequest) {
           });
         }
 
-        // Poll for new notifications every 5 seconds (reduced from 2s to save DB)
-        let lastCheck = new Date();
-        let lastCheckId = '';
+        // Initialize cursor for new/missed notifications
+        let lastCheck = initialCursorDate ?? new Date();
+        let lastCheckId = initialAfterId;
+
+        // If client reconnected with a cursor, immediately backfill missed events
+        if (initialCursorDate) {
+          try {
+            const missedNotifications = await prisma.inAppNotification.findMany({
+              where: {
+                userId: user.id,
+                OR: [
+                  { createdAt: { gt: lastCheck } },
+                  { createdAt: lastCheck, id: { gt: lastCheckId || '' } },
+                ],
+              },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              take: 50,
+              select: {
+                id: true,
+                title: true,
+                message: true,
+                type: true,
+                entityType: true,
+                entityId: true,
+                readAt: true,
+                createdAt: true,
+              },
+            });
+
+            if (missedNotifications.length > 0) {
+              const formattedMissed = missedNotifications.map(notification => {
+                const timeAgo = formatDateTime(notification.createdAt, userTimeZone, {
+                  format: 'relative',
+                });
+                const typeKey = notification.type.toLowerCase();
+                let type: 'incident' | 'service' | 'schedule' = 'incident';
+                if (typeKey === 'schedule') {
+                  type = 'schedule';
+                } else if (typeKey === 'service' || typeKey === 'team') {
+                  type = 'service';
+                }
+                const incidentId =
+                  notification.entityType === 'INCIDENT' ? notification.entityId : null;
+
+                return {
+                  id: notification.id,
+                  title: notification.title,
+                  message: notification.message,
+                  time: timeAgo,
+                  unread: !notification.readAt,
+                  type,
+                  incidentId,
+                  createdAt: notification.createdAt.toISOString(),
+                };
+              });
+
+              const lastItem = missedNotifications[missedNotifications.length - 1];
+              lastCheck = lastItem.createdAt;
+              lastCheckId = lastItem.id;
+
+              send(
+                JSON.stringify({
+                  type: 'notifications',
+                  notifications: formattedMissed,
+                  count: formattedMissed.length,
+                }),
+                `${lastItem.createdAt.toISOString()}_${lastItem.id}`
+              );
+            }
+          } catch (err) {
+            logger.warn('Failed to backfill missed notifications on stream reconnect', {
+              component: 'api-notifications-stream',
+              error: err,
+            });
+          }
+        }
+
         let pollCount = 0;
         let notificationVersion = await getNotificationUserChangeVersion(user.id);
 
@@ -165,19 +263,19 @@ export async function GET(req: NextRequest) {
                 };
               });
 
+              const lastNotification = newNotifications[newNotifications.length - 1];
+              lastCheck = lastNotification.createdAt;
+              lastCheckId = lastNotification.id;
+              shouldUpdateUnreadCount = true;
+
               send(
                 JSON.stringify({
                   type: 'notifications',
                   notifications: formattedNotifications,
                   count: formattedNotifications.length,
-                })
+                }),
+                `${lastNotification.createdAt.toISOString()}_${lastNotification.id}`
               );
-
-              // Update last check time
-              const lastNotification = newNotifications[newNotifications.length - 1];
-              lastCheck = lastNotification.createdAt;
-              lastCheckId = lastNotification.id;
-              shouldUpdateUnreadCount = true;
             }
 
             // Optimized Unread Count:

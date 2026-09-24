@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { logger } from '@/lib/logger';
-import { redirectToSessionExpired, verifyClientSession } from '@/lib/client-auth-recovery';
+import {
+  notifySessionExpired,
+  verifyClientSession,
+  isTerminalSessionError,
+} from '@/lib/client-auth-recovery';
 
 type NotificationStreamHandlers<T = unknown> = {
   enabled?: boolean;
@@ -26,6 +30,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 let browserListenersInstalled = false;
 let isAuthTerminated = false;
+let lastReceivedCursor: { createdAt: string; id: string } | null = null;
 
 const supportsEventSource = () =>
   typeof window !== 'undefined' && typeof EventSource !== 'undefined';
@@ -75,7 +80,7 @@ function dispatchPayload(payload: unknown) {
     isAuthTerminated = true;
     clearReconnectTimer();
     closeConnection();
-    redirectToSessionExpired();
+    notifySessionExpired();
     return;
   }
   for (const subscriber of subscribers.values()) {
@@ -86,13 +91,30 @@ function dispatchPayload(payload: unknown) {
       subscriber.unread(typeof data.count === 'number' ? Math.max(0, data.count) : 0);
     }
   }
+  if (
+    data.type === 'notifications' &&
+    Array.isArray(data.notifications) &&
+    data.notifications.length > 0
+  ) {
+    const lastItem = data.notifications[data.notifications.length - 1] as {
+      createdAt?: string;
+      id?: string;
+    };
+    if (lastItem && typeof lastItem.createdAt === 'string' && typeof lastItem.id === 'string') {
+      lastReceivedCursor = { createdAt: lastItem.createdAt, id: lastItem.id };
+    }
+  }
 }
 
 function connect() {
   if (!canConnect() || eventSource) return;
   clearReconnectTimer();
 
-  const source = new EventSource('/api/notifications/stream');
+  const streamUrl = lastReceivedCursor
+    ? `/api/notifications/stream?afterCreatedAt=${encodeURIComponent(lastReceivedCursor.createdAt)}&afterId=${encodeURIComponent(lastReceivedCursor.id)}`
+    : '/api/notifications/stream';
+
+  const source = new EventSource(streamUrl);
   eventSource = source;
   source.onopen = () => {
     if (eventSource !== source) return;
@@ -117,13 +139,13 @@ function connect() {
     for (const subscriber of subscribers.values()) {
       if (subscriber.enabled()) subscriber.error(error);
     }
-    void verifyClientSession().then(isValid => {
+    void verifyClientSession().then(result => {
       if (isAuthTerminated) return;
-      if (!isValid) {
+      if (isTerminalSessionError(result)) {
         isAuthTerminated = true;
         clearReconnectTimer();
         closeConnection();
-        redirectToSessionExpired();
+        notifySessionExpired();
         return;
       }
       scheduleReconnect();
@@ -210,4 +232,5 @@ export function resetNotificationStreamForTesting() {
   reconnectAttempt = 0;
   isAuthTerminated = false;
   browserListenersInstalled = false;
+  lastReceivedCursor = null;
 }

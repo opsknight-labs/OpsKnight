@@ -239,6 +239,20 @@ export default function TopbarNotifications() {
     }
   }, []);
 
+  const fetchUnreadCount = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    try {
+      const response = await fetch('/api/notifications?limit=1', { cache: 'no-store' });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (typeof data.unreadCount === 'number') {
+        setUnreadCount(data.unreadCount);
+      }
+    } catch {
+      // Badge freshness must not disrupt UI
+    }
+  }, []);
+
   const handleIncomingNotifications = useCallback((incoming: Notification[]) => {
     setNotifications(prev => {
       const existingIds = new Set(prev.map(n => n.id));
@@ -268,12 +282,18 @@ export default function TopbarNotifications() {
   // Controlled fallback polling ONLY if EventSource is unsupported
   useEffect(() => {
     if (!pollingRequired) return;
+
+    // Initialize badge count immediately when EventSource is unsupported
+    void fetchUnreadCount();
+
     let interval: ReturnType<typeof setInterval> | null = null;
     const start = () => {
-      if (interval || document.hidden) return;
+      if (interval || (typeof document !== 'undefined' && document.hidden)) return;
       interval = setInterval(() => {
         if (open) {
           void fetchNotifications();
+        } else {
+          void fetchUnreadCount();
         }
       }, 30_000);
     };
@@ -285,14 +305,21 @@ export default function TopbarNotifications() {
     start();
     const handleVisibility = () => {
       if (document.hidden) stop();
-      else start();
+      else {
+        if (open) {
+          void fetchNotifications();
+        } else {
+          void fetchUnreadCount();
+        }
+        start();
+      }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       stop();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [pollingRequired, open, fetchNotifications]);
+  }, [pollingRequired, open, fetchNotifications, fetchUnreadCount]);
 
   const markAllRead = useCallback(async () => {
     if (unreadCount === 0) return;

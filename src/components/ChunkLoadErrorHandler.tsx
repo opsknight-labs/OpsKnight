@@ -28,6 +28,22 @@ function isChunkOrStyleError(message: string): boolean {
   );
 }
 
+function isValidBudget(val: unknown): val is ChunkRecoveryBudget {
+  if (!val || typeof val !== 'object') return false;
+  const b = val as Record<string, unknown>;
+  return (
+    typeof b.count === 'number' &&
+    Number.isInteger(b.count) &&
+    b.count >= 0 &&
+    typeof b.firstAttemptAt === 'number' &&
+    Number.isFinite(b.firstAttemptAt) &&
+    b.firstAttemptAt > 0 &&
+    typeof b.lastAttemptAt === 'number' &&
+    Number.isFinite(b.lastAttemptAt) &&
+    b.lastAttemptAt > 0
+  );
+}
+
 export function tryConsumeRecoveryBudget(reason: string): boolean {
   if (typeof window === 'undefined') return false;
 
@@ -46,12 +62,29 @@ export function tryConsumeRecoveryBudget(reason: string): boolean {
     let budget: ChunkRecoveryBudget;
 
     if (raw) {
-      budget = JSON.parse(raw);
-      if (
-        typeof budget.firstAttemptAt !== 'number' ||
-        now - budget.firstAttemptAt > RELOAD_WINDOW_MS
-      ) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        logger.error(
+          '[ChunkRecovery] Malformed JSON in storage budget; failing safe to recovery UI',
+          { reason }
+        );
+        return false;
+      }
+
+      if (!isValidBudget(parsed)) {
+        logger.error(
+          '[ChunkRecovery] Invalid budget schema in storage; failing safe to recovery UI',
+          { reason, parsed }
+        );
+        return false;
+      }
+
+      if (now - parsed.firstAttemptAt > RELOAD_WINDOW_MS) {
         budget = { count: 0, firstAttemptAt: now, lastAttemptAt: now };
+      } else {
+        budget = parsed;
       }
     } else {
       budget = { count: 0, firstAttemptAt: now, lastAttemptAt: now };

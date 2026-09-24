@@ -4,7 +4,7 @@ import {
   useNotificationStream,
   resetNotificationStreamForTesting,
 } from '@/hooks/useNotificationStream';
-import { resetSessionRecoveryState } from '@/lib/client-auth-recovery';
+import { resetSessionRecoveryState, onSessionExpired } from '@/lib/client-auth-recovery';
 
 type MockEventSourceInstance = {
   onopen: ((event: Event) => void) | null;
@@ -114,7 +114,10 @@ describe('useNotificationStream', () => {
     expect(onNotifications).toHaveBeenCalledWith([{ id: 'n1', title: 'Test' }]);
   });
 
-  it('handles authorization_revoked by closing stream and redirecting to login', async () => {
+  it('handles authorization_revoked by closing stream and emitting session expired', async () => {
+    const expiredListener = vi.fn();
+    const unsubscribe = onSessionExpired(expiredListener);
+
     renderHook(() => useNotificationStream({}));
     const instance = getMockEventSourceInstance();
 
@@ -127,10 +130,14 @@ describe('useNotificationStream', () => {
     });
 
     expect(instance.close).toHaveBeenCalled();
-    expect(assignMock).toHaveBeenCalledWith('/login?error=SessionExpired');
+    expect(expiredListener).toHaveBeenCalledWith('/login?error=SessionExpired', 'desktop');
+    unsubscribe();
   });
 
-  it('terminates and redirects to login if session check fails after connection error', async () => {
+  it('terminates and notifies session expired if session check fails after connection error', async () => {
+    const expiredListener = vi.fn();
+    const unsubscribe = onSessionExpired(expiredListener);
+
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -148,11 +155,16 @@ describe('useNotificationStream', () => {
 
     await waitFor(() => {
       expect(instance.close).toHaveBeenCalled();
-      expect(assignMock).toHaveBeenCalledWith('/login?error=SessionExpired');
+      expect(expiredListener).toHaveBeenCalledWith('/login?error=SessionExpired', 'desktop');
     });
+
+    unsubscribe();
   });
 
-  it('does not redirect if session check succeeds on connection error', async () => {
+  it('does not terminate if session check succeeds on connection error', async () => {
+    const expiredListener = vi.fn();
+    const unsubscribe = onSessionExpired(expiredListener);
+
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -173,6 +185,49 @@ describe('useNotificationStream', () => {
       expect(instance.close).toHaveBeenCalled();
     });
 
-    expect(assignMock).not.toHaveBeenCalled();
+    expect(expiredListener).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('tracks latest cursor from incoming notifications and includes afterCreatedAt/afterId on reconnect', async () => {
+    vi.useFakeTimers();
+    renderHook(() => useNotificationStream({}));
+
+    const instance1 = getMockEventSourceInstance(0);
+
+    act(() => {
+      instance1.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'notifications',
+            notifications: [
+              { id: 'n1', createdAt: '2026-09-24T10:00:00.000Z' },
+              { id: 'n2', createdAt: '2026-09-24T10:00:05.000Z' },
+            ],
+          }),
+        })
+      );
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: { id: 'u1' } }),
+      })
+    );
+
+    // Network disconnect occurs
+    act(() => {
+      instance1.onerror?.(new Event('error'));
+    });
+
+    await vi.runAllTimersAsync();
+
+    expect(global.EventSource).toHaveBeenCalledWith(
+      '/api/notifications/stream?afterCreatedAt=2026-09-24T10%3A00%3A05.000Z&afterId=n2'
+    );
+    vi.useRealTimers();
   });
 });

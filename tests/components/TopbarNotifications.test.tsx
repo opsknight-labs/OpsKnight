@@ -167,4 +167,44 @@ describe('TopbarNotifications', () => {
     expect(items.length).toBe(1);
     expect(screen.getByText('New Service Alert')).toBeInTheDocument();
   });
+
+  it('initializes badge count and polls limit=1 when EventSource is unsupported', async () => {
+    const origEventSource = globalThis.EventSource;
+    // @ts-expect-error test unsupported EventSource
+    delete globalThis.EventSource;
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('limit=1')) {
+        return {
+          ok: true,
+          json: async () => ({ unreadCount: 7 }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({ notifications: [], unreadCount: 7 }),
+      };
+    });
+
+    try {
+      render(<TopbarNotifications />);
+
+      // Should fetch limit=1 on mount to initialize badge
+      await waitFor(() => {
+        const limit1Calls = fetchMock.mock.calls.filter(([url]) =>
+          String(url).includes('/api/notifications?limit=1')
+        );
+        expect(limit1Calls.length).toBe(1);
+        expect(screen.getByText('7')).toBeInTheDocument();
+      });
+
+      // Still no limit=50 calls because drawer remained closed
+      const limit50Calls = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/notifications?limit=50')
+      );
+      expect(limit50Calls.length).toBe(0);
+    } finally {
+      globalThis.EventSource = origEventSource;
+    }
+  });
 });
