@@ -110,8 +110,10 @@ export default function SetPasswordForm({ token }: { token: string }) {
         >
           New password
         </label>
-        <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
-          <Lock className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+        <div className="group relative flex items-center">
+          <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+            <Lock className="h-4 w-4" aria-hidden="true" />
+          </div>
           <input
             id="invite-password"
             name="password"
@@ -121,14 +123,15 @@ export default function SetPasswordForm({ token }: { token: string }) {
             maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS}
             onChange={event => setPasswordValue(event.target.value)}
             autoComplete="new-password"
-            className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
+            placeholder="Enter your password"
+            className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
             autoFocus
           />
           <button
             type="button"
             onClick={() => setShowPassword(value => !value)}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
-            className="mr-3 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:hover:text-slate-300 dark:focus-visible:ring-white"
+            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
           >
             {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
@@ -146,8 +149,10 @@ export default function SetPasswordForm({ token }: { token: string }) {
         >
           Confirm password
         </label>
-        <div className="flex items-center rounded-xl border border-slate-200 bg-white focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:focus-within:border-slate-500">
-          <Lock className="ml-3.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+        <div className="group relative flex items-center">
+          <div className="absolute left-3.5 z-10 text-slate-400 dark:text-slate-500 group-focus-within:text-slate-800 dark:group-focus-within:text-slate-200 transition-colors pointer-events-none">
+            <Lock className="h-4 w-4" aria-hidden="true" />
+          </div>
           <input
             id="invite-confirm-password"
             name="confirmPassword"
@@ -157,7 +162,8 @@ export default function SetPasswordForm({ token }: { token: string }) {
             maxLength={PASSWORD_TRANSPORT_MAX_CODE_UNITS}
             onChange={event => setConfirmPassword(event.target.value)}
             autoComplete="new-password"
-            className="w-full bg-transparent px-3 py-3 text-sm text-slate-900 outline-none dark:text-white"
+            placeholder="Re-enter your password"
+            className="auth-input w-full h-11 min-h-[44px] 2xl:h-12 pl-10 pr-10 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm shadow-xs hover:border-slate-400 dark:hover:border-slate-600 focus:outline-none focus:border-slate-900 dark:focus:border-slate-100 focus:ring-2 focus:ring-slate-900/10 dark:focus:ring-white/15 transition-all"
           />
           <button
             type="button"
@@ -165,7 +171,7 @@ export default function SetPasswordForm({ token }: { token: string }) {
             aria-label={
               showConfirmPassword ? 'Hide confirmation password' : 'Show confirmation password'
             }
-            className="mr-3 rounded p-1 text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:hover:text-slate-300 dark:focus-visible:ring-white"
+            className="absolute right-2.5 z-10 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 dark:focus-visible:ring-white"
           >
             {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>

@@ -525,7 +525,7 @@
 
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
+input:focus-visible:not(.auth-input):not(.login-input),
 select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid var(--border-focus);
