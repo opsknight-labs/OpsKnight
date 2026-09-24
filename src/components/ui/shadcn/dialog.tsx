@@ -46,8 +46,12 @@ const DialogContent = React.forwardRef<
     >
       <div aria-hidden="true" className="mx-auto -mt-1 h-1 w-10 rounded-full bg-border sm:hidden" />
       {children}
-      <DialogPrimitive.Close className="absolute right-3.5 top-3.5 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100/80 hover:bg-slate-200 text-slate-500 hover:text-slate-900 border border-slate-200/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-slate-800/80 dark:hover:bg-slate-700 dark:text-slate-400 dark:hover:text-slate-100 dark:border-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none">
-        <X className="h-4 w-4 stroke-[2.25]" />
+      <DialogPrimitive.Close
+        className="absolute right-3.5 top-3.5 z-20 flex h-8.5 w-8.5 items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-700 hover:text-zinc-950 border border-zinc-300/80 shadow-2xs transition-all duration-150 active:scale-95 cursor-pointer dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-200 dark:hover:text-white dark:border-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none"
+        aria-label="Close dialog"
+        title="Close (Esc)"
+      >
+        <X className="h-5 w-5 shrink-0" strokeWidth={2.5} />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
