@@ -8,7 +8,6 @@ import { Prisma } from '@prisma/client';
 import {
   decryptProviderConfig,
   encryptProviderConfig,
-  getProviderSensitiveFields,
   maskSensitiveFields,
   mergeSensitiveProviderFields,
   SECRET_MASK,
@@ -26,11 +25,29 @@ async function recoverableProviderConfig(provider: string, config: Record<string
   }
 }
 
+function recoverySecretFields(provider: string): readonly string[] {
+  switch (provider) {
+    case 'twilio':
+      return ['accountSid', 'authToken'];
+    case 'aws-sns':
+    case 'ses':
+      return ['accessKeyId', 'secretAccessKey'];
+    case 'resend':
+    case 'sendgrid':
+      return ['apiKey'];
+    case 'smtp':
+      return ['password'];
+    case 'web-push':
+      return ['vapidPrivateKey'];
+    default:
+      return [];
+  }
+}
+
 function hasReplacementSecrets(provider: string, config: Record<string, unknown>) {
-  const requiredFields =
-    provider === 'twilio' ? ['accountSid', 'authToken'] : getProviderSensitiveFields(provider);
-  return requiredFields.every(field => {
-    const value = config[field];
+  const suppliedValues = new Map(Object.entries(config));
+  return recoverySecretFields(provider).every(field => {
+    const value = suppliedValues.get(field);
     return (
       value !== SECRET_MASK &&
       value !== '********' &&

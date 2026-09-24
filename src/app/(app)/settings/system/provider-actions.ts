@@ -8,7 +8,6 @@ import { assertAdmin, getCurrentUser } from '@/lib/rbac';
 import {
   decryptProviderConfig,
   encryptProviderConfig,
-  getProviderSensitiveFields,
   mergeSensitiveProviderFields,
   SECRET_MASK,
 } from '@/lib/encrypted-provider-config';
@@ -73,12 +72,32 @@ async function recoverableExistingConfig(provider: string, config: Record<string
   }
 }
 
-function assertRecoveryHasReplacementSecrets(provider: string, config: Record<string, unknown>) {
+function recoverySecretFields(provider: string): readonly string[] {
   // WhatsApp override credentials are optional; Twilio's SMS credentials are
   // the recoverable baseline for that provider.
-  const requiredFields =
-    provider === 'twilio' ? ['accountSid', 'authToken'] : getProviderSensitiveFields(provider);
-  const missing = requiredFields.filter(field => isSecretPlaceholder(config[field]));
+  switch (provider) {
+    case 'twilio':
+      return ['accountSid', 'authToken'];
+    case 'aws-sns':
+    case 'ses':
+      return ['accessKeyId', 'secretAccessKey'];
+    case 'resend':
+    case 'sendgrid':
+      return ['apiKey'];
+    case 'smtp':
+      return ['password'];
+    case 'web-push':
+      return ['vapidPrivateKey'];
+    default:
+      return [];
+  }
+}
+
+function assertRecoveryHasReplacementSecrets(provider: string, config: Record<string, unknown>) {
+  const suppliedValues = new Map(Object.entries(config));
+  const missing = recoverySecretFields(provider).filter(field =>
+    isSecretPlaceholder(suppliedValues.get(field))
+  );
   if (missing.length > 0) {
     throw new Error(
       'This provider has unreadable credentials. Enter replacement values for all secret fields before enabling it.'
