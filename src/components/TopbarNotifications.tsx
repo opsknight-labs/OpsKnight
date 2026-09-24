@@ -279,6 +279,15 @@ export default function TopbarNotifications() {
     }
   }, [open, fetchNotifications]);
 
+  // Backfill/refresh notifications if stream reconnects while the drawer is already open
+  const prevLiveRef = useRef(isLive);
+  useEffect(() => {
+    if (!prevLiveRef.current && isLive && open) {
+      void fetchNotifications();
+    }
+    prevLiveRef.current = isLive;
+  }, [isLive, open, fetchNotifications]);
+
   // Controlled fallback polling ONLY if EventSource is unsupported
   useEffect(() => {
     if (!pollingRequired) return;

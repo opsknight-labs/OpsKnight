@@ -75,13 +75,23 @@ function scheduleReconnect() {
 
 function dispatchPayload(payload: unknown) {
   if (!payload || typeof payload !== 'object') return;
-  const data = payload as { type?: unknown; notifications?: unknown; count?: unknown };
+  const data = payload as {
+    type?: unknown;
+    notifications?: unknown;
+    count?: unknown;
+    serverTime?: unknown;
+  };
   if (data.type === 'authorization_revoked') {
     isAuthTerminated = true;
     clearReconnectTimer();
     closeConnection();
     notifySessionExpired();
     return;
+  }
+  if (data.type === 'connected' && typeof data.serverTime === 'string') {
+    if (!lastReceivedCursor) {
+      lastReceivedCursor = { createdAt: data.serverTime, id: '' };
+    }
   }
   for (const subscriber of subscribers.values()) {
     if (!subscriber.enabled()) continue;

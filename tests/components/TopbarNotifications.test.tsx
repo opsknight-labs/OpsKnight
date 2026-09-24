@@ -207,4 +207,77 @@ describe('TopbarNotifications', () => {
       globalThis.EventSource = origEventSource;
     }
   });
+
+  it('refreshes notification list when stream reconnects while drawer is open', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/api/auth/session')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ user: { id: 'u1' } }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          notifications: [
+            {
+              id: 'notif-1',
+              title: 'Critical DB Incident',
+              message: 'Database connection failed',
+              time: 'Just now',
+              unread: true,
+              type: 'incident',
+            },
+          ],
+          unreadCount: 1,
+        }),
+      };
+    });
+
+    try {
+      render(<TopbarNotifications />);
+      const instance1 = getMockEventSourceInstance(0);
+
+      act(() => {
+        instance1.onopen?.(new Event('open'));
+      });
+
+      // Open drawer -> triggers initial fetch (1 call)
+      const triggerButton = screen.getByRole('button', { name: /notifications/i });
+      act(() => {
+        fireEvent.click(triggerButton);
+      });
+
+      const callsAfterOpen = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/notifications?limit=50')
+      );
+      expect(callsAfterOpen.length).toBe(1);
+
+      // Stream disconnects
+      act(() => {
+        instance1.onerror?.(new Event('error'));
+      });
+
+      // Let session verification and reconnect timer complete
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+
+      // Stream reconnects (instance 2)
+      const instance2 = getMockEventSourceInstance(1);
+      await act(async () => {
+        instance2.onopen?.(new Event('open'));
+      });
+
+      // Drawer is still open, so list should refresh (2 calls)
+      const callsAfterReconnect = fetchMock.mock.calls.filter(([url]) =>
+        String(url).includes('/api/notifications?limit=50')
+      );
+      expect(callsAfterReconnect.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

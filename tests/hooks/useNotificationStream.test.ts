@@ -230,4 +230,43 @@ describe('useNotificationStream', () => {
     );
     vi.useRealTimers();
   });
+
+  it('uses serverTime from connected event if no notifications have been received before reconnect', async () => {
+    vi.useFakeTimers();
+    renderHook(() => useNotificationStream({}));
+
+    const instance1 = getMockEventSourceInstance(0);
+
+    act(() => {
+      instance1.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'connected',
+            serverTime: '2026-09-24T12:00:00.000Z',
+          }),
+        })
+      );
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ user: { id: 'u1' } }),
+      })
+    );
+
+    // Network disconnect occurs
+    act(() => {
+      instance1.onerror?.(new Event('error'));
+    });
+
+    await vi.runAllTimersAsync();
+
+    expect(global.EventSource).toHaveBeenCalledWith(
+      '/api/notifications/stream?afterCreatedAt=2026-09-24T12%3A00%3A00.000Z&afterId='
+    );
+    vi.useRealTimers();
+  });
 });

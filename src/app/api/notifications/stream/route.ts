@@ -101,7 +101,13 @@ export async function GET(req: NextRequest) {
           }
         };
 
-        send(JSON.stringify({ type: 'connected', message: 'Notification stream connected' }));
+        send(
+          JSON.stringify({
+            type: 'connected',
+            message: 'Notification stream connected',
+            serverTime: new Date().toISOString(),
+          })
+        );
 
         // Provide immediate unread count upon handshake so UI badge is accurate without loading 50 records
         try {
