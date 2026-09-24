@@ -95,7 +95,7 @@ const GUIDES: GuideTopic[] = [
     icon: MessageSquare,
     iconBg: 'bg-purple-500/10 dark:bg-purple-500/20',
     iconColor: 'text-purple-600 dark:text-purple-400',
-    href: '/settings/slack',
+    href: '/settings/integrations/slack',
     highlights: [
       'Automatic channel generation',
       'One-click Acknowledge & Resolve',

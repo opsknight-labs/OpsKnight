@@ -149,6 +149,9 @@ export default async function ActionItemsPage({
   const filteredItems: typeof allActionItems = [];
 
   for (const item of allActionItems) {
+    if (owner && item.owner !== owner) continue;
+    if (priority && item.priority !== priority) continue;
+
     stats.total++;
     if (item.status === 'OPEN') stats.open++;
     else if (item.status === 'IN_PROGRESS') stats.inProgress++;
@@ -160,8 +163,6 @@ export default async function ActionItemsPage({
     if (item.priority === 'HIGH' && item.status !== 'COMPLETED') stats.highPriority++;
 
     if (status && item.status !== status) continue;
-    if (owner && item.owner !== owner) continue;
-    if (priority && item.priority !== priority) continue;
     filteredItems.push(item);
   }
 
@@ -210,7 +211,7 @@ export default async function ActionItemsPage({
             value: stats.total,
             icon: <CheckSquare className="h-3.5 w-3.5" />,
             href: buildStatUrl(undefined),
-            active: !status && !priority && !owner,
+            active: !status,
           },
           {
             label: 'Open',
