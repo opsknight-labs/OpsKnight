@@ -1,0 +1,35 @@
+name: 'Build Application & Export Artifact'
+description: 'Compiles the Next.js application, verifies performance budgets, and uploads the build artifact'
+
+inputs:
+  upload-artifact:
+    description: 'Whether to upload build artifacts for downstream jobs'
+    required: false
+    default: 'true'
+  artifact-name:
+    description: 'Artifact name to upload'
+    required: false
+    default: 'next-build-artifact'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Build application
+      shell: bash
+      run: npm run build
+
+    - name: Performance architecture budgets
+      shell: bash
+      run: npm run perf:budgets
+
+    - name: Upload build artifact
+      if: inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          .next/
+          public/
+          package.json
+        if-no-files-found: error
+        retention-days: 1

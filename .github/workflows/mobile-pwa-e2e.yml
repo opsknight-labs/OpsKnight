@@ -51,7 +51,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: Build mobile application
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Build application & verify budgets
+        uses: ./.github/actions/build-app
+        with:
+          upload-artifact: 'true'
+          artifact-name: mobile-next-build
+
   mobile-browser:
+    name: Mobile browser matrix
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -76,26 +98,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Node
-        uses: actions/setup-node@v7
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
         with:
           node-version: 20
-          cache: npm
+          generate-prisma: 'true'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Restore mobile build artifact
+        uses: ./.github/actions/restore-build
+        with:
+          artifact-name: mobile-next-build
 
       - name: Prepare browser-test database
-        run: |
-          npx prisma migrate deploy
-          npx prisma generate
-          npm run prisma:indexes:status-platform
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-smoke: 'false'
+          run-validation: 'false'
 
       - name: Install mobile browser engines
         run: npx playwright install --with-deps chromium webkit
-
-      - name: Build mobile browser application
-        run: npm run build
 
       - name: Run Android and iPhone browser contracts + responsive matrix
         run: >-
@@ -116,8 +137,10 @@ jobs:
           if-no-files-found: ignore
 
   pwa-production:
+    name: Production PWA contract
+    needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -146,26 +169,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up Node
-        uses: actions/setup-node@v7
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
         with:
           node-version: 20
-          cache: npm
+          generate-prisma: 'true'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Restore mobile build artifact
+        uses: ./.github/actions/restore-build
+        with:
+          artifact-name: mobile-next-build
 
       - name: Prepare PWA-test database
-        run: |
-          npx prisma migrate deploy
-          npx prisma generate
-          npm run prisma:indexes:status-platform
+        uses: ./.github/actions/setup-test-db
+        with:
+          run-smoke: 'false'
+          run-validation: 'false'
 
       - name: Install production PWA browser engine
         run: npx playwright install --with-deps chromium
-
-      - name: Build production application and generated service worker
-        run: npm run build
 
       - name: Run generated service-worker contract
         run: >-

@@ -1,4 +1,4 @@
-name: Tests (lint + unit)
+name: Tests (lint + unit + build + integration)
 
 on:
   pull_request:
@@ -17,7 +17,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
+  fast-validation:
+    name: Fast validation (L0 static + L1 unit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: |
+          mkdir -p reports
+          npm run test:ci:unit
+
+      - name: Upload unit test report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-unit-report
+          path: reports/junit-unit.xml
+          if-no-files-found: ignore
+
+  build:
+    name: Application build & budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: 20
+          generate-prisma: 'true'
+
+      - name: Build application & verify budgets
+        uses: ./.github/actions/build-app
+        with:
+          upload-artifact: 'true'
+          artifact-name: next-build-artifact
+
+  db-integration:
+    name: Database integration (L2)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -42,30 +93,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set up Node
-        uses: actions/setup-node@v7
+      - name: Set up Node & dependencies
+        uses: ./.github/actions/setup-node
         with:
           node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        env:
-          # CI doesn't need git hooks; this also avoids husky-related setup issues.
-          HUSKY: '0'
-        run: npm ci --legacy-peer-deps
+          generate-prisma: 'true'
 
       - name: Prepare test database schema
         # Match pre-prod behavior by applying migrations in order.
         run: npx prisma migrate deploy
-
-      - name: Generate Prisma client
-        run: npx prisma generate
-
-      - name: Build application
-        run: npm run build
-
-      - name: Performance architecture budgets
-        run: npm run perf:budgets
 
       - name: Enforce idempotent status platform indexes
         run: |
@@ -87,36 +123,55 @@ jobs:
           mkdir -p reports
           npm run prisma:health
 
-      - name: Unit tests
-        # DB-backed tests share a single database; run files serially to avoid cross-test contention.
-        run: |
-          mkdir -p reports
-          npm run test:ci:unit
-
       - name: Database integration tests
         # Enable real database for integration and resilience tests
         env:
           VITEST_USE_REAL_DB: '1'
         run: npm run test:ci:db
 
-      - name: Upload test report artifact (JUnit)
+      - name: Upload db test report artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vitest-junit
-          path: reports/*.xml
+          name: junit-db-report
+          path: |
+            reports/junit-db.xml
+            reports/ci-db-smoke.xml
+          if-no-files-found: ignore
+
+  summary:
+    name: Test summary & checks
+    runs-on: ubuntu-latest
+    needs: [fast-validation, build, db-integration]
+    if: always()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download unit test reports
+        uses: actions/download-artifact@v4
+        with:
+          name: junit-unit-report
+          path: reports
+        continue-on-error: true
+
+      - name: Download db test reports
+        uses: actions/download-artifact@v4
+        with:
+          name: junit-db-report
+          path: reports
+        continue-on-error: true
 
       - name: Publish test results to GitHub Checks
-        if: always()
         uses: dorny/test-reporter@v3
         with:
-          name: '✅ Tests: Unit (Vitest)'
+          name: '✅ Tests: Vitest Suite'
           path: reports/*.xml
           reporter: java-junit
+        continue-on-error: true
 
       - name: Summarize JUnit results for PR comment
         id: junit_summary
-        if: always()
         run: |
           node - <<'NODE'
           const fs = require('fs');
@@ -154,6 +209,9 @@ jobs:
           };
 
           try {
+            if (!fs.existsSync('reports')) {
+              fs.mkdirSync('reports');
+            }
             const xmlFiles = fs.readdirSync('reports').filter((f) => f.endsWith('.xml'));
             console.log(`Found ${xmlFiles.length} XML files: ${xmlFiles.join(', ')}`);
 
@@ -209,29 +267,15 @@ jobs:
           NODE
 
       - name: Post results to PR conversation (sticky)
-        if: github.event_name == 'pull_request' && always()
+        if: github.event_name == 'pull_request'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: vitest
           message: ${{ steps.junit_summary.outputs.markdown }}
+        continue-on-error: true
 
-  typecheck:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        env:
-          HUSKY: '0'
-        run: npm ci --legacy-peer-deps
-
-      - name: TypeScript typecheck
-        run: npx tsc --noEmit
+      - name: Gate check
+        if: steps.junit_summary.outputs.markdown && contains(steps.junit_summary.outputs.markdown, '❌ Failed')
+        run: |
+          echo "Test suite failed"
+          exit 1
