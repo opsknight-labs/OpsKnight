@@ -68,15 +68,15 @@ export default function TopbarUserMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-64 p-1 overflow-hidden border border-border shadow-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl z-[1050] rounded-xl"
+        className="w-64 p-1 overflow-hidden border border-border shadow-xl bg-white/95 dark:bg-[#121216]/95 backdrop-blur-xl z-[1050] rounded-xl"
         align="end"
       >
-        {/* Comfortable Header */}
-        <div className="relative p-3 bg-gradient-to-br from-primary/90 via-primary to-primary/90 text-primary-foreground overflow-hidden rounded-lg mb-1 border-b border-white/10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.15),transparent_50%)]" />
+        {/* Comfortable Header matching Create dropdown */}
+        <div className="relative p-3 bg-gradient-to-br from-[#18181b] via-[#121216] to-[#09090b] text-white overflow-hidden rounded-lg mb-1 border-b border-zinc-800/80">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_50%)]" />
 
           <div className="relative z-10 flex items-center gap-2.5">
-            <Avatar className="h-8 w-8 border border-white/20 shadow-sm shrink-0">
+            <Avatar className="h-8 w-8 border border-zinc-700/60 shadow-xs shrink-0">
               <AvatarImage src={finalAvatarUrl} />
               <AvatarFallback className="bg-white/10 text-white backdrop-blur-md text-xs font-semibold">
                 {initials}
@@ -86,11 +86,11 @@ export default function TopbarUserMenu({
               <p className="text-sm font-semibold truncate leading-tight text-white">
                 {name || 'User'}
               </p>
-              <p className="text-xs text-white/75 font-normal truncate">{email}</p>
+              <p className="text-xs text-zinc-400 font-normal truncate">{email}</p>
               {role && (
                 <span
                   className={cn(
-                    'mt-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border shadow-sm backdrop-blur-md inline-block w-fit',
+                    'mt-1 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider border shadow-xs inline-block w-fit',
                     {
                       'text-rose-200 bg-rose-500/20 border-rose-500/30':
                         role?.toLowerCase() === 'admin',
@@ -161,21 +161,29 @@ export default function TopbarUserMenu({
           <DropdownMenuGroup>
             <DropdownMenuItem
               onClick={() => window.dispatchEvent(new CustomEvent('toggleKeyboardShortcuts'))}
-              className="group cursor-pointer focus:bg-muted/70 rounded-lg py-2 px-2"
+              className="group cursor-pointer focus:bg-muted/70 data-[highlighted]:bg-muted/70 rounded-lg py-2 px-2"
             >
-              <Keyboard className="mr-2.5 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-              <span className="text-xs font-medium flex-1">Keyboard Shortcuts</span>
-              <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1 rounded border border-border/40">
+              <div className="flex items-center justify-center w-6 h-6 rounded-md bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 mr-2.5 group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700/60 transition-all shadow-xs border border-zinc-200 dark:border-zinc-700/40 shrink-0">
+                <Keyboard className="h-3.5 w-3.5" />
+              </div>
+              <div className="flex flex-col flex-1 min-w-0">
+                <span className="text-xs font-medium text-foreground">Keyboard Shortcuts</span>
+              </div>
+              <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/50">
                 ?
               </span>
             </DropdownMenuItem>
             <DropdownMenuItem
               asChild
-              className="group cursor-pointer focus:bg-muted/70 rounded-lg py-2 px-2"
+              className="group cursor-pointer focus:bg-muted/70 data-[highlighted]:bg-muted/70 rounded-lg py-2 px-2"
             >
               <Link href="/help" className="flex items-center w-full">
-                <HelpCircle className="mr-2.5 h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-                <span className="text-xs font-medium flex-1">Help & Documentation</span>
+                <div className="flex items-center justify-center w-6 h-6 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 mr-2.5 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/50 transition-all shadow-xs border border-emerald-100 dark:border-emerald-900/40 shrink-0">
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </div>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="text-xs font-medium text-foreground">Help & Documentation</span>
+                </div>
               </Link>
             </DropdownMenuItem>
           </DropdownMenuGroup>
@@ -194,16 +202,13 @@ export default function TopbarUserMenu({
               ⇧⌘Q
             </DropdownMenuShortcut>
           </DropdownMenuItem>
-
-          {legalNotice && (
-            <>
-              <DropdownMenuSeparator className="my-1 bg-border/60" />
-              <div className="px-2.5 py-1.5 text-[10px] text-muted-foreground/80 flex items-center justify-between">
-                {legalNotice}
-              </div>
-            </>
-          )}
         </div>
+
+        {legalNotice && (
+          <div className="py-1.5 px-3 bg-muted/40 border-t flex items-center justify-center gap-1.5 rounded-b-lg text-[10px] text-muted-foreground/80">
+            {legalNotice}
+          </div>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
